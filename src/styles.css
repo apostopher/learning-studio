@@ -1,0 +1,19 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* https://x.com/csswizardry/status/1717841334462005661 */
+img {
+  font-style: italic; /* if the image doesn't load, the alt text will be italic */
+
+  /* These are useful if the low res image is used as a background of the main image */
+  background-repeat: no-repeat;
+  background-size: cover;
+
+  /* in rare cases, if the image is used as a float, the margin will be added to the image so that the text around the image is not too close */
+  shape-margin: 1rem;
+
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle; /* this removes the space below the baseline text. e.g. the g, y characters */
+}
