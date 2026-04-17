@@ -42,3 +42,29 @@ export function parseFontSpecs(specs: FontSpecs): FontParseResult {
 
   return { googleHref, extraHrefs, families }
 }
+
+export type LogoData =
+  | { kind: 'svg'; svg: string }
+  | { kind: 'url'; src: string }
+
+export function sanitizeSvg(input: string): string {
+  let out = input
+  // Remove <script>...</script> blocks.
+  out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+  // Remove on* event handler attributes (on followed by word chars, = "…" or '…').
+  out = out.replace(/\s+on\w+\s*=\s*("[^"]*"|'[^']*')/gi, '')
+  // Replace any attribute value starting with javascript: with '#'.
+  out = out.replace(
+    /(\s(?:href|xlink:href|src)\s*=\s*)("javascript:[^"]*"|'javascript:[^']*')/gi,
+    '$1"#"',
+  )
+  return out
+}
+
+export function parseLogo(value: string): LogoData {
+  const trimmed = value.trimStart()
+  if (trimmed.startsWith('<svg')) {
+    return { kind: 'svg', svg: sanitizeSvg(trimmed) }
+  }
+  return { kind: 'url', src: value }
+}

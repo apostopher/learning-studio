@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFontSpecs } from './generate-theme-css'
+import { parseFontSpecs, parseLogo, sanitizeSvg } from './generate-theme-css'
 
 describe('parseFontSpecs', () => {
   it('combines multiple Google Fonts specs into one css2 URL', () => {
@@ -50,5 +50,49 @@ describe('parseFontSpecs', () => {
     expect(result.families.sans).toBe('Inter')
     expect(result.families.mono).toBe('monospace')
     expect(result.families.display).toBe('Bebas Neue')
+  })
+})
+
+describe('sanitizeSvg', () => {
+  it('strips <script> tags', () => {
+    const dirty = '<svg><script>alert(1)</script><circle/></svg>'
+    expect(sanitizeSvg(dirty)).toBe('<svg><circle/></svg>')
+  })
+
+  it('strips on* attributes', () => {
+    const dirty = '<svg onload="x()"><circle onclick="y()"/></svg>'
+    expect(sanitizeSvg(dirty)).toBe('<svg><circle/></svg>')
+  })
+
+  it('neutralizes javascript: URLs', () => {
+    const dirty = '<svg><a href="javascript:alert(1)"><circle/></a></svg>'
+    expect(sanitizeSvg(dirty)).toBe('<svg><a href="#"><circle/></a></svg>')
+  })
+
+  it('leaves clean SVG unchanged', () => {
+    const clean = '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>'
+    expect(sanitizeSvg(clean)).toBe(clean)
+  })
+})
+
+describe('parseLogo', () => {
+  it('parses inline SVG and sanitizes it', () => {
+    const result = parseLogo('<svg onload="x()"><circle/></svg>')
+    expect(result).toEqual({ kind: 'svg', svg: '<svg><circle/></svg>' })
+  })
+
+  it('parses SVG with leading whitespace', () => {
+    const result = parseLogo('  \n<svg><circle/></svg>')
+    expect(result).toEqual({ kind: 'svg', svg: '<svg><circle/></svg>' })
+  })
+
+  it('parses absolute https URL', () => {
+    const result = parseLogo('https://cdn.example.com/logo.svg')
+    expect(result).toEqual({ kind: 'url', src: 'https://cdn.example.com/logo.svg' })
+  })
+
+  it('parses /public path URL', () => {
+    const result = parseLogo('/logo.svg')
+    expect(result).toEqual({ kind: 'url', src: '/logo.svg' })
   })
 })
