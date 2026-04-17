@@ -97,7 +97,37 @@ describe('parseLogo', () => {
   })
 })
 
-import { buildScaleBlock } from './generate-theme-css'
+import { buildScaleBlock, buildThemeCss } from './generate-theme-css'
+
+describe('buildThemeCss', () => {
+  it('emits @theme and .dark blocks with all three scales plus font vars and background', () => {
+    const css = buildThemeCss({
+      gray: { light: '#8B8D98', dark: '#8B8D98' },
+      accent: { light: '#3D63DD', dark: '#3D63DD' },
+      brand: { light: '#E5484D', dark: '#E5484D' },
+      bg: { light: '#ffffff', dark: '#111111' },
+      fontFamilies: {
+        sans: 'Inter',
+        mono: 'IBM Plex Mono',
+        display: 'Bebas Neue',
+      },
+    })
+
+    expect(css).toMatch(/^\/\* GENERATED\. Do not edit\. Source: scripts\/generate-theme-css\.ts \*\/\n@theme \{/)
+    expect(css).toContain('--color-gray-1:')
+    expect(css).toContain('--color-gray-12:')
+    expect(css).toContain('--color-accent-1:')
+    expect(css).toContain('--color-accent-contrast:')
+    expect(css).toContain('--color-brand-1:')
+    expect(css).toContain('--color-brand-surface:')
+    expect(css).toContain('--color-background: #ffffff;')
+    expect(css).toContain('--font-sans: Inter,')
+    expect(css).toContain('--font-mono: IBM Plex Mono,')
+    expect(css).toContain('--font-display: Bebas Neue,')
+    expect(css).toMatch(/\.dark \{[\s\S]*--color-background: #111111;/)
+    expect(css).toMatch(/@supports \(color: oklch\(0 0 0\)\)/)
+  })
+})
 
 describe('buildScaleBlock', () => {
   it('emits 12 hex steps, 12 alpha steps, contrast and surface for a named scale', () => {
