@@ -1,19 +1,80 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
+@import "./styles/theme.generated.css";
 @plugin "@tailwindcss/typography";
 
+/* https://polypane.app/css-specificity-calculator/ */
+
 /* https://x.com/csswizardry/status/1717841334462005661 */
-img {
-  font-style: italic; /* if the image doesn't load, the alt text will be italic */
+@layer base {
+  img {
+    font-style: italic; /* if the image doesn't loßad, the alt text will be italic */
 
-  /* These are useful if the low res image is used as a background of the main image */
-  background-repeat: no-repeat;
-  background-size: cover;
+    /* These are useful if the low res image is used as a background of the main image */
+    background-repeat: no-repeat;
+    background-size: cover;
 
-  /* in rare cases, if the image is used as a float, the margin will be added to the image so that the text around the image is not too close */
-  shape-margin: 1rem;
+    /* in rare cases, if the image is used as a float, the margin will be added to the image so that the text around the image is not too close */
+    shape-margin: 1rem;
 
-  max-width: 100%;
-  height: auto;
-  vertical-align: middle; /* this removes the space below the baseline text. e.g. the g, y characters */
+    max-width: 100%;
+    height: auto;
+    vertical-align: middle; /* this removes the space below the baseline text. e.g. the g, y characters */
+  }
 }
+
+@layer layout {
+  .content-grid {
+    --padding-inline: 1rem;
+    --content-max-width: 1500px;
+    --breakout-max-width: 1600px;
+
+    --breakout-size: calc(
+      (var(--breakout-max-width) - var(--content-max-width)) / 2
+    );
+
+    display: grid;
+    grid-template-columns:
+      [full-width-start] minmax(var(--padding-inline), 1fr)
+      [breakout-start] minmax(0, var(--breakout-size))
+      [content-start] min(
+        100% - (var(--padding-inline) * 2),
+        var(--content-max-width)
+      )
+      [content-end]
+      minmax(0, var(--breakout-size)) [breakout-end]
+      minmax(var(--padding-inline), 1fr) [full-width-end];
+  }
+
+  .content-grid > .breakout {
+    grid-column: breakout;
+  }
+
+  .content-grid > .content {
+    grid-column: content;
+  }
+  .content-grid > .full-width {
+    grid-column: full-width;
+  }
+
+  .flow > *:where(:not(:first-child)) {
+    margin-block-start: var(--flow-space, 1rem);
+  }
+
+  .grid-auto-fit {
+    display: grid;
+    --grid-auto-fit-max-width: 40ch;
+    gap: var(--grid-auto-fit-gap, 1rem);
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(
+        min(var(--grid-auto-fit-min-width, 30ch), 100%),
+        var(--grid-auto-fit-max-width, 1fr)
+      )
+    );
+
+    &:has(> :nth-child(3)) {
+      --grid-auto-fit-max-width: 1fr;
+    }
+  }
+}
+
