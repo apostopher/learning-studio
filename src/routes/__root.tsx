@@ -1,18 +1,16 @@
+import { TanStackDevtools } from '@tanstack/react-devtools';
+import type { QueryClient } from '@tanstack/react-query';
 import {
+  createRootRouteWithContext,
   HeadContent,
   Scripts,
-  createRootRouteWithContext,
-} from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { TanStackDevtools } from "@tanstack/react-devtools";
-import TanstackQueryProvider from "../integrations/tanstack-query/root-provider";
+} from '@tanstack/react-router';
+import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
-import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
-
-import appCss from "../styles.css?url";
-import { extraFontLinks, fontLinkHref } from "../styles/theme.generated";
-
-import type { QueryClient } from "@tanstack/react-query";
+import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
+import TanstackQueryProvider from '../integrations/tanstack-query/root-provider';
+import { extraFontLinks, fontLinkHref } from '../styles/theme.generated';
+import appCss from '../styles.css?url';
 
 interface MyRouterContext {
   queryClient: QueryClient;
@@ -24,19 +22,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
     meta: [
       {
-        charSet: "utf-8",
+        charSet: 'utf-8',
       },
       {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        name: 'viewport',
+        content: 'width=device-width, initial-scale=1',
       },
       {
-        title: "TanStack Start Starter",
+        title: 'TanStack Start Starter',
       },
     ],
     links: [
       {
-        rel: "stylesheet",
+        rel: 'stylesheet',
         href: appCss,
       },
     ],
@@ -58,6 +56,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         {extraFontLinks.map((href) => (
           <link key={href} href={href} rel="stylesheet" />
         ))}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: theme FOUC prevention script */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
@@ -67,11 +66,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 
           <TanStackDevtools
             config={{
-              position: "bottom-right",
+              position: 'bottom-right',
             }}
             plugins={[
               {
-                name: "Tanstack Router",
+                name: 'Tanstack Router',
                 render: <TanStackRouterDevtoolsPanel />,
               },
               TanStackQueryDevtools,

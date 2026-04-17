@@ -1,26 +1,25 @@
-import { createEnv } from '@t3-oss/env-core'
-import { z } from 'zod'
-import Color from 'colorjs.io'
+import { createEnv } from '@t3-oss/env-core';
+import Color from 'colorjs.io';
+import { z } from 'zod';
 
-const colorStr = z
-  .string()
-  .refine(
-    (v) => {
-      try {
-        new Color(v)
-        return true
-      } catch {
-        return false
-      }
-    },
-    { message: 'must be a valid CSS color' },
-  )
+const colorStr = z.string().refine(
+  (v) => {
+    try {
+      new Color(v);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  { message: 'must be a valid CSS color' },
+);
 
 const logoStr = z
   .string()
   .min(1)
   .refine((v) => !/<script|on\w+\s*=|javascript:/i.test(v), {
-    message: 'logo SVG contains unsafe content (script tags, event handlers, or javascript: URIs)',
+    message:
+      'logo SVG contains unsafe content (script tags, event handlers, or javascript: URIs)',
   })
   .refine(
     (v) =>
@@ -28,12 +27,12 @@ const logoStr = z
       /^https?:\/\//.test(v) ||
       v.startsWith('/'),
     { message: 'must be inline SVG, absolute URL, or /public path' },
-  )
+  );
 
 // Google Fonts spec shape: "Family Name:axis,range@value;value" e.g. "Inter:ital,wght@0,400;1,700"
 // Multiple axes separated by commas; values after @ separated by semicolons.
 // For display/single-variant fonts, the bare family name is also accepted: "Bebas Neue"
-const fontStr = z.string().min(1)
+const fontStr = z.string().min(1);
 
 export const env = createEnv({
   server: {
@@ -78,4 +77,4 @@ export const env = createEnv({
 
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
-})
+});
