@@ -96,3 +96,29 @@ describe('parseLogo', () => {
     expect(result).toEqual({ kind: 'url', src: '/logo.svg' })
   })
 })
+
+import { buildScaleBlock } from './generate-theme-css'
+
+describe('buildScaleBlock', () => {
+  it('emits 12 hex steps, 12 alpha steps, contrast and surface for a named scale', () => {
+    const scale = {
+      accentScale: Array.from({ length: 12 }, (_, i) => `#00000${i}`) as unknown as [
+        string, string, string, string, string, string, string, string, string, string, string, string,
+      ],
+      accentScaleAlpha: Array.from({ length: 12 }, (_, i) => `#a0000${i}`) as unknown as [
+        string, string, string, string, string, string, string, string, string, string, string, string,
+      ],
+      accentContrast: '#ffffff',
+      accentSurface: '#eeeeee',
+    }
+
+    const out = buildScaleBlock('accent', scale)
+
+    expect(out).toContain('--color-accent-1: #000000;')
+    expect(out).toContain('--color-accent-12: #0000011;')
+    expect(out).toContain('--color-accent-a1: #a00000;')
+    expect(out).toContain('--color-accent-a12: #a000011;')
+    expect(out).toContain('--color-accent-contrast: #ffffff;')
+    expect(out).toContain('--color-accent-surface: #eeeeee;')
+  })
+})

@@ -68,3 +68,27 @@ export function parseLogo(value: string): LogoData {
   }
   return { kind: 'url', src: value }
 }
+
+type ScaleInput = {
+  accentScale: readonly string[]
+  accentScaleAlpha: readonly string[]
+  accentContrast?: string
+  accentSurface?: string
+}
+
+export function buildScaleBlock(name: string, scale: ScaleInput): string {
+  const lines: string[] = []
+  scale.accentScale.forEach((hex, i) => {
+    lines.push(`  --color-${name}-${i + 1}: ${hex};`)
+  })
+  scale.accentScaleAlpha.forEach((hex, i) => {
+    lines.push(`  --color-${name}-a${i + 1}: ${hex};`)
+  })
+  if (scale.accentContrast) {
+    lines.push(`  --color-${name}-contrast: ${scale.accentContrast};`)
+  }
+  if (scale.accentSurface) {
+    lines.push(`  --color-${name}-surface: ${scale.accentSurface};`)
+  }
+  return lines.join('\n')
+}
