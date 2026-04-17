@@ -152,3 +152,45 @@ describe('buildScaleBlock', () => {
     expect(out).toContain('--color-accent-surface: #eeeeee;')
   })
 })
+
+import { buildThemeModule } from './generate-theme-css'
+
+describe('buildThemeModule', () => {
+  it('serializes font hrefs, logo data, and app title as TS exports', () => {
+    const out = buildThemeModule({
+      appTitle: 'Test Studio',
+      fonts: {
+        googleHref: 'https://fonts.googleapis.com/css2?family=Inter&display=swap',
+        extraHrefs: ['https://cdn.example.com/mono.css'],
+      },
+      logos: {
+        light: { kind: 'svg', svg: '<svg/>' },
+        dark: { kind: 'url', src: '/logo-dark.svg' },
+      },
+    })
+
+    expect(out).toContain("export const appTitle = 'Test Studio'")
+    expect(out).toContain(
+      "export const fontLinkHref = 'https://fonts.googleapis.com/css2?family=Inter&display=swap'",
+    )
+    expect(out).toContain(
+      "export const extraFontLinks = ['https://cdn.example.com/mono.css']",
+    )
+    expect(out).toContain("export const logoLight = {")
+    expect(out).toContain("kind: 'svg'")
+    expect(out).toContain("kind: 'url'")
+    expect(out).toContain("src: '/logo-dark.svg'")
+  })
+
+  it('handles null googleHref', () => {
+    const out = buildThemeModule({
+      appTitle: 'T',
+      fonts: { googleHref: null, extraHrefs: [] },
+      logos: {
+        light: { kind: 'url', src: '/a.svg' },
+        dark: { kind: 'url', src: '/b.svg' },
+      },
+    })
+    expect(out).toContain('export const fontLinkHref = null')
+  })
+})

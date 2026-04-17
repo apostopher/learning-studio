@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { generateRadixColors } from '../src/utils/colors'
 
 export type FontSlotKey = 'sans' | 'mono' | 'display'
@@ -223,4 +225,74 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
   ].join('\n')
 
   return `${header}\n${lightThemeBlock}\n\n${darkThemeBlock}\n\n${p3Block}\n`
+}
+
+export type ThemeModuleInputs = {
+  appTitle: string
+  fonts: { googleHref: string | null; extraHrefs: string[] }
+  logos: { light: LogoData; dark: LogoData }
+}
+
+const q = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
+
+const serializeLogo = (l: LogoData): string =>
+  l.kind === 'svg'
+    ? `{ kind: 'svg' as const, svg: ${q(l.svg)} }`
+    : `{ kind: 'url' as const, src: ${q(l.src)} }`
+
+export function buildThemeModule(inputs: ThemeModuleInputs): string {
+  const lines = [
+    '// GENERATED. Do not edit. Source: scripts/generate-theme-css.ts',
+    '',
+    `export const appTitle = ${q(inputs.appTitle)}`,
+    `export const fontLinkHref = ${
+      inputs.fonts.googleHref === null ? 'null' : q(inputs.fonts.googleHref)
+    }`,
+    `export const extraFontLinks = [${inputs.fonts.extraHrefs.map(q).join(', ')}]`,
+    `export const logoLight = ${serializeLogo(inputs.logos.light)}`,
+    `export const logoDark = ${serializeLogo(inputs.logos.dark)}`,
+    '',
+  ]
+  return lines.join('\n')
+}
+
+import { env } from '../src/env'
+
+const OUT_DIR = resolve(process.cwd(), 'src/styles')
+const OUT_CSS = resolve(OUT_DIR, 'theme.generated.css')
+const OUT_TS = resolve(OUT_DIR, 'theme.generated.ts')
+
+export function generateTheme(): void {
+  const fonts = parseFontSpecs({
+    sans: env.VITE_FONT_SANS,
+    mono: env.VITE_FONT_MONO,
+    display: env.VITE_FONT_DISPLAY,
+  })
+
+  const css = buildThemeCss({
+    gray: { light: env.VITE_GRAY_LIGHT, dark: env.VITE_GRAY_DARK },
+    accent: { light: env.VITE_ACCENT_LIGHT, dark: env.VITE_ACCENT_DARK },
+    brand: { light: env.VITE_BRAND_LIGHT, dark: env.VITE_BRAND_DARK },
+    bg: { light: env.VITE_BG_LIGHT, dark: env.VITE_BG_DARK },
+    fontFamilies: fonts.families,
+  })
+
+  const mod = buildThemeModule({
+    appTitle: env.VITE_APP_TITLE,
+    fonts: { googleHref: fonts.googleHref, extraHrefs: fonts.extraHrefs },
+    logos: {
+      light: parseLogo(env.VITE_LOGO_LIGHT),
+      dark: parseLogo(env.VITE_LOGO_DARK),
+    },
+  })
+
+  mkdirSync(dirname(OUT_CSS), { recursive: true })
+  writeFileSync(OUT_CSS, css, 'utf8')
+  writeFileSync(OUT_TS, mod, 'utf8')
+}
+
+// Support `tsx scripts/generate-theme-css.ts` for debugging.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  generateTheme()
+  console.log('Theme written to:', OUT_CSS, OUT_TS)
 }
