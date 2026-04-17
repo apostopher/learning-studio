@@ -20,7 +20,7 @@ const logoStr = z
   .string()
   .min(1)
   .refine((v) => !/<script|on\w+\s*=|javascript:/i.test(v), {
-    message: 'logo contains unsafe content',
+    message: 'logo SVG contains unsafe content (script tags, event handlers, or javascript: URIs)',
   })
   .refine(
     (v) =>
@@ -30,6 +30,9 @@ const logoStr = z
     { message: 'must be inline SVG, absolute URL, or /public path' },
   )
 
+// Google Fonts spec shape: "Family Name:axis,range@value;value" e.g. "Inter:ital,wght@0,400;1,700"
+// Multiple axes separated by commas; values after @ separated by semicolons.
+// For display/single-variant fonts, the bare family name is also accepted: "Bebas Neue"
 const fontStr = z.string().min(1)
 
 export const env = createEnv({
