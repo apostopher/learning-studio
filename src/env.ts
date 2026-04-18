@@ -1,6 +1,11 @@
 import { createEnv } from '@t3-oss/env-core';
 import Color from 'colorjs.io';
 import { z } from 'zod';
+import {
+  BRAND_NAME_REGEX,
+  RESERVED_BRAND_NAMES,
+  parseBrandColorEntries,
+} from './utils/brand-colors';
 
 const colorStr = z.string().refine(
   (v) => {
@@ -34,6 +39,46 @@ const logoStr = z
 // For display/single-variant fonts, the bare family name is also accepted: "Bebas Neue"
 const fontStr = z.string().min(1);
 
+const reservedNames = new Set<string>(RESERVED_BRAND_NAMES);
+
+const brandColorsSchema = z
+  .string()
+  .min(1)
+  .transform((raw, ctx) => {
+    try {
+      return parseBrandColorEntries(raw);
+    } catch (err) {
+      ctx.addIssue({
+        code: 'custom',
+        message: (err as Error).message,
+      });
+      return z.NEVER;
+    }
+  })
+  .pipe(
+    z
+      .array(
+        z.object({
+          name: z
+            .string()
+            .regex(BRAND_NAME_REGEX, {
+              message: 'brand name must match /^[a-z][a-z0-9-]*$/',
+            })
+            .refine((n) => !reservedNames.has(n), {
+              message: `brand name is reserved (${[...reservedNames].join(', ')})`,
+            }),
+          light: colorStr,
+          dark: colorStr,
+        }),
+      )
+      .min(1, 'VITE_BRAND_COLORS must contain at least one entry')
+      .max(12, 'VITE_BRAND_COLORS supports at most 12 entries')
+      .refine(
+        (arr) => new Set(arr.map((e) => e.name)).size === arr.length,
+        { message: 'brand names must be unique' },
+      ),
+  );
+
 export const env = createEnv({
   server: {
     SERVER_URL: z.url().optional(),
@@ -59,10 +104,7 @@ export const env = createEnv({
 
     VITE_GRAY_LIGHT: colorStr,
     VITE_GRAY_DARK: colorStr,
-    VITE_ACCENT_LIGHT: colorStr,
-    VITE_ACCENT_DARK: colorStr,
-    VITE_BRAND_LIGHT: colorStr,
-    VITE_BRAND_DARK: colorStr,
+    VITE_BRAND_COLORS: brandColorsSchema,
 
     VITE_BG_LIGHT: colorStr.default('#ffffff'),
     VITE_BG_DARK: colorStr.default('#111111'),
