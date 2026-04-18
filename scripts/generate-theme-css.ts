@@ -256,6 +256,7 @@ export type ThemeModuleInputs = {
   appTitle: string
   fonts: { googleHref: string | null; extraHrefs: string[] }
   logos: { light: LogoData; dark: LogoData }
+  brandNames: readonly string[]
 }
 
 const q = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
@@ -276,6 +277,7 @@ export function buildThemeModule(inputs: ThemeModuleInputs): string {
     `export const extraFontLinks = [${inputs.fonts.extraHrefs.map(q).join(', ')}]`,
     `export const logoLight = ${serializeLogo(inputs.logos.light)}`,
     `export const logoDark = ${serializeLogo(inputs.logos.dark)}`,
+    `export const brandNames = [${inputs.brandNames.map(q).join(', ')}] as const`,
     '',
   ]
   return lines.join('\n')
@@ -308,6 +310,7 @@ export function generateTheme(): void {
       light: parseLogo(env.VITE_LOGO_LIGHT),
       dark: parseLogo(env.VITE_LOGO_DARK),
     },
+    brandNames: env.VITE_BRAND_COLORS.map((e) => e.name),
   })
 
   mkdirSync(dirname(OUT_CSS), { recursive: true })
