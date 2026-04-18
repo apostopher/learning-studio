@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import type { BrandEntry } from '../src/utils/brand-colors'
 import { generateRadixColors } from '../src/utils/colors'
 
 export type FontSlotKey = 'sans' | 'mono' | 'display'
@@ -97,10 +98,28 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
   return lines.join('\n')
 }
 
+/**
+ * Emits `--color-<from>-<suffix>: var(--color-<to>-<suffix>);` for every
+ * suffix a scale block produces (1..12, a1..a12, contrast, surface).
+ * Used to alias `accent` to the first brand entry in one place — dark/P3
+ * swaps propagate automatically via `var()`.
+ */
+export function buildAliasBlock(fromName: string, toName: string): string {
+  const lines: string[] = []
+  for (let i = 1; i <= 12; i += 1) {
+    lines.push(`  --color-${fromName}-${i}: var(--color-${toName}-${i});`)
+  }
+  for (let i = 1; i <= 12; i += 1) {
+    lines.push(`  --color-${fromName}-a${i}: var(--color-${toName}-a${i});`)
+  }
+  lines.push(`  --color-${fromName}-contrast: var(--color-${toName}-contrast);`)
+  lines.push(`  --color-${fromName}-surface: var(--color-${toName}-surface);`)
+  return lines.join('\n')
+}
+
 export type ThemeColorInputs = {
   gray: { light: string; dark: string }
-  accent: { light: string; dark: string }
-  brand: { light: string; dark: string }
+  brandColors: BrandEntry[]
   bg: { light: string; dark: string }
   fontFamilies: Record<FontSlotKey, string>
 }
@@ -144,43 +163,41 @@ const asScaleInputP3 = (
       }
 
 export function buildThemeCss(inputs: ThemeColorInputs): string {
+  if (inputs.brandColors.length === 0) {
+    throw new Error('buildThemeCss: brandColors must contain at least one entry')
+  }
+
   const lightGray = generateRadixColors({
     appearance: 'light',
     accent: inputs.gray.light,
     gray: inputs.gray.light,
     background: inputs.bg.light,
   })
-  const lightAccent = generateRadixColors({
-    appearance: 'light',
-    accent: inputs.accent.light,
-    gray: inputs.gray.light,
-    background: inputs.bg.light,
-  })
-  const lightBrand = generateRadixColors({
-    appearance: 'light',
-    accent: inputs.brand.light,
-    gray: inputs.gray.light,
-    background: inputs.bg.light,
-  })
-
   const darkGray = generateRadixColors({
     appearance: 'dark',
     accent: inputs.gray.dark,
     gray: inputs.gray.dark,
     background: inputs.bg.dark,
   })
-  const darkAccent = generateRadixColors({
-    appearance: 'dark',
-    accent: inputs.accent.dark,
-    gray: inputs.gray.dark,
-    background: inputs.bg.dark,
-  })
-  const darkBrand = generateRadixColors({
-    appearance: 'dark',
-    accent: inputs.brand.dark,
-    gray: inputs.gray.dark,
-    background: inputs.bg.dark,
-  })
+
+  const light = inputs.brandColors.map((entry) => ({
+    name: entry.name,
+    colors: generateRadixColors({
+      appearance: 'light',
+      accent: entry.light,
+      gray: inputs.gray.light,
+      background: inputs.bg.light,
+    }),
+  }))
+  const dark = inputs.brandColors.map((entry) => ({
+    name: entry.name,
+    colors: generateRadixColors({
+      appearance: 'dark',
+      accent: entry.dark,
+      gray: inputs.gray.dark,
+      background: inputs.bg.dark,
+    }),
+  }))
 
   const fontVars = [
     `  --font-sans: ${inputs.fontFamilies.sans}, ui-sans-serif, system-ui, sans-serif;`,
@@ -188,13 +205,18 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     `  --font-display: ${inputs.fontFamilies.display}, ui-sans-serif, sans-serif;`,
   ].join('\n')
 
-  const header = '/* GENERATED. Do not edit. Source: scripts/generate-theme-css.ts */'
+  const header =
+    '/* GENERATED. Do not edit. Source: scripts/generate-theme-css.ts */'
+
+  const firstName = inputs.brandColors[0]!.name
 
   const lightThemeBlock = [
     '@theme {',
     buildScaleBlock('gray', asScaleInput(lightGray, 'gray')),
-    buildScaleBlock('accent', asScaleInput(lightAccent, 'accent')),
-    buildScaleBlock('brand', asScaleInput(lightBrand, 'accent')),
+    ...light.map(({ name, colors }) =>
+      buildScaleBlock(name, asScaleInput(colors, 'accent')),
+    ),
+    buildAliasBlock('accent', firstName),
     `  --color-background: ${inputs.bg.light};`,
     fontVars,
     '}',
@@ -203,8 +225,9 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
   const darkThemeBlock = [
     '.dark {',
     buildScaleBlock('gray', asScaleInput(darkGray, 'gray')),
-    buildScaleBlock('accent', asScaleInput(darkAccent, 'accent')),
-    buildScaleBlock('brand', asScaleInput(darkBrand, 'accent')),
+    ...dark.map(({ name, colors }) =>
+      buildScaleBlock(name, asScaleInput(colors, 'accent')),
+    ),
     `  --color-background: ${inputs.bg.dark};`,
     '}',
   ].join('\n')
@@ -213,13 +236,15 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     '@supports (color: oklch(0 0 0)) {',
     '  @theme {',
     buildScaleBlock('gray', asScaleInputP3(lightGray, 'gray')),
-    buildScaleBlock('accent', asScaleInputP3(lightAccent, 'accent')),
-    buildScaleBlock('brand', asScaleInputP3(lightBrand, 'accent')),
+    ...light.map(({ name, colors }) =>
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent')),
+    ),
     '  }',
     '  .dark {',
     buildScaleBlock('gray', asScaleInputP3(darkGray, 'gray')),
-    buildScaleBlock('accent', asScaleInputP3(darkAccent, 'accent')),
-    buildScaleBlock('brand', asScaleInputP3(darkBrand, 'accent')),
+    ...dark.map(({ name, colors }) =>
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent')),
+    ),
     '  }',
     '}',
   ].join('\n')
@@ -271,8 +296,7 @@ export function generateTheme(): void {
 
   const css = buildThemeCss({
     gray: { light: env.VITE_GRAY_LIGHT, dark: env.VITE_GRAY_DARK },
-    accent: { light: env.VITE_ACCENT_LIGHT, dark: env.VITE_ACCENT_DARK },
-    brand: { light: env.VITE_BRAND_LIGHT, dark: env.VITE_BRAND_DARK },
+    brandColors: env.VITE_BRAND_COLORS,
     bg: { light: env.VITE_BG_LIGHT, dark: env.VITE_BG_DARK },
     fontFamilies: fonts.families,
   })

@@ -98,34 +98,81 @@ describe('parseLogo', () => {
 })
 
 import { buildScaleBlock, buildThemeCss } from './generate-theme-css'
+import type { BrandEntry } from '../src/utils/brand-colors'
 
 describe('buildThemeCss', () => {
-  it('emits @theme and .dark blocks with all three scales plus font vars and background', () => {
-    const css = buildThemeCss({
-      gray: { light: '#8B8D98', dark: '#8B8D98' },
-      accent: { light: '#3D63DD', dark: '#3D63DD' },
-      brand: { light: '#E5484D', dark: '#E5484D' },
-      bg: { light: '#ffffff', dark: '#111111' },
-      fontFamilies: {
-        sans: 'Inter',
-        mono: 'IBM Plex Mono',
-        display: 'Bebas Neue',
-      },
-    })
+  const baseInputs = {
+    gray: { light: '#8B8D98', dark: '#8B8D98' },
+    bg: { light: '#ffffff', dark: '#111111' },
+    fontFamilies: {
+      sans: 'Inter',
+      mono: 'IBM Plex Mono',
+      display: 'Bebas Neue',
+    },
+  } as const
 
+  it('emits named scales, accent aliases, fonts, background, and .dark/P3 blocks', () => {
+    const brandColors: BrandEntry[] = [
+      { name: 'primary', light: '#3D63DD', dark: '#3D63DD' },
+      { name: 'danger', light: '#E5484D', dark: '#E5484D' },
+    ]
+
+    const css = buildThemeCss({ ...baseInputs, brandColors })
+
+    // Header + root @theme
     expect(css).toMatch(/^\/\* GENERATED\. Do not edit\. Source: scripts\/generate-theme-css\.ts \*\/\n@theme \{/)
+
+    // Gray scale
     expect(css).toContain('--color-gray-1:')
     expect(css).toContain('--color-gray-12:')
-    expect(css).toContain('--color-accent-1:')
-    expect(css).toContain('--color-accent-contrast:')
-    expect(css).toContain('--color-brand-1:')
-    expect(css).toContain('--color-brand-surface:')
+
+    // Named brand scales (concrete hex values)
+    expect(css).toContain('--color-primary-1:')
+    expect(css).toContain('--color-primary-12:')
+    expect(css).toContain('--color-primary-contrast:')
+    expect(css).toContain('--color-primary-surface:')
+    expect(css).toContain('--color-danger-1:')
+    expect(css).toContain('--color-danger-surface:')
+
+    // Accent aliases — var() references, NOT concrete hex
+    expect(css).toContain('--color-accent-1: var(--color-primary-1);')
+    expect(css).toContain('--color-accent-12: var(--color-primary-12);')
+    expect(css).toContain('--color-accent-a1: var(--color-primary-a1);')
+    expect(css).toContain('--color-accent-a12: var(--color-primary-a12);')
+    expect(css).toContain('--color-accent-contrast: var(--color-primary-contrast);')
+    expect(css).toContain('--color-accent-surface: var(--color-primary-surface);')
+
+    // --color-brand-* must be entirely gone
+    expect(css).not.toMatch(/--color-brand-/)
+
+    // Background + fonts
     expect(css).toContain('--color-background: #ffffff;')
     expect(css).toContain('--font-sans: Inter,')
     expect(css).toContain('--font-mono: IBM Plex Mono,')
     expect(css).toContain('--font-display: Bebas Neue,')
-    expect(css).toMatch(/\.dark \{[\s\S]*--color-background: #111111;/)
-    expect(css).toMatch(/@supports \(color: oklch\(0 0 0\)\)/)
+
+    // .dark block — has primary/danger concrete overrides, no accent aliases
+    const darkBlock = css.slice(css.indexOf('.dark {'), css.indexOf('@supports'))
+    expect(darkBlock).toContain('--color-background: #111111;')
+    expect(darkBlock).toContain('--color-primary-1:')
+    expect(darkBlock).toContain('--color-danger-1:')
+    expect(darkBlock).not.toMatch(/--color-accent-/)
+
+    // P3 block — same rule: named scales only, no accent
+    const p3Block = css.slice(css.indexOf('@supports'))
+    expect(p3Block).toContain('--color-primary-1:')
+    expect(p3Block).not.toMatch(/--color-accent-/)
+  })
+
+  it('handles a single brand entry (accent aliases it)', () => {
+    const css = buildThemeCss({
+      ...baseInputs,
+      brandColors: [{ name: 'solo', light: '#3D63DD', dark: '#3D63DD' }],
+    })
+
+    expect(css).toContain('--color-solo-1:')
+    expect(css).toContain('--color-accent-1: var(--color-solo-1);')
+    expect(css).not.toMatch(/--color-brand-/)
   })
 })
 
