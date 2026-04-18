@@ -13,7 +13,7 @@ Support an arbitrary number of named brand color scales per deployment (think Go
 | # | Decision | Choice |
 |---|----------|--------|
 | 1 | Env shape | **Single var** `VITE_BRAND_COLORS`, comma-separated entries of form `<name>:<lightHex>/<darkHex>` |
-| 2 | First entry's role | **First entry is the accent.** Emits both `--color-<name>-*` and `--color-accent-*` (same scale, duplicated as literal tokens — not `var()` references) |
+| 2 | First entry's role | **First entry is the accent.** Emits `--color-<name>-*` with concrete values; `--color-accent-*` defined as `var()` aliases pointing at the first entry (one source of truth, dark/P3 swaps propagate automatically) |
 | 3 | `--color-brand-*` | **Dropped.** Avoids a third alias for the same scale |
 | 4 | Existing `VITE_ACCENT_*` / `VITE_BRAND_*` env vars | **Removed.** Accent is no longer independently configurable |
 | 5 | Name rules | Strict regex `/^[a-z][a-z0-9-]*$/`; reserved names (`gray`, `accent`, `brand`, `background`) rejected; unique within list |
@@ -98,11 +98,23 @@ export type ThemeColorInputs = {
 ### Emission rules (inside `buildThemeCss`)
 
 For each `entry` in `brandColors`:
-1. Call `generateRadixColors` once with `appearance: "light"` and once with `"dark"`, using `gray` and `bg` as anchors.
-2. Emit `buildScaleBlock(entry.name, …)` in both the `@theme` and `.dark` blocks (and their P3 counterparts).
-3. If `index === 0`, emit the same scale a second time under the name `"accent"`.
 
-The second emission is literal duplication of the token values (not CSS `var(--color-<name>-9)`), because Tailwind v4 `@theme` resolves tokens at build time and needs each token to be concrete.
+1. Call `generateRadixColors` once with `appearance: "light"` and once with `"dark"`, using `gray` and `bg` as anchors.
+2. Emit `buildScaleBlock(entry.name, …)` with concrete hex / oklch values in `@theme`, `.dark`, and their P3 counterparts.
+
+**Accent alias.** After the loop, emit one `@theme` block of `var()` aliases pointing at the first entry's tokens:
+
+```css
+@theme {
+  --color-accent-1:  var(--color-primary-1);
+  --color-accent-2:  var(--color-primary-2);
+  /* …through 12 + a1..a12 + contrast + surface */
+}
+```
+
+These aliases live **only** in the root `@theme` block — not in `.dark` and not in the P3 `@supports` block. `var()` resolves at use-time, so when `.dark` redefines `--color-primary-*` or the P3 block swaps to oklch, `--color-accent-*` follows automatically. Single source of truth, no duplicated hex.
+
+A small `buildAliasBlock(fromName: string, toName: string): string` helper emits the 28 `var()` lines (`1..12`, `a1..a12`, `contrast`, `surface`) and is called once with `("accent", firstEntry.name)`.
 
 ### Removed
 
@@ -112,9 +124,9 @@ The second emission is literal duplication of the token values (not CSS `var(--c
 ### Test updates (`scripts/generate-theme-css.test.ts`)
 
 - Drop assertions referencing `--color-brand-*`.
-- Add: given `brandColors: [{ name: "primary", ... }, { name: "secondary", ... }]`, generated CSS contains `--color-primary-*`, `--color-secondary-*`, and `--color-accent-*` (aliasing `primary`), but **no** `--color-brand-*`.
-- Add: given only one brand entry, `--color-<name>-*` and `--color-accent-*` both present.
-- Add: alias scale values are byte-equal to the first entry's scale values.
+- Add: given `brandColors: [{ name: "primary", ... }, { name: "secondary", ... }]`, generated CSS contains `--color-primary-*`, `--color-secondary-*`, and `--color-accent-*` aliases (of form `var(--color-primary-N)`), but **no** `--color-brand-*`.
+- Add: given only one brand entry, `--color-<name>-*` and `--color-accent-*` both present; accent entries are all `var()` references.
+- Add: the `.dark` block and the P3 `@supports` block do **not** contain any `--color-accent-*` redefinitions.
 
 ## Theme module (`src/styles/theme.generated.ts`)
 
@@ -133,16 +145,17 @@ Populated from `env.VITE_BRAND_COLORS.map((e) => e.name)` inside `buildThemeModu
 @theme {
   --color-gray-1..12, --color-gray-a1..12, --color-gray-surface;
 
-  /* first entry — emitted twice (named + accent alias) */
+  /* concrete values per named entry */
   --color-primary-1..12, --color-primary-a1..12,
   --color-primary-contrast, --color-primary-surface;
-  --color-accent-1..12, --color-accent-a1..12,
-  --color-accent-contrast, --color-accent-surface;
-
-  /* remaining entries — named only */
   --color-secondary-1..12, --color-secondary-a1..12,
   --color-secondary-contrast, --color-secondary-surface;
   --color-tertiary-1..12, ...;
+
+  /* accent aliases — var() references to the first entry, only block */
+  --color-accent-1:  var(--color-primary-1);
+  --color-accent-2:  var(--color-primary-2);
+  /* … through 12, a1..a12, contrast, surface */
 
   --color-background: <VITE_BG_LIGHT>;
 
@@ -152,18 +165,18 @@ Populated from `env.VITE_BRAND_COLORS.map((e) => e.name)` inside `buildThemeModu
 }
 
 .dark {
-  /* all scales overridden with dark hex values; same name set */
+  /* concrete dark scales for gray + each named brand; NO accent redefinition */
   --color-gray-1: ...;
   --color-primary-1: ...;
-  --color-accent-1: ...;
   --color-secondary-1: ...;
   ...
   --color-background: <VITE_BG_DARK>;
 }
 
 @supports (color: oklch(0 0 0)) {
-  @theme { /* wide-gamut copies of every scale above */ }
-  .dark   { /* wide-gamut dark copies */ }
+  /* wide-gamut named scales only — accent aliases in base @theme already follow */
+  @theme { ... }
+  .dark   { ... }
 }
 ```
 
