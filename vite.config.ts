@@ -1,14 +1,12 @@
-import { defineConfig } from "vite";
-import { devtools } from "@tanstack/devtools-vite";
+import babel from '@rolldown/plugin-babel';
+import tailwindcss from '@tailwindcss/vite';
+import { devtools } from '@tanstack/devtools-vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
+import { themePlugin } from './plugins/vite-theme';
 
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-
-import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
-import babel from "@rolldown/plugin-babel";
-import tailwindcss from "@tailwindcss/vite";
-import { themePlugin } from "./plugins/vite-theme";
-
-const config = defineConfig({
+export default defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: [
     devtools(),
@@ -18,6 +16,7 @@ const config = defineConfig({
     viteReact(),
     babel({ presets: [reactCompilerPreset()] }),
   ],
+  test: {
+    setupFiles: ['./vitest.setup.ts'],
+  },
 });
-
-export default config;
