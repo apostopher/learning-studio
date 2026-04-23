@@ -10,16 +10,16 @@ Build the persistent application shell — header, aside, main, footer — as a 
 
 ## Key decisions
 
-| # | Decision | Choice |
-|---|----------|--------|
-| 1 | Grid topology | **Header & footer full-width; aside on the left between them; main fills the remaining cell** |
-| 2 | Scroll behavior | **Header & footer never move. Aside and main are independent scroll containers.** |
+| # | Decision            | Choice |
+| - | ------------------- | ------ |
+| 1 | Grid topology       | **Header & footer full-width; aside on the left between them; main fills the remaining cell** |
+| 2 | Scroll behavior     | **Header & footer never move. Aside and main are independent scroll containers.** |
 | 3 | Responsive strategy | **Desktop-only.** Below 768px an "unsupported viewport" screen replaces the shell. |
-| 4 | Region separator | **Grid `gap`** (uses existing `--layout-separator-size`). Regions are floating panels; page background shows through the gap. |
-| 5 | Region backgrounds | **Uniform** — all four panels use the same `--panel-bg` token. No ring, no shadow. |
+| 4 | Region separator    | **Grid `gap`** (uses existing `--layout-separator-size`). Regions are floating panels; page background shows through the gap. |
+| 5 | Region backgrounds  | **Uniform** — all four panels use the same `--panel-bg` token. No ring, no shadow. |
 | 6 | Placeholder content | Header: `<Logo />` + `appTitle`. Aside: nav stub. Footer: copyright stub. Main: empty. |
 | 7 | Everything-is-a-var | **Every non-breakpoint value is a CSS custom property**, so theme swaps need no JSX or component CSS changes. |
-| 8 | Out of scope | User-draggable aside, collapsible aside, real navigation, header actions, nested `<Outlet />`. |
+| 8 | Out of scope        | User-draggable aside, collapsible aside, real navigation, header actions, nested `<Outlet />`. |
 
 ## Dependencies
 
@@ -37,7 +37,7 @@ A single CSS grid on the shell root fills `100dvh`. Named grid areas pin header,
 
 A viewport guard is CSS-only: below 768px, `@media` rules collapse the grid and reveal a single `<UnsupportedScreen />` element. No JavaScript breakpoint state, no hydration mismatch.
 
-```
+```text
 <AppShell>                             // grid root, 100dvh, gap = --shell-gap, bg = --shell-bg
   <header .app-shell__header>          // Logo + appTitle
   <aside  .app-shell__aside>           // overflow-auto, nav stub
@@ -51,7 +51,7 @@ A viewport guard is CSS-only: below 768px, `@media` rules collapse the grid and 
 
 Grid template:
 
-```
+```text
 columns:  [var(--sidebar-width)] [minmax(0, 1fr)]
 rows:     [var(--header-height)] [minmax(0, 1fr)] [var(--footer-height)]
 
@@ -173,19 +173,19 @@ All tokens live in `@layer base`; all rules live in a new `@layer components` bl
 
 ## Token inventory (what themes can override)
 
-| Token | Purpose | Default |
-|---|---|---|
-| `--header-height` | top row height | `64px` |
-| `--footer-height` | bottom row height | `40px` |
-| `--sidebar-width` | aside column width | `300px` |
-| `--shell-gap` | gap between panels | `var(--layout-separator-size)` |
-| `--shell-padding` | outer inset from viewport edge | `var(--layout-separator-size)` |
-| `--shell-bg` | page background behind panels | `var(--color-background)` |
-| `--panel-bg` | each panel's background | `var(--color-gray-2)` |
-| `--panel-radius` | each panel's corner radius | `0.75rem` |
-| `--unsupported-bg` | < 768px background | `var(--color-background)` |
-| `--unsupported-padding` | < 768px inset | `calc(var(--layout-separator-size) * 2)` |
-| `--unsupported-max-inline-size` | unsupported-screen body width | `32ch` |
+| Token                           | Purpose                        | Default                          |
+| ------------------------------- | ------------------------------ | -------------------------------- |
+| `--header-height`               | top row height                 | `64px`                           |
+| `--footer-height`               | bottom row height              | `40px`                           |
+| `--sidebar-width`               | aside column width             | `300px`                          |
+| `--shell-gap`                   | gap between panels             | `var(--layout-separator-size)`   |
+| `--shell-padding`               | outer inset from viewport edge | `var(--layout-separator-size)`   |
+| `--shell-bg`                    | page background behind panels  | `var(--color-background)`        |
+| `--panel-bg`                    | each panel's background        | `var(--color-gray-2)`            |
+| `--panel-radius`                | each panel's corner radius     | `0.75rem`                        |
+| `--unsupported-bg`              | < 768px background             | `var(--color-background)`        |
+| `--unsupported-padding`         | < 768px inset                  | `calc(var(--layout-separator-size) * 2)` |
+| `--unsupported-max-inline-size` | unsupported-screen body width  | `32ch`                           |
 
 A theme swaps the shell's geometry or chrome by setting these on `:root` (or `.dark`). No component CSS, JSX, or build step involved.
 
@@ -324,14 +324,17 @@ Logical-property Tailwind classes (`ps-4`, `pe-4`) per project CLAUDE.md.
 ## File inventory
 
 **New:**
+
 - `src/components/app-shell.tsx`
 - `src/components/unsupported-screen.tsx`
 
 **Modified:**
+
 - `src/styles.css` — add new tokens in `@layer base`; add `@layer components` block with shell, unsupported, and unsupported-screen rules.
 - `src/routes/index.tsx` — replace skeleton with `<AppShell />` composition.
 
 **No changes to:**
+
 - `src/routes/__root.tsx`
 - `vite.config.ts`, `src/env.ts`, `scripts/generate-theme-css.ts`, `plugins/vite-theme.ts`
 - Any file under `src/db/`, `src/lib/`
