@@ -6,6 +6,48 @@
 
 /* https://x.com/csswizardry/status/1717841334462005661 */
 @layer base {
+  html {
+    --header-height: 64px;
+    --sidebar-width: 300px;
+    --content-height: calc(100vh - var(--header-height));
+    --layout-separator-size: 12px;
+
+    /* shell layout — all overridable per theme */
+    --footer-height: 40px;
+    --shell-padding: var(--layout-separator-size);
+    --shell-gap: var(--layout-separator-size);
+    --shell-bg: var(--color-background);
+
+    --panel-bg: var(--color-gray-2);
+    --panel-radius: 0.75rem;
+
+    --unsupported-bg: var(--color-background);
+    --unsupported-padding: calc(var(--layout-separator-size) * 2);
+    --unsupported-max-inline-size: 32ch;
+
+    --ease-in-quad: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+    --ease-in-cubic: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+    --ease-in-quart: cubic-bezier(0.895, 0.03, 0.685, 0.22);
+    --ease-in-quint: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+    --ease-in-expo: cubic-bezier(0.95, 0.05, 0.795, 0.035);
+    --ease-in-circ: cubic-bezier(0.6, 0.04, 0.98, 0.335);
+
+    --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+    --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+    --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+    --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
+
+    --ease-in-out-quad: cubic-bezier(0.455, 0.03, 0.515, 0.955);
+    --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+    --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-in-out-quint: cubic-bezier(0.86, 0, 0.07, 1);
+    --ease-in-out-expo: cubic-bezier(1, 0, 0, 1);
+    --ease-in-out-circ: cubic-bezier(0.785, 0.135, 0.15, 0.86);
+
+    interpolate-size: allow-keywords;
+  }
   img {
     font-style: italic; /* if the image doesn't loßad, the alt text will be italic */
 
@@ -78,3 +120,98 @@
   }
 }
 
+@layer components {
+  .app-shell {
+    display: grid;
+    block-size: 100dvh;
+    inline-size: 100%;
+
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-rows:
+      var(--header-height)
+      minmax(0, 1fr)
+      var(--footer-height);
+    grid-template-areas:
+      "header header"
+      "aside  main"
+      "footer footer";
+
+    gap: var(--shell-gap);
+    padding: var(--shell-padding);
+    background-color: var(--shell-bg);
+  }
+
+  .app-shell > .app-shell__header {
+    grid-area: header;
+  }
+  .app-shell > .app-shell__aside {
+    grid-area: aside;
+  }
+  .app-shell > .app-shell__main {
+    grid-area: main;
+  }
+  .app-shell > .app-shell__footer {
+    grid-area: footer;
+  }
+
+  .app-shell
+    > :is(
+      .app-shell__header,
+      .app-shell__aside,
+      .app-shell__main,
+      .app-shell__footer
+    ) {
+    background-color: var(--panel-bg);
+    border-radius: var(--panel-radius);
+  }
+
+  .app-shell__aside,
+  .app-shell__main {
+    overflow: auto;
+    min-block-size: 0;
+    min-inline-size: 0;
+  }
+
+  .app-shell__unsupported {
+    display: none;
+  }
+
+  .unsupported-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--layout-separator-size);
+    max-inline-size: var(--unsupported-max-inline-size);
+    text-align: center;
+    color: var(--color-gray-12);
+  }
+  .unsupported-screen__title {
+    font-family: var(--font-display);
+  }
+  .unsupported-screen__body {
+    color: var(--color-gray-11);
+  }
+
+  @media (max-width: 767px) {
+    .app-shell {
+      display: block;
+      padding: 0;
+      background-color: var(--unsupported-bg);
+    }
+    .app-shell
+      > :is(
+        .app-shell__header,
+        .app-shell__aside,
+        .app-shell__main,
+        .app-shell__footer
+      ) {
+      display: none;
+    }
+    .app-shell__unsupported {
+      display: grid;
+      place-items: center;
+      block-size: 100dvh;
+      padding: var(--unsupported-padding);
+    }
+  }
+}
