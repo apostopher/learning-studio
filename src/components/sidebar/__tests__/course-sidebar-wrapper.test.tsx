@@ -8,7 +8,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider } from 'jotai';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -118,7 +118,8 @@ describe('CourseSidebarWrapper', () => {
       '3D Airmanship',
     );
     expect(screen.getByText('2 modules · 3 lessons')).toBeDefined();
-    // The wrapper should auto-open the module containing the active lesson
+    // Accordion starts closed; open the Intermediate module to reveal Yaw.
+    fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
     await waitFor(() => {
       const yawLink = screen.getByRole('link', { name: 'Yaw' });
       expect(yawLink.getAttribute('aria-current')).toBe('page');

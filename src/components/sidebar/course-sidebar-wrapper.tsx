@@ -32,9 +32,6 @@ export const CourseSidebarWrapper = () => {
     };
   }, [data, isError, isLoading]);
 
-  // Auto-open the module containing the active lesson
-  const effectiveOpenModuleSlug = params.moduleSlug ?? openModuleSlug;
-
   if (derived.status === 'loading' || derived.status === 'error') {
     return (
       <CourseSidebar
@@ -53,7 +50,7 @@ export const CourseSidebarWrapper = () => {
       moduleCount={derived.moduleCount}
       lessonCount={derived.lessonCount}
       modules={derived.modules}
-      openModuleSlug={effectiveOpenModuleSlug}
+      openModuleSlug={openModuleSlug}
       onOpenChange={setOpenModuleSlug}
       activeLessonSlug={params.lessonSlug ?? null}
     />
