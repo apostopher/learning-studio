@@ -268,3 +268,90 @@
     }
   }
 }
+
+@theme {
+  /* sidebar spacing */
+  --spacing-sidebar-row-block: calc(var(--spacing) * 2);
+  --spacing-sidebar-row-inline: calc(var(--spacing) * 3);
+  --spacing-sidebar-lesson-indent: calc(var(--spacing) * 6);
+  --spacing-sidebar-row-gap: calc(var(--spacing) * 1);
+  --spacing-sidebar-section-gap: calc(var(--spacing) * 3);
+
+  /* sidebar shape */
+  --radius-sidebar-row: var(--radius-md);
+
+  /* sidebar static tokens (no utility generation) */
+  --border-width-sidebar-active: 2px;
+  --outline-width-sidebar-focus: 2px;
+  --outline-offset-sidebar-focus: 2px;
+  --color-sidebar-focus-ring: var(--color-accent-9);
+
+  /* sidebar animation */
+  --duration-sidebar-chevron: 200ms;
+  --duration-sidebar-reveal: 320ms;
+  --duration-sidebar-shimmer: 1400ms;
+  --ease-sidebar: var(--ease-out-cubic);
+  --blur-sidebar-reveal: 2px;
+  --sidebar-skeleton-row-opacity-step: 0.12;
+
+  /* sidebar skeleton row heights */
+  --block-size-sidebar-skeleton-header: calc(var(--spacing) * 10);
+  --block-size-sidebar-skeleton-module: calc(var(--spacing) * 9);
+  --block-size-sidebar-skeleton-lesson: calc(var(--spacing) * 7);
+}
+
+@layer components {
+  /* Focus-visible ring applied via semantic class; no Tailwind arbitrary values. */
+  .sidebar-focus-ring:focus-visible {
+    outline-style: solid;
+    outline-color: var(--color-sidebar-focus-ring);
+    outline-width: var(--outline-width-sidebar-focus);
+    outline-offset: var(--outline-offset-sidebar-focus);
+  }
+  .sidebar-focus-ring:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Active-lesson row appearance. */
+  .sidebar-row-active {
+    background-color: var(--color-accent-3);
+    color: var(--color-accent-11);
+    border-inline-start-width: var(--border-width-sidebar-active);
+    border-inline-start-style: solid;
+    border-inline-start-color: var(--color-accent-7);
+  }
+
+  /* Chevron rotation flip (Base UI Trigger exposes data-panel-open). */
+  .sidebar-chevron {
+    transition-property: transform;
+    transition-duration: var(--duration-sidebar-chevron);
+    transition-timing-function: var(--ease-sidebar);
+    transform: rotate(-90deg);
+  }
+  [data-panel-open] .sidebar-chevron {
+    transform: rotate(0deg);
+  }
+
+  /* Skeleton shimmer: a wide gradient moving across the background. */
+  .sidebar-skeleton-row {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-gray-3) 0%,
+      var(--color-gray-4) 50%,
+      var(--color-gray-3) 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    border-radius: var(--radius-sidebar-row);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-chevron {
+      transition-duration: 0ms;
+    }
+    .sidebar-skeleton-row {
+      background-image: none;
+      background-color: var(--color-gray-3);
+    }
+  }
+}
