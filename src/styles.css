@@ -321,17 +321,6 @@
     border-inline-start-color: var(--color-accent-7);
   }
 
-  /* Chevron rotation flip (Base UI Trigger exposes data-panel-open). */
-  .sidebar-chevron {
-    transition-property: transform;
-    transition-duration: var(--duration-sidebar-chevron);
-    transition-timing-function: var(--ease-sidebar);
-    transform: rotate(-90deg);
-  }
-  [data-panel-open] .sidebar-chevron {
-    transform: rotate(0deg);
-  }
-
   /* Skeleton shimmer: a wide gradient moving across the background. */
   .sidebar-skeleton-row {
     background-image: linear-gradient(
@@ -346,9 +335,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .sidebar-chevron {
-      transition-duration: 0ms;
-    }
     .sidebar-skeleton-row {
       background-image: none;
       background-color: var(--color-gray-3);

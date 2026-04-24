@@ -1,4 +1,5 @@
 import { Accordion } from '@base-ui/react/accordion';
+import { MotionConfig } from 'motion/react';
 import { ModuleItem } from './module-item';
 
 type LessonLike = { slug: string; name: string };
@@ -22,22 +23,28 @@ export const ModuleAccordion = ({
   onOpenChange,
   activeLessonSlug,
 }: ModuleAccordionProps) => (
-  <Accordion.Root
-    value={openModuleSlug ? [openModuleSlug] : []}
-    onValueChange={(values) =>
-      onOpenChange(
-        typeof values[0] === 'string' ? (values[0] as string) : null,
-      )
-    }
-    className="flex flex-col gap-sidebar-row-gap"
+  <MotionConfig
+    reducedMotion="user"
+    transition={{ type: 'spring', bounce: 0.2, visualDuration: 0.4 }}
   >
-    {modules.map((module, index) => (
-      <ModuleItem
-        key={module.slug}
-        module={module}
-        rank={index + 1}
-        activeLessonSlug={activeLessonSlug}
-      />
-    ))}
-  </Accordion.Root>
+    <Accordion.Root
+      value={openModuleSlug ? [openModuleSlug] : []}
+      onValueChange={(values) =>
+        onOpenChange(
+          typeof values[0] === 'string' ? (values[0] as string) : null,
+        )
+      }
+      className="flex flex-col gap-sidebar-row-gap"
+    >
+      {modules.map((module, index) => (
+        <ModuleItem
+          key={module.slug}
+          module={module}
+          rank={index + 1}
+          isOpen={openModuleSlug === module.slug}
+          activeLessonSlug={activeLessonSlug}
+        />
+      ))}
+    </Accordion.Root>
+  </MotionConfig>
 );

@@ -32,6 +32,7 @@ async function renderInside(rank: number, activeLessonSlug: string | null) {
         <ModuleItem
           module={module}
           rank={rank}
+          isOpen={false}
           activeLessonSlug={activeLessonSlug}
         />
       </Accordion.Root>
