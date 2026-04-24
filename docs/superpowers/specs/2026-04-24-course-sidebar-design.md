@@ -21,7 +21,7 @@
 ## Decisions (locked during brainstorm)
 
 | # | Question | Decision |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Click behavior | Lesson → TanStack Router `<Link>` to `/modules/$moduleSlug/lessons/$lessonSlug`. Scaffold the route now with a placeholder `main`. |
 | 2 | Accordion mode | Single-open. No auto-expand when route changes. |
 | 3 | Active lesson style | `bg-accent-3`, `text-accent-11`, 2px `border-inline-start` in `accent-7`. |
@@ -47,7 +47,7 @@ Every other component in the feature is pure: props in, JSX out, no hooks except
 
 ### Data flow
 
-```
+```text
 course-sidebar-wrapper (hooks, atom, router)
       │  props only
       ▼
@@ -64,7 +64,7 @@ course-sidebar  (motion stage, AnimatePresence, status branch)
 
 ### File layout
 
-```
+```text
 src/
 ├── atoms/
 │   └── sidebar.ts                          # openModuleSlugAtom
@@ -88,7 +88,7 @@ Public import: `import { CourseSidebarWrapper } from "@/components/sidebar/cours
 ### Component contracts
 
 | Component | Props | Renders |
-|---|---|---|
+| --- | --- | --- |
 | `CourseSidebarWrapper` | — | `<CourseSidebar …/>` |
 | `CourseSidebar` | `status`, `title?`, `moduleCount?`, `lessonCount?`, `modules?`, `openModuleSlug`, `onOpenChange`, `activeLessonSlug?` | `<nav aria-label="Course contents">` + motion stage |
 | `SidebarSkeleton` | — | shimmer rows (`aria-hidden`) |
@@ -135,7 +135,7 @@ All values trace to a named CSS variable. Tailwind default-scale utilities (`p-2
 ### Row state map
 
 | State | Module trigger | Lesson link |
-|---|---|---|
+| --- | --- | --- |
 | Rest | `text-gray-12`, transparent | `text-gray-11`, transparent |
 | Hover | `bg-gray-a3` | `bg-gray-a3`, `text-gray-12` |
 | Active (URL match) | — | `bg-accent-3`, `text-accent-11`, `border-inline-start-2 border-accent-7` |
