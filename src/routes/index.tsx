@@ -7,7 +7,6 @@ export const Route = createFileRoute("/")({ component: App });
 
 function App() {
   const { data: courseDetails } = useCourseDetails("3d-airmanship");
-  console.log(courseDetails);
   return (
     <AppShell
       header={<div className="flex items-center gap-3 h-full ps-4 pe-4"></div>}
