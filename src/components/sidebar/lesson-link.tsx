@@ -5,12 +5,14 @@ type LessonLike = { slug: string; name: string };
 type LessonLinkProps = {
   moduleSlug: string;
   lesson: LessonLike;
+  rank: number;
   isActive: boolean;
 };
 
 export const LessonLink = ({
   moduleSlug,
   lesson,
+  rank,
   isActive,
 }: LessonLinkProps) => {
   const classes = [
@@ -30,6 +32,12 @@ export const LessonLink = ({
       aria-current={isActive ? 'page' : undefined}
       className={classes}
     >
+      <span
+        aria-hidden="true"
+        className="tabular-nums text-gray-10 text-xs font-medium shrink-0 pt-0.5"
+      >
+        {String(rank).padStart(2, '0')}
+      </span>
       <span className="min-w-0 break-words">{lesson.name}</span>
     </Link>
   );

@@ -45,6 +45,7 @@ describe('LessonLink', () => {
       <LessonLink
         moduleSlug="fundamentals"
         lesson={lesson}
+        rank={1}
         isActive={false}
       />,
     );
@@ -58,7 +59,12 @@ describe('LessonLink', () => {
 
   it('marks the link as current and applies the active class when isActive is true', async () => {
     await renderInRouter(
-      <LessonLink moduleSlug="fundamentals" lesson={lesson} isActive />,
+      <LessonLink
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive
+      />,
     );
     const link = screen.getByRole('link', { name: 'Pitch and roll' });
     expect(link.getAttribute('aria-current')).toBe('page');
@@ -70,6 +76,7 @@ describe('LessonLink', () => {
       <LessonLink
         moduleSlug="fundamentals"
         lesson={lesson}
+        rank={1}
         isActive={false}
       />,
     );
