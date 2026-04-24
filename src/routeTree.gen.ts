@@ -16,6 +16,7 @@ import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/modules.$moduleSlug.lessons.$lessonSlug'
 
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
@@ -54,6 +55,12 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ModulesModuleSlugLessonsLessonSlugRoute =
+  ModulesModuleSlugLessonsLessonSlugRouteImport.update({
+    id: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -63,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -72,6 +80,7 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -82,6 +91,7 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
+    | '/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
+    | '/modules/$moduleSlug/lessons/$lessonSlug'
   id:
     | '__root__'
     | '/'
@@ -111,6 +123,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
+    | '/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -121,6 +134,7 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
+  ModulesModuleSlugLessonsLessonSlugRoute: typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -174,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/modules/$moduleSlug/lessons/$lessonSlug': {
+      id: '/modules/$moduleSlug/lessons/$lessonSlug'
+      path: '/modules/$moduleSlug/lessons/$lessonSlug'
+      fullPath: '/modules/$moduleSlug/lessons/$lessonSlug'
+      preLoaderRoute: typeof ModulesModuleSlugLessonsLessonSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -187,6 +208,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
+  ModulesModuleSlugLessonsLessonSlugRoute:
+    ModulesModuleSlugLessonsLessonSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
