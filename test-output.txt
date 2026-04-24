@@ -1,0 +1,109 @@
+Warning: Route file "/Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/src/routes/__tests__/modules.lessons.test.tsx" does not export a Route. This file will not be included in the route tree.
+
+If this file is not intended to be a route, you can exclude it using one of these options:
+  1. Rename the file to "/Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/src/routes/__tests__/-modules.lessons.test.tsx" (prefix with "-")
+  2. Use 'routeFileIgnorePattern' in your config to match this file
+
+Current configuration:
+  routeFileIgnorePrefix: "-"
+  routeFileIgnorePattern: undefined
+
+ RUN  v3.2.4 /Users/rahul/Developer/3d-airmanship/projects/rmtp-studio
+
+Error: [module runner] Dynamic access of "import.meta.env" is not supported. Please, use "import.meta.env.VITE_SENTRY_DSN" instead.
+    at Object.get (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1050:8)
+    at /Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/instrument.server.mjs:3:34
+    at ESModulesEvaluator.runInlinedModule (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:992:3)
+    at ModuleRunner.directRequest (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1247:59)
+    at ModuleRunner.cachedRequest (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1154:73)
+    at /Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/src/server.ts:1:1
+    at ESModulesEvaluator.runInlinedModule (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:992:3)
+    at ModuleRunner.directRequest (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1247:59)
+    at ModuleRunner.cachedRequest (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1154:73)
+    at ModuleRunner.import (file:///Users/rahul/Developer/3d-airmanship/projects/rmtp-studio/node_modules/.pnpm/vite@8.0.8_@types+node@22.19.17_esbuild@0.27.7_jiti@2.6.1_tsx@4.21.0/node_modules/vite/dist/node/module-runner.js:1104:10)
+ ✓ src/lib/__tests__/sidebar-motion.test.ts (4 tests) 85ms
+stderr | src/components/sidebar/__tests__/lesson-link.test.tsx > LessonLink > renders a link to the lesson route
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/sidebar/__tests__/course-sidebar-header.test.tsx (2 tests) 118ms
+ ✓ src/components/sidebar/__tests__/sidebar-error.test.tsx (2 tests) 118ms
+stderr | src/components/sidebar/__tests__/lesson-list.test.tsx > LessonList > renders one LessonLink per lesson in a single <ul>
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/lesson-link.test.tsx > LessonLink > marks the link as current and applies the active class when isActive is true
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/module-accordion.test.tsx > ModuleAccordion > renders one ModuleItem per module
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/module-item.test.tsx > ModuleItem > renders a trigger with zero-padded rank and module name
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/lesson-link.test.tsx > LessonLink > always applies the focus-ring class
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/sidebar/__tests__/sidebar-skeleton.test.tsx (2 tests) 266ms
+stderr | src/components/sidebar/__tests__/lesson-list.test.tsx > LessonList > marks only the matching lesson as active
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/__tests__/app-shell.test.tsx (3 tests) 312ms
+ ✓ src/components/sidebar/__tests__/lesson-link.test.tsx (3 tests) 388ms
+ ✓ src/components/sidebar/__tests__/lesson-list.test.tsx (2 tests) 362ms
+stderr | src/components/sidebar/__tests__/module-accordion.test.tsx > ModuleAccordion > calls onOpenChange with the clicked slug when a closed item is opened
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/module-item.test.tsx > ModuleItem > applies the focus-ring class on the trigger
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/course-sidebar.test.tsx > CourseSidebar > renders a nav landmark with the "Course contents" label
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/module-item.test.tsx > ModuleItem > includes a chevron with the sidebar-chevron class
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/sidebar/__tests__/module-item.test.tsx (3 tests) 549ms
+   ✓ ModuleItem > renders a trigger with zero-padded rank and module name  488ms
+stderr | src/components/sidebar/__tests__/course-sidebar-wrapper.test.tsx > CourseSidebarWrapper > renders the skeleton while loading
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/module-accordion.test.tsx > ModuleAccordion > calls onOpenChange with null when the open item is clicked again
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/course-sidebar-wrapper.test.tsx > CourseSidebarWrapper > renders the error when the query errors
+Not implemented: Window's scrollTo() method
+
+ ✓ src/utils/brand-colors.test.ts (12 tests) 7ms
+stderr | src/components/sidebar/__tests__/course-sidebar.test.tsx > CourseSidebar > renders the skeleton when status is "loading"
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/sidebar/__tests__/module-accordion.test.tsx (3 tests) 609ms
+   ✓ ModuleAccordion > renders one ModuleItem per module  430ms
+stderr | src/components/sidebar/__tests__/course-sidebar.test.tsx > CourseSidebar > renders the error when status is "error"
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/course-sidebar-wrapper.test.tsx > CourseSidebarWrapper > renders the error when data resolves to null
+Not implemented: Window's scrollTo() method
+
+ ✓ scripts/generate-theme-css.test.ts (16 tests) 88ms
+stderr | src/components/sidebar/__tests__/course-sidebar-wrapper.test.tsx > CourseSidebarWrapper > renders header + modules when ready and marks the active lesson from the URL
+Not implemented: Window's scrollTo() method
+
+stderr | src/components/sidebar/__tests__/course-sidebar.test.tsx > CourseSidebar > renders header + accordion when status is "ready"
+Not implemented: Window's scrollTo() method
+
+ ✓ src/components/sidebar/__tests__/course-sidebar.test.tsx (4 tests) 428ms
+ ✓ src/components/sidebar/__tests__/course-sidebar-wrapper.test.tsx (4 tests) 466ms
+ ✓ src/atoms/__tests__/sidebar.test.ts (3 tests) 13ms
+stderr | src/routes/__tests__/modules.lessons.test.tsx > LessonPlaceholder > renders the moduleSlug and lessonSlug from the URL
+Not implemented: Window's scrollTo() method
+
+ ✓ src/routes/__tests__/modules.lessons.test.tsx (1 test) 32ms
+
+ Test Files  15 passed (15)
+      Tests  64 passed (64)
+   Start at  18:09:36
+   Duration  2.93s (transform 1.84s, setup 2.29s, collect 5.57s, tests 3.84s, environment 11.50s, prepare 1.61s)
+
+close timed out after 10000ms
+Tests closed successfully but something prevents Vite server from exiting
+You can try to identify the cause by enabling "hanging-process" reporter. See https://vitest.dev/config/#reporters

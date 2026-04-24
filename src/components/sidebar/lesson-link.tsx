@@ -15,9 +15,9 @@ export const LessonLink = ({
 }: LessonLinkProps) => {
   const classes = [
     'sidebar-focus-ring',
-    'flex items-center gap-2',
+    'flex items-start gap-2',
     'ps-sidebar-lesson-indent pe-sidebar-row-inline py-sidebar-row-block',
-    'text-sm truncate',
+    'text-sm',
     'rounded-sidebar-row',
     'hover:bg-gray-a3 hover:text-gray-12',
     isActive ? 'sidebar-row-active' : 'text-gray-11',
@@ -30,7 +30,7 @@ export const LessonLink = ({
       aria-current={isActive ? 'page' : undefined}
       className={classes}
     >
-      <span className="truncate">{lesson.name}</span>
+      <span className="min-w-0 break-words">{lesson.name}</span>
     </Link>
   );
 };

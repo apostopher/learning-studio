@@ -26,6 +26,7 @@ export const ScrollArea = ({
       }
     >
       <BaseScrollArea.Viewport
+        data-orientation={orientation}
         className={
           viewportClassName
             ? `scroll-area-viewport ${viewportClassName}`

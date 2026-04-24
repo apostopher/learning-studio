@@ -378,6 +378,10 @@
     block-size: 100%;
     overscroll-behavior: contain;
   }
+  .scroll-area-viewport[data-orientation='vertical'] {
+    overflow-x: clip;
+    overflow-wrap: anywhere;
+  }
   .scroll-area-content {
     min-inline-size: 0;
     min-block-size: 0;
