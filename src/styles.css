@@ -183,7 +183,7 @@
 
   .app-shell__aside,
   .app-shell__main {
-    overflow: auto;
+    overflow: hidden;
     min-block-size: 0;
     min-inline-size: 0;
   }
@@ -353,5 +353,70 @@
       background-image: none;
       background-color: var(--color-gray-3);
     }
+  }
+}
+
+@theme {
+  /* scroll area shape + color */
+  --size-scroll-area-thumb: calc(var(--spacing) * 1.5);
+  --spacing-scroll-area-thumb-inset: 2px;
+  --radius-scroll-area-thumb: 9999px;
+  --color-scroll-area-thumb: var(--color-gray-a7);
+  --color-scroll-area-thumb-hover: var(--color-gray-a8);
+  --duration-scroll-area-thumb: 160ms;
+}
+
+@layer components {
+  .scroll-area-root {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: hidden;
+  }
+  .scroll-area-viewport {
+    inline-size: 100%;
+    block-size: 100%;
+    overscroll-behavior: contain;
+  }
+  .scroll-area-content {
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+  .scroll-area-scrollbar {
+    display: flex;
+    touch-action: none;
+    user-select: none;
+    padding: var(--spacing-scroll-area-thumb-inset);
+    background: transparent;
+    transition: background-color var(--duration-scroll-area-thumb) ease-out;
+    opacity: 0;
+    transition-property: opacity, background-color;
+  }
+  .scroll-area-scrollbar[data-hovering],
+  .scroll-area-scrollbar[data-scrolling] {
+    opacity: 1;
+  }
+  .scroll-area-scrollbar[data-orientation='vertical'] {
+    inline-size: calc(
+      var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
+    );
+  }
+  .scroll-area-scrollbar[data-orientation='horizontal'] {
+    block-size: calc(
+      var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
+    );
+    flex-direction: column;
+  }
+  .scroll-area-thumb {
+    background-color: var(--color-scroll-area-thumb);
+    border-radius: var(--radius-scroll-area-thumb);
+    flex: 1;
+    transition: background-color var(--duration-scroll-area-thumb) ease-out;
+  }
+  .scroll-area-thumb:hover {
+    background-color: var(--color-scroll-area-thumb-hover);
+  }
+  .scroll-area-corner {
+    background: transparent;
   }
 }
