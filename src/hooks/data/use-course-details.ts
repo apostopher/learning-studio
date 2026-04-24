@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { CourseDetails } from "@/db/course";
 
 export function useCourseDetails(slug?: string) {
   return useQuery({
@@ -8,7 +9,8 @@ export function useCourseDetails(slug?: string) {
       if (!response.ok) {
         throw new Error("Failed to fetch course details");
       }
-      return response.json();
+      const data = await response.json();
+      return data as CourseDetails;
     },
     staleTime: 1000 * 60 * 60 * 48, // 48 hours
     gcTime: 1000 * 60 * 60 * 48, // 48 hours
