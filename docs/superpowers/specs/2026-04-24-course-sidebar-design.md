@@ -180,16 +180,16 @@ New route file: `src/routes/modules.$moduleSlug.lessons.$lessonSlug.tsx`.
 
 ### Skeleton (`sidebar-skeleton.tsx`, pure)
 
-- 1 header-skeleton row + 6 module-skeleton rows + 3 lesson-skeleton rows nested under the first module row.
+- 1 header-skeleton row + 6 module-skeleton rows. Rows 3 and 4 each render 2 nested lesson-skeleton rows as a visual hint of the accordion's nested structure (the hint is fixed, not tied to any real accordion state).
 - Each row wrapped in `motion.div`; row `i` gets `opacity = 1 - i * var(--sidebar-skeleton-row-opacity-step)` via inline `style`.
-- Shimmer: `backgroundImage: linear-gradient(90deg, var(--color-gray-3) 0%, var(--color-gray-4) 50%, var(--color-gray-3) 100%)`, `backgroundSize: '200% 100%'`, `animate={{ backgroundPosition: ['0% 0', '-200% 0'] }}`, `transition={{ duration: parsedShimmerMs, repeat: Infinity, ease: 'linear' }}`. Both gradient stops use theme tokens so it adapts to any brand.
+- Shimmer: `backgroundImage: linear-gradient(90deg, var(--color-gray-3) 0%, var(--color-gray-4) 50%, var(--color-gray-3) 100%)`, `backgroundSize: '200% 100%'`, `animate={{ backgroundPosition: ['0% 0', '-200% 0'] }}`, `transition={{ duration: tokens.shimmerS, repeat: Infinity, ease: 'linear' }}`. All three gradient stops use theme tokens so the shimmer adapts to any brand.
 - `aria-hidden="true"` on the whole skeleton.
 
 ### Reveal (`course-sidebar.tsx`, pure)
 
 - `<AnimatePresence mode="wait">` around the status branch.
 - Skeleton exit: `exit={{ opacity: 0 }}`.
-- Real-content enter: `initial={{ opacity: 0, filter: 'blur(var(--blur-sidebar-reveal))' }}`, `animate={{ opacity: 1, filter: 'blur(0px)' }}`, `transition={{ duration: parsedRevealMs, ease: 'var(--ease-sidebar)' resolved to bezier tuple }}`.
+- Real-content enter: `initial={{ opacity: 0, filter: 'blur(var(--blur-sidebar-reveal))' }}`, `animate={{ opacity: 1, filter: 'blur(0px)' }}`, `transition={{ duration: tokens.revealS, ease: tokens.ease }}` (duration in seconds; ease is a 4-number cubic-bezier tuple).
 - When `useReducedMotion()` returns true, the initial `filter` drops to `'blur(0)'` and duration is clamped to 0.
 
 ### Motion token bridge
@@ -200,16 +200,18 @@ Motion's `transition` expects numeric ms and bezier tuples. A tiny helper `src/l
 export function readSidebarMotionTokens() {
   const root = document.documentElement;
   const s = getComputedStyle(root);
-  const ms = (v: string) => parseFloat(s.getPropertyValue(v)) || 0;
-  const bezier = parseCubicBezier(s.getPropertyValue('--ease-sidebar'));
+  const toSec = (v: string) => (parseFloat(s.getPropertyValue(v)) || 0) / 1000;
+  const ease = parseCubicBezier(s.getPropertyValue('--ease-sidebar')); // [x1, y1, x2, y2]
   return {
-    revealMs: ms('--duration-sidebar-reveal'),
-    chevronMs: ms('--duration-sidebar-chevron'),
-    shimmerMs: ms('--duration-sidebar-shimmer'),
-    ease: bezier,
+    revealS: toSec('--duration-sidebar-reveal'),
+    chevronS: toSec('--duration-sidebar-chevron'),
+    shimmerS: toSec('--duration-sidebar-shimmer'),
+    ease,
   };
 }
 ```
+
+Durations are exposed in seconds because `motion/react`'s `transition.duration` is a `number` in seconds.
 
 The wrapper calls this once on mount (via a ref-stable cache); it also re-resolves when a theme-change event fires (already emitted by the existing theme infrastructure — to be confirmed in the implementation plan).
 
