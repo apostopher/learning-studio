@@ -29,13 +29,13 @@
     --layout-separator-size: 12px;
 
     /* shell layout — all overridable per theme */
-    --footer-height: 40px;
+    --footer-height: 0px;
     --shell-padding: var(--layout-separator-size);
     --shell-gap: var(--layout-separator-size);
     --shell-bg: var(--color-background);
 
     --panel-bg: var(--color-gray-2);
-    --panel-radius: 0.75rem;
+    --panel-radius: 0rem;
 
     --unsupported-bg: var(--color-background);
     --unsupported-padding: calc(var(--layout-separator-size) * 2);
