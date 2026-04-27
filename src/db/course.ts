@@ -145,9 +145,9 @@ export async function getCourseDetails(slug: string) {
 
   // sort each module.lessons by rank
   moduleMapWithDependencies.forEach((mod) => {
-    const modLessons = mod.lessons.sort(
-      (a, b) => Number(a.rank) - Number(b.rank),
-    );
+    const modLessons = mod.lessons
+      .filter((lesson) => lesson.isAvailable)
+      .sort((a, b) => Number(a.rank) - Number(b.rank));
     // add depends on for module ids 2 to 5
     if (mod.id > 1 && mod.id < 6) {
       modLessons.forEach((lesson, index) => {
