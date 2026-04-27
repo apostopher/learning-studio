@@ -33,6 +33,7 @@ export const LessonLink = ({
       to="/modules/$moduleSlug/lessons/$lessonSlug"
       params={{ moduleSlug, lessonSlug: lesson.slug }}
       aria-current={isActive ? 'page' : undefined}
+      viewTransition
       className={classes}
     >
       <span
