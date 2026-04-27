@@ -49,6 +49,8 @@
     "drizzle-zod": "0.8.3",
     "ioredis": "5.10.1",
     "jotai": "2.19.1",
+    "jotai-family": "1.0.1",
+    "jotai-tanstack-query": "0.11.0",
     "lucide-react": "^0.545.0",
     "motion": "12.38.0",
     "nitro": "3.0.260415-beta",
