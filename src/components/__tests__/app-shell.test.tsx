@@ -7,7 +7,8 @@ describe('AppShell', () => {
   const renderShell = () =>
     render(
       <AppShell
-        header={<div>HEADER_CONTENT</div>}
+        headerAside={<div>HEADER_ASIDE_CONTENT</div>}
+        headerMain={<div>HEADER_MAIN_CONTENT</div>}
         aside={<div>ASIDE_CONTENT</div>}
         main={<div>MAIN_CONTENT</div>}
         footer={<div>FOOTER_CONTENT</div>}
@@ -26,10 +27,20 @@ describe('AppShell', () => {
 
   it('routes each slot into the correct landmark', () => {
     renderShell();
-    expect(screen.getByRole('banner').textContent).toBe('HEADER_CONTENT');
+    const banner = screen.getByRole('banner');
+    expect(banner.textContent).toContain('HEADER_ASIDE_CONTENT');
+    expect(banner.textContent).toContain('HEADER_MAIN_CONTENT');
     expect(screen.getByRole('complementary').textContent).toBe('ASIDE_CONTENT');
     expect(screen.getByRole('main').textContent).toBe('MAIN_CONTENT');
     expect(screen.getByRole('contentinfo').textContent).toBe('FOOTER_CONTENT');
+  });
+
+  it('places header-aside and header-main in their respective grid slots', () => {
+    const { container } = renderShell();
+    const aside = container.querySelector('.app-shell__header-aside');
+    const main = container.querySelector('.app-shell__header-main');
+    expect(aside?.textContent).toBe('HEADER_ASIDE_CONTENT');
+    expect(main?.textContent).toBe('HEADER_MAIN_CONTENT');
   });
 
   it('always renders the unsupported-screen slot (CSS hides it ≥ 768px)', () => {

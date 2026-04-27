@@ -4,7 +4,6 @@ import { LessonError } from './parts/lesson-error';
 import { LessonNoVideo } from './parts/lesson-no-video';
 import { LessonNotFound } from './parts/lesson-not-found';
 import { LessonSkeleton } from './parts/lesson-skeleton';
-import { LessonTitle } from './parts/lesson-title';
 import type { LessonMainState, VideoFetchState } from './types';
 
 const NULL_VIDEO_REF: RefObject<HTMLVideoElement | null> = { current: null };
@@ -61,20 +60,12 @@ const renderArticleBody = (state: LessonMainState) => {
     case 'not-found':
       return <LessonNotFound lessonSlug={state.lessonSlug} />;
     case 'no-video':
-      return (
-        <>
-          <LessonTitle name={state.lessonName} />
-          <LessonNoVideo lessonName={state.lessonName} />
-        </>
-      );
+      return <LessonNoVideo lessonName={state.lessonName} />;
     case 'ready':
       return (
-        <>
-          <LessonTitle name={state.lessonName} />
-          <div className="lesson-player">
-            {renderPlayerSlot(state.videoState)}
-          </div>
-        </>
+        <div className="lesson-player">
+          {renderPlayerSlot(state.videoState)}
+        </div>
       );
     case 'course-loading': {
       // Handled by the early-return below; included here for switch exhaustiveness.

@@ -167,6 +167,26 @@
 
   .app-shell > .app-shell__header {
     grid-area: header;
+    /* Sub-grid mirrors the outer column tracks so header content can align
+       with the aside or main columns regardless of sidebar resize. */
+    display: grid;
+    grid-template-columns:
+      var(--sidebar-width)
+      var(--shell-gap)
+      minmax(0, 1fr);
+    column-gap: 0;
+  }
+  .app-shell > .app-shell__header > .app-shell__header-aside {
+    grid-column: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+  .app-shell > .app-shell__header > .app-shell__header-main {
+    grid-column: 3;
+    min-inline-size: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
   }
   .app-shell > .app-shell__aside {
     grid-area: aside;
@@ -633,13 +653,40 @@
     padding-block: calc(var(--spacing) * 6);
   }
 
-  .lesson-title {
+  .lesson-header {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    padding-inline: calc(var(--spacing) * 6);
+    min-inline-size: 0;
+  }
+
+  .lesson-header__title {
     color: var(--color-gray-12);
     font-family: var(--font-sans);
-    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+    font-size: clamp(1rem, 1.6vw, 1.25rem);
     font-weight: 600;
     line-height: 1.2;
     margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    inline-size: 100%;
+  }
+
+  .lesson-header__skeleton {
+    block-size: 1rem;
+    inline-size: min(40%, 16rem);
+    background: var(--color-gray-a4);
+    border-radius: var(--radius-md, 0.375rem);
+    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lesson-header__skeleton {
+      animation: none;
+    }
   }
 
   .lesson-player {
@@ -701,18 +748,12 @@
     padding-block: calc(var(--spacing) * 6);
   }
 
-  .lesson-skeleton-title {
-    block-size: 1.5rem;
-    inline-size: 60%;
-    background: var(--color-gray-a4);
-    border-radius: var(--radius-md, 0.375rem);
-  }
-
   .lesson-skeleton-player {
     aspect-ratio: 16 / 9;
     inline-size: 100%;
     background: var(--color-gray-a4);
     border-radius: var(--radius-lg, 0.5rem);
+    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
   }
 
   @keyframes lesson-skeleton-pulse {
@@ -720,13 +761,7 @@
     50% { opacity: 1; }
   }
 
-  .lesson-skeleton-title,
-  .lesson-skeleton-player {
-    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .lesson-skeleton-title,
     .lesson-skeleton-player {
       animation: none;
     }

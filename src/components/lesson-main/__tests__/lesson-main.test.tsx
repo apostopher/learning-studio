@@ -41,17 +41,16 @@ describe('LessonMain', () => {
     expect(status.textContent).toContain('missing-lesson');
   });
 
-  it('renders no-video status with the lesson name and title', () => {
+  it('renders no-video status with the lesson name (title now lives in header)', () => {
     render(
       <LessonMain state={{ kind: 'no-video', lessonName: 'Lesson Two' }} />,
     );
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      'Lesson Two',
-    );
+    // h1 is rendered by LessonHeader in the AppShell header, not here.
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.getByRole('status').textContent).toContain('Lesson Two');
   });
 
-  it('renders the title when state.kind is ready with fetching video', () => {
+  it('renders the player when state.kind is ready with fetching video', () => {
     // ready+fetching uses the pure VideoPlayer (no container), so we don't
     // hit the project's vitest hook-resolution issue with VideoPlayerContainer.
     render(
@@ -64,10 +63,8 @@ describe('LessonMain', () => {
         }}
       />,
     );
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      'Lesson One',
-    );
-    // The pure VideoPlayer renders the spinner via role=status
+    // h1 is in the header now, not the article body.
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.getByRole('region', { name: 'Video player' })).toBeTruthy();
   });
 });

@@ -20,6 +20,7 @@ export async function getVideoDetails(videoId: string) {
       cache: "no-store",
     },
   );
+  console.log("response", response);
   if (!response.ok) {
     throw new Error("GET_VIDEO_URL_ERROR");
   }
