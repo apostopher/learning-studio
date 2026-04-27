@@ -1,3 +1,9 @@
+// TODO: add unit tests for this hook (buffered-range computation, error message
+// extraction, fullscreen-change handling). Deferred because the project's
+// vite/vitest setup currently fails with "Invalid hook call" on any direct
+// React-hook import inside tests. Library hooks (motion/react) work fine. No
+// existing test in the repo uses direct React hooks, so this is a pre-existing
+// infrastructure issue worth fixing separately.
 import { useSetAtom } from 'jotai';
 import { type RefObject, useEffect, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';

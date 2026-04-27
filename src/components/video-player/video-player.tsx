@@ -47,6 +47,14 @@ export const VideoPlayer = ({
   const surfaceLabel = paused ? labels.play : labels.pause;
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (
+      target.matches?.(
+        '[role="slider"], input, textarea, [role="menu"], [role="menu"] *',
+      )
+    ) {
+      return;
+    }
     a.onKeyboardShortcut?.(event.key);
   };
 
