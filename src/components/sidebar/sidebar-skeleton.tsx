@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react';
+import { inlineDirSign } from '#/lib/inline-direction';
 import { readSidebarMotionTokens } from '../../lib/sidebar-motion';
 
 const MODULE_ROW_COUNT = 6;
@@ -15,9 +16,13 @@ function rowOpacity(index: number): number {
   return Math.max(0.1, 1 - index * safe);
 }
 
-const shimmerAnimate = {
-  backgroundPosition: ['0% 0', '-200% 0'] as [string, string],
-};
+// Shimmer travels from inline-start to inline-end. In LTR that's
+// left→right (background-position 0% → -200%); in RTL it's right→left
+// (0% → +200%). Flip the end keyframe via inlineDirSign().
+const shimmerKeyframes = (sign: 1 | -1) =>
+  ({
+    backgroundPosition: ['0% 0', `${-200 * sign}% 0`] as [string, string],
+  }) as const;
 
 export const SidebarSkeleton = () => {
   const reduced = useReducedMotion();
@@ -29,7 +34,7 @@ export const SidebarSkeleton = () => {
         repeat: Number.POSITIVE_INFINITY,
         ease: 'linear' as const,
       };
-  const animate = reduced ? undefined : shimmerAnimate;
+  const animate = reduced ? undefined : shimmerKeyframes(inlineDirSign());
 
   return (
     <div

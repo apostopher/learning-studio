@@ -1,22 +1,11 @@
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { inlineDirSign } from '#/lib/inline-direction';
 
 const FALLBACK_MIN = 300;
 const FALLBACK_MAX = 400;
 const KEYBOARD_STEP = 8;
 
 const isBrowser = () => typeof document !== 'undefined';
-
-/**
- * Returns +1 in LTR and -1 in RTL. Multiply by a viewport-physical pointer
- * delta (clientX) to get a logical inline-direction delta where positive
- * means "grow the sidebar" regardless of writing mode.
- */
-const inlineDirSign = (): 1 | -1 => {
-  if (!isBrowser()) return 1;
-  return getComputedStyle(document.documentElement).direction === 'rtl'
-    ? -1
-    : 1;
-};
 
 const readPxVar = (name: string, fallback: number): number => {
   if (!isBrowser()) return fallback;
