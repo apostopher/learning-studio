@@ -452,11 +452,18 @@
     aspect-ratio: 16 / 9;
     inline-size: 100%;
     max-inline-size: 100%;
+    /* Letterbox is always dark (YouTube-style). In light theme gray-12 is
+       near-black; in dark theme gray-1 is pure black. Both keep contrast
+       with the white player chrome (icons, captions). */
     background: var(--color-gray-12);
     overflow: hidden;
     border-radius: var(--radius-lg, 0.5rem);
     color: var(--color-gray-1);
     font-family: var(--font-sans);
+  }
+
+  .dark .video-player {
+    background: var(--color-gray-1);
   }
 
   .video-player[data-controls-visible="false"][data-status="ready"] {
@@ -468,6 +475,10 @@
     block-size: 100%;
     object-fit: contain;
     background: var(--color-gray-12);
+  }
+
+  .dark .video-player video {
+    background: var(--color-gray-1);
   }
 
   .video-player ::cue {
