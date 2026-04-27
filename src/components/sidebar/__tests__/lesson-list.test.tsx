@@ -34,9 +34,9 @@ async function renderInRouter(ui: React.ReactNode) {
 }
 
 const lessons = [
-  { slug: 'a', name: 'Lesson A' },
-  { slug: 'b', name: 'Lesson B' },
-  { slug: 'c', name: 'Lesson C' },
+  { slug: 'a', name: 'Lesson A', videoId: null },
+  { slug: 'b', name: 'Lesson B', videoId: null },
+  { slug: 'c', name: 'Lesson C', videoId: null },
 ];
 
 describe('LessonList', () => {
@@ -45,6 +45,7 @@ describe('LessonList', () => {
       <LessonList
         moduleSlug="fundamentals"
         lessons={lessons}
+        lessonPercents={{}}
         activeLessonSlug={null}
       />,
     );
@@ -60,6 +61,7 @@ describe('LessonList', () => {
       <LessonList
         moduleSlug="fundamentals"
         lessons={lessons}
+        lessonPercents={{}}
         activeLessonSlug="b"
       />,
     );

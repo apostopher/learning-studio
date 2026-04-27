@@ -1,10 +1,12 @@
 import { Accordion } from '@base-ui/react/accordion';
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { CircularProgress } from '../ui/circular-progress';
 import { LessonList } from './lesson-list';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = { slug: string; name: string; videoId: string | null };
 type ModuleLike = {
+  id: number;
   slug: string;
   name: string;
   lessons: readonly LessonLike[];
@@ -15,11 +17,13 @@ type ModuleItemProps = {
   rank: number;
   isOpen: boolean;
   activeLessonSlug: string | null;
+  modulePercent: number;
+  lessonPercents: Record<string, number>;
 };
 
 const TRIGGER_CLASSES = [
   'sidebar-focus-ring',
-  'flex items-start gap-2 w-full',
+  'flex items-center gap-2 w-full',
   'px-sidebar-row-inline py-sidebar-row-block',
   'text-start text-sm text-gray-12',
   'rounded-sidebar-row',
@@ -47,16 +51,24 @@ export const ModuleItem = ({
   rank,
   isOpen,
   activeLessonSlug,
+  modulePercent,
+  lessonPercents,
 }: ModuleItemProps) => (
   <Accordion.Item value={module.slug} className="flex flex-col">
     <Accordion.Header>
       <Accordion.Trigger className={TRIGGER_CLASSES}>
-        <span className="tabular-nums text-gray-10 text-xs font-medium shrink-0 pt-0.5">
+        <span className="tabular-nums text-gray-10 text-xs font-medium shrink-0">
           {String(rank).padStart(2, '0')}
         </span>
-        <span className="flex-1 min-w-0 break-words">{module.name}</span>
+        <span className="flex-1 min-w-0 truncate">{module.name}</span>
+        <CircularProgress
+          value={modulePercent}
+          size={24}
+          strokeWidth={8}
+          ariaLabel={`Module ${module.name} progress`}
+        />
         <motion.span
-          className="sidebar-chevron shrink-0 mt-0.5 inline-flex"
+          className="sidebar-chevron shrink-0 inline-flex"
           animate={{ rotate: isOpen ? 0 : -90 }}
           style={{ willChange: 'transform' }}
           aria-hidden="true"
@@ -79,6 +91,7 @@ export const ModuleItem = ({
                 moduleSlug={module.slug}
                 lessons={module.lessons}
                 activeLessonSlug={activeLessonSlug}
+                lessonPercents={lessonPercents}
               />
             </motion.div>
           </motion.div>

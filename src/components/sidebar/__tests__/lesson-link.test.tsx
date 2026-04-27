@@ -37,7 +37,11 @@ async function renderInRouter(ui: React.ReactNode, initialPath = '/') {
   });
 }
 
-const lesson = { slug: 'pitch-and-roll', name: 'Pitch and roll' };
+const lesson = {
+  slug: 'pitch-and-roll',
+  name: 'Pitch and roll',
+  videoId: null,
+};
 
 describe('LessonLink', () => {
   it('renders a link to the lesson route', async () => {
@@ -47,9 +51,10 @@ describe('LessonLink', () => {
         lesson={lesson}
         rank={1}
         isActive={false}
+        progressPercent={0}
       />,
     );
-    const link = screen.getByRole('link', { name: 'Pitch and roll' });
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.getAttribute('href')).toBe(
       '/modules/fundamentals/lessons/pitch-and-roll',
     );
@@ -64,9 +69,10 @@ describe('LessonLink', () => {
         lesson={lesson}
         rank={1}
         isActive
+        progressPercent={0}
       />,
     );
-    const link = screen.getByRole('link', { name: 'Pitch and roll' });
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.getAttribute('aria-current')).toBe('page');
     expect(link.className).toContain('sidebar-row-active');
   });
@@ -78,9 +84,10 @@ describe('LessonLink', () => {
         lesson={lesson}
         rank={1}
         isActive={false}
+        progressPercent={0}
       />,
     );
-    const link = screen.getByRole('link', { name: 'Pitch and roll' });
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.className).toContain('sidebar-focus-ring');
   });
 });

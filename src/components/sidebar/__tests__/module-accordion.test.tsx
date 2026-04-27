@@ -16,13 +16,13 @@ const modules = [
     id: 1,
     name: 'Fundamentals',
     slug: 'fundamentals',
-    lessons: [{ slug: 'pitch', name: 'Pitch' }],
+    lessons: [{ slug: 'pitch', name: 'Pitch', videoId: null }],
   },
   {
     id: 2,
     name: 'Intermediate',
     slug: 'intermediate',
-    lessons: [{ slug: 'yaw', name: 'Yaw' }],
+    lessons: [{ slug: 'yaw', name: 'Yaw', videoId: null }],
   },
 ];
 
@@ -40,6 +40,8 @@ async function renderIn(
         openModuleSlug={openModuleSlug}
         onOpenChange={onOpenChange}
         activeLessonSlug={null}
+        lessonPercents={{}}
+        modulePercents={{}}
       />
     ),
   });

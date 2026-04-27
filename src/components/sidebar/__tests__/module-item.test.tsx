@@ -17,8 +17,8 @@ const module = {
   name: 'Fundamentals',
   slug: 'fundamentals',
   lessons: [
-    { slug: 'pitch', name: 'Pitch' },
-    { slug: 'roll', name: 'Roll' },
+    { slug: 'pitch', name: 'Pitch', videoId: null },
+    { slug: 'roll', name: 'Roll', videoId: null },
   ],
 };
 
@@ -34,6 +34,8 @@ async function renderInside(rank: number, activeLessonSlug: string | null) {
           rank={rank}
           isOpen={false}
           activeLessonSlug={activeLessonSlug}
+          modulePercent={0}
+          lessonPercents={{}}
         />
       </Accordion.Root>
     ),

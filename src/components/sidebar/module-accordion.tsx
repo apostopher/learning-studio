@@ -2,7 +2,7 @@ import { Accordion } from '@base-ui/react/accordion';
 import { MotionConfig } from 'motion/react';
 import { ModuleItem } from './module-item';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = { slug: string; name: string; videoId: string | null };
 type ModuleLike = {
   id: number;
   slug: string;
@@ -15,6 +15,8 @@ type ModuleAccordionProps = {
   openModuleSlug: string | null;
   onOpenChange: (slug: string | null) => void;
   activeLessonSlug: string | null;
+  lessonPercents: Record<string, number>;
+  modulePercents: Record<number, number>;
 };
 
 export const ModuleAccordion = ({
@@ -22,6 +24,8 @@ export const ModuleAccordion = ({
   openModuleSlug,
   onOpenChange,
   activeLessonSlug,
+  lessonPercents,
+  modulePercents,
 }: ModuleAccordionProps) => (
   <MotionConfig
     reducedMotion="user"
@@ -43,6 +47,8 @@ export const ModuleAccordion = ({
           rank={index + 1}
           isOpen={openModuleSlug === module.slug}
           activeLessonSlug={activeLessonSlug}
+          modulePercent={modulePercents[module.id] ?? 0}
+          lessonPercents={lessonPercents}
         />
       ))}
     </Accordion.Root>

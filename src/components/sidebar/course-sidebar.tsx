@@ -5,7 +5,7 @@ import { ModuleAccordion } from './module-accordion';
 import { SidebarError } from './sidebar-error';
 import { SidebarSkeleton } from './sidebar-skeleton';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = { slug: string; name: string; videoId: string | null };
 type ModuleLike = {
   id: number;
   slug: string;
@@ -22,6 +22,8 @@ type CourseSidebarProps = {
   openModuleSlug: string | null;
   onOpenChange: (slug: string | null) => void;
   activeLessonSlug: string | null;
+  lessonPercents?: Record<string, number>;
+  modulePercents?: Record<number, number>;
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -35,6 +37,8 @@ export const CourseSidebar = ({
   openModuleSlug,
   onOpenChange,
   activeLessonSlug,
+  lessonPercents,
+  modulePercents,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -85,6 +89,8 @@ export const CourseSidebar = ({
               openModuleSlug={openModuleSlug}
               onOpenChange={onOpenChange}
               activeLessonSlug={activeLessonSlug}
+              lessonPercents={lessonPercents ?? {}}
+              modulePercents={modulePercents ?? {}}
             />
           </motion.div>
         )}
