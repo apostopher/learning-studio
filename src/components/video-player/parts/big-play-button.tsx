@@ -7,7 +7,11 @@ type BigPlayButtonProps = {
   disabled?: boolean;
 };
 
-export const BigPlayButton = ({ label, onClick, disabled }: BigPlayButtonProps) => {
+export const BigPlayButton = ({
+  label,
+  onClick,
+  disabled,
+}: BigPlayButtonProps) => {
   const reduced = useReducedMotion();
   return (
     <div className="vp-overlay">
@@ -21,7 +25,9 @@ export const BigPlayButton = ({ label, onClick, disabled }: BigPlayButtonProps) 
         whileHover={reduced || disabled ? undefined : { scale: 1.05 }}
         whileTap={reduced || disabled ? undefined : { scale: 0.95 }}
         transition={
-          reduced ? { duration: 0 } : { type: 'spring', bounce: 0.3, visualDuration: 0.3 }
+          reduced
+            ? { duration: 0 }
+            : { type: 'spring', bounce: 0.3, visualDuration: 0.3 }
         }
         style={{
           display: 'inline-flex',

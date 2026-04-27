@@ -37,7 +37,12 @@ describe('VideoPlayer', () => {
         {...MIN_PROPS}
         videoRef={ref}
         tracks={[
-          { src: 'cap.vtt', srcLang: 'en', label: 'English', kind: 'subtitles' },
+          {
+            src: 'cap.vtt',
+            srcLang: 'en',
+            label: 'English',
+            kind: 'subtitles',
+          },
         ]}
         state={{ captionsEnabled: true }}
         actions={{ onCaptionsToggle: vi.fn() }}

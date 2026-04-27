@@ -53,7 +53,9 @@ export const VideoPlayerContainer = ({
     } else if (root.requestFullscreen) {
       await root.requestFullscreen();
     } else if (v && 'webkitEnterFullscreen' in v) {
-      (v as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen();
+      (
+        v as unknown as { webkitEnterFullscreen: () => void }
+      ).webkitEnterFullscreen();
     }
   };
 

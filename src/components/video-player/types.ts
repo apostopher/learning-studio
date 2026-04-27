@@ -1,6 +1,11 @@
 import type * as React from 'react';
 
-export type VideoPlayerStatus = 'idle' | 'loading' | 'ready' | 'buffering' | 'error';
+export type VideoPlayerStatus =
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'buffering'
+  | 'error';
 
 export type VideoPlayerState = {
   paused: boolean;

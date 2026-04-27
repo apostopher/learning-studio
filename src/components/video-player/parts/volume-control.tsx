@@ -56,7 +56,10 @@ export const VolumeControl = ({
             }}
           >
             <Slider.Indicator
-              style={{ background: 'var(--color-accent-9)', borderRadius: 9999 }}
+              style={{
+                background: 'var(--color-accent-9)',
+                borderRadius: 9999,
+              }}
             />
             <Slider.Thumb
               style={{

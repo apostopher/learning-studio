@@ -8,6 +8,7 @@ type SpinnerProps = {
 export const Spinner = ({ label }: SpinnerProps) => {
   const reduced = useReducedMotion();
   return (
+    // biome-ignore lint/a11y/useSemanticElements: role=status on overlay div — the live-region semantic is intentional; <output> would carry irrelevant form-control semantics
     <div className="vp-overlay" role="status">
       <span className="vp-sr-only">{label}</span>
       {reduced ? (

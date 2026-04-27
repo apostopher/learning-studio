@@ -55,7 +55,8 @@ export const PlaybackRateMenu = ({
                 paddingInline: 8,
                 borderRadius: 4,
                 cursor: 'pointer',
-                background: r === rate ? 'var(--color-accent-a4)' : 'transparent',
+                background:
+                  r === rate ? 'var(--color-accent-a4)' : 'transparent',
                 fontVariantNumeric: 'tabular-nums',
               }}
             >

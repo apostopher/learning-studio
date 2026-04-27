@@ -4,8 +4,8 @@ import { BigPlayButton } from './parts/big-play-button';
 import { CaptionsButton } from './parts/captions-button';
 import { ErrorOverlay } from './parts/error-overlay';
 import { FullscreenButton } from './parts/fullscreen-button';
-import { PlaybackRateMenu } from './parts/playback-rate-menu';
 import { PlayPauseButton } from './parts/play-pause-button';
+import { PlaybackRateMenu } from './parts/playback-rate-menu';
 import { Scrubber } from './parts/scrubber';
 import { Spinner } from './parts/spinner';
 import { TimeDisplay } from './parts/time-display';
@@ -51,6 +51,7 @@ export const VideoPlayer = ({
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: keep div root — section's UA styles add unwanted block flow; aria role + tabIndex give the same semantics with full layout control
     <div
       ref={rootRef}
       role="region"
@@ -61,6 +62,7 @@ export const VideoPlayer = ({
       onMouseMove={a.onPointerActivity}
       onPointerDown={a.onPointerActivity}
       onKeyDown={handleKeyDown}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: root is focusable so keyboard shortcuts (Space/arrows/F/M/C) work even before any control inside has focus
       tabIndex={0}
     >
       <video ref={videoRef} src={src} playsInline {...nativeRest}>
