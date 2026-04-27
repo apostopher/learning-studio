@@ -6,15 +6,27 @@ import { UnsupportedScreen } from './unsupported-screen';
 const ASIDE_ID = 'app-shell-aside';
 
 type AppShellProps = {
-  header: ReactNode;
+  /** Content placed above the sidebar (aligns with the aside column). */
+  headerAside?: ReactNode;
+  /** Content placed above the main section (aligns with the main column). */
+  headerMain?: ReactNode;
   aside: ReactNode;
   main: ReactNode;
   footer: ReactNode;
 };
 
-export const AppShell = ({ header, aside, main, footer }: AppShellProps) => (
+export const AppShell = ({
+  headerAside,
+  headerMain,
+  aside,
+  main,
+  footer,
+}: AppShellProps) => (
   <div className="app-shell">
-    <header className="app-shell__header">{header}</header>
+    <header className="app-shell__header">
+      <div className="app-shell__header-aside">{headerAside}</div>
+      <div className="app-shell__header-main">{headerMain}</div>
+    </header>
     <aside id={ASIDE_ID} className="app-shell__aside" aria-label="Sidebar">
       <ScrollArea>{aside}</ScrollArea>
     </aside>

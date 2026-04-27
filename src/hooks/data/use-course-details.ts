@@ -1,8 +1,8 @@
-import { useAtomValue } from "jotai";
-import { atomFamily } from "jotai-family";
-import { atomWithQuery } from "jotai-tanstack-query";
-import type { CourseDetails } from "@/db/course";
-import { queryKeys } from "./keys";
+import { useAtomValue } from 'jotai';
+import { atomFamily } from 'jotai-family';
+import { atomWithQuery } from 'jotai-tanstack-query';
+import type { CourseDetails } from '@/db/course';
+import { queryKeys } from './keys';
 
 export const courseDetailsAtomFamily = atomFamily((slug: string) =>
   atomWithQuery(() => ({
@@ -10,7 +10,7 @@ export const courseDetailsAtomFamily = atomFamily((slug: string) =>
     queryFn: async () => {
       const response = await fetch(`/api/course/details?slug=${slug}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch course details");
+        throw new Error('Failed to fetch course details');
       }
       const data = await response.json();
       return data as CourseDetails;
@@ -22,5 +22,5 @@ export const courseDetailsAtomFamily = atomFamily((slug: string) =>
 );
 
 export function useCourseDetails(slug?: string) {
-  return useAtomValue(courseDetailsAtomFamily(slug ?? ""));
+  return useAtomValue(courseDetailsAtomFamily(slug ?? ''));
 }

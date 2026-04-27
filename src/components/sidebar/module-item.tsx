@@ -1,6 +1,7 @@
 import { Accordion } from '@base-ui/react/accordion';
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { inlineDirSign } from '#/lib/inline-direction';
 import { CircularProgress } from '../ui/circular-progress';
 import { LessonList } from './lesson-list';
 
@@ -69,7 +70,11 @@ export const ModuleItem = ({
         />
         <motion.span
           className="sidebar-chevron shrink-0 inline-flex"
-          animate={{ rotate: isOpen ? 0 : -90 }}
+          // -90deg points the chevron toward inline-start in LTR. Sign-flip
+          // with inlineDirSign() so it mirrors to +90 in RTL — same physical
+          // logic, opposite physical direction. Closed → points back at the
+          // page edge; open → points down into the panel.
+          animate={{ rotate: isOpen ? 0 : -90 * inlineDirSign() }}
           style={{ willChange: 'transform' }}
           aria-hidden="true"
         >

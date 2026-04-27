@@ -11,6 +11,7 @@ function readWidth(): number {
 }
 
 beforeEach(() => {
+  document.documentElement.dir = '';
   document.documentElement.style.setProperty('--sidebar-width', '320px');
   document.documentElement.style.setProperty('--sidebar-width-min', '300px');
   document.documentElement.style.setProperty('--sidebar-width-max', '400px');
@@ -62,6 +63,16 @@ describe('ResizeHandle', () => {
     fireEvent.keyDown(handle, { key: 'Enter' });
     expect(readWidth()).toBe(300);
     fireEvent.keyDown(handle, { key: 'Enter' });
+    expect(readWidth()).toBe(320);
+  });
+
+  it('inverts arrow keys in RTL (ArrowLeft grows, ArrowRight shrinks)', () => {
+    document.documentElement.dir = 'rtl';
+    render(<ResizeHandle />);
+    const handle = screen.getByRole('separator');
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(readWidth()).toBe(328);
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
     expect(readWidth()).toBe(320);
   });
 });

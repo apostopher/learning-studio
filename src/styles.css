@@ -167,6 +167,26 @@
 
   .app-shell > .app-shell__header {
     grid-area: header;
+    /* Sub-grid mirrors the outer column tracks so header content can align
+       with the aside or main columns regardless of sidebar resize. */
+    display: grid;
+    grid-template-columns:
+      var(--sidebar-width)
+      var(--shell-gap)
+      minmax(0, 1fr);
+    column-gap: 0;
+  }
+  .app-shell > .app-shell__header > .app-shell__header-aside {
+    grid-column: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+  .app-shell > .app-shell__header > .app-shell__header-main {
+    grid-column: 3;
+    min-inline-size: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
   }
   .app-shell > .app-shell__aside {
     grid-area: aside;
@@ -443,5 +463,362 @@
   }
   .scroll-area-corner {
     background: transparent;
+  }
+}
+
+@layer components {
+  .video-player {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    /* Whole player surface uses the always-dark theme so the controls bar
+       below the video reads as a single dark slab. In light theme gray-12
+       is near-black; .dark override below uses gray-1 (pure black). */
+    background: var(--color-gray-12);
+    border-radius: var(--radius-lg, 0.5rem);
+    overflow: hidden;
+    color: var(--color-gray-1);
+    font-family: var(--font-sans);
+  }
+
+  .dark .video-player {
+    background: var(--color-gray-1);
+    /* Foreground inherits to icons, time text, captions — gray-1 is #000
+       in dark theme (illegible on the dark slab). Flip to gray-12 (light)
+       so icons and text read white over the always-dark player. */
+    color: var(--color-gray-12);
+  }
+
+  /* The 16:9 video surface — sibling to the controls. Overlays (BigPlay,
+     Spinner, ErrorOverlay, click surface) are scoped here. */
+  .vp-video-area {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    inline-size: 100%;
+    background: var(--color-gray-12);
+    overflow: hidden;
+  }
+
+  .dark .vp-video-area {
+    background: var(--color-gray-1);
+  }
+
+  .video-player[data-controls-visible="false"][data-status="ready"]
+    .vp-video-area {
+    cursor: none;
+  }
+
+  .video-player video {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+    background: var(--color-gray-12);
+  }
+
+  .dark .video-player video {
+    background: var(--color-gray-1);
+  }
+
+  .video-player ::cue {
+    background: var(--color-gray-a12);
+    color: var(--color-gray-1);
+    font-family: var(--font-sans);
+  }
+
+  .dark .video-player ::cue {
+    color: var(--color-gray-12);
+  }
+
+  .video-player .vp-controls {
+    /* Controls sit below the video on the same dark player slab. No
+       gradient (no longer overlaying the video). The slab is dark in
+       both themes (see .video-player + .dark .video-player rules). */
+    display: grid;
+    gap: calc(var(--spacing) * 1);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 3);
+    background: var(--color-gray-12);
+    border-block-start: 1px solid var(--color-gray-a4);
+  }
+
+  .dark .video-player .vp-controls {
+    background: var(--color-gray-1);
+    border-block-start-color: var(--color-gray-a4);
+  }
+
+  .video-player .vp-controls-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .video-player .vp-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--spacing) * 8);
+    block-size: calc(var(--spacing) * 8);
+    border-radius: var(--radius-md, 0.375rem);
+    color: var(--color-gray-1);
+    background: transparent;
+  }
+
+  .dark .video-player .vp-icon-button {
+    color: var(--color-gray-12);
+  }
+
+  /* Modifier for icon-buttons that also carry a text label (e.g. playback
+     rate trigger "1x"). Frees the fixed 32×32 box so the label fits on
+     one line. */
+  .video-player .vp-icon-button.vp-icon-button--text {
+    inline-size: auto;
+    min-inline-size: calc(var(--spacing) * 8);
+    padding-inline: calc(var(--spacing) * 2);
+    gap: calc(var(--spacing) * 1);
+    white-space: nowrap;
+  }
+
+  .video-player .vp-icon-button:hover:not(:disabled) {
+    background: var(--color-gray-a4);
+  }
+
+  .video-player .vp-icon-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .video-player .vp-icon-button:focus-visible,
+  .video-player .vp-surface:focus-visible,
+  .video-player [data-base-ui]:focus-visible {
+    outline: 2px solid var(--color-accent-9);
+    outline-offset: 2px;
+  }
+
+  .video-player .vp-surface {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .video-player .vp-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .video-player .vp-error {
+    /* Always-dark scrim regardless of theme. gray-a11 in light mode is a
+       near-black alpha; in dark mode it flips to a near-white alpha, which
+       is wrong for an error overlay over a dark letterbox. Override below. */
+    background: var(--color-gray-a11);
+    color: var(--color-gray-1);
+    padding: calc(var(--spacing) * 4);
+    text-align: center;
+  }
+
+  .dark .video-player .vp-error {
+    /* In dark mode use the inverse alpha (gray-a12 light is near-black) so
+       the overlay stays a dark scrim, and pick the light gray for text. */
+    background: rgba(0, 0, 0, 0.72);
+    color: var(--color-gray-12);
+  }
+
+  .video-player .vp-error__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+  }
+
+  .video-player .vp-error__message {
+    margin: 0;
+    font-size: 0.9375rem;
+    max-inline-size: 40ch;
+  }
+
+  .video-player .vp-error__retry {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md, 0.375rem);
+    background: var(--color-accent-9);
+    color: var(--color-accent-contrast);
+    border: 0;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .video-player .vp-error__retry:hover {
+    background: var(--color-accent-10);
+  }
+
+  .video-player .vp-error__retry:focus-visible {
+    outline: 2px solid var(--color-accent-9);
+    outline-offset: 2px;
+  }
+
+  .video-player .vp-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-gray-1);
+    font-size: 0.875rem;
+  }
+
+  .dark .video-player .vp-time {
+    color: var(--color-gray-12);
+  }
+
+  .video-player .vp-sr-only {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@layer components {
+  .lesson-main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 4);
+    inline-size: min(100%, 1100px);
+    margin-inline: auto;
+    padding-inline: calc(var(--spacing) * 6);
+    padding-block: calc(var(--spacing) * 6);
+  }
+
+  .lesson-header {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    padding-inline: calc(var(--spacing) * 6);
+    padding-inline-start: 0;
+    min-inline-size: 0;
+  }
+
+  .lesson-header__title {
+    color: var(--color-gray-12);
+    font-family: var(--font-sans);
+    font-size: clamp(1rem, 1.6vw, 1.25rem);
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    inline-size: 100%;
+  }
+
+  .lesson-header__skeleton {
+    block-size: 1rem;
+    inline-size: min(40%, 16rem);
+    background: var(--color-gray-a4);
+    border-radius: var(--radius-md, 0.375rem);
+    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lesson-header__skeleton {
+      animation: none;
+    }
+  }
+
+  .lesson-player {
+    /* The video player owns the 16:9 video area internally; the controls
+       row sits below it. Don't constrain the aspect ratio here. */
+    inline-size: 100%;
+  }
+
+  .lesson-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 3);
+    text-align: center;
+    background: var(--color-gray-2);
+    color: var(--color-gray-11);
+    border: 1px solid var(--color-gray-a6);
+    border-radius: var(--radius-lg, 0.5rem);
+    padding-inline: calc(var(--spacing) * 6);
+    padding-block: calc(var(--spacing) * 6);
+    block-size: 100%;
+  }
+
+  .lesson-card__heading {
+    color: var(--color-gray-12);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .lesson-card__retry {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md, 0.375rem);
+    background: var(--color-accent-9);
+    color: var(--color-accent-contrast);
+    border: 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .lesson-card__retry:hover {
+    background: var(--color-accent-10);
+  }
+
+  .lesson-card__retry:focus-visible,
+  .lesson-card:focus-visible {
+    outline: 2px solid var(--color-accent-9);
+    outline-offset: 2px;
+  }
+
+  .lesson-empty {
+    color: var(--color-gray-11);
+    text-align: center;
+    padding-inline: calc(var(--spacing) * 6);
+    padding-block: calc(var(--spacing) * 6);
+  }
+
+  .lesson-skeleton-player {
+    aspect-ratio: 16 / 9;
+    inline-size: 100%;
+    background: var(--color-gray-a4);
+    border-radius: var(--radius-lg, 0.5rem);
+    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes lesson-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lesson-skeleton-player {
+      animation: none;
+    }
   }
 }
