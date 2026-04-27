@@ -484,6 +484,10 @@
 
   .dark .video-player {
     background: var(--color-gray-1);
+    /* Foreground inherits to icons, time text, captions — gray-1 is #000
+       in dark theme (illegible on the dark slab). Flip to gray-12 (light)
+       so icons and text read white over the always-dark player. */
+    color: var(--color-gray-12);
   }
 
   /* The 16:9 video surface — sibling to the controls. Overlays (BigPlay,
@@ -522,6 +526,10 @@
     font-family: var(--font-sans);
   }
 
+  .dark .video-player ::cue {
+    color: var(--color-gray-12);
+  }
+
   .video-player .vp-controls {
     /* Controls sit below the video on the same dark player slab. No
        gradient (no longer overlaying the video). The slab is dark in
@@ -554,6 +562,10 @@
     border-radius: var(--radius-md, 0.375rem);
     color: var(--color-gray-1);
     background: transparent;
+  }
+
+  .dark .video-player .vp-icon-button {
+    color: var(--color-gray-12);
   }
 
   .video-player .vp-icon-button:hover:not(:disabled) {
@@ -648,6 +660,10 @@
     font-variant-numeric: tabular-nums;
     color: var(--color-gray-1);
     font-size: 0.875rem;
+  }
+
+  .dark .video-player .vp-time {
+    color: var(--color-gray-12);
   }
 
   .video-player .vp-sr-only {
