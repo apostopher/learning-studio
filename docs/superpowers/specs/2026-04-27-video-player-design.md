@@ -41,7 +41,7 @@
 
 ### File layout
 
-```
+```text
 src/components/video-player/
 ├── video-player.tsx                 # presentational
 ├── video-player-container.tsx       # stateful (jotai + videoRef)
@@ -185,6 +185,7 @@ const {
 ```
 
 Behavior when actions are missing:
+
 - Missing `onCaptionsToggle` or empty `tracks` → captions button not rendered.
 - Missing `onFullscreenToggle` → fullscreen button not rendered.
 - Missing `onPlaybackRateChange` → rate menu not rendered.
@@ -194,11 +195,13 @@ Behavior when actions are missing:
 Default labels (English) are baked in but every entry is overridable via `labels`.
 
 Minimum usage:
+
 ```tsx
 <VideoPlayer src={url} videoRef={ref} />
 ```
 
 Full usage:
+
 ```tsx
 <VideoPlayer
   src={url}
@@ -213,7 +216,7 @@ Full usage:
 
 ## DOM tree
 
-```
+```tsx
 <div ref={rootRef} role="region" aria-label={labels.player} class="video-player"
      data-controls-visible data-status>
   <video ref={videoRef} src={src} {...nativeRest}>
@@ -368,6 +371,7 @@ Only one overlay shows at a time. Order:
 | `video-player.test.tsx` | Renders required minimal props; renders/hides parts based on optional actions; ARIA labels correct; keyboard shortcut callbacks fire on root keydown; reduced-motion path; status overlays mutually exclusive. |
 
 **Storybook stories (`video-player.stories.tsx`):**
+
 - Idle / Loading / Ready / Buffering / Error.
 - With captions / without.
 - With/without each optional action (verifies graceful degradation).
