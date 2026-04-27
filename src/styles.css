@@ -468,16 +468,16 @@
 
 @layer components {
   .video-player {
-    position: relative;
-    aspect-ratio: 16 / 9;
+    display: flex;
+    flex-direction: column;
     inline-size: 100%;
     max-inline-size: 100%;
-    /* Letterbox is always dark (YouTube-style). In light theme gray-12 is
-       near-black; in dark theme gray-1 is pure black. Both keep contrast
-       with the white player chrome (icons, captions). */
+    /* Whole player surface uses the always-dark theme so the controls bar
+       below the video reads as a single dark slab. In light theme gray-12
+       is near-black; .dark override below uses gray-1 (pure black). */
     background: var(--color-gray-12);
-    overflow: hidden;
     border-radius: var(--radius-lg, 0.5rem);
+    overflow: hidden;
     color: var(--color-gray-1);
     font-family: var(--font-sans);
   }
@@ -486,7 +486,22 @@
     background: var(--color-gray-1);
   }
 
-  .video-player[data-controls-visible="false"][data-status="ready"] {
+  /* The 16:9 video surface — sibling to the controls. Overlays (BigPlay,
+     Spinner, ErrorOverlay, click surface) are scoped here. */
+  .vp-video-area {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    inline-size: 100%;
+    background: var(--color-gray-12);
+    overflow: hidden;
+  }
+
+  .dark .vp-video-area {
+    background: var(--color-gray-1);
+  }
+
+  .video-player[data-controls-visible="false"][data-status="ready"]
+    .vp-video-area {
     cursor: none;
   }
 
@@ -508,14 +523,20 @@
   }
 
   .video-player .vp-controls {
-    position: absolute;
-    inset-inline: 0;
-    inset-block-end: 0;
+    /* Controls sit below the video on the same dark player slab. No
+       gradient (no longer overlaying the video). The slab is dark in
+       both themes (see .video-player + .dark .video-player rules). */
     display: grid;
     gap: calc(var(--spacing) * 1);
     padding-inline: calc(var(--spacing) * 3);
     padding-block: calc(var(--spacing) * 3);
-    background: linear-gradient(to top, var(--color-gray-a12), transparent);
+    background: var(--color-gray-12);
+    border-block-start: 1px solid var(--color-gray-a4);
+  }
+
+  .dark .video-player .vp-controls {
+    background: var(--color-gray-1);
+    border-block-start-color: var(--color-gray-a4);
   }
 
   .video-player .vp-controls-row {
@@ -659,6 +680,7 @@
     inline-size: 100%;
     block-size: 100%;
     padding-inline: calc(var(--spacing) * 6);
+    padding-inline-start: 0;
     min-inline-size: 0;
   }
 
@@ -690,7 +712,8 @@
   }
 
   .lesson-player {
-    aspect-ratio: 16 / 9;
+    /* The video player owns the 16:9 video area internally; the controls
+       row sits below it. Don't constrain the aspect ratio here. */
     inline-size: 100%;
   }
 
@@ -757,8 +780,13 @@
   }
 
   @keyframes lesson-skeleton-pulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

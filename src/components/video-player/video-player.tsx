@@ -67,123 +67,122 @@ export const VideoPlayer = ({
       className="video-player"
       data-controls-visible={controlsVisible}
       data-status={status}
-      onMouseMove={a.onPointerActivity}
-      onPointerDown={a.onPointerActivity}
       onKeyDown={handleKeyDown}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: root is focusable so keyboard shortcuts (Space/arrows/F/M/C) work even before any control inside has focus
       tabIndex={0}
     >
-      <video ref={videoRef} src={src} playsInline {...nativeRest}>
-        {tracks?.map((t) => (
-          <track key={`${t.src}-${t.srcLang ?? ''}`} {...t} />
-        ))}
-      </video>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer activity wakes the auto-hide controls; the inner <button class="vp-surface"> handles real click semantics */}
+      <div
+        className="vp-video-area"
+        onMouseMove={a.onPointerActivity}
+        onPointerDown={a.onPointerActivity}
+      >
+        <video ref={videoRef} src={src} playsInline {...nativeRest}>
+          {tracks?.map((t) => (
+            <track key={`${t.src}-${t.srcLang ?? ''}`} {...t} />
+          ))}
+        </video>
 
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={onSurfaceClick}
-        disabled={!onSurfaceClick}
-        aria-label={surfaceLabel}
-        className="vp-surface"
-      />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={onSurfaceClick}
+          disabled={!onSurfaceClick}
+          aria-label={surfaceLabel}
+          className="vp-surface"
+        />
 
-      <AnimatePresence>
-        {!hasPlayedOnce && status !== 'error' && status !== 'loading' ? (
-          <BigPlayButton
-            key="big-play"
-            label={labels.play}
-            onClick={a.onPlay}
-            disabled={!a.onPlay}
+        <AnimatePresence>
+          {!hasPlayedOnce && status !== 'error' && status !== 'loading' ? (
+            <BigPlayButton
+              key="big-play"
+              label={labels.play}
+              onClick={a.onPlay}
+              disabled={!a.onPlay}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        {status === 'loading' || status === 'buffering' ? (
+          <Spinner
+            label={status === 'loading' ? labels.loading : labels.buffering}
           />
         ) : null}
-      </AnimatePresence>
 
-      {status === 'loading' || status === 'buffering' ? (
-        <Spinner
-          label={status === 'loading' ? labels.loading : labels.buffering}
-        />
-      ) : null}
-
-      {status === 'error' ? (
-        <ErrorOverlay
-          message={error}
-          defaultMessage={labels.error}
-          retryLabel={labels.retry}
-          onRetry={a.onRetry}
-        />
-      ) : null}
-
-      <span aria-live="polite" className="vp-sr-only" />
-
-      <AnimatePresence>
-        {controlsVisible ? (
-          <motion.div
-            key="controls"
-            className="vp-controls"
-            initial={reduced ? false : { opacity: 0, y: 8 }}
-            animate={reduced ? undefined : { opacity: 1, y: 0 }}
-            exit={reduced ? undefined : { opacity: 0, y: 8 }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { type: 'spring', bounce: 0.1, visualDuration: 0.25 }
-            }
-          >
-            <Scrubber
-              currentTime={currentTime}
-              duration={duration}
-              bufferedEnd={bufferedEnd}
-              seekLabel={labels.seek}
-              onSeek={a.onSeek}
-            />
-            <div className="vp-controls-row">
-              <PlayPauseButton
-                paused={paused}
-                playLabel={labels.play}
-                pauseLabel={labels.pause}
-                onPlay={a.onPlay}
-                onPause={a.onPause}
-              />
-              <TimeDisplay currentTime={currentTime} duration={duration} />
-              <VolumeControl
-                volume={volume}
-                muted={muted}
-                muteLabel={labels.mute}
-                unmuteLabel={labels.unmute}
-                volumeLabel={labels.volume}
-                onMuteToggle={a.onMuteToggle}
-                onVolumeChange={a.onVolumeChange}
-              />
-              <span style={{ flex: 1 }} />
-              {a.onPlaybackRateChange ? (
-                <PlaybackRateMenu
-                  rate={playbackRate}
-                  rates={playbackRates}
-                  label={labels.playbackRate}
-                  onChange={a.onPlaybackRateChange}
-                />
-              ) : null}
-              {hasCaptions && a.onCaptionsToggle ? (
-                <CaptionsButton
-                  enabled={captionsEnabled}
-                  onLabel={labels.captionsOn}
-                  offLabel={labels.captionsOff}
-                  onToggle={a.onCaptionsToggle}
-                />
-              ) : null}
-              {a.onFullscreenToggle ? (
-                <FullscreenButton
-                  isFullscreen={fullscreen}
-                  enterLabel={labels.fullscreenEnter}
-                  exitLabel={labels.fullscreenExit}
-                  onToggle={a.onFullscreenToggle}
-                />
-              ) : null}
-            </div>
-          </motion.div>
+        {status === 'error' ? (
+          <ErrorOverlay
+            message={error}
+            defaultMessage={labels.error}
+            retryLabel={labels.retry}
+            onRetry={a.onRetry}
+          />
         ) : null}
-      </AnimatePresence>
+
+        <span aria-live="polite" className="vp-sr-only" />
+      </div>
+
+      <motion.div
+        className="vp-controls"
+        initial={reduced ? false : { opacity: 0, y: 4 }}
+        animate={reduced ? undefined : { opacity: 1, y: 0 }}
+        transition={
+          reduced
+            ? { duration: 0 }
+            : { type: 'spring', bounce: 0.1, visualDuration: 0.25 }
+        }
+      >
+        <Scrubber
+          currentTime={currentTime}
+          duration={duration}
+          bufferedEnd={bufferedEnd}
+          seekLabel={labels.seek}
+          onSeek={a.onSeek}
+        />
+        <div className="vp-controls-row">
+          <PlayPauseButton
+            paused={paused}
+            playLabel={labels.play}
+            pauseLabel={labels.pause}
+            onPlay={a.onPlay}
+            onPause={a.onPause}
+          />
+          <TimeDisplay currentTime={currentTime} duration={duration} />
+          <VolumeControl
+            volume={volume}
+            muted={muted}
+            muteLabel={labels.mute}
+            unmuteLabel={labels.unmute}
+            volumeLabel={labels.volume}
+            onMuteToggle={a.onMuteToggle}
+            onVolumeChange={a.onVolumeChange}
+          />
+          <span style={{ flex: 1 }} />
+          {a.onPlaybackRateChange ? (
+            <PlaybackRateMenu
+              rate={playbackRate}
+              rates={playbackRates}
+              label={labels.playbackRate}
+              onChange={a.onPlaybackRateChange}
+            />
+          ) : null}
+          {hasCaptions && a.onCaptionsToggle ? (
+            <CaptionsButton
+              enabled={captionsEnabled}
+              onLabel={labels.captionsOn}
+              offLabel={labels.captionsOff}
+              onToggle={a.onCaptionsToggle}
+            />
+          ) : null}
+          {a.onFullscreenToggle ? (
+            <FullscreenButton
+              isFullscreen={fullscreen}
+              enterLabel={labels.fullscreenEnter}
+              exitLabel={labels.fullscreenExit}
+              onToggle={a.onFullscreenToggle}
+            />
+          ) : null}
+        </div>
+      </motion.div>
     </div>
   );
 };
