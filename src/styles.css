@@ -25,6 +25,8 @@
 
     --header-height: 64px;
     --sidebar-width: 300px;
+    --sidebar-width-min: 300px;
+    --sidebar-width-max: 400px;
     --content-height: calc(100vh - var(--header-height));
     --layout-separator-size: 12px;
 
@@ -142,17 +144,23 @@
     block-size: 100dvh;
     inline-size: 100%;
 
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    /* The middle column is the gutter between aside and main. The resize
+       handle lives there so the user can grab anywhere in the gap. */
+    grid-template-columns:
+      var(--sidebar-width)
+      var(--shell-gap)
+      minmax(0, 1fr);
     grid-template-rows:
       var(--header-height)
       minmax(0, 1fr)
       var(--footer-height);
     grid-template-areas:
-      "header header"
-      "aside  main"
-      "footer footer";
+      "header  header  header"
+      "aside   sep     main"
+      "footer  footer  footer";
 
-    gap: var(--shell-gap);
+    column-gap: 0;
+    row-gap: var(--shell-gap);
     padding: var(--shell-padding);
     background-color: var(--shell-bg);
   }
@@ -162,6 +170,10 @@
   }
   .app-shell > .app-shell__aside {
     grid-area: aside;
+  }
+  .app-shell > .app-shell__separator {
+    grid-area: sep;
+    position: relative;
   }
   .app-shell > .app-shell__main {
     grid-area: main;
@@ -218,6 +230,7 @@
       > :is(
         .app-shell__header,
         .app-shell__aside,
+        .app-shell__separator,
         .app-shell__main,
         .app-shell__footer
       ) {
@@ -241,8 +254,8 @@
     .app-shell {
       grid-template-rows: minmax(0, 1fr) var(--footer-height);
       grid-template-areas:
-        "aside  main"
-        "footer footer";
+        "aside  sep     main"
+        "footer footer  footer";
     }
   }
 
@@ -254,8 +267,8 @@
     .app-shell {
       grid-template-rows: var(--header-height) minmax(0, 1fr);
       grid-template-areas:
-        "header header"
-        "aside  main";
+        "header header header"
+        "aside  sep    main";
     }
   }
 
@@ -264,8 +277,30 @@
     style(--footer-height: 0px) {
     .app-shell {
       grid-template-rows: minmax(0, 1fr);
-      grid-template-areas: "aside main";
+      grid-template-areas: "aside sep main";
     }
+  }
+
+  /*
+   * Wrapping detection isn't possible with container queries:
+   * container-type: inline-size doesn't expose height, and container-type: size
+   * activates size containment which would zero the row's intrinsic height.
+   * Instead, align by baseline — single-line rows look centered, and on wrap
+   * everything anchors to the first line's baseline so the rank stays on top.
+   */
+
+  /* The drag-handle fills the gutter cell, so the entire shell-gap is the
+     hit-area. No visible rule — the col-resize cursor is the only affordance. */
+  .resize-handle {
+    position: absolute;
+    inset: 0;
+    cursor: col-resize;
+    background: transparent;
+    touch-action: none;
+    user-select: none;
+  }
+  .resize-handle:focus-visible {
+    outline: none;
   }
 }
 
@@ -364,7 +399,7 @@
     block-size: 100%;
     overscroll-behavior: contain;
   }
-  .scroll-area-viewport[data-orientation='vertical'] {
+  .scroll-area-viewport[data-orientation="vertical"] {
     overflow-x: clip;
     overflow-wrap: anywhere;
   }
@@ -386,12 +421,12 @@
   .scroll-area-scrollbar[data-scrolling] {
     opacity: 1;
   }
-  .scroll-area-scrollbar[data-orientation='vertical'] {
+  .scroll-area-scrollbar[data-orientation="vertical"] {
     inline-size: calc(
       var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
     );
   }
-  .scroll-area-scrollbar[data-orientation='horizontal'] {
+  .scroll-area-scrollbar[data-orientation="horizontal"] {
     block-size: calc(
       var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
     );
