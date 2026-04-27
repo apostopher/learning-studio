@@ -14,20 +14,17 @@ export const ErrorOverlay = ({
   onRetry,
 }: ErrorOverlayProps) => (
   <div className="vp-overlay vp-error" role="alert">
-    <div>
-      <p>{message ?? defaultMessage}</p>
+    <div className="vp-error__body">
+      <p className="vp-error__message">{message ?? defaultMessage}</p>
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="vp-icon-button"
+          className="vp-error__retry"
           aria-label={retryLabel}
-          style={{ marginBlockStart: 'calc(var(--spacing) * 2)' }}
         >
-          <RotateCcw size={20} aria-hidden="true" />
-          <span style={{ marginInlineStart: 'calc(var(--spacing) * 2)' }}>
-            {retryLabel}
-          </span>
+          <RotateCcw size={16} aria-hidden="true" />
+          <span>{retryLabel}</span>
         </button>
       ) : null}
     </div>
