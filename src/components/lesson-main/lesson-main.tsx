@@ -54,33 +54,55 @@ const renderPlayerSlot = (videoState: VideoFetchState) => {
   );
 };
 
-export const LessonMain = ({ state }: LessonMainProps) => {
-  if (state.kind === 'course-loading') {
-    return <LessonSkeleton />;
-  }
-
-  return (
-    <article className="lesson-main">
-      {state.kind === 'course-error' ? (
-        <LessonError message={state.message} onRetry={state.onRetry} />
-      ) : null}
-      {state.kind === 'not-found' ? (
-        <LessonNotFound lessonSlug={state.lessonSlug} />
-      ) : null}
-      {state.kind === 'no-video' ? (
+const renderArticleBody = (state: LessonMainState) => {
+  switch (state.kind) {
+    case 'course-error':
+      return <LessonError message={state.message} onRetry={state.onRetry} />;
+    case 'not-found':
+      return <LessonNotFound lessonSlug={state.lessonSlug} />;
+    case 'no-video':
+      return (
         <>
           <LessonTitle name={state.lessonName} />
           <LessonNoVideo lessonName={state.lessonName} />
         </>
-      ) : null}
-      {state.kind === 'ready' ? (
+      );
+    case 'ready':
+      return (
         <>
           <LessonTitle name={state.lessonName} />
           <div className="lesson-player">
             {renderPlayerSlot(state.videoState)}
           </div>
         </>
-      ) : null}
+      );
+    case 'course-loading': {
+      // Handled by the early-return below; included here for switch exhaustiveness.
+      return null;
+    }
+    default: {
+      const _exhaustive: never = state;
+      return _exhaustive;
+    }
+  }
+};
+
+const isVideoInFlight = (state: LessonMainState): boolean =>
+  state.kind === 'ready' &&
+  (state.videoState.status === 'fetching' ||
+    state.videoState.status === 'rendering');
+
+export const LessonMain = ({ state }: LessonMainProps) => {
+  if (state.kind === 'course-loading') {
+    return <LessonSkeleton />;
+  }
+
+  return (
+    <article
+      className="lesson-main"
+      aria-busy={isVideoInFlight(state) ? true : undefined}
+    >
+      {renderArticleBody(state)}
     </article>
   );
 };
