@@ -568,6 +568,17 @@
     color: var(--color-gray-12);
   }
 
+  /* Modifier for icon-buttons that also carry a text label (e.g. playback
+     rate trigger "1x"). Frees the fixed 32×32 box so the label fits on
+     one line. */
+  .video-player .vp-icon-button.vp-icon-button--text {
+    inline-size: auto;
+    min-inline-size: calc(var(--spacing) * 8);
+    padding-inline: calc(var(--spacing) * 2);
+    gap: calc(var(--spacing) * 1);
+    white-space: nowrap;
+  }
+
   .video-player .vp-icon-button:hover:not(:disabled) {
     background: var(--color-gray-a4);
   }

@@ -16,14 +16,13 @@ export const PlaybackRateMenu = ({
 }: PlaybackRateMenuProps) => (
   <Menu.Root>
     <Menu.Trigger
-      className="vp-icon-button"
+      className="vp-icon-button vp-icon-button--text"
       aria-label={`${label}: ${rate}x`}
       disabled={!onChange}
     >
       <Gauge size={20} aria-hidden="true" />
       <span
         style={{
-          marginInlineStart: 4,
           fontSize: '0.75rem',
           fontVariantNumeric: 'tabular-nums',
         }}
