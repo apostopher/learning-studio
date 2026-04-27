@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonVideo } from '#/hooks/data/use-lesson-video';
-import { queryKeys } from '#/hooks/data/keys';
 import { computeLessonMainState } from './compute-lesson-main-state';
 import { findLesson } from './find-lesson';
 import { LessonMain } from './lesson-main';

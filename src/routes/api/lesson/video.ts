@@ -1,5 +1,5 @@
-import { getVideoDetailsWithCache } from '#/integrations/synthesia/videos';
 import { createFileRoute } from '@tanstack/react-router';
+import { getVideoDetailsWithCache } from '#/integrations/synthesia/videos';
 
 export const Route = createFileRoute('/api/lesson/video')({
   server: {

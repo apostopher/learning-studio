@@ -5,6 +5,7 @@ type LessonNotFoundProps = {
 };
 
 export const LessonNotFound = ({ lessonSlug }: LessonNotFoundProps) => (
+  // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics
   <div className="lesson-card" role="status">
     <SearchX
       size={32}

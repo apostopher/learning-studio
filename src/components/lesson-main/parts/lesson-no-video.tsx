@@ -5,6 +5,7 @@ type LessonNoVideoProps = {
 };
 
 export const LessonNoVideo = ({ lessonName }: LessonNoVideoProps) => (
+  // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics
   <div className="lesson-card" role="status">
     <VideoOff
       size={32}

@@ -1,8 +1,8 @@
-import { useAtomValue } from "jotai";
-import { atomFamily } from "jotai-family";
-import { atomWithQuery } from "jotai-tanstack-query";
-import type { WatchWindow } from "#/db/videos-progress";
-import { queryKeys } from "./keys";
+import { useAtomValue } from 'jotai';
+import { atomFamily } from 'jotai-family';
+import { atomWithQuery } from 'jotai-tanstack-query';
+import type { WatchWindow } from '#/db/videos-progress';
+import { queryKeys } from './keys';
 
 /**
  * Wire format of /api/course/progress. Server serialises Sets as arrays
@@ -20,7 +20,7 @@ export const courseProgressAtomFamily = atomFamily((slug: string) =>
     queryFn: async () => {
       const response = await fetch(`/api/course/progress?slug=${slug}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch course progress");
+        throw new Error('Failed to fetch course progress');
       }
       const data = await response.json();
       return data as ClientCourseProgress;
@@ -30,5 +30,5 @@ export const courseProgressAtomFamily = atomFamily((slug: string) =>
 );
 
 export function useCourseProgress(slug?: string) {
-  return useAtomValue(courseProgressAtomFamily(slug ?? ""));
+  return useAtomValue(courseProgressAtomFamily(slug ?? ''));
 }
