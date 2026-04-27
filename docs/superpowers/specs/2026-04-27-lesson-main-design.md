@@ -188,7 +188,7 @@ If `<ViewTransition>` is gated behind an experimental export in the installed Re
 
 ## Visual layout
 
-```
+```text
 main (inside <ScrollArea>)
 └── article.lesson-main (centered, max-inline-size: min(100%, 1100px))
     ├── h1.lesson-title
@@ -241,7 +241,7 @@ All spacing/insets/borders use logical properties (`padding-inline`, `padding-bl
 
 ## Data flow
 
-```
+```text
 sidebar lesson-link click
   → TanStack Router navigates to /modules/X/lessons/Y
   → LessonRoute renders <LessonMainWrapper moduleSlug=X lessonSlug=Y />
