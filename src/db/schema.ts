@@ -156,6 +156,10 @@ export const videoProgressTable = pgTable(
   (table) => [
     index("videos_progress_user_id_idx").on(table.userId),
     index("videos_progress_user_video_idx").on(table.userId, table.videoId),
+    index("videos_progress_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
   ],
 );
 

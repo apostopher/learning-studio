@@ -8,6 +8,13 @@
       "when": 1776174868030,
       "tag": "0000_stale_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777035948648,
+      "tag": "0001_smiling_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,8 @@
 
     --header-height: 64px;
     --sidebar-width: 300px;
+    --sidebar-width-min: 300px;
+    --sidebar-width-max: 400px;
     --content-height: calc(100vh - var(--header-height));
     --layout-separator-size: 12px;
 
@@ -142,17 +144,23 @@
     block-size: 100dvh;
     inline-size: 100%;
 
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    /* The middle column is the gutter between aside and main. The resize
+       handle lives there so the user can grab anywhere in the gap. */
+    grid-template-columns:
+      var(--sidebar-width)
+      var(--shell-gap)
+      minmax(0, 1fr);
     grid-template-rows:
       var(--header-height)
       minmax(0, 1fr)
       var(--footer-height);
     grid-template-areas:
-      "header header"
-      "aside  main"
-      "footer footer";
+      "header  header  header"
+      "aside   sep     main"
+      "footer  footer  footer";
 
-    gap: var(--shell-gap);
+    column-gap: 0;
+    row-gap: var(--shell-gap);
     padding: var(--shell-padding);
     background-color: var(--shell-bg);
   }
@@ -162,6 +170,10 @@
   }
   .app-shell > .app-shell__aside {
     grid-area: aside;
+  }
+  .app-shell > .app-shell__separator {
+    grid-area: sep;
+    position: relative;
   }
   .app-shell > .app-shell__main {
     grid-area: main;
@@ -183,7 +195,7 @@
 
   .app-shell__aside,
   .app-shell__main {
-    overflow: auto;
+    overflow: hidden;
     min-block-size: 0;
     min-inline-size: 0;
   }
@@ -218,6 +230,7 @@
       > :is(
         .app-shell__header,
         .app-shell__aside,
+        .app-shell__separator,
         .app-shell__main,
         .app-shell__footer
       ) {
@@ -241,8 +254,8 @@
     .app-shell {
       grid-template-rows: minmax(0, 1fr) var(--footer-height);
       grid-template-areas:
-        "aside  main"
-        "footer footer";
+        "aside  sep     main"
+        "footer footer  footer";
     }
   }
 
@@ -254,8 +267,8 @@
     .app-shell {
       grid-template-rows: var(--header-height) minmax(0, 1fr);
       grid-template-areas:
-        "header header"
-        "aside  main";
+        "header header header"
+        "aside  sep    main";
     }
   }
 
@@ -264,7 +277,171 @@
     style(--footer-height: 0px) {
     .app-shell {
       grid-template-rows: minmax(0, 1fr);
-      grid-template-areas: "aside main";
+      grid-template-areas: "aside sep main";
     }
+  }
+
+  /*
+   * Wrapping detection isn't possible with container queries:
+   * container-type: inline-size doesn't expose height, and container-type: size
+   * activates size containment which would zero the row's intrinsic height.
+   * Instead, align by baseline — single-line rows look centered, and on wrap
+   * everything anchors to the first line's baseline so the rank stays on top.
+   */
+
+  /* The drag-handle fills the gutter cell, so the entire shell-gap is the
+     hit-area. No visible rule — the col-resize cursor is the only affordance. */
+  .resize-handle {
+    position: absolute;
+    inset: 0;
+    cursor: col-resize;
+    background: transparent;
+    touch-action: none;
+    user-select: none;
+  }
+  .resize-handle:focus-visible {
+    outline: none;
+  }
+}
+
+@theme {
+  /* sidebar spacing */
+  --spacing-sidebar-row-block: calc(var(--spacing) * 2);
+  --spacing-sidebar-row-inline: calc(var(--spacing) * 3);
+  --spacing-sidebar-lesson-indent: calc(var(--spacing) * 6);
+  --spacing-sidebar-row-gap: calc(var(--spacing) * 1);
+  --spacing-sidebar-section-gap: calc(var(--spacing) * 3);
+
+  /* sidebar shape */
+  --radius-sidebar-row: var(--radius-md);
+
+  /* sidebar static tokens (no utility generation) */
+  --border-width-sidebar-active: 2px;
+  --outline-width-sidebar-focus: 2px;
+  --outline-offset-sidebar-focus: 2px;
+  --color-sidebar-focus-ring: var(--color-accent-9);
+
+  /* sidebar animation */
+  --duration-sidebar-chevron: 200ms;
+  --duration-sidebar-reveal: 320ms;
+  --duration-sidebar-shimmer: 1400ms;
+  --ease-sidebar: var(--ease-out-cubic);
+  --blur-sidebar-reveal: 2px;
+  --sidebar-skeleton-row-opacity-step: 0.12;
+
+  /* sidebar skeleton row heights */
+  --block-size-sidebar-skeleton-header: calc(var(--spacing) * 10);
+  --block-size-sidebar-skeleton-module: calc(var(--spacing) * 9);
+  --block-size-sidebar-skeleton-lesson: calc(var(--spacing) * 7);
+}
+
+@layer components {
+  /* Focus-visible ring applied via semantic class; no Tailwind arbitrary values. */
+  .sidebar-focus-ring:focus-visible {
+    outline-style: solid;
+    outline-color: var(--color-sidebar-focus-ring);
+    outline-width: var(--outline-width-sidebar-focus);
+    outline-offset: var(--outline-offset-sidebar-focus);
+  }
+  .sidebar-focus-ring:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Active-lesson row appearance. */
+  .sidebar-row-active {
+    background-color: var(--color-accent-3);
+    color: var(--color-accent-11);
+    border-inline-start-width: var(--border-width-sidebar-active);
+    border-inline-start-style: solid;
+    border-inline-start-color: var(--color-accent-7);
+  }
+
+  /* Skeleton shimmer: a wide gradient moving across the background. */
+  .sidebar-skeleton-row {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-gray-3) 0%,
+      var(--color-gray-4) 50%,
+      var(--color-gray-3) 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    border-radius: var(--radius-sidebar-row);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-skeleton-row {
+      background-image: none;
+      background-color: var(--color-gray-3);
+    }
+  }
+}
+
+@theme {
+  /* scroll area shape + color */
+  --size-scroll-area-thumb: calc(var(--spacing) * 1.5);
+  --spacing-scroll-area-thumb-inset: 2px;
+  --radius-scroll-area-thumb: 9999px;
+  --color-scroll-area-thumb: var(--color-gray-a7);
+  --color-scroll-area-thumb-hover: var(--color-gray-a8);
+  --duration-scroll-area-thumb: 160ms;
+}
+
+@layer components {
+  .scroll-area-root {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: hidden;
+  }
+  .scroll-area-viewport {
+    inline-size: 100%;
+    block-size: 100%;
+    overscroll-behavior: contain;
+  }
+  .scroll-area-viewport[data-orientation="vertical"] {
+    overflow-x: clip;
+    overflow-wrap: anywhere;
+  }
+  .scroll-area-content {
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+  .scroll-area-scrollbar {
+    display: flex;
+    touch-action: none;
+    user-select: none;
+    padding: var(--spacing-scroll-area-thumb-inset);
+    background: transparent;
+    transition: background-color var(--duration-scroll-area-thumb) ease-out;
+    opacity: 0;
+    transition-property: opacity, background-color;
+  }
+  .scroll-area-scrollbar[data-hovering],
+  .scroll-area-scrollbar[data-scrolling] {
+    opacity: 1;
+  }
+  .scroll-area-scrollbar[data-orientation="vertical"] {
+    inline-size: calc(
+      var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
+    );
+  }
+  .scroll-area-scrollbar[data-orientation="horizontal"] {
+    block-size: calc(
+      var(--size-scroll-area-thumb) + var(--spacing-scroll-area-thumb-inset) * 2
+    );
+    flex-direction: column;
+  }
+  .scroll-area-thumb {
+    background-color: var(--color-scroll-area-thumb);
+    border-radius: var(--radius-scroll-area-thumb);
+    flex: 1;
+    transition: background-color var(--duration-scroll-area-thumb) ease-out;
+  }
+  .scroll-area-thumb:hover {
+    background-color: var(--color-scroll-area-thumb-hover);
+  }
+  .scroll-area-corner {
+    background: transparent;
   }
 }
