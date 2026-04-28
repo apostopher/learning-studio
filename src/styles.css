@@ -423,6 +423,12 @@
     overflow-x: clip;
     overflow-wrap: anywhere;
   }
+  .scroll-area-viewport[data-orientation="horizontal"] {
+    overflow-y: clip;
+  }
+  .lesson-material-tabs-scroll {
+    block-size: auto;
+  }
   .scroll-area-content {
     min-inline-size: 0;
     min-block-size: 0;
@@ -806,6 +812,13 @@
     animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
   }
 
+  .lesson-material-skeleton-tab,
+  .lesson-material-skeleton-line {
+    background: var(--color-gray-a4);
+    border-radius: var(--radius-sm, 0.25rem);
+    animation: lesson-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
   @keyframes lesson-skeleton-pulse {
     0%,
     100% {
@@ -817,7 +830,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .lesson-skeleton-player {
+    .lesson-skeleton-player,
+    .lesson-material-skeleton-tab,
+    .lesson-material-skeleton-line {
       animation: none;
     }
   }

@@ -16,6 +16,7 @@ export type LessonMainState =
   | {
       kind: 'ready';
       lessonName: string;
+      lessonSlug: string;
       videoId: string;
       videoState: VideoFetchState;
     };

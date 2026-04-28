@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { LessonMaterialWrapper } from '#/components/lesson-material';
 import { VideoPlayer, VideoPlayerContainer } from '#/components/video-player';
 import { LessonError } from './parts/lesson-error';
 import { LessonNoVideo } from './parts/lesson-no-video';
@@ -53,6 +54,10 @@ const renderPlayerSlot = (videoState: VideoFetchState) => {
   );
 };
 
+const renderLessonMaterialSlot = (lessonSlug: string) => (
+  <LessonMaterialWrapper lessonSlug={lessonSlug} />
+);
+
 const renderArticleBody = (state: LessonMainState) => {
   switch (state.kind) {
     case 'course-error':
@@ -63,9 +68,12 @@ const renderArticleBody = (state: LessonMainState) => {
       return <LessonNoVideo lessonName={state.lessonName} />;
     case 'ready':
       return (
-        <div className="lesson-player">
-          {renderPlayerSlot(state.videoState)}
-        </div>
+        <>
+          <div className="lesson-player">
+            {renderPlayerSlot(state.videoState)}
+          </div>
+          {renderLessonMaterialSlot(state.lessonSlug)}
+        </>
       );
     case 'course-loading': {
       // Handled by the early-return below; included here for switch exhaustiveness.

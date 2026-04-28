@@ -43,6 +43,7 @@ export const ReadyFetching: Story = {
     state: {
       kind: 'ready',
       lessonName: 'Crosswind landings',
+      lessonSlug: 'crosswind-landings',
       videoId: 'v1',
       videoState: { status: 'fetching' },
     },
@@ -54,6 +55,7 @@ export const ReadyRendering: Story = {
     state: {
       kind: 'ready',
       lessonName: 'Crosswind landings',
+      lessonSlug: 'crosswind-landings',
       videoId: 'v1',
       videoState: { status: 'rendering' },
     },
@@ -65,6 +67,7 @@ export const ReadyError: Story = {
     state: {
       kind: 'ready',
       lessonName: 'Crosswind landings',
+      lessonSlug: 'crosswind-landings',
       videoId: 'v1',
       videoState: {
         status: 'error',
@@ -80,6 +83,7 @@ export const ReadyPlaying: Story = {
     state: {
       kind: 'ready',
       lessonName: 'Crosswind landings',
+      lessonSlug: 'crosswind-landings',
       videoId: 'v1',
       videoState: {
         status: 'ready',

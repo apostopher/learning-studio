@@ -58,6 +58,7 @@ describe('LessonMain', () => {
         state={{
           kind: 'ready',
           lessonName: 'Lesson One',
+          lessonSlug: 'lesson-one',
           videoId: 'v1',
           videoState: { status: 'fetching' },
         }}

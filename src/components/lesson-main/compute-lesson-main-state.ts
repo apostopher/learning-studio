@@ -67,6 +67,7 @@ export const computeLessonMainState = ({
   return {
     kind: 'ready',
     lessonName: lesson.name,
+    lessonSlug: lesson.slug,
     videoId: lesson.videoId,
     videoState,
   };
