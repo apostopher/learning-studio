@@ -11,11 +11,13 @@ type ContainerProps = Omit<
 > & {
   playerId?: string;
   onEnded?: () => void;
+  overlay?: React.ReactNode;
 };
 
 export const VideoPlayerContainer = ({
   playerId: providedId,
   onEnded,
+  overlay,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -178,6 +180,7 @@ export const VideoPlayerContainer = ({
       rootRef={rootRef}
       state={state}
       actions={actions}
+      overlay={overlay}
     />
   );
 };

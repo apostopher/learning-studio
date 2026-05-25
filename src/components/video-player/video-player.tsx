@@ -21,6 +21,7 @@ export const VideoPlayer = ({
   actions,
   playbackRates = [...PLAYBACK_RATES],
   labels: labelOverrides,
+  overlay,
   ...nativeRest
 }: VideoPlayerProps) => {
   const labels = { ...DEFAULT_LABELS, ...labelOverrides };
@@ -117,6 +118,8 @@ export const VideoPlayer = ({
             onRetry={a.onRetry}
           />
         ) : null}
+
+        {overlay}
 
         <span aria-live="polite" className="vp-sr-only" />
       </div>

@@ -71,4 +71,5 @@ export type VideoPlayerProps = Omit<
   actions?: VideoPlayerActions;
   playbackRates?: number[];
   labels?: Partial<VideoPlayerLabels>;
+  overlay?: React.ReactNode;
 };

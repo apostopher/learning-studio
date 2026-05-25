@@ -1,9 +1,10 @@
 import type { RefObject } from 'react';
 import { LessonMaterialWrapper } from '#/components/lesson-material';
-import { VideoPlayer, VideoPlayerContainer } from '#/components/video-player';
+import { VideoPlayer } from '#/components/video-player';
 import { LessonError } from './parts/lesson-error';
 import { LessonNoVideo } from './parts/lesson-no-video';
 import { LessonNotFound } from './parts/lesson-not-found';
+import { LessonPlayerContainer } from './parts/lesson-player-container';
 import { LessonSkeleton } from './parts/lesson-skeleton';
 import type { LessonMainState, VideoFetchState } from './types';
 
@@ -13,13 +14,15 @@ type LessonMainProps = {
   state: LessonMainState;
 };
 
-const renderPlayerSlot = (videoState: VideoFetchState) => {
+const renderPlayerSlot = (
+  videoState: VideoFetchState,
+  lessonSlug: string,
+) => {
   if (videoState.status === 'ready') {
     return (
-      <VideoPlayerContainer
-        src={videoState.src}
-        poster={videoState.poster}
-        tracks={videoState.tracks}
+      <LessonPlayerContainer
+        videoState={videoState}
+        lessonSlug={lessonSlug}
       />
     );
   }
@@ -70,7 +73,7 @@ const renderArticleBody = (state: LessonMainState) => {
       return (
         <>
           <div className="lesson-player">
-            {renderPlayerSlot(state.videoState)}
+            {renderPlayerSlot(state.videoState, state.lessonSlug)}
           </div>
           {renderLessonMaterialSlot(state.lessonSlug)}
         </>
