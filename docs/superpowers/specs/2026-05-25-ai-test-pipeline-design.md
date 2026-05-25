@@ -4,21 +4,23 @@
 
 Two AI pipelines that generate knowledge assessment tests from lesson material and evaluate user responses in real-time.
 
-- **Pipeline 1 — Test Generation:** Takes lesson `keyPoints[]` and `text` corpus, produces 10 indirect questions (7 MCQ + 3 free-text) via Claude Sonnet
-- **Pipeline 2 — Answer Evaluation:** Grades each answer immediately after submission. MCQ: deterministic comparison. Free-text: AI-scored 0-100.
+- **Pipeline 1 — Test Generation (Evaluator-Optimizer):** Takes lesson `keyPoints[]` and `text` corpus, generates 2 questions per keypoint (mix of MCQ and free-text). An evaluator LLM call checks question quality; the optimizer loop regenerates weak questions until all pass.
+- **Pipeline 2 — Answer Evaluation:** Simple evaluator that takes keypoints, text, and a user answer, scores it 0-100.
 
 Results are stored per user per lesson in the database.
 
 ## Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Test persistence | On-the-fly generation | Fresh questions each attempt; no caching |
-| AI model | Claude Sonnet via Vercel AI Gateway | Good quality/cost balance for structured generation + grading |
-| Grading flow | Immediate per-question | Instant feedback after each answer |
-| Question mix | 7 MCQ + 3 free-text | Mostly structured, with open-ended for deeper understanding |
-| Result storage | Full persistence in DB | Users can review past attempts and track progress |
-| Architecture | Two server routes + `generateObject` | Simple, fully typed, easy to test |
+| Decision              | Choice                                     | Rationale                                                        |
+| --------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| Test persistence      | On-the-fly generation                      | Fresh questions each attempt; no caching                         |
+| AI model              | Claude Sonnet via Anthropic SDK            | Good quality/cost balance for structured generation + grading    |
+| Grading flow          | Immediate per-question                     | Instant feedback after each answer                               |
+| Question count        | 2 per keypoint                             | Thorough coverage; test size scales with lesson content          |
+| Question mix          | ~70% MCQ + ~30% free-text                 | Mostly structured, with open-ended for deeper understanding      |
+| Generation quality    | Evaluator-Optimizer workflow               | Ensures indirect, scenario-based questions; rejects low quality  |
+| Result storage        | Full persistence in DB                     | Users can review past attempts and track progress                |
+| Prompt management     | Modular prompt files for easy fine-tuning  | Prompts isolated in `src/ai/prompts/` for iteration              |
 
 ## Data Model
 
@@ -55,18 +57,29 @@ const AITestQuestionSchema = z.discriminatedUnion("type", [
   AITestFreeTextQuestionSchema,
 ]);
 
-// Full test
+// Full test — question count is dynamic (2 * keyPoints.length)
 const AITestSchema = z.object({
   lessonSlug: z.string(),
-  questions: z.array(AITestQuestionSchema).length(10),
+  questions: z.array(AITestQuestionSchema),
 });
 
-// Evaluation result per question
+// Evaluator output — per question quality assessment
+const QuestionQualitySchema = z.object({
+  questionId: z.string(),
+  pass: z.boolean(),
+  reason: z.string().describe("Why this question passed or failed quality check"),
+});
+
+const EvaluatorOutputSchema = z.object({
+  results: z.array(QuestionQualitySchema),
+  allPassed: z.boolean(),
+});
+
+// Evaluation result per answer
 const AIEvaluationResultSchema = z.object({
   questionId: z.string(),
   type: z.enum(["mcq", "free-text"]),
   score: z.number().int().min(0).max(100),
-  isCorrect: z.boolean(),
   userAnswer: z.string(),
   explanation: z.string(),
 });
@@ -84,21 +97,23 @@ const AITestResultSchema = z.object({
 
 New table `lessonTestResults` in `src/db/schema.ts`:
 
-```
+```sql
 lessonTestResults
-├── id              serial PK
-├── userId          text FK → user.id
-├── lessonSlug      text NOT NULL
-├── questions       json NOT NULL       — AITest (the generated questions)
-├── answers         json DEFAULT '[]'   — AIEvaluationResult[] (graded answers)
-├── totalScore      integer             — 0-100 percentage, set when complete
-├── completedAt     timestamp           — set when all 10 questions answered
-├── createdAt       timestamp DEFAULT now()
+  id              serial PK
+  userId          text FK -> user.id
+  lessonSlug      text NOT NULL
+  questions       json NOT NULL       -- AITest (the generated questions)
+  answers         json DEFAULT '[]'   -- AIEvaluationResult[] (graded answers)
+  totalScore      integer             -- 0-100 percentage, set when complete
+  completedAt     timestamp           -- set when all questions answered
+  createdAt       timestamp DEFAULT now()
 ```
 
 One row per test attempt. `answers` array grows as the user progresses through questions.
 
-## Pipeline 1: Test Generation
+## Pipeline 1: Test Generation (Evaluator-Optimizer)
+
+Uses the [Evaluator-Optimizer workflow](https://www.anthropic.com/engineering/building-effective-agents): a generator produces questions, an evaluator checks quality, and failed questions loop back through the generator with feedback.
 
 ### Route
 
@@ -112,50 +127,86 @@ One row per test attempt. `answers` array grows as the user progresses through q
 
 ### Flow
 
-1. Server handler validates input
-2. Calls `generateTest(keyPoints, text)` from `src/ai/generate-test.ts`
-3. `generateTest` uses Vercel AI SDK `generateObject` with:
-   - Model: Claude Sonnet via AI Gateway
-   - Output schema: `AITestSchema` (Zod)
-   - System prompt (see below)
-4. Returns the structured `AITest` validated against schema
+```
+keyPoints + text
+      |
+      v
+  [Generator] -- produces 2 questions per keypoint (mix MCQ + free-text)
+      |
+      v
+  [Evaluator] -- checks each question for quality criteria
+      |
+      +--> all pass? --> return AITest
+      |
+      +--> some fail? --> feed failures + evaluator feedback back to Generator
+                          (max 2 retry iterations, then accept best effort)
+```
 
-### System Prompt Strategy
+#### Step 1: Generator
 
-The system prompt instructs the model to:
+Calls `generateObject` with the **generation prompt**. Produces `2 * keyPoints.length` questions.
 
-- Read all keypoints and the full text corpus
-- Map questions to keypoints: if 10+ keypoints exist, select the 10 most substantive. If fewer than 10, distribute questions across available keypoints (some keypoints get 2 questions testing different aspects)
-- Questions 1-7: MCQ with 4 options (1 correct + 3 plausible distractors)
-- Questions 8-10: Free-text requiring 1-3 sentence answers
-- **Indirectness requirement:** Never quote or directly name the keypoint in the question. Instead, present a scenario, analogy, or application question from the text corpus that requires understanding the keypoint to answer correctly.
-- Each MCQ must have a `correctOptionId` matching one of its options
-- Each free-text must include an `expectedAnswer` reference for the grading pipeline
-- Questions should be shuffled so MCQ and free-text are interleaved (not all MCQ first)
+- For each keypoint: 1 MCQ + 1 free-text (or vary the mix, but maintain ~70/30 MCQ/free-text overall)
+- Questions must be indirect — scenario-based, never quoting the keypoint
+- MCQs have 4 options with plausible distractors
+- Free-text questions include an `expectedAnswer` reference
 
-### Prompt Template
+#### Step 2: Evaluator
+
+A second `generateObject` call with the **evaluator prompt**. Receives the generated questions + the original keypoints + text. Checks each question against quality criteria:
+
+- **Indirectness:** Does the question avoid directly stating the keypoint?
+- **Accuracy:** Is the correct answer actually correct given the text corpus?
+- **Plausibility:** Are MCQ distractors plausible but distinguishable?
+- **Clarity:** Is the question unambiguous?
+- **Coverage:** Does the question actually test the mapped keypoint?
+
+Returns `EvaluatorOutputSchema` — a pass/fail + reason for each question.
+
+#### Step 3: Optimizer Loop
+
+If any questions fail:
+
+1. Collect failed questions + their evaluator feedback
+2. Call the generator again with an **optimizer prompt** that includes:
+   - The original keypoints + text
+   - The failed questions
+   - The evaluator's specific feedback for each
+   - Instruction to regenerate only the failed questions
+3. Merge regenerated questions back into the test
+4. Re-evaluate (max 2 total retry iterations to bound cost/latency)
+5. After max retries, accept best-effort result
+
+### Prompt Organization
+
+All prompts live in `src/ai/prompts/` as separate files for easy fine-tuning:
 
 ```
-You are an aviation knowledge assessment expert. Given the lesson material below, create a test of 10 questions.
-
-RULES:
-- 7 questions must be multiple choice (type: "mcq") with exactly 4 options each
-- 3 questions must be free-text (type: "free-text") requiring 1-3 sentence answers
-- Each question tests one key point from the lesson, but NEVER quotes or directly references the key point
-- Instead, create scenario-based or application questions that require understanding the concept
-- MCQ distractors must be plausible but clearly wrong to someone who understands the material
-- Free-text expectedAnswer should be a concise, correct reference answer
-- Interleave MCQ and free-text questions (don't group by type)
-- Generate unique string IDs for each question and option
-
-KEY POINTS:
-{keyPoints}
-
-LESSON TEXT:
-{text}
+src/ai/prompts/
+  generation.ts        -- system prompt for initial question generation
+  evaluator.ts         -- system prompt for quality evaluation
+  optimizer.ts         -- system prompt for regenerating failed questions
+  evaluation.ts        -- system prompt for grading user answers (Pipeline 2)
 ```
+
+Each file exports a function that takes template variables and returns the prompt string:
+
+```ts
+// src/ai/prompts/generation.ts
+export function generationPrompt(vars: {
+  keyPoints: string[];
+  text: string;
+  questionCount: number;
+}): string {
+  return `...`;
+}
+```
+
+This keeps prompts isolated, versionable, and easy to A/B test.
 
 ## Pipeline 2: Answer Evaluation
+
+Simple evaluator — one `generateObject` call per answer.
 
 ### Route
 
@@ -164,52 +215,36 @@ LESSON TEXT:
 ### Input
 
 ```ts
-{ question: AITestQuestion, userAnswer: string, text: string }
+{
+  question: AITestQuestion,
+  userAnswer: string,
+  keyPoints: string[],
+  text: string,
+}
 ```
 
 ### Flow — MCQ
 
+Deterministic, no AI call:
+
 1. Compare `userAnswer` with `question.correctOptionId`
 2. Score: 100 if match, 0 if not
-3. Build explanation from the question data: identify the correct option's `value` text and return it as "The correct answer is: {correctOption.value}". No AI call needed — deterministic lookup + template.
+3. Build explanation: identify the correct option's `value` text, return "The correct answer is: {correctOption.value}"
 
 ### Flow — Free-text
 
-1. Call `evaluateAnswer(question, userAnswer, text)` from `src/ai/evaluate-answer.ts`
-2. Uses `generateObject` with Claude Sonnet
-3. AI receives: the question, the expected reference answer, the user's answer, and the original text corpus
-4. AI returns: `{ score: 0-100, explanation: string }`
-5. `isCorrect` is derived: `score >= 70`
+Single `generateObject` call:
 
-### Evaluation Prompt Template
-
-```
-You are grading a student's answer to an aviation knowledge question.
-
-QUESTION: {question}
-EXPECTED ANSWER: {expectedAnswer}
-STUDENT'S ANSWER: {userAnswer}
-
-CONTEXT (lesson text):
-{text}
-
-Score the student's answer from 0 to 100:
-- 0: Completely wrong or irrelevant
-- 25: Shows some awareness but misses key concepts
-- 50: Partially correct, missing important details
-- 75: Mostly correct with minor gaps
-- 100: Fully correct and demonstrates clear understanding
-
-Provide a brief explanation of what the student got right, what they missed,
-and what the ideal answer includes.
-```
+1. Call `evaluateAnswer(question, userAnswer, keyPoints, text)` from `src/ai/evaluate-answer.ts`
+2. AI receives: the question, the expected answer, the user's answer, the keypoints, and the text corpus
+3. AI returns: `{ score: 0-100, explanation: string }`
 
 ### Scoring
 
 - MCQ correct: 100 points
 - MCQ incorrect: 0 points
 - Free-text: 0-100 points (AI-scored)
-- **Total score** = sum of all 10 scores / 10 (produces a 0-100 percentage)
+- **Total score** = sum of all scores / number of questions (0-100 percentage)
 
 ## Result Storage
 
@@ -217,7 +252,7 @@ and what the ideal answer includes.
 
 `POST /api/lesson/ai-test/save-results`
 
-Called after the user completes all 10 questions. Persists the full test + evaluations.
+Called after the user completes all questions. Persists the full test + evaluations.
 
 Input: `{ lessonSlug: string, test: AITest, evaluations: AIEvaluationResult[], totalScore: number }`
 
@@ -231,28 +266,32 @@ Returns all past test attempts for the authenticated user on a given lesson. Sor
 
 ```
 src/ai/
-  ai-provider.ts          — Vercel AI SDK gateway provider + model config
-  schemas.ts              — All Zod schemas (AITest, EvaluationResult, etc.)
-  prompts.ts              — System prompt templates for generation and evaluation
-  generate-test.ts        — generateTest(keyPoints, text) → AITest
-  evaluate-answer.ts      — evaluateAnswer(question, userAnswer, text) → EvaluationResult
+  ai-provider.ts            -- Anthropic SDK provider + model config
+  schemas.ts                -- All Zod schemas (AITest, EvaluatorOutput, EvaluationResult)
+  generate-test.ts          -- generateTest(): evaluator-optimizer loop orchestrator
+  evaluate-answer.ts        -- evaluateAnswer(): single-call grading
+  prompts/
+    generation.ts           -- question generation prompt
+    evaluator.ts            -- quality check prompt
+    optimizer.ts            -- regeneration prompt (includes evaluator feedback)
+    evaluation.ts           -- answer grading prompt
 
 src/routes/api/lesson/ai-test/
-  generate.ts             — POST: generate a fresh test
-  evaluate.ts             — POST: evaluate one answer (MCQ or free-text)
-  save-results.ts         — POST: persist completed test results
-  results.ts              — GET: fetch past test results
+  generate.ts               -- POST: generate a fresh test (runs eval-opt loop)
+  evaluate.ts               -- POST: evaluate one answer (MCQ or free-text)
+  save-results.ts           -- POST: persist completed test results
+  results.ts                -- GET: fetch past test results
 
 src/db/
-  schema.ts               — add lessonTestResultsTable (extend existing)
-  lesson-test.ts          — saveTestResult(), getTestResults() query functions
+  schema.ts                 -- add lessonTestResultsTable (extend existing)
+  lesson-test.ts            -- saveTestResult(), getTestResults() query functions
 
 src/hooks/data/
-  lesson-ai-test.ts       — Jotai atom families + TanStack Query mutations
+  lesson-ai-test.ts         -- Jotai atom families + TanStack Query mutations
 
 src/atoms/
-  lesson-ai-test.ts       — Client state atoms: currentTest, currentQuestionIndex,
-                             answers[], isGenerating, isEvaluating
+  lesson-ai-test.ts         -- Client state atoms: currentTest, currentQuestionIndex,
+                               answers[], isGenerating, isEvaluating
 ```
 
 ## AI Provider Setup
@@ -279,6 +318,7 @@ Both pipelines use `generateObject` from the `ai` package with the `sonnet` mode
 ## Error Handling
 
 - **Generation failure:** Return 500 with error message. Frontend shows retry button.
+- **Evaluator-optimizer timeout:** After 2 retry iterations, accept best-effort questions and return them. Never block indefinitely.
 - **Evaluation failure (free-text):** Return 500. Frontend allows re-submitting the answer.
 - **MCQ evaluation:** Cannot fail (deterministic). Always succeeds.
 - **Schema validation:** `generateObject` with Zod ensures type-safe output. If the AI produces invalid output, Vercel AI SDK retries automatically.
@@ -286,12 +326,14 @@ Both pipelines use `generateObject` from the `ai` package with the `sonnet` mode
 ## Scope Boundaries
 
 **In scope:**
-- AI module (provider, schemas, prompts, generation, evaluation)
+
+- AI module (provider, schemas, modular prompts, generation with eval-opt loop, evaluation)
 - API routes (4 endpoints)
 - DB table + query functions
 - Data hooks and Jotai atoms
 
 **Out of scope (future work):**
+
 - UI components for the test experience
 - Test history/review UI
 - Retry/regeneration UX
