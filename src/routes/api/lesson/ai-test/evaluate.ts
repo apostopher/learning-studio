@@ -1,11 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { auth } from "#/lib/auth";
 import { evaluateMCQ, evaluateFreeText } from "#/ai/evaluate-answer";
-import type {
-  AITestQuestion,
-  AITestMCQQuestion,
-  AITestFreeTextQuestion,
+import {
+  AITestQuestionSchema,
+  type AITestMCQQuestion,
+  type AITestFreeTextQuestion,
 } from "#/ai/schemas";
+
+const EvaluateInputSchema = z.object({
+  question: AITestQuestionSchema,
+  userAnswer: z.string(),
+  keyPoints: z.array(z.string()),
+  text: z.string(),
+});
 
 export const Route = createFileRoute("/api/lesson/ai-test/evaluate")({
   server: {
@@ -17,19 +25,14 @@ export const Route = createFileRoute("/api/lesson/ai-test/evaluate")({
         }
 
         const body = await request.json();
-        const { question, userAnswer, keyPoints, text } = body as {
-          question: AITestQuestion;
-          userAnswer: string;
-          keyPoints: string[];
-          text: string;
-        };
-
-        if (!question || userAnswer === undefined || userAnswer === null) {
+        const parsed = EvaluateInputSchema.safeParse(body);
+        if (!parsed.success) {
           return Response.json(
-            { error: "question and userAnswer are required" },
+            { error: "Valid question, userAnswer, keyPoints, and text are required" },
             { status: 400 },
           );
         }
+        const { question, userAnswer, keyPoints, text } = parsed.data;
 
         try {
           let result;

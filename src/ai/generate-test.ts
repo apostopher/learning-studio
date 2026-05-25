@@ -71,7 +71,8 @@ export async function generateTest(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const evaluation = await evaluate(keyPoints, text, questions);
 
-    if (evaluation.allPassed) break;
+    const hasFailed = evaluation.results.some((r) => !r.pass);
+    if (!hasFailed) break;
 
     const failedIds = new Set(
       evaluation.results.filter((r) => !r.pass).map((r) => r.questionId),

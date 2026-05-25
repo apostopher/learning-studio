@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { auth } from "#/lib/auth";
 import { generateTest } from "#/ai/generate-test";
+
+const GenerateInputSchema = z.object({
+  lessonSlug: z.string().min(1),
+  keyPoints: z.array(z.string()).min(1),
+  text: z.string().min(1),
+});
 
 export const Route = createFileRoute("/api/lesson/ai-test/generate")({
   server: {
@@ -12,18 +19,14 @@ export const Route = createFileRoute("/api/lesson/ai-test/generate")({
         }
 
         const body = await request.json();
-        const { lessonSlug, keyPoints, text } = body as {
-          lessonSlug: string;
-          keyPoints: string[];
-          text: string;
-        };
-
-        if (!lessonSlug || !keyPoints || !text) {
+        const parsed = GenerateInputSchema.safeParse(body);
+        if (!parsed.success) {
           return Response.json(
-            { error: "lessonSlug, keyPoints, and text are required" },
+            { error: "lessonSlug, keyPoints (non-empty), and text are required" },
             { status: 400 },
           );
         }
+        const { lessonSlug, keyPoints, text } = parsed.data;
 
         try {
           const test = await generateTest(lessonSlug, keyPoints, text);

@@ -55,11 +55,12 @@ export function useGenerateTest() {
   );
 }
 
-// Mutation: Evaluate a single answer
+export const useAdvanceQuestion = () => useSetAtom(currentQuestionIndexAtom);
+
+// Mutation: Evaluate a single answer (does NOT auto-advance — UI controls navigation)
 export function useEvaluateAnswer() {
   const setIsEvaluating = useSetAtom(isEvaluatingAtom);
   const setEvaluations = useSetAtom(evaluationsAtom);
-  const setIndex = useSetAtom(currentQuestionIndexAtom);
 
   return useCallback(
     async (
@@ -78,13 +79,12 @@ export function useEvaluateAnswer() {
         if (!response.ok) throw new Error("Failed to evaluate answer");
         const result = (await response.json()) as AIEvaluationResult;
         setEvaluations((prev) => [...prev, result]);
-        setIndex((prev) => prev + 1);
         return result;
       } finally {
         setIsEvaluating(false);
       }
     },
-    [setIsEvaluating, setEvaluations, setIndex],
+    [setIsEvaluating, setEvaluations],
   );
 }
 

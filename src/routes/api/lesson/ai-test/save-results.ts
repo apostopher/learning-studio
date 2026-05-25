@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { auth } from "#/lib/auth";
 import { saveTestResult } from "#/db/lesson-test";
+import { AITestSchema, AIEvaluationResultSchema } from "#/ai/schemas";
+
+const SaveResultsInputSchema = z.object({
+  lessonSlug: z.string().min(1),
+  test: AITestSchema,
+  evaluations: z.array(AIEvaluationResultSchema),
+  totalScore: z.number().int().min(0).max(100),
+});
 
 export const Route = createFileRoute("/api/lesson/ai-test/save-results")({
   server: {
@@ -12,28 +21,14 @@ export const Route = createFileRoute("/api/lesson/ai-test/save-results")({
         }
 
         const body = await request.json();
-        const { lessonSlug, test, evaluations, totalScore } = body as {
-          lessonSlug: string;
-          test: unknown;
-          evaluations: unknown;
-          totalScore: number;
-        };
-
-        if (
-          !lessonSlug ||
-          !test ||
-          !evaluations ||
-          totalScore === undefined ||
-          totalScore === null
-        ) {
+        const parsed = SaveResultsInputSchema.safeParse(body);
+        if (!parsed.success) {
           return Response.json(
-            {
-              error:
-                "lessonSlug, test, evaluations, and totalScore are required",
-            },
+            { error: "Valid lessonSlug, test, evaluations, and totalScore are required" },
             { status: 400 },
           );
         }
+        const { lessonSlug, test, evaluations, totalScore } = parsed.data;
 
         try {
           const result = await saveTestResult({
