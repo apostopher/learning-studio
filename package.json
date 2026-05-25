@@ -23,6 +23,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.78",
     "@base-ui/react": "1.4.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@radix-ui/colors": "3.0.0",
