@@ -4,4 +4,6 @@ export const queryKeys = {
   lessonVideo: (videoId: string) => ['lesson-video', videoId] as const,
   lessonMaterial: (lessonSlug: string) =>
     ['lesson-material', lessonSlug] as const,
+  aiTestResults: (lessonSlug: string) =>
+    ['ai-test-results', lessonSlug] as const,
 } as const;
