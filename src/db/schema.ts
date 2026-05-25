@@ -824,3 +824,42 @@ export const airportsTable = pgTable("airports", {
   lng: numeric("lng", { precision: 10, scale: 5 }).notNull(),
   countryCode: varchar("country_code", { length: 2 }).notNull(),
 });
+
+export const lessonTestResultsTable = pgTable(
+  "lesson_test_results",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
+    lessonSlug: text("lesson_slug")
+      .notNull()
+      .references(() => lessonsTable.slug, { onDelete: "cascade" }),
+    questions: json("questions").notNull(),
+    answers: json("answers").notNull().default([]),
+    totalScore: integer("total_score"),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("lesson_test_results_user_id_idx").on(table.userId),
+    index("lesson_test_results_user_lesson_idx").on(table.userId, table.lessonSlug),
+  ],
+);
+
+export const lessonTestResultsInsertSchema = createInsertSchema(lessonTestResultsTable);
+export type LessonTestResultsInsert = z.infer<typeof lessonTestResultsInsertSchema>;
+
+export const lessonTestResultsSelectSchema = createSelectSchema(lessonTestResultsTable);
+export type LessonTestResultsSelect = z.infer<typeof lessonTestResultsSelectSchema>;
+
+export const lessonTestResultsTableRelations = relations(lessonTestResultsTable, ({ one }) => ({
+  user: one(userProfileTable, {
+    fields: [lessonTestResultsTable.userId],
+    references: [userProfileTable.userId],
+  }),
+  lesson: one(lessonsTable, {
+    fields: [lessonTestResultsTable.lessonSlug],
+    references: [lessonsTable.slug],
+  }),
+}));
