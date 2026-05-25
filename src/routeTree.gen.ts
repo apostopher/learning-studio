@@ -20,6 +20,10 @@ import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progr
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/modules.$moduleSlug.lessons.$lessonSlug'
+import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
+import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
+import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
+import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
 
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
@@ -79,6 +83,27 @@ const ModulesModuleSlugLessonsLessonSlugRoute =
     path: '/modules/$moduleSlug/lessons/$lessonSlug',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiLessonAiTestSaveResultsRoute =
+  ApiLessonAiTestSaveResultsRouteImport.update({
+    id: '/api/lesson/ai-test/save-results',
+    path: '/api/lesson/ai-test/save-results',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiLessonAiTestResultsRoute = ApiLessonAiTestResultsRouteImport.update({
+  id: '/api/lesson/ai-test/results',
+  path: '/api/lesson/ai-test/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonAiTestGenerateRoute = ApiLessonAiTestGenerateRouteImport.update({
+  id: '/api/lesson/ai-test/generate',
+  path: '/api/lesson/ai-test/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
+  id: '/api/lesson/ai-test/evaluate',
+  path: '/api/lesson/ai-test/evaluate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -91,6 +116,10 @@ export interface FileRoutesByFullPath {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
+  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
+  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
@@ -104,6 +133,10 @@ export interface FileRoutesByTo {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
+  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
+  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
@@ -118,6 +151,10 @@ export interface FileRoutesById {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
+  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
+  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
@@ -133,6 +170,10 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/api/lesson/ai-test/evaluate'
+    | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/results'
+    | '/api/lesson/ai-test/save-results'
     | '/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -146,6 +187,10 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/api/lesson/ai-test/evaluate'
+    | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/results'
+    | '/api/lesson/ai-test/save-results'
     | '/modules/$moduleSlug/lessons/$lessonSlug'
   id:
     | '__root__'
@@ -159,6 +204,10 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/api/lesson/ai-test/evaluate'
+    | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/results'
+    | '/api/lesson/ai-test/save-results'
     | '/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
@@ -173,6 +222,10 @@ export interface RootRouteChildren {
   ApiCourseProgressRoute: typeof ApiCourseProgressRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonVideoRoute: typeof ApiLessonVideoRoute
+  ApiLessonAiTestEvaluateRoute: typeof ApiLessonAiTestEvaluateRoute
+  ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
+  ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
+  ApiLessonAiTestSaveResultsRoute: typeof ApiLessonAiTestSaveResultsRoute
   ModulesModuleSlugLessonsLessonSlugRoute: typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 
@@ -255,6 +308,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModulesModuleSlugLessonsLessonSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/lesson/ai-test/save-results': {
+      id: '/api/lesson/ai-test/save-results'
+      path: '/api/lesson/ai-test/save-results'
+      fullPath: '/api/lesson/ai-test/save-results'
+      preLoaderRoute: typeof ApiLessonAiTestSaveResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/results': {
+      id: '/api/lesson/ai-test/results'
+      path: '/api/lesson/ai-test/results'
+      fullPath: '/api/lesson/ai-test/results'
+      preLoaderRoute: typeof ApiLessonAiTestResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/generate': {
+      id: '/api/lesson/ai-test/generate'
+      path: '/api/lesson/ai-test/generate'
+      fullPath: '/api/lesson/ai-test/generate'
+      preLoaderRoute: typeof ApiLessonAiTestGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/evaluate': {
+      id: '/api/lesson/ai-test/evaluate'
+      path: '/api/lesson/ai-test/evaluate'
+      fullPath: '/api/lesson/ai-test/evaluate'
+      preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -271,6 +352,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseProgressRoute: ApiCourseProgressRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonVideoRoute: ApiLessonVideoRoute,
+  ApiLessonAiTestEvaluateRoute: ApiLessonAiTestEvaluateRoute,
+  ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
+  ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
+  ApiLessonAiTestSaveResultsRoute: ApiLessonAiTestSaveResultsRoute,
   ModulesModuleSlugLessonsLessonSlugRoute:
     ModulesModuleSlugLessonsLessonSlugRoute,
 }
