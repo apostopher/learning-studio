@@ -14,7 +14,7 @@ Results are stored per user per lesson in the database.
 | Decision              | Choice                                     | Rationale                                                        |
 | --------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
 | Test persistence      | On-the-fly generation                      | Fresh questions each attempt; no caching                         |
-| AI model              | Claude Sonnet via Anthropic SDK            | Good quality/cost balance for structured generation + grading    |
+| AI models             | Sonnet (generator/grader), Haiku (evaluator) | Different model for evaluation avoids self-reinforcing blind spots |
 | Grading flow          | Immediate per-question                     | Instant feedback after each answer                               |
 | Question count        | 2 per keypoint                             | Thorough coverage; test size scales with lesson content          |
 | Question mix          | ~70% MCQ + ~30% free-text                 | Mostly structured, with open-ended for deeper understanding      |
@@ -142,18 +142,18 @@ keyPoints + text
                           (max 2 retry iterations, then accept best effort)
 ```
 
-#### Step 1: Generator
+#### Step 1: Generator (Sonnet)
 
-Calls `generateObject` with the **generation prompt**. Produces `2 * keyPoints.length` questions.
+Calls `generateObject` with `sonnet` and the **generation prompt**. Produces `2 * keyPoints.length` questions.
 
 - For each keypoint: 1 MCQ + 1 free-text (or vary the mix, but maintain ~70/30 MCQ/free-text overall)
 - Questions must be indirect — scenario-based, never quoting the keypoint
 - MCQs have 4 options with plausible distractors
 - Free-text questions include an `expectedAnswer` reference
 
-#### Step 2: Evaluator
+#### Step 2: Evaluator (Haiku)
 
-A second `generateObject` call with the **evaluator prompt**. Receives the generated questions + the original keypoints + text. Checks each question against quality criteria:
+A separate `generateObject` call using `haiku` with the **evaluator prompt**. Using a different model family for evaluation avoids the generator's own blind spots and catches issues a same-model review would miss. Receives the generated questions + the original keypoints + text. Checks each question against quality criteria:
 
 - **Indirectness:** Does the question avoid directly stating the keypoint?
 - **Accuracy:** Is the correct answer actually correct given the text corpus?
@@ -311,9 +311,13 @@ const anthropic = createAnthropic({
 });
 
 export const sonnet = anthropic("claude-sonnet-4-6");
+export const haiku = anthropic("claude-haiku-4-5-20251001");
 ```
 
-Both pipelines use `generateObject` from the `ai` package with the `sonnet` model and Zod schemas for structured output. The `AI_GATEWAY_API_KEY` env var is already configured.
+- **Sonnet**: Generator (Pipeline 1), Optimizer (Pipeline 1), Answer Grader (Pipeline 2)
+- **Haiku**: Evaluator (Pipeline 1) — fast, cheap, independent perspective on question quality
+
+Both use `generateObject` from the `ai` package with Zod schemas for structured output. The `AI_GATEWAY_API_KEY` env var is already configured.
 
 ## Error Handling
 
