@@ -71,7 +71,24 @@ export function useResetTest() {
   }, [setTest, setIndex, setEvaluations]);
 }
 
+function evaluateMCQLocal(
+  question: Extract<AITestQuestion, { type: "mcq" }>,
+  userAnswer: string,
+): AIEvaluationResult {
+  const correctOption = question.options.find(
+    (o) => o.id === question.correctOptionId,
+  );
+  return {
+    questionId: question.id,
+    type: "mcq",
+    score: userAnswer === question.correctOptionId ? 100 : 0,
+    userAnswer,
+    explanation: `The correct answer is: ${correctOption?.value ?? question.correctOptionId}`,
+  };
+}
+
 // Mutation: Evaluate a single answer (does NOT auto-advance — UI controls navigation)
+// MCQ is evaluated client-side (deterministic). Free-text calls the server for AI grading.
 export function useEvaluateAnswer() {
   const setIsEvaluating = useSetAtom(isEvaluatingAtom);
   const setEvaluations = useSetAtom(evaluationsAtom);
@@ -83,6 +100,12 @@ export function useEvaluateAnswer() {
       keyPoints: string[],
       text: string,
     ) => {
+      if (question.type === "mcq") {
+        const result = evaluateMCQLocal(question, userAnswer);
+        setEvaluations((prev) => [...prev, result]);
+        return result;
+      }
+
       setIsEvaluating(true);
       try {
         const response = await fetch("/api/lesson/ai-test/evaluate", {
