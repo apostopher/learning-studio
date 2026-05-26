@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { lessonMaterialRef } from "#/atoms/lesson-ai-test";
 import { useLessonMaterial } from "#/hooks/data/use-lesson-material";
 import { LessonMaterialView } from "./lesson-material";
 import { LessonMaterialSkeleton } from "./lesson-material-skeleton";
@@ -6,8 +7,6 @@ import { LessonMaterialSkeleton } from "./lesson-material-skeleton";
 type LessonMaterialWrapperProps = {
   lessonSlug: string;
 };
-
-export const lessonMaterialRef = { current: null as HTMLDivElement | null };
 
 export const LessonMaterialWrapper = ({
   lessonSlug,

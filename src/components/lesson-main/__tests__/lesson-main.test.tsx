@@ -2,6 +2,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('#/components/lesson-material', () => ({
+  LessonMaterialWrapper: ({ lessonSlug }: { lessonSlug: string }) => (
+    <div data-testid="lesson-material">{lessonSlug}</div>
+  ),
+}));
+
 import { LessonMain } from '../lesson-main';
 
 describe('LessonMain', () => {

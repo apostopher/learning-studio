@@ -4,8 +4,7 @@ import { useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import { VideoPlayerContainer } from "#/components/video-player";
 import { DebriefOverlay } from "#/components/video-player/parts/debrief-overlay";
-import { lessonMaterialRef } from "#/components/lesson-material/lesson-material-wrapper";
-import { activeTabAtom } from "#/atoms/lesson-ai-test";
+import { activeTabAtom, lessonMaterialRef } from "#/atoms/lesson-ai-test";
 import { useLessonMaterial } from "#/hooks/data/use-lesson-material";
 import {
   useGenerateTest,

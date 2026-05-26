@@ -29,6 +29,8 @@ export const totalScoreAtom = atom((get) => {
 
 export const activeTabAtom = atom("keyPoints");
 
+export const lessonMaterialRef = { current: null as HTMLDivElement | null };
+
 // Atom family for fetching past test results per lesson
 export const testResultsAtomFamily = atomFamily((lessonSlug: string) =>
   atomWithQuery<LessonTestResultsSelect[]>(() => ({
