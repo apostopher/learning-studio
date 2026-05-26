@@ -15,10 +15,10 @@ export const Route = createFileRoute("/api/lesson/ai-test/save-results")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const session = await auth.api.getSession({ headers: request.headers });
-        if (!session) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        // const session = await auth.api.getSession({ headers: request.headers });
+        // if (!session) {
+        //   return new Response("Unauthorized", { status: 401 });
+        // }
 
         const body = await request.json();
         const parsed = SaveResultsInputSchema.safeParse(body);
@@ -31,8 +31,9 @@ export const Route = createFileRoute("/api/lesson/ai-test/save-results")({
         const { lessonSlug, test, evaluations, totalScore } = parsed.data;
 
         try {
+          // TODO: restore session.user.id when auth is re-enabled
           const result = await saveTestResult({
-            userId: session.user.id,
+            userId: "dev-user",
             lessonSlug,
             questions: test,
             answers: evaluations,

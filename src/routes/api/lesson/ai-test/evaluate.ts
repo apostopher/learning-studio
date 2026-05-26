@@ -19,10 +19,10 @@ export const Route = createFileRoute("/api/lesson/ai-test/evaluate")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const session = await auth.api.getSession({ headers: request.headers });
-        if (!session) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        // const session = await auth.api.getSession({ headers: request.headers });
+        // if (!session) {
+        //   return new Response("Unauthorized", { status: 401 });
+        // }
 
         const body = await request.json();
         const parsed = EvaluateInputSchema.safeParse(body);
