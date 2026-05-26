@@ -27,6 +27,8 @@ export const totalScoreAtom = atom((get) => {
   return Math.round(sum / evaluations.length);
 });
 
+export const activeTabAtom = atom("keyPoints");
+
 // Atom family for fetching past test results per lesson
 export const testResultsAtomFamily = atomFamily((lessonSlug: string) =>
   atomWithQuery<LessonTestResultsSelect[]>(() => ({

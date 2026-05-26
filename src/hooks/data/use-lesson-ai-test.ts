@@ -1,8 +1,9 @@
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useAtomCallback } from "jotai/utils";
 import { useCallback } from "react";
 import type { AITest, AITestQuestion, AIEvaluationResult } from "#/ai/schemas";
 import {
+  activeTabAtom,
   currentTestAtom,
   currentQuestionIndexAtom,
   evaluationsAtom,
@@ -55,7 +56,20 @@ export function useGenerateTest() {
   );
 }
 
+export const useActiveTab = () => useAtom(activeTabAtom);
 export const useAdvanceQuestion = () => useSetAtom(currentQuestionIndexAtom);
+
+export function useResetTest() {
+  const setTest = useSetAtom(currentTestAtom);
+  const setIndex = useSetAtom(currentQuestionIndexAtom);
+  const setEvaluations = useSetAtom(evaluationsAtom);
+
+  return useCallback(() => {
+    setTest(null);
+    setIndex(0);
+    setEvaluations([]);
+  }, [setTest, setIndex, setEvaluations]);
+}
 
 // Mutation: Evaluate a single answer (does NOT auto-advance — UI controls navigation)
 export function useEvaluateAnswer() {
