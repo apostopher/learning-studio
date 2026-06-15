@@ -13,3 +13,4 @@ __unconfig*
 todos.json
 mcp-todos.json
 src/styles/theme.generated.*
+.superpowers/
