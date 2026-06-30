@@ -54,7 +54,7 @@ export const EmailStepForm = ({
           className={cn(
             "text-sm text-red-11 transition-all duration-200",
             errorMessage
-              ? "px-3 py-2.5 rounded-[var(--radius-lg)] bg-red-3/70 border border-red-6/50"
+              ? "px-3 py-2.5 rounded-[var(--radius-lg)] bg-red-9/15 border border-red-9/40"
               : "min-h-[1.25rem]",
           )}
         >
