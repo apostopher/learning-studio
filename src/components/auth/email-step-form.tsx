@@ -47,12 +47,16 @@ export const EmailStepForm = ({
           )}
         />
 
-        {/* Reserved error slot — always in the DOM so height never shifts on error */}
         <p
           id={errorId}
           role="alert"
           aria-live="polite"
-          className="min-h-[1.25rem] text-sm text-red-11"
+          className={cn(
+            "text-sm text-red-11 transition-all duration-200",
+            errorMessage
+              ? "px-3 py-2.5 rounded-[var(--radius-lg)] bg-red-3/70 border border-red-6/50"
+              : "min-h-[1.25rem]",
+          )}
         >
           {errorMessage ?? ""}
         </p>
