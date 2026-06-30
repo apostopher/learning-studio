@@ -1,11 +1,20 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { z } from "zod";
+import { AuthFlowContainer } from "../../components/auth/auth-flow-container";
 
-export const Route = createFileRoute('/auth/login')({ component: Login })
+export const Route = createFileRoute("/auth/login")({
+  validateSearch: z.object({
+    redirect: z.string().optional(),
+  }),
+  beforeLoad: ({ context, search }) => {
+    if (context.session) {
+      throw redirect({ to: search.redirect ?? "/" });
+    }
+  },
+  component: LoginPage,
+});
 
-function Login() {
-  return (
-    <main className="">
-      <h1>Login</h1>
-    </main>
-  )
+function LoginPage() {
+  const { redirect: redirectTo } = Route.useSearch();
+  return <AuthFlowContainer redirect={redirectTo} />;
 }

@@ -94,6 +94,8 @@ export const env = createEnv({
     MCP_RESOURCE_URL: z.url(),
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    EMAIL_FROM: z.string().email().default("noreply@example.com"),
     SYNTHESIA_API_KEY: z.string().min(1),
     DATABASE_URL: z.string().min(1),
   },

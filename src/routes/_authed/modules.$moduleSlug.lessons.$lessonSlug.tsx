@@ -1,14 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { AppShell } from '../components/app-shell';
+import { AppShell } from '../../components/app-shell';
 import {
   LessonHeaderWrapper,
   LessonMainWrapper,
-} from '../components/lesson-main';
-import { CourseSidebarWrapper } from '../components/sidebar/course-sidebar-wrapper';
-import { appTitle } from '../styles/theme.generated';
+} from '../../components/lesson-main';
+import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
+import { appTitle } from '../../styles/theme.generated';
 
 export const Route = createFileRoute(
-  '/modules/$moduleSlug/lessons/$lessonSlug',
+  '/_authed/modules/$moduleSlug/lessons/$lessonSlug',
 )({
   component: LessonRoute,
 });

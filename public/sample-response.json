@@ -1,0 +1,325 @@
+{
+  "lessonSlug": "selfawareness-psychology",
+  "questions": [
+      {
+          "id": "q1",
+          "type": "mcq",
+          "question": "A drone pilot has just had a heated argument with a colleague before a scheduled flight. During the mission, they skip a pre-takeoff hover check and proceed directly to the target area. What is the **most likely** underlying cause of this error?",
+          "options": [
+              {
+                  "id": "q1a",
+                  "value": "Insufficient training on pre-takeoff procedures"
+              },
+              {
+                  "id": "q1b",
+                  "value": "Emotional preoccupation diverting mental bandwidth away from flight procedures"
+              },
+              {
+                  "id": "q1c",
+                  "value": "Overconfidence gained from many previous successful flights"
+              },
+              {
+                  "id": "q1d",
+                  "value": "Time pressure caused by a delayed mission start"
+              }
+          ],
+          "correctOptionId": "q1b",
+          "keyPointIndex": 0
+      },
+      {
+          "id": "q2",
+          "type": "free-text",
+          "question": "A pilot completes a flight and later reviews the footage, noticing several near-misses they barely registered at the time. They recall being absorbed in replaying a conversation with their boss. How does this situation illustrate the relationship between emotional state and airborne performance?",
+          "expectedAnswer": "Emotional thoughts unrelated to the flight consume cognitive bandwidth, reducing situational awareness. When a pilot's mind is occupied by personal or emotional concerns, they lose focus on present flight conditions, making them more likely to miss critical cues and procedural steps.",
+          "keyPointIndex": 0
+      },
+      {
+          "id": "q3",
+          "type": "mcq",
+          "question": "During a debrief, a pilot says, 'I instinctively banked hard left when I saw the obstacle—I'm not sure why I did it instead of pausing.' Which concept does this statement best illustrate the **lack** of?",
+          "options": [
+              {
+                  "id": "q3a",
+                  "value": "Technical proficiency in manual flight maneuvers"
+              },
+              {
+                  "id": "q3b",
+                  "value": "The ability to distinguish between having a thought and understanding the reason behind an action"
+              },
+              {
+                  "id": "q3c",
+                  "value": "Awareness of the 10-second anticipation rule"
+              },
+              {
+                  "id": "q3d",
+                  "value": "Proper use of the pause function during obstacle avoidance"
+              }
+          ],
+          "correctOptionId": "q3b",
+          "keyPointIndex": 1
+      },
+      {
+          "id": "q4",
+          "type": "free-text",
+          "question": "A student pilot says, 'I knew I was going to turn left, so I turned left—that's all there is to it.' Why might an experienced instructor challenge this explanation, and what deeper level of awareness is the instructor trying to develop?",
+          "expectedAnswer": "The instructor wants the pilot to distinguish between simply executing an action and understanding why that action was chosen. Recognizing the reasoning behind decisions—separate from the act itself—builds deeper cognitive self-awareness and enables deliberate improvement rather than purely instinctive flying.",
+          "keyPointIndex": 1
+      },
+      {
+          "id": "q5",
+          "type": "mcq",
+          "question": "Midway through a precision inspection flight, a pilot begins mentally replaying a mistake they made during a client presentation earlier that morning. What is the **primary operational risk** introduced by this shift in thinking?",
+          "options": [
+              {
+                  "id": "q5a",
+                  "value": "The pilot may forget to log flight time accurately after landing"
+              },
+              {
+                  "id": "q5b",
+                  "value": "Reduced situational awareness as mental focus shifts from the present flight to a past event"
+              },
+              {
+                  "id": "q5c",
+                  "value": "The pilot may become overconfident and push the aircraft beyond its limits"
+              },
+              {
+                  "id": "q5d",
+                  "value": "Communication with the ground crew will deteriorate significantly"
+              }
+          ],
+          "correctOptionId": "q5b",
+          "keyPointIndex": 2
+      },
+      {
+          "id": "q6",
+          "type": "free-text",
+          "question": "During a complex low-level mapping mission, a pilot keeps mentally revisiting a personal argument from the night before. An observer notices the pilot is consistently slow to react to new obstacles. Explain why dwelling on past events is operationally dangerous and what the pilot should do instead.",
+          "expectedAnswer": "Focusing on past events consumes the cognitive resources needed for real-time situational awareness, slowing reaction times and increasing the risk of error. The pilot should consciously redirect attention to the present flight—such as asking 'Where will I be in the next 10 seconds?'—to reclaim mental bandwidth for active decision-making.",
+          "keyPointIndex": 2
+      },
+      {
+          "id": "q7",
+          "type": "mcq",
+          "question": "A pilot is feeling frustrated after receiving critical feedback before departure. They choose to fly anyway without addressing their emotional state. According to sound airmanship principles, what is the **most significant** concern with this decision?",
+          "options": [
+              {
+                  "id": "q7a",
+                  "value": "The pilot may forget to complete a post-flight inspection"
+              },
+              {
+                  "id": "q7b",
+                  "value": "Emotional arousal will interfere with timely and rational in-flight decision-making"
+              },
+              {
+                  "id": "q7c",
+                  "value": "The crew may lose respect for the pilot's authority"
+              },
+              {
+                  "id": "q7d",
+                  "value": "The drone's automated systems may be affected by operator stress"
+              }
+          ],
+          "correctOptionId": "q7b",
+          "keyPointIndex": 3
+      },
+      {
+          "id": "q8",
+          "type": "free-text",
+          "question": "A pilot acknowledges feeling anxious and distracted before a mission but decides the flight must go ahead regardless. What should the pilot do to manage their emotional state before and during the flight, and why is this important for mission safety?",
+          "expectedAnswer": "The pilot should attempt to temporarily suppress or set aside their emotional concerns before flight, achieving a calm and composed mental state. A calm emotional state maximizes cognitive bandwidth for situational awareness and decision-making; unresolved emotional arousal interrupts this process and leads to delayed or poor decisions during critical moments.",
+          "keyPointIndex": 3
+      },
+      {
+          "id": "q9",
+          "type": "mcq",
+          "question": "A drone pilot is navigating a corridor between two buildings at low speed. The aircraft begins drifting toward a wall, but the pilot had not mentally anticipated being this close to the structure. This scenario best describes which common airmanship failure?",
+          "options": [
+              {
+                  "id": "q9a",
+                  "value": "Failure to complete a pre-flight risk assessment"
+              },
+              {
+                  "id": "q9b",
+                  "value": "Allowing the aircraft to reach a position the pilot's mind had not already anticipated several seconds prior"
+              },
+              {
+                  "id": "q9c",
+                  "value": "Neglecting to use automated obstacle avoidance systems"
+              },
+              {
+                  "id": "q9d",
+                  "value": "Flying in conditions that exceeded the aircraft's performance envelope"
+              }
+          ],
+          "correctOptionId": "q9b",
+          "keyPointIndex": 4
+      },
+      {
+          "id": "q10",
+          "type": "free-text",
+          "question": "During a training exercise, an instructor observes that a student pilot is consistently reacting to obstacles *as they appear* rather than adjusting their flight path in advance. What principle is the student failing to apply, and how would correctly applying it change their flying behavior?",
+          "expectedAnswer": "The student is failing to apply the 10-second anticipation rule—mentally projecting where the aircraft will be 10 seconds ahead rather than reacting to the present moment. Correctly applying this principle means the pilot continuously pre-thinks the flight path, enabling proactive course adjustments rather than reactive responses to immediate hazards.",
+          "keyPointIndex": 4
+      },
+      {
+          "id": "q11",
+          "type": "mcq",
+          "question": "A pilot is flying a drone through a dense tree canopy for a wildlife survey. Feeling pressed for time, they keep advancing instead of slowing down, hoping the aircraft will clear the branches. What should the pilot do instead to apply best airmanship practice?",
+          "options": [
+              {
+                  "id": "q11a",
+                  "value": "Switch to an automated flight mode to let the aircraft self-navigate"
+              },
+              {
+                  "id": "q11b",
+                  "value": "Increase altitude immediately without assessing the canopy gap"
+              },
+              {
+                  "id": "q11c",
+                  "value": "Use pause to halt forward progress, assess clearances, and anticipate the next few seconds of flight"
+              },
+              {
+                  "id": "q11d",
+                  "value": "Continue at the same speed but reduce altitude to increase clearance below branches"
+              }
+          ],
+          "correctOptionId": "q11c",
+          "keyPointIndex": 5
+      },
+      {
+          "id": "q12",
+          "type": "free-text",
+          "question": "A trainee pilot is hesitant to use the pause function frequently, feeling it makes them look indecisive in front of their crew. How would you advise this pilot, and what longer-term benefit does regular use of pause provide during complex flight operations?",
+          "expectedAnswer": "Using pause is a sign of good airmanship, not indecision—it allows the pilot to assess clearances, anticipate obstacles, and reduce risk in tight spaces. Over time, the habit of pausing builds anticipatory awareness so that the pilot naturally thinks further ahead and eventually requires the pause function less often.",
+          "keyPointIndex": 5
+      },
+      {
+          "id": "q13",
+          "type": "mcq",
+          "question": "During a confined-area inspection, a pilot clips a cable they did not see in time. Rather than criticizing themselves harshly, they calmly note the error, mentally rehearse the correct approach, and continue the mission focused on improvement. This behavior most closely reflects which airmanship principle?",
+          "options": [
+              {
+                  "id": "q13a",
+                  "value": "Passive acceptance of mistakes to avoid emotional distress"
+              },
+              {
+                  "id": "q13b",
+                  "value": "Non-judgmental self-correction by noting the deviation, visualizing the correct action, and resolving to improve"
+              },
+              {
+                  "id": "q13c",
+                  "value": "Delegating decision-making responsibility to the observer after an error"
+              },
+              {
+                  "id": "q13d",
+                  "value": "Immediately aborting the mission to prevent further errors"
+              }
+          ],
+          "correctOptionId": "q13b",
+          "keyPointIndex": 6
+      },
+      {
+          "id": "q14",
+          "type": "free-text",
+          "question": "After misjudging a distance during a close-proximity structure inspection, a pilot harshly berates themselves over the radio, becoming visibly flustered for the remainder of the flight. What approach would be more effective for both immediate performance and long-term skill development?",
+          "expectedAnswer": "The pilot should acknowledge the error without self-judgment, mentally note what went wrong and what should have been done differently, then immediately refocus on the mission. Treating corrections like a course adjustment—rather than a failure—maintains composure during flight and builds a constructive habit of improvement without emotional disruption.",
+          "keyPointIndex": 6
+      },
+      {
+          "id": "q15",
+          "type": "mcq",
+          "question": "A pilot is flying near a busy construction site and suddenly starts thinking about a family conflict. To immediately restore flight focus, what is the **most effective** first action the pilot should take?",
+          "options": [
+              {
+                  "id": "q15a",
+                  "value": "Ask the observer to take over radio communications temporarily"
+              },
+              {
+                  "id": "q15b",
+                  "value": "Reduce speed and enter a hover while waiting for the thought to fade naturally"
+              },
+              {
+                  "id": "q15c",
+                  "value": "Instantly replace the distracting thought with a specific, flight-related question such as 'Where will I be in 10 seconds?'"
+              },
+              {
+                  "id": "q15d",
+                  "value": "Make a note of the thought in the flight log to address during debrief"
+              }
+          ],
+          "correctOptionId": "q15c",
+          "keyPointIndex": 7
+      },
+      {
+          "id": "q16",
+          "type": "free-text",
+          "question": "Midway through a tactical drone operation, a pilot catches themselves thinking about a personal problem. Describe the technique they should use to immediately return their focus to the mission, and explain why this method is effective.",
+          "expectedAnswer": "The pilot should instantly replace the distracting thought with a flight-focused question, such as 'Where is my next turning point and where will I be in 10 seconds?' This technique works because it forces the mind back to present, mission-relevant content, displacing the intrusive thought and restoring situational awareness without requiring the pilot to land or pause the mission.",
+          "keyPointIndex": 7
+      },
+      {
+          "id": "q17",
+          "type": "mcq",
+          "question": "A drone pilot consistently avoids asking their observer for feedback because they worry it will undermine their authority. Over time, their performance plateaus and certain recurring errors go unaddressed. What does this situation highlight about effective crew dynamics and personal development?",
+          "options": [
+              {
+                  "id": "q17a",
+                  "value": "Observers should only provide feedback during formal after-action reviews"
+              },
+              {
+                  "id": "q17b",
+                  "value": "Pilot authority is best maintained by limiting feedback channels from the crew"
+              },
+              {
+                  "id": "q17c",
+                  "value": "Inviting honest, ongoing feedback from crew members is essential for identifying blind spots and driving performance improvement"
+              },
+              {
+                  "id": "q17d",
+                  "value": "Performance plateaus are a normal part of the learning curve and require no specific intervention"
+              }
+          ],
+          "correctOptionId": "q17c",
+          "keyPointIndex": 8
+      },
+      {
+          "id": "q18",
+          "type": "free-text",
+          "question": "A newly paired pilot and observer have not yet established a feedback agreement. During a mission, the observer notices a recurring habit in the pilot's flying but says nothing to avoid causing offence. What should have been established before the flight, and how does this kind of agreement benefit both crew members?",
+          "expectedAnswer": "Before the flight, the pilot and observer should agree on what types of observations should be communicated, how urgently, and in what format—making feedback part of standard operating procedure. This agreement allows the observer to raise relevant issues without disrupting critical phases of flight, and helps the pilot receive constructive input that supports genuine performance improvement.",
+          "keyPointIndex": 8
+      },
+      {
+          "id": "q19",
+          "type": "mcq",
+          "question": "A pilot is midway through a complex mission when they make a poor altitude judgment near a structure. They acknowledge the error, mentally note what went wrong, and immediately redirect their focus to completing the current mission. When should they conduct a detailed analysis of that error?",
+          "options": [
+              {
+                  "id": "q19a",
+                  "value": "Immediately, by stopping the mission and discussing it with the observer in detail"
+              },
+              {
+                  "id": "q19b",
+                  "value": "After landing, during the debrief or a dedicated practice session"
+              },
+              {
+                  "id": "q19c",
+                  "value": "The error should be ignored to prevent further emotional disruption"
+              },
+              {
+                  "id": "q19d",
+                  "value": "Before the next mission begins, during the pre-flight risk assessment"
+              }
+          ],
+          "correctOptionId": "q19b",
+          "keyPointIndex": 9
+      },
+      {
+          "id": "q20",
+          "type": "free-text",
+          "question": "After narrowly avoiding a collision with a crane boom, a pilot spends the remainder of the flight mentally analyzing the near-miss instead of focusing on the mission. What is the correct approach to handling this error during the flight, and how should it be properly addressed afterward?",
+          "expectedAnswer": "During the flight, the pilot should briefly acknowledge the error, note its nature—perhaps asking the observer to record it—and then immediately return full attention to the mission. The detailed analysis, reflection, and practice planning should be saved for the post-flight debrief or a practice session, ensuring mission focus is not compromised by in-flight rumination.",
+          "keyPointIndex": 9
+      }
+  ]
+}

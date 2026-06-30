@@ -56,6 +56,8 @@ export const CourseSidebar = ({
           <motion.div
             key="loading"
             className={STAGE_CLASSES}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={revealTransition}
           >
