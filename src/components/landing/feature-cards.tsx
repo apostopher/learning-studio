@@ -47,7 +47,7 @@ export const FeatureCards = () => {
               whileInView={shouldReduce ? {} : { opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.1, ease: "easeOut" }}
               viewport={{ once: true, margin: "-80px" }}
-              className="flex flex-col gap-4 rounded-2xl border border-gray-6 bg-gray-surface p-8 backdrop-blur-sm"
+              className="flex flex-col gap-4 rounded-2xl border border-gray-6 bg-gray-surface/60 p-8 backdrop-blur-2xl"
             >
               <Icon className="w-6 h-6 text-apple-9" aria-hidden="true" />
               <div>
