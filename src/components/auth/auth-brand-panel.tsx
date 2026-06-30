@@ -7,8 +7,8 @@ export const AuthBrandPanel = () => (
     className="hidden md:flex flex-col justify-between bg-apple-9 text-apple-contrast p-12 select-none"
   >
     <div className="flex items-center gap-3">
-      <Logo className="w-8 h-8 text-apple-contrast" />
-      <span className="text-sm font-semibold tracking-wide">{appTitle}</span>
+      <Logo className="inline-flex items-center justify-center shrink-0 w-8 h-8 text-apple-contrast" />
+      <span className="text-base font-semibold tracking-wide">{appTitle}</span>
     </div>
 
     <div className="space-y-4">
