@@ -1,5 +1,5 @@
 import { BrainCircuit, FlaskConical, PlayCircle, TrendingUp } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { ComponentType } from "react";
 
 interface Feature {
@@ -31,7 +31,10 @@ const FEATURES: Feature[] = [
   },
 ];
 
-export const FeatureCards = () => (
+export const FeatureCards = () => {
+  const shouldReduce = useReducedMotion();
+
+  return (
   <section className="w-full bg-gray-1 pb-24">
     <div className="content-grid">
       <div className="content">
@@ -40,8 +43,8 @@ export const FeatureCards = () => (
           {FEATURES.map(({ Icon, heading, body }, i) => (
             <motion.article
               key={heading}
-              initial={{ opacity: 0, y: 32 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={shouldReduce ? false : { opacity: 0, y: 32 }}
+              whileInView={shouldReduce ? {} : { opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.1, ease: "easeOut" }}
               viewport={{ once: true, margin: "-80px" }}
               className="flex flex-col gap-4 rounded-2xl border border-gray-6 bg-gray-surface p-8 backdrop-blur-sm"
@@ -57,4 +60,5 @@ export const FeatureCards = () => (
       </div>
     </div>
   </section>
-);
+  );
+};

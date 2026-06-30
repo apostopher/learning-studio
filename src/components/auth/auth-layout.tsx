@@ -6,7 +6,7 @@ interface AuthLayoutProps {
 }
 
 export const AuthLayout = ({ children }: AuthLayoutProps) => (
-  <div className="min-h-screen grid grid-cols-[2fr_3fr]">
+  <div className="min-h-screen grid grid-cols-1 md:grid-cols-[2fr_3fr]">
     <AuthBrandPanel />
     <main className="flex items-center justify-center bg-gray-1 p-8">
       {children}

@@ -61,8 +61,8 @@ export const FeatureSpotlight = ({
             {/* Text block — order-2 when text is on the right */}
             <motion.div
               className={cn("flex-1", !isTextLeft && "order-2")}
-              initial={{ opacity: 0, x: isTextLeft ? -24 : 24 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={shouldReduce ? false : { opacity: 0, x: isTextLeft ? -24 : 24 }}
+              whileInView={shouldReduce ? {} : { opacity: 1, x: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               viewport={{ once: true, margin: "-80px" }}
             >
@@ -80,8 +80,8 @@ export const FeatureSpotlight = ({
             {/* Visual block — order-1 when text is on the right */}
             <motion.div
               className={cn("flex-1", !isTextLeft && "order-1")}
-              initial={{ opacity: 0, x: isTextLeft ? 24 : -24 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={shouldReduce ? false : { opacity: 0, x: isTextLeft ? 24 : -24 }}
+              whileInView={shouldReduce ? {} : { opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
               viewport={{ once: true, margin: "-80px" }}
             >

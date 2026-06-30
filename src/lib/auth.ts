@@ -13,6 +13,7 @@ export const auth = betterAuth({
   plugins: [
     tanstackStartCookies(),
     emailOTP({
+      expiresIn: 600,
       async sendVerificationOTP({ email, otp, type }) {
         if (process.env.NODE_ENV === "development") {
           console.log(`[DEV] OTP for ${email} (${type}): ${otp}`);
@@ -22,7 +23,7 @@ export const auth = betterAuth({
       },
     }),
     mcp({
-      loginPage: "/login",
+      loginPage: "/auth/login",
       resource: env.MCP_RESOURCE_URL,
     }),
   ],
