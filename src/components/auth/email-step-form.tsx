@@ -42,7 +42,7 @@ export const EmailStepForm = ({
             "transition-colors duration-100",
             "focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9",
             errorMessage
-              ? "border-red-500 focus-visible:ring-red-500 focus-visible:border-red-500"
+              ? "border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9"
               : "border-gray-6 hover:border-gray-8",
           )}
         />
@@ -52,7 +52,7 @@ export const EmailStepForm = ({
           id={errorId}
           role="alert"
           aria-live="polite"
-          className="min-h-[1.25rem] text-sm text-red-600"
+          className="min-h-[1.25rem] text-sm text-red-11"
         >
           {errorMessage ?? ""}
         </p>

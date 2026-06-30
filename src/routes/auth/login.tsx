@@ -8,7 +8,7 @@ export const Route = createFileRoute("/auth/login")({
   }),
   beforeLoad: ({ context, search }) => {
     if (context.session) {
-      throw redirect({ to: search.redirect ?? "/" });
+      throw redirect({ to: search.redirect ?? "/app" });
     }
   },
   component: LoginPage,

@@ -1,5 +1,5 @@
 import { env } from "../../env";
-import { resend } from "./client";
+import { getResendClient } from "./client";
 import { otpEmailTemplate } from "./templates/otp-email";
 
 type OtpEmailType = "sign-in" | "email-verification" | "forget-password" | "change-email";
@@ -13,7 +13,7 @@ interface SendOtpEmailParams {
 export async function sendOtpEmail({ email, otp, type }: SendOtpEmailParams) {
   const { subject, html } = otpEmailTemplate({ otp, type });
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResendClient().emails.send({
     from: env.EMAIL_FROM,
     to: email,
     subject,

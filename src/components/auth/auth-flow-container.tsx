@@ -100,7 +100,7 @@ export const AuthFlowContainer = ({ redirect }: AuthFlowContainerProps) => {
         onSuccess: () => {
           setStep("email");
           setEmail("");
-          navigate({ to: (redirect as string | undefined) ?? "/app" });
+          navigate({ to: redirect ?? "/app" });
         },
       },
     );
