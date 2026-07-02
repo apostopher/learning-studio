@@ -23,6 +23,29 @@ Support an arbitrary number of named brand color scales per deployment (think Go
 
 `generateRadixColors` is still called twice per entry (light + dark), using the existing `VITE_GRAY_*` and `VITE_BG_*` as `gray` and `background` anchors.
 
+### Semantic scales via named entries
+
+Because Tailwind's default palette is disabled (only generated `--color-*` tokens
+produce utilities), semantic status colors must be added as named brand entries.
+A `red` entry seeds a full danger/error scale so `bg-red-9`, `text-red-11`,
+`border-red-9`, etc. resolve. It is a normal (non-accent) brand entry — the first
+entry remains the accent.
+
+```
+VITE_BRAND_COLORS='apple:#1d1d1f/#f5f5f7,link:#0066cc/#2997ff,red:#e5484d/#ff6369'
+```
+
+Emits `--color-red-1..12`, `--color-red-a1..12`, `--color-red-contrast`,
+`--color-red-surface`. Seed hues follow Radix `red` (`#e5484d` light / `#ff6369`
+dark). Additional semantic scales (`green` success, `amber` warning) can be added
+the same way when needed — none are added speculatively (YAGNI).
+
+**Caveat:** as a tenant brand entry, `red` lives in `VITE_BRAND_COLORS` and a
+deployment could rename or drop it, which would break error styling. This is
+accepted for the current single-tenant setup; promoting semantic scales to a
+fixed, always-emitted set in the generator is a future option if multi-tenant
+error-color drift becomes a real risk.
+
 ## Env schema changes (`src/env.ts`)
 
 **Removed:** `VITE_ACCENT_LIGHT`, `VITE_ACCENT_DARK`, `VITE_BRAND_LIGHT`, `VITE_BRAND_DARK`.
