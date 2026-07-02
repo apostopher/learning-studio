@@ -10,6 +10,10 @@ import { sendOtpEmail } from "./email/send-otp-email";
 export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
+  // Vite dev picks the first free port (5000 → 5001 → 5002), so the origin
+  // won't always match BETTER_AUTH_URL. Trust any localhost port in dev only.
+  trustedOrigins:
+    process.env.NODE_ENV === "development" ? ["http://localhost:*"] : [],
   plugins: [
     tanstackStartCookies(),
     emailOTP({

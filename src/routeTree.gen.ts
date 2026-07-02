@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
@@ -33,6 +34,11 @@ const McpRoute = McpRouteImport.update({
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
@@ -111,7 +117,7 @@ const AuthedModulesModuleSlugLessonsLessonSlugRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AuthedRouteWithChildren
+  '/': typeof IndexRoute
   '/mcp': typeof McpRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
@@ -129,7 +135,7 @@ export interface FileRoutesByFullPath {
   '/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof AuthedRouteWithChildren
+  '/': typeof IndexRoute
   '/mcp': typeof McpRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
@@ -148,6 +154,7 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/mcp': typeof McpRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
@@ -204,6 +211,7 @@ export interface FileRouteTypes {
     | '/modules/$moduleSlug/lessons/$lessonSlug'
   id:
     | '__root__'
+    | '/'
     | '/_authed'
     | '/mcp'
     | '/.well-known/oauth-authorization-server'
@@ -223,6 +231,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   McpRoute: typeof McpRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
@@ -253,6 +262,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/login': {
@@ -371,6 +387,7 @@ const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   McpRoute: McpRoute,
   DotwellKnownOauthAuthorizationServerRoute:
