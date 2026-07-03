@@ -91,7 +91,7 @@ export const env = createEnv({
           .map((s) => s.trim())
           .filter(Boolean),
       ),
-    MCP_RESOURCE_URL: z.url(),
+    MCP_RESOURCE_URL: z.url().optional(),
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),

@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP, mcp } from "better-auth/plugins";
+import { emailOTP } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 import { db } from "../db";
@@ -25,10 +25,6 @@ export const auth = betterAuth({
         }
         await sendOtpEmail({ email, otp, type });
       },
-    }),
-    mcp({
-      loginPage: "/auth/login",
-      resource: env.MCP_RESOURCE_URL,
     }),
   ],
   database: drizzleAdapter(db, {
