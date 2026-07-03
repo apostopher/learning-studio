@@ -81,17 +81,6 @@ const brandColorsSchema = z
 export const env = createEnv({
   server: {
     SERVER_URL: z.url().optional(),
-    REDIS_URL: z.string().min(1),
-    MCP_CORS_ALLOWLIST: z
-      .string()
-      .default("")
-      .transform((v) =>
-        v
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-      ),
-    MCP_RESOURCE_URL: z.url().optional(),
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),
