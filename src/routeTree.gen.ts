@@ -9,25 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as McpRouteImport } from './routes/mcp'
+import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
-import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known/oauth-protected-resource'
-import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
+import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progress'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/modules.$moduleSlug.lessons.$lessonSlug'
 import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
 import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
+import { Route as AuthedModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/modules.$moduleSlug.lessons.$lessonSlug'
 
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -40,18 +38,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DotwellKnownOauthProtectedResourceRoute =
-  DotwellKnownOauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const DotwellKnownOauthAuthorizationServerRoute =
-  DotwellKnownOauthAuthorizationServerRouteImport.update({
-    id: '/.well-known/oauth-authorization-server',
-    path: '/.well-known/oauth-authorization-server',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const AuthedAppRoute = AuthedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const ApiLessonVideoRoute = ApiLessonVideoRouteImport.update({
   id: '/api/lesson/video',
   path: '/api/lesson/video',
@@ -77,12 +68,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ModulesModuleSlugLessonsLessonSlugRoute =
-  ModulesModuleSlugLessonsLessonSlugRouteImport.update({
-    id: '/modules/$moduleSlug/lessons/$lessonSlug',
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiLessonAiTestSaveResultsRoute =
   ApiLessonAiTestSaveResultsRouteImport.update({
     id: '/api/lesson/ai-test/save-results',
@@ -104,12 +89,16 @@ const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
   path: '/api/lesson/ai-test/evaluate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedModulesModuleSlugLessonsLessonSlugRoute =
+  AuthedModulesModuleSlugLessonsLessonSlugRouteImport.update({
+    id: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/mcp': typeof McpRoute
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
-  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
+  '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
@@ -120,13 +109,11 @@ export interface FileRoutesByFullPath {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
+  '/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/mcp': typeof McpRoute
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
-  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
+  '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
@@ -137,14 +124,13 @@ export interface FileRoutesByTo {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
+  '/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/mcp': typeof McpRoute
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
-  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/_authed/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
@@ -155,15 +141,13 @@ export interface FileRoutesById {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/modules/$moduleSlug/lessons/$lessonSlug': typeof ModulesModuleSlugLessonsLessonSlugRoute
+  '/_authed/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/mcp'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/oauth-protected-resource'
+    | '/app'
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
@@ -178,9 +162,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/mcp'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/oauth-protected-resource'
+    | '/app'
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
@@ -195,9 +177,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/mcp'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/oauth-protected-resource'
+    | '/_authed'
+    | '/_authed/app'
     | '/auth/login'
     | '/api/auth/$'
     | '/api/course/details'
@@ -208,14 +189,12 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
-    | '/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/_authed/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  McpRoute: typeof McpRoute
-  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
-  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
@@ -226,16 +205,15 @@ export interface RootRouteChildren {
   ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
   ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
   ApiLessonAiTestSaveResultsRoute: typeof ApiLessonAiTestSaveResultsRoute
-  ModulesModuleSlugLessonsLessonSlugRoute: typeof ModulesModuleSlugLessonsLessonSlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -252,19 +230,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.well-known/oauth-authorization-server': {
-      id: '/.well-known/oauth-authorization-server'
-      path: '/.well-known/oauth-authorization-server'
-      fullPath: '/.well-known/oauth-authorization-server'
-      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authed/app': {
+      id: '/_authed/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthedAppRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/api/lesson/video': {
       id: '/api/lesson/video'
@@ -301,13 +272,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/modules/$moduleSlug/lessons/$lessonSlug': {
-      id: '/modules/$moduleSlug/lessons/$lessonSlug'
-      path: '/modules/$moduleSlug/lessons/$lessonSlug'
-      fullPath: '/modules/$moduleSlug/lessons/$lessonSlug'
-      preLoaderRoute: typeof ModulesModuleSlugLessonsLessonSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/lesson/ai-test/save-results': {
       id: '/api/lesson/ai-test/save-results'
       path: '/api/lesson/ai-test/save-results'
@@ -336,16 +300,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/modules/$moduleSlug/lessons/$lessonSlug': {
+      id: '/_authed/modules/$moduleSlug/lessons/$lessonSlug'
+      path: '/modules/$moduleSlug/lessons/$lessonSlug'
+      fullPath: '/modules/$moduleSlug/lessons/$lessonSlug'
+      preLoaderRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
+interface AuthedRouteChildren {
+  AuthedAppRoute: typeof AuthedAppRoute
+  AuthedModulesModuleSlugLessonsLessonSlugRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAppRoute: AuthedAppRoute,
+  AuthedModulesModuleSlugLessonsLessonSlugRoute:
+    AuthedModulesModuleSlugLessonsLessonSlugRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  McpRoute: McpRoute,
-  DotwellKnownOauthAuthorizationServerRoute:
-    DotwellKnownOauthAuthorizationServerRoute,
-  DotwellKnownOauthProtectedResourceRoute:
-    DotwellKnownOauthProtectedResourceRoute,
+  AuthedRoute: AuthedRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
@@ -356,8 +337,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
   ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
   ApiLessonAiTestSaveResultsRoute: ApiLessonAiTestSaveResultsRoute,
-  ModulesModuleSlugLessonsLessonSlugRoute:
-    ModulesModuleSlugLessonsLessonSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

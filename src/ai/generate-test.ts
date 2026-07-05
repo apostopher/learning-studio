@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { sonnet, haiku } from "./ai-provider";
 import { generationPrompt } from "./prompts/generation";
 import { evaluatorPrompt } from "./prompts/evaluator";
@@ -20,12 +20,20 @@ async function generate(
   mcqCount: number,
   freeTextCount: number,
 ): Promise<AITestQuestion[]> {
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: sonnet,
-    schema: AITestGenerationOutputSchema,
-    prompt: generationPrompt({ keyPoints, text, questionCount, mcqCount, freeTextCount }),
+    output: Output.object({
+      schema: AITestGenerationOutputSchema,
+    }),
+    prompt: generationPrompt({
+      keyPoints,
+      text,
+      questionCount,
+      mcqCount,
+      freeTextCount,
+    }),
   });
-  return object.questions;
+  return output.questions;
 }
 
 async function evaluate(
@@ -33,12 +41,14 @@ async function evaluate(
   text: string,
   questions: AITestQuestion[],
 ): Promise<EvaluatorOutput> {
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: haiku,
-    schema: EvaluatorOutputSchema,
+    output: Output.object({
+      schema: EvaluatorOutputSchema,
+    }),
     prompt: evaluatorPrompt({ keyPoints, text, questions }),
   });
-  return object;
+  return output;
 }
 
 async function optimize(
@@ -47,12 +57,19 @@ async function optimize(
   failedQuestions: AITestQuestion[],
   evaluatorFeedback: EvaluatorOutput["results"],
 ): Promise<AITestQuestion[]> {
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: sonnet,
-    schema: AITestGenerationOutputSchema,
-    prompt: optimizerPrompt({ keyPoints, text, failedQuestions, evaluatorFeedback }),
+    output: Output.object({
+      schema: AITestGenerationOutputSchema,
+    }),
+    prompt: optimizerPrompt({
+      keyPoints,
+      text,
+      failedQuestions,
+      evaluatorFeedback,
+    }),
   });
-  return object.questions;
+  return output.questions;
 }
 
 export async function generateTest(
@@ -65,7 +82,13 @@ export async function generateTest(
   const freeTextCount = questionCount - mcqCount;
 
   // Step 1: Generate initial questions using Sonnet
-  let questions = await generate(keyPoints, text, questionCount, mcqCount, freeTextCount);
+  let questions = await generate(
+    keyPoints,
+    text,
+    questionCount,
+    mcqCount,
+    freeTextCount,
+  );
 
   // Step 2-3: Evaluate with Haiku, optimize failures with Sonnet (max 2 retries)
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -81,7 +104,12 @@ export async function generateTest(
     const passedQuestions = questions.filter((q) => !failedIds.has(q.id));
     const failedFeedback = evaluation.results.filter((r) => !r.pass);
 
-    const regenerated = await optimize(keyPoints, text, failedQuestions, failedFeedback);
+    const regenerated = await optimize(
+      keyPoints,
+      text,
+      failedQuestions,
+      failedFeedback,
+    );
     questions = [...passedQuestions, ...regenerated];
   }
 
