@@ -39,6 +39,7 @@
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
     "@upstash/redis": "1.37.0",
+    "@xstate/react": "^6.1.0",
     "ai": "6.0.168",
     "better-auth": "^1.5.3",
     "bezier-easing": "3.0.0",
@@ -64,6 +65,7 @@
     "storybook": "^10.2.15",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "^4.1.18",
+    "xstate": "^5.32.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
