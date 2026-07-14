@@ -1,47 +1,49 @@
-import { useAtom } from "jotai";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "@tanstack/react-router";
-import { z } from "zod";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useMachine } from '@xstate/react';
+import { useAtomValue, useStore } from 'jotai';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useCallback, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import {
   authEmailAtom,
-  authStepAtom,
-  nowAtom,
-  resendAvailableAtAtom,
-} from "../../atoms/auth";
-import { useRequestOtp, useVerifyOtp } from "../../hooks/auth";
-import { AuthCard } from "./auth-card";
-import { AuthLayout } from "./auth-layout";
-import { EmailStepForm } from "./email-step-form";
-import { OtpStepForm } from "./otp-step-form";
-
-const RESEND_COOLDOWN_MS = 30_000;
+  authErrorAtom,
+  resendCountdownAtom,
+} from '../../atoms/auth';
+import { useRequestOtp, useVerifyOtp } from '../../hooks/auth';
+import {
+  authLoginMachine,
+  createAuthLoginImplementations,
+} from '../../machines/auth-login-machine';
+import { AuthCard } from './auth-card';
+import { AuthLayout } from './auth-layout';
+import { EmailStepForm } from './email-step-form';
+import { OtpStepForm } from './otp-step-form';
 
 const emailSchema = z.object({
   email: z
     .string()
-    .min(1, "Enter your email address")
-    .email("Enter a valid email address"),
+    .min(1, 'Enter your email address')
+    .email('Enter a valid email address'),
 });
 
 const otpSchema = z.object({
   otp: z
     .string()
-    .min(1, "Enter the 6-digit code")
-    .length(6, "The code must be exactly 6 digits")
-    .regex(/^\d+$/, "The code must contain only digits"),
+    .min(1, 'Enter the 6-digit code')
+    .length(6, 'The code must be exactly 6 digits')
+    .regex(/^\d+$/, 'The code must contain only digits'),
 });
 
 type EmailFormData = z.infer<typeof emailSchema>;
 type OtpFormData = z.infer<typeof otpSchema>;
 
 function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
+  const [local, domain] = email.split('@');
   if (!local || !domain) return email;
-  return `${local[0]}${"•".repeat(Math.max(1, local.length - 1))}@${domain}`;
+  return `${local[0]}${'•'.repeat(Math.max(1, local.length - 1))}@${domain}`;
 }
 
 interface AuthFlowContainerProps {
@@ -49,82 +51,84 @@ interface AuthFlowContainerProps {
 }
 
 export const AuthFlowContainer = ({ redirect }: AuthFlowContainerProps) => {
+  const store = useStore();
+  const router = useRouter();
   const navigate = useNavigate();
-  const [step, setStep] = useAtom(authStepAtom);
-  const [email, setEmail] = useAtom(authEmailAtom);
-  const [resendAvailableAt, setResendAvailableAt] = useAtom(resendAvailableAtAtom);
-  const [now, setNow] = useAtom(nowAtom);
-
   const shouldReduce = useReducedMotion();
 
   const requestOtp = useRequestOtp();
   const verifyOtp = useVerifyOtp();
 
+  // Stable dependency callbacks so the provided machine identity does not churn
+  // (which would restart the actor and drop flow state). react-query's
+  // mutateAsync is referentially stable, and router/navigate/redirect are
+  // constant for the flow's lifetime.
+  const sendOtp = useCallback(
+    (email: string) => requestOtp.mutateAsync(email),
+    [requestOtp.mutateAsync],
+  );
+  const verify = useCallback(
+    (args: { email: string; otp: string }) => verifyOtp.mutateAsync(args),
+    [verifyOtp.mutateAsync],
+  );
+  const redirectFn = useCallback(async () => {
+    // Re-run the root beforeLoad so the freshly-set session lands in router
+    // context, then navigate. Both live inside the machine's redirect actor.
+    await router.invalidate();
+    await navigate({ to: redirect ?? '/app' });
+  }, [router, navigate, redirect]);
+
+  const machine = useMemo(
+    () =>
+      authLoginMachine.provide(
+        createAuthLoginImplementations({
+          store,
+          sendOtp,
+          verifyOtp: verify,
+          redirect: redirectFn,
+        }),
+      ),
+    [store, sendOtp, verify, redirectFn],
+  );
+
+  const [state, send] = useMachine(machine);
+
+  const email = useAtomValue(authEmailAtom);
+  const serverError = useAtomValue(authErrorAtom) ?? undefined;
+  const resendCountdown = useAtomValue(resendCountdownAtom);
+
   const emailForm = useForm<EmailFormData>({
     resolver: zodResolver(emailSchema),
-    mode: "onSubmit",
+    mode: 'onSubmit',
   });
 
   const otpForm = useForm<OtpFormData>({
     resolver: zodResolver(otpSchema),
-    mode: "onSubmit",
+    mode: 'onSubmit',
   });
 
-  // Tick "now" every second while on the OTP step to drive the resend countdown.
-  useEffect(() => {
-    if (step !== "otp") return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [step, setNow]);
-
-  const resendCountdown = Math.max(
-    0,
-    Math.ceil((resendAvailableAt - now) / 1000),
-  );
-
-  const handleEmailSubmit = emailForm.handleSubmit(async ({ email: value }) => {
-    requestOtp.reset();
-    await requestOtp.mutateAsync(value, {
-      onSuccess: () => {
-        setEmail(value);
-        setResendAvailableAt(Date.now() + RESEND_COOLDOWN_MS);
-        setStep("otp");
-        otpForm.reset();
-      },
-    });
+  const handleEmailSubmit = emailForm.handleSubmit(({ email: value }) => {
+    send({ type: 'SUBMIT_EMAIL', email: value });
+    otpForm.reset();
   });
 
-  const handleOtpSubmit = otpForm.handleSubmit(async ({ otp }) => {
-    verifyOtp.reset();
-    await verifyOtp.mutateAsync(
-      { email, otp },
-      {
-        onSuccess: () => {
-          setStep("email");
-          setEmail("");
-          navigate({ to: redirect ?? "/app" });
-        },
-      },
-    );
+  const handleOtpSubmit = otpForm.handleSubmit(({ otp }) => {
+    send({ type: 'SUBMIT_OTP', otp });
   });
 
-  const handleResend = async () => {
-    requestOtp.reset();
-    await requestOtp.mutateAsync(email, {
-      onSuccess: () => {
-        setResendAvailableAt(Date.now() + RESEND_COOLDOWN_MS);
-        otpForm.reset();
-        otpForm.setFocus("otp");
-      },
-    });
+  const handleResend = () => {
+    send({ type: 'RESEND' });
+    otpForm.reset();
+    otpForm.setFocus('otp');
   };
 
   const handleBack = () => {
-    setStep("email");
-    requestOtp.reset();
-    verifyOtp.reset();
+    send({ type: 'BACK' });
     otpForm.reset();
   };
+
+  const onEmailScreen =
+    state.matches('emailEntry') || state.matches('sendingOtp');
 
   const stepVariants = {
     enter: { opacity: 0, y: shouldReduce ? 0 : 8 },
@@ -132,34 +136,17 @@ export const AuthFlowContainer = ({ redirect }: AuthFlowContainerProps) => {
     exit: { opacity: 0, y: shouldReduce ? 0 : -8 },
   };
 
-  const resolveErrorMessage = (error: unknown): string | undefined => {
-    if (!error) return undefined;
-    if (error && typeof error === "object" && "code" in error) {
-      const codes: Record<string, string> = {
-        OTP_EXPIRED: "That code has expired. Request a new one.",
-        INVALID_OTP: "Incorrect code. Please try again.",
-        TOO_MANY_ATTEMPTS: "Too many attempts. Please wait a moment and try again.",
-      };
-      const code = (error as { code: string }).code;
-      if (code in codes) return codes[code];
-    }
-    if (error && typeof error === "object" && "message" in error) {
-      return (error as { message: string }).message;
-    }
-    return "Something went wrong. Please try again.";
-  };
-
   return (
     <AuthLayout>
       <AnimatePresence mode="wait" initial={false}>
-        {step === "email" ? (
+        {onEmailScreen ? (
           <motion.div
             key="email"
             variants={stepVariants}
             initial="enter"
             animate="visible"
             exit="exit"
-            transition={{ duration: 0.18, ease: "easeInOut" }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
             className="w-full"
           >
             <AuthCard
@@ -168,10 +155,10 @@ export const AuthFlowContainer = ({ redirect }: AuthFlowContainerProps) => {
             >
               <EmailStepForm
                 onSubmit={handleEmailSubmit}
-                registerEmail={emailForm.register("email")}
+                registerEmail={emailForm.register('email')}
                 fieldError={emailForm.formState.errors.email?.message}
-                serverError={resolveErrorMessage(requestOtp.error)}
-                isLoading={requestOtp.isPending}
+                serverError={serverError}
+                isLoading={state.matches('sendingOtp')}
               />
             </AuthCard>
           </motion.div>
@@ -182,22 +169,24 @@ export const AuthFlowContainer = ({ redirect }: AuthFlowContainerProps) => {
             initial="enter"
             animate="visible"
             exit="exit"
-            transition={{ duration: 0.18, ease: "easeInOut" }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
             className="w-full"
           >
             <AuthCard
               heading="Check your email"
-              description={`Enter the code we sent to verify it's you.`}
+              description="Enter the code we sent to verify it's you."
             >
               <OtpStepForm
                 maskedEmail={maskEmail(email)}
                 onSubmit={handleOtpSubmit}
-                registerOtp={otpForm.register("otp")}
+                registerOtp={otpForm.register('otp')}
                 fieldError={otpForm.formState.errors.otp?.message}
-                serverError={resolveErrorMessage(verifyOtp.error ?? (requestOtp.isError && step === "otp" ? requestOtp.error : null))}
-                isLoading={verifyOtp.isPending}
+                serverError={serverError}
+                isLoading={
+                  state.matches('verifyingOtp') || state.matches('redirecting')
+                }
                 onResend={handleResend}
-                isResending={requestOtp.isPending}
+                isResending={state.matches('resendingOtp')}
                 resendCountdown={resendCountdown}
                 onBack={handleBack}
               />
