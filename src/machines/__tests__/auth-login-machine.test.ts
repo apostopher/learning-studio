@@ -10,6 +10,7 @@ import {
 import {
   authLoginMachine,
   createAuthLoginImplementations,
+  RESEND_COOLDOWN_MS,
 } from '../auth-login-machine';
 
 interface Overrides {
@@ -78,15 +79,15 @@ describe('authLoginMachine', () => {
 
     actor.send({ type: 'SUBMIT_EMAIL', email: 'pilot@example.com' });
     await waitFor(actor, (s) => s.matches('otpEntry'));
-    const firstResendAt = store.get(resendAvailableAtAtom);
 
+    const before = Date.now();
     actor.send({ type: 'RESEND' });
     await waitFor(actor, (s) => s.matches('resendingOtp'));
     await waitFor(actor, (s) => s.matches('otpEntry'));
 
     expect(sendOtp).toHaveBeenCalledTimes(2);
     expect(store.get(resendAvailableAtAtom)).toBeGreaterThanOrEqual(
-      firstResendAt,
+      before + RESEND_COOLDOWN_MS,
     );
 
     actor.stop();
@@ -94,33 +95,28 @@ describe('authLoginMachine', () => {
 
   it('clears email and error on BACK', async () => {
     const { store, actor } = makeActor({
-      sendOtp: async () => {
-        throw { code: 'TOO_MANY_ATTEMPTS' };
+      verifyOtp: async () => {
+        throw { code: 'INVALID_OTP' };
       },
     });
     actor.start();
 
-    // Trigger an error first so we can prove BACK clears it.
     actor.send({ type: 'SUBMIT_EMAIL', email: 'pilot@example.com' });
+    await waitFor(actor, (s) => s.matches('otpEntry'));
+
+    actor.send({ type: 'SUBMIT_OTP', otp: '000000' });
     await waitFor(
       actor,
-      (s) => s.matches('emailEntry') && store.get(authErrorAtom) !== null,
+      (s) => s.matches('otpEntry') && store.get(authErrorAtom) !== null,
     );
-    expect(store.get(authErrorAtom)).toBe(
-      'Too many attempts. Please wait a moment and try again.',
-    );
+    expect(store.get(authErrorAtom)).toBe('Incorrect code. Please try again.');
+    expect(store.get(authEmailAtom)).toBe('pilot@example.com');
 
-    // Now succeed to reach otpEntry, then go BACK.
-    const { store: store2, actor: actor2 } = makeActor();
-    actor2.start();
-    actor2.send({ type: 'SUBMIT_EMAIL', email: 'pilot@example.com' });
-    await waitFor(actor2, (s) => s.matches('otpEntry'));
-    actor2.send({ type: 'BACK' });
-    await waitFor(actor2, (s) => s.matches('emailEntry'));
-    expect(store2.get(authEmailAtom)).toBe('');
-    expect(store2.get(authErrorAtom)).toBeNull();
+    actor.send({ type: 'BACK' });
+    await waitFor(actor, (s) => s.matches('emailEntry'));
+    expect(store.get(authEmailAtom)).toBe('');
+    expect(store.get(authErrorAtom)).toBeNull();
 
     actor.stop();
-    actor2.stop();
   });
 });

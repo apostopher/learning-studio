@@ -135,7 +135,17 @@ export const authLoginMachine = setup({
       },
     },
     redirecting: {
-      invoke: { src: 'redirect', onDone: 'done' },
+      invoke: {
+        src: 'redirect',
+        onDone: 'done',
+        onError: {
+          target: 'otpEntry',
+          actions: {
+            type: 'setError',
+            params: ({ event }) => ({ error: event.error }),
+          },
+        },
+      },
     },
     done: { type: 'final' },
   },
