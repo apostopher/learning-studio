@@ -24,8 +24,15 @@ is no role-check helper yet.
 - **Bootstrap:** a `pnpm db:grant-admin <email>` script upserts the `admin` role
   and links it to the profile with that email. It will be run once now against
   the live Neon DB for `apostopher@gmail.com`.
-- **Data:** react-query over a `createServerFn` (matches the existing `getSession`
-  pattern), never `useEffect` fetching.
+- **Data:** ALL client data fetching goes through TanStack Query hooks over
+  `createServerFn`s (matches the existing `getSession` pattern). No direct
+  `fetch`/axios in components, and no route-**loader** data fetching. A route's
+  `beforeLoad` is used only for the access-control redirect, never to load page
+  data.
+- **API guarding:** EVERY admin server fn independently enforces the `admin`
+  role server-side via a shared `requireAdmin(headers)` guard — never relying on
+  the route guard alone. A leaked/forged direct call to any admin server fn must
+  still be rejected.
 - **UI:** container/presentational split; Base UI components; Radix/token colors
   (WCAG AA); `date-fns` for relative dates; `.content-grid` + `.grid-auto-fit`
   for layout; kebab-case component files.
@@ -55,14 +62,21 @@ is no role-check helper yet.
 - Export type `AdminCourseSummary`.
 
 `src/lib/admin-functions.ts` (server fns, `@tanstack/react-start`):
-- `ensureAdmin` — `createServerFn({ method: 'GET' })`; gets session via
+- `requireAdmin(headers): Promise<{ userId: string; roles: string[] }>` — shared
+  guard (not a server fn; a plain server-side helper). Gets the session via
   `auth.api.getSession({ headers })`; if no session or `admin` not in
-  `getUserRoleNames(session.user.id)`, `throw new Error('Forbidden')` (the route
-  `beforeLoad` turns a thrown/rejected result into a redirect to `/app`).
-  Returns the role list on success.
-- `listAdminCoursesFn` — `createServerFn({ method: 'GET' })` calling
-  `listAdminCourses()`. (Re-checks admin server-side so the data fn isn't
-  callable by non-admins.)
+  `getUserRoleNames(session.user.id)`, throws `Error('Forbidden')`. Returns the
+  user id + roles on success. **Every admin server fn calls this first.**
+- `ensureAdmin` — `createServerFn({ method: 'GET' })` that calls
+  `requireAdmin(getRequestHeaders())` and returns the roles. Used by the route
+  `beforeLoad`, which wraps the call in try/catch and, on rejection, throws
+  `redirect({ to: '/app' })`.
+- `listAdminCoursesFn` — `createServerFn({ method: 'GET' })` that calls
+  `requireAdmin(getRequestHeaders())` FIRST, then returns `listAdminCourses()`.
+  So even a direct RPC call from a non-admin is rejected, independent of the
+  route guard.
+- Any future admin server fn (create/update course, etc.) MUST open with
+  `requireAdmin(...)` the same way.
 
 `src/hooks/data/keys.ts`: add `adminCourses: () => ['admin', 'courses'] as const`.
 `src/hooks/data/use-admin-courses.ts`: `useAdminCourses()` — `useQuery({ queryKey:
