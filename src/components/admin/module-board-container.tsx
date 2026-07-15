@@ -20,6 +20,7 @@ import { useAtom } from 'jotai';
 import { activeDragModuleIdAtom } from '@/atoms/admin';
 import { useReorderModule } from '@/data-hooks/use-reorder-module';
 import type { BoardModule } from '@/lib/admin-schemas';
+import { CreateLessonDialogContainer } from './create-lesson-dialog-container';
 import { ModuleColumn } from './module-column';
 import { SortableModuleColumn } from './sortable-module-column';
 
@@ -89,6 +90,7 @@ export const ModuleBoardContainer = ({
       <DragOverlay dropAnimation={null}>
         {activeModule ? <ModuleColumn module={activeModule} /> : null}
       </DragOverlay>
+      <CreateLessonDialogContainer courseId={courseId} />
     </DndContext>
   );
 };
