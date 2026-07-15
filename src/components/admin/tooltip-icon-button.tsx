@@ -35,7 +35,7 @@ export const TooltipIconButton = ({
         {children}
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Positioner sideOffset={6}>
+        <Tooltip.Positioner sideOffset={6} className="z-50">
           <Tooltip.Popup className="rounded-md bg-gray-12 px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
             {label}
           </Tooltip.Popup>

@@ -73,7 +73,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased wrap-anywhere">
         <TanstackQueryProvider>
-          <Tooltip.Provider delay={300}>{children}</Tooltip.Provider>
+          <Tooltip.Provider delay={0}>{children}</Tooltip.Provider>
 
           <TanStackDevtools
             config={{
