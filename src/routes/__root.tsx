@@ -6,6 +6,7 @@ import {
   Scripts,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
+import { Toaster } from 'sonner';
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
 import TanstackQueryProvider from '../integrations/tanstack-query/root-provider';
 import { getAuthContext, type getSession } from '../lib/auth-functions';
@@ -84,6 +85,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               },
               TanStackQueryDevtools,
             ]}
+          />
+          <Toaster
+            position="bottom-right"
+            theme="system"
+            richColors
+            closeButton
           />
         </TanstackQueryProvider>
         <Scripts />
