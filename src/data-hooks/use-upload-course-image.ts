@@ -17,13 +17,17 @@ export function useUploadCourseImage() {
   return useMutation<UploadedCourseImage, Error, File>({
     mutationFn: async (file) => {
       const { avif, webp } = await optimizeCourseImage(file);
+      // Unique base name per upload so different courses never collide (writing
+      // to an existing blob without allowOverwrite is a 400). The .avif/.webp
+      // pair shares one id so they stay associated in storage.
+      const id = crypto.randomUUID();
       const [avifResult, webpResult] = await Promise.all([
-        upload('courses/cover.avif', avif, {
+        upload(`courses/${id}.avif`, avif, {
           access: 'public',
           contentType: 'image/avif',
           handleUploadUrl: '/api/admin/uploads',
         }),
-        upload('courses/cover.webp', webp, {
+        upload(`courses/${id}.webp`, webp, {
           access: 'public',
           contentType: 'image/webp',
           handleUploadUrl: '/api/admin/uploads',

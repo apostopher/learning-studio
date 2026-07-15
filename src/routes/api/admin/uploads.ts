@@ -26,6 +26,7 @@ export const Route = createFileRoute('/api/admin/uploads')({
         try {
           body = (await request.json()) as HandleUploadBody;
         } catch {
+          console.error('Invalid JSON body');
           return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
         }
 
@@ -40,10 +41,12 @@ export const Route = createFileRoute('/api/admin/uploads')({
               // The separate upload-completed webhook is authenticated by
               // Blob's own token signature, so it isn't guarded here.
               await requireAdmin(request.headers);
+              // The client sends a unique UUID pathname per upload, so no random
+              // suffix is needed — names stay clean (courses/<uuid>.<ext>).
               return {
                 allowedContentTypes: ALLOWED_CONTENT_TYPES,
                 maximumSizeInBytes: MAX_SIZE_BYTES,
-                addRandomSuffix: true,
+                addRandomSuffix: false,
               };
             },
           });
