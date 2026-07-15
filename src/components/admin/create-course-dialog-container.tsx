@@ -40,9 +40,6 @@ export const CreateCourseDialogContainer = () => {
         toast.success('Course created');
         onOpenChange(false);
       },
-      onError: () => {
-        toast.error('Could not create course. Please try again.');
-      },
     });
   });
 
@@ -69,7 +66,9 @@ export const CreateCourseDialogContainer = () => {
               imageUrl: form.formState.errors.imageUrl?.message,
             }}
             serverError={
-              createCourse.isError ? 'Something went wrong.' : undefined
+              createCourse.isError
+                ? 'Could not create course. Please try again.'
+                : undefined
             }
             isPending={createCourse.isPending}
             onCancel={() => onOpenChange(false)}

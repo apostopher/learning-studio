@@ -15,6 +15,7 @@ interface CreateCourseFormProps {
 
 const inputBase = cn(
   'w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-gray-12 outline-none',
+  'placeholder:text-gray-8',
   'transition-colors duration-100',
   'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
 );
@@ -45,6 +46,7 @@ export const CreateCourseForm = ({
           type="text"
           autoFocus
           aria-invalid={!!errors.name}
+          aria-describedby={errors.name ? 'course-name-error' : undefined}
           className={cn(
             inputBase,
             errors.name
@@ -52,7 +54,16 @@ export const CreateCourseForm = ({
               : 'border-gray-6 hover:border-gray-8',
           )}
         />
-        {errors.name && <p className="text-sm text-red-11">{errors.name}</p>}
+        {errors.name && (
+          <p
+            id="course-name-error"
+            role="alert"
+            aria-live="polite"
+            className="text-sm text-red-11"
+          >
+            {errors.name}
+          </p>
+        )}
       </div>
 
       {/* Description */}
@@ -68,6 +79,9 @@ export const CreateCourseForm = ({
           id="course-description"
           rows={3}
           aria-invalid={!!errors.description}
+          aria-describedby={
+            errors.description ? 'course-description-error' : undefined
+          }
           className={cn(
             inputBase,
             'resize-y',
@@ -77,7 +91,14 @@ export const CreateCourseForm = ({
           )}
         />
         {errors.description && (
-          <p className="text-sm text-red-11">{errors.description}</p>
+          <p
+            id="course-description-error"
+            role="alert"
+            aria-live="polite"
+            className="text-sm text-red-11"
+          >
+            {errors.description}
+          </p>
         )}
       </div>
 
@@ -95,6 +116,9 @@ export const CreateCourseForm = ({
           type="url"
           placeholder="https://…"
           aria-invalid={!!errors.imageUrl}
+          aria-describedby={
+            errors.imageUrl ? 'course-image-url-error' : undefined
+          }
           className={cn(
             inputBase,
             errors.imageUrl
@@ -103,7 +127,14 @@ export const CreateCourseForm = ({
           )}
         />
         {errors.imageUrl && (
-          <p className="text-sm text-red-11">{errors.imageUrl}</p>
+          <p
+            id="course-image-url-error"
+            role="alert"
+            aria-live="polite"
+            className="text-sm text-red-11"
+          >
+            {errors.imageUrl}
+          </p>
         )}
       </div>
 
