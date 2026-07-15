@@ -15,7 +15,7 @@ export const DeleteModuleDialogContainer = ({
   const [target, setTarget] = useAtom(deleteModuleAtom);
   const deleteModule = useDeleteModule(courseId);
   const form = useForm<{ confirm: string }>({
-    values: { confirm: '' },
+    defaultValues: { confirm: '' },
     mode: 'onChange',
   });
   const confirmValue = form.watch('confirm');
@@ -24,6 +24,7 @@ export const DeleteModuleDialogContainer = ({
   const onOpenChange = (next: boolean) => {
     if (!next) {
       setTarget(null);
+      form.reset();
       deleteModule.reset();
     }
   };
