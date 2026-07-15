@@ -13,6 +13,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
+import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progress'
@@ -41,6 +42,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 const AuthedAppRoute = AuthedAppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AuthedRoute,
 } as any)
 const ApiLessonVideoRoute = ApiLessonVideoRouteImport.update({
@@ -98,6 +104,7 @@ const AuthedModulesModuleSlugLessonsLessonSlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AuthedAdminRoute
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AuthedAdminRoute
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/_authed/admin': typeof AuthedAdminRoute
   '/_authed/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/app'
     | '/auth/login'
     | '/api/auth/$'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/app'
     | '/auth/login'
     | '/api/auth/$'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
+    | '/_authed/admin'
     | '/_authed/app'
     | '/auth/login'
     | '/api/auth/$'
@@ -235,6 +247,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AuthedAppRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin': {
+      id: '/_authed/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/api/lesson/video': {
@@ -311,11 +330,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedRouteChildren {
+  AuthedAdminRoute: typeof AuthedAdminRoute
   AuthedAppRoute: typeof AuthedAppRoute
   AuthedModulesModuleSlugLessonsLessonSlugRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAdminRoute: AuthedAdminRoute,
   AuthedAppRoute: AuthedAppRoute,
   AuthedModulesModuleSlugLessonsLessonSlugRoute:
     AuthedModulesModuleSlugLessonsLessonSlugRoute,
