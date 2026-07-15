@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const ADMIN_ROLE = 'admin';
+
 /** Course summary as delivered by GET /api/admin/courses (dates arrive as ISO strings). */
 export const adminCourseSummarySchema = z.object({
   id: z.number(),

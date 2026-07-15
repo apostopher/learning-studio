@@ -31,7 +31,7 @@ export const getAuthContext = createServerFn({ method: 'GET' }).handler(
     const headers = getRequestHeaders();
     const session = await auth.api.getSession({ headers });
     const roles = session?.user?.id
-      ? await getUserRoleNames(session.user.id)
+      ? await getUserRoleNames(session.user.id).catch(() => [])
       : [];
     return { session, roles };
   },

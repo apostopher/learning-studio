@@ -1,5 +1,6 @@
 import { getUserRoleNames } from '@/db/admin';
 import { auth } from '@/lib/auth';
+import { ADMIN_ROLE } from '@/lib/admin-schemas';
 
 export class ForbiddenError extends Error {
   constructor() {
@@ -7,8 +8,6 @@ export class ForbiddenError extends Error {
     this.name = 'ForbiddenError';
   }
 }
-
-const ADMIN_ROLE = 'admin';
 
 /** Server-only admin guard. Every admin API handler must call this first. */
 export async function requireAdmin(
