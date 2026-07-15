@@ -74,7 +74,10 @@ export const DeleteModuleConfirmForm = ({
           type="submit"
           disabled={!canSubmit || isPending}
           className={cn(
-            'inline-flex items-center justify-center gap-2 rounded-lg bg-red-9 px-4 py-2.5 text-sm font-medium text-red-1',
+            // red-9 is bright in both themes (#e5484d / #ff6369): black text
+            // clears WCAG AA (5.37 / 7.24) where white/red-1 do not. No
+            // "red-contrast" token is generated, so black is the correct choice.
+            'inline-flex items-center justify-center gap-2 rounded-lg bg-red-9 px-4 py-2.5 text-sm font-medium text-black',
             'transition-colors hover:bg-red-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-9 focus-visible:ring-offset-2',
             'disabled:opacity-60 disabled:cursor-not-allowed',
           )}
