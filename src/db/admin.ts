@@ -33,7 +33,7 @@ export async function listAdminCourses(): Promise<AdminCourseSummary[]> {
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
     .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
     .groupBy(coursesTable.id)
-    .orderBy(desc(coursesTable.updatedAt));
+    .orderBy(desc(coursesTable.updatedAt), desc(coursesTable.id));
 
   // Postgres count() comes back as a string via node-postgres; normalise to number.
   return rows.map((r) => ({

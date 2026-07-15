@@ -1,12 +1,17 @@
 import { createServerFn } from '@tanstack/react-start';
 import { listAdminCourses } from '@/db/admin';
-import { requireAdmin } from './admin-functions.server';
+import { ForbiddenError, requireAdmin } from './admin-functions.server';
 
 /** Route-guard probe: resolves for admins, rejects otherwise. */
 export const ensureAdmin = createServerFn({ method: 'GET' }).handler(
   async () => {
-    const { roles } = await requireAdmin();
-    return { roles };
+    try {
+      const { roles } = await requireAdmin();
+      return { ok: true as const, roles };
+    } catch (error) {
+      if (error instanceof ForbiddenError) return { ok: false as const };
+      throw error;
+    }
   },
 );
 
