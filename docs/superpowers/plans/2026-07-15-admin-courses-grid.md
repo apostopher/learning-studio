@@ -226,9 +226,15 @@ git commit -m "feat(admin): requireAdmin guard + ensureAdmin/listAdminCourses se
 
 - [ ] **Step 1: Write `src/db/seed-admin.ts`**
 
+Signing in creates a better-auth `user` row but NOT a `user_profiles` row, and
+the admin gate joins through `user_profiles`. So the script also upserts a
+minimal profile (userId + email, sourced from the matching auth `user`) when one
+is missing, before granting.
+
 ```ts
 import { eq } from "drizzle-orm";
 import { db } from ".";
+import { user as authUserTable } from "@/db/auth-schema";
 import {
   userProfileRolesTable,
   userProfileTable,
@@ -242,7 +248,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 1. Upsert the admin role.
+  // 1. Ensure the admin role exists.
   await db
     .insert(userRolesTable)
     .values({ name: "admin", description: "Full administrative access" })
@@ -256,17 +262,36 @@ async function main() {
     process.exit(1);
   }
 
-  // 2. Find the user profile by email.
-  const [profile] = await db
+  // 2. Ensure a user_profiles row exists for this email, backed by the auth user.
+  let [profile] = await db
     .select()
     .from(userProfileTable)
     .where(eq(userProfileTable.email, email));
   if (!profile) {
-    console.error(`No user_profiles row found for ${email}. Sign in once first.`);
-    process.exit(1);
+    const [account] = await db
+      .select()
+      .from(authUserTable)
+      .where(eq(authUserTable.email, email));
+    if (!account) {
+      console.error(`No account found for ${email}. Sign in once via the app first.`);
+      process.exit(1);
+    }
+    await db
+      .insert(userProfileTable)
+      .values({ userId: account.id, email })
+      .onConflictDoNothing();
+    [profile] = await db
+      .select()
+      .from(userProfileTable)
+      .where(eq(userProfileTable.email, email));
+    if (!profile) {
+      console.error(`Failed to create a user profile for ${email}.`);
+      process.exit(1);
+    }
+    console.log(`Created user profile ${profile.id} for ${email} (auth user ${account.id}).`);
   }
 
-  // 3. Grant the role.
+  // 3. Grant the admin role.
   await db
     .insert(userProfileRolesTable)
     .values({ userProfileId: profile.id, roleId: role.id, assignedBy: "seed" })
@@ -298,8 +323,8 @@ Expected: no new errors in `src/db/seed-admin.ts`.
 - [ ] **Step 4: Run the grant for the admin user (approved: run once now)**
 
 Run: `pnpm db:grant-admin apostopher@gmail.com`
-Expected: `Granted 'admin' to apostopher@gmail.com (profile <id>, role <id>).`
-If it prints "No user_profiles row found" — STOP and report; the user must sign in once so a profile row exists.
+Expected: a `Created user profile …` line (profiles table is currently empty) followed by `Granted 'admin' to apostopher@gmail.com (profile <id>, role <id>).`
+If it prints "No account found for …" — STOP and report; the user must sign in once so an auth `user` row exists (the `user` row for this email already exists from prior logins, so this should not happen).
 
 - [ ] **Step 5: Verify the grant (read-only)**
 
