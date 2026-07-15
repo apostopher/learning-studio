@@ -10,6 +10,7 @@ import {
 } from '@/db/schema';
 import type {
   AdminCourseSummary,
+  BoardLesson,
   BoardModule,
   CourseBoard,
   CreateCourseInput,
@@ -132,6 +133,47 @@ export async function createModule(input: {
     slug: created.slug,
     rank: Number(created.rank),
     lessons: [],
+  };
+}
+
+export async function createLesson(input: {
+  moduleId: number;
+  name: string;
+}): Promise<BoardLesson> {
+  const base = slugify(input.name) || 'lesson';
+  const taken = await db
+    .select({ slug: lessonsTable.slug })
+    .from(lessonsTable)
+    .where(
+      or(eq(lessonsTable.slug, base), like(lessonsTable.slug, `${base}-%`)),
+    );
+  const takenSet = new Set(taken.map((r) => r.slug));
+  let slug = base;
+  for (let n = 2; takenSet.has(slug); n++) slug = `${base}-${n}`;
+
+  const [{ maxRank }] = await db
+    .select({ maxRank: sql<string | null>`max(${lessonsTable.rank})` })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.moduleId, input.moduleId));
+  const rank = maxRank === null ? 1 : Number(maxRank) + 1;
+
+  const [created] = await db
+    .insert(lessonsTable)
+    .values({
+      moduleId: input.moduleId,
+      name: input.name,
+      slug,
+      requiredSubscriptions: [],
+      rank: String(rank),
+    })
+    .returning();
+
+  return {
+    id: created.id,
+    name: created.name,
+    slug: created.slug,
+    rank: Number(created.rank),
+    isAvailable: created.isAvailable,
   };
 }
 

@@ -44,6 +44,11 @@ export const createModuleInputSchema = z.object({
 });
 export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 
+export const createLessonInputSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+});
+export type CreateLessonInput = z.infer<typeof createLessonInputSchema>;
+
 export const boardLessonSchema = z.object({
   id: z.number(),
   name: z.string(),
