@@ -1,7 +1,11 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import { createLessonModuleIdAtom } from '@/atoms/admin';
+import {
+  createLessonModuleIdAtom,
+  deleteModuleAtom,
+  editModuleAtom,
+} from '@/atoms/admin';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
 import { ModuleColumn } from './module-column';
@@ -21,6 +25,8 @@ export const SortableModuleColumn = ({
     isDragging,
   } = useSortable({ id: mod.id });
   const setLessonModuleId = useSetAtom(createLessonModuleIdAtom);
+  const setEditModule = useSetAtom(editModuleAtom);
+  const setDeleteModule = useSetAtom(deleteModuleAtom);
 
   return (
     <div
@@ -38,6 +44,8 @@ export const SortableModuleColumn = ({
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
         onAddLesson={() => setLessonModuleId(mod.id)}
+        onEditModule={() => setEditModule({ id: mod.id, name: mod.name })}
+        onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
       />
     </div>
   );
