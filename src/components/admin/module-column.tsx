@@ -1,3 +1,4 @@
+import { GripVertical } from 'lucide-react';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { LessonCard } from './lesson-card';
 
@@ -8,9 +9,13 @@ export const ModuleColumn = ({ module: mod }: { module: BoardModule }) => {
         <h3 className="min-w-0 truncate text-sm font-semibold text-gray-12">
           {mod.name}
         </h3>
-        <span className="shrink-0 text-xs text-gray-11">
-          {mod.lessons.length}
-        </span>
+        <button
+          type="button"
+          aria-label="Drag to reorder module"
+          className="-me-1 shrink-0 cursor-grab rounded p-1 text-gray-10 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </button>
       </header>
       <div className="flex flex-col gap-2 p-3">
         {mod.lessons.length === 0 ? (
