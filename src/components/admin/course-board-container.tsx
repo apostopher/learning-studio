@@ -1,6 +1,6 @@
 import { useCourseBoard } from '@/data-hooks/use-course-board';
+import { CourseActionsContainer } from './course-actions-container';
 import { CourseBoard } from './course-board';
-import { CreateModuleDialogContainer } from './create-module-dialog-container';
 import { ModuleBoardContainer } from './module-board-container';
 
 export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
@@ -21,7 +21,7 @@ export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
   return (
     <CourseBoard
       courseName={board.course.name}
-      toolbar={<CreateModuleDialogContainer courseId={courseId} />}
+      toolbar={<CourseActionsContainer course={board.course} />}
     >
       {board.modules.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">

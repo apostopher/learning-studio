@@ -16,3 +16,13 @@ export const createLessonModuleIdAtom = atom<number | null>(null);
 export const editModuleAtom = atom<{ id: number; name: string } | null>(null);
 /** The module pending deletion (id + name), or null when closed. */
 export const deleteModuleAtom = atom<{ id: number; name: string } | null>(null);
+
+/** The course being edited (current field values), or null when closed. */
+export const editCourseAtom = atom<{
+  id: number;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+} | null>(null);
+/** The course pending deletion (id + name), or null when closed. */
+export const deleteCourseAtom = atom<{ id: number; name: string } | null>(null);

@@ -14,6 +14,7 @@ import type {
   BoardModule,
   CourseBoard,
   CreateCourseInput,
+  UpdateCourseInput,
 } from '@/lib/admin-schemas';
 import { slugify } from '@/lib/slugify';
 import { db } from '.';
@@ -185,6 +186,8 @@ export async function getCourseBoard(
       id: coursesTable.id,
       name: coursesTable.name,
       slug: coursesTable.slug,
+      description: coursesTable.description,
+      imageUrl: coursesTable.imageUrl,
     })
     .from(coursesTable)
     .where(eq(coursesTable.id, courseId));
@@ -286,5 +289,35 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
     .delete(modulesTable)
     .where(eq(modulesTable.id, moduleId))
     .returning({ id: modulesTable.id });
+  return Boolean(deleted);
+}
+
+/**
+ * Update a course's editable fields. Slug is intentionally left unchanged (like
+ * module rename) so existing URLs keep working. Returns null if no such course.
+ */
+export async function updateCourse(
+  courseId: number,
+  input: UpdateCourseInput,
+): Promise<DBCourse | null> {
+  const [updated] = await db
+    .update(coursesTable)
+    .set({
+      name: input.name,
+      description: input.description ?? null,
+      imageUrl: input.imageUrl ?? null,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(coursesTable.id, courseId))
+    .returning();
+  return updated ?? null;
+}
+
+/** Delete a course; its modules and lessons cascade via FK. */
+export async function deleteCourse(courseId: number): Promise<boolean> {
+  const [deleted] = await db
+    .delete(coursesTable)
+    .where(eq(coursesTable.id, courseId))
+    .returning({ id: coursesTable.id });
   return Boolean(deleted);
 }

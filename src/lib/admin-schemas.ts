@@ -39,6 +39,10 @@ export const createCourseInputSchema = z.object({
 });
 export type CreateCourseInput = z.infer<typeof createCourseInputSchema>;
 
+/** Input accepted by PATCH /api/admin/courses/:id — same shape as create. */
+export const updateCourseInputSchema = createCourseInputSchema;
+export type UpdateCourseInput = z.infer<typeof updateCourseInputSchema>;
+
 export const createModuleInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
 });
@@ -72,8 +76,18 @@ export const boardModuleSchema = z.object({
 });
 export type BoardModule = z.infer<typeof boardModuleSchema>;
 
+/** The course header delivered with the editor board. */
+export const boardCourseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+});
+export type BoardCourse = z.infer<typeof boardCourseSchema>;
+
 export const courseBoardSchema = z.object({
-  course: z.object({ id: z.number(), name: z.string(), slug: z.string() }),
+  course: boardCourseSchema,
   modules: z.array(boardModuleSchema),
 });
 export type CourseBoard = z.infer<typeof courseBoardSchema>;

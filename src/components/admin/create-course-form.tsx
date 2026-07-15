@@ -11,6 +11,7 @@ interface CreateCourseFormProps {
   serverError?: string;
   isPending: boolean;
   onCancel: () => void;
+  submitLabel?: string;
 }
 
 const inputBase = cn(
@@ -29,6 +30,7 @@ export const CreateCourseForm = ({
   serverError,
   isPending,
   onCancel,
+  submitLabel = 'Create course',
 }: CreateCourseFormProps) => {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
@@ -167,7 +169,7 @@ export const CreateCourseForm = ({
           {isPending && (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           )}
-          Create course
+          {submitLabel}
         </button>
       </div>
     </form>

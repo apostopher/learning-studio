@@ -1,11 +1,14 @@
 import { Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { cn } from '@/lib/cn';
 
 const CONFIRM_PHRASE = 'permanently delete';
 
-interface DeleteModuleConfirmFormProps {
-  moduleName: string;
+interface DeleteConfirmFormProps {
+  /** Warning copy shown above the confirmation input (entity-specific). */
+  warning: ReactNode;
+  submitLabel: string;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
   registerConfirm: UseFormRegisterReturn<'confirm'>;
   canSubmit: boolean;
@@ -14,22 +17,23 @@ interface DeleteModuleConfirmFormProps {
   onCancel: () => void;
 }
 
-export const DeleteModuleConfirmForm = ({
-  moduleName,
+/**
+ * Destructive-action confirmation form: the submit button stays disabled until
+ * the user types "permanently delete". Reused for module and course deletion.
+ */
+export const DeleteConfirmForm = ({
+  warning,
+  submitLabel,
   onSubmit,
   registerConfirm,
   canSubmit,
   isPending,
   serverError,
   onCancel,
-}: DeleteModuleConfirmFormProps) => {
+}: DeleteConfirmFormProps) => {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-      <p className="text-sm text-gray-11">
-        Deleting <span className="font-medium text-gray-12">{moduleName}</span>{' '}
-        will permanently delete the module and all of its lessons. This can't be
-        undone.
-      </p>
+      <p className="text-sm text-gray-11">{warning}</p>
 
       <div className="flex flex-col gap-1.5">
         <label
@@ -85,7 +89,7 @@ export const DeleteModuleConfirmForm = ({
           {isPending && (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           )}
-          Delete module
+          {submitLabel}
         </button>
       </div>
     </form>
