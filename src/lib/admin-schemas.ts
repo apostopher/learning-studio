@@ -38,3 +38,27 @@ export const createCourseInputSchema = z.object({
   ),
 });
 export type CreateCourseInput = z.infer<typeof createCourseInputSchema>;
+
+export const boardLessonSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  rank: z.coerce.number(),
+  isAvailable: z.boolean(),
+});
+export type BoardLesson = z.infer<typeof boardLessonSchema>;
+
+export const boardModuleSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  rank: z.coerce.number(),
+  lessons: z.array(boardLessonSchema),
+});
+export type BoardModule = z.infer<typeof boardModuleSchema>;
+
+export const courseBoardSchema = z.object({
+  course: z.object({ id: z.number(), name: z.string(), slug: z.string() }),
+  modules: z.array(boardModuleSchema),
+});
+export type CourseBoard = z.infer<typeof courseBoardSchema>;
