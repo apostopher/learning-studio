@@ -3,7 +3,13 @@ import { ArrowLeft } from 'lucide-react';
 import type { CourseBoard as CourseBoardData } from '@/lib/admin-schemas';
 import { ModuleColumn } from './module-column';
 
-export const CourseBoard = ({ board }: { board: CourseBoardData }) => {
+export const CourseBoard = ({
+  board,
+  toolbar,
+}: {
+  board: CourseBoardData;
+  toolbar?: React.ReactNode;
+}) => {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center gap-3 border-b border-gray-6 px-4 py-3">
@@ -18,6 +24,12 @@ export const CourseBoard = ({ board }: { board: CourseBoardData }) => {
           {board.course.name}
         </h1>
       </header>
+
+      {toolbar && (
+        <div className="flex items-center justify-end border-b border-gray-6 px-4 py-2">
+          {toolbar}
+        </div>
+      )}
 
       {board.modules.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">

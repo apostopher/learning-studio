@@ -1,5 +1,6 @@
 import { useCourseBoard } from '@/data-hooks/use-course-board';
 import { CourseBoard } from './course-board';
+import { CreateModuleDialogContainer } from './create-module-dialog-container';
 
 export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
   const { data: board, isLoading, error } = useCourseBoard(courseId);
@@ -15,5 +16,10 @@ export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
   if (!board) {
     return <div className="p-6 text-sm text-gray-11">Course not found.</div>;
   }
-  return <CourseBoard board={board} />;
+  return (
+    <CourseBoard
+      board={board}
+      toolbar={<CreateModuleDialogContainer courseId={courseId} />}
+    />
+  );
 };
