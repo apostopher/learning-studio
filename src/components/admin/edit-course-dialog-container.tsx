@@ -11,6 +11,7 @@ import {
   type CreateCourseInput,
   updateCourseInputSchema,
 } from '@/lib/admin-schemas';
+import { CourseImageFieldContainer } from './course-image-field-container';
 import { CreateCourseForm } from './create-course-form';
 
 export const EditCourseDialogContainer = () => {
@@ -25,7 +26,8 @@ export const EditCourseDialogContainer = () => {
     values: {
       name: target?.name ?? '',
       description: target?.description ?? '',
-      imageUrl: target?.imageUrl ?? '',
+      imageUrlAvif: target?.imageUrlAvif ?? undefined,
+      imageUrlWebp: target?.imageUrlWebp ?? undefined,
     },
     mode: 'onSubmit',
   });
@@ -62,11 +64,33 @@ export const EditCourseDialogContainer = () => {
             onSubmit={handleSubmit}
             registerName={form.register('name')}
             registerDescription={form.register('description')}
-            registerImageUrl={form.register('imageUrl')}
+            imageField={
+              <CourseImageFieldContainer
+                value={{
+                  imageUrlAvif: form.watch('imageUrlAvif') ?? null,
+                  imageUrlWebp: form.watch('imageUrlWebp') ?? null,
+                }}
+                onChange={(next) => {
+                  form.setValue(
+                    'imageUrlAvif',
+                    next.imageUrlAvif ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                  form.setValue(
+                    'imageUrlWebp',
+                    next.imageUrlWebp ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                }}
+              />
+            }
             errors={{
               name: form.formState.errors.name?.message,
               description: form.formState.errors.description?.message,
-              imageUrl: form.formState.errors.imageUrl?.message,
             }}
             serverError={
               updateCourse.isError

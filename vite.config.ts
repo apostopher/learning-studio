@@ -10,6 +10,9 @@ import { themePlugin } from './plugins/vite-theme';
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  // @jsquash ships emscripten glue that loads its own .wasm via import.meta.url.
+  // Excluding it from dep pre-bundling keeps that wasm resolution intact.
+  optimizeDeps: { exclude: ['@jsquash/webp', '@jsquash/avif'] },
   plugins: [
     devtools(),
     themePlugin(),

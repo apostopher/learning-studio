@@ -90,7 +90,8 @@ export async function createCourse(
       name: input.name,
       slug,
       description: input.description ?? null,
-      imageUrl: input.imageUrl ?? null,
+      imageUrlAvif: input.imageUrlAvif ?? null,
+      imageUrlWebp: input.imageUrlWebp ?? null,
     })
     .returning();
   return created;
@@ -187,7 +188,8 @@ export async function getCourseBoard(
       name: coursesTable.name,
       slug: coursesTable.slug,
       description: coursesTable.description,
-      imageUrl: coursesTable.imageUrl,
+      imageUrlAvif: coursesTable.imageUrlAvif,
+      imageUrlWebp: coursesTable.imageUrlWebp,
     })
     .from(coursesTable)
     .where(eq(coursesTable.id, courseId));
@@ -305,7 +307,8 @@ export async function updateCourse(
     .set({
       name: input.name,
       description: input.description ?? null,
-      imageUrl: input.imageUrl ?? null,
+      imageUrlAvif: input.imageUrlAvif ?? null,
+      imageUrlWebp: input.imageUrlWebp ?? null,
       updatedAt: sql`now()`,
     })
     .where(eq(coursesTable.id, courseId))

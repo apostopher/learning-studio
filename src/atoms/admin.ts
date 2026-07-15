@@ -22,7 +22,8 @@ export const editCourseAtom = atom<{
   id: number;
   name: string;
   description: string | null;
-  imageUrl: string | null;
+  imageUrlAvif: string | null;
+  imageUrlWebp: string | null;
 } | null>(null);
 /** The course pending deletion (id + name), or null when closed. */
 export const deleteCourseAtom = atom<{ id: number; name: string } | null>(null);

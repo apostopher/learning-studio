@@ -23,7 +23,8 @@ export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
             id: course.id,
             name: course.name,
             description: course.description,
-            imageUrl: course.imageUrl,
+            imageUrlAvif: course.imageUrlAvif,
+            imageUrlWebp: course.imageUrlWebp,
           })
         }
       >

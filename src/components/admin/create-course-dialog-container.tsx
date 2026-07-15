@@ -12,6 +12,7 @@ import {
   createCourseInputSchema,
 } from '@/lib/admin-schemas';
 import { AddCourseButton } from './add-course-button';
+import { CourseImageFieldContainer } from './course-image-field-container';
 import { CreateCourseForm } from './create-course-form';
 
 export const CreateCourseDialogContainer = () => {
@@ -59,11 +60,33 @@ export const CreateCourseDialogContainer = () => {
             onSubmit={handleSubmit}
             registerName={form.register('name')}
             registerDescription={form.register('description')}
-            registerImageUrl={form.register('imageUrl')}
+            imageField={
+              <CourseImageFieldContainer
+                value={{
+                  imageUrlAvif: form.watch('imageUrlAvif') ?? null,
+                  imageUrlWebp: form.watch('imageUrlWebp') ?? null,
+                }}
+                onChange={(next) => {
+                  form.setValue(
+                    'imageUrlAvif',
+                    next.imageUrlAvif ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                  form.setValue(
+                    'imageUrlWebp',
+                    next.imageUrlWebp ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                }}
+              />
+            }
             errors={{
               name: form.formState.errors.name?.message,
               description: form.formState.errors.description?.message,
-              imageUrl: form.formState.errors.imageUrl?.message,
             }}
             serverError={
               createCourse.isError

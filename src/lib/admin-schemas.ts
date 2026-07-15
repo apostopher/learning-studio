@@ -19,7 +19,8 @@ export const courseSchema = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable(),
-  imageUrl: z.string().nullable(),
+  imageUrlAvif: z.string().nullable(),
+  imageUrlWebp: z.string().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
@@ -32,10 +33,11 @@ export const createCourseInputSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.string().trim().max(2000).optional(),
   ),
-  imageUrl: z.preprocess(
-    (v) => (v === '' ? undefined : v),
-    z.string().trim().url('Enter a valid URL').optional(),
-  ),
+  // Set programmatically by the image upload flow (never user-typed, never
+  // '' — the field is undefined until an upload resolves), so a plain optional
+  // URL keeps the react-hook-form value type clean (string | undefined).
+  imageUrlAvif: z.string().url().optional(),
+  imageUrlWebp: z.string().url().optional(),
 });
 export type CreateCourseInput = z.infer<typeof createCourseInputSchema>;
 
@@ -82,7 +84,8 @@ export const boardCourseSchema = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable(),
-  imageUrl: z.string().nullable(),
+  imageUrlAvif: z.string().nullable(),
+  imageUrlWebp: z.string().nullable(),
 });
 export type BoardCourse = z.infer<typeof boardCourseSchema>;
 

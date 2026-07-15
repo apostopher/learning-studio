@@ -6,8 +6,9 @@ interface CreateCourseFormProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
   registerName: UseFormRegisterReturn<'name'>;
   registerDescription: UseFormRegisterReturn<'description'>;
-  registerImageUrl: UseFormRegisterReturn<'imageUrl'>;
-  errors: { name?: string; description?: string; imageUrl?: string };
+  /** Cover-image picker (a CourseImageFieldContainer), rendered by the container. */
+  imageField: React.ReactNode;
+  errors: { name?: string; description?: string };
   serverError?: string;
   isPending: boolean;
   onCancel: () => void;
@@ -25,7 +26,7 @@ export const CreateCourseForm = ({
   onSubmit,
   registerName,
   registerDescription,
-  registerImageUrl,
+  imageField,
   errors,
   serverError,
   isPending,
@@ -104,40 +105,12 @@ export const CreateCourseForm = ({
         )}
       </div>
 
-      {/* Image URL */}
+      {/* Cover image */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="course-image-url"
-          className="text-sm font-medium text-gray-12"
-        >
-          Image URL <span className="text-gray-10">(optional)</span>
-        </label>
-        <input
-          {...registerImageUrl}
-          id="course-image-url"
-          type="url"
-          placeholder="https://…"
-          aria-invalid={!!errors.imageUrl}
-          aria-describedby={
-            errors.imageUrl ? 'course-image-url-error' : undefined
-          }
-          className={cn(
-            inputBase,
-            errors.imageUrl
-              ? 'border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9'
-              : 'border-gray-6 hover:border-gray-8',
-          )}
-        />
-        {errors.imageUrl && (
-          <p
-            id="course-image-url-error"
-            role="alert"
-            aria-live="polite"
-            className="text-sm text-red-11"
-          >
-            {errors.imageUrl}
-          </p>
-        )}
+        <span className="text-sm font-medium text-gray-12">
+          Cover image <span className="text-gray-10">(optional)</span>
+        </span>
+        {imageField}
       </div>
 
       {serverError && (
