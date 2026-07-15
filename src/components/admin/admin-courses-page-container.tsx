@@ -1,6 +1,6 @@
 import { useAdminCourses } from '@/data-hooks/use-admin-courses';
-import { AddCourseButton } from './add-course-button';
 import { CourseTile } from './course-tile';
+import { CreateCourseDialogContainer } from './create-course-dialog-container';
 
 export const AdminCoursesPageContainer = () => {
   const { data: courses, isLoading, error } = useAdminCourses();
@@ -15,7 +15,7 @@ export const AdminCoursesPageContainer = () => {
               Manage your courses and their modules.
             </p>
           </div>
-          <AddCourseButton />
+          <CreateCourseDialogContainer />
         </header>
 
         {isLoading ? (
