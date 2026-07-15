@@ -1,5 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
-import { AdminCoursesPageContainer } from '@/components/admin/admin-courses-page-container';
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { ADMIN_ROLE } from '@/lib/admin-schemas';
 
 export const Route = createFileRoute('/_authed/admin')({
@@ -8,9 +7,5 @@ export const Route = createFileRoute('/_authed/admin')({
       throw redirect({ to: '/app' });
     }
   },
-  component: AdminPage,
+  component: () => <Outlet />,
 });
-
-function AdminPage() {
-  return <AdminCoursesPageContainer />;
-}

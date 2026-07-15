@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
 import type { AdminCourseSummary } from '@/db/admin';
 
@@ -7,7 +8,11 @@ interface CourseTileProps {
 
 export const CourseTile = ({ course }: CourseTileProps) => {
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-gray-6 bg-gray-2 p-5 transition-colors hover:border-gray-8">
+    <Link
+      to="/admin/$courseId/editor"
+      params={{ courseId: String(course.id) }}
+      className="flex flex-col gap-3 rounded-xl border border-gray-6 bg-gray-2 p-5 transition-colors hover:border-gray-8"
+    >
       <div className="flex flex-col gap-1">
         <h3 className="text-base font-semibold text-gray-12">{course.name}</h3>
         <span className="font-mono text-xs text-gray-11">/{course.slug}</span>
@@ -30,6 +35,6 @@ export const CourseTile = ({ course }: CourseTileProps) => {
         Updated{' '}
         {formatDistanceToNow(new Date(course.updatedAt), { addSuffix: true })}
       </p>
-    </li>
+    </Link>
   );
 };

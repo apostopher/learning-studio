@@ -34,7 +34,9 @@ export const AdminCoursesPageContainer = () => {
         ) : (
           <ul className="grid-auto-fit list-none p-0">
             {courses.map((course) => (
-              <CourseTile key={course.id} course={course} />
+              <li key={course.id}>
+                <CourseTile course={course} />
+              </li>
             ))}
           </ul>
         )}

@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
+import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.index'
 import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progress'
@@ -24,6 +25,7 @@ import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/les
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
 import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
+import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
 import { Route as AuthedModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/modules.$moduleSlug.lessons.$lessonSlug'
 
@@ -50,6 +52,11 @@ const AuthedAdminRoute = AuthedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 const ApiLessonVideoRoute = ApiLessonVideoRouteImport.update({
   id: '/api/lesson/video',
@@ -102,6 +109,12 @@ const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
   path: '/api/lesson/ai-test/evaluate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedAdminCourseIdEditorRoute =
+  AuthedAdminCourseIdEditorRouteImport.update({
+    id: '/$courseId/editor',
+    path: '/$courseId/editor',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 const ApiAdminCoursesCourseIdBoardRoute =
   ApiAdminCoursesCourseIdBoardRouteImport.update({
     id: '/$courseId/board',
@@ -117,7 +130,7 @@ const AuthedModulesModuleSlugLessonsLessonSlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AuthedAdminRoute
+  '/admin': typeof AuthedAdminRouteWithChildren
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -126,6 +139,8 @@ export interface FileRoutesByFullPath {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/admin/': typeof AuthedAdminIndexRoute
+  '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -135,7 +150,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AuthedAdminRoute
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -144,6 +158,8 @@ export interface FileRoutesByTo {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/admin': typeof AuthedAdminIndexRoute
+  '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -155,7 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
-  '/_authed/admin': typeof AuthedAdminRoute
+  '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -164,6 +180,8 @@ export interface FileRoutesById {
   '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/_authed/admin/': typeof AuthedAdminIndexRoute
+  '/_authed/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -184,6 +202,8 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/admin/'
+    | '/admin/$courseId/editor'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -193,7 +213,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/app'
     | '/auth/login'
     | '/api/admin/courses'
@@ -202,6 +221,8 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/admin'
+    | '/admin/$courseId/editor'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -221,6 +242,8 @@ export interface FileRouteTypes {
     | '/api/course/progress'
     | '/api/lesson/material'
     | '/api/lesson/video'
+    | '/_authed/admin/'
+    | '/_authed/admin/$courseId/editor'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -281,6 +304,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AuthedAdminRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin/': {
+      id: '/_authed/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthedAdminIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
     }
     '/api/lesson/video': {
       id: '/api/lesson/video'
@@ -352,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/admin/$courseId/editor': {
+      id: '/_authed/admin/$courseId/editor'
+      path: '/$courseId/editor'
+      fullPath: '/admin/$courseId/editor'
+      preLoaderRoute: typeof AuthedAdminCourseIdEditorRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/api/admin/courses/$courseId/board': {
       id: '/api/admin/courses/$courseId/board'
       path: '/$courseId/board'
@@ -369,14 +406,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthedAdminRouteChildren {
+  AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+  AuthedAdminCourseIdEditorRoute: typeof AuthedAdminCourseIdEditorRoute
+}
+
+const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+  AuthedAdminCourseIdEditorRoute: AuthedAdminCourseIdEditorRoute,
+}
+
+const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
+  AuthedAdminRouteChildren,
+)
+
 interface AuthedRouteChildren {
-  AuthedAdminRoute: typeof AuthedAdminRoute
+  AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedAppRoute: typeof AuthedAppRoute
   AuthedModulesModuleSlugLessonsLessonSlugRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
-  AuthedAdminRoute: AuthedAdminRoute,
+  AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedAppRoute: AuthedAppRoute,
   AuthedModulesModuleSlugLessonsLessonSlugRoute:
     AuthedModulesModuleSlugLessonsLessonSlugRoute,
