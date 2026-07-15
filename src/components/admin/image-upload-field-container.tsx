@@ -1,24 +1,29 @@
 import { toast } from 'sonner';
-import { useUploadCourseImage } from '@/data-hooks/use-upload-course-image';
-import { CourseImageField } from './course-image-field';
+import { useUploadImage } from '@/data-hooks/use-upload-image';
+import { ImageUploadField } from './image-upload-field';
 
-export interface CourseImageValue {
+export interface ImageValue {
   imageUrlAvif: string | null;
   imageUrlWebp: string | null;
 }
 
-/** Owns the optimize + upload mutation; reports the resulting URLs via onChange. */
-export const CourseImageFieldContainer = ({
+/**
+ * Owns the optimize + upload mutation for a cover image and reports the
+ * resulting URLs via onChange. `pathPrefix` namespaces the blob storage path.
+ */
+export const ImageUploadFieldContainer = ({
+  pathPrefix,
   value,
   onChange,
 }: {
-  value: CourseImageValue;
-  onChange: (next: CourseImageValue) => void;
+  pathPrefix: string;
+  value: ImageValue;
+  onChange: (next: ImageValue) => void;
 }) => {
-  const uploadImage = useUploadCourseImage();
+  const uploadImage = useUploadImage(pathPrefix);
 
   return (
-    <CourseImageField
+    <ImageUploadField
       previewUrl={value.imageUrlWebp}
       status={
         uploadImage.isPending ? 'busy' : uploadImage.isError ? 'error' : 'idle'

@@ -11,8 +11,8 @@ import {
   type CreateCourseInput,
   updateCourseInputSchema,
 } from '@/lib/admin-schemas';
-import { CourseImageFieldContainer } from './course-image-field-container';
 import { CreateCourseForm } from './create-course-form';
+import { ImageUploadFieldContainer } from './image-upload-field-container';
 
 export const EditCourseDialogContainer = () => {
   const [target, setTarget] = useAtom(editCourseAtom);
@@ -65,7 +65,8 @@ export const EditCourseDialogContainer = () => {
             registerName={form.register('name')}
             registerDescription={form.register('description')}
             imageField={
-              <CourseImageFieldContainer
+              <ImageUploadFieldContainer
+                pathPrefix="courses"
                 value={{
                   imageUrlAvif: form.watch('imageUrlAvif') ?? null,
                   imageUrlWebp: form.watch('imageUrlWebp') ?? null,

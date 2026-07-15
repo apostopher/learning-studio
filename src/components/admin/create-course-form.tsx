@@ -6,7 +6,7 @@ interface CreateCourseFormProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
   registerName: UseFormRegisterReturn<'name'>;
   registerDescription: UseFormRegisterReturn<'description'>;
-  /** Cover-image picker (a CourseImageFieldContainer), rendered by the container. */
+  /** Cover-image picker (an ImageUploadFieldContainer), rendered by the container. */
   imageField: React.ReactNode;
   errors: { name?: string; description?: string };
   serverError?: string;

@@ -1,5 +1,6 @@
 /**
- * Client-side image optimization for course covers. Runs entirely in the
+ * Client-side image optimization for admin cover images (courses, modules…).
+ * Runs entirely in the
  * browser: decode → resize (canvas) → encode to BOTH AVIF and WebP with
  * WASM encoders (libaom / libwebp via @jsquash). The WASM modules are
  * dynamically imported so they only load when an admin actually optimizes an
@@ -66,7 +67,7 @@ function fitWithin(
  * Optimize a user-selected image file into resized AVIF + WebP blobs.
  * Throws if the file can't be decoded or a 2D canvas context is unavailable.
  */
-export async function optimizeCourseImage(file: File): Promise<OptimizedImage> {
+export async function optimizeImage(file: File): Promise<OptimizedImage> {
   // The browser decodes any format it supports (jpeg/png/webp/heic-on-Safari…)
   // and applies EXIF orientation so the pixels are already upright.
   const bitmap = await createImageBitmap(file, {

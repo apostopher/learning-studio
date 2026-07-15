@@ -100,6 +100,8 @@ export async function createCourse(
 export async function createModule(input: {
   courseId: number;
   name: string;
+  imageUrlAvif?: string | null;
+  imageUrlWebp?: string | null;
 }): Promise<BoardModule> {
   const base = slugify(input.name) || 'module';
   const taken = await db
@@ -124,6 +126,8 @@ export async function createModule(input: {
       courseId: input.courseId,
       name: input.name,
       slug,
+      imageUrlAvif: input.imageUrlAvif ?? null,
+      imageUrlWebp: input.imageUrlWebp ?? null,
       requiredSubscriptions: [],
       rank: String(rank),
     })
@@ -133,6 +137,8 @@ export async function createModule(input: {
     id: created.id,
     name: created.name,
     slug: created.slug,
+    imageUrlAvif: created.imageUrlAvif,
+    imageUrlWebp: created.imageUrlWebp,
     rank: Number(created.rank),
     lessons: [],
   };
@@ -200,6 +206,8 @@ export async function getCourseBoard(
       id: modulesTable.id,
       name: modulesTable.name,
       slug: modulesTable.slug,
+      imageUrlAvif: modulesTable.imageUrlAvif,
+      imageUrlWebp: modulesTable.imageUrlWebp,
       rank: modulesTable.rank,
     })
     .from(modulesTable)
@@ -235,6 +243,8 @@ export async function getCourseBoard(
       id: m.id,
       name: m.name,
       slug: m.slug,
+      imageUrlAvif: m.imageUrlAvif,
+      imageUrlWebp: m.imageUrlWebp,
       rank: Number(m.rank),
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
@@ -274,13 +284,22 @@ export async function reorderModule(input: {
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }
 
-export async function updateModuleName(
+export async function updateModule(
   moduleId: number,
-  name: string,
+  input: {
+    name: string;
+    imageUrlAvif?: string | null;
+    imageUrlWebp?: string | null;
+  },
 ): Promise<{ id: number; name: string } | null> {
   const [updated] = await db
     .update(modulesTable)
-    .set({ name, updatedAt: sql`now()` })
+    .set({
+      name: input.name,
+      imageUrlAvif: input.imageUrlAvif ?? null,
+      imageUrlWebp: input.imageUrlWebp ?? null,
+      updatedAt: sql`now()`,
+    })
     .where(eq(modulesTable.id, moduleId))
     .returning({ id: modulesTable.id, name: modulesTable.name });
   return updated ?? null;

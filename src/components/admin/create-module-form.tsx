@@ -6,18 +6,23 @@ interface CreateModuleFormProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
   registerName: UseFormRegisterReturn<'name'>;
   nameError?: string;
+  /** Cover-image picker (an ImageUploadFieldContainer), rendered by the container. */
+  imageField: React.ReactNode;
   serverError?: string;
   isPending: boolean;
   onCancel: () => void;
+  submitLabel?: string;
 }
 
 export const CreateModuleForm = ({
   onSubmit,
   registerName,
   nameError,
+  imageField,
   serverError,
   isPending,
   onCancel,
+  submitLabel = 'Create module',
 }: CreateModuleFormProps) => {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
@@ -55,6 +60,14 @@ export const CreateModuleForm = ({
         )}
       </div>
 
+      {/* Cover image */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-12">
+          Cover image <span className="text-gray-10">(optional)</span>
+        </span>
+        {imageField}
+      </div>
+
       {serverError && (
         <p
           role="alert"
@@ -84,7 +97,7 @@ export const CreateModuleForm = ({
           {isPending && (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           )}
-          Create module
+          {submitLabel}
         </button>
       </div>
     </form>

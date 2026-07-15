@@ -13,6 +13,7 @@ import {
 } from '@/lib/admin-schemas';
 import { AddModuleButton } from './add-module-button';
 import { CreateModuleForm } from './create-module-form';
+import { ImageUploadFieldContainer } from './image-upload-field-container';
 import { IconButtonTooltip } from './tooltip-icon-button';
 
 export const CreateModuleDialogContainer = ({
@@ -65,6 +66,31 @@ export const CreateModuleDialogContainer = ({
             onSubmit={handleSubmit}
             registerName={form.register('name')}
             nameError={form.formState.errors.name?.message}
+            imageField={
+              <ImageUploadFieldContainer
+                pathPrefix="modules"
+                value={{
+                  imageUrlAvif: form.watch('imageUrlAvif') ?? null,
+                  imageUrlWebp: form.watch('imageUrlWebp') ?? null,
+                }}
+                onChange={(next) => {
+                  form.setValue(
+                    'imageUrlAvif',
+                    next.imageUrlAvif ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                  form.setValue(
+                    'imageUrlWebp',
+                    next.imageUrlWebp ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                }}
+              />
+            }
             serverError={
               createModule.isError
                 ? 'Could not create module. Please try again.'

@@ -33,7 +33,12 @@ export const Route = createFileRoute('/api/admin/courses/$courseId/modules')({
           );
         }
         return Response.json(
-          await createModule({ courseId, name: parsed.data.name }),
+          await createModule({
+            courseId,
+            name: parsed.data.name,
+            imageUrlAvif: parsed.data.imageUrlAvif ?? null,
+            imageUrlWebp: parsed.data.imageUrlWebp ?? null,
+          }),
         );
       },
     },

@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/avif';
 
-interface CourseImageFieldProps {
+interface ImageUploadFieldProps {
   /** URL to preview (the uploaded WebP), or null when nothing is set. */
   previewUrl: string | null;
   status: 'idle' | 'busy' | 'error';
@@ -14,13 +14,13 @@ interface CourseImageFieldProps {
 }
 
 /** Cover-image picker: click to select, shows preview + optimize/upload state. */
-export const CourseImageField = ({
+export const ImageUploadField = ({
   previewUrl,
   status,
   errorMessage,
   onSelectFile,
   onRemove,
-}: CourseImageFieldProps) => {
+}: ImageUploadFieldProps) => {
   const busy = status === 'busy';
 
   const handleChange: ChangeEventHandler<HTMLInputElement> = (event) => {
@@ -36,7 +36,7 @@ export const CourseImageField = ({
         <div className="relative aspect-video overflow-hidden rounded-lg border border-gray-6 bg-gray-1">
           <img
             src={previewUrl}
-            alt="Course cover preview"
+            alt="Cover preview"
             className="h-full w-full object-cover"
           />
           {busy && (

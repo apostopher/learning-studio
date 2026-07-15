@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 import { editModuleAtom } from '@/atoms/admin';
 import { useUpdateModule } from '@/data-hooks/use-update-module';
 import {
-  type RenameModuleInput,
-  renameModuleInputSchema,
+  type UpdateModuleInput,
+  updateModuleInputSchema,
 } from '@/lib/admin-schemas';
-import { SingleNameForm } from './single-name-form';
+import { CreateModuleForm } from './create-module-form';
+import { ImageUploadFieldContainer } from './image-upload-field-container';
 
 export const EditModuleDialogContainer = ({
   courseId,
@@ -19,9 +20,13 @@ export const EditModuleDialogContainer = ({
 }) => {
   const [target, setTarget] = useAtom(editModuleAtom);
   const updateModule = useUpdateModule(courseId);
-  const form = useForm<RenameModuleInput>({
-    resolver: zodResolver(renameModuleInputSchema),
-    values: { name: target?.name ?? '' },
+  const form = useForm<UpdateModuleInput>({
+    resolver: zodResolver(updateModuleInputSchema),
+    values: {
+      name: target?.name ?? '',
+      imageUrlAvif: target?.imageUrlAvif ?? undefined,
+      imageUrlWebp: target?.imageUrlWebp ?? undefined,
+    },
     mode: 'onSubmit',
   });
 
@@ -35,7 +40,12 @@ export const EditModuleDialogContainer = ({
   const handleSubmit = form.handleSubmit((data) => {
     if (!target) return;
     updateModule.mutate(
-      { moduleId: target.id, name: data.name },
+      {
+        moduleId: target.id,
+        name: data.name,
+        imageUrlAvif: data.imageUrlAvif ?? null,
+        imageUrlWebp: data.imageUrlWebp ?? null,
+      },
       {
         onSuccess: () => {
           toast.success('Module updated');
@@ -54,12 +64,37 @@ export const EditModuleDialogContainer = ({
             Edit module
           </Dialog.Title>
           <Dialog.Description className="mt-1 mb-5 text-sm text-gray-11">
-            Rename this module.
+            Update this module's name and cover image.
           </Dialog.Description>
-          <SingleNameForm
+          <CreateModuleForm
             onSubmit={handleSubmit}
             registerName={form.register('name')}
             nameError={form.formState.errors.name?.message}
+            imageField={
+              <ImageUploadFieldContainer
+                pathPrefix="modules"
+                value={{
+                  imageUrlAvif: form.watch('imageUrlAvif') ?? null,
+                  imageUrlWebp: form.watch('imageUrlWebp') ?? null,
+                }}
+                onChange={(next) => {
+                  form.setValue(
+                    'imageUrlAvif',
+                    next.imageUrlAvif ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                  form.setValue(
+                    'imageUrlWebp',
+                    next.imageUrlWebp ?? undefined,
+                    {
+                      shouldDirty: true,
+                    },
+                  );
+                }}
+              />
+            }
             serverError={
               updateModule.isError
                 ? 'Could not save. Please try again.'

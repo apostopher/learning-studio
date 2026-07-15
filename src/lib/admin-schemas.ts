@@ -47,13 +47,19 @@ export type UpdateCourseInput = z.infer<typeof updateCourseInputSchema>;
 
 export const createModuleInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
+  // Set programmatically by the image upload flow (never user-typed).
+  imageUrlAvif: z.string().url().optional(),
+  imageUrlWebp: z.string().url().optional(),
 });
 export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 
-export const renameModuleInputSchema = z.object({
+/** PATCH body for renaming / updating a module's details (name + cover image). */
+export const updateModuleInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
+  imageUrlAvif: z.string().url().optional(),
+  imageUrlWebp: z.string().url().optional(),
 });
-export type RenameModuleInput = z.infer<typeof renameModuleInputSchema>;
+export type UpdateModuleInput = z.infer<typeof updateModuleInputSchema>;
 
 export const createLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
@@ -73,6 +79,8 @@ export const boardModuleSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
+  imageUrlAvif: z.string().nullable(),
+  imageUrlWebp: z.string().nullable(),
   rank: z.coerce.number(),
   lessons: z.array(boardLessonSchema),
 });

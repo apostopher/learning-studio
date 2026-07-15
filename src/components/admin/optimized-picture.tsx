@@ -1,22 +1,22 @@
-interface CoursePictureProps {
+interface OptimizedPictureProps {
   avifUrl: string | null;
   webpUrl: string | null;
-  /** Required alt text for the cover image. */
+  /** Required alt text for the image. */
   alt: string;
   /** Applied to the underlying <img> (sizing, object-fit, etc.). */
   className?: string;
 }
 
 /**
- * Renders a course cover as a <picture> so browsers pick AVIF when they can
+ * Renders a cover image as a <picture> so browsers pick AVIF when they can
  * decode it and fall back to WebP otherwise. Returns null when no image is set.
  */
-export const CoursePicture = ({
+export const OptimizedPicture = ({
   avifUrl,
   webpUrl,
   alt,
   className,
-}: CoursePictureProps) => {
+}: OptimizedPictureProps) => {
   const fallback = webpUrl ?? avifUrl;
   if (!fallback) return null;
 

@@ -44,7 +44,14 @@ export const SortableModuleColumn = ({
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
         onAddLesson={() => setLessonModuleId(mod.id)}
-        onEditModule={() => setEditModule({ id: mod.id, name: mod.name })}
+        onEditModule={() =>
+          setEditModule({
+            id: mod.id,
+            name: mod.name,
+            imageUrlAvif: mod.imageUrlAvif,
+            imageUrlWebp: mod.imageUrlWebp,
+          })
+        }
         onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
       />
     </div>

@@ -12,8 +12,8 @@ import {
   createCourseInputSchema,
 } from '@/lib/admin-schemas';
 import { AddCourseButton } from './add-course-button';
-import { CourseImageFieldContainer } from './course-image-field-container';
 import { CreateCourseForm } from './create-course-form';
+import { ImageUploadFieldContainer } from './image-upload-field-container';
 
 export const CreateCourseDialogContainer = () => {
   const [open, setOpen] = useAtom(createCourseDialogOpenAtom);
@@ -61,7 +61,8 @@ export const CreateCourseDialogContainer = () => {
             registerName={form.register('name')}
             registerDescription={form.register('description')}
             imageField={
-              <CourseImageFieldContainer
+              <ImageUploadFieldContainer
+                pathPrefix="courses"
                 value={{
                   imageUrlAvif: form.watch('imageUrlAvif') ?? null,
                   imageUrlWebp: form.watch('imageUrlWebp') ?? null,

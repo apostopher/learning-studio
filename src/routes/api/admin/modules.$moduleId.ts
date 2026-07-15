@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { deleteModule, reorderModule, updateModuleName } from '@/db/admin';
+import { deleteModule, reorderModule, updateModule } from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
 import {
-  renameModuleInputSchema,
   reorderModuleInputSchema,
+  updateModuleInputSchema,
 } from '@/lib/admin-schemas';
 
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
@@ -41,9 +41,9 @@ export const Route = createFileRoute('/api/admin/modules/$moduleId')({
           return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
         }
 
-        const rename = renameModuleInputSchema.safeParse(body);
-        if (rename.success) {
-          const updated = await updateModuleName(moduleId, rename.data.name);
+        const update = updateModuleInputSchema.safeParse(body);
+        if (update.success) {
+          const updated = await updateModule(moduleId, update.data);
           if (!updated) return new Response('Not found', { status: 404 });
           return Response.json(updated);
         }
