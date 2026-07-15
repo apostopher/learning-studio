@@ -15,13 +15,20 @@ export const SortableModuleColumn = ({
     setNodeRef,
     transform,
     transition,
+    isSorting,
     isDragging,
   } = useSortable({ id: mod.id });
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      // Only animate the shift while a drag is in progress. After drop, the
+      // optimistic reorder already places the column in its final slot, so
+      // suppress the transition to avoid the displaced column sliding oddly.
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: isSorting ? transition : undefined,
+      }}
       className={cn('shrink-0', isDragging && 'opacity-40')}
     >
       <ModuleColumn
