@@ -1000,3 +1000,23 @@
     -webkit-mask-position: center;
   }
 }
+
+@layer components {
+  /* Course editor board: header + sub-header heights are the single source of
+     truth so a module column can fill the remaining viewport below them. */
+  .course-board {
+    --board-header-height: 3.5rem;
+    --board-subheader-height: 3.25rem;
+    /* Inline padding of the columns row; matches the p-4 on the scroll region. */
+    --board-column-inset: 1rem;
+  }
+
+  /* Each module column is at least the remaining vertical space, so short or
+     empty columns still span the board (and read as full drop targets). */
+  .course-board__column {
+    min-block-size: calc(
+      100dvh - var(--board-header-height) - var(--board-subheader-height) -
+        (var(--board-column-inset) * 2)
+    );
+  }
+}

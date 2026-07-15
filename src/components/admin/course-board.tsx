@@ -11,8 +11,8 @@ export const CourseBoard = ({
   toolbar?: React.ReactNode;
 }) => {
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex items-center gap-3 border-b border-gray-6 px-4 py-3">
+    <div className="course-board flex h-dvh flex-col">
+      <header className="flex h-[var(--board-header-height)] items-center gap-3 border-b border-gray-6 px-4">
         <Link
           to="/admin"
           className="shrink-0 text-gray-11 transition-colors hover:text-gray-12"
@@ -26,7 +26,7 @@ export const CourseBoard = ({
       </header>
 
       {toolbar && (
-        <div className="flex items-center justify-end border-b border-gray-6 px-4 py-2">
+        <div className="flex h-[var(--board-subheader-height)] items-center justify-end border-b border-gray-6 px-4">
           {toolbar}
         </div>
       )}
