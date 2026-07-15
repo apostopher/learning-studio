@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray, like, or, type SQL, sql } from 'drizzle-orm';
 import type { DBCourse } from '@/db/schema';
 import {
   coursesTable,
@@ -198,4 +198,31 @@ export async function getCourseBoard(
       })),
     })),
   };
+}
+
+export async function reorderModule(input: {
+  moduleId: number;
+  prevModuleId: number | null;
+  nextModuleId: number | null;
+}): Promise<{ id: number; rank: number } | null> {
+  const prevRank = input.prevModuleId
+    ? sql`(select ${modulesTable.rank} from ${modulesTable} where ${modulesTable.id} = ${input.prevModuleId})`
+    : null;
+  const nextRank = input.nextModuleId
+    ? sql`(select ${modulesTable.rank} from ${modulesTable} where ${modulesTable.id} = ${input.nextModuleId})`
+    : null;
+
+  let rankExpr: SQL;
+  if (prevRank && nextRank) rankExpr = sql`(${prevRank} + ${nextRank}) / 2`;
+  else if (nextRank) rankExpr = sql`${nextRank} / 2`;
+  else if (prevRank) rankExpr = sql`${prevRank} + 1`;
+  else return null;
+
+  const [updated] = await db
+    .update(modulesTable)
+    .set({ rank: rankExpr, updatedAt: sql`now()` })
+    .where(eq(modulesTable.id, input.moduleId))
+    .returning({ id: modulesTable.id, rank: modulesTable.rank });
+
+  return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }

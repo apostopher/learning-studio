@@ -67,3 +67,13 @@ export const courseBoardSchema = z.object({
   modules: z.array(boardModuleSchema),
 });
 export type CourseBoard = z.infer<typeof courseBoardSchema>;
+
+export const reorderModuleInputSchema = z
+  .object({
+    prevModuleId: z.number().int().positive().nullable(),
+    nextModuleId: z.number().int().positive().nullable(),
+  })
+  .refine((v) => v.prevModuleId !== null || v.nextModuleId !== null, {
+    message: 'At least one neighbor is required',
+  });
+export type ReorderModuleInput = z.infer<typeof reorderModuleInputSchema>;
