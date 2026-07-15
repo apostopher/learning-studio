@@ -1,8 +1,5 @@
-import { getRequestHeaders } from '@tanstack/react-start/server';
 import { getUserRoleNames } from '@/db/admin';
 import { auth } from '@/lib/auth';
-
-const ADMIN_ROLE = 'admin';
 
 export class ForbiddenError extends Error {
   constructor() {
@@ -11,15 +8,12 @@ export class ForbiddenError extends Error {
   }
 }
 
-/**
- * Shared server-side guard. Every admin server fn must call this first so a
- * direct RPC from a non-admin is rejected regardless of any route guard.
- */
-export async function requireAdmin(): Promise<{
-  userId: string;
-  roles: string[];
-}> {
-  const headers = getRequestHeaders();
+const ADMIN_ROLE = 'admin';
+
+/** Server-only admin guard. Every admin API handler must call this first. */
+export async function requireAdmin(
+  headers: Headers,
+): Promise<{ userId: string; roles: string[] }> {
   const session = await auth.api.getSession({ headers });
   const userId = session?.user?.id;
   if (!userId) throw new ForbiddenError();
