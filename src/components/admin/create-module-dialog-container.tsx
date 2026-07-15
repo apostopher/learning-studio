@@ -1,4 +1,5 @@
 import { Dialog } from '@base-ui/react/dialog';
+import { Tooltip } from '@base-ui/react/tooltip';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
@@ -12,6 +13,7 @@ import {
 } from '@/lib/admin-schemas';
 import { AddModuleButton } from './add-module-button';
 import { CreateModuleForm } from './create-module-form';
+import { IconButtonTooltip } from './tooltip-icon-button';
 
 export const CreateModuleDialogContainer = ({
   courseId,
@@ -44,7 +46,12 @@ export const CreateModuleDialogContainer = ({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger render={<AddModuleButton />} />
+      <Tooltip.Root>
+        <Tooltip.Trigger
+          render={<Dialog.Trigger render={<AddModuleButton />} />}
+        />
+        <IconButtonTooltip label="Add module" />
+      </Tooltip.Root>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
         <Dialog.Popup className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
