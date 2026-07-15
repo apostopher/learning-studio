@@ -11,7 +11,7 @@ export const LessonCard = ({ lesson }: { lesson: BoardLesson }) => {
         )}
         aria-hidden="true"
       />
-      <span className="truncate">{lesson.name}</span>
+      <span className="min-w-0 truncate">{lesson.name}</span>
     </div>
   );
 };

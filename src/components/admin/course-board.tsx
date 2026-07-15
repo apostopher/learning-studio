@@ -9,12 +9,12 @@ export const CourseBoard = ({ board }: { board: CourseBoardData }) => {
       <header className="flex items-center gap-3 border-b border-gray-6 px-4 py-3">
         <Link
           to="/admin"
-          className="text-gray-11 transition-colors hover:text-gray-12"
+          className="shrink-0 text-gray-11 transition-colors hover:text-gray-12"
           aria-label="Back to courses"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Link>
-        <h1 className="truncate text-base font-semibold text-gray-12">
+        <h1 className="min-w-0 truncate text-base font-semibold text-gray-12">
           {board.course.name}
         </h1>
       </header>

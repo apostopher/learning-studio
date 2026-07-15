@@ -115,7 +115,7 @@ export async function getCourseBoard(
     })
     .from(modulesTable)
     .where(eq(modulesTable.courseId, courseId))
-    .orderBy(asc(modulesTable.rank));
+    .orderBy(asc(modulesTable.rank), asc(modulesTable.id));
 
   const moduleIds = modules.map((m) => m.id);
   const lessons = moduleIds.length
@@ -130,7 +130,7 @@ export async function getCourseBoard(
         })
         .from(lessonsTable)
         .where(inArray(lessonsTable.moduleId, moduleIds))
-        .orderBy(asc(lessonsTable.rank))
+        .orderBy(asc(lessonsTable.rank), asc(lessonsTable.id))
     : [];
 
   const byModule = new Map<number, typeof lessons>();
