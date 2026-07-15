@@ -15,6 +15,7 @@
     "check": "biome check",
     "start": "node .output/server/index.mjs",
     "db:generate": "drizzle-kit generate",
+    "db:grant-admin": "dotenv -e .env -- tsx src/db/seed-admin.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
