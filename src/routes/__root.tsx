@@ -1,3 +1,4 @@
+import { Tooltip } from '@base-ui/react/tooltip';
 import { TanStackDevtools } from '@tanstack/react-devtools';
 import type { QueryClient } from '@tanstack/react-query';
 import {
@@ -72,7 +73,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased wrap-anywhere">
         <TanstackQueryProvider>
-          {children}
+          <Tooltip.Provider delay={300}>{children}</Tooltip.Provider>
 
           <TanStackDevtools
             config={{

@@ -1,17 +1,21 @@
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { BoardModule } from '@/lib/admin-schemas';
-import { AddLessonButton } from './add-lesson-button';
 import { LessonCard } from './lesson-card';
+import { TooltipIconButton } from './tooltip-icon-button';
 
 export const ModuleColumn = ({
   module: mod,
   dragHandleProps,
   onAddLesson,
+  onEditModule,
+  onDeleteModule,
 }: {
   module: BoardModule;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
   onAddLesson?: () => void;
+  onEditModule?: () => void;
+  onDeleteModule?: () => void;
 }) => {
   return (
     <section className="course-board__column flex w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
@@ -29,8 +33,20 @@ export const ModuleColumn = ({
         </button>
       </header>
       {onAddLesson && (
-        <div className="border-b border-gray-6 p-3">
-          <AddLessonButton onClick={onAddLesson} />
+        <div className="flex items-center gap-1 border-b border-gray-6 px-2 py-1.5">
+          <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+          <TooltipIconButton label="Edit module" onClick={onEditModule}>
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+          <TooltipIconButton
+            label="Delete module"
+            onClick={onDeleteModule}
+            variant="danger"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
         </div>
       )}
       <div className="flex flex-col gap-2 p-3">
