@@ -1,14 +1,17 @@
 import { GripVertical } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { BoardModule } from '@/lib/admin-schemas';
+import { AddLessonButton } from './add-lesson-button';
 import { LessonCard } from './lesson-card';
 
 export const ModuleColumn = ({
   module: mod,
   dragHandleProps,
+  onAddLesson,
 }: {
   module: BoardModule;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
+  onAddLesson?: () => void;
 }) => {
   return (
     <section className="course-board__column flex w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
@@ -25,6 +28,11 @@ export const ModuleColumn = ({
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
       </header>
+      {onAddLesson && (
+        <div className="border-b border-gray-6 p-3">
+          <AddLessonButton onClick={onAddLesson} />
+        </div>
+      )}
       <div className="flex flex-col gap-2 p-3">
         {mod.lessons.length === 0 ? (
           <p className="px-1 py-4 text-center text-xs text-gray-10">
