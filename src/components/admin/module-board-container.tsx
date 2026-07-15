@@ -82,7 +82,11 @@ export const ModuleBoardContainer = ({
           </SortableContext>
         </div>
       </div>
-      <DragOverlay>
+      {/* dropAnimation={null}: the column is already in its final place via the
+          optimistic reorder, so skip the overlay's fly-back/stretch animation
+          (which looked wrong because the overlay preview is content-height while
+          the real columns fill the viewport). */}
+      <DragOverlay dropAnimation={null}>
         {activeModule ? <ModuleColumn module={activeModule} /> : null}
       </DragOverlay>
     </DndContext>
