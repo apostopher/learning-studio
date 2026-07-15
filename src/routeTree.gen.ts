@@ -20,6 +20,7 @@ import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/mater
 import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progress'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
@@ -85,6 +86,11 @@ const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUploadsRoute = ApiAdminUploadsRouteImport.update({
+  id: '/api/admin/uploads',
+  path: '/api/admin/uploads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminCoursesRoute = ApiAdminCoursesRouteImport.update({
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
+  '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress': typeof ApiCourseProgressRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
+  '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress': typeof ApiCourseProgressRoute
@@ -209,6 +217,7 @@ export interface FileRoutesById {
   '/_authed/app': typeof AuthedAppRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
+  '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress': typeof ApiCourseProgressRoute
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/auth/login'
     | '/api/admin/courses'
+    | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
     | '/api/course/progress'
@@ -258,6 +268,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/auth/login'
     | '/api/admin/courses'
+    | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
     | '/api/course/progress'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/_authed/app'
     | '/auth/login'
     | '/api/admin/courses'
+    | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
     | '/api/course/progress'
@@ -307,6 +319,7 @@ export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
+  ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
   ApiCourseProgressRoute: typeof ApiCourseProgressRoute
@@ -396,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/uploads': {
+      id: '/api/admin/uploads'
+      path: '/api/admin/uploads'
+      fullPath: '/api/admin/uploads'
+      preLoaderRoute: typeof ApiAdminUploadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/courses': {
@@ -562,6 +582,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
+  ApiAdminUploadsRoute: ApiAdminUploadsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
   ApiCourseProgressRoute: ApiCourseProgressRoute,

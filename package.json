@@ -43,6 +43,7 @@
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
     "@upstash/redis": "1.37.0",
+    "@vercel/blob": "2.6.1",
     "@xstate/react": "^6.1.0",
     "ai": "6.0.168",
     "better-auth": "^1.5.3",

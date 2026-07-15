@@ -1,11 +1,11 @@
-import { createEnv } from "@t3-oss/env-core";
-import Color from "colorjs.io";
-import { z } from "zod";
+import { createEnv } from '@t3-oss/env-core';
+import Color from 'colorjs.io';
+import { z } from 'zod';
 import {
   BRAND_NAME_REGEX,
-  RESERVED_BRAND_NAMES,
   parseBrandColorEntries,
-} from "./utils/brand-colors";
+  RESERVED_BRAND_NAMES,
+} from './utils/brand-colors';
 
 const colorStr = z.string().refine(
   (v) => {
@@ -16,7 +16,7 @@ const colorStr = z.string().refine(
       return false;
     }
   },
-  { message: "must be a valid CSS color" },
+  { message: 'must be a valid CSS color' },
 );
 
 const logoStr = z
@@ -24,14 +24,14 @@ const logoStr = z
   .min(1)
   .refine((v) => !/<script|on\w+\s*=|javascript:/i.test(v), {
     message:
-      "logo SVG contains unsafe content (script tags, event handlers, or javascript: URIs)",
+      'logo SVG contains unsafe content (script tags, event handlers, or javascript: URIs)',
   })
   .refine(
     (v) =>
-      v.trimStart().startsWith("<svg") ||
+      v.trimStart().startsWith('<svg') ||
       /^https?:\/\//.test(v) ||
-      v.startsWith("/"),
-    { message: "must be inline SVG, absolute URL, or /public path" },
+      v.startsWith('/'),
+    { message: 'must be inline SVG, absolute URL, or /public path' },
   );
 
 // Google Fonts spec shape: "Family Name:axis,range@value;value" e.g. "Inter:ital,wght@0,400;1,700"
@@ -49,7 +49,7 @@ const brandColorsSchema = z
       return parseBrandColorEntries(raw);
     } catch (err) {
       ctx.addIssue({
-        code: "custom",
+        code: 'custom',
         message: (err as Error).message,
       });
       return z.NEVER;
@@ -62,19 +62,19 @@ const brandColorsSchema = z
           name: z
             .string()
             .regex(BRAND_NAME_REGEX, {
-              message: "brand name must match /^[a-z][a-z0-9-]*$/",
+              message: 'brand name must match /^[a-z][a-z0-9-]*$/',
             })
             .refine((n) => !reservedNames.has(n), {
-              message: `brand name is reserved (${[...reservedNames].join(", ")})`,
+              message: `brand name is reserved (${[...reservedNames].join(', ')})`,
             }),
           light: colorStr,
           dark: colorStr,
         }),
       )
-      .min(1, "VITE_BRAND_COLORS must contain at least one entry")
-      .max(12, "VITE_BRAND_COLORS supports at most 12 entries")
+      .min(1, 'VITE_BRAND_COLORS must contain at least one entry')
+      .max(12, 'VITE_BRAND_COLORS supports at most 12 entries')
       .refine((arr) => new Set(arr.map((e) => e.name)).size === arr.length, {
-        message: "brand names must be unique",
+        message: 'brand names must be unique',
       }),
   );
 
@@ -84,12 +84,14 @@ export const env = createEnv({
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),
-    EMAIL_FROM: z.string().email().default("noreply@example.com"),
+    EMAIL_FROM: z.string().email().default('noreply@example.com'),
     SYNTHESIA_API_KEY: z.string().min(1),
     DATABASE_URL: z.string().min(1),
+    // Vercel Blob read-write token — powers admin client-side image uploads.
+    BLOB_READ_WRITE_TOKEN: z.string().min(1),
   },
 
-  clientPrefix: "VITE_",
+  clientPrefix: 'VITE_',
 
   client: {
     VITE_APP_TITLE: z.string().min(1),
@@ -98,8 +100,8 @@ export const env = createEnv({
     VITE_GRAY_DARK: colorStr,
     VITE_BRAND_COLORS: brandColorsSchema,
 
-    VITE_BG_LIGHT: colorStr.default("#ffffff"),
-    VITE_BG_DARK: colorStr.default("#111111"),
+    VITE_BG_LIGHT: colorStr.default('#ffffff'),
+    VITE_BG_DARK: colorStr.default('#111111'),
 
     VITE_FONT_SANS: fontStr,
     VITE_FONT_MONO: fontStr,
