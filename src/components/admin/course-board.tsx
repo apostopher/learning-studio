@@ -1,14 +1,14 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
-import type { CourseBoard as CourseBoardData } from '@/lib/admin-schemas';
-import { ModuleColumn } from './module-column';
 
 export const CourseBoard = ({
-  board,
+  courseName,
   toolbar,
+  children,
 }: {
-  board: CourseBoardData;
+  courseName: string;
   toolbar?: React.ReactNode;
+  children: React.ReactNode;
 }) => {
   return (
     <div className="course-board flex h-dvh flex-col">
@@ -21,7 +21,7 @@ export const CourseBoard = ({
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Link>
         <h1 className="min-w-0 truncate text-base font-semibold text-gray-12">
-          {board.course.name}
+          {courseName}
         </h1>
       </header>
 
@@ -31,19 +31,7 @@ export const CourseBoard = ({
         </div>
       )}
 
-      {board.modules.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-gray-11">No modules yet</p>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-auto">
-          <div className="flex w-max items-start gap-4 p-4">
-            {board.modules.map((mod) => (
-              <ModuleColumn key={mod.id} module={mod} />
-            ))}
-          </div>
-        </div>
-      )}
+      {children}
     </div>
   );
 };
