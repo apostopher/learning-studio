@@ -5,11 +5,17 @@
  * dynamically imported so they only load when an admin actually optimizes an
  * image — never in the SSR bundle or for normal visitors.
  *
- * The encoders are pre-initialized with a `locateFile` that returns
- * Vite-resolved wasm URLs. Without this, emscripten self-resolves the wasm
- * path relative to its glue and the fetch fails under `vite dev` ("both async
- * and sync fetching of the wasm failed"). Routing every wasm filename through
- * a `?url` import makes it resolve correctly in both dev and production.
+ * The encoders are pre-initialized with a `locateFile` that points at the wasm
+ * binaries served statically from /public/wasm. Emscripten otherwise resolves
+ * the wasm relative to its glue via import.meta.url, which `vite dev` does not
+ * serve from inside node_modules ("both async and sync fetching of the wasm
+ * failed"). Serving the binaries from /public sidesteps bundler resolution and
+ * behaves identically in dev and production.
+ *
+ * These files are copied from the packages — re-copy after upgrading
+ * @jsquash/webp or @jsquash/avif:
+ *   cp node_modules/@jsquash/webp/codec/enc/*.wasm public/wasm/
+ *   cp node_modules/@jsquash/avif/codec/enc/*.wasm public/wasm/
  */
 
 const MAX_EDGE = 1600;
@@ -31,39 +37,18 @@ type EncoderInit = (
   overrides: { locateFile: (path: string) => string },
 ) => Promise<unknown>;
 
+// Emscripten requests each wasm by basename (e.g. "webp_enc_simd.wasm"); map it
+// to the static copy under /public/wasm.
+const locateWasm = (path: string): string => `/wasm/${path}`;
+
 // Memoize init so re-uploads within a session don't re-instantiate the wasm.
-let webpReady: Promise<void> | null = null;
-let avifReady: Promise<void> | null = null;
+let webpReady: Promise<unknown> | null = null;
+let avifReady: Promise<unknown> | null = null;
 
-async function ensureWebpReady(init: EncoderInit): Promise<void> {
-  webpReady ??= (async () => {
-    const [{ default: base }, { default: simd }] = await Promise.all([
-      import('@jsquash/webp/codec/enc/webp_enc.wasm?url'),
-      import('@jsquash/webp/codec/enc/webp_enc_simd.wasm?url'),
-    ]);
-    const urls: Record<string, string> = {
-      'webp_enc.wasm': base,
-      'webp_enc_simd.wasm': simd,
-    };
-    await init(undefined, { locateFile: (path) => urls[path] ?? path });
-  })();
-  return webpReady;
-}
-
-async function ensureAvifReady(init: EncoderInit): Promise<void> {
-  avifReady ??= (async () => {
-    const [{ default: base }, { default: mt }] = await Promise.all([
-      import('@jsquash/avif/codec/enc/avif_enc.wasm?url'),
-      import('@jsquash/avif/codec/enc/avif_enc_mt.wasm?url'),
-    ]);
-    const urls: Record<string, string> = {
-      'avif_enc.wasm': base,
-      'avif_enc_mt.wasm': mt,
-    };
-    await init(undefined, { locateFile: (path) => urls[path] ?? path });
-  })();
-  return avifReady;
-}
+const ensureWebpReady = (init: EncoderInit) =>
+  (webpReady ??= init(undefined, { locateFile: locateWasm }));
+const ensureAvifReady = (init: EncoderInit) =>
+  (avifReady ??= init(undefined, { locateFile: locateWasm }));
 
 /** Scale (w, h) down so the longest edge is at most `maxEdge`; never upscale. */
 function fitWithin(
@@ -103,11 +88,13 @@ export async function optimizeCourseImage(file: File): Promise<OptimizedImage> {
   bitmap.close();
   const imageData = ctx.getImageData(0, 0, width, height);
 
-  const [{ default: encodeWebp, init: initWebp }, { default: encodeAvif, init: initAvif }] =
-    await Promise.all([
-      import('@jsquash/webp/encode'),
-      import('@jsquash/avif/encode'),
-    ]);
+  const [
+    { default: encodeWebp, init: initWebp },
+    { default: encodeAvif, init: initAvif },
+  ] = await Promise.all([
+    import('@jsquash/webp/encode'),
+    import('@jsquash/avif/encode'),
+  ]);
 
   await Promise.all([
     ensureWebpReady(initWebp as EncoderInit),
