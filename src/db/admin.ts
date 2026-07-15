@@ -10,6 +10,7 @@ import {
 } from '@/db/schema';
 import type {
   AdminCourseSummary,
+  BoardModule,
   CourseBoard,
   CreateCourseInput,
 } from '@/lib/admin-schemas';
@@ -91,6 +92,47 @@ export async function createCourse(
     })
     .returning();
   return created;
+}
+
+export async function createModule(input: {
+  courseId: number;
+  name: string;
+}): Promise<BoardModule> {
+  const base = slugify(input.name) || 'module';
+  const taken = await db
+    .select({ slug: modulesTable.slug })
+    .from(modulesTable)
+    .where(
+      or(eq(modulesTable.slug, base), like(modulesTable.slug, `${base}-%`)),
+    );
+  const takenSet = new Set(taken.map((r) => r.slug));
+  let slug = base;
+  for (let n = 2; takenSet.has(slug); n++) slug = `${base}-${n}`;
+
+  const [{ maxRank }] = await db
+    .select({ maxRank: sql<string | null>`max(${modulesTable.rank})` })
+    .from(modulesTable)
+    .where(eq(modulesTable.courseId, input.courseId));
+  const rank = maxRank === null ? 1 : Number(maxRank) + 1;
+
+  const [created] = await db
+    .insert(modulesTable)
+    .values({
+      courseId: input.courseId,
+      name: input.name,
+      slug,
+      requiredSubscriptions: [],
+      rank: String(rank),
+    })
+    .returning();
+
+  return {
+    id: created.id,
+    name: created.name,
+    slug: created.slug,
+    rank: Number(created.rank),
+    lessons: [],
+  };
 }
 
 export async function getCourseBoard(
