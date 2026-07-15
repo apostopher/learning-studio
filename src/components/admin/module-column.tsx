@@ -33,7 +33,7 @@ export const ModuleColumn = ({
         </button>
       </header>
       {onAddLesson && (
-        <div className="flex items-center gap-1 border-b border-gray-6 px-2 py-1.5">
+        <div className="flex items-center justify-end gap-1 border-b border-gray-6 px-2 py-1.5">
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
             <Plus className="h-4 w-4" aria-hidden="true" />
           </TooltipIconButton>
