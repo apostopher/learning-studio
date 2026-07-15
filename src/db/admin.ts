@@ -268,3 +268,23 @@ export async function reorderModule(input: {
 
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }
+
+export async function updateModuleName(
+  moduleId: number,
+  name: string,
+): Promise<{ id: number; name: string } | null> {
+  const [updated] = await db
+    .update(modulesTable)
+    .set({ name, updatedAt: sql`now()` })
+    .where(eq(modulesTable.id, moduleId))
+    .returning({ id: modulesTable.id, name: modulesTable.name });
+  return updated ?? null;
+}
+
+export async function deleteModule(moduleId: number): Promise<boolean> {
+  const [deleted] = await db
+    .delete(modulesTable)
+    .where(eq(modulesTable.id, moduleId))
+    .returning({ id: modulesTable.id });
+  return Boolean(deleted);
+}
