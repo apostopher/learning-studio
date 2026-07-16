@@ -122,38 +122,39 @@ export const CourseVideoIntegrationsContainer = ({
     );
   });
 
-  const credentialFields: CredentialField[] = useMemo(() => {
-    if (expandedProvider === 'mux') {
-      return [
-        {
-          name: 'keyId',
-          label: 'Signing key ID',
-          type: 'text',
-          register: credentialForm.register('keyId'),
-          error: credentialForm.formState.errors.keyId?.message,
-        },
-        {
-          name: 'privateKey',
-          label: 'Signing key (private, Base64)',
-          type: 'password',
-          register: credentialForm.register('privateKey'),
-          error: credentialForm.formState.errors.privateKey?.message,
-        },
-      ];
-    }
-    if (expandedProvider === 'synthesia') {
-      return [
-        {
-          name: 'apiKey',
-          label: 'API key',
-          type: 'password',
-          register: credentialForm.register('apiKey'),
-          error: credentialForm.formState.errors.apiKey?.message,
-        },
-      ];
-    }
-    return [];
-  }, [expandedProvider, credentialForm]);
+  // Plain array, not useMemo: `credentialForm` is a stable reference, so a
+  // memo keyed on it would never recompute after `credentialForm.setError`
+  // runs inside handleCredentialSubmit, leaving validation errors stuck at
+  // `undefined`. Recomputing every render keeps RHF's errors proxy live.
+  const credentialFields: CredentialField[] =
+    expandedProvider === 'mux'
+      ? [
+          {
+            name: 'keyId',
+            label: 'Signing key ID',
+            type: 'text',
+            register: credentialForm.register('keyId'),
+            error: credentialForm.formState.errors.keyId?.message,
+          },
+          {
+            name: 'privateKey',
+            label: 'Signing key (private, Base64)',
+            type: 'password',
+            register: credentialForm.register('privateKey'),
+            error: credentialForm.formState.errors.privateKey?.message,
+          },
+        ]
+      : expandedProvider === 'synthesia'
+        ? [
+            {
+              name: 'apiKey',
+              label: 'API key',
+              type: 'password',
+              register: credentialForm.register('apiKey'),
+              error: credentialForm.formState.errors.apiKey?.message,
+            },
+          ]
+        : [];
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -188,7 +189,7 @@ export const CourseVideoIntegrationsContainer = ({
                     setExpandedProvider(isExpanded ? null : providerId)
                   }
                   aria-expanded={isExpanded}
-                  className="flex flex-1 items-center gap-3 text-start"
+                  className="flex flex-1 items-center gap-3 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
                 >
                   <ChevronDown
                     className={cn(
@@ -201,7 +202,18 @@ export const CourseVideoIntegrationsContainer = ({
                     <span className="font-medium text-gray-12 text-sm">
                       {meta.label}
                     </span>
-                    {isConfigured ? (
+                    {credentials.isLoading ? (
+                      // Query still in flight with no cached data yet — avoid
+                      // flashing a misleading "Not connected" for providers
+                      // that may actually be configured.
+                      <span className="inline-flex items-center gap-1.5 text-gray-10 text-xs">
+                        <Loader2
+                          className="h-3 w-3 animate-spin"
+                          aria-hidden="true"
+                        />
+                        Loading…
+                      </span>
+                    ) : isConfigured ? (
                       <span className="inline-flex items-center gap-1.5 text-green-11 text-xs">
                         <CheckCircle2
                           className="h-3.5 w-3.5"
@@ -259,7 +271,17 @@ export const CourseVideoIntegrationsContainer = ({
                   <ProviderHowTo provider={providerId} />
                   <ProviderCredentialForm
                     fields={credentialFields}
-                    onSubmit={handleCredentialSubmit}
+                    // This container renders inside the course-edit <form>
+                    // (via the videoIntegrations slot in create-course-form.tsx).
+                    // ProviderCredentialForm renders its own nested <form>, and
+                    // the native `submit` event bubbles even through React's
+                    // synthetic nested form elements — stop it here so clicking
+                    // "Save/Update credentials" doesn't also submit the outer
+                    // course-edit form and fire an unintended updateCourse.mutate.
+                    onSubmit={(e) => {
+                      e.stopPropagation();
+                      handleCredentialSubmit(e);
+                    }}
                     serverError={saveCredential.error?.message}
                     isPending={saveCredential.isPending}
                     submitLabel={
