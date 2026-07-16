@@ -1,8 +1,19 @@
 import { del, list } from '@vercel/blob';
-import { asc, desc, eq, inArray, like, or, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  like,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import type { DBCourse } from '@/db/schema';
 import {
   coursesTable,
+  courseVideoProvidersTable,
   lessonsTable,
   modulesTable,
   userProfileRolesTable,
@@ -16,9 +27,22 @@ import type {
   BoardModule,
   CourseBoard,
   CreateCourseInput,
+  CredentialSummary,
+  SaveCredentialInput,
   UpdateCourseInput,
 } from '@/lib/admin-schemas';
+import {
+  decryptJson,
+  encryptJson,
+  type SecretEnvelope,
+} from '@/lib/crypto.server';
 import { slugify } from '@/lib/slugify';
+import { type ProviderId, VIDEO_PROVIDERS } from '@/lib/video-providers';
+import {
+  type Playback,
+  resolvePlayback,
+  validateCredentials,
+} from '@/lib/video-providers/resolve.server';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -232,6 +256,7 @@ export async function getCourseBoard(
           rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
           videoId: lessonsTable.videoId,
+          videoRef: lessonsTable.videoRef,
         })
         .from(lessonsTable)
         .where(inArray(lessonsTable.moduleId, moduleIds))
@@ -260,10 +285,121 @@ export async function getCourseBoard(
         slug: l.slug,
         rank: Number(l.rank),
         isAvailable: l.isAvailable,
-        isConfigured: l.videoId !== null,
+        isConfigured: l.videoRef !== null || l.videoId !== null,
       })),
     })),
   };
+}
+
+/** Configured video-provider credentials for a course, decrypted display only. */
+export async function listCourseProviders(
+  courseId: number,
+): Promise<CredentialSummary[]> {
+  const rows = await db
+    .select({
+      provider: courseVideoProvidersTable.provider,
+      secrets: courseVideoProvidersTable.secrets,
+      lastValidatedAt: courseVideoProvidersTable.lastValidatedAt,
+    })
+    .from(courseVideoProvidersTable)
+    .where(eq(courseVideoProvidersTable.courseId, courseId));
+  return rows.map((r) => {
+    const provider = r.provider as ProviderId;
+    const creds = decryptJson(r.secrets as SecretEnvelope);
+    return {
+      provider,
+      configured: true as const,
+      display: VIDEO_PROVIDERS[provider].credentialDisplay(creds),
+      lastValidatedAt: r.lastValidatedAt,
+    };
+  });
+}
+
+/** Validate then upsert encrypted provider credentials for a course. */
+export async function saveCourseProvider(
+  courseId: number,
+  input: SaveCredentialInput,
+): Promise<{ ok: boolean; error?: string }> {
+  const { provider, ...creds } = input;
+  const validation = await validateCredentials(provider, creds);
+  if (!validation.ok) return validation;
+  const secrets = encryptJson(creds);
+  await db
+    .insert(courseVideoProvidersTable)
+    .values({ courseId, provider, secrets, lastValidatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [
+        courseVideoProvidersTable.courseId,
+        courseVideoProvidersTable.provider,
+      ],
+      set: { secrets, lastValidatedAt: new Date(), updatedAt: sql`now()` },
+    });
+  return { ok: true };
+}
+
+export async function deleteCourseProvider(
+  courseId: number,
+  provider: ProviderId,
+): Promise<boolean> {
+  const [deleted] = await db
+    .delete(courseVideoProvidersTable)
+    .where(
+      and(
+        eq(courseVideoProvidersTable.courseId, courseId),
+        eq(courseVideoProvidersTable.provider, provider),
+      ),
+    )
+    .returning({ id: courseVideoProvidersTable.id });
+  return Boolean(deleted);
+}
+
+/** Server-only: decrypted creds for a course+provider, or null. */
+export async function resolveCourseProvider(
+  courseId: number,
+  provider: ProviderId,
+): Promise<unknown | null> {
+  const [row] = await db
+    .select({ secrets: courseVideoProvidersTable.secrets })
+    .from(courseVideoProvidersTable)
+    .where(
+      and(
+        eq(courseVideoProvidersTable.courseId, courseId),
+        eq(courseVideoProvidersTable.provider, provider),
+      ),
+    );
+  return row ? decryptJson(row.secrets as SecretEnvelope) : null;
+}
+
+export async function setLessonVideo(
+  lessonId: number,
+  provider: ProviderId,
+  ref: string,
+): Promise<{ id: number } | null> {
+  const [updated] = await db
+    .update(lessonsTable)
+    .set({ videoProvider: provider, videoRef: ref, updatedAt: sql`now()` })
+    .where(eq(lessonsTable.id, lessonId))
+    .returning({ id: lessonsTable.id });
+  return updated ?? null;
+}
+
+export async function resolveLessonPlayback(
+  lessonId: number,
+): Promise<Playback | null> {
+  const [lesson] = await db
+    .select({
+      videoProvider: lessonsTable.videoProvider,
+      videoRef: lessonsTable.videoRef,
+      courseId: modulesTable.courseId,
+    })
+    .from(lessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .where(eq(lessonsTable.id, lessonId));
+  if (!lesson?.videoProvider || !lesson.videoRef) return null;
+  const provider = lesson.videoProvider as ProviderId;
+  const creds = await resolveCourseProvider(lesson.courseId, provider);
+  if (!creds) return null;
+  return resolvePlayback(provider, lesson.videoRef, creds);
 }
 
 export async function reorderModule(input: {
