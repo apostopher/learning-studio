@@ -89,6 +89,8 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     // Vercel Blob read-write token — powers admin client-side image uploads.
     BLOB_READ_WRITE_TOKEN: z.string().min(1),
+    // 32-byte base64 key for AES-256-GCM encryption of stored provider secrets.
+    CREDENTIALS_ENCRYPTION_KEY: z.string().min(1),
     // Shared secret for the Vercel Cron blob-sweep endpoint. Optional: the
     // endpoint stays disabled (401) until it's set.
     CRON_SECRET: z.string().min(1).optional(),
