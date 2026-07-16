@@ -79,6 +79,8 @@ export const boardLessonSchema = z.object({
   slug: z.string(),
   rank: z.coerce.number(),
   isAvailable: z.boolean(),
+  /** A lesson counts as configured once it has a video. */
+  isConfigured: z.boolean(),
 });
 export type BoardLesson = z.infer<typeof boardLessonSchema>;
 

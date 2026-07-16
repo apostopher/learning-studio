@@ -188,6 +188,7 @@ export async function createLesson(input: {
     slug: created.slug,
     rank: Number(created.rank),
     isAvailable: created.isAvailable,
+    isConfigured: created.videoId !== null,
   };
 }
 
@@ -230,6 +231,7 @@ export async function getCourseBoard(
           slug: lessonsTable.slug,
           rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
+          videoId: lessonsTable.videoId,
         })
         .from(lessonsTable)
         .where(inArray(lessonsTable.moduleId, moduleIds))
@@ -258,6 +260,7 @@ export async function getCourseBoard(
         slug: l.slug,
         rank: Number(l.rank),
         isAvailable: l.isAvailable,
+        isConfigured: l.videoId !== null,
       })),
     })),
   };

@@ -17,6 +17,9 @@ export const editLessonAtom = atom<{ id: number; name: string } | null>(null);
 /** The lesson pending deletion (id + name), or null when closed. */
 export const deleteLessonAtom = atom<{ id: number; name: string } | null>(null);
 
+/** Id of the lesson whose configure modal is open, or null when closed. */
+export const configureLessonIdAtom = atom<number | null>(null);
+
 /** Module id whose create-lesson dialog is open, or null when closed. */
 export const createLessonModuleIdAtom = atom<number | null>(null);
 
