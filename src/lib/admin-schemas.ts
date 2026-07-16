@@ -115,12 +115,13 @@ export const reorderModuleInputSchema = z
   });
 export type ReorderModuleInput = z.infer<typeof reorderModuleInputSchema>;
 
-export const reorderLessonInputSchema = z
-  .object({
-    prevLessonId: z.number().int().positive().nullable(),
-    nextLessonId: z.number().int().positive().nullable(),
-  })
-  .refine((v) => v.prevLessonId !== null || v.nextLessonId !== null, {
-    message: 'At least one neighbor is required',
-  });
-export type ReorderLessonInput = z.infer<typeof reorderLessonInputSchema>;
+/**
+ * Move a lesson to `targetModuleId` (possibly the same module) between the given
+ * neighbors. Both neighbors are null when the lesson lands in an empty module.
+ */
+export const moveLessonInputSchema = z.object({
+  targetModuleId: z.number().int().positive(),
+  prevLessonId: z.number().int().positive().nullable(),
+  nextLessonId: z.number().int().positive().nullable(),
+});
+export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;

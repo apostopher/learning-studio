@@ -290,12 +290,17 @@ export async function reorderModule(input: {
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }
 
-/** Reorder a lesson within its module via a midpoint rank (numeric). */
-export async function reorderLesson(input: {
+/**
+ * Move a lesson to a module (same or different) with a midpoint rank computed
+ * from its target neighbors. Handles reorder-within-module and cross-module
+ * drag uniformly; rank 1 when the target module is empty.
+ */
+export async function moveLesson(input: {
   lessonId: number;
+  targetModuleId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
-}): Promise<{ id: number; rank: number } | null> {
+}): Promise<{ id: number; rank: number; moduleId: number } | null> {
   const prevRank = input.prevLessonId
     ? sql`(select ${lessonsTable.rank} from ${lessonsTable} where ${lessonsTable.id} = ${input.prevLessonId})`
     : null;
@@ -307,15 +312,25 @@ export async function reorderLesson(input: {
   if (prevRank && nextRank) rankExpr = sql`(${prevRank} + ${nextRank}) / 2`;
   else if (nextRank) rankExpr = sql`${nextRank} / 2`;
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
-  else return null;
+  else rankExpr = sql`1`;
 
   const [updated] = await db
     .update(lessonsTable)
-    .set({ rank: rankExpr, updatedAt: sql`now()` })
+    .set({
+      moduleId: input.targetModuleId,
+      rank: rankExpr,
+      updatedAt: sql`now()`,
+    })
     .where(eq(lessonsTable.id, input.lessonId))
-    .returning({ id: lessonsTable.id, rank: lessonsTable.rank });
+    .returning({
+      id: lessonsTable.id,
+      rank: lessonsTable.rank,
+      moduleId: lessonsTable.moduleId,
+    });
 
-  return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
+  return updated
+    ? { id: updated.id, rank: Number(updated.rank), moduleId: updated.moduleId }
+    : null;
 }
 
 // Grace period so a just-uploaded-but-not-yet-saved cover isn't swept while the

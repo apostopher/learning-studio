@@ -8,14 +8,13 @@ import {
 } from '@/atoms/admin';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
+import { moduleDndId } from '@/lib/dnd-ids';
 import { LessonBoardContainer } from './lesson-board-container';
 import { ModuleColumn } from './module-column';
 
 export const SortableModuleColumn = ({
-  courseId,
   module: mod,
 }: {
-  courseId: number;
   module: BoardModule;
 }) => {
   const {
@@ -26,7 +25,10 @@ export const SortableModuleColumn = ({
     transition,
     isSorting,
     isDragging,
-  } = useSortable({ id: mod.id });
+  } = useSortable({
+    id: moduleDndId(mod.id),
+    data: { type: 'module', moduleId: mod.id },
+  });
   const setLessonModuleId = useSetAtom(createLessonModuleIdAtom);
   const setEditModule = useSetAtom(editModuleAtom);
   const setDeleteModule = useSetAtom(deleteModuleAtom);
@@ -57,11 +59,7 @@ export const SortableModuleColumn = ({
         }
         onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
         lessonsSlot={
-          <LessonBoardContainer
-            courseId={courseId}
-            moduleId={mod.id}
-            lessons={mod.lessons}
-          />
+          <LessonBoardContainer moduleId={mod.id} lessons={mod.lessons} />
         }
       />
     </div>

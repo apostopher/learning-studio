@@ -2,9 +2,16 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { BoardLesson } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
+import { lessonDndId } from '@/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
 
-export const SortableLessonCard = ({ lesson }: { lesson: BoardLesson }) => {
+export const SortableLessonCard = ({
+  lesson,
+  moduleId,
+}: {
+  lesson: BoardLesson;
+  moduleId: number;
+}) => {
   const {
     attributes,
     listeners,
@@ -13,7 +20,10 @@ export const SortableLessonCard = ({ lesson }: { lesson: BoardLesson }) => {
     transition,
     isSorting,
     isDragging,
-  } = useSortable({ id: lesson.id, data: { type: 'lesson' } });
+  } = useSortable({
+    id: lessonDndId(lesson.id),
+    data: { type: 'lesson', lessonId: lesson.id, moduleId },
+  });
 
   return (
     <div
