@@ -25,8 +25,14 @@ is a deliberate follow-up (there is no material-save endpoint yet).
 - **Scope:** parse & return for review. Full slice = API route + data-hook +
   admin UI (upload → generate → **read-only preview**). Editable form + save is
   out of scope (separate spec).
-- **Markdown, not HTML:** the repo's quiz schema `.describe()`s specify markdown
-  (unlike the old repo's HTML output), so the prompt emits markdown.
+- **Output format (HTML prose + markdown quiz):** the persisted material is
+  rendered as HTML (`MaterialProse` uses `dangerouslySetInnerHTML` on
+  `text`/`proTips`), so prose fields (`text`, `keyPoints`, `proTips`,
+  `assignments`, `jobOfTheDay`) are **HTML** — matching the old repo. Only the
+  quiz `question`/option `value` are **markdown**, per the quiz schema's
+  `.describe()`. The read-only preview renders prose as escaped text (XSS-safe,
+  zero deps); the future save/display path will render the stored HTML via the
+  existing `MaterialProse` (sanitized at save time).
 
 ## Data flow
 
