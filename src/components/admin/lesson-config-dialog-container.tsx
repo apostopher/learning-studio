@@ -1,15 +1,15 @@
-import { Accordion } from '@base-ui/react/accordion';
 import { Dialog } from '@base-ui/react/dialog';
+import { Tabs } from '@base-ui/react/tabs';
 import { useAtom } from 'jotai';
-import { ChevronDown, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
 import { configureLessonIdAtom } from '@/atoms/admin';
 import type { BoardLesson } from '@/lib/admin-schemas';
 
 /**
- * Sidebar sections (accordion). Placeholder content for now — each panel will
- * hold the real controls for that part of the lesson.
+ * Sidebar sections. Each is a vertical tab whose content renders in the main
+ * panel. Placeholder content for now — each panel will hold the real controls.
  */
 const SECTIONS: { value: string; title: string; hint: string }[] = [
   { value: 'video', title: 'Video', hint: 'Main video and additional clips.' },
@@ -26,7 +26,7 @@ const SECTIONS: { value: string; title: string; hint: string }[] = [
   { value: 'debrief', title: 'Debrief', hint: 'Post-lesson debrief settings.' },
 ];
 
-/** Big JIRA-style lesson configuration modal (fixed-width sidebar + main). */
+/** Big JIRA-style lesson configuration modal (fixed-width tab sidebar + main). */
 export const LessonConfigDialogContainer = ({
   lessons,
 }: {
@@ -49,7 +49,7 @@ export const LessonConfigDialogContainer = ({
           className="fixed inset-0 z-40 m-auto grid h-[85vh] max-h-[calc(100vh-2rem)] w-[var(--modal-dialog-width)] max-w-[calc(100vw-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl"
         >
           <div className="flex items-center justify-between gap-4 border-b border-gray-6 px-6 py-4">
-            <Dialog.Title className="text-lg font-semibold text-gray-12">
+            <Dialog.Title className="font-semibold text-gray-12 text-lg">
               Configure lesson
             </Dialog.Title>
             <Dialog.Close className="shrink-0 rounded-md p-1.5 text-gray-11 transition-colors hover:bg-gray-4 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
@@ -57,41 +57,38 @@ export const LessonConfigDialogContainer = ({
             </Dialog.Close>
           </div>
 
-          <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="min-h-0 overflow-y-auto border-e border-gray-6 bg-gray-1">
-              <Accordion.Root className="flex flex-col">
-                {SECTIONS.map((section) => (
-                  <Accordion.Item
-                    key={section.value}
-                    value={section.value}
-                    className="border-b border-gray-6"
-                  >
-                    <Accordion.Header>
-                      <Accordion.Trigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-gray-12 transition-colors hover:bg-gray-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9">
-                        {section.title}
-                        <ChevronDown
-                          className="h-4 w-4 shrink-0 text-gray-10 transition-transform group-data-[panel-open]:rotate-180"
-                          aria-hidden="true"
-                        />
-                      </Accordion.Trigger>
-                    </Accordion.Header>
-                    <Accordion.Panel className="px-4 pb-3 text-xs text-gray-10">
-                      {section.hint}
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                ))}
-              </Accordion.Root>
-            </aside>
+          <Tabs.Root
+            defaultValue={SECTIONS[0].value}
+            orientation="vertical"
+            className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)]"
+          >
+            <Tabs.List className="flex min-h-0 flex-col overflow-y-auto border-gray-6 border-e bg-gray-1">
+              {SECTIONS.map((section) => (
+                <Tabs.Tab
+                  key={section.value}
+                  value={section.value}
+                  className="border-gray-6 border-b px-4 py-3 text-left font-medium text-gray-11 text-sm transition-colors hover:bg-gray-3 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-gray-12"
+                >
+                  {section.title}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
 
             <main className="flex min-h-0 flex-col gap-6 overflow-y-auto p-6">
-              <h2 className="break-words text-2xl font-semibold text-gray-12">
+              <h2 className="break-words font-semibold text-2xl text-gray-12">
                 {lesson?.name ?? ''}
               </h2>
-              <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-gray-6 p-8 text-center text-sm text-gray-10">
-                Select a section on the left to configure this lesson.
-              </div>
+              {SECTIONS.map((section) => (
+                <Tabs.Panel
+                  key={section.value}
+                  value={section.value}
+                  className="flex flex-1 items-center justify-center rounded-lg border border-gray-6 border-dashed p-8 text-center text-gray-10 text-sm"
+                >
+                  {section.hint}
+                </Tabs.Panel>
+              ))}
             </main>
-          </div>
+          </Tabs.Root>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
