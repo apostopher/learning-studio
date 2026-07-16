@@ -1,22 +1,17 @@
 import { ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import ReactCrop, {
-  type Crop,
-  centerCrop,
-  convertToPixelCrop,
-  makeAspectCrop,
-} from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
+import { useCallback, useEffect, useState } from 'react';
+import Cropper, { type Area, type Point } from 'react-easy-crop';
 
 /**
  * Why this component exists:
  * - Checked: no Base UI component provides interactive image cropping.
- * - Composes the react-image-crop library (per "libraries over custom"); the
+ * - Composes the react-easy-crop library (per "libraries over custom"); the
  *   local crop/zoom state is the widget's own interactive state, like a form
  *   field.
  *
- * Lets the user position a 16:9 crop box over a selected image and zoom it, then
- * emits the cropped region as a Blob for the optimize + upload pipeline.
+ * Pan-and-zoom cropper with a fixed 16:9 frame: the user drags and zooms the
+ * image behind the frame, then the framed region is emitted as a Blob for the
+ * optimize + upload pipeline.
  */
 
 const ASPECT = 16 / 9;
@@ -29,14 +24,48 @@ interface ImageCropperProps {
   onCropped: (blob: Blob) => void;
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', reject);
+    image.src = src;
+  });
+}
+
+/** Draw the framed region (natural-pixel Area) to a lossless PNG blob. */
+async function cropToBlob(src: string, area: Area): Promise<Blob | null> {
+  const image = await loadImage(src);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(area.width);
+  canvas.height = Math.round(area.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    image,
+    area.x,
+    area.y,
+    area.width,
+    area.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  // PNG keeps the intermediate lossless; optimizeImage does the final encode
+  // (including the downscale to <=1600px).
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
 export const ImageCropper = ({
   file,
   onCancel,
   onCropped,
 }: ImageCropperProps) => {
   // Create AND revoke the object URL in the same effect so a re-run (e.g. dev
-  // double-invoke) makes a fresh URL rather than leaving the img pointing at a
-  // revoked one — the cause of the "broken image" in the crop preview.
+  // double-invoke) makes a fresh URL rather than leaving a revoked one.
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -44,97 +73,43 @@ export const ImageCropper = ({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const imgRef = useRef<HTMLImageElement>(null);
-  const [crop, setCrop] = useState<Crop>();
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(MIN_ZOOM);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const onImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    const { naturalWidth, naturalHeight } = event.currentTarget;
-    setCrop(
-      centerCrop(
-        makeAspectCrop(
-          { unit: '%', width: 90 },
-          ASPECT,
-          naturalWidth,
-          naturalHeight,
-        ),
-        naturalWidth,
-        naturalHeight,
-      ),
-    );
-  };
+  const onCropComplete = useCallback((_area: Area, pixels: Area) => {
+    setCroppedAreaPixels(pixels);
+  }, []);
 
   const handleConfirm = async () => {
-    const image = imgRef.current;
-    if (!image || !crop) return;
+    if (!objectUrl || !croppedAreaPixels) return;
     setBusy(true);
-
-    // Crop is stored in display units; scale up to the image's natural pixels.
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    const pixelCrop = convertToPixelCrop(crop, image.width, image.height);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(pixelCrop.width * scaleX);
-    canvas.height = Math.round(pixelCrop.height * scaleY);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
+    try {
+      const blob = await cropToBlob(objectUrl, croppedAreaPixels);
+      if (blob) onCropped(blob);
+    } finally {
       setBusy(false);
-      return;
     }
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // Replicate react-image-crop's `scale` transform: the image is zoomed about
-    // its natural centre, then the crop offset is applied.
-    const centerX = image.naturalWidth / 2;
-    const centerY = image.naturalHeight / 2;
-    ctx.translate(-pixelCrop.x * scaleX, -pixelCrop.y * scaleY);
-    ctx.translate(centerX, centerY);
-    ctx.scale(zoom, zoom);
-    ctx.translate(-centerX, -centerY);
-    ctx.drawImage(
-      image,
-      0,
-      0,
-      image.naturalWidth,
-      image.naturalHeight,
-      0,
-      0,
-      image.naturalWidth,
-      image.naturalHeight,
-    );
-
-    // PNG keeps the intermediate lossless; optimizeImage does the final encode
-    // (including the downscale to <=1600px).
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/png'),
-    );
-    setBusy(false);
-    if (blob) onCropped(blob);
   };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex max-h-[60vh] justify-center overflow-hidden rounded-lg bg-gray-1">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-1">
         {objectUrl && (
-          <ReactCrop
+          <Cropper
+            image={objectUrl}
             crop={crop}
-            onChange={(_, percentCrop) => setCrop(percentCrop)}
+            zoom={zoom}
             aspect={ASPECT}
-            keepSelection
-            minWidth={40}
-          >
-            <img
-              ref={imgRef}
-              src={objectUrl}
-              onLoad={onImageLoad}
-              alt="Crop source"
-              style={{ transform: `scale(${zoom})` }}
-              className="max-h-[60vh] w-auto object-contain"
-            />
-          </ReactCrop>
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+            objectFit="cover"
+            showGrid
+            onCropChange={setCrop}
+            onZoomChange={setZoom}
+            onCropComplete={onCropComplete}
+          />
         )}
       </div>
 
@@ -166,7 +141,7 @@ export const ImageCropper = ({
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={busy || !crop}
+          disabled={busy || !croppedAreaPixels}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-apple-9 px-4 py-2.5 text-sm font-medium text-apple-contrast transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Crop &amp; upload
