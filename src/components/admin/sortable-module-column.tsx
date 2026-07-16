@@ -8,11 +8,14 @@ import {
 } from '@/atoms/admin';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
+import { LessonBoardContainer } from './lesson-board-container';
 import { ModuleColumn } from './module-column';
 
 export const SortableModuleColumn = ({
+  courseId,
   module: mod,
 }: {
+  courseId: number;
   module: BoardModule;
 }) => {
   const {
@@ -53,6 +56,13 @@ export const SortableModuleColumn = ({
           })
         }
         onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
+        lessonsSlot={
+          <LessonBoardContainer
+            courseId={courseId}
+            moduleId={mod.id}
+            lessons={mod.lessons}
+          />
+        }
       />
     </div>
   );

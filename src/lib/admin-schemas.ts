@@ -114,3 +114,13 @@ export const reorderModuleInputSchema = z
     message: 'At least one neighbor is required',
   });
 export type ReorderModuleInput = z.infer<typeof reorderModuleInputSchema>;
+
+export const reorderLessonInputSchema = z
+  .object({
+    prevLessonId: z.number().int().positive().nullable(),
+    nextLessonId: z.number().int().positive().nullable(),
+  })
+  .refine((v) => v.prevLessonId !== null || v.nextLessonId !== null, {
+    message: 'At least one neighbor is required',
+  });
+export type ReorderLessonInput = z.infer<typeof reorderLessonInputSchema>;

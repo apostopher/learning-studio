@@ -9,6 +9,9 @@ export const createModuleDialogOpenAtom = atom(false);
 /** Id of the module column currently being dragged, or null. */
 export const activeDragModuleIdAtom = atom<number | null>(null);
 
+/** Id of the lesson currently being dragged, or null. */
+export const activeDragLessonIdAtom = atom<number | null>(null);
+
 /** Module id whose create-lesson dialog is open, or null when closed. */
 export const createLessonModuleIdAtom = atom<number | null>(null);
 

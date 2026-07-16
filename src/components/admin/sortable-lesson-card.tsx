@@ -1,0 +1,36 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { BoardLesson } from '@/lib/admin-schemas';
+import { cn } from '@/lib/cn';
+import { LessonCard } from './lesson-card';
+
+export const SortableLessonCard = ({ lesson }: { lesson: BoardLesson }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isSorting,
+    isDragging,
+  } = useSortable({ id: lesson.id, data: { type: 'lesson' } });
+
+  return (
+    <div
+      ref={setNodeRef}
+      // Only animate the shift while sorting. After drop, the optimistic reorder
+      // already places the lesson in its final slot, so suppress the transition
+      // to avoid the displaced card sliding oddly.
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: isSorting ? transition : undefined,
+      }}
+      className={cn(isDragging && 'opacity-40')}
+    >
+      <LessonCard
+        lesson={lesson}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+};

@@ -290,6 +290,34 @@ export async function reorderModule(input: {
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }
 
+/** Reorder a lesson within its module via a midpoint rank (numeric). */
+export async function reorderLesson(input: {
+  lessonId: number;
+  prevLessonId: number | null;
+  nextLessonId: number | null;
+}): Promise<{ id: number; rank: number } | null> {
+  const prevRank = input.prevLessonId
+    ? sql`(select ${lessonsTable.rank} from ${lessonsTable} where ${lessonsTable.id} = ${input.prevLessonId})`
+    : null;
+  const nextRank = input.nextLessonId
+    ? sql`(select ${lessonsTable.rank} from ${lessonsTable} where ${lessonsTable.id} = ${input.nextLessonId})`
+    : null;
+
+  let rankExpr: SQL;
+  if (prevRank && nextRank) rankExpr = sql`(${prevRank} + ${nextRank}) / 2`;
+  else if (nextRank) rankExpr = sql`${nextRank} / 2`;
+  else if (prevRank) rankExpr = sql`${prevRank} + 1`;
+  else return null;
+
+  const [updated] = await db
+    .update(lessonsTable)
+    .set({ rank: rankExpr, updatedAt: sql`now()` })
+    .where(eq(lessonsTable.id, input.lessonId))
+    .returning({ id: lessonsTable.id, rank: lessonsTable.rank });
+
+  return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
+}
+
 // Grace period so a just-uploaded-but-not-yet-saved cover isn't swept while the
 // admin is still filling in the form.
 const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;

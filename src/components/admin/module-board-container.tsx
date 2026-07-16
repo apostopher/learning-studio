@@ -80,7 +80,11 @@ export const ModuleBoardContainer = ({
         <div className="flex w-max items-start gap-4 p-4">
           <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
             {modules.map((mod) => (
-              <SortableModuleColumn key={mod.id} module={mod} />
+              <SortableModuleColumn
+                key={mod.id}
+                courseId={courseId}
+                module={mod}
+              />
             ))}
           </SortableContext>
         </div>

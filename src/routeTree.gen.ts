@@ -28,6 +28,7 @@ import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
 import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
 import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
+import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
 import { Route as ApiAdminCoursesCourseIdRouteImport } from './routes/api/admin/courses.$courseId'
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
 import { Route as ApiAdminModulesModuleIdLessonsRouteImport } from './routes/api/admin/modules.$moduleId.lessons'
@@ -130,6 +131,11 @@ const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
   path: '/api/admin/modules/$moduleId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminLessonsLessonIdRoute = ApiAdminLessonsLessonIdRouteImport.update({
+  id: '/api/admin/lessons/$lessonId',
+  path: '/api/admin/lessons/$lessonId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminCoursesCourseIdRoute = ApiAdminCoursesCourseIdRouteImport.update({
   id: '/$courseId',
   path: '/$courseId',
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthedAdminIndexRoute
   '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRoute
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
@@ -207,6 +214,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthedAdminIndexRoute
   '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRoute
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRoute
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/$courseId/editor'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin/$courseId/editor'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/'
     | '/_authed/admin/$courseId/editor'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
@@ -338,6 +350,7 @@ export interface RootRouteChildren {
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonVideoRoute: typeof ApiLessonVideoRoute
+  ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRoute
   ApiAdminModulesModuleIdRoute: typeof ApiAdminModulesModuleIdRouteWithChildren
   ApiLessonAiTestEvaluateRoute: typeof ApiLessonAiTestEvaluateRoute
   ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
@@ -480,6 +493,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminModulesModuleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/lessons/$lessonId': {
+      id: '/api/admin/lessons/$lessonId'
+      path: '/api/admin/lessons/$lessonId'
+      fullPath: '/api/admin/lessons/$lessonId'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/courses/$courseId': {
       id: '/api/admin/courses/$courseId'
       path: '/$courseId'
@@ -609,6 +629,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonVideoRoute: ApiLessonVideoRoute,
+  ApiAdminLessonsLessonIdRoute: ApiAdminLessonsLessonIdRoute,
   ApiAdminModulesModuleIdRoute: ApiAdminModulesModuleIdRouteWithChildren,
   ApiLessonAiTestEvaluateRoute: ApiLessonAiTestEvaluateRoute,
   ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
