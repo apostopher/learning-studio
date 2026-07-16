@@ -55,9 +55,9 @@ interface VideoProvider {
   /** Detect this provider + extract the normalized ref from a pasted URL. */
   detect(url: string): { ref: string } | null;
   /** Zod schema for the credential fields the admin enters. */
-  credentialSchema: ZodType;                 // e.g. { apiKey } / { signingKeyId, signingKeyPrivate }
-  /** Non-secret metadata to persist for display ("configured" state). */
-  credentialMeta(creds): Record<string, unknown>;   // e.g. { keyId } / { apiKeyLast4 }
+  credentialSchema: ZodType;                 // e.g. { apiKey } / { keyId, privateKey }
+  /** Non-secret projection for display ("configured" state) — never the secret. */
+  credentialDisplay(creds): Record<string, unknown>;  // e.g. { keyId } / { apiKeyLast4 }
   /** Lightweight "test connection" — returns ok/err. */
   validateCredentials(creds): Promise<{ ok: boolean; error?: string }>;
   /** Server-only. Returns a short-lived playable URL for `ref`. */
@@ -90,22 +90,28 @@ interface VideoProvider {
 
 ## Data model (schema.ts — user runs `pnpm db:push`)
 
-**New table `course_provider_credentials`:**
+**New table `course_video_providers`:**
 
 ```
 id                integer pk
 course_id         integer FK -> courses(id) on delete cascade
-provider          text        -- 'mux' | 'synthesia'
-secret_ciphertext text        -- base64
-secret_iv         text        -- base64
-secret_auth_tag   text        -- base64
-meta              jsonb        -- non-secret display info (keyId / apiKeyLast4)
+provider          text        -- 'mux' | 'synthesia' (plaintext; for uniqueness + listing)
+secrets           jsonb        -- AES-GCM envelope: { v, iv, tag, ct } (all base64)
 last_validated_at timestamp    -- nullable
 created_at, updated_at timestamps
 unique(course_id, provider)
 ```
 
-The encrypted blob is the full credential JSON for that provider.
+- `secrets` is the **encryption envelope**, not plaintext. `ct` is the
+  encrypted provider payload JSON — `{ apiKey }` (Synthesia) /
+  `{ keyId, privateKey }` (Mux). At rest the jsonb is opaque; a single code
+  path (`resolveCourseProvider`) loads the row, decrypts `secrets`, and hands
+  the payload to the provider's signer.
+- `provider` is the only plaintext column (non-secret) — required for the
+  unique constraint (can't index a field inside the ciphertext).
+- No separate `meta` column: the credentials GET decrypts server-side and
+  projects only non-secret display fields (Mux `keyId`, Synthesia `apiKey`
+  last-4). Providers are few and admin-only, so decrypt-on-read is fine.
 
 **Lessons — add columns:**
 
@@ -121,16 +127,18 @@ New videos write `(video_provider, video_ref)`. Existing `video_id` /
 ## Encryption (`src/lib/crypto.server.ts`)
 
 - AES-256-GCM. Key = base64-decoded `CREDENTIALS_ENCRYPTION_KEY` (32 bytes).
-- `encryptSecret(plaintext) -> { ciphertext, iv, authTag }` (all base64).
-- `decryptSecret({ ciphertext, iv, authTag }) -> plaintext`.
-- 12-byte random IV per encryption. Server-only module.
+- `encryptJson(value) -> { v: 1, iv, tag, ct }` (base64) — the jsonb envelope.
+- `decryptJson(envelope) -> value`.
+- 12-byte random IV per encryption. Server-only module. The `v` field allows a
+  future key-version prefix for rotation.
 - Env: `CREDENTIALS_ENCRYPTION_KEY` (required). Generate:
   `openssl rand -base64 32`.
 
 ## Security
 
 - Secrets encrypted at rest; **never** returned to the client. The credentials
-  GET returns only `{ provider, configured: true, meta, lastValidatedAt }`.
+  GET returns only `{ provider, configured: true, display, lastValidatedAt }`
+  where `display` is a non-secret projection (Mux keyId, Synthesia key last-4).
 - Credential inputs are **write-only** ("Replace credential" to change).
 - Decryption happens only inside `resolvePlayback` / `validateCredentials`,
   server-side.
@@ -140,7 +148,8 @@ New videos write `(video_provider, video_ref)`. Existing `video_id` /
 ## API endpoints (all admin-guarded)
 
 - `GET  /api/admin/courses/$courseId/credentials`
-  → `[{ provider, configured, meta, lastValidatedAt }]` (no secrets).
+  → `[{ provider, configured, display, lastValidatedAt }]` (no secrets;
+  `resolveCourseProvider` decrypts server-side, returns display projection).
 - `PUT  /api/admin/courses/$courseId/credentials/$provider`
   → validate → encrypt → upsert. Body = provider credential fields.
 - `DELETE /api/admin/courses/$courseId/credentials/$provider` → remove.
@@ -181,7 +190,8 @@ Preview player: HLS-capable `<video>` (hls.js for `.m3u8`; native for Synthesia
 - `src/lib/crypto.server.ts` — AES-GCM encrypt/decrypt.
 - `src/lib/video-providers/{index,types,mux,synthesia}.ts` — registry + providers.
 - `src/db/schema.ts` — new table + lesson columns.
-- `src/db/admin.ts` — credential CRUD (encrypt/decrypt), setLessonVideo,
+- `src/db/admin.ts` — `course_video_providers` CRUD (encrypt/decrypt via
+  crypto.server), `resolveCourseProvider(courseId, provider)`, setLessonVideo,
   resolveLessonPlayback.
 - `src/routes/api/admin/courses.$courseId.credentials(.$provider).ts`,
   `lessons.$lessonId.video.ts`, `lessons.$lessonId.video-playback.ts`.
