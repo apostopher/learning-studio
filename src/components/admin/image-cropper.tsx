@@ -1,3 +1,4 @@
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactCrop, {
   type Crop,
@@ -11,14 +12,16 @@ import 'react-image-crop/dist/ReactCrop.css';
  * Why this component exists:
  * - Checked: no Base UI component provides interactive image cropping.
  * - Composes the react-image-crop library (per "libraries over custom"); the
- *   local crop state is the widget's own interactive state, like a form field.
+ *   local crop/zoom state is the widget's own interactive state, like a form
+ *   field.
  *
- * Lets the user position a 16:9 crop box over a selected image, then emits the
- * cropped region as a Blob (max 1600px wide) for the optimize + upload pipeline.
+ * Lets the user position a 16:9 crop box over a selected image and zoom it, then
+ * emits the cropped region as a Blob for the optimize + upload pipeline.
  */
 
 const ASPECT = 16 / 9;
-const MAX_OUTPUT_WIDTH = 1600;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
 
 interface ImageCropperProps {
   file: File;
@@ -43,6 +46,7 @@ export const ImageCropper = ({
 
   const imgRef = useRef<HTMLImageElement>(null);
   const [crop, setCrop] = useState<Crop>();
+  const [zoom, setZoom] = useState(MIN_ZOOM);
   const [busy, setBusy] = useState(false);
 
   const onImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
@@ -67,20 +71,13 @@ export const ImageCropper = ({
     setBusy(true);
 
     // Crop is stored in display units; scale up to the image's natural pixels.
-    const pixelCrop = convertToPixelCrop(crop, image.width, image.height);
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
-    const sx = pixelCrop.x * scaleX;
-    const sy = pixelCrop.y * scaleY;
-    const sw = pixelCrop.width * scaleX;
-    const sh = pixelCrop.height * scaleY;
-
-    const targetW = Math.min(Math.round(sw), MAX_OUTPUT_WIDTH);
-    const targetH = Math.round(targetW / ASPECT);
+    const pixelCrop = convertToPixelCrop(crop, image.width, image.height);
 
     const canvas = document.createElement('canvas');
-    canvas.width = targetW;
-    canvas.height = targetH;
+    canvas.width = Math.round(pixelCrop.width * scaleX);
+    canvas.height = Math.round(pixelCrop.height * scaleY);
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       setBusy(false);
@@ -88,9 +85,29 @@ export const ImageCropper = ({
     }
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, targetW, targetH);
 
-    // PNG keeps the intermediate lossless; optimizeImage does the final encode.
+    // Replicate react-image-crop's `scale` transform: the image is zoomed about
+    // its natural centre, then the crop offset is applied.
+    const centerX = image.naturalWidth / 2;
+    const centerY = image.naturalHeight / 2;
+    ctx.translate(-pixelCrop.x * scaleX, -pixelCrop.y * scaleY);
+    ctx.translate(centerX, centerY);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-centerX, -centerY);
+    ctx.drawImage(
+      image,
+      0,
+      0,
+      image.naturalWidth,
+      image.naturalHeight,
+      0,
+      0,
+      image.naturalWidth,
+      image.naturalHeight,
+    );
+
+    // PNG keeps the intermediate lossless; optimizeImage does the final encode
+    // (including the downscale to <=1600px).
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/png'),
     );
@@ -114,10 +131,27 @@ export const ImageCropper = ({
               src={objectUrl}
               onLoad={onImageLoad}
               alt="Crop source"
+              style={{ transform: `scale(${zoom})` }}
               className="max-h-[60vh] w-auto object-contain"
             />
           </ReactCrop>
         )}
+      </div>
+
+      {/* Zoom */}
+      <div className="flex items-center gap-3">
+        <ZoomOut className="h-4 w-4 shrink-0 text-gray-11" aria-hidden="true" />
+        <input
+          type="range"
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
+          step={0.01}
+          value={zoom}
+          onChange={(event) => setZoom(Number(event.target.value))}
+          aria-label="Zoom"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-gray-6 accent-apple-9"
+        />
+        <ZoomIn className="h-4 w-4 shrink-0 text-gray-11" aria-hidden="true" />
       </div>
 
       <div className="flex items-center justify-end gap-3">
