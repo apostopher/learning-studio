@@ -1,206 +1,152 @@
 # Lesson material from a Word doc — design
 
 **Date:** 2026-07-17
-**Status:** Approved (design), pending implementation plan
+**Status:** Approved (design), pending implementation
+**Revision:** 2 — editable form + persistence (was: parse & return, read-only)
 
 ## Summary
 
-Port the old `airmanship-web` `/api/word-processor` route into `rmtp-studio`.
-An admin uploads a `.docx` lesson document; the server converts it to HTML,
-sends it through the Vercel AI Gateway (Haiku) to extract a structured
-`CourseLessonMaterial` (text, key points, pro tips, quiz, links, assignments,
-job of the day, attachments), and **returns the parsed result for the admin to
-review**. Nothing is persisted in this pass — persisting/editing lesson material
-is a deliberate follow-up (there is no material-save endpoint yet).
+Port the old `airmanship-web` `/api/word-processor` route into `rmtp-studio` as
+a full admin feature. An admin opens a lesson's **Material** tab; if the lesson
+already has material it loads into an editable form. The admin can upload a
+`.docx`, which the server converts to HTML and sends through the Vercel AI
+Gateway (Haiku) to extract a structured `CourseLessonMaterial` (text, key
+points, pro tips, quiz, links, assignments, job of the day, attachments); the
+parsed result **populates the editable form**. The admin reviews/edits and
+**saves**, upserting into `lessonMaterialTable`.
 
 ## Decisions
 
-- **Model:** `haiku` (`anthropic/claude-haiku-4.5`), reusing the existing
-  `src/ai/ai-provider.ts` constant. It is a formatting/extraction task, so Haiku
-  is cheap and capable, and keeps the repo Anthropic-consistent.
-- **Gateway:** implicit, via passing the model id string to `generateText`
-  (the AI SDK v6 default provider is the Vercel AI Gateway, authenticated by
-  `AI_GATEWAY_API_KEY` — already added to env). This matches how
-  `src/ai/generate-test.ts` already works. No `@ai-sdk/gateway` package.
-- **Scope:** parse & return for review. Full slice = API route + data-hook +
-  admin UI (upload → generate → **read-only preview**). Editable form + save is
-  out of scope (separate spec).
-- **Output format (HTML prose + markdown quiz):** the persisted material is
-  rendered as HTML (`MaterialProse` uses `dangerouslySetInnerHTML` on
-  `text`/`proTips`), so prose fields (`text`, `keyPoints`, `proTips`,
-  `assignments`, `jobOfTheDay`) are **HTML** — matching the old repo. Only the
-  quiz `question`/option `value` are **markdown**, per the quiz schema's
-  `.describe()`. The read-only preview renders prose as escaped text (XSS-safe,
-  zero deps); the future save/display path will render the stored HTML via the
-  existing `MaterialProse` (sanitized at save time).
+- **Model:** `haiku` (`anthropic/claude-haiku-4.5`), from `src/ai/ai-provider.ts`.
+  Formatting/extraction task → cheap, capable, Anthropic-consistent.
+- **Gateway:** implicit — pass the model id string to `generateText` (AI SDK v6
+  default provider is the Vercel AI Gateway, auth via `AI_GATEWAY_API_KEY`,
+  already in `.env`). Matches `src/ai/generate-test.ts`. No `@ai-sdk/gateway`.
+- **Scope:** full slice — parse route + editable RHF form + save (persist).
+- **Output format (HTML prose + markdown quiz):** persisted material renders as
+  HTML (`MaterialProse` uses `dangerouslySetInnerHTML` on `text`/`proTips`), so
+  prose fields (`text`, `keyPoints`, `proTips`, `assignments`, `jobOfTheDay`)
+  are **HTML** — matching the old repo. Quiz `question`/option `value` are
+  **markdown**, per the quiz schema's `.describe()`.
+- **Form layout:** a single scrollable panel in the Material tab (not a wizard) —
+  an admin corrects the whole parsed document at once. react-hook-form 7.80 +
+  `zodResolver(LessonMaterialGenerationSchema)` (zod v4).
+- **Form-design principles applied:** every field has a visible label (never a
+  placeholder-as-label); the Save button is always enabled and validates on
+  submit; validation errors are shown inline and kept visible; conventional
+  controls only (textareas, text inputs, add/remove list rows, a radio group for
+  the quiz's correct option); a server-error alert on save failure.
+- **Persistence without a migration:** `lessonMaterialTable` has no unique
+  constraint on `lessonSlug` (and `schema.ts` carries the user's uncommitted
+  edits — don't touch it). Upsert = `delete` existing rows for the slug then
+  `insert`, in a `db.transaction`. `getLessonMaterial` already reads one row per
+  slug, so this preserves the effective one-material-per-lesson model.
+- **Attachments:** parsed and shown **read-only** ("detected, not saved").
+  `lessonMaterialTable` has no attachments column; linking parsed attachment
+  names to `blobFileAssignmentsTable` (old repo behavior) is deferred.
 
 ## Data flow
 
 ```
-Admin picks .docx
-  → useParseLessonMaterial (TanStack Query mutation, multipart POST)
-    → POST /api/admin/lesson-material/parse   [requireAdmin guard → 403]
+Open Material tab
+  → useLessonMaterial(lessonId)  [GET /api/admin/lessons/:id/material, guarded]
+    → form.reset(existing material | empty defaults)
+Upload .docx
+  → useParseLessonMaterial (multipart POST)
+    → POST /api/admin/lesson-material/parse  [requireAdmin]
         → wordToHtml(buffer)            [mammoth: docx → HTML]
         → generateLessonMaterial(html)  [ai v6 · Output.object · haiku via Gateway]
         → Response.json(parsedMaterial)
-    → hook Zod-parses response
-  → admin reviews parsed result (read-only) in the lesson-config dialog
+    → form.reset(parsedMaterial)
+Admin edits fields → Save
+  → useSaveLessonMaterial(lessonId) (POST)
+    → POST /api/admin/lessons/:id/material  [requireAdmin]
+        → resolve slug from lessonId
+        → upsertLessonMaterial: delete+insert lessonMaterialTable (txn)
+        → Response.json(savedRow)
+    → invalidate lessonMaterial(lessonId) query
 ```
 
 ## Components
 
 ### 1. docx → HTML — `src/lib/word-to-html.server.ts`
+- `wordToHtml(buffer: Buffer): Promise<string>` wrapping
+  `mammoth.convertToHtml({ buffer }, { ignoreEmptyParagraphs: true })`. Throws on
+  failure or empty output. Add `mammoth@latest`. `.server` suffix, Node runtime.
 
-- `export async function wordToHtml(buffer: Buffer): Promise<string>`
-- Wraps `mammoth.convertToHtml({ buffer }, { ignoreEmptyParagraphs: true })`,
-  returns `result.value`.
-- **Throws** on conversion failure (route maps to 500) — unlike the old repo's
-  wrapper which swallowed errors and returned `""` (feeding empty HTML to the
-  model). Empty/whitespace-only output is also treated as a failure.
-- Add `mammoth` to `package.json` dependencies.
-- Node runtime only (mammoth uses Node built-ins); `.server` suffix keeps it off
-  the client bundle. Modern Node has a global `File`, so no polyfill is expected;
-  if mammoth complains under the deploy runtime, add a `File` polyfill import.
+### 2. Schemas — `src/types.ts`
+- `LessonMaterialGenerationSchema = CourseLessonMaterialSchema.omit({ id: true })`
+  + type `LessonMaterialGeneration`. Drives the AI output, the form
+  (`zodResolver`), and the save-route body.
 
-### 2. Generation schema — `src/types.ts`
+### 3. AI — `src/ai/generate-lesson-material.ts` + `src/ai/prompts/lesson-material.ts`
+- `generateLessonMaterial(html): Promise<LessonMaterialGeneration>`, mirroring
+  `generate-test.ts`: `generateText({ model: haiku, output: Output.object({ schema }), system, prompt })`.
+- Prompt instructs HTML prose + markdown quiz, "10 Key Teaching Points"
+  extraction, pro tips, quiz, links, attachment names, assignments, job-of-the-
+  day URL; omit `<None>`/empty.
 
-Next to `CourseLessonMaterialSchema`:
+### 4. Parse route — `src/routes/api/admin/lesson-material.parse.ts`
+- `POST /api/admin/lesson-material/parse`. `requireAdmin` → 403. Multipart
+  `file`; validate docx MIME + ~4 MB cap → 400. Convert → generate →
+  `Response.json`. Handler exported as a plain function for unit testing.
 
-```ts
-export const LessonMaterialGenerationSchema = CourseLessonMaterialSchema.omit({
-  id: true,
-});
-export type LessonMaterialGeneration = z.infer<
-  typeof LessonMaterialGenerationSchema
->;
-```
+### 5. DB — `src/db/lesson.ts`
+- `getLessonMaterialByLessonId(lessonId): Promise<LessonMaterialSelect | null>` —
+  resolve slug from `lessonsTable`, then `getLessonMaterial(slug)`.
+- `upsertLessonMaterial(lessonId, material): Promise<LessonMaterialSelect | null>` —
+  resolve slug (null if lesson missing); `db.transaction`: delete rows for slug,
+  insert mapped material (`attachments` dropped — no column), return the row.
 
-Reuses the canonical material shape minus the DB `id` the model can't produce.
-Fields: `text`, `keyPoints`, `proTips`, `quiz` (required; empty string/array when
-absent in the doc), and optional `links`, `assignments`, `jobOfTheDay`,
-`attachments`.
+### 6. Save/read route — `src/routes/api/admin/lessons.$lessonId.material.ts`
+- Reuses sibling `guard`/`parseLessonId`.
+- `GET` → `getLessonMaterialByLessonId` → `Response.json(row | null)`.
+- `POST` → parse body with `LessonMaterialGenerationSchema` → `upsertLessonMaterial`
+  → 404 if lesson missing → `Response.json(savedRow)`.
 
-### 3. AI module — `src/ai/generate-lesson-material.ts`
+### 7. Hooks — `src/data-hooks/`
+- `useParseLessonMaterial()` — multipart POST → parsed material (Task, no cache).
+- `useLessonMaterial(lessonId)` — GET; maps the DB row (nullable) to
+  `LessonMaterialGeneration` form values (or empty defaults). Key:
+  `dataKeys.lessonMaterial(lessonId)`.
+- `useSaveLessonMaterial(lessonId)` — POST form values; invalidates the material
+  key on success.
 
-- `export async function generateLessonMaterial(html: string): Promise<LessonMaterialGeneration>`
-- Mirrors `src/ai/generate-test.ts`:
+### 8. Form UI — `src/components/admin/lesson-config/`
+- `MaterialSectionContainer({ lesson })` — owns `useForm`, loads existing +
+  parse into `form.reset`, wires save. Jotai atom not needed (RHF holds form
+  state); a small atom only if cross-render coordination is required.
+- Presentational, prop-driven (RHF field-array hooks are the accepted exception
+  to "no hooks in presentational" — the standard RHF idiom):
+  - `MaterialUpload` — `.docx` picker with pending/error state.
+  - `MaterialTextFields` — labelled textareas/inputs for text, proTips,
+    assignments, jobOfTheDay.
+  - `StringListField` — reusable add/remove editor for a `string[]` (keyPoints,
+    links).
+  - `QuizField` — question cards; per-question option list + a radio group for
+    the correct option; add/remove questions and options.
+  - `MaterialForm` — composes the above + a "Save material" button + server-error
+    alert; `onSubmit` = `form.handleSubmit(save)`.
+- `AttachmentsList` (read-only) — shows detected attachment names when present.
+- Wire a `material` section into `lesson-config-dialog-container.tsx`.
 
-  ```ts
-  const { output } = await generateText({
-    model: haiku,
-    output: Output.object({ schema: LessonMaterialGenerationSchema }),
-    system: lessonMaterialSystemPrompt,
-    prompt: lessonMaterialUserPrompt(html),
-  });
-  return output;
-  ```
+### 9. Query keys — `src/data-hooks/keys.ts`
+- Add `lessonMaterial: (lessonId: number) => ['lesson-material', lessonId]`.
 
-- Prompt lives in `src/ai/prompts/lesson-material.ts` (matching the `prompts/`
-  convention: `lessonMaterialSystemPrompt`, `lessonMaterialUserPrompt(html)`).
-  Adapted from the old formatter prompt, but instructs **markdown** output,
-  extraction of the "10 Key Teaching Points", pro tips, quiz, links, attachments
-  (by file name), assignments, and job-of-the-day URL; omit `<None>`/empty
-  values.
+## Tests
 
-### 4. API route — `src/routes/api/admin/lesson-material.parse.ts`
+- Schema parse (Task 1), `wordToHtml` (mocked mammoth), prompt builders,
+  `generateLessonMaterial` (mocked `ai`), parse route (guard/validation/happy/
+  error), save route (guard/validation/happy, mocked upsert), `useParseLessonMaterial`,
+  `useSaveLessonMaterial` (mocked fetch), `StringListField` (add/remove),
+  `QuizField` (render + add), `MaterialTextFields` (labels/values).
+- DB functions (`upsertLessonMaterial`, `getLessonMaterialByLessonId`) verified by
+  typecheck + route tests (mocked) + manual run — matching the repo's untested
+  `db/*` convention.
 
-- Path: `POST /api/admin/lesson-material/parse`. Flat (no `$lessonId`) because
-  parsing doesn't touch the lesson; a future `lesson-material.$lessonSlug.ts`
-  can own save.
-- Reuses the repo's admin guard pattern:
+## Out of scope (future)
 
-  ```ts
-  async function guard(request: Request): Promise<Response | null> {
-    try { await requireAdmin(request.headers); return null; }
-    catch (error) {
-      if (error instanceof ForbiddenError) return new Response('Forbidden', { status: 403 });
-      throw error;
-    }
-  }
-  ```
-
-- Handler:
-  1. `guard(request)` → early 403.
-  2. `await request.formData()`, read `file`.
-  3. Validate presence + docx MIME
-     (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`)
-     + size cap (~4 MB — Vercel serverless request-body limit) → 400 on failure.
-  4. `wordToHtml(Buffer.from(await file.arrayBuffer()))`.
-  5. `generateLessonMaterial(html)`.
-  6. `Response.json(material)`.
-  - try/catch: bad file → 400; conversion/AI failure → 500, logged via
-    `console.error`.
-- **Body-size tradeoff:** direct multipart is simplest and docx are usually
-  small, but Vercel serverless caps the request body at ~4.5 MB. If lesson docs
-  grow (embedded images), switch to the existing client-blob-upload flow
-  (`/api/admin/uploads`) then fetch the blob server-side. Out of scope now.
-
-### 5. Data-hook — `src/data-hooks/use-parse-lesson-material.ts`
-
-```ts
-export function useParseLessonMaterial() {
-  return useMutation<LessonMaterialGeneration, Error, File>({
-    mutationFn: async (file) => {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/admin/lesson-material/parse', {
-        method: 'POST',
-        body: form,
-      });
-      if (!res.ok) throw new Error(`Failed to parse lesson material (${res.status})`);
-      return LessonMaterialGenerationSchema.parse(await res.json());
-    },
-  });
-}
-```
-
-No cache invalidation (nothing persisted).
-
-### 6. Admin UI
-
-- Add a **Material** section to
-  `src/components/admin/lesson-config-dialog-container.tsx`, replacing one of the
-  dashed placeholder panels (`PLACEHOLDER_SECTIONS`).
-- Container `src/components/admin/lesson-config/material-section-container.tsx`:
-  jotai atom for the parsed-material-under-review state, the
-  `useParseLessonMaterial` hook, wiring upload → generate → preview.
-- Presentational component(s): a Base UI + lucide file/dropzone control with a
-  loading state during generation, then a **read-only preview** of the parsed
-  material (text, key points, pro tips, quiz, links, assignments, job of the day,
-  attachments) so the admin can verify the parse worked.
-- Editable form + Save button are **out of scope** (no save endpoint yet).
-
-### 7. Tests
-
-- `src/ai/__tests__/generate-lesson-material.test.ts`: mock `generateText`
-  (as the existing AI tests do), assert `generateLessonMaterial` returns the
-  schema-shaped output and passes the right model/prompt.
-- Route test: the `requireAdmin` → 403 branch and the docx-MIME/size → 400
-  validation branches.
-
-## File change list
-
-| File | Change |
-| --- | --- |
-| `package.json` | add `mammoth` dependency |
-| `src/env.ts` | (optional) add `AI_GATEWAY_API_KEY` to server schema for validation |
-| `src/lib/word-to-html.server.ts` | new — `wordToHtml(buffer)` |
-| `src/types.ts` | new — `LessonMaterialGenerationSchema` / `LessonMaterialGeneration` |
-| `src/ai/prompts/lesson-material.ts` | new — system + user prompt |
-| `src/ai/generate-lesson-material.ts` | new — `generateLessonMaterial(html)` |
-| `src/routes/api/admin/lesson-material.parse.ts` | new — guarded POST route |
-| `src/data-hooks/use-parse-lesson-material.ts` | new — mutation hook |
-| `src/components/admin/lesson-config/material-section-container.tsx` | new — container |
-| `src/components/admin/lesson-config/*.tsx` | new — presentational upload/preview |
-| `src/components/admin/lesson-config-dialog-container.tsx` | edit — add Material section |
-| `src/ai/__tests__/generate-lesson-material.test.ts` | new — unit test |
-| route test | new — guard + validation branches |
-
-## Out of scope (future spec)
-
-- Persisting reviewed material (`upsert` into `lessonMaterialTable`) and a
-  `lesson-material.$lessonSlug` save endpoint.
-- An editable review form (react-hook-form + zod resolver, quiz editor).
-- Linking parsed `attachments` (by name) to `blobFileAssignmentsTable` (the old
-  repo's `getBlobFilesByNames` behavior).
-- PDF ingestion (the old repo also had `convertPdfToHtml`).
+- Linking parsed `attachments` to `blobFileAssignmentsTable`.
+- A `lessonMaterialTable` unique-on-slug migration (delete+insert avoids it).
+- PDF ingestion (old repo's `convertPdfToHtml`).
+- Rich-text/markdown WYSIWYG editing (fields are plain textareas over HTML/markdown).
