@@ -1,4 +1,3 @@
-import { Dialog } from '@base-ui/react/dialog';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
@@ -14,6 +13,10 @@ import {
 import { CourseVideoIntegrationsContainer } from './course-video-integrations-container';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
+import {
+  type ConfigModalSection,
+  SectionedConfigModal,
+} from './sectioned-config-modal';
 
 export const EditCourseDialogContainer = () => {
   const [target, setTarget] = useAtom(editCourseAtom);
@@ -50,17 +53,14 @@ export const EditCourseDialogContainer = () => {
     });
   });
 
-  return (
-    <Dialog.Root open={target !== null} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
-        <Dialog.Popup className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
-          <Dialog.Title className="text-lg font-semibold text-gray-12">
-            Edit course
-          </Dialog.Title>
-          <Dialog.Description className="mt-1 mb-5 text-sm text-gray-11">
-            Update this course's details.
-          </Dialog.Description>
+  const sections: ConfigModalSection[] = [
+    {
+      value: 'basic',
+      title: 'Basic info',
+      content: (
+        // Constrain the form column so inputs don't stretch across the full
+        // 1280px shell.
+        <div className="max-w-2xl">
           <CreateCourseForm
             onSubmit={handleSubmit}
             registerName={form.register('name')}
@@ -76,24 +76,15 @@ export const EditCourseDialogContainer = () => {
                   form.setValue(
                     'imageUrlAvif',
                     next.imageUrlAvif ?? undefined,
-                    {
-                      shouldDirty: true,
-                    },
+                    { shouldDirty: true },
                   );
                   form.setValue(
                     'imageUrlWebp',
                     next.imageUrlWebp ?? undefined,
-                    {
-                      shouldDirty: true,
-                    },
+                    { shouldDirty: true },
                   );
                 }}
               />
-            }
-            videoIntegrations={
-              target && (
-                <CourseVideoIntegrationsContainer courseId={target.id} />
-              )
             }
             errors={{
               name: form.formState.errors.name?.message,
@@ -108,8 +99,27 @@ export const EditCourseDialogContainer = () => {
             onCancel={() => onOpenChange(false)}
             submitLabel="Save changes"
           />
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      ),
+    },
+    {
+      value: 'video',
+      title: 'Video providers',
+      content: target && (
+        <div className="max-w-2xl">
+          <CourseVideoIntegrationsContainer courseId={target.id} />
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <SectionedConfigModal
+      open={target !== null}
+      onOpenChange={onOpenChange}
+      title="Edit course"
+      heading={target?.name ?? ''}
+      sections={sections}
+    />
   );
 };

@@ -8,8 +8,6 @@ interface CreateCourseFormProps {
   registerDescription: UseFormRegisterReturn<'description'>;
   /** Cover-image picker (an ImageUploadFieldContainer), rendered by the container. */
   imageField: React.ReactNode;
-  /** Video-provider credential management (a CourseVideoIntegrationsContainer). Only available once the course exists, so undefined in the create dialog. */
-  videoIntegrations?: React.ReactNode;
   errors: { name?: string; description?: string };
   serverError?: string;
   isPending: boolean;
@@ -29,7 +27,6 @@ export const CreateCourseForm = ({
   registerName,
   registerDescription,
   imageField,
-  videoIntegrations,
   errors,
   serverError,
   isPending,
@@ -115,8 +112,6 @@ export const CreateCourseForm = ({
         </span>
         {imageField}
       </div>
-
-      {videoIntegrations}
 
       {serverError && (
         <p
