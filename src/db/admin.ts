@@ -1,3 +1,4 @@
+import { del } from '@vercel/blob';
 import { asc, desc, eq, inArray, like, or, type SQL, sql } from 'drizzle-orm';
 import type { DBCourse } from '@/db/schema';
 import {
@@ -8,6 +9,7 @@ import {
   userProfileTable,
   userRolesTable,
 } from '@/db/schema';
+import { env } from '@/env';
 import type {
   AdminCourseSummary,
   BoardLesson,
@@ -288,6 +290,30 @@ export async function reorderModule(input: {
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
 }
 
+/** Delete blobs by public URL. Non-fatal: a failure just leaves an orphan. */
+async function deleteBlobs(
+  urls: Array<string | null | undefined>,
+): Promise<void> {
+  const targets = urls.filter((u): u is string => Boolean(u));
+  if (targets.length === 0) return;
+  try {
+    await del(targets, { token: env.BLOB_READ_WRITE_TOKEN });
+  } catch (error) {
+    console.error('Failed to delete blob(s):', error);
+  }
+}
+
+/** Delete previously-stored image blobs that a save has replaced or cleared. */
+async function deleteReplacedImageBlobs(
+  previous: { avif: string | null; webp: string | null },
+  next: { avif: string | null; webp: string | null },
+): Promise<void> {
+  const stale: Array<string | null> = [];
+  if (previous.avif && previous.avif !== next.avif) stale.push(previous.avif);
+  if (previous.webp && previous.webp !== next.webp) stale.push(previous.webp);
+  await deleteBlobs(stale);
+}
+
 export async function updateModule(
   moduleId: number,
   input: {
@@ -296,6 +322,14 @@ export async function updateModule(
     imageUrlWebp?: string | null;
   },
 ): Promise<{ id: number; name: string } | null> {
+  const [existing] = await db
+    .select({
+      imageUrlAvif: modulesTable.imageUrlAvif,
+      imageUrlWebp: modulesTable.imageUrlWebp,
+    })
+    .from(modulesTable)
+    .where(eq(modulesTable.id, moduleId));
+
   const [updated] = await db
     .update(modulesTable)
     .set({
@@ -306,15 +340,35 @@ export async function updateModule(
     })
     .where(eq(modulesTable.id, moduleId))
     .returning({ id: modulesTable.id, name: modulesTable.name });
-  return updated ?? null;
+  if (!updated) return null;
+
+  await deleteReplacedImageBlobs(
+    {
+      avif: existing?.imageUrlAvif ?? null,
+      webp: existing?.imageUrlWebp ?? null,
+    },
+    { avif: input.imageUrlAvif ?? null, webp: input.imageUrlWebp ?? null },
+  );
+  return updated;
 }
 
 export async function deleteModule(moduleId: number): Promise<boolean> {
+  const [existing] = await db
+    .select({
+      imageUrlAvif: modulesTable.imageUrlAvif,
+      imageUrlWebp: modulesTable.imageUrlWebp,
+    })
+    .from(modulesTable)
+    .where(eq(modulesTable.id, moduleId));
+
   const [deleted] = await db
     .delete(modulesTable)
     .where(eq(modulesTable.id, moduleId))
     .returning({ id: modulesTable.id });
-  return Boolean(deleted);
+  if (!deleted) return false;
+
+  await deleteBlobs([existing?.imageUrlAvif, existing?.imageUrlWebp]);
+  return true;
 }
 
 /**
@@ -325,6 +379,14 @@ export async function updateCourse(
   courseId: number,
   input: UpdateCourseInput,
 ): Promise<DBCourse | null> {
+  const [existing] = await db
+    .select({
+      imageUrlAvif: coursesTable.imageUrlAvif,
+      imageUrlWebp: coursesTable.imageUrlWebp,
+    })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, courseId));
+
   const [updated] = await db
     .update(coursesTable)
     .set({
@@ -336,14 +398,47 @@ export async function updateCourse(
     })
     .where(eq(coursesTable.id, courseId))
     .returning();
-  return updated ?? null;
+  if (!updated) return null;
+
+  await deleteReplacedImageBlobs(
+    {
+      avif: existing?.imageUrlAvif ?? null,
+      webp: existing?.imageUrlWebp ?? null,
+    },
+    { avif: updated.imageUrlAvif, webp: updated.imageUrlWebp },
+  );
+  return updated;
 }
 
 /** Delete a course; its modules and lessons cascade via FK. */
 export async function deleteCourse(courseId: number): Promise<boolean> {
+  // Collect the course cover and every cascade-deleted module cover so their
+  // blobs can be removed after the row is gone.
+  const [course] = await db
+    .select({
+      imageUrlAvif: coursesTable.imageUrlAvif,
+      imageUrlWebp: coursesTable.imageUrlWebp,
+    })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, courseId));
+  const moduleImages = await db
+    .select({
+      imageUrlAvif: modulesTable.imageUrlAvif,
+      imageUrlWebp: modulesTable.imageUrlWebp,
+    })
+    .from(modulesTable)
+    .where(eq(modulesTable.courseId, courseId));
+
   const [deleted] = await db
     .delete(coursesTable)
     .where(eq(coursesTable.id, courseId))
     .returning({ id: coursesTable.id });
-  return Boolean(deleted);
+  if (!deleted) return false;
+
+  await deleteBlobs([
+    course?.imageUrlAvif,
+    course?.imageUrlWebp,
+    ...moduleImages.flatMap((m) => [m.imageUrlAvif, m.imageUrlWebp]),
+  ]);
+  return true;
 }
