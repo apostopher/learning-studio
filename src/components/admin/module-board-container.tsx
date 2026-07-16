@@ -33,7 +33,9 @@ import type {
 } from '@/lib/admin-schemas';
 import { moduleDndId, parseDndId } from '@/lib/dnd-ids';
 import { CreateLessonDialogContainer } from './create-lesson-dialog-container';
+import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import { DeleteModuleDialogContainer } from './delete-module-dialog-container';
+import { EditLessonDialogContainer } from './edit-lesson-dialog-container';
 import { EditModuleDialogContainer } from './edit-module-dialog-container';
 import { LessonCard } from './lesson-card';
 import { ModuleColumn } from './module-column';
@@ -300,6 +302,8 @@ export const ModuleBoardContainer = ({
       <CreateLessonDialogContainer courseId={courseId} />
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
+      <EditLessonDialogContainer courseId={courseId} />
+      <DeleteLessonDialogContainer courseId={courseId} />
     </DndContext>
   );
 };

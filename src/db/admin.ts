@@ -333,6 +333,26 @@ export async function moveLesson(input: {
     : null;
 }
 
+export async function updateLessonName(
+  lessonId: number,
+  name: string,
+): Promise<{ id: number; name: string } | null> {
+  const [updated] = await db
+    .update(lessonsTable)
+    .set({ name, updatedAt: sql`now()` })
+    .where(eq(lessonsTable.id, lessonId))
+    .returning({ id: lessonsTable.id, name: lessonsTable.name });
+  return updated ?? null;
+}
+
+export async function deleteLesson(lessonId: number): Promise<boolean> {
+  const [deleted] = await db
+    .delete(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId))
+    .returning({ id: lessonsTable.id });
+  return Boolean(deleted);
+}
+
 // Grace period so a just-uploaded-but-not-yet-saved cover isn't swept while the
 // admin is still filling in the form.
 const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;

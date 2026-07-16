@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { moveLesson } from '@/db/admin';
+import { deleteLesson, moveLesson, updateLessonName } from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
-import { moveLessonInputSchema } from '@/lib/admin-schemas';
+import {
+  moveLessonInputSchema,
+  renameLessonInputSchema,
+} from '@/lib/admin-schemas';
 
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
 async function guard(request: Request): Promise<Response | null> {
@@ -38,6 +41,13 @@ export const Route = createFileRoute('/api/admin/lessons/$lessonId')({
           return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
         }
 
+        const rename = renameLessonInputSchema.safeParse(body);
+        if (rename.success) {
+          const updated = await updateLessonName(lessonId, rename.data.name);
+          if (!updated) return new Response('Not found', { status: 404 });
+          return Response.json(updated);
+        }
+
         const move = moveLessonInputSchema.safeParse(body);
         if (move.success) {
           const updated = await moveLesson({
@@ -51,6 +61,18 @@ export const Route = createFileRoute('/api/admin/lessons/$lessonId')({
         }
 
         return Response.json({ error: 'Invalid body' }, { status: 400 });
+      },
+
+      DELETE: async ({ request, params }) => {
+        const denied = await guard(request);
+        if (denied) return denied;
+        const lessonId = parseLessonId(params.lessonId);
+        if (lessonId === null) {
+          return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
+        }
+        const deleted = await deleteLesson(lessonId);
+        if (!deleted) return new Response('Not found', { status: 404 });
+        return new Response(null, { status: 204 });
       },
     },
   },
