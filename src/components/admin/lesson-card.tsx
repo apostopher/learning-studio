@@ -40,19 +40,6 @@ export const LessonCard = ({
         </button>
       </div>
 
-      {!lesson.isConfigured && onConfigure && (
-        <div className="flex items-center justify-between gap-2 border-t border-gray-6 px-3 py-2">
-          <span className="text-xs text-gray-10">Lesson is not configured</span>
-          <button
-            type="button"
-            onClick={onConfigure}
-            className="shrink-0 rounded-md bg-apple-9 px-2.5 py-1 text-xs font-medium text-apple-contrast transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-1"
-          >
-            Configure
-          </button>
-        </div>
-      )}
-
       {hasActions && (
         <div className="flex items-center justify-end gap-1 border-t border-gray-6 px-2 py-1">
           {lesson.isConfigured && onConfigure && (
@@ -70,6 +57,19 @@ export const LessonCard = ({
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </TooltipIconButton>
+        </div>
+      )}
+
+      {!lesson.isConfigured && onConfigure && (
+        <div className="flex items-center justify-between gap-2 border-t border-gray-6 px-3 py-2">
+          <span className="text-xs text-gray-10">Lesson is not configured</span>
+          <button
+            type="button"
+            onClick={onConfigure}
+            className="shrink-0 rounded-md bg-apple-9 px-2.5 py-1 text-xs font-medium text-apple-contrast transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-1"
+          >
+            Configure
+          </button>
         </div>
       )}
     </div>
