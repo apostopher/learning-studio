@@ -1,11 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import {
-  configureLessonIdAtom,
-  deleteLessonAtom,
-  editLessonAtom,
-} from '@/atoms/admin';
+import { configureLessonIdAtom, deleteLessonAtom } from '@/atoms/admin';
 import type { BoardLesson } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
 import { lessonDndId } from '@/lib/dnd-ids';
@@ -31,7 +27,6 @@ export const SortableLessonCard = ({
     data: { type: 'lesson', lessonId: lesson.id, moduleId },
   });
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
-  const setEditLesson = useSetAtom(editLessonAtom);
   const setDeleteLesson = useSetAtom(deleteLessonAtom);
 
   return (
@@ -49,8 +44,7 @@ export const SortableLessonCard = ({
       <LessonCard
         lesson={lesson}
         dragHandleProps={{ ...attributes, ...listeners }}
-        onConfigure={() => setConfigureLessonId(lesson.id)}
-        onEdit={() => setEditLesson({ id: lesson.id, name: lesson.name })}
+        onEdit={() => setConfigureLessonId(lesson.id)}
         onDelete={() => setDeleteLesson({ id: lesson.id, name: lesson.name })}
       />
     </div>

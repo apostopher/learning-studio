@@ -49,14 +49,9 @@ export const LessonConfigDialogContainer = ({
           className="fixed inset-0 z-40 m-auto grid h-[85vh] max-h-[calc(100vh-2rem)] w-[var(--modal-dialog-width)] max-w-[calc(100vw-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl"
         >
           <div className="flex items-center justify-between gap-4 border-b border-gray-6 px-6 py-4">
-            <div className="min-w-0">
-              <Dialog.Title className="text-lg font-semibold text-gray-12">
-                Configure lesson
-              </Dialog.Title>
-              <Dialog.Description className="mt-0.5 truncate text-sm text-gray-11">
-                {lesson?.name ?? ''}
-              </Dialog.Description>
-            </div>
+            <Dialog.Title className="text-lg font-semibold text-gray-12">
+              Configure lesson
+            </Dialog.Title>
             <Dialog.Close className="shrink-0 rounded-md p-1.5 text-gray-11 transition-colors hover:bg-gray-4 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
               <X className="h-5 w-5" aria-hidden="true" />
             </Dialog.Close>
@@ -88,8 +83,11 @@ export const LessonConfigDialogContainer = ({
               </Accordion.Root>
             </aside>
 
-            <main className="min-h-0 overflow-y-auto p-6">
-              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-6 p-8 text-center text-sm text-gray-10">
+            <main className="flex min-h-0 flex-col gap-6 overflow-y-auto p-6">
+              <h2 className="break-words text-2xl font-semibold text-gray-12">
+                {lesson?.name ?? ''}
+              </h2>
+              <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-gray-6 p-8 text-center text-sm text-gray-10">
                 Select a section on the left to configure this lesson.
               </div>
             </main>

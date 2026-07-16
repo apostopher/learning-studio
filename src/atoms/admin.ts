@@ -12,8 +12,6 @@ export const activeDragModuleIdAtom = atom<number | null>(null);
 /** Id of the lesson currently being dragged, or null. */
 export const activeDragLessonIdAtom = atom<number | null>(null);
 
-/** The lesson being edited (id + current name), or null when closed. */
-export const editLessonAtom = atom<{ id: number; name: string } | null>(null);
 /** The lesson pending deletion (id + name), or null when closed. */
 export const deleteLessonAtom = atom<{ id: number; name: string } | null>(null);
 
