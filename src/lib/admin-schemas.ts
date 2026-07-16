@@ -132,3 +132,43 @@ export const moveLessonInputSchema = z.object({
   nextLessonId: z.number().int().positive().nullable(),
 });
 export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;
+
+export const providerIdSchema = z.enum(['mux', 'synthesia']);
+export type ProviderId = z.infer<typeof providerIdSchema>;
+
+export const muxCredentialInputSchema = z.object({
+  provider: z.literal('mux'),
+  keyId: z.string().trim().min(1),
+  privateKey: z.string().trim().min(1),
+});
+export const synthesiaCredentialInputSchema = z.object({
+  provider: z.literal('synthesia'),
+  apiKey: z.string().trim().min(1),
+});
+export const saveCredentialInputSchema = z.discriminatedUnion('provider', [
+  muxCredentialInputSchema,
+  synthesiaCredentialInputSchema,
+]);
+export type SaveCredentialInput = z.infer<typeof saveCredentialInputSchema>;
+
+/** Client-safe summary — never includes secrets. */
+export const credentialSummarySchema = z.object({
+  provider: providerIdSchema,
+  configured: z.literal(true),
+  display: z.record(z.string(), z.unknown()),
+  lastValidatedAt: z.coerce.date().nullable(),
+});
+export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
+
+export const setLessonVideoInputSchema = z.object({
+  provider: providerIdSchema,
+  ref: z.string().trim().min(1),
+});
+export type SetLessonVideoInput = z.infer<typeof setLessonVideoInputSchema>;
+
+export const lessonPlaybackSchema = z.object({
+  url: z.string().url(),
+  kind: z.enum(['hls', 'file']),
+  expiresAt: z.number().nullable(),
+});
+export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
