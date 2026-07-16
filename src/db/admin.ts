@@ -213,6 +213,8 @@ export async function createLesson(input: {
     rank: Number(created.rank),
     isAvailable: created.isAvailable,
     isConfigured: created.videoId !== null,
+    videoProvider: created.videoProvider as ProviderId | null,
+    videoRef: created.videoRef,
   };
 }
 
@@ -256,6 +258,7 @@ export async function getCourseBoard(
           rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
           videoId: lessonsTable.videoId,
+          videoProvider: lessonsTable.videoProvider,
           videoRef: lessonsTable.videoRef,
         })
         .from(lessonsTable)
@@ -286,6 +289,8 @@ export async function getCourseBoard(
         rank: Number(l.rank),
         isAvailable: l.isAvailable,
         isConfigured: l.videoRef !== null || l.videoId !== null,
+        videoProvider: l.videoProvider as ProviderId | null,
+        videoRef: l.videoRef,
       })),
     })),
   };

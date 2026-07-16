@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 
 import { configureLessonIdAtom } from '@/atoms/admin';
 import type { BoardLesson } from '@/lib/admin-schemas';
+import { VideoSectionContainer } from './lesson-config/video-section-container';
 
 /**
  * Sidebar sections. Each is a vertical tab whose content renders in the main
@@ -28,8 +29,10 @@ const SECTIONS: { value: string; title: string; hint: string }[] = [
 
 /** Big JIRA-style lesson configuration modal (fixed-width tab sidebar + main). */
 export const LessonConfigDialogContainer = ({
+  courseId,
   lessons,
 }: {
+  courseId: number;
   lessons: BoardLesson[];
 }) => {
   const [lessonId, setLessonId] = useAtom(configureLessonIdAtom);
@@ -78,15 +81,30 @@ export const LessonConfigDialogContainer = ({
               <h2 className="break-words font-semibold text-2xl text-gray-12">
                 {lesson?.name ?? ''}
               </h2>
-              {SECTIONS.map((section) => (
-                <Tabs.Panel
-                  key={section.value}
-                  value={section.value}
-                  className="flex flex-1 items-center justify-center rounded-lg border border-gray-6 border-dashed p-8 text-center text-gray-10 text-sm"
-                >
-                  {section.hint}
-                </Tabs.Panel>
-              ))}
+              {SECTIONS.map((section) =>
+                section.value === 'video' ? (
+                  <Tabs.Panel
+                    key={section.value}
+                    value={section.value}
+                    className="flex-1"
+                  >
+                    {lesson && (
+                      <VideoSectionContainer
+                        courseId={courseId}
+                        lesson={lesson}
+                      />
+                    )}
+                  </Tabs.Panel>
+                ) : (
+                  <Tabs.Panel
+                    key={section.value}
+                    value={section.value}
+                    className="flex flex-1 items-center justify-center rounded-lg border border-gray-6 border-dashed p-8 text-center text-gray-10 text-sm"
+                  >
+                    {section.hint}
+                  </Tabs.Panel>
+                ),
+              )}
             </main>
           </Tabs.Root>
         </Dialog.Popup>

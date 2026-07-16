@@ -1,4 +1,5 @@
 import { atom } from 'jotai';
+import type { ProviderId } from '@/lib/admin-schemas';
 
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);
@@ -41,3 +42,19 @@ export const editCourseAtom = atom<{
 } | null>(null);
 /** The course pending deletion (id + name), or null when closed. */
 export const deleteCourseAtom = atom<{ id: number; name: string } | null>(null);
+
+/**
+ * Provider/ref detected from a video URL the admin just typed into the Video
+ * tab but hasn't been confirmed by the board yet (the source of truth is the
+ * lesson record once `useSetLessonVideo` succeeds and the board refetches).
+ * Only one lesson-config modal is open at a time, so a single atom — not a
+ * family — is enough. Reset when the modal switches lessons or the draft is
+ * confirmed by the refetched board.
+ */
+export const videoDraftDetectionAtom = atom<{
+  provider: ProviderId;
+  ref: string;
+} | null>(null);
+
+/** Whether the Video tab is showing the "replace video URL" form over an already-configured video. */
+export const videoReplaceModeAtom = atom(false);

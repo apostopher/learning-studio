@@ -73,6 +73,9 @@ export const renameLessonInputSchema = z.object({
 });
 export type RenameLessonInput = z.infer<typeof renameLessonInputSchema>;
 
+export const providerIdSchema = z.enum(['mux', 'synthesia']);
+export type ProviderId = z.infer<typeof providerIdSchema>;
+
 export const boardLessonSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -81,6 +84,8 @@ export const boardLessonSchema = z.object({
   isAvailable: z.boolean(),
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
+  videoProvider: providerIdSchema.nullable(),
+  videoRef: z.string().nullable(),
 });
 export type BoardLesson = z.infer<typeof boardLessonSchema>;
 
@@ -132,9 +137,6 @@ export const moveLessonInputSchema = z.object({
   nextLessonId: z.number().int().positive().nullable(),
 });
 export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;
-
-export const providerIdSchema = z.enum(['mux', 'synthesia']);
-export type ProviderId = z.infer<typeof providerIdSchema>;
 
 export const muxCredentialInputSchema = z.object({
   provider: z.literal('mux'),
