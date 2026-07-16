@@ -58,57 +58,47 @@ export const EditCourseDialogContainer = () => {
       value: 'basic',
       title: 'Basic info',
       content: (
-        // Constrain the form column so inputs don't stretch across the full
-        // 1280px shell.
-        <div className="max-w-2xl">
-          <CreateCourseForm
-            onSubmit={handleSubmit}
-            registerName={form.register('name')}
-            registerDescription={form.register('description')}
-            imageField={
-              <ImageUploadFieldContainer
-                pathPrefix="courses"
-                value={{
-                  imageUrlAvif: form.watch('imageUrlAvif') ?? null,
-                  imageUrlWebp: form.watch('imageUrlWebp') ?? null,
-                }}
-                onChange={(next) => {
-                  form.setValue(
-                    'imageUrlAvif',
-                    next.imageUrlAvif ?? undefined,
-                    { shouldDirty: true },
-                  );
-                  form.setValue(
-                    'imageUrlWebp',
-                    next.imageUrlWebp ?? undefined,
-                    { shouldDirty: true },
-                  );
-                }}
-              />
-            }
-            errors={{
-              name: form.formState.errors.name?.message,
-              description: form.formState.errors.description?.message,
-            }}
-            serverError={
-              updateCourse.isError
-                ? 'Could not save. Please try again.'
-                : undefined
-            }
-            isPending={updateCourse.isPending}
-            onCancel={() => onOpenChange(false)}
-            submitLabel="Save changes"
-          />
-        </div>
+        <CreateCourseForm
+          onSubmit={handleSubmit}
+          registerName={form.register('name')}
+          registerDescription={form.register('description')}
+          imageField={
+            <ImageUploadFieldContainer
+              pathPrefix="courses"
+              value={{
+                imageUrlAvif: form.watch('imageUrlAvif') ?? null,
+                imageUrlWebp: form.watch('imageUrlWebp') ?? null,
+              }}
+              onChange={(next) => {
+                form.setValue('imageUrlAvif', next.imageUrlAvif ?? undefined, {
+                  shouldDirty: true,
+                });
+                form.setValue('imageUrlWebp', next.imageUrlWebp ?? undefined, {
+                  shouldDirty: true,
+                });
+              }}
+            />
+          }
+          errors={{
+            name: form.formState.errors.name?.message,
+            description: form.formState.errors.description?.message,
+          }}
+          serverError={
+            updateCourse.isError
+              ? 'Could not save. Please try again.'
+              : undefined
+          }
+          isPending={updateCourse.isPending}
+          onCancel={() => onOpenChange(false)}
+          submitLabel="Save changes"
+        />
       ),
     },
     {
       value: 'video',
       title: 'Video providers',
       content: target && (
-        <div className="max-w-2xl">
-          <CourseVideoIntegrationsContainer courseId={target.id} />
-        </div>
+        <CourseVideoIntegrationsContainer courseId={target.id} />
       ),
     },
   ];
@@ -120,6 +110,10 @@ export const EditCourseDialogContainer = () => {
       title="Edit course"
       heading={target?.name ?? ''}
       sections={sections}
+      // Narrower than the 1280px default: this modal's form content is
+      // slim, so a wide shell would just leave dead space on the right.
+      width="880px"
+      sidebarWidth="220px"
     />
   );
 };

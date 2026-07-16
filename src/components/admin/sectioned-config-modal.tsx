@@ -22,6 +22,8 @@ interface SectionedConfigModalProps {
   sections: ConfigModalSection[];
   /** Overall modal width; defaults to 1280px. */
   width?: string;
+  /** Sidebar (tab list) column width; defaults to 320px. */
+  sidebarWidth?: string;
 }
 
 /**
@@ -38,6 +40,7 @@ export const SectionedConfigModal = ({
   heading,
   sections,
   width = '1280px',
+  sidebarWidth = '320px',
 }: SectionedConfigModalProps) => {
   const firstValue = sections[0]?.value;
 
@@ -62,7 +65,8 @@ export const SectionedConfigModal = ({
             <Tabs.Root
               defaultValue={firstValue}
               orientation="vertical"
-              className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)]"
+              style={{ gridTemplateColumns: `${sidebarWidth} minmax(0, 1fr)` }}
+              className="grid min-h-0"
             >
               <Tabs.List className="flex min-h-0 flex-col overflow-y-auto border-gray-6 border-e bg-gray-1">
                 {sections.map((section) => (
