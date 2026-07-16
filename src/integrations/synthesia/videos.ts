@@ -1,34 +1,37 @@
-import { env } from "@/env";
-import { cacheWithRedis } from "@/integrations/upstash/redis";
+import { env } from '@/env';
+import { cacheWithRedis } from '@/integrations/upstash/redis';
 import {
-  VideoResponseSchema,
+  isVideoAvailable,
   type VideoResponse,
+  VideoResponseSchema,
   type VideosPage,
   VideosPageSchema,
-  isVideoAvailable,
-} from "@/types";
+} from '@/types';
 
-export async function getVideoDetails(videoId: string) {
+export async function getVideoDetails(
+  videoId: string,
+  apiKey: string = env.SYNTHESIA_API_KEY,
+) {
   const response = await fetch(
     `https://api.synthesia.io/v2/videos/${videoId}`,
     {
-      method: "GET",
+      method: 'GET',
       headers: {
-        Accept: "application/json",
-        Authorization: env.SYNTHESIA_API_KEY,
+        Accept: 'application/json',
+        Authorization: apiKey,
       },
-      cache: "no-store",
+      cache: 'no-store',
     },
   );
   if (!response.ok) {
-    throw new Error("GET_VIDEO_URL_ERROR");
+    throw new Error('GET_VIDEO_URL_ERROR');
   }
   const data = await response.json();
   return VideoResponseSchema.parse(data);
 }
 
 export const getVideoDetailsWithCache = cacheWithRedis<string, VideoResponse>(
-  "video-details",
+  'video-details',
   getVideoDetails,
   (result) => {
     if (isVideoAvailable(result)) {
@@ -50,16 +53,16 @@ export async function getVideosByPage(page: number): Promise<VideosPage> {
   const response = await fetch(
     `https://api.synthesia.io/v2/videos?limit=${limit}&offset=${offset}`,
     {
-      method: "GET",
+      method: 'GET',
       headers: {
-        Accept: "application/json",
+        Accept: 'application/json',
         Authorization: env.SYNTHESIA_API_KEY,
       },
-      cache: "no-store",
+      cache: 'no-store',
     },
   );
   if (!response.ok) {
-    throw new Error("GET_VIDEOS_PAGE_ERROR");
+    throw new Error('GET_VIDEOS_PAGE_ERROR');
   }
   const data = await response.json();
   return VideosPageSchema.parse(data);
@@ -127,7 +130,7 @@ export async function getAllVideos() {
 export const getAllVideosWithCache = cacheWithRedis<
   string,
   Record<string, VideoResponse>
->("all-videos", getAllVideos, (videos) => {
+>('all-videos', getAllVideos, (videos) => {
   const firstVideo = Object.values(videos).find((videoDetails) => {
     if (isVideoAvailable(videoDetails)) {
       return videoDetails.download;
@@ -149,7 +152,7 @@ export const getAllVideosWithCache = cacheWithRedis<
 export function getVideoExpiry(videoURL: string): number | null {
   try {
     const url = new URL(videoURL);
-    const expires = url.searchParams.get("Expires");
+    const expires = url.searchParams.get('Expires');
     if (!expires) return null;
     const expiresNum = Number(expires);
     // give 1 minute buffer
@@ -166,7 +169,7 @@ export function getVideoExpiry(videoURL: string): number | null {
 export function getVideoIdFromURL(url: string): string | null {
   try {
     const parsed = new URL(url);
-    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
     return pathParts.length > 0 ? pathParts[0] : null;
   } catch {
     return null; // Invalid URL
