@@ -53,7 +53,7 @@ export const Route = createFileRoute(
         const parsed = saveCredentialInputSchema.safeParse(body);
         if (!parsed.success) {
           return Response.json(
-            { error: parsed.error.flatten() },
+            { error: 'Invalid credential fields' },
             { status: 400 },
           );
         }

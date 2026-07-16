@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PROVIDER_IDS } from '@/lib/video-providers';
 
 export const ADMIN_ROLE = 'admin';
 
@@ -73,7 +74,9 @@ export const renameLessonInputSchema = z.object({
 });
 export type RenameLessonInput = z.infer<typeof renameLessonInputSchema>;
 
-export const providerIdSchema = z.enum(['mux', 'synthesia']);
+// Canonical id list lives in PROVIDER_IDS (src/lib/video-providers); derive
+// the schema from it so adding a provider can't drift between the two.
+export const providerIdSchema = z.enum(PROVIDER_IDS);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
 export const boardLessonSchema = z.object({

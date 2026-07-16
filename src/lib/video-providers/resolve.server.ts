@@ -2,8 +2,8 @@ import Mux from '@mux/mux-node';
 import {
   getVideoDetails,
   getVideoExpiry,
-} from '@/integrations/synthesia/videos';
-import { isVideoAvailable } from '@/types';
+} from '../../integrations/synthesia/videos';
+import { isVideoAvailable } from '../../types';
 import { muxCredentialSchema } from './mux';
 import { synthesiaCredentialSchema } from './synthesia';
 import type { ProviderId } from './types';

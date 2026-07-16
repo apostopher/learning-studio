@@ -41,7 +41,7 @@ export const Route = createFileRoute('/api/admin/lessons/$lessonId/video')({
         const parsed = setLessonVideoInputSchema.safeParse(body);
         if (!parsed.success) {
           return Response.json(
-            { error: parsed.error.flatten() },
+            { error: 'Invalid video input' },
             { status: 400 },
           );
         }
