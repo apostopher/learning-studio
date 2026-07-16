@@ -176,8 +176,22 @@ Flow:
    **credential form** (fields from `credentialSchema`) with a **Test** action;
    on save (`PUT …/credentials/:provider`), re-resolve → preview.
 
+Credential entry is thus **one-time per (course, provider)**: step 4 fires only
+until the course has that provider's creds; afterwards adding a video for that
+provider goes straight to the preview.
+
 Preview player: HLS-capable `<video>` (hls.js for `.m3u8`; native for Synthesia
 `file`). hls.js is a new client dep (lazy-loaded, admin-only).
+
+### Credential management in the course edit dialog
+
+The same credential form is also surfaced persistently in the **course edit
+dialog** as a "Video integrations" section: lists each provider with its
+configured state (via the credentials GET `display`), and lets the admin
+**add / update / remove** credentials anytime — reusing
+`PUT`/`DELETE …/courses/:id/credentials/:provider`. This is the durable place to
+rotate keys; the contextual step-4 form is just a convenience for the first
+video.
 
 ## Dependencies / env
 
@@ -202,6 +216,9 @@ Preview player: HLS-capable `<video>` (hls.js for `.m3u8`; native for Synthesia
 - `src/components/admin/lesson-config/video-section-container.tsx` (+
   presentational `video-preview`, `video-url-form`, `provider-credential-form`,
   `provider-how-to`).
+- `src/components/admin/course-video-integrations-container.tsx` — the
+  persistent add/update/remove-credentials section rendered in the course edit
+  dialog (reuses `provider-credential-form` / `provider-how-to`).
 
 ## Testing
 
