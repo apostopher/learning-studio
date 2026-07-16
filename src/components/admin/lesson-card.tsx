@@ -2,6 +2,7 @@ import { GripVertical, Pencil, Trash2 } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { BoardLesson } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
+import { ClampedText } from '../clamped-text';
 import { TooltipIconButton } from './tooltip-icon-button';
 
 export const LessonCard = ({
@@ -24,7 +25,7 @@ export const LessonCard = ({
         )}
         aria-hidden="true"
       />
-      <span className="min-w-0 flex-1 line-clamp-2">{lesson.name}</span>
+      <ClampedText text={lesson.name} className="min-w-0 flex-1" />
       {onEdit && (
         <TooltipIconButton label="Edit lesson" onClick={onEdit}>
           <Pencil className="h-4 w-4" aria-hidden="true" />

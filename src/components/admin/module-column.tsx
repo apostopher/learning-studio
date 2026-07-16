@@ -1,6 +1,7 @@
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardModule } from '@/lib/admin-schemas';
+import { ClampedText } from '../clamped-text';
 import { LessonCard } from './lesson-card';
 import { TooltipIconButton } from './tooltip-icon-button';
 
@@ -23,9 +24,10 @@ export const ModuleColumn = ({
   return (
     <section className="course-board__column flex w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
       <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
-        <h3 className="min-w-0 flex-1 line-clamp-2 text-sm font-semibold text-gray-12">
-          {mod.name}
-        </h3>
+        <ClampedText
+          text={mod.name}
+          className="min-w-0 flex-1 text-sm font-semibold text-gray-12"
+        />
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
             <Plus className="h-4 w-4" aria-hidden="true" />
