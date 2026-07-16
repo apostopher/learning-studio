@@ -24,7 +24,7 @@ export const LessonCard = ({
         )}
         aria-hidden="true"
       />
-      <span className="min-w-0 flex-1 truncate">{lesson.name}</span>
+      <span className="min-w-0 flex-1 line-clamp-2">{lesson.name}</span>
       {onEdit && (
         <TooltipIconButton label="Edit lesson" onClick={onEdit}>
           <Pencil className="h-4 w-4" aria-hidden="true" />
