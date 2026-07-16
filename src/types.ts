@@ -1,14 +1,14 @@
-import { z } from "zod";
-import type { UIMessage } from "ai";
+import type { UIMessage } from 'ai';
+import { z } from 'zod';
 
-export const SubscriptionSchema = z.enum(["associate", "candidate", "rpoc"]);
+export const SubscriptionSchema = z.enum(['associate', 'candidate', 'rpoc']);
 export const SubscriptionsSchema = z.array(SubscriptionSchema);
 export type SubscriptionType = z.infer<typeof SubscriptionSchema>;
 
 // Video schemas
 export const VideoAvailableSchema = z.object({
   id: z.string(),
-  status: z.literal("complete"),
+  status: z.literal('complete'),
   download: z.url().nullable(),
   captions: z.object({
     srt: z.string().url().nullable(),
@@ -24,7 +24,7 @@ export const VideoAvailableSchema = z.object({
 
 export const VideoNotReadySchema = z.object({
   id: z.string(),
-  status: z.enum(["in_progress", "error", "rejected"]).nullable(),
+  status: z.enum(['in_progress', 'error', 'rejected']).nullable(),
 });
 
 export const VideoResponseSchema = z.union([
@@ -51,8 +51,8 @@ export const VideosPageSchema = z.object({
 export type VideosPage = z.infer<typeof VideosPageSchema>;
 
 export const OtherVideoIdSchema = z.object({
-  lang: z.enum(["FR", "JP"]),
-  videoId: z.url("Video ID must be a valid URL"),
+  lang: z.enum(['FR', 'JP']),
+  videoId: z.url('Video ID must be a valid URL'),
 });
 export type OtherVideoId = z.infer<typeof OtherVideoIdSchema>;
 
@@ -61,7 +61,7 @@ export type OtherVideoIds = z.infer<typeof OtherVideoIdsSchema>;
 
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
-  value: z.string().describe("The value of the option in markdown format"),
+  value: z.string().describe('The value of the option in markdown format'),
 });
 export type CourseLessonQuizOption = z.infer<
   typeof CourseLessonQuizOptionSchema
@@ -69,9 +69,9 @@ export type CourseLessonQuizOption = z.infer<
 
 export const CourseLessonQuizQuestionSchema = z.object({
   id: z.string(),
-  question: z.string().describe("The question of the quiz in markdown format"),
+  question: z.string().describe('The question of the quiz in markdown format'),
   options: z.array(CourseLessonQuizOptionSchema),
-  correctOptionId: z.string().describe("The id of the correct option"),
+  correctOptionId: z.string().describe('The id of the correct option'),
 });
 export type CourseLessonQuizQuestion = z.infer<
   typeof CourseLessonQuizQuestionSchema
@@ -109,12 +109,24 @@ export const CourseLessonMaterialSchema = z.object({
 });
 export type CourseLessonMaterial = z.infer<typeof CourseLessonMaterialSchema>;
 
+/**
+ * Shape the docx parser returns and the edit form uses — the canonical lesson
+ * material minus the DB `id`. Prose fields are HTML; quiz question/option
+ * values are markdown (see the quiz schema).
+ */
+export const LessonMaterialGenerationSchema = CourseLessonMaterialSchema.omit({
+  id: true,
+});
+export type LessonMaterialGeneration = z.infer<
+  typeof LessonMaterialGenerationSchema
+>;
+
 export const CourseLessonDependencySchema = z.object({
   moduleSlug: z
     .string()
     .optional()
     .describe(
-      "The slug of the module. if not mentioned then its the current module",
+      'The slug of the module. if not mentioned then its the current module',
     ),
   lessonSlug: z.string(),
 });
@@ -185,8 +197,8 @@ export const CourseSchema = z.object({
 export type Course = z.infer<typeof CourseSchema>;
 
 export const UserPublicMetadataSchema = z.object({
-  subscriptions: z.array(SubscriptionSchema).default(["associate"]),
-  role: z.enum(["admin", "user"]).default("user"),
+  subscriptions: z.array(SubscriptionSchema).default(['associate']),
+  role: z.enum(['admin', 'user']).default('user'),
 });
 export type UserPublicMetadata = z.infer<typeof UserPublicMetadataSchema>;
 
@@ -216,7 +228,7 @@ export type Articles = z.infer<typeof ArticlesSchema>;
 
 const LatestNewsSchema = z.object({
   sourceId: z.number(),
-  title: z.string().nullable().default(""),
+  title: z.string().nullable().default(''),
   image: z.string().nullable(),
   description: z.string().nullable(),
   linkURL: z.string().nullable(),
@@ -247,7 +259,7 @@ export const traceMetadataSchema = z.object({
 });
 export type TraceMetadata = z.infer<typeof traceMetadataSchema>;
 
-export type MessagePart = NonNullable<UIMessage["parts"]>[number];
+export type MessagePart = NonNullable<UIMessage['parts']>[number];
 
 export const RoomMessageSchema = z.object({
   text: z.string(),
@@ -263,10 +275,10 @@ export const PilotLicenseSchema = z.object({
 export const PilotLicensesSchema = z.array(PilotLicenseSchema);
 export type PilotLicenses = z.infer<typeof PilotLicensesSchema>;
 
-export const VisibilitySchema = z.enum(["PUBLIC", "PRIVATE"]);
+export const VisibilitySchema = z.enum(['PUBLIC', 'PRIVATE']);
 
 export const ProfileItemVisibilitySchema = z.object({
-  visibility: VisibilitySchema.default("PRIVATE"),
+  visibility: VisibilitySchema.default('PRIVATE'),
   name: z.string(),
 });
 
@@ -320,7 +332,7 @@ export const PriceSchema = z.object({
   id: z.string(),
   unit_amount: z.number().nullable(),
   currency: z.string(),
-  type: z.enum(["one_time", "recurring"]),
+  type: z.enum(['one_time', 'recurring']),
   interval: z.string().nullable().optional(),
   interval_count: z.number().nullable().optional(),
 });
@@ -352,15 +364,15 @@ export function isProductWithPricesArray(
 }
 
 export const AIWriterDataRequestSchema = z.object({
-  type: z.literal("data-request"),
+  type: z.literal('data-request'),
   data: z.object({
-    request: z.enum(["geolocation"]),
+    request: z.enum(['geolocation']),
   }),
 });
 export type AIWriterDataRequest = z.infer<typeof AIWriterDataRequestSchema>;
 
 export const AIWriterDataNotificationSchema = z.object({
-  type: z.literal("data-notification"),
+  type: z.literal('data-notification'),
   data: z.object({
     text: z.string(),
   }),
@@ -377,8 +389,8 @@ export const AIWriterDataSchema = z.union([
 export type AIWriterData = z.infer<typeof AIWriterDataSchema>;
 
 export const FlyabilityToolOutputSchema = z.object({
-  type: z.literal("tool-checkFlyability"),
-  state: z.literal("output-available"),
+  type: z.literal('tool-checkFlyability'),
+  state: z.literal('output-available'),
   output: z.object({
     text: z.string(),
     data: z.object({
