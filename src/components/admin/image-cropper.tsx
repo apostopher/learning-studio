@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactCrop, {
   type Crop,
   centerCrop,
@@ -31,8 +31,15 @@ export const ImageCropper = ({
   onCancel,
   onCropped,
 }: ImageCropperProps) => {
-  const objectUrl = useMemo(() => URL.createObjectURL(file), [file]);
-  useEffect(() => () => URL.revokeObjectURL(objectUrl), [objectUrl]);
+  // Create AND revoke the object URL in the same effect so a re-run (e.g. dev
+  // double-invoke) makes a fresh URL rather than leaving the img pointing at a
+  // revoked one — the cause of the "broken image" in the crop preview.
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const [crop, setCrop] = useState<Crop>();
@@ -94,21 +101,23 @@ export const ImageCropper = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex max-h-[60vh] justify-center overflow-hidden rounded-lg bg-gray-1">
-        <ReactCrop
-          crop={crop}
-          onChange={(_, percentCrop) => setCrop(percentCrop)}
-          aspect={ASPECT}
-          keepSelection
-          minWidth={40}
-        >
-          <img
-            ref={imgRef}
-            src={objectUrl}
-            onLoad={onImageLoad}
-            alt="Crop source"
-            className="max-h-[60vh] w-auto object-contain"
-          />
-        </ReactCrop>
+        {objectUrl && (
+          <ReactCrop
+            crop={crop}
+            onChange={(_, percentCrop) => setCrop(percentCrop)}
+            aspect={ASPECT}
+            keepSelection
+            minWidth={40}
+          >
+            <img
+              ref={imgRef}
+              src={objectUrl}
+              onLoad={onImageLoad}
+              alt="Crop source"
+              className="max-h-[60vh] w-auto object-contain"
+            />
+          </ReactCrop>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-3">
