@@ -1,4 +1,4 @@
-import { del } from '@vercel/blob';
+import { del, list } from '@vercel/blob';
 import { asc, desc, eq, inArray, like, or, type SQL, sql } from 'drizzle-orm';
 import type { DBCourse } from '@/db/schema';
 import {
@@ -288,6 +288,73 @@ export async function reorderModule(input: {
     .returning({ id: modulesTable.id, rank: modulesTable.rank });
 
   return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
+}
+
+// Grace period so a just-uploaded-but-not-yet-saved cover isn't swept while the
+// admin is still filling in the form.
+const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+// Blob path prefixes we own. MUST stay in sync with the referenced-URL
+// collection in sweepOrphanBlobs — only sweep a prefix whose references we
+// gather, else live blobs get deleted. When lessons gain 16:9 covers, add
+// 'lessons/' here AND collect lesson image URLs below.
+const SWEPT_PREFIXES = ['courses/', 'modules/'];
+
+/**
+ * Periodic orphan sweep (Vercel Cron): delete cover blobs under our prefixes
+ * that no course/module row references and that are older than the grace
+ * period. Catches images uploaded but never saved (abandoned dialogs).
+ */
+export async function sweepOrphanBlobs(): Promise<{
+  scanned: number;
+  deleted: number;
+}> {
+  const [courseRows, moduleRows] = await Promise.all([
+    db
+      .select({
+        avif: coursesTable.imageUrlAvif,
+        webp: coursesTable.imageUrlWebp,
+      })
+      .from(coursesTable),
+    db
+      .select({
+        avif: modulesTable.imageUrlAvif,
+        webp: modulesTable.imageUrlWebp,
+      })
+      .from(modulesTable),
+  ]);
+  const referenced = new Set<string>();
+  for (const row of [...courseRows, ...moduleRows]) {
+    if (row.avif) referenced.add(row.avif);
+    if (row.webp) referenced.add(row.webp);
+  }
+
+  const now = Date.now();
+  const orphans: string[] = [];
+  let scanned = 0;
+  for (const prefix of SWEPT_PREFIXES) {
+    let cursor: string | undefined;
+    do {
+      const page = await list({
+        token: env.BLOB_READ_WRITE_TOKEN,
+        prefix,
+        cursor,
+        limit: 1000,
+      });
+      for (const blob of page.blobs) {
+        scanned++;
+        const age = now - blob.uploadedAt.getTime();
+        if (age > ORPHAN_MIN_AGE_MS && !referenced.has(blob.url)) {
+          orphans.push(blob.url);
+        }
+      }
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+  }
+
+  for (let i = 0; i < orphans.length; i += 100) {
+    await deleteBlobs(orphans.slice(i, i + 100));
+  }
+  return { scanned, deleted: orphans.length };
 }
 
 /** Delete blobs by public URL. Non-fatal: a failure just leaves an orphan. */
