@@ -64,13 +64,14 @@ function fitWithin(
 }
 
 /**
- * Optimize a user-selected image file into resized AVIF + WebP blobs.
- * Throws if the file can't be decoded or a 2D canvas context is unavailable.
+ * Optimize a source image (a File, or the cropped Blob from ImageCropper) into
+ * resized AVIF + WebP blobs. Throws if it can't be decoded or a 2D canvas
+ * context is unavailable.
  */
-export async function optimizeImage(file: File): Promise<OptimizedImage> {
+export async function optimizeImage(source: Blob): Promise<OptimizedImage> {
   // The browser decodes any format it supports (jpeg/png/webp/heic-on-Safari…)
   // and applies EXIF orientation so the pixels are already upright.
-  const bitmap = await createImageBitmap(file, {
+  const bitmap = await createImageBitmap(source, {
     imageOrientation: 'from-image',
   });
   const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_EDGE);

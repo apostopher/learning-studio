@@ -69,6 +69,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "7.80.0",
+    "react-image-crop": "11.1.2",
     "resend": "6.14.0",
     "sonner": "^2.0.7",
     "storybook": "^10.2.15",
