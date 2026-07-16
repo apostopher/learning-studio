@@ -63,7 +63,11 @@ function resolveOverModuleId(
 
 /**
  * Return a new board with `lessonId` moved into `targetModuleId` at the position
- * of `overId` (a lesson → before it; a container → appended).
+ * of `overId` (a lesson → its slot; a container → appended).
+ *
+ * The insert index is the over lesson's index in the target's CURRENT list
+ * (with the active lesson still present) — matching arrayMove semantics, so a
+ * same-module downward move lands in the right slot rather than one above it.
  */
 function placeLesson(
   board: CourseBoard,
@@ -71,6 +75,16 @@ function placeLesson(
   targetModuleId: number,
   overId: string | number,
 ): CourseBoard {
+  const targetModule = board.modules.find((m) => m.id === targetModuleId);
+  if (!targetModule) return board;
+
+  const over = parseDndId(overId);
+  let overIndex = targetModule.lessons.length;
+  if (over?.type === 'lesson') {
+    const i = targetModule.lessons.findIndex((l) => l.id === over.id);
+    if (i !== -1) overIndex = i;
+  }
+
   let moved: BoardLesson | undefined;
   const withoutLesson = board.modules.map((m) => {
     const idx = m.lessons.findIndex((l) => l.id === lessonId);
@@ -80,18 +94,16 @@ function placeLesson(
   });
   if (!moved) return board;
 
-  const over = parseDndId(overId);
   return {
     ...board,
     modules: withoutLesson.map((m) => {
       if (m.id !== targetModuleId) return m;
       const lessons = [...m.lessons];
-      let insertAt = lessons.length;
-      if (over?.type === 'lesson') {
-        const overIdx = lessons.findIndex((l) => l.id === over.id);
-        if (overIdx !== -1) insertAt = overIdx;
-      }
-      lessons.splice(insertAt, 0, moved as BoardLesson);
+      lessons.splice(
+        Math.min(overIndex, lessons.length),
+        0,
+        moved as BoardLesson,
+      );
       return { ...m, lessons };
     }),
   };
