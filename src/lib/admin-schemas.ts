@@ -7,6 +7,8 @@ export const adminCourseSummarySchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
+  imageUrlAvif: z.string().nullable(),
+  imageUrlWebp: z.string().nullable(),
   updatedAt: z.coerce.date(),
   moduleCount: z.number(),
   lessonCount: z.number(),
