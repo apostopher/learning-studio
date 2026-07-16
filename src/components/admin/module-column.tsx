@@ -22,10 +22,29 @@ export const ModuleColumn = ({
 }) => {
   return (
     <section className="course-board__column flex w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-gray-6 bg-gray-3 px-4 py-3">
-        <h3 className="min-w-0 truncate text-sm font-semibold text-gray-12">
+      <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-12">
           {mod.name}
         </h3>
+        {onAddLesson && (
+          <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+        )}
+        {onEditModule && (
+          <TooltipIconButton label="Edit module" onClick={onEditModule}>
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+        )}
+        {onDeleteModule && (
+          <TooltipIconButton
+            label="Delete module"
+            onClick={onDeleteModule}
+            variant="danger"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+        )}
         <button
           type="button"
           aria-label="Drag to reorder module"
@@ -35,23 +54,6 @@ export const ModuleColumn = ({
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
       </header>
-      {onAddLesson && (
-        <div className="flex items-center justify-end gap-1 border-b border-gray-6 px-2 py-1.5">
-          <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </TooltipIconButton>
-          <TooltipIconButton label="Edit module" onClick={onEditModule}>
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-          </TooltipIconButton>
-          <TooltipIconButton
-            label="Delete module"
-            onClick={onDeleteModule}
-            variant="danger"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </TooltipIconButton>
-        </div>
-      )}
       <div className="flex flex-col gap-2 p-3">
         {lessonsSlot ??
           (mod.lessons.length === 0 ? (
