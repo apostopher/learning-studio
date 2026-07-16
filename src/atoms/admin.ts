@@ -58,3 +58,10 @@ export const videoDraftDetectionAtom = atom<{
 
 /** Whether the Video tab is showing the "replace video URL" form over an already-configured video. */
 export const videoReplaceModeAtom = atom(false);
+
+/**
+ * Which provider's credential form is expanded in the course edit dialog's
+ * "Video integrations" section, or null when every row is collapsed. Reset
+ * whenever the dialog is pointed at a different course.
+ */
+export const expandedVideoProviderAtom = atom<ProviderId | null>(null);

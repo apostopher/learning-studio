@@ -11,6 +11,7 @@ import {
   type CreateCourseInput,
   updateCourseInputSchema,
 } from '@/lib/admin-schemas';
+import { CourseVideoIntegrationsContainer } from './course-video-integrations-container';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
 
@@ -88,6 +89,11 @@ export const EditCourseDialogContainer = () => {
                   );
                 }}
               />
+            }
+            videoIntegrations={
+              target && (
+                <CourseVideoIntegrationsContainer courseId={target.id} />
+              )
             }
             errors={{
               name: form.formState.errors.name?.message,
