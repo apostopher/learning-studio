@@ -92,4 +92,12 @@ describe('lessons material route', () => {
     expect(await res.json()).toEqual(saved);
     expect(upsertLessonMaterial).toHaveBeenCalledWith(1, material);
   });
+
+  it('POST 500 when upsertLessonMaterial rejects', async () => {
+    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
+    upsertLessonMaterial.mockRejectedValueOnce(new Error('db down'));
+    expect((await saveMaterialHandler(postReq(material), '1')).status).toBe(
+      500,
+    );
+  });
 });

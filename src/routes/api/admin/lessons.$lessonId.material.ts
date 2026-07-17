@@ -57,7 +57,16 @@ export async function saveMaterialHandler(
     return Response.json({ error: 'Invalid material' }, { status: 400 });
   }
 
-  const saved = await upsertLessonMaterial(lessonId, parsed.data);
+  let saved: Awaited<ReturnType<typeof upsertLessonMaterial>>;
+  try {
+    saved = await upsertLessonMaterial(lessonId, parsed.data);
+  } catch (error) {
+    console.error('Failed to save lesson material:', error);
+    return Response.json(
+      { error: 'Failed to save the material. Please try again.' },
+      { status: 500 },
+    );
+  }
   if (!saved) return new Response('Not found', { status: 404 });
   return Response.json(saved);
 }
