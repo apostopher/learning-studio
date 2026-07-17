@@ -18,6 +18,7 @@
 - **Presentational purity exception:** `RichTextEditor` uses the `useEditor` hook, so it is NOT a pure presentational component. This is an allowed, documented exception (third-party editor integration, like the repo's RHF field-array components). Add a justification comment. `RichTextToolbar`, `LinkPopover` stay pure (driven by a passed `editor`).
 - **Lint/format:** Biome — `pnpm exec biome check --write <files>` before each commit. Tests: `pnpm exec vitest run <path>`. Typecheck: `pnpm exec tsc --noEmit` — expect ONLY the 3 pre-existing unrelated `src/routes/api/lesson/ai-test/*.ts` errors; none in feature files.
 - **Uncommitted user files:** `package.json`, `src/db/schema.ts`, `CLAUDE.md` carry the user's unrelated edits. NEVER `git add -A`/`git add .`. Stage only this feature's explicit paths. The TipTap install touches `package.json` + `pnpm-lock.yaml` — dep-dance (Task 1).
+- **CRITICAL — do NOT import `@tiptap/*` (even `import type`) in any component a test RENDERS.** In this repo's Vite pipeline (react-compiler + TanStack Start), `import type` from `@tiptap` is not erased — it leaks as a runtime side-effect import that loads a SECOND React instance, nulling the hook dispatcher → every hook in that test file throws "Invalid hook call". This is not fixable via `vi.mock`, `resolve.dedupe`, or the dep-optimizer (all verified failing). Therefore: `RichTextToolbar` and `LinkPopover` type their `editor` prop with a LOCAL structural interface `RichTextEditorApi` (Task 2, no `@tiptap` import) so their render-tests work. Only `RichTextEditor` (Task 3) imports `@tiptap`; its test covers the pure `normalizeEditorHtml` helper (no render) and marks the mount smoke `it.skip` (real editing = manual, Task 6). Do not add `@tiptap` imports to `material-form.tsx` either — it renders `RichTextEditor` (which owns the import) but is not unit-tested.
 - **TipTap v3 API notes** (verify against installed types with `tsc`): `useEditor`/`EditorContent` from `@tiptap/react`; `BubbleMenu` from `@tiptap/react/menus` (no extension needed); `StarterKit` from `@tiptap/starter-kit` (bundles Link, Underline, ListKeymap — configure Link via `StarterKit.configure({ link: {...} })`); `Placeholder` from `@tiptap/extensions`; `type Editor` from `@tiptap/react`. `editor.commands.setContent(html, { emitUpdate: false })` is the v3 signature. If `tsc` rejects the options object on the installed version, fall back to a ref-guard around `onUpdate` (see Task 3 note) — do not loop.
 
 ---
@@ -68,13 +69,15 @@ If `git status` shows the user's unrelated `package.json` edits staged, `git res
 ### Task 2: `RichTextToolbar` + `LinkPopover`
 
 **Files:**
+- Create: `src/components/admin/lesson-config/rich-text-editor-api.ts`
 - Create: `src/components/admin/lesson-config/link-popover.tsx`
 - Create: `src/components/admin/lesson-config/rich-text-toolbar.tsx`
 - Test: `src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx`
 
 **Interfaces:**
-- Consumes: `type Editor` from `@tiptap/react`.
+- Consumes: nothing from `@tiptap` (see the CRITICAL constraint). Uses the LOCAL `RichTextEditorApi`.
 - Produces:
+  - `rich-text-editor-api.ts` — a local structural type `RichTextEditorApi` (+ `RichTextChain`) covering only what the toolbar/popover call, so these files never import `@tiptap`. `RichTextEditor` (Task 3) casts its real TipTap editor to this when passing it down.
   - `LinkPopover({ editor })` — Base UI popover with a URL input; Apply sets the link on the current selection, Remove unsets it.
   - `RichTextToolbar({ editor, compact? })` — button row (bold, italic, H1–H3, bullet list, ordered list, blockquote, inline code, link). `compact` drops the headings (used by the bubble menu on key points).
 
@@ -149,21 +152,56 @@ describe('RichTextToolbar', () => {
 Run: `pnpm exec vitest run src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `LinkPopover`**
+- [ ] **Step 3a: Create the local editor-API type** (no `@tiptap` import)
+
+Create `src/components/admin/lesson-config/rich-text-editor-api.ts`:
+
+```ts
+/**
+ * Minimal structural slice of TipTap's Editor used by the toolbar + link
+ * popover. Defined locally (NOT imported from @tiptap) so these components —
+ * and their render-tests — never pull @tiptap into the module graph, which in
+ * this repo's Vite/react-compiler pipeline duplicates React and breaks hooks.
+ * RichTextEditor (which owns the real @tiptap editor) casts to this when passing
+ * the editor down.
+ */
+export interface RichTextChain {
+  focus: () => RichTextChain;
+  toggleBold: () => RichTextChain;
+  toggleItalic: () => RichTextChain;
+  toggleHeading: (attrs: { level: 1 | 2 | 3 }) => RichTextChain;
+  toggleBulletList: () => RichTextChain;
+  toggleOrderedList: () => RichTextChain;
+  toggleBlockquote: () => RichTextChain;
+  toggleCode: () => RichTextChain;
+  extendMarkRange: (name: string) => RichTextChain;
+  setLink: (attrs: { href: string }) => RichTextChain;
+  unsetLink: () => RichTextChain;
+  run: () => boolean;
+}
+
+export interface RichTextEditorApi {
+  isActive: (name: string, attrs?: Record<string, unknown>) => boolean;
+  getAttributes: (name: string) => Record<string, unknown>;
+  chain: () => RichTextChain;
+}
+```
+
+- [ ] **Step 3b: Implement `LinkPopover`**
 
 Create `src/components/admin/lesson-config/link-popover.tsx`:
 
 ```tsx
 import { Popover } from '@base-ui/react/popover';
-import type { Editor } from '@tiptap/react';
 import { Link2, Link2Off } from 'lucide-react';
 import { useState } from 'react';
+import type { RichTextEditorApi } from './rich-text-editor-api';
 
 /**
  * Link add/edit popover for the rich-text toolbar. Prefills from the current
  * selection's link; Apply sets it on the extended mark range, Remove unsets it.
  */
-export const LinkPopover = ({ editor }: { editor: Editor }) => {
+export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
   const [href, setHref] = useState('');
 
   const apply = () => {
@@ -233,7 +271,6 @@ Note: verify the Base UI Popover subcomponent names against the installed `@base
 Create `src/components/admin/lesson-config/rich-text-toolbar.tsx`:
 
 ```tsx
-import type { Editor } from '@tiptap/react';
 import {
   Bold,
   Code,
@@ -247,6 +284,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { LinkPopover } from './link-popover';
+import type { RichTextEditorApi } from './rich-text-editor-api';
 
 interface ToolbarButtonProps {
   label: string;
@@ -276,7 +314,7 @@ export const RichTextToolbar = ({
   editor,
   compact = false,
 }: {
-  editor: Editor;
+  editor: RichTextEditorApi;
   compact?: boolean;
 }) => {
   return (
@@ -357,8 +395,8 @@ Expected: PASS (4 tests). (`LinkPopover`'s trigger provides the "Link" button th
 
 ```bash
 pnpm exec tsc --noEmit
-pnpm exec biome check --write src/components/admin/lesson-config/link-popover.tsx src/components/admin/lesson-config/rich-text-toolbar.tsx src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx
-git add src/components/admin/lesson-config/link-popover.tsx src/components/admin/lesson-config/rich-text-toolbar.tsx src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx
+pnpm exec biome check --write src/components/admin/lesson-config/rich-text-editor-api.ts src/components/admin/lesson-config/link-popover.tsx src/components/admin/lesson-config/rich-text-toolbar.tsx src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx
+git add src/components/admin/lesson-config/rich-text-editor-api.ts src/components/admin/lesson-config/link-popover.tsx src/components/admin/lesson-config/rich-text-toolbar.tsx src/components/admin/lesson-config/__tests__/rich-text-toolbar.test.tsx
 git commit -m "feat(admin): add rich-text toolbar + link popover"
 ```
 
@@ -397,7 +435,12 @@ describe('normalizeEditorHtml', () => {
 });
 
 describe('RichTextEditor', () => {
-  it('mounts without throwing and renders a labelled region', () => {
+  // Skipped: importing this module pulls @tiptap, which in this repo's Vite
+  // pipeline duplicates React under Vitest — rendering a hook-using component
+  // then throws "Invalid hook call". The non-render `normalizeEditorHtml` tests
+  // above still pass (no hooks run). Real editor behavior is verified manually
+  // (Task 6). Importing the module here is fine — the dup only bites on render.
+  it.skip('mounts and renders a labelled region (manual-only — see comment)', () => {
     const { container } = render(
       <RichTextEditor value="<p>Hello</p>" onChange={vi.fn()} ariaLabel="Text" />,
     );
@@ -421,6 +464,7 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { useEffect } from 'react';
+import type { RichTextEditorApi } from './rich-text-editor-api';
 import { RichTextToolbar } from './rich-text-toolbar';
 
 /** TipTap's empty document serializes to `<p></p>`; treat that as empty. */
@@ -497,7 +541,7 @@ export const RichTextEditor = ({
     <div className="rich-editor rounded-lg border border-gray-6 bg-gray-1 focus-within:ring-2 focus-within:ring-apple-9">
       {toolbar === 'fixed' && editor && (
         <div className="flex flex-wrap items-center gap-0.5 border-gray-6 border-b p-1">
-          <RichTextToolbar editor={editor} />
+          <RichTextToolbar editor={editor as unknown as RichTextEditorApi} />
         </div>
       )}
       {toolbar === 'bubble' && editor && (
@@ -505,7 +549,10 @@ export const RichTextEditor = ({
           editor={editor}
           className="flex items-center gap-0.5 rounded-lg border border-gray-6 bg-gray-2 p-1 shadow-lg"
         >
-          <RichTextToolbar editor={editor} compact />
+          <RichTextToolbar
+            editor={editor as unknown as RichTextEditorApi}
+            compact
+          />
         </BubbleMenu>
       )}
       <EditorContent editor={editor} />
@@ -547,7 +594,7 @@ Append to the END of `src/styles.css`:
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pnpm exec vitest run src/components/admin/lesson-config/__tests__/rich-text-editor.test.tsx`
-Expected: PASS. If TipTap fails to initialize under jsdom and the mount smoke test throws (ProseMirror needs DOM APIs jsdom may lack), keep the `normalizeEditorHtml` tests, mark the mount test `it.skip` with a comment ("TipTap contenteditable unreliable in jsdom — covered by manual verification in Task 6"), and note it in the report. The pure-helper tests must pass.
+Expected: the 2 `normalizeEditorHtml` tests PASS; the mount test reports as skipped (1 skipped). Do NOT un-skip it — see the CRITICAL constraint (rendering a @tiptap component under Vitest throws "Invalid hook call").
 
 - [ ] **Step 6: Typecheck, format + commit**
 
