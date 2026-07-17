@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
@@ -41,13 +41,18 @@ export const MaterialSectionContainer = ({
     defaultValues: EMPTY,
   });
 
-  // Load saved material (or reset to empty) whenever the lesson changes and its
-  // material query resolves.
+  const hydratedForLessonId = useRef<number | null>(null);
   const existingData = existing.data;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable; reset on lesson switch or when saved data arrives.
+  // Hydrate the form once per lesson (when its material first loads). Background
+  // refetches of the same lesson must NOT reset — that would wipe unsaved edits.
+  // A lesson switch re-hydrates because hydratedForLessonId no longer matches.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable; intentionally hydrate once per lesson.
   useEffect(() => {
+    if (existing.isLoading) return;
+    if (hydratedForLessonId.current === lesson.id) return;
+    hydratedForLessonId.current = lesson.id;
     form.reset(existingData ?? EMPTY);
-  }, [lesson.id, existingData]);
+  }, [lesson.id, existing.isLoading, existingData]);
 
   const attachments = form.watch('attachments') ?? [];
 
