@@ -2,6 +2,7 @@ import { useAtom } from 'jotai';
 
 import { configureLessonIdAtom } from '@/atoms/admin';
 import type { BoardLesson } from '@/lib/admin-schemas';
+import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
 import {
   type ConfigModalSection,
@@ -41,6 +42,11 @@ export const LessonConfigDialogContainer = ({
       content: lesson && (
         <VideoSectionContainer courseId={courseId} lesson={lesson} />
       ),
+    },
+    {
+      value: 'material',
+      title: 'Material',
+      content: lesson && <MaterialSectionContainer lesson={lesson} />,
     },
     ...PLACEHOLDER_SECTIONS.map((section) => ({
       value: section.value,
