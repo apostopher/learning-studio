@@ -19,7 +19,8 @@
 - **Presentational purity:** presentational components are pure prop-driven functions built on Base UI where possible. Array fields are driven from the container via RHF `Controller` (`value`/`onChange`) so the field components hold no RHF hooks. Logical CSS properties only (`ms-*`/`me-*`, `ps-*`/`pe-*`, `text-start`, `inset-inline-*`).
 - **Lint/format:** Biome — `pnpm exec biome check --write <files>` before each commit. Tests: `pnpm exec vitest run <path>`. Typecheck: `pnpm exec tsc --noEmit`.
 - **Uncommitted user files:** `package.json`, `src/db/schema.ts`, `CLAUDE.md` carry the user's unrelated edits. NEVER `git add -A`/`git add .`. Stage only this feature's explicit paths. Do NOT edit `schema.ts` (persistence uses delete+insert — no migration). The mammoth install touches `package.json` + `pnpm-lock.yaml` — see Task 2's dep-dance.
-- **Import alias:** `@/…` (and `#/…`) both map to `./src/…`; match the file being edited (db files use `#/db`).
+- **Import alias:** use `#/…` (maps to `./src/*`) in ALL new source and test files. Vitest does NOT resolve the `@/` alias (only `#/` and relative); `#/` works in the app (client + server) AND vitest. Never introduce `@/` in this feature's code.
+- **Vitest mocking rules:** (a) mock factories are hoisted above top-level `const`s, so any fn/class referenced inside a `vi.mock(...)` factory must be created with `vi.hoisted(() => ({ ... }))` (repo convention — see `src/lib/video-providers/resolve.server.test.ts`). (b) Do NOT `importOriginal()` an internal module that itself uses `@/` imports or has auth/db side effects (e.g. `#/lib/admin-functions.server`) — fully stub it instead, providing every export the code under test imports (including error classes like `ForbiddenError`) via `vi.hoisted`.
 
 ---
 
@@ -332,7 +333,7 @@ git commit -m "feat(ai): add lesson-material parser prompts"
 - Test: `src/ai/__tests__/generate-lesson-material.test.ts`
 
 **Interfaces:**
-- Consumes: `haiku` from `./ai-provider`; `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `@/types`; prompts from `./prompts/lesson-material`; `generateText`, `Output` from `ai`.
+- Consumes: `haiku` from `./ai-provider`; `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `#/types`; prompts from `./prompts/lesson-material`; `generateText`, `Output` from `ai`.
 - Produces: `generateLessonMaterial(html: string): Promise<LessonMaterialGeneration>`.
 
 - [ ] **Step 1: Write the failing test**
@@ -384,8 +385,8 @@ Create `src/ai/generate-lesson-material.ts`:
 
 ```ts
 import { generateText, Output } from "ai";
-import type { LessonMaterialGeneration } from "@/types";
-import { LessonMaterialGenerationSchema } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
+import { LessonMaterialGenerationSchema } from "#/types";
 import { haiku } from "./ai-provider";
 import {
   lessonMaterialSystemPrompt,
@@ -432,7 +433,7 @@ git commit -m "feat(ai): add generateLessonMaterial via AI Gateway (Haiku)"
 - Test: `src/routes/api/admin/__tests__/lesson-material-parse.test.ts`
 
 **Interfaces:**
-- Consumes: `requireAdmin`, `ForbiddenError` from `@/lib/admin-functions.server`; `wordToHtml` from `@/lib/word-to-html.server`; `generateLessonMaterial` from `@/ai/generate-lesson-material`.
+- Consumes: `requireAdmin`, `ForbiddenError` from `#/lib/admin-functions.server`; `wordToHtml` from `#/lib/word-to-html.server`; `generateLessonMaterial` from `#/ai/generate-lesson-material`.
 - Produces: exported `parseLessonMaterialHandler(request: Request): Promise<Response>` + the `Route`.
 
 - [ ] **Step 1: Write the failing test**
@@ -442,18 +443,33 @@ Create `src/routes/api/admin/__tests__/lesson-material-parse.test.ts`:
 ```ts
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { ForbiddenError } from "@/lib/admin-functions.server";
 
-const requireAdmin = vi.fn();
-vi.mock("@/lib/admin-functions.server", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/admin-functions.server")>();
-  return { ...actual, requireAdmin };
-});
-const wordToHtml = vi.fn();
-vi.mock("@/lib/word-to-html.server", () => ({ wordToHtml }));
-const generateLessonMaterial = vi.fn();
-vi.mock("@/ai/generate-lesson-material", () => ({ generateLessonMaterial }));
+// Fully stub admin-functions.server — importOriginal would load the real module
+// (which uses @/ imports vitest can't resolve, plus auth/db side effects). The
+// route imports ForbiddenError from this same mocked path, so the stub class is
+// the one `instanceof` checks against. vi.hoisted defines these before the
+// hoisted vi.mock factories run.
+const { requireAdmin, ForbiddenError, wordToHtml, generateLessonMaterial } =
+  vi.hoisted(() => {
+    class ForbiddenError extends Error {
+      constructor() {
+        super("Forbidden");
+        this.name = "ForbiddenError";
+      }
+    }
+    return {
+      requireAdmin: vi.fn(),
+      ForbiddenError,
+      wordToHtml: vi.fn(),
+      generateLessonMaterial: vi.fn(),
+    };
+  });
+vi.mock("#/lib/admin-functions.server", () => ({
+  requireAdmin,
+  ForbiddenError,
+}));
+vi.mock("#/lib/word-to-html.server", () => ({ wordToHtml }));
+vi.mock("#/ai/generate-lesson-material", () => ({ generateLessonMaterial }));
 
 import { parseLessonMaterialHandler } from "../lesson-material.parse";
 
@@ -528,9 +544,9 @@ Create `src/routes/api/admin/lesson-material.parse.ts`:
 
 ```ts
 import { createFileRoute } from "@tanstack/react-router";
-import { generateLessonMaterial } from "@/ai/generate-lesson-material";
-import { ForbiddenError, requireAdmin } from "@/lib/admin-functions.server";
-import { wordToHtml } from "@/lib/word-to-html.server";
+import { generateLessonMaterial } from "#/ai/generate-lesson-material";
+import { ForbiddenError, requireAdmin } from "#/lib/admin-functions.server";
+import { wordToHtml } from "#/lib/word-to-html.server";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -626,7 +642,7 @@ git commit -m "feat(api): add guarded /api/admin/lesson-material/parse route"
 - Test: `src/data-hooks/__tests__/use-parse-lesson-material.test.tsx`
 
 **Interfaces:**
-- Consumes: `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `@/types`.
+- Consumes: `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `#/types`.
 - Produces: `useParseLessonMaterial()` → mutation with `mutateAsync(file: File): Promise<LessonMaterialGeneration>`.
 
 - [ ] **Step 1: Write the failing test**
@@ -693,8 +709,8 @@ Create `src/data-hooks/use-parse-lesson-material.ts`:
 
 ```ts
 import { useMutation } from "@tanstack/react-query";
-import type { LessonMaterialGeneration } from "@/types";
-import { LessonMaterialGenerationSchema } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
+import { LessonMaterialGenerationSchema } from "#/types";
 
 /** Upload a .docx and get back structured lesson material for review. */
 export function useParseLessonMaterial() {
@@ -736,7 +752,7 @@ git commit -m "feat(data-hooks): add useParseLessonMaterial mutation"
 - Modify: `src/db/lesson.ts`
 
 **Interfaces:**
-- Consumes: `db` from `#/db`; `lessonMaterialTable`, `lessonsTable` from `./schema`; `LessonMaterialGeneration` from `@/types`.
+- Consumes: `db` from `#/db`; `lessonMaterialTable`, `lessonsTable` from `./schema`; `LessonMaterialGeneration` from `#/types`.
 - Produces:
   - `getLessonMaterialByLessonId(lessonId: number): Promise<LessonMaterialRow | null>`
   - `upsertLessonMaterial(lessonId: number, material: LessonMaterialGeneration): Promise<LessonMaterialRow | null>` (null when the lesson id doesn't exist).
@@ -749,7 +765,7 @@ Replace the contents of `src/db/lesson.ts` with:
 ```ts
 import { eq } from "drizzle-orm";
 import { db } from "#/db";
-import type { LessonMaterialGeneration } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
 import { lessonMaterialTable, lessonsTable } from "./schema";
 
 export async function getLessonMaterial(lessonSlug: string) {
@@ -843,7 +859,7 @@ git commit -m "feat(db): read + upsert lesson material by lesson id"
 - Test: `src/routes/api/admin/__tests__/lessons-material.test.ts`
 
 **Interfaces:**
-- Consumes: `requireAdmin`, `ForbiddenError` from `@/lib/admin-functions.server`; `getLessonMaterialByLessonId`, `upsertLessonMaterial` from `@/db/lesson`; `LessonMaterialGenerationSchema` from `@/types`.
+- Consumes: `requireAdmin`, `ForbiddenError` from `#/lib/admin-functions.server`; `getLessonMaterialByLessonId`, `upsertLessonMaterial` from `#/db/lesson`; `LessonMaterialGenerationSchema` from `#/types`.
 - Produces: exported `getMaterialHandler(request, lessonIdRaw)` and `saveMaterialHandler(request, lessonIdRaw)` + the `Route` (GET + POST).
 
 - [ ] **Step 1: Write the failing test**
@@ -853,17 +869,34 @@ Create `src/routes/api/admin/__tests__/lessons-material.test.ts`:
 ```ts
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { ForbiddenError } from "@/lib/admin-functions.server";
 
-const requireAdmin = vi.fn();
-vi.mock("@/lib/admin-functions.server", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/admin-functions.server")>();
-  return { ...actual, requireAdmin };
+// Fully stub admin-functions.server (see mocking rules: no importOriginal on
+// internal @/-using modules). The route imports ForbiddenError from this same
+// mocked path, so this stub class is what `instanceof` checks against.
+const {
+  requireAdmin,
+  ForbiddenError,
+  getLessonMaterialByLessonId,
+  upsertLessonMaterial,
+} = vi.hoisted(() => {
+  class ForbiddenError extends Error {
+    constructor() {
+      super("Forbidden");
+      this.name = "ForbiddenError";
+    }
+  }
+  return {
+    requireAdmin: vi.fn(),
+    ForbiddenError,
+    getLessonMaterialByLessonId: vi.fn(),
+    upsertLessonMaterial: vi.fn(),
+  };
 });
-const getLessonMaterialByLessonId = vi.fn();
-const upsertLessonMaterial = vi.fn();
-vi.mock("@/db/lesson", () => ({
+vi.mock("#/lib/admin-functions.server", () => ({
+  requireAdmin,
+  ForbiddenError,
+}));
+vi.mock("#/db/lesson", () => ({
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
 }));
@@ -943,9 +976,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
-} from "@/db/lesson";
-import { ForbiddenError, requireAdmin } from "@/lib/admin-functions.server";
-import { LessonMaterialGenerationSchema } from "@/types";
+} from "#/db/lesson";
+import { ForbiddenError, requireAdmin } from "#/lib/admin-functions.server";
+import { LessonMaterialGenerationSchema } from "#/types";
 
 async function guard(request: Request): Promise<Response | null> {
   try {
@@ -1047,7 +1080,7 @@ git commit -m "feat(api): add guarded GET/POST lesson material route"
 - Test: `src/data-hooks/__tests__/use-save-lesson-material.test.tsx`
 
 **Interfaces:**
-- Consumes: `dataKeys` from `./keys`; `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `@/types`.
+- Consumes: `dataKeys` from `./keys`; `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `#/types`.
 - Produces:
   - `dataKeys.lessonMaterial(lessonId)`
   - `useLessonMaterial(lessonId: number)` → query returning `LessonMaterialGeneration | null` (mapped from the DB row).
@@ -1122,8 +1155,8 @@ Create `src/data-hooks/use-lesson-material.ts`:
 
 ```ts
 import { useQuery } from "@tanstack/react-query";
-import type { LessonMaterialGeneration } from "@/types";
-import { LessonMaterialGenerationSchema } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
+import { LessonMaterialGenerationSchema } from "#/types";
 import { dataKeys } from "./keys";
 
 /**
@@ -1161,7 +1194,7 @@ Create `src/data-hooks/use-save-lesson-material.ts`:
 
 ```ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { LessonMaterialGeneration } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
 import { dataKeys } from "./keys";
 
 /** Persist edited lesson material, then refetch the material query. */
@@ -1460,7 +1493,7 @@ Create `src/components/admin/lesson-config/material-text-fields.tsx`:
 
 ```tsx
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import type { LessonMaterialGeneration } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
 
 const labelCls =
   "font-medium text-gray-11 text-xs uppercase tracking-wide";
@@ -1558,7 +1591,7 @@ git commit -m "feat(admin): add material text fields + string-list field"
 - Test: `src/components/admin/lesson-config/__tests__/quiz-field.test.tsx`
 
 **Interfaces:**
-- Consumes: `CourseLessonQuiz` from `@/types`.
+- Consumes: `CourseLessonQuiz` from `#/types`.
 - Produces: `QuizField({ value, onChange })` where `value: CourseLessonQuiz`, `onChange: (next: CourseLessonQuiz) => void` — pure, controlled editor: per-question card with a question textarea, an option list (input + remove per option, add option), a radio group to pick the correct option, and add/remove question.
 
 - [ ] **Step 1: Write the failing test**
@@ -1570,7 +1603,7 @@ Create `src/components/admin/lesson-config/__tests__/quiz-field.test.tsx`:
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { CourseLessonQuiz } from "@/types";
+import type { CourseLessonQuiz } from "#/types";
 import { QuizField } from "../quiz-field";
 
 const quiz: CourseLessonQuiz = [
@@ -1624,7 +1657,7 @@ Create `src/components/admin/lesson-config/quiz-field.tsx`:
 
 ```tsx
 import { Plus, X } from "lucide-react";
-import type { CourseLessonQuiz } from "@/types";
+import type { CourseLessonQuiz } from "#/types";
 
 const labelCls = "font-medium text-gray-11 text-xs uppercase tracking-wide";
 const controlCls =
@@ -1801,7 +1834,7 @@ git commit -m "feat(admin): add quiz field editor"
 - Create: `src/components/admin/lesson-config/material-form.tsx`
 
 **Interfaces:**
-- Consumes: `MaterialTextFields`, `StringListField`, `QuizField` (Tasks 11–12); `LessonMaterialGeneration` from `@/types`; RHF `Control`/`UseFormRegister`/`FieldErrors` + `Controller`.
+- Consumes: `MaterialTextFields`, `StringListField`, `QuizField` (Tasks 11–12); `LessonMaterialGeneration` from `#/types`; RHF `Control`/`UseFormRegister`/`FieldErrors` + `Controller`.
 - Produces: `MaterialForm({ register, control, errors, onSubmit, isSaving, saveError })` — a pure form body wiring array fields through `Controller` and rendering a "Save material" button + server-error alert.
 
 - [ ] **Step 1: Implement**
@@ -1817,7 +1850,7 @@ import {
   type FieldErrors,
   type UseFormRegister,
 } from "react-hook-form";
-import type { LessonMaterialGeneration } from "@/types";
+import type { LessonMaterialGeneration } from "#/types";
 import { MaterialTextFields } from "./material-text-fields";
 import { QuizField } from "./quiz-field";
 import { StringListField } from "./string-list-field";
@@ -1921,7 +1954,7 @@ git commit -m "feat(admin): compose material edit form"
 - Modify: `src/components/admin/lesson-config-dialog-container.tsx`
 
 **Interfaces:**
-- Consumes: `useLessonMaterial`, `useSaveLessonMaterial`, `useParseLessonMaterial` (Tasks 6, 9); `MaterialUpload`, `AttachmentsList`, `MaterialForm` (Tasks 10, 13); `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `@/types`; `BoardLesson` from `@/lib/admin-schemas`; `zodResolver` from `@hookform/resolvers/zod`; `useForm` from `react-hook-form`.
+- Consumes: `useLessonMaterial`, `useSaveLessonMaterial`, `useParseLessonMaterial` (Tasks 6, 9); `MaterialUpload`, `AttachmentsList`, `MaterialForm` (Tasks 10, 13); `LessonMaterialGenerationSchema`/`LessonMaterialGeneration` from `#/types`; `BoardLesson` from `#/lib/admin-schemas`; `zodResolver` from `@hookform/resolvers/zod`; `useForm` from `react-hook-form`.
 - Produces: `MaterialSectionContainer({ lesson }: { lesson: BoardLesson })`; a `material` section in the dialog.
 
 - [ ] **Step 1: Implement the container**
@@ -1932,12 +1965,12 @@ Create `src/components/admin/lesson-config/material-section-container.tsx`:
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useLessonMaterial } from "@/data-hooks/use-lesson-material";
-import { useParseLessonMaterial } from "@/data-hooks/use-parse-lesson-material";
-import { useSaveLessonMaterial } from "@/data-hooks/use-save-lesson-material";
-import type { BoardLesson } from "@/lib/admin-schemas";
-import type { LessonMaterialGeneration } from "@/types";
-import { LessonMaterialGenerationSchema } from "@/types";
+import { useLessonMaterial } from "#/data-hooks/use-lesson-material";
+import { useParseLessonMaterial } from "#/data-hooks/use-parse-lesson-material";
+import { useSaveLessonMaterial } from "#/data-hooks/use-save-lesson-material";
+import type { BoardLesson } from "#/lib/admin-schemas";
+import type { LessonMaterialGeneration } from "#/types";
+import { LessonMaterialGenerationSchema } from "#/types";
 import { AttachmentsList } from "./attachments-list";
 import { MaterialForm } from "./material-form";
 import { MaterialUpload } from "./material-upload";
