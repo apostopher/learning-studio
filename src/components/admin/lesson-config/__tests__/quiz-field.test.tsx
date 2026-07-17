@@ -42,4 +42,17 @@ describe('QuizField', () => {
     const next = onChange.mock.calls[0][0] as CourseLessonQuiz;
     expect(next).toHaveLength(2);
   });
+
+  it('repairs correctOptionId when the correct option is removed', async () => {
+    const onChange = vi.fn();
+    render(<QuizField value={quiz} onChange={onChange} />);
+    const removeButtons = screen.getAllByRole('button', {
+      name: /remove option/i,
+    });
+    await userEvent.click(removeButtons[0]);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as CourseLessonQuiz;
+    expect(next[0].options).toEqual([{ id: 'b', value: 'Gravity' }]);
+    expect(next[0].correctOptionId).toBe('b');
+  });
 });

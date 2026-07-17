@@ -64,7 +64,6 @@ export const QuizField = ({
               rows={2}
               value={q.question}
               onChange={(e) => patchQuestion(qi, { question: e.target.value })}
-              placeholder=""
               className={`flex-1 ${controlCls}`}
             />
             <button
@@ -111,11 +110,16 @@ export const QuizField = ({
                 <button
                   type="button"
                   aria-label={`Remove option ${oi + 1}`}
-                  onClick={() =>
+                  onClick={() => {
+                    const remaining = q.options.filter((_, i) => i !== oi);
                     patchQuestion(qi, {
-                      options: q.options.filter((_, i) => i !== oi),
-                    })
-                  }
+                      options: remaining,
+                      correctOptionId:
+                        q.correctOptionId === opt.id
+                          ? (remaining[0]?.id ?? '')
+                          : q.correctOptionId,
+                    });
+                  }}
                   className="rounded-md p-2 text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
