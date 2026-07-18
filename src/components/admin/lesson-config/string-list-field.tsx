@@ -1,19 +1,29 @@
 import { Plus, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 /**
  * Controlled add/remove editor for a string[] (key points, links). Pure — the
  * container owns the value via an RHF Controller and passes value/onChange.
+ *
+ * When `renderItem` is provided, each row renders the custom node instead of
+ * the default text input (e.g. a rich editor for key points).
  */
 export const StringListField = ({
   label,
   itemNoun,
   value,
   onChange,
+  renderItem,
 }: {
   label: string;
   itemNoun: string;
   value: string[];
   onChange: (next: string[]) => void;
+  renderItem?: (args: {
+    value: string;
+    onChange: (v: string) => void;
+    index: number;
+  }) => ReactNode;
 }) => {
   const update = (index: number, next: string) =>
     onChange(value.map((v, i) => (i === index ? next : v)));
@@ -27,16 +37,28 @@ export const StringListField = ({
       </legend>
       {value.map((item, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: this list is controlled — value always comes from props, so index is a stable enough key for this render.
-        <div key={i} className="flex items-center gap-2">
-          <label className="sr-only" htmlFor={`${label}-${i}`}>
-            {itemNoun} {i + 1}
-          </label>
-          <input
-            id={`${label}-${i}`}
-            value={item}
-            onChange={(e) => update(i, e.target.value)}
-            className="flex-1 rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-          />
+        <div key={i} className="flex items-start gap-2">
+          {renderItem ? (
+            <div className="flex-1">
+              {renderItem({
+                value: item,
+                onChange: (next) => update(i, next),
+                index: i,
+              })}
+            </div>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor={`${label}-${i}`}>
+                {itemNoun} {i + 1}
+              </label>
+              <input
+                id={`${label}-${i}`}
+                value={item}
+                onChange={(e) => update(i, e.target.value)}
+                className="flex-1 rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              />
+            </>
+          )}
           <button
             type="button"
             onClick={() => remove(i)}

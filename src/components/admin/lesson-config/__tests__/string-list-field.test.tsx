@@ -46,4 +46,35 @@ describe('StringListField', () => {
     await userEvent.click(removes[0]);
     expect(onChange).toHaveBeenCalledWith(['two']);
   });
+
+  it('renders a custom item via renderItem instead of the default input', () => {
+    render(
+      <StringListField
+        label="Key points"
+        itemNoun="key point"
+        value={['Alpha']}
+        onChange={vi.fn()}
+        renderItem={({ value }) => <div data-testid="custom">{value}</div>}
+      />,
+    );
+    expect(screen.getByTestId('custom').textContent).toBe('Alpha');
+    // The default text input is not used when renderItem is provided.
+    expect(screen.queryByDisplayValue('Alpha')).toBeNull();
+  });
+
+  it('renderItem rows still support remove', async () => {
+    const onChange = vi.fn();
+    render(
+      <StringListField
+        label="Key points"
+        itemNoun="key point"
+        value={['Alpha', 'Bravo']}
+        onChange={onChange}
+        renderItem={({ value }) => <div>{value}</div>}
+      />,
+    );
+    const removes = screen.getAllByRole('button', { name: /remove/i });
+    await userEvent.click(removes[0]);
+    expect(onChange).toHaveBeenCalledWith(['Bravo']);
+  });
 });
