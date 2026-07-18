@@ -12,11 +12,10 @@ import type { RichTextEditorApi } from './rich-text-editor-api';
  * TanStack Start under Vitest) nulls the hook dispatcher for ANY component
  * that calls a React hook directly in a render test — a pre-existing infra
  * issue unrelated to this component (see src/components/video-player/hooks.ts's
- * top-of-file note). The input's value is seeded via a `ref` callback (not a
- * hook) instead of `defaultValue`, so it re-reads the editor's current link
- * fresh every time the input mounts — Base UI unmounts Popover.Popup's
- * content on close by default, so this re-seeds on every open without
- * needing state.
+ * top-of-file note). The input's value is seeded via `defaultValue` (not a
+ * hook), read fresh at render time from the editor's current link — Base UI
+ * unmounts Popover.Popup's content on close by default, so this re-seeds on
+ * every open without needing state.
  *
  * The input uses `type="text"` rather than `type="url"`: native URL
  * validation would silently block form submission (and thus `applyLink`)
@@ -50,11 +49,9 @@ export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
           <Popover.Popup className="rounded-lg border border-gray-6 bg-gray-2 p-1.5 shadow-lg">
             <form onSubmit={applyLink} className="flex items-center gap-1.5">
               <input
-                ref={(el) => {
-                  if (el)
-                    el.value =
-                      (editor.getAttributes('link').href as string) ?? '';
-                }}
+                defaultValue={
+                  (editor.getAttributes('link').href as string) ?? ''
+                }
                 type="text"
                 name="href"
                 placeholder="https://…"

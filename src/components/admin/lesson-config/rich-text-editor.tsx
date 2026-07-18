@@ -9,7 +9,7 @@ import { RichTextToolbar } from './rich-text-toolbar';
 /** TipTap's empty document serializes to `<p></p>`; treat that as empty. */
 export function normalizeEditorHtml(html: string): string {
   const stripped = html.replace(/<p>\s*(<br\s*\/?>)?\s*<\/p>/gi, '').trim();
-  return stripped;
+  return stripped === '' ? '' : html.trim();
 }
 
 interface RichTextEditorProps {
@@ -42,6 +42,7 @@ export const RichTextEditor = ({
   const compact = toolbar === 'bubble';
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit.configure({
         link: {
@@ -57,7 +58,13 @@ export const RichTextEditor = ({
     editorProps: {
       attributes: {
         class: `material-prose rich-editor__content${compact ? ' rich-editor__content--compact' : ''}`,
-        ...(ariaLabel ? { 'aria-label': ariaLabel, role: 'textbox' } : {}),
+        ...(ariaLabel
+          ? {
+              'aria-label': ariaLabel,
+              role: 'textbox',
+              'aria-multiline': 'true',
+            }
+          : {}),
       },
     },
     onUpdate: ({ editor }) => onChange(normalizeEditorHtml(editor.getHTML())),

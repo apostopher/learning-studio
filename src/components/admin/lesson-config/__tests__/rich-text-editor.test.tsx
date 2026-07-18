@@ -12,6 +12,11 @@ describe('normalizeEditorHtml', () => {
   it('passes real content through unchanged', () => {
     expect(normalizeEditorHtml('<p>Hi</p>')).toBe('<p>Hi</p>');
   });
+  it('preserves an intentional blank paragraph between content', () => {
+    expect(normalizeEditorHtml('<p>A</p><p></p><p>B</p>')).toBe(
+      '<p>A</p><p></p><p>B</p>',
+    );
+  });
 });
 
 describe('RichTextEditor', () => {
