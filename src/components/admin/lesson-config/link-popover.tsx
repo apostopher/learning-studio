@@ -7,23 +7,29 @@ import type { RichTextEditorApi } from './rich-text-editor-api';
  * Link add/edit popover for the rich-text toolbar. Prefills from the current
  * selection's link; Apply sets it on the extended mark range, Remove unsets it.
  *
- * Deliberately hookless (uncontrolled `<form>` + `defaultValue` read via
- * FormData on submit, instead of `useState`): this repo's Vite pipeline
- * (react-compiler + TanStack Start under Vitest) nulls the hook dispatcher for
- * ANY component that calls a React hook directly in a render test — a
- * pre-existing infra issue unrelated to this component (see
- * src/components/video-player/hooks.ts's top-of-file note). Base UI unmounts
- * Popover.Popup's content on close by default, so `defaultValue` re-seeds from
- * the editor's current link on every open without needing state.
+ * Deliberately hookless (uncontrolled `<form>` read via FormData on submit,
+ * instead of `useState`): this repo's Vite pipeline (react-compiler +
+ * TanStack Start under Vitest) nulls the hook dispatcher for ANY component
+ * that calls a React hook directly in a render test — a pre-existing infra
+ * issue unrelated to this component (see src/components/video-player/hooks.ts's
+ * top-of-file note). The input's value is seeded via a `ref` callback (not a
+ * hook) instead of `defaultValue`, so it re-reads the editor's current link
+ * fresh every time the input mounts — Base UI unmounts Popover.Popup's
+ * content on close by default, so this re-seeds on every open without
+ * needing state.
+ *
+ * The input uses `type="text"` rather than `type="url"`: native URL
+ * validation would silently block form submission (and thus `applyLink`)
+ * for scheme-less input like `example.com`, while the popover still closes
+ * via `Popover.Close`. `applyLink` normalizes scheme-less input instead.
  */
 export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
-  const currentHref = (editor.getAttributes('link').href as string) ?? '';
-
   const applyLink = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const raw = new FormData(event.currentTarget).get('href');
-    const url = typeof raw === 'string' ? raw.trim() : '';
+    let url = typeof raw === 'string' ? raw.trim() : '';
     if (!url) return;
+    if (!/^(https?:|mailto:|tel:)/i.test(url)) url = `https://${url}`;
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
   const removeLink = () => {
@@ -44,9 +50,13 @@ export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
           <Popover.Popup className="rounded-lg border border-gray-6 bg-gray-2 p-1.5 shadow-lg">
             <form onSubmit={applyLink} className="flex items-center gap-1.5">
               <input
-                type="url"
+                ref={(el) => {
+                  if (el)
+                    el.value =
+                      (editor.getAttributes('link').href as string) ?? '';
+                }}
+                type="text"
                 name="href"
-                defaultValue={currentHref}
                 placeholder="https://…"
                 aria-label="Link URL"
                 className="w-56 rounded-md border border-gray-6 bg-gray-1 px-2 py-1 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
