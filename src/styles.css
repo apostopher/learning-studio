@@ -1020,3 +1020,25 @@
     );
   }
 }
+
+@layer components {
+  /* Rich-text editor chrome. Content itself is styled by .material-prose,
+     applied to the ProseMirror node via editorProps. */
+  .rich-editor__content {
+    min-block-size: 8rem;
+    padding: 0.75rem;
+    outline: none;
+  }
+  .rich-editor__content.rich-editor__content--compact {
+    min-block-size: 2.25rem;
+    padding: 0.5rem 0.625rem;
+  }
+  /* Placeholder (from @tiptap/extensions Placeholder). */
+  .rich-editor__content p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-gray-9);
+    float: inline-start;
+    block-size: 0;
+    pointer-events: none;
+  }
+}
