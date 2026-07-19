@@ -1,9 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { deleteLesson, moveLesson, updateLessonName } from '@/db/admin';
+import {
+  deleteLesson,
+  moveLesson,
+  updateLessonConfig,
+  updateLessonName,
+} from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
   renameLessonInputSchema,
+  updateLessonConfigInputSchema,
 } from '@/lib/admin-schemas';
 
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
@@ -56,6 +62,13 @@ export const Route = createFileRoute('/api/admin/lessons/$lessonId')({
             prevLessonId: move.data.prevLessonId,
             nextLessonId: move.data.nextLessonId,
           });
+          if (!updated) return new Response('Not found', { status: 404 });
+          return Response.json(updated);
+        }
+
+        const config = updateLessonConfigInputSchema.safeParse(body);
+        if (config.success) {
+          const updated = await updateLessonConfig(lessonId, config.data);
           if (!updated) return new Response('Not found', { status: 404 });
           return Response.json(updated);
         }

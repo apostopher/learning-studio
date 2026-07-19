@@ -145,6 +145,21 @@ export const moveLessonInputSchema = z.object({
 });
 export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;
 
+/** PATCH body for the lesson Config tab. Every field optional; at least one required. */
+export const updateLessonConfigInputSchema = z
+  .object({
+    isAvailable: z.boolean().optional(),
+    hasDebrief: z.boolean().optional(),
+    requiredSubscriptions: SubscriptionsSchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field is required',
+  });
+export type UpdateLessonConfigInput = z.infer<
+  typeof updateLessonConfigInputSchema
+>;
+
 export const muxCredentialInputSchema = z.object({
   provider: z.literal('mux'),
   keyId: z.string().trim().min(1),

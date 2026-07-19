@@ -499,6 +499,36 @@ export async function updateLessonName(
   return updated ?? null;
 }
 
+export async function updateLessonConfig(
+  lessonId: number,
+  patch: {
+    isAvailable?: boolean;
+    hasDebrief?: boolean;
+    requiredSubscriptions?: SubscriptionType[];
+  },
+): Promise<{
+  id: number;
+  isAvailable: boolean;
+  hasDebrief: boolean;
+  requiredSubscriptions: SubscriptionType[];
+} | null> {
+  const [updated] = await db
+    .update(lessonsTable)
+    .set({ ...patch, updatedAt: sql`now()` })
+    .where(eq(lessonsTable.id, lessonId))
+    .returning({
+      id: lessonsTable.id,
+      isAvailable: lessonsTable.isAvailable,
+      hasDebrief: lessonsTable.hasDebrief,
+      requiredSubscriptions: lessonsTable.requiredSubscriptions,
+    });
+  if (!updated) return null;
+  return {
+    ...updated,
+    requiredSubscriptions: updated.requiredSubscriptions as SubscriptionType[],
+  };
+}
+
 export async function deleteLesson(lessonId: number): Promise<boolean> {
   const [deleted] = await db
     .delete(lessonsTable)
