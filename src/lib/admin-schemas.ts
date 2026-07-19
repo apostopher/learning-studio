@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PROVIDER_IDS } from '@/lib/video-providers';
+import { SubscriptionsSchema } from '@/types';
 
 export const ADMIN_ROLE = 'admin';
 
@@ -85,6 +86,8 @@ export const boardLessonSchema = z.object({
   slug: z.string(),
   rank: z.coerce.number(),
   isAvailable: z.boolean(),
+  hasDebrief: z.boolean(),
+  requiredSubscriptions: SubscriptionsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
   videoProvider: providerIdSchema.nullable(),
@@ -99,6 +102,7 @@ export const boardModuleSchema = z.object({
   imageUrlAvif: z.string().nullable(),
   imageUrlWebp: z.string().nullable(),
   rank: z.coerce.number(),
+  requiredSubscriptions: SubscriptionsSchema,
   lessons: z.array(boardLessonSchema),
 });
 export type BoardModule = z.infer<typeof boardModuleSchema>;

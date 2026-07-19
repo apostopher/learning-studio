@@ -43,6 +43,7 @@ import {
   resolvePlayback,
   validateCredentials,
 } from '@/lib/video-providers/resolve.server';
+import type { SubscriptionType } from '@/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -170,6 +171,7 @@ export async function createModule(input: {
     imageUrlAvif: created.imageUrlAvif,
     imageUrlWebp: created.imageUrlWebp,
     rank: Number(created.rank),
+    requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     lessons: [],
   };
 }
@@ -212,6 +214,8 @@ export async function createLesson(input: {
     slug: created.slug,
     rank: Number(created.rank),
     isAvailable: created.isAvailable,
+    hasDebrief: created.hasDebrief,
+    requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     isConfigured: created.videoId !== null,
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
@@ -242,6 +246,7 @@ export async function getCourseBoard(
       imageUrlAvif: modulesTable.imageUrlAvif,
       imageUrlWebp: modulesTable.imageUrlWebp,
       rank: modulesTable.rank,
+      requiredSubscriptions: modulesTable.requiredSubscriptions,
     })
     .from(modulesTable)
     .where(eq(modulesTable.courseId, courseId))
@@ -257,6 +262,8 @@ export async function getCourseBoard(
           slug: lessonsTable.slug,
           rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
+          hasDebrief: lessonsTable.hasDebrief,
+          requiredSubscriptions: lessonsTable.requiredSubscriptions,
           videoId: lessonsTable.videoId,
           videoProvider: lessonsTable.videoProvider,
           videoRef: lessonsTable.videoRef,
@@ -282,12 +289,15 @@ export async function getCourseBoard(
       imageUrlAvif: m.imageUrlAvif,
       imageUrlWebp: m.imageUrlWebp,
       rank: Number(m.rank),
+      requiredSubscriptions: m.requiredSubscriptions as SubscriptionType[],
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
         name: l.name,
         slug: l.slug,
         rank: Number(l.rank),
         isAvailable: l.isAvailable,
+        hasDebrief: l.hasDebrief,
+        requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
         isConfigured: l.videoRef !== null || l.videoId !== null,
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
