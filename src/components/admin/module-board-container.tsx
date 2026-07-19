@@ -303,10 +303,7 @@ export const ModuleBoardContainer = ({
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
       <DeleteLessonDialogContainer courseId={courseId} />
-      <LessonConfigDialogContainer
-        courseId={courseId}
-        lessons={modules.flatMap((m) => m.lessons)}
-      />
+      <LessonConfigDialogContainer courseId={courseId} modules={modules} />
     </DndContext>
   );
 };

@@ -1,7 +1,8 @@
 import { useAtom } from 'jotai';
 
 import { configureLessonIdAtom } from '@/atoms/admin';
-import type { BoardLesson } from '@/lib/admin-schemas';
+import type { BoardModule } from '@/lib/admin-schemas';
+import { ConfigSectionContainer } from './lesson-config/config-section-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
 import {
@@ -9,31 +10,18 @@ import {
   SectionedConfigModal,
 } from './sectioned-config-modal';
 
-/** Sections whose real controls don't exist yet — a dashed placeholder panel. */
-const PLACEHOLDER_SECTIONS: { value: string; title: string; hint: string }[] = [
-  {
-    value: 'availability',
-    title: 'Availability',
-    hint: 'Publish state and release rules.',
-  },
-  {
-    value: 'access',
-    title: 'Access',
-    hint: 'Which subscriptions unlock this lesson.',
-  },
-  { value: 'debrief', title: 'Debrief', hint: 'Post-lesson debrief settings.' },
-];
-
 /** Big JIRA-style lesson configuration modal (tab sidebar + main panel). */
 export const LessonConfigDialogContainer = ({
   courseId,
-  lessons,
+  modules,
 }: {
   courseId: number;
-  lessons: BoardLesson[];
+  modules: BoardModule[];
 }) => {
   const [lessonId, setLessonId] = useAtom(configureLessonIdAtom);
-  const lesson = lessons.find((l) => l.id === lessonId) ?? null;
+  const parentModule =
+    modules.find((m) => m.lessons.some((l) => l.id === lessonId)) ?? null;
+  const lesson = parentModule?.lessons.find((l) => l.id === lessonId) ?? null;
 
   const sections: ConfigModalSection[] = [
     {
@@ -48,15 +36,17 @@ export const LessonConfigDialogContainer = ({
       title: 'Material',
       content: lesson && <MaterialSectionContainer lesson={lesson} />,
     },
-    ...PLACEHOLDER_SECTIONS.map((section) => ({
-      value: section.value,
-      title: section.title,
-      content: (
-        <div className="flex h-full items-center justify-center rounded-lg border border-gray-6 border-dashed p-8 text-center text-gray-10 text-sm">
-          {section.hint}
-        </div>
+    {
+      value: 'config',
+      title: 'Config',
+      content: lesson && parentModule && (
+        <ConfigSectionContainer
+          courseId={courseId}
+          lesson={lesson}
+          module={parentModule}
+        />
       ),
-    })),
+    },
   ];
 
   return (
