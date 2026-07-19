@@ -18,8 +18,12 @@ describe('BinaryToggle', () => {
         options={options}
       />,
     );
-    expect(screen.getByRole('button', { name: 'On' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Off' }).getAttribute('aria-pressed')).toBe('false');
+    expect(
+      screen.getByRole('button', { name: 'On' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(
+      screen.getByRole('button', { name: 'Off' }).getAttribute('aria-pressed'),
+    ).toBe('false');
   });
 
   it('calls onValueChange with the newly selected value', () => {
@@ -60,6 +64,9 @@ describe('BinaryToggle', () => {
         disabledValue="on"
       />,
     );
-    expect(screen.getByRole('button', { name: 'On' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'On' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 });
