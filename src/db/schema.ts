@@ -31,13 +31,15 @@ import {
   OtherVideoIdsSchema,
 } from "@/types";
 
-
 export * from "./auth-schema";
 
 export const coursesTable = pgTable("courses", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  description: text("description"),
+  imageUrlAvif: text("image_url_avif"),
+  imageUrlWebp: text("image_url_webp"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -57,8 +59,10 @@ export const modulesTable = pgTable("modules", {
     .references(() => coursesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  imageUrlAvif: text("image_url_avif"),
+  imageUrlWebp: text("image_url_webp"),
   requiredSubscriptions: text("required_subscriptions").array().notNull(),
-  rank: numeric("rank", { precision: 10, scale: 5 }).notNull(),
+  rank: numeric("rank", { precision: 30, scale: 15 }).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -68,14 +72,17 @@ export const dbModuleSchema = createSelectSchema(modulesTable, {
 });
 export type DBModule = z.infer<typeof dbModuleSchema>;
 
-export const modulesTableRelations = relations(modulesTable, ({ one, many }) => ({
-  course: one(coursesTable, {
-    fields: [modulesTable.courseId],
-    references: [coursesTable.id],
+export const modulesTableRelations = relations(
+  modulesTable,
+  ({ one, many }) => ({
+    course: one(coursesTable, {
+      fields: [modulesTable.courseId],
+      references: [coursesTable.id],
+    }),
+    lessons: many(lessonsTable),
+    fileAssignments: many(blobFileAssignmentsTable),
   }),
-  lessons: many(lessonsTable),
-  fileAssignments: many(blobFileAssignmentsTable),
-}));
+);
 
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_modules_required_subs ON modules USING GIN (required_subscriptions);`;
@@ -88,11 +95,16 @@ export const lessonsTable = pgTable("lessons", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   videoId: uuid("video_id"),
-  otherVideoIds: jsonb("other_video_ids").$type<z.infer<typeof OtherVideoIdsSchema>>().default([]),
+  otherVideoIds: jsonb("other_video_ids")
+    .$type<z.infer<typeof OtherVideoIdsSchema>>()
+    .default([]),
+  videoProvider: text("video_provider"), // 'mux' | 'synthesia' | null
+  videoRef: text("video_ref"),
   requiredSubscriptions: text("required_subscriptions").array().notNull(),
-  rank: numeric("rank", { precision: 10, scale: 5 }).notNull(),
+  rank: numeric("rank", { precision: 30, scale: 15 }).notNull(),
   isAvailable: boolean("is_available").notNull().default(false),
   exclusivePerDay: boolean("exclusive_per_day").notNull().default(false),
+  hasDebrief: boolean("has_debrief").notNull().default(true),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -102,20 +114,44 @@ export const dbLessonSchema = createSelectSchema(lessonsTable, {
 });
 export type DBLesson = z.infer<typeof dbLessonSchema>;
 
-export const lessonsTableRelations = relations(lessonsTable, ({ one, many }) => ({
-  module: one(modulesTable, {
-    fields: [lessonsTable.moduleId],
-    references: [modulesTable.id],
+export const lessonsTableRelations = relations(
+  lessonsTable,
+  ({ one, many }) => ({
+    module: one(modulesTable, {
+      fields: [lessonsTable.moduleId],
+      references: [modulesTable.id],
+    }),
+    quizAnswers: many(lessonQuizAnswersTable),
+    material: many(lessonMaterialTable),
+    fileAssignments: many(blobFileAssignmentsTable),
+    favKeyPoints: many(favKeyPointsTable),
+    orgLessons: many(orgLessonsTable),
   }),
-  quizAnswers: many(lessonQuizAnswersTable),
-  material: many(lessonMaterialTable),
-  fileAssignments: many(blobFileAssignmentsTable),
-  favKeyPoints: many(favKeyPointsTable),
-  orgLessons: many(orgLessonsTable),
-}));
+);
 
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_lessons_required_subs ON lessons USING GIN (required_subscriptions);`;
+
+export const courseVideoProvidersTable = pgTable(
+  "course_video_providers",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(), // 'mux' | 'synthesia'
+    secrets: jsonb("secrets").notNull(), // AES-GCM envelope { v, iv, tag, ct }
+    lastValidatedAt: timestamp("last_validated_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("course_video_providers_course_provider_idx").on(
+      table.courseId,
+      table.provider,
+    ),
+  ],
+);
 
 export const moduleDependenciesTable = pgTable(
   "module_dependencies",
@@ -136,7 +172,9 @@ export const lessonDependenciesTable = pgTable("lesson_dependencies", {
     .unique()
     .notNull()
     .references(() => lessonsTable.id, { onDelete: "cascade" }),
-  dependsOn: jsonb("depends_on").$type<z.infer<typeof CourseLessonDependenciesSchema>>().notNull(),
+  dependsOn: jsonb("depends_on")
+    .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
+    .notNull(),
 });
 
 // GIN index for JSONB depends_on field
@@ -156,10 +194,7 @@ export const videoProgressTable = pgTable(
   (table) => [
     index("videos_progress_user_id_idx").on(table.userId),
     index("videos_progress_user_video_idx").on(table.userId, table.videoId),
-    index("videos_progress_user_created_idx").on(
-      table.userId,
-      table.createdAt,
-    ),
+    index("videos_progress_user_created_idx").on(table.userId, table.createdAt),
   ],
 );
 
@@ -169,12 +204,15 @@ export type VideoProgressInsert = z.infer<typeof videoProgressInsertSchema>;
 export const videoProgressSelectSchema = createSelectSchema(videoProgressTable);
 export type VideoProgressSelect = z.infer<typeof videoProgressSelectSchema>;
 
-export const videoProgressTableRelations = relations(videoProgressTable, ({ one }) => ({
-  user: one(userProfileTable, {
-    fields: [videoProgressTable.userId],
-    references: [userProfileTable.userId],
+export const videoProgressTableRelations = relations(
+  videoProgressTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [videoProgressTable.userId],
+      references: [userProfileTable.userId],
+    }),
   }),
-}));
+);
 
 export const lessonQuizAnswersTable = pgTable(
   "lesson_quiz_answers",
@@ -186,35 +224,53 @@ export const lessonQuizAnswersTable = pgTable(
     lessonSlug: varchar("lesson_slug", { length: 255 })
       .notNull()
       .references(() => lessonsTable.slug, { onDelete: "cascade" }),
-    answers: json("answers").$type<z.infer<typeof CourseLessonQuizAnswersSchema>>().notNull(),
+    answers: json("answers")
+      .$type<z.infer<typeof CourseLessonQuizAnswersSchema>>()
+      .notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
     index("lesson_quiz_answers_user_id_idx").on(table.userId),
-    index("lesson_quiz_answers_user_lesson_idx").on(table.userId, table.lessonSlug),
+    index("lesson_quiz_answers_user_lesson_idx").on(
+      table.userId,
+      table.lessonSlug,
+    ),
   ],
 );
 
-export const lessonQuizAnswersInsertSchema = createInsertSchema(lessonQuizAnswersTable, {
-  answers: CourseLessonQuizAnswersSchema,
-});
-export type LessonQuizAnswersInsert = z.infer<typeof lessonQuizAnswersInsertSchema>;
+export const lessonQuizAnswersInsertSchema = createInsertSchema(
+  lessonQuizAnswersTable,
+  {
+    answers: CourseLessonQuizAnswersSchema,
+  },
+);
+export type LessonQuizAnswersInsert = z.infer<
+  typeof lessonQuizAnswersInsertSchema
+>;
 
-export const lessonQuizAnswersSelectSchema = createSelectSchema(lessonQuizAnswersTable, {
-  answers: CourseLessonQuizAnswerSchema,
-});
-export type LessonQuizAnswersSelect = z.infer<typeof lessonQuizAnswersSelectSchema>;
+export const lessonQuizAnswersSelectSchema = createSelectSchema(
+  lessonQuizAnswersTable,
+  {
+    answers: CourseLessonQuizAnswerSchema,
+  },
+);
+export type LessonQuizAnswersSelect = z.infer<
+  typeof lessonQuizAnswersSelectSchema
+>;
 
-export const lessonQuizAnswersTableRelations = relations(lessonQuizAnswersTable, ({ one }) => ({
-  user: one(userProfileTable, {
-    fields: [lessonQuizAnswersTable.userId],
-    references: [userProfileTable.userId],
+export const lessonQuizAnswersTableRelations = relations(
+  lessonQuizAnswersTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [lessonQuizAnswersTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [lessonQuizAnswersTable.lessonSlug],
+      references: [lessonsTable.slug],
+    }),
   }),
-  lesson: one(lessonsTable, {
-    fields: [lessonQuizAnswersTable.lessonSlug],
-    references: [lessonsTable.slug],
-  }),
-}));
+);
 
 export const lessonMaterialTable = pgTable(
   "lesson_material",
@@ -236,22 +292,31 @@ export const lessonMaterialTable = pgTable(
   (table) => [index("lesson_material_lesson_slug_idx").on(table.lessonSlug)],
 );
 
-export const lessonMaterialInsertSchema = createInsertSchema(lessonMaterialTable, {
-  quiz: CourseLessonQuizSchema,
-});
+export const lessonMaterialInsertSchema = createInsertSchema(
+  lessonMaterialTable,
+  {
+    quiz: CourseLessonQuizSchema,
+  },
+);
 export type LessonMaterialInsert = z.infer<typeof lessonMaterialInsertSchema>;
 
-export const lessonMaterialSelectSchema = createSelectSchema(lessonMaterialTable, {
-  quiz: CourseLessonQuizSchema,
-});
+export const lessonMaterialSelectSchema = createSelectSchema(
+  lessonMaterialTable,
+  {
+    quiz: CourseLessonQuizSchema,
+  },
+);
 export type LessonMaterialSelect = z.infer<typeof lessonMaterialSelectSchema>;
 
-export const lessonMaterialTableRelations = relations(lessonMaterialTable, ({ one }) => ({
-  lesson: one(lessonsTable, {
-    fields: [lessonMaterialTable.lessonSlug],
-    references: [lessonsTable.slug],
+export const lessonMaterialTableRelations = relations(
+  lessonMaterialTable,
+  ({ one }) => ({
+    lesson: one(lessonsTable, {
+      fields: [lessonMaterialTable.lessonSlug],
+      references: [lessonsTable.slug],
+    }),
   }),
-}));
+);
 
 export const lessonMaterialProgressTable = pgTable(
   "lesson_material_progress",
@@ -277,11 +342,19 @@ export const lessonMaterialProgressTable = pgTable(
   ],
 );
 
-export const lessonMaterialProgressInsertSchema = createInsertSchema(lessonMaterialProgressTable);
-export type LessonMaterialProgressInsert = z.infer<typeof lessonMaterialProgressInsertSchema>;
+export const lessonMaterialProgressInsertSchema = createInsertSchema(
+  lessonMaterialProgressTable,
+);
+export type LessonMaterialProgressInsert = z.infer<
+  typeof lessonMaterialProgressInsertSchema
+>;
 
-export const lessonMaterialProgressSelectSchema = createSelectSchema(lessonMaterialProgressTable);
-export type LessonMaterialProgressSelect = z.infer<typeof lessonMaterialProgressSelectSchema>;
+export const lessonMaterialProgressSelectSchema = createSelectSchema(
+  lessonMaterialProgressTable,
+);
+export type LessonMaterialProgressSelect = z.infer<
+  typeof lessonMaterialProgressSelectSchema
+>;
 
 export const lessonMaterialProgressTableRelations = relations(
   lessonMaterialProgressTable,
@@ -304,9 +377,12 @@ export const favKeyPointsTable = pgTable(
     userId: varchar("user_id", { length: 255 })
       .notNull()
       .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    lessonSlug: varchar("lesson_slug", { length: 255 }).references(() => lessonsTable.slug, {
-      onDelete: "cascade",
-    }),
+    lessonSlug: varchar("lesson_slug", { length: 255 }).references(
+      () => lessonsTable.slug,
+      {
+        onDelete: "cascade",
+      },
+    ),
     keyPoint: text("key_point").notNull(),
   },
   (table) => [
@@ -348,9 +424,12 @@ export type BlobFilesInsert = z.infer<typeof blobFilesInsertSchema>;
 export const blobFilesSelectSchema = createSelectSchema(blobFilesTable);
 export type BlobFilesSelect = z.infer<typeof blobFilesSelectSchema>;
 
-export const blobFilesTableRelations = relations(blobFilesTable, ({ many }) => ({
-  assignments: many(blobFileAssignmentsTable),
-}));
+export const blobFilesTableRelations = relations(
+  blobFilesTable,
+  ({ many }) => ({
+    assignments: many(blobFileAssignmentsTable),
+  }),
+);
 
 export const blobFileAssignmentsTable = pgTable(
   "blob_file_assignments",
@@ -359,12 +438,18 @@ export const blobFileAssignmentsTable = pgTable(
     fileId: integer("file_id")
       .notNull()
       .references(() => blobFilesTable.id, { onDelete: "cascade" }),
-    moduleSlug: varchar("module_slug", { length: 255 }).references(() => modulesTable.slug, {
-      onDelete: "cascade",
-    }),
-    lessonSlug: varchar("lesson_slug", { length: 255 }).references(() => lessonsTable.slug, {
-      onDelete: "cascade",
-    }),
+    moduleSlug: varchar("module_slug", { length: 255 }).references(
+      () => modulesTable.slug,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    lessonSlug: varchar("lesson_slug", { length: 255 }).references(
+      () => lessonsTable.slug,
+      {
+        onDelete: "cascade",
+      },
+    ),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
@@ -375,26 +460,37 @@ export const blobFileAssignmentsTable = pgTable(
 );
 
 // Add foreign key relationship
-export const blobFileAssignmentsRelations = relations(blobFileAssignmentsTable, ({ one }) => ({
-  file: one(blobFilesTable, {
-    fields: [blobFileAssignmentsTable.fileId],
-    references: [blobFilesTable.id],
+export const blobFileAssignmentsRelations = relations(
+  blobFileAssignmentsTable,
+  ({ one }) => ({
+    file: one(blobFilesTable, {
+      fields: [blobFileAssignmentsTable.fileId],
+      references: [blobFilesTable.id],
+    }),
+    module: one(modulesTable, {
+      fields: [blobFileAssignmentsTable.moduleSlug],
+      references: [modulesTable.slug],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [blobFileAssignmentsTable.lessonSlug],
+      references: [lessonsTable.slug],
+    }),
   }),
-  module: one(modulesTable, {
-    fields: [blobFileAssignmentsTable.moduleSlug],
-    references: [modulesTable.slug],
-  }),
-  lesson: one(lessonsTable, {
-    fields: [blobFileAssignmentsTable.lessonSlug],
-    references: [lessonsTable.slug],
-  }),
-}));
+);
 
-export const blobFileAssignmentsInsertSchema = createInsertSchema(blobFileAssignmentsTable);
-export type BlobFileAssignmentsInsert = z.infer<typeof blobFileAssignmentsInsertSchema>;
+export const blobFileAssignmentsInsertSchema = createInsertSchema(
+  blobFileAssignmentsTable,
+);
+export type BlobFileAssignmentsInsert = z.infer<
+  typeof blobFileAssignmentsInsertSchema
+>;
 
-export const blobFileAssignmentsSelectSchema = createSelectSchema(blobFileAssignmentsTable);
-export type BlobFileAssignmentsSelect = z.infer<typeof blobFileAssignmentsSelectSchema>;
+export const blobFileAssignmentsSelectSchema = createSelectSchema(
+  blobFileAssignmentsTable,
+);
+export type BlobFileAssignmentsSelect = z.infer<
+  typeof blobFileAssignmentsSelectSchema
+>;
 
 export const userProfileTable = pgTable(
   "user_profiles",
@@ -410,13 +506,16 @@ export const userProfileTable = pgTable(
     avatarURL: varchar("avatar_url"),
     age: integer("age"),
     gender: varchar("gender", { enum: ["M", "F"] }),
-    pilotLicenses: json("pilot_licenses").$type<z.infer<typeof PilotLicensesSchema>>().array(),
+    pilotLicenses: json("pilot_licenses")
+      .$type<z.infer<typeof PilotLicensesSchema>>()
+      .array(),
     uasLicenseCountry: varchar("uas_license_country", { length: 3 }), // 3 letter country code
     uasLicenseType: varchar("uas_license_type").array(),
     uasType: varchar("uas_type").array(),
     uasWeightClass: varchar("uas_weight_class"),
     address: json("address").$type<z.infer<typeof AddressSchema>>(),
-    visibility: json("visibility").$type<z.infer<typeof ProfileVisibilitySchema>>(),
+    visibility:
+      json("visibility").$type<z.infer<typeof ProfileVisibilitySchema>>(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -446,17 +545,20 @@ export const userProfileSelectSchema = createSelectSchema(userProfileTable, {
 });
 export type UserProfileSelect = z.infer<typeof userProfileSelectSchema>;
 
-export const userProfileTableRelations = relations(userProfileTable, ({ many }) => ({
-  aiChats: many(aiChats),
-  videoProgress: many(videoProgressTable),
-  lessonQuizAnswers: many(lessonQuizAnswersTable),
-  lessonMaterialProgress: many(lessonMaterialProgressTable),
-  courseSubscriptions: many(courseSubscriptionsTable),
-  userNewsSources: many(userNewsSourcesTable),
-  favKeyPoints: many(favKeyPointsTable),
-  userRoles: many(userProfileRolesTable),
-  userOrganizations: many(userOrgTable),
-}));
+export const userProfileTableRelations = relations(
+  userProfileTable,
+  ({ many }) => ({
+    aiChats: many(aiChats),
+    videoProgress: many(videoProgressTable),
+    lessonQuizAnswers: many(lessonQuizAnswersTable),
+    lessonMaterialProgress: many(lessonMaterialProgressTable),
+    courseSubscriptions: many(courseSubscriptionsTable),
+    userNewsSources: many(userNewsSourcesTable),
+    favKeyPoints: many(favKeyPointsTable),
+    userRoles: many(userProfileRolesTable),
+    userOrganizations: many(userOrgTable),
+  }),
+);
 
 export const userRolesTable = pgTable(
   "user_roles",
@@ -477,9 +579,12 @@ export type UserRolesInsert = z.infer<typeof userRolesInsertSchema>;
 export const userRolesSelectSchema = createSelectSchema(userRolesTable);
 export type UserRolesSelect = z.infer<typeof userRolesSelectSchema>;
 
-export const userRolesTableRelations = relations(userRolesTable, ({ many }) => ({
-  users: many(userProfileRolesTable),
-}));
+export const userRolesTableRelations = relations(
+  userRolesTable,
+  ({ many }) => ({
+    users: many(userProfileRolesTable),
+  }),
+);
 
 export const userProfileRolesTable = pgTable(
   "user_profile_roles",
@@ -500,16 +605,19 @@ export const userProfileRolesTable = pgTable(
   ],
 );
 
-export const userProfileRolesRelations = relations(userProfileRolesTable, ({ one }) => ({
-  userProfile: one(userProfileTable, {
-    fields: [userProfileRolesTable.userProfileId],
-    references: [userProfileTable.id],
+export const userProfileRolesRelations = relations(
+  userProfileRolesTable,
+  ({ one }) => ({
+    userProfile: one(userProfileTable, {
+      fields: [userProfileRolesTable.userProfileId],
+      references: [userProfileTable.id],
+    }),
+    role: one(userRolesTable, {
+      fields: [userProfileRolesTable.roleId],
+      references: [userRolesTable.id],
+    }),
   }),
-  role: one(userRolesTable, {
-    fields: [userProfileRolesTable.roleId],
-    references: [userRolesTable.id],
-  }),
-}));
+);
 
 export const newsSourcesTable = pgTable("news_sources", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -530,9 +638,12 @@ export type NewsSourcesInsert = z.infer<typeof newsSourcesInsertSchema>;
 export const newsSourcesSelectSchema = createSelectSchema(newsSourcesTable);
 export type NewsSourcesSelect = z.infer<typeof newsSourcesSelectSchema>;
 
-export const newsSourcesTableRelations = relations(newsSourcesTable, ({ many }) => ({
-  userNewsSources: many(userNewsSourcesTable),
-}));
+export const newsSourcesTableRelations = relations(
+  newsSourcesTable,
+  ({ many }) => ({
+    userNewsSources: many(userNewsSourcesTable),
+  }),
+);
 
 export const userNewsSourcesTable = pgTable(
   "user_news_sources",
@@ -546,26 +657,34 @@ export const userNewsSourcesTable = pgTable(
       .references(() => newsSourcesTable.id, { onDelete: "cascade" }),
   },
   (table) => [
-    uniqueIndex("user_news_sources_user_source_idx").on(table.userId, table.newsSourceId),
+    uniqueIndex("user_news_sources_user_source_idx").on(
+      table.userId,
+      table.newsSourceId,
+    ),
   ],
 );
 
-export const userNewsSourcesInsertSchema = createInsertSchema(userNewsSourcesTable);
+export const userNewsSourcesInsertSchema =
+  createInsertSchema(userNewsSourcesTable);
 export type UserNewsSourcesInsert = z.infer<typeof userNewsSourcesInsertSchema>;
 
-export const userNewsSourcesSelectSchema = createSelectSchema(userNewsSourcesTable);
+export const userNewsSourcesSelectSchema =
+  createSelectSchema(userNewsSourcesTable);
 export type UserNewsSourcesSelect = z.infer<typeof userNewsSourcesSelectSchema>;
 
-export const userNewsSourcesTableRelations = relations(userNewsSourcesTable, ({ one }) => ({
-  user: one(userProfileTable, {
-    fields: [userNewsSourcesTable.userId],
-    references: [userProfileTable.userId],
+export const userNewsSourcesTableRelations = relations(
+  userNewsSourcesTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [userNewsSourcesTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    newsSource: one(newsSourcesTable, {
+      fields: [userNewsSourcesTable.newsSourceId],
+      references: [newsSourcesTable.id],
+    }),
   }),
-  newsSource: one(newsSourcesTable, {
-    fields: [userNewsSourcesTable.newsSourceId],
-    references: [newsSourcesTable.id],
-  }),
-}));
+);
 
 export const helpTopicsTable = pgTable("help_topics", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -594,19 +713,27 @@ export const courseSubscriptionsTable = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("course_subscriptions_user_course_idx").on(table.userId, table.courseId)],
+  (table) => [
+    uniqueIndex("course_subscriptions_user_course_idx").on(
+      table.userId,
+      table.courseId,
+    ),
+  ],
 );
 
-export const courseSubscriptionsTableRelations = relations(courseSubscriptionsTable, ({ one }) => ({
-  user: one(userProfileTable, {
-    fields: [courseSubscriptionsTable.userId],
-    references: [userProfileTable.userId],
+export const courseSubscriptionsTableRelations = relations(
+  courseSubscriptionsTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [courseSubscriptionsTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    course: one(coursesTable, {
+      fields: [courseSubscriptionsTable.courseId],
+      references: [coursesTable.id],
+    }),
   }),
-  course: one(coursesTable, {
-    fields: [courseSubscriptionsTable.courseId],
-    references: [coursesTable.id],
-  }),
-}));
+);
 
 export const docs = pgTable(
   "docs",
@@ -619,7 +746,13 @@ export const docs = pgTable(
     embedding: vector("embedding", { dimensions: 3072 }).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (t) => [uniqueIndex("uniq_source_heading_chunk").on(t.sourcePath, t.heading, t.chunk)],
+  (t) => [
+    uniqueIndex("uniq_source_heading_chunk").on(
+      t.sourcePath,
+      t.heading,
+      t.chunk,
+    ),
+  ],
 );
 
 export const docURLs = pgTable(
@@ -754,7 +887,10 @@ export const userOrgTable = pgTable(
   "user_organizations",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userRoles: varchar("user_roles", { length: 255 }).array().default([]).notNull(),
+    userRoles: varchar("user_roles", { length: 255 })
+      .array()
+      .default([])
+      .notNull(),
     userId: varchar("user_id", { length: 255 })
       .notNull()
       .references(() => userProfileTable.userId, { onDelete: "cascade" }),
@@ -762,7 +898,9 @@ export const userOrgTable = pgTable(
       .notNull()
       .references(() => orgsTable.id, { onDelete: "cascade" }),
   },
-  (table) => [uniqueIndex("user_orgs_user_org_idx").on(table.userId, table.orgId)],
+  (table) => [
+    uniqueIndex("user_orgs_user_org_idx").on(table.userId, table.orgId),
+  ],
 );
 
 export const userOrgTableRelations = relations(userOrgTable, ({ one }) => ({
@@ -794,26 +932,32 @@ export const orgLessonsTable = pgTable(
   ],
 );
 
-export const orgLessonsTableRelations = relations(orgLessonsTable, ({ one }) => ({
-  org: one(orgsTable, {
-    fields: [orgLessonsTable.orgId],
-    references: [orgsTable.id],
+export const orgLessonsTableRelations = relations(
+  orgLessonsTable,
+  ({ one }) => ({
+    org: one(orgsTable, {
+      fields: [orgLessonsTable.orgId],
+      references: [orgsTable.id],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [orgLessonsTable.lessonId],
+      references: [lessonsTable.id],
+    }),
   }),
-  lesson: one(lessonsTable, {
-    fields: [orgLessonsTable.lessonId],
-    references: [lessonsTable.id],
-  }),
-}));
+);
 
-export const accountDeletionRequestsTable = pgTable("account_deletion_requests", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id", { length: 255 })
-    .notNull()
-    .unique()
-    .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-  reason: text("reason").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-});
+export const accountDeletionRequestsTable = pgTable(
+  "account_deletion_requests",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .unique()
+      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+);
 
 export const airportsTable = pgTable("airports", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -843,23 +987,37 @@ export const lessonTestResultsTable = pgTable(
   },
   (table) => [
     index("lesson_test_results_user_id_idx").on(table.userId),
-    index("lesson_test_results_user_lesson_idx").on(table.userId, table.lessonSlug),
+    index("lesson_test_results_user_lesson_idx").on(
+      table.userId,
+      table.lessonSlug,
+    ),
   ],
 );
 
-export const lessonTestResultsInsertSchema = createInsertSchema(lessonTestResultsTable);
-export type LessonTestResultsInsert = z.infer<typeof lessonTestResultsInsertSchema>;
+export const lessonTestResultsInsertSchema = createInsertSchema(
+  lessonTestResultsTable,
+);
+export type LessonTestResultsInsert = z.infer<
+  typeof lessonTestResultsInsertSchema
+>;
 
-export const lessonTestResultsSelectSchema = createSelectSchema(lessonTestResultsTable);
-export type LessonTestResultsSelect = z.infer<typeof lessonTestResultsSelectSchema>;
+export const lessonTestResultsSelectSchema = createSelectSchema(
+  lessonTestResultsTable,
+);
+export type LessonTestResultsSelect = z.infer<
+  typeof lessonTestResultsSelectSchema
+>;
 
-export const lessonTestResultsTableRelations = relations(lessonTestResultsTable, ({ one }) => ({
-  user: one(userProfileTable, {
-    fields: [lessonTestResultsTable.userId],
-    references: [userProfileTable.userId],
+export const lessonTestResultsTableRelations = relations(
+  lessonTestResultsTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [lessonTestResultsTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [lessonTestResultsTable.lessonSlug],
+      references: [lessonsTable.slug],
+    }),
   }),
-  lesson: one(lessonsTable, {
-    fields: [lessonTestResultsTable.lessonSlug],
-    references: [lessonsTable.slug],
-  }),
-}));
+);

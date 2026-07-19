@@ -1,5 +1,11 @@
 # Claude AI Rules
 
+## React rules
+
+strictly use presentational components for all UI elements. they are pure functions that return JSX. optionally they might have internal state if that state is purely to power the UI it renders. e.g. animations.
+presentation components should always build on top of base UI components. only build a custom component if there is no base UI component that can be used.
+Use container components to wrap the presentational components. Containers are responsible for fetching data and passing it to the presentational components. Containers will read data from jotai store. and pass them as props to the presentational components.
+
 ## CSS: Always Use Logical Properties
 
 Never use physical direction properties. Always use logical properties so layouts work correctly in RTL locales and flow contexts.
@@ -40,7 +46,7 @@ When editing existing code that uses physical properties, convert them to logica
 
 ## State Management: Jotai + React Query
 
-Always use Jotai for client state and React Query (TanStack Query) for server state. Never use useState/useReducer for complex state or manual fetch logic.
+Always use Jotai for client state and React Query (TanStack Query) for server state. Never use useState/useReducer for complex state or manual fetch logic. use data-hooks for all data fetching logic. so that each hook in data-hooks is type-safe and can be used in any component.
 
 ### Jotai for Client State
 
