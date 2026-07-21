@@ -1,5 +1,4 @@
 import { Upload } from 'lucide-react';
-import { useRef } from 'react';
 
 export type UploadStatus = 'idle' | 'uploading' | 'processing';
 
@@ -19,7 +18,11 @@ const STATUS_LABEL: Record<UploadStatus, string> = {
   processing: 'Processing embeddings…',
 };
 
-/** "Upload Training Document" card: dropzone + name + submit. Presentational. */
+/**
+ * "Upload Training Document" card: dropzone + name + submit. Presentational and
+ * HOOKLESS — the dropzone is a `<label>` wrapping a hidden file input (clicking
+ * the label opens the picker natively; no `useRef`).
+ */
 export const TrainingDocUploadCard = ({
   fileName,
   onPickFile,
@@ -29,7 +32,6 @@ export const TrainingDocUploadCard = ({
   status,
   error,
 }: TrainingDocUploadCardProps) => {
-  const inputRef = useRef<HTMLInputElement>(null);
   const busy = status !== 'idle';
 
   return (
@@ -38,13 +40,23 @@ export const TrainingDocUploadCard = ({
         Upload Training Document
       </h2>
 
-      <label className="mt-4 block text-gray-11 text-sm">Select Document</label>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={busy}
-        className="mt-2 flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-gray-6 border-dashed px-6 py-12 text-center transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+      <span className="mt-4 block text-gray-11 text-sm">Select Document</span>
+      <label
+        className={`mt-2 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-gray-6 border-dashed px-6 py-12 text-center transition-colors hover:border-gray-8 focus-within:ring-2 focus-within:ring-apple-9 ${
+          busy ? 'pointer-events-none opacity-60' : ''
+        }`}
       >
+        <input
+          type="file"
+          accept=".pdf,.docx"
+          className="hidden"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onPickFile(file);
+            e.currentTarget.value = '';
+          }}
+        />
         <Upload className="h-6 w-6 text-gray-10" aria-hidden="true" />
         <span className="font-medium text-gray-12">
           {fileName ?? 'Click to upload PDF or Word document'}
@@ -52,18 +64,7 @@ export const TrainingDocUploadCard = ({
         <span className="text-gray-10 text-sm">
           Only .pdf and .docx files are supported
         </span>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".pdf,.docx"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onPickFile(file);
-          e.target.value = '';
-        }}
-      />
+      </label>
 
       <label
         htmlFor="training-doc-name"

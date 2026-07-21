@@ -16,17 +16,19 @@ const base = {
 describe('TrainingDocUploadCard', () => {
   it('disables submit when no file is selected', () => {
     render(<TrainingDocUploadCard {...base} />);
-    expect(
-      screen.getByRole('button', { name: /upload document/i }),
-    ).toBeDisabled();
+    const submit = screen.getByRole('button', {
+      name: /upload document/i,
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
   });
 
   it('enables submit and shows the selected file name', () => {
     render(<TrainingDocUploadCard {...base} fileName="drone-manual.pdf" />);
-    expect(screen.getByText('drone-manual.pdf')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /upload document/i }),
-    ).toBeEnabled();
+    expect(screen.queryByText('drone-manual.pdf')).not.toBeNull();
+    const submit = screen.getByRole('button', {
+      name: /upload document/i,
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
   });
 
   it('shows processing label and disables submit while processing', () => {
@@ -37,14 +39,15 @@ describe('TrainingDocUploadCard', () => {
         status="processing"
       />,
     );
-    expect(screen.getByText(/processing embeddings/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /processing embeddings/i }),
-    ).toBeDisabled();
+    expect(screen.queryByText(/processing embeddings/i)).not.toBeNull();
+    const submit = screen.getByRole('button', {
+      name: /processing embeddings/i,
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
   });
 
   it('renders an error message', () => {
     render(<TrainingDocUploadCard {...base} error="Only PDF or Word files" />);
-    expect(screen.getByText('Only PDF or Word files')).toBeInTheDocument();
+    expect(screen.queryByText('Only PDF or Word files')).not.toBeNull();
   });
 });
