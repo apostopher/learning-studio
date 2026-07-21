@@ -1,8 +1,9 @@
 import { useSetAtom } from 'jotai';
-import { Pencil, Trash2 } from 'lucide-react';
+import { BrainCircuit, Pencil, Trash2 } from 'lucide-react';
 
-import { deleteCourseAtom, editCourseAtom } from '@/atoms/admin';
+import { deleteCourseAtom, editCourseAtom, trainCourseAtom } from '@/atoms/admin';
 import type { BoardCourse } from '@/lib/admin-schemas';
+import { CourseEmbeddingsDialogContainer } from './course-embeddings-dialog-container';
 import { CreateModuleDialogContainer } from './create-module-dialog-container';
 import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
@@ -12,10 +13,17 @@ import { TooltipIconButton } from './tooltip-icon-button';
 export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
   const setEditCourse = useSetAtom(editCourseAtom);
   const setDeleteCourse = useSetAtom(deleteCourseAtom);
+  const setTrainCourse = useSetAtom(trainCourseAtom);
 
   return (
     <div className="flex items-center gap-1">
       <CreateModuleDialogContainer courseId={course.id} />
+      <TooltipIconButton
+        label="AI training"
+        onClick={() => setTrainCourse({ id: course.id, name: course.name })}
+      >
+        <BrainCircuit className="h-4 w-4" aria-hidden="true" />
+      </TooltipIconButton>
       <TooltipIconButton
         label="Edit course"
         onClick={() =>
@@ -38,6 +46,7 @@ export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </TooltipIconButton>
 
+      <CourseEmbeddingsDialogContainer />
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer />
     </div>

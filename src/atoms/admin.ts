@@ -65,3 +65,9 @@ export const videoReplaceModeAtom = atom(false);
  * whenever the dialog is pointed at a different course.
  */
 export const expandedVideoProviderAtom = atom<ProviderId | null>(null);
+
+/** Course whose training-documents (AI embeddings) modal is open. */
+export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);
+
+/** Client-side search filter for the training-documents list. Reset on close. */
+export const embeddingsSearchAtom = atom('');
