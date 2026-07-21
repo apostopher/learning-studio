@@ -41,6 +41,24 @@ describe('aiRagPostSchema', () => {
     });
     expect(r.success).toBe(false);
   });
+  it('accepts a *.vercel-storage.com file url', () => {
+    const r = aiRagPostSchema.safeParse({
+      mode: 'file',
+      url: 'https://blob.vercel-storage.com/x.pdf',
+      fileName: 'x.pdf',
+      mimeType: 'application/pdf',
+    });
+    expect(r.success).toBe(true);
+  });
+  it('rejects a file url on an arbitrary host (SSRF allowlist)', () => {
+    const r = aiRagPostSchema.safeParse({
+      mode: 'file',
+      url: 'https://evil.example.com/x.pdf',
+      fileName: 'x.pdf',
+      mimeType: 'application/pdf',
+    });
+    expect(r.success).toBe(false);
+  });
 });
 
 describe('aiRagDeleteSchema', () => {

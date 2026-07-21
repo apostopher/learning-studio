@@ -8,7 +8,7 @@ import {
 
 describe('htmlToSections', () => {
   it('strips tags and drops paragraphs shorter than 20 chars', () => {
-    const html = '<p>short</p>\n\n<p>' + 'a'.repeat(30) + '</p>';
+    const html = `<p>short</p>\n\n<p>${'a'.repeat(30)}</p>`;
     const sections = htmlToSections(html, 'file-x');
     expect(sections).toHaveLength(1);
     expect(sections[0].name).toBe('file-x');
@@ -31,7 +31,7 @@ describe('chunkSectionTokens', () => {
   });
 
   it('splits long text into multiple overlapping chunks', () => {
-    const long = Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ') + '.';
+    const long = `${Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ')}.`;
     const chunks = chunkSectionTokens({
       heading: 'Section 1',
       text: long,
@@ -59,6 +59,6 @@ describe('trySnapToSentenceBoundary', () => {
     expect(trySnapToSentenceBoundary('Hello world. tail')).toBe('Hello world.');
   });
   it('returns null when no terminator is near the end', () => {
-    expect(trySnapToSentenceBoundary('no terminator ' + 'x'.repeat(60))).toBeNull();
+    expect(trySnapToSentenceBoundary(`no terminator ${'x'.repeat(60)}`)).toBeNull();
   });
 });

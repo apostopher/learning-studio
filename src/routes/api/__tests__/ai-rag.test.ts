@@ -111,7 +111,10 @@ describe('addEmbeddingsHandler (POST)', () => {
   });
 
   it('file mode (docx) → fetches, converts, embeds, records url', async () => {
-    mocks.fetchMock.mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(8) });
+    mocks.fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
     mocks.convertWordToHtml.mockResolvedValue(LONG);
     const res = await addEmbeddingsHandler(
       post({
@@ -138,11 +141,14 @@ describe('addEmbeddingsHandler (POST)', () => {
   });
 
   it('file mode invalid mimeType → 400', async () => {
-    mocks.fetchMock.mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(8) });
+    mocks.fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
     const res = await addEmbeddingsHandler(
       post({
         mode: 'file',
-        url: 'https://x/y.txt',
+        url: 'https://blob.vercel-storage.com/y.txt',
         fileName: 'y.txt',
         mimeType: 'text/plain',
       }),
@@ -156,6 +162,31 @@ describe('addEmbeddingsHandler (POST)', () => {
       post({ mode: 'text', sourcePath: 'd', html: LONG }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it('file mode → fetch not ok → 400 and generateHTMLEmbeddings not called', async () => {
+    mocks.fetchMock.mockResolvedValue({ ok: false });
+    const res = await addEmbeddingsHandler(
+      post({
+        mode: 'file',
+        url: 'https://blob.vercel-storage.com/x.pdf',
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.generateHTMLEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it('500 when generateHTMLEmbeddings rejects', async () => {
+    mocks.generateHTMLEmbeddings.mockRejectedValueOnce(new Error('boom'));
+    const res = await addEmbeddingsHandler(
+      post({ mode: 'text', sourcePath: 'd', html: LONG }),
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: 'Something went wrong. Please try again.',
+    });
   });
 });
 
@@ -218,6 +249,40 @@ describe('deleteEmbeddingsHandler (DELETE)', () => {
     expect(mocks.deleteDocsBySource).toHaveBeenCalledWith(2, 'file-x.pdf');
     expect(mocks.del).toHaveBeenCalledTimes(1); // only the vercel blob url
     expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.deleteDocUrls).toHaveBeenCalledWith(2, 'file-x.pdf');
+  });
+
+  it('500 when a db/docs helper rejects', async () => {
+    mocks.deleteDocsBySource.mockRejectedValueOnce(new Error('boom'));
+    const res = await deleteEmbeddingsHandler(
+      new Request('http://test/api/ai-rag', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ courseId: 2, sourcePath: 'file-x.pdf' }),
+      }),
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: 'Something went wrong. Please try again.',
+    });
+  });
+
+  it('tolerates one blob delete failing and still deletes doc_urls', async () => {
+    mocks.getDocUrls.mockResolvedValue([
+      { url: 'https://blob.vercel-storage.com/x.pdf' },
+      { url: 'https://blob.vercel-storage.com/y.pdf' },
+    ]);
+    mocks.del.mockRejectedValueOnce(new Error('blob delete failed'));
+    mocks.del.mockResolvedValueOnce(undefined);
+    const res = await deleteEmbeddingsHandler(
+      new Request('http://test/api/ai-rag', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ courseId: 2, sourcePath: 'file-x.pdf' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.del).toHaveBeenCalledTimes(2);
     expect(mocks.deleteDocUrls).toHaveBeenCalledWith(2, 'file-x.pdf');
   });
 });

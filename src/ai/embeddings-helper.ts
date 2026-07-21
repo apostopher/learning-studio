@@ -5,9 +5,6 @@ const CHUNK_TOKENS = 300;
 const OVERLAP_TOKENS = 70;
 const MIN_PARAGRAPH_CHARS = 20;
 
-export const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 type Section = {
   heading: string;
   text: string;

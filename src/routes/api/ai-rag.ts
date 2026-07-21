@@ -57,39 +57,53 @@ export async function addEmbeddingsHandler(request: Request): Promise<Response> 
   let sourcePath: string;
   let html: string;
 
-  if (input.mode === 'text') {
-    sourcePath = input.sourcePath;
-    html = input.html;
-  } else {
-    const file = await fetch(input.url);
-    const arrayBuffer = await file.arrayBuffer();
-    if (input.mimeType === 'application/pdf') {
-      html = await convertPdfToHtml(input.fileName, arrayBuffer);
-    } else if (input.mimeType === DOCX_MIME) {
-      html = await convertWordToHtml(Buffer.from(arrayBuffer));
+  try {
+    if (input.mode === 'text') {
+      sourcePath = input.sourcePath;
+      html = input.html;
     } else {
+      const file = await fetch(input.url);
+      if (!file.ok) {
+        return Response.json(
+          { error: 'Failed to fetch the uploaded file.' },
+          { status: 400 },
+        );
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      if (input.mimeType === 'application/pdf') {
+        html = await convertPdfToHtml(input.fileName, arrayBuffer);
+      } else if (input.mimeType === DOCX_MIME) {
+        html = await convertWordToHtml(Buffer.from(arrayBuffer));
+      } else {
+        return Response.json(
+          { error: 'Invalid file type. Upload a .pdf or .docx file.' },
+          { status: 400 },
+        );
+      }
+      sourcePath = `file-${input.fileName}`;
+    }
+
+    const { chunks } = await generateHTMLEmbeddings({ courseId, sourcePath, html });
+
+    if (chunks === 0) {
       return Response.json(
-        { error: 'Invalid file type. Upload a .pdf or .docx file.' },
+        { error: 'No text was extracted from the document.' },
         { status: 400 },
       );
     }
-    sourcePath = `file-${input.fileName}`;
-  }
 
-  const { chunks } = await generateHTMLEmbeddings({ courseId, sourcePath, html });
+    if (input.mode === 'file') {
+      await upsertDocUrl(courseId, sourcePath, input.url);
+    }
 
-  if (chunks === 0) {
+    return Response.json({ success: true, sourcePath, chunks });
+  } catch (error) {
+    console.error('Failed to add embeddings:', error);
     return Response.json(
-      { error: 'No text was extracted from the document.' },
-      { status: 400 },
+      { error: 'Something went wrong. Please try again.' },
+      { status: 500 },
     );
   }
-
-  if (input.mode === 'file') {
-    await upsertDocUrl(courseId, sourcePath, input.url);
-  }
-
-  return Response.json({ success: true, sourcePath, chunks });
 }
 
 export async function listEmbeddingsHandler(request: Request): Promise<Response> {
@@ -102,8 +116,16 @@ export async function listEmbeddingsHandler(request: Request): Promise<Response>
     return Response.json({ error: 'Invalid course id' }, { status: 400 });
   }
 
-  const docsBySource = await listDocsBySource(courseId);
-  return Response.json({ docsBySource });
+  try {
+    const docsBySource = await listDocsBySource(courseId);
+    return Response.json({ docsBySource });
+  } catch (error) {
+    console.error('Failed to list embeddings:', error);
+    return Response.json(
+      { error: 'Something went wrong. Please try again.' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function deleteEmbeddingsHandler(
@@ -126,20 +148,28 @@ export async function deleteEmbeddingsHandler(
   const courseId = parsed.data.courseId ?? null;
   const { sourcePath } = parsed.data;
 
-  await deleteDocsBySource(courseId, sourcePath);
+  try {
+    await deleteDocsBySource(courseId, sourcePath);
 
-  const urls = await getDocUrls(courseId, sourcePath);
-  for (const row of urls) {
-    if (row.url && row.url.includes('vercel')) {
-      await del(row.url);
-    }
+    const urls = await getDocUrls(courseId, sourcePath);
+    const vercelUrls = urls
+      .map((row) => row.url)
+      .filter((url): url is string => Boolean(url?.includes('vercel')));
+    await Promise.allSettled(vercelUrls.map((url) => del(url)));
+
+    await deleteDocUrls(courseId, sourcePath);
+
+    return Response.json({
+      success: true,
+      message: `Deleted embeddings for ${sourcePath}`,
+    });
+  } catch (error) {
+    console.error('Failed to delete embeddings:', error);
+    return Response.json(
+      { error: 'Something went wrong. Please try again.' },
+      { status: 500 },
+    );
   }
-  await deleteDocUrls(courseId, sourcePath);
-
-  return Response.json({
-    success: true,
-    message: `Deleted embeddings for ${sourcePath}`,
-  });
 }
 
 export const Route = createFileRoute('/api/ai-rag')({
