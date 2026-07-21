@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.index'
@@ -54,6 +55,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiRagRoute = ApiAiRagRouteImport.update({
+  id: '/api/ai-rag',
+  path: '/api/ai-rag',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAppRoute = AuthedAppRouteImport.update({
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AuthedAdminRouteWithChildren
   '/app': typeof AuthedAppRoute
+  '/api/ai-rag': typeof ApiAiRagRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AuthedAppRoute
+  '/api/ai-rag': typeof ApiAiRagRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/app': typeof AuthedAppRoute
+  '/api/ai-rag': typeof ApiAiRagRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/app'
+    | '/api/ai-rag'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/app'
+    | '/api/ai-rag'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/_authed/admin'
     | '/_authed/app'
+    | '/api/ai-rag'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -419,6 +431,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  ApiAiRagRoute: typeof ApiAiRagRoute
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
@@ -458,6 +471,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai-rag': {
+      id: '/api/ai-rag'
+      path: '/api/ai-rag'
+      fullPath: '/api/ai-rag'
+      preLoaderRoute: typeof ApiAiRagRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/app': {
@@ -778,6 +798,7 @@ const ApiAdminModulesModuleIdRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  ApiAiRagRoute: ApiAiRagRoute,
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
