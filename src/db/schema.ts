@@ -14,6 +14,7 @@ import {
   vector,
   serial,
   uniqueIndex,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -50,6 +51,8 @@ export type DBCourse = z.infer<typeof dbCourseSchema>;
 export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   modules: many(modulesTable),
   subscriptions: many(courseSubscriptionsTable),
+  docs: many(docs),
+  fileAssignments: many(blobFileAssignmentsTable),
 }));
 
 export const modulesTable = pgTable("modules", {
@@ -438,24 +441,24 @@ export const blobFileAssignmentsTable = pgTable(
     fileId: integer("file_id")
       .notNull()
       .references(() => blobFilesTable.id, { onDelete: "cascade" }),
-    moduleSlug: varchar("module_slug", { length: 255 }).references(
-      () => modulesTable.slug,
-      {
-        onDelete: "cascade",
-      },
-    ),
-    lessonSlug: varchar("lesson_slug", { length: 255 }).references(
-      () => lessonsTable.slug,
-      {
-        onDelete: "cascade",
-      },
-    ),
+    // Integer FKs (not slugs): immutable, smaller/faster indexes and joins.
+    // Each is nullable — a file can be assigned at course, module, or lesson level.
+    courseId: integer("course_id").references(() => coursesTable.id, {
+      onDelete: "cascade",
+    }),
+    moduleId: integer("module_id").references(() => modulesTable.id, {
+      onDelete: "cascade",
+    }),
+    lessonId: integer("lesson_id").references(() => lessonsTable.id, {
+      onDelete: "cascade",
+    }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
     index("blob_file_assignments_file_id_idx").on(table.fileId),
-    index("blob_file_assignments_module_slug_idx").on(table.moduleSlug),
-    index("blob_file_assignments_lesson_slug_idx").on(table.lessonSlug),
+    index("blob_file_assignments_course_id_idx").on(table.courseId),
+    index("blob_file_assignments_module_id_idx").on(table.moduleId),
+    index("blob_file_assignments_lesson_id_idx").on(table.lessonId),
   ],
 );
 
@@ -467,13 +470,17 @@ export const blobFileAssignmentsRelations = relations(
       fields: [blobFileAssignmentsTable.fileId],
       references: [blobFilesTable.id],
     }),
+    course: one(coursesTable, {
+      fields: [blobFileAssignmentsTable.courseId],
+      references: [coursesTable.id],
+    }),
     module: one(modulesTable, {
-      fields: [blobFileAssignmentsTable.moduleSlug],
-      references: [modulesTable.slug],
+      fields: [blobFileAssignmentsTable.moduleId],
+      references: [modulesTable.id],
     }),
     lesson: one(lessonsTable, {
-      fields: [blobFileAssignmentsTable.lessonSlug],
-      references: [lessonsTable.slug],
+      fields: [blobFileAssignmentsTable.lessonId],
+      references: [lessonsTable.id],
     }),
   }),
 );
@@ -739,6 +746,10 @@ export const docs = pgTable(
   "docs",
   {
     id: serial("id").primaryKey(),
+    // Null = org-wide doc (shared across all courses); set = course-specific.
+    courseId: integer("course_id").references(() => coursesTable.id, {
+      onDelete: "cascade",
+    }),
     sourcePath: text("source_path").notNull(),
     heading: text("heading"),
     chunk: text("chunk").notNull(),
@@ -747,22 +758,47 @@ export const docs = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex("uniq_source_heading_chunk").on(
-      t.sourcePath,
-      t.heading,
-      t.chunk,
-    ),
+    // Course-scoped dedup key: the same source chunk can be embedded per
+    // course. A unique constraint (not index) so it can be NULLS NOT DISTINCT —
+    // org-wide rows (null course_id / null heading) still dedupe; Postgres
+    // otherwise treats every NULL as a distinct value.
+    unique("uniq_course_source_heading_chunk")
+      .on(t.courseId, t.sourcePath, t.heading, t.chunk)
+      .nullsNotDistinct(),
+    // Filter embeddings by course before similarity search.
+    index("docs_course_id_idx").on(t.courseId),
   ],
 );
+
+export const docsInsertSchema = createInsertSchema(docs);
+export type DocsInsert = z.infer<typeof docsInsertSchema>;
+
+export const docsSelectSchema = createSelectSchema(docs);
+export type DocsSelect = z.infer<typeof docsSelectSchema>;
+
+export const docsRelations = relations(docs, ({ one }) => ({
+  course: one(coursesTable, {
+    fields: [docs.courseId],
+    references: [coursesTable.id],
+  }),
+}));
 
 export const docURLs = pgTable(
   "doc_urls",
   {
     id: serial("id").primaryKey(),
+    // Null = org-wide; set = course-specific. Matches docs.courseId scoping.
+    courseId: integer("course_id").references(() => coursesTable.id, {
+      onDelete: "cascade",
+    }),
     sourcePath: text("source_path").notNull(),
     url: text("url"),
   },
-  (t) => [uniqueIndex("uniq_source_path_url").on(t.sourcePath, t.url)],
+  (t) => [
+    unique("uniq_course_source_path_url")
+      .on(t.courseId, t.sourcePath, t.url)
+      .nullsNotDistinct(),
+  ],
 );
 
 export const docURLsInsertSchema = createInsertSchema(docURLs);
