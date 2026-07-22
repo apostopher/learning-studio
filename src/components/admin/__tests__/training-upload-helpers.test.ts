@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalMimeType,
   deriveUploadStatus,
   resolveDocName,
 } from '#/components/admin/training-upload-helpers';
@@ -24,5 +25,34 @@ describe('deriveUploadStatus', () => {
   });
   it('is idle when nothing is pending', () => {
     expect(deriveUploadStatus(false, false)).toBe('idle');
+  });
+});
+
+describe('canonicalMimeType', () => {
+  it('trusts a known pdf file.type', () => {
+    expect(canonicalMimeType('doc.pdf', 'application/pdf')).toBe(
+      'application/pdf',
+    );
+  });
+  it('trusts a known docx file.type', () => {
+    expect(
+      canonicalMimeType(
+        'doc.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    ).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+  });
+  it('derives pdf from extension when file.type is empty', () => {
+    expect(canonicalMimeType('doc.pdf', '')).toBe('application/pdf');
+  });
+  it('derives docx from extension when file.type is empty', () => {
+    expect(canonicalMimeType('doc.docx', '')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+  });
+  it('returns the input type unchanged for unknown type and extension', () => {
+    expect(canonicalMimeType('doc.txt', 'text/plain')).toBe('text/plain');
   });
 });

@@ -9,7 +9,7 @@ import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
 import { TooltipIconButton } from './tooltip-icon-button';
 
-/** Course-level action toolbar: add module, edit course, delete course. */
+/** Course-level action toolbar: add module, AI training, edit course, delete course. */
 export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
   const setEditCourse = useSetAtom(editCourseAtom);
   const setDeleteCourse = useSetAtom(deleteCourseAtom);

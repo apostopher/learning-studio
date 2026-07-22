@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { upload } from '@vercel/blob/client';
+import { canonicalMimeType } from '#/components/admin/training-upload-helpers';
 
 export interface UploadedTrainingDoc {
   url: string;
@@ -15,16 +16,17 @@ export function useUploadTrainingDoc() {
   return useMutation<UploadedTrainingDoc, Error, File>({
     mutationFn: async (file) => {
       const ext = file.name.split('.').pop() ?? 'bin';
+      const mimeType = canonicalMimeType(file.name, file.type);
       const result = await upload(
         `training-docs/${crypto.randomUUID()}.${ext}`,
         file,
         {
           access: 'public',
-          contentType: file.type,
+          contentType: mimeType,
           handleUploadUrl: '/api/admin/uploads',
         },
       );
-      return { url: result.url, fileName: file.name, mimeType: file.type };
+      return { url: result.url, fileName: file.name, mimeType };
     },
   });
 }

@@ -138,6 +138,7 @@ describe('addEmbeddingsHandler (POST)', () => {
       'file-x.docx',
       'https://blob.vercel-storage.com/x.docx',
     );
+    expect(mocks.del).not.toHaveBeenCalled();
   });
 
   it('file mode invalid mimeType → 400', async () => {
@@ -162,6 +163,48 @@ describe('addEmbeddingsHandler (POST)', () => {
       post({ mode: 'text', sourcePath: 'd', html: LONG }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it('file mode + empty extracted text → 400, deletes the orphaned blob, does not record url', async () => {
+    mocks.fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
+    mocks.convertPdfToHtml.mockResolvedValue(LONG);
+    mocks.generateHTMLEmbeddings.mockResolvedValueOnce({ chunks: 0 });
+    const res = await addEmbeddingsHandler(
+      post({
+        mode: 'file',
+        courseId: 2,
+        url: 'https://blob.vercel-storage.com/x.pdf',
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.upsertDocUrl).not.toHaveBeenCalled();
+  });
+
+  it('file mode + generateHTMLEmbeddings rejects → 500, deletes the orphaned blob', async () => {
+    mocks.fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
+    mocks.convertPdfToHtml.mockResolvedValue(LONG);
+    mocks.generateHTMLEmbeddings.mockRejectedValueOnce(new Error('boom'));
+    const res = await addEmbeddingsHandler(
+      post({
+        mode: 'file',
+        courseId: 2,
+        url: 'https://blob.vercel-storage.com/x.pdf',
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+      }),
+    );
+    expect(res.status).toBe(500);
+    expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.upsertDocUrl).not.toHaveBeenCalled();
   });
 
   it('file mode → fetch not ok → 400 and generateHTMLEmbeddings not called', async () => {

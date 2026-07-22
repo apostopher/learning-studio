@@ -20,6 +20,20 @@ import {
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+/**
+ * Best-effort cleanup of a just-uploaded blob when ingestion fails before
+ * `upsertDocUrl` records it. Never throws — a delete failure must not mask
+ * the original error being reported to the caller.
+ */
+async function deleteOrphanedBlob(url: string): Promise<void> {
+  if (!url.includes('vercel')) return;
+  try {
+    await del(url);
+  } catch (error) {
+    console.error('Failed to delete orphaned blob:', error);
+  }
+}
+
 async function guard(request: Request): Promise<Response | null> {
   try {
     await requireAdmin(request.headers);
@@ -86,6 +100,9 @@ export async function addEmbeddingsHandler(request: Request): Promise<Response> 
     const { chunks } = await generateHTMLEmbeddings({ courseId, sourcePath, html });
 
     if (chunks === 0) {
+      if (input.mode === 'file') {
+        await deleteOrphanedBlob(input.url);
+      }
       return Response.json(
         { error: 'No text was extracted from the document.' },
         { status: 400 },
@@ -99,6 +116,9 @@ export async function addEmbeddingsHandler(request: Request): Promise<Response> 
     return Response.json({ success: true, sourcePath, chunks });
   } catch (error) {
     console.error('Failed to add embeddings:', error);
+    if (input.mode === 'file') {
+      await deleteOrphanedBlob(input.url);
+    }
     return Response.json(
       { error: 'Something went wrong. Please try again.' },
       { status: 500 },
