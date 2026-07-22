@@ -34,7 +34,7 @@ export const TrainingDocsList = ({
         </h2>
         <div className="relative">
           <Search
-            className="-translate-y-1/2 absolute inset-inline-start-3 top-1/2 h-4 w-4 text-gray-10"
+            className="-translate-y-1/2 absolute start-3 top-1/2 h-4 w-4 text-gray-10"
             aria-hidden="true"
           />
           <input

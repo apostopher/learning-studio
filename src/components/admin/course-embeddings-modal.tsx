@@ -1,6 +1,7 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ScrollArea } from '#/components/scroll-area';
 
 interface CourseEmbeddingsModalProps {
   open: boolean;
@@ -31,7 +32,7 @@ export const CourseEmbeddingsModal = ({
             <X className="h-5 w-5" aria-hidden="true" />
           </Dialog.Close>
         </div>
-        <div className="overflow-y-auto p-6">{children}</div>
+        <ScrollArea viewportClassName="p-6">{children}</ScrollArea>
       </Dialog.Popup>
     </Dialog.Portal>
   </Dialog.Root>
