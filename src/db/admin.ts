@@ -43,7 +43,7 @@ import {
   resolvePlayback,
   validateCredentials,
 } from '@/lib/video-providers/resolve.server';
-import type { SubscriptionType } from '@/types';
+import type { OnboardingQuestion, SubscriptionType } from '@/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -722,6 +722,27 @@ export async function updateCourse(
     { avif: updated.imageUrlAvif, webp: updated.imageUrlWebp },
   );
   return updated;
+}
+
+export async function getCourseOnboarding(
+  courseId: number,
+): Promise<OnboardingQuestion[]> {
+  const [row] = await db
+    .select({ onboardingQuestions: coursesTable.onboardingQuestions })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, courseId));
+  return row?.onboardingQuestions ?? [];
+}
+
+export async function updateCourseOnboarding(
+  courseId: number,
+  questions: OnboardingQuestion[],
+): Promise<OnboardingQuestion[]> {
+  await db
+    .update(coursesTable)
+    .set({ onboardingQuestions: questions, updatedAt: new Date() })
+    .where(eq(coursesTable.id, courseId));
+  return questions;
 }
 
 /** Delete a course; its modules and lessons cascade via FK. */
