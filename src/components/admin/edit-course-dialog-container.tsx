@@ -10,6 +10,7 @@ import {
   type CreateCourseInput,
   updateCourseInputSchema,
 } from '@/lib/admin-schemas';
+import { CourseOnboardingContainer } from './course-onboarding-container';
 import { CourseVideoIntegrationsContainer } from './course-video-integrations-container';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
@@ -100,6 +101,11 @@ export const EditCourseDialogContainer = () => {
       content: target && (
         <CourseVideoIntegrationsContainer courseId={target.id} />
       ),
+    },
+    {
+      value: 'onboarding',
+      title: 'Onboarding',
+      content: target && <CourseOnboardingContainer courseId={target.id} />,
     },
   ];
 
