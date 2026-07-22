@@ -2,6 +2,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { Tabs } from '@base-ui/react/tabs';
 import { X } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
+import { ScrollArea } from '#/components/scroll-area';
 
 export interface ConfigModalSection {
   /** Stable tab value; also the panel key. */
@@ -80,20 +81,22 @@ export const SectionedConfigModal = ({
                 ))}
               </Tabs.List>
 
-              <main className="flex min-h-0 flex-col gap-6 overflow-y-auto p-6">
-                <h2 className="break-words font-semibold text-2xl text-gray-12">
-                  {heading}
-                </h2>
-                {sections.map((section) => (
-                  <Tabs.Panel
-                    key={section.value}
-                    value={section.value}
-                    className="flex-1"
-                  >
-                    {section.content}
-                  </Tabs.Panel>
-                ))}
-              </main>
+              <ScrollArea className="min-h-0" viewportClassName="p-6">
+                <div className="flex flex-col gap-6">
+                  <h2 className="break-words font-semibold text-2xl text-gray-12">
+                    {heading}
+                  </h2>
+                  {sections.map((section) => (
+                    <Tabs.Panel
+                      key={section.value}
+                      value={section.value}
+                      className="flex-1"
+                    >
+                      {section.content}
+                    </Tabs.Panel>
+                  ))}
+                </div>
+              </ScrollArea>
             </Tabs.Root>
           )}
         </Dialog.Popup>
