@@ -30,6 +30,7 @@ import {
   ProfileVisibilitySchema,
   PersonaSchema,
   OtherVideoIdsSchema,
+  OnboardingQuestionsSchema,
 } from "@/types";
 
 export * from "./auth-schema";
@@ -41,6 +42,10 @@ export const coursesTable = pgTable("courses", {
   description: text("description"),
   imageUrlAvif: text("image_url_avif"),
   imageUrlWebp: text("image_url_webp"),
+  onboardingQuestions: jsonb("onboarding_questions")
+    .$type<z.infer<typeof OnboardingQuestionsSchema>>()
+    .notNull()
+    .default([]),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });

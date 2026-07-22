@@ -59,6 +59,14 @@ export type OtherVideoId = z.infer<typeof OtherVideoIdSchema>;
 export const OtherVideoIdsSchema = z.array(OtherVideoIdSchema);
 export type OtherVideoIds = z.infer<typeof OtherVideoIdsSchema>;
 
+export const OnboardingQuestionSchema = z.object({
+  id: z.string().min(1),
+  text: z.string(),
+});
+export type OnboardingQuestion = z.infer<typeof OnboardingQuestionSchema>;
+export const OnboardingQuestionsSchema = z.array(OnboardingQuestionSchema);
+export type OnboardingQuestions = z.infer<typeof OnboardingQuestionsSchema>;
+
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
   value: z.string().describe('The value of the option in markdown format'),
