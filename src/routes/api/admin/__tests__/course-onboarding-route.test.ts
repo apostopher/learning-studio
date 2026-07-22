@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => {
   class ForbiddenError extends Error {
@@ -76,7 +76,10 @@ describe('putOnboardingHandler', () => {
     expect((await putOnboardingHandler(bad, '1')).status).toBe(400);
   });
   it('400 on schema failure', async () => {
-    const res = await putOnboardingHandler(putReq({ questions: [{ text: 'x' }] }), '1');
+    const res = await putOnboardingHandler(
+      putReq({ questions: [{ text: 'x' }] }),
+      '1',
+    );
     expect(res.status).toBe(400);
     expect(m.updateCourseOnboarding).not.toHaveBeenCalled();
   });

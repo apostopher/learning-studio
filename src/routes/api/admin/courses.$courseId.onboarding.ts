@@ -1,8 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import {
-  getCourseOnboarding,
-  updateCourseOnboarding,
-} from '#/db/admin';
+import { getCourseOnboarding, updateCourseOnboarding } from '#/db/admin';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import { OnboardingQuestionsSchema } from '#/types';
 
@@ -58,20 +55,18 @@ export async function putOnboardingHandler(
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  return Response.json(
-    await updateCourseOnboarding(courseId, parsed.data),
-  );
+  return Response.json(await updateCourseOnboarding(courseId, parsed.data));
 }
 
-export const Route = createFileRoute(
-  '/api/admin/courses/$courseId/onboarding',
-)({
-  server: {
-    handlers: {
-      GET: ({ request, params }) =>
-        getOnboardingHandler(request, params.courseId),
-      PUT: ({ request, params }) =>
-        putOnboardingHandler(request, params.courseId),
+export const Route = createFileRoute('/api/admin/courses/$courseId/onboarding')(
+  {
+    server: {
+      handlers: {
+        GET: ({ request, params }) =>
+          getOnboardingHandler(request, params.courseId),
+        PUT: ({ request, params }) =>
+          putOnboardingHandler(request, params.courseId),
+      },
     },
   },
-});
+);

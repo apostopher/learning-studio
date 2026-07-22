@@ -61,10 +61,12 @@ export type OtherVideoIds = z.infer<typeof OtherVideoIdsSchema>;
 
 export const OnboardingQuestionSchema = z.object({
   id: z.string().min(1),
-  text: z.string(),
+  text: z.string().max(2000),
 });
 export type OnboardingQuestion = z.infer<typeof OnboardingQuestionSchema>;
-export const OnboardingQuestionsSchema = z.array(OnboardingQuestionSchema);
+export const OnboardingQuestionsSchema = z
+  .array(OnboardingQuestionSchema)
+  .max(50);
 export type OnboardingQuestions = z.infer<typeof OnboardingQuestionsSchema>;
 
 export const CourseLessonQuizOptionSchema = z.object({

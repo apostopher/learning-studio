@@ -18,8 +18,14 @@ export const SortableOnboardingQuestion = ({
   register,
   onRemove,
 }: SortableOnboardingQuestionProps) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
 
   return (
     <div
@@ -42,6 +48,7 @@ export const SortableOnboardingQuestion = ({
       </button>
       <AutoGrowTextarea
         {...register}
+        maxLength={2000}
         placeholder="Enter an onboarding question"
         aria-label={`Onboarding question ${index + 1}`}
       />
