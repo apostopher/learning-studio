@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Send } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { AutoGrowTextarea } from '#/components/admin/auto-grow-textarea';
@@ -109,14 +109,23 @@ export function ChatWidgetInput({ onSend, isLoading }: ChatWidgetInputProps) {
       onSubmit={form.handleSubmit(onSubmit)}
       className="flex items-end gap-2 border-gray-6 border-t p-3"
     >
-      <AutoGrowTextarea
-        {...form.register('input')}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoComplete="off"
-        readOnly={inputBusy}
-        aria-label="Chat message"
-        className="max-h-32"
+      <Controller
+        name="input"
+        control={form.control}
+        render={({ field }) => (
+          <AutoGrowTextarea
+            name={field.name}
+            value={field.value}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            autoComplete="off"
+            readOnly={inputBusy}
+            aria-label="Chat message"
+            className="max-h-32"
+          />
+        )}
       />
       <ChatWidgetMicButton
         isRecording={recorder.isRecording}
