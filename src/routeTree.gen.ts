@@ -22,7 +22,6 @@ import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
-import { Route as ApiCourseProgressRouteImport } from './routes/api/course/progress'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
@@ -113,11 +112,6 @@ const ApiCourseProgressSummaryRoute =
     path: '/api/course/progress-summary',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiCourseProgressRoute = ApiCourseProgressRouteImport.update({
-  id: '/api/course/progress',
-  path: '/api/course/progress',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
   id: '/api/course/details',
   path: '/api/course/details',
@@ -257,7 +251,6 @@ export interface FileRoutesByFullPath {
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
-  '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -294,7 +287,6 @@ export interface FileRoutesByTo {
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
-  '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -334,7 +326,6 @@ export interface FileRoutesById {
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
-  '/api/course/progress': typeof ApiCourseProgressRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -374,7 +365,6 @@ export interface FileRouteTypes {
     | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
-    | '/api/course/progress'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -411,7 +401,6 @@ export interface FileRouteTypes {
     | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
-    | '/api/course/progress'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -450,7 +439,6 @@ export interface FileRouteTypes {
     | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/course/details'
-    | '/api/course/progress'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -488,7 +476,6 @@ export interface RootRouteChildren {
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
-  ApiCourseProgressRoute: typeof ApiCourseProgressRoute
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
@@ -595,13 +582,6 @@ declare module '@tanstack/react-router' {
       path: '/api/course/progress-summary'
       fullPath: '/api/course/progress-summary'
       preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/progress': {
-      id: '/api/course/progress'
-      path: '/api/course/progress'
-      fullPath: '/api/course/progress'
-      preLoaderRoute: typeof ApiCourseProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/course/details': {
@@ -889,7 +869,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
-  ApiCourseProgressRoute: ApiCourseProgressRoute,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,

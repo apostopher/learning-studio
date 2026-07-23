@@ -24,21 +24,13 @@ const detailsAtom = atom<DetailsResult>({
   isError: false,
 });
 
-const emptyMapAtom = atom({} as Record<string, number>);
-const emptyNumMapAtom = atom({} as Record<number, number>);
-
 vi.mock('../../../hooks/data/use-course-details', () => ({
   useCourseDetails: vi.fn(),
   courseDetailsAtomFamily: (() => detailsAtom) as (slug: string) => Atom<DetailsResult>,
 }));
 
-vi.mock('../../../atoms/course-progress', () => ({
-  lessonPercentsAtomFamily: (() => emptyMapAtom) as (
-    slug: string,
-  ) => Atom<Record<string, number>>,
-  modulePercentsAtomFamily: (() => emptyNumMapAtom) as (
-    slug: string,
-  ) => Atom<Record<number, number>>,
+vi.mock('../../../data-hooks/use-course-progress-summary', () => ({
+  useCourseProgressSummary: () => ({ data: undefined }),
 }));
 
 import { CourseSidebarWrapper } from '../course-sidebar-wrapper';
