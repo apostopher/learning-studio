@@ -17,4 +17,6 @@ export const dataKeys = {
     ['user', 'video-progress', videoId] as const,
   courseProgressSummary: (slug: string) =>
     ['course', 'progress-summary', slug] as const,
+  chats: () => ['user', 'chats'] as const,
+  chatMessages: (chatId: string) => ['user', 'chat-messages', chatId] as const,
 } as const;

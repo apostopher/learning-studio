@@ -775,6 +775,13 @@ export const docs = pgTable(
   ],
 );
 
+// Vector index for cosine similarity search over doc embeddings. pgvector's
+// hnsw index on the native `vector` type caps at 2000 dimensions, but
+// gemini-embedding-001 produces 3072-dim vectors — so the index is built on a
+// `halfvec(3072)` cast instead (halfvec supports up to 4000 dims). searchKB's
+// correctness does not depend on this index; it only affects query speed.
+void sql`CREATE INDEX IF NOT EXISTS docs_embedding_hnsw ON docs USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);`;
+
 export const docsInsertSchema = createInsertSchema(docs);
 export type DocsInsert = z.infer<typeof docsInsertSchema>;
 

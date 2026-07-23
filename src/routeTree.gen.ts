@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as ApiChatsRouteImport } from './routes/api/chats'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
@@ -23,6 +25,7 @@ import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/mater
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
+import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
@@ -58,6 +61,16 @@ const IndexRoute = IndexRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatsRoute = ApiChatsRouteImport.update({
+  id: '/api/chats',
+  path: '/api/chats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAiRagRoute = ApiAiRagRouteImport.update({
@@ -116,6 +129,11 @@ const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
   id: '/api/course/details',
   path: '/api/course/details',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatsChatIdRoute = ApiChatsChatIdRouteImport.update({
+  id: '/$chatId',
+  path: '/$chatId',
+  getParentRoute: () => ApiChatsRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -246,10 +264,13 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthedAdminRouteWithChildren
   '/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
@@ -282,10 +303,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
@@ -321,10 +345,13 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
+  '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
@@ -360,10 +387,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/app'
     | '/api/ai-rag'
+    | '/api/chat'
+    | '/api/chats'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
     | '/api/auth/$'
+    | '/api/chats/$chatId'
     | '/api/course/details'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
@@ -396,10 +426,13 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/api/ai-rag'
+    | '/api/chat'
+    | '/api/chats'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
     | '/api/auth/$'
+    | '/api/chats/$chatId'
     | '/api/course/details'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
@@ -434,10 +467,13 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/app'
     | '/api/ai-rag'
+    | '/api/chat'
+    | '/api/chats'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
     | '/api/auth/$'
+    | '/api/chats/$chatId'
     | '/api/course/details'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
@@ -471,6 +507,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   ApiAiRagRoute: typeof ApiAiRagRoute
+  ApiChatRoute: typeof ApiChatRoute
+  ApiChatsRoute: typeof ApiChatsRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
@@ -512,6 +550,20 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chats': {
+      id: '/api/chats'
+      path: '/api/chats'
+      fullPath: '/api/chats'
+      preLoaderRoute: typeof ApiChatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ai-rag': {
@@ -590,6 +642,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/course/details'
       preLoaderRoute: typeof ApiCourseDetailsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/chats/$chatId': {
+      id: '/api/chats/$chatId'
+      path: '/$chatId'
+      fullPath: '/api/chats/$chatId'
+      preLoaderRoute: typeof ApiChatsChatIdRouteImport
+      parentRoute: typeof ApiChatsRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -778,6 +837,18 @@ const AuthedRouteChildren: AuthedRouteChildren = {
 const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
+interface ApiChatsRouteChildren {
+  ApiChatsChatIdRoute: typeof ApiChatsChatIdRoute
+}
+
+const ApiChatsRouteChildren: ApiChatsRouteChildren = {
+  ApiChatsChatIdRoute: ApiChatsChatIdRoute,
+}
+
+const ApiChatsRouteWithChildren = ApiChatsRoute._addFileChildren(
+  ApiChatsRouteChildren,
+)
+
 interface ApiAdminCoursesCourseIdCredentialsRouteChildren {
   ApiAdminCoursesCourseIdCredentialsProviderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
 }
@@ -864,6 +935,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   ApiAiRagRoute: ApiAiRagRoute,
+  ApiChatRoute: ApiChatRoute,
+  ApiChatsRoute: ApiChatsRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
