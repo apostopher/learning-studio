@@ -20,3 +20,18 @@ export function unreportedMilestones(
   if (!Number.isFinite(percent) || percent <= 0) return [];
   return milestones.filter((m) => m <= percent && !reported.has(m));
 }
+
+/**
+ * Milestones required to count a video as "watched": every milestone EXCEPT the
+ * final 100 — most users stop a few seconds before the end, so requiring 100
+ * would leave nearly every video incomplete.
+ */
+export const watchedMilestones: number[] = milestones.filter((m) => m !== 100);
+
+/**
+ * True when `reached` covers every watched-milestone. Still anti-skip (each 5%
+ * step up to 95 must be hit), just tolerant of stopping right before the end.
+ */
+export function isVideoWatched(reached: ReadonlySet<number>): boolean {
+  return watchedMilestones.every((m) => reached.has(m));
+}
