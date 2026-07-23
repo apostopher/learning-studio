@@ -52,10 +52,10 @@ describe('lessonPercentsAtomFamily', () => {
   });
 
   it('floors partial progress to the nearest whole percent', () => {
-    // 8/16 milestones = 50%
-    const half = milestones.slice(0, 8);
-    const store = setup({ 'vid-1': half }, undefined);
-    expect(store.get(lessonPercentsAtomFamily(SLUG))['vid-1']).toBe(50);
+    // 8/19 milestones = 42.1% → floored to 42
+    const partial = milestones.slice(0, 8);
+    const store = setup({ 'vid-1': partial }, undefined);
+    expect(store.get(lessonPercentsAtomFamily(SLUG))['vid-1']).toBe(42);
   });
 
   it('returns 0 for a video with no matching milestones', () => {
@@ -67,9 +67,9 @@ describe('lessonPercentsAtomFamily', () => {
 describe('modulePercentsAtomFamily', () => {
   it('averages lesson percents across a module', () => {
     const full = [...milestones];
-    const half = milestones.slice(0, 8);
+    const partial = milestones.slice(0, 8); // 8/19 → 42%
     const store = setup(
-      { 'v-a': full, 'v-b': half },
+      { 'v-a': full, 'v-b': partial },
       {
         modules: [
           {
@@ -79,8 +79,8 @@ describe('modulePercentsAtomFamily', () => {
         ],
       },
     );
-    // (100 + 50) / 2 = 75
-    expect(store.get(modulePercentsAtomFamily(SLUG))[1]).toBe(75);
+    // (100 + 42) / 2 = 71
+    expect(store.get(modulePercentsAtomFamily(SLUG))[1]).toBe(71);
   });
 
   it('returns 0 for an empty module', () => {

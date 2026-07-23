@@ -17,12 +17,14 @@ type LessonMainProps = {
 const renderPlayerSlot = (
   videoState: VideoFetchState,
   lessonSlug: string,
+  videoId: string,
 ) => {
   if (videoState.status === 'ready') {
     return (
       <LessonPlayerContainer
         videoState={videoState}
         lessonSlug={lessonSlug}
+        videoId={videoId}
       />
     );
   }
@@ -73,7 +75,7 @@ const renderArticleBody = (state: LessonMainState) => {
       return (
         <>
           <div className="lesson-player">
-            {renderPlayerSlot(state.videoState, state.lessonSlug)}
+            {renderPlayerSlot(state.videoState, state.lessonSlug, state.videoId)}
           </div>
           {renderLessonMaterialSlot(state.lessonSlug)}
         </>
