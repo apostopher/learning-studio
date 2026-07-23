@@ -28,10 +28,19 @@ const courseProgressSummarySchema = z.object({
 
 export type CourseProgressSummary = z.infer<typeof courseProgressSummarySchema>;
 
+/** Poll the rollup this often so it reflects milestones the user just earned. */
+const REFETCH_INTERVAL_MS = 60_000;
+
 /**
  * The logged-in user's aggregated progress for a whole course: course / module
  * / lesson percentages in one payload. Backed by the server-aggregated
  * GET /api/course/progress-summary. Disabled until `slug` is non-empty.
+ *
+ * Kept fresh as the user watches: polls every minute (foreground only) and
+ * refetches when the tab regains focus/visibility — TanStack Query's focus
+ * manager listens for `visibilitychange`, so a refetch fires on tab return
+ * (when the data is stale). `refetchIntervalInBackground` stays false so a
+ * hidden tab doesn't poll; the focus refetch catches it up on return.
  */
 export function useCourseProgressSummary(slug: string) {
   return useQuery({
@@ -47,5 +56,8 @@ export function useCourseProgressSummary(slug: string) {
     },
     enabled: slug.length > 0,
     staleTime: 30_000,
+    refetchInterval: REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
