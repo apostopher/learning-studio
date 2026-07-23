@@ -65,4 +65,20 @@ describe('saveJson', () => {
       saveJson({ url: '/x', method: 'POST', body: {} }),
     ).rejects.toThrow(/500/);
   });
+
+  it('falls back to keepalive fetch when sendBeacon returns false', async () => {
+    const beacon = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await saveJson({ url: '/x', method: 'POST', body: {}, fireAndForget: true });
+
+    expect(beacon).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('POST');
+    expect(init.keepalive).toBe(true);
+  });
 });
