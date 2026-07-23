@@ -19,10 +19,10 @@ export const Route = createFileRoute("/api/lesson/ai-test/evaluate")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // const session = await auth.api.getSession({ headers: request.headers });
-        // if (!session) {
-        //   return new Response("Unauthorized", { status: 401 });
-        // }
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session) {
+          return new Response("Unauthorized", { status: 401 });
+        }
 
         const body = await request.json();
         const parsed = EvaluateInputSchema.safeParse(body);
@@ -35,17 +35,15 @@ export const Route = createFileRoute("/api/lesson/ai-test/evaluate")({
         const { question, userAnswer, keyPoints, text } = parsed.data;
 
         try {
-          let result;
-          if (question.type === "mcq") {
-            result = evaluateMCQ(question as AITestMCQQuestion, userAnswer);
-          } else {
-            result = await evaluateFreeText(
-              question as AITestFreeTextQuestion,
-              userAnswer,
-              keyPoints,
-              text,
-            );
-          }
+          const result =
+            question.type === "mcq"
+              ? evaluateMCQ(question as AITestMCQQuestion, userAnswer)
+              : await evaluateFreeText(
+                  question as AITestFreeTextQuestion,
+                  userAnswer,
+                  keyPoints,
+                  text,
+                );
           return Response.json(result);
         } catch (error) {
           console.error("Failed to evaluate answer:", error);
