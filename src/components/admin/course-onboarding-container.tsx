@@ -44,6 +44,7 @@ export const CourseOnboardingContainer = ({
   const updateRef = useRef(update);
   updateRef.current = update;
   const resaveRef = useRef(false);
+  const savingRef = useRef(false);
 
   // Seed the form + baselines the first time the query resolves.
   useEffect(() => {
@@ -61,10 +62,11 @@ export const CourseOnboardingContainer = ({
     const saveNow = (questions: OnboardingQuestion[]) => {
       const snapshot = JSON.stringify(questions);
       if (snapshot === lastSavedRef.current) return;
-      if (updateRef.current.isPending) {
+      if (savingRef.current) {
         resaveRef.current = true;
         return;
       }
+      savingRef.current = true;
       updateRef.current.mutate(
         { questions },
         {
@@ -72,6 +74,7 @@ export const CourseOnboardingContainer = ({
             lastSavedRef.current = snapshot;
           },
           onSettled: () => {
+            savingRef.current = false;
             if (resaveRef.current) {
               resaveRef.current = false;
               saveNow(currentRef.current);
