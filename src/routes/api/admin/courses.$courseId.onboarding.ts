@@ -33,7 +33,7 @@ export async function getOnboardingHandler(
   return Response.json(await getCourseOnboarding(courseId));
 }
 
-export async function putOnboardingHandler(
+export async function postOnboardingHandler(
   request: Request,
   courseIdRaw: string,
 ): Promise<Response> {
@@ -64,8 +64,8 @@ export const Route = createFileRoute('/api/admin/courses/$courseId/onboarding')(
       handlers: {
         GET: ({ request, params }) =>
           getOnboardingHandler(request, params.courseId),
-        PUT: ({ request, params }) =>
-          putOnboardingHandler(request, params.courseId),
+        POST: ({ request, params }) =>
+          postOnboardingHandler(request, params.courseId),
       },
     },
   },

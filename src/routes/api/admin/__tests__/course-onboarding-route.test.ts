@@ -26,12 +26,12 @@ vi.mock('#/db/admin', () => ({
 
 import {
   getOnboardingHandler,
-  putOnboardingHandler,
+  postOnboardingHandler,
 } from '../courses.$courseId.onboarding';
 
-function putReq(body: unknown): Request {
+function postReq(body: unknown): Request {
   return new Request('http://test/api/admin/courses/1/onboarding', {
-    method: 'PUT',
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -61,23 +61,23 @@ describe('getOnboardingHandler', () => {
   });
 });
 
-describe('putOnboardingHandler', () => {
+describe('postOnboardingHandler', () => {
   it('403 when not admin', async () => {
     m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await putOnboardingHandler(putReq({ questions: [] }), '1');
+    const res = await postOnboardingHandler(postReq({ questions: [] }), '1');
     expect(res.status).toBe(403);
   });
   it('400 on bad JSON', async () => {
     const bad = new Request('http://t', {
-      method: 'PUT',
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{nope',
     });
-    expect((await putOnboardingHandler(bad, '1')).status).toBe(400);
+    expect((await postOnboardingHandler(bad, '1')).status).toBe(400);
   });
   it('400 on schema failure', async () => {
-    const res = await putOnboardingHandler(
-      putReq({ questions: [{ text: 'x' }] }),
+    const res = await postOnboardingHandler(
+      postReq({ questions: [{ text: 'x' }] }),
       '1',
     );
     expect(res.status).toBe(400);
@@ -86,7 +86,7 @@ describe('putOnboardingHandler', () => {
   it('saves and returns the questions', async () => {
     const questions = [{ id: 'a', text: 'Q1' }];
     m.updateCourseOnboarding.mockResolvedValue(questions);
-    const res = await putOnboardingHandler(putReq({ questions }), '1');
+    const res = await postOnboardingHandler(postReq({ questions }), '1');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(questions);
     expect(m.updateCourseOnboarding).toHaveBeenCalledWith(1, questions);
