@@ -54,7 +54,7 @@ export async function chatHandler(request: Request): Promise<Response> {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { chatId, messages } = parsed.data as {
+  const { chatId: requestChatId, messages } = parsed.data as {
     chatId?: string;
     messages: UIMessage[];
   };
@@ -79,6 +79,17 @@ export async function chatHandler(request: Request): Promise<Response> {
 
   const lastUserMessage = messages[messages.length - 1];
 
+  // Resolve (continue-or-create) the chat row up front, before the stream
+  // starts, so the id is stable for the whole turn: it's what `onFinish`
+  // appends to, and it's what we surface back to the client via the
+  // `x-chat-id` header below so multi-turn continuation works (the client
+  // echoes it back as `chatId` on the next request).
+  const chatId = await ensureChat({
+    chatId: requestChatId,
+    userId: session.user.id,
+    firstUserText: textOf(lastUserMessage),
+  });
+
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const result = await buildChatStream({
@@ -98,12 +109,7 @@ export async function chatHandler(request: Request): Promise<Response> {
     },
     onFinish: async ({ responseMessage }) => {
       try {
-        const cid = await ensureChat({
-          chatId,
-          userId: session.user.id,
-          firstUserText: textOf(lastUserMessage),
-        });
-        await appendMessages(cid, [
+        await appendMessages(chatId, [
           { role: lastUserMessage.role, parts: lastUserMessage.parts },
           { role: responseMessage.role, parts: responseMessage.parts },
         ]);
@@ -113,7 +119,10 @@ export async function chatHandler(request: Request): Promise<Response> {
     },
   });
 
-  return createUIMessageStreamResponse({ stream });
+  return createUIMessageStreamResponse({
+    stream,
+    headers: { 'x-chat-id': chatId },
+  });
 }
 
 export const Route = createFileRoute('/api/chat')({

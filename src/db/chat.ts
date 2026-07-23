@@ -6,10 +6,14 @@ import { and, asc, desc, eq, max, sql } from "drizzle-orm";
 export { chatTitleFromText } from "@/lib/chat-title";
 
 /**
- * Resolve the chat id for a streaming turn: if the caller already has a
- * `chatId` (continuing a conversation), just return it — no ownership check
- * here, callers that need one should use getChat. Otherwise create a new
- * `aiChats` row titled from the first user message and return its new id.
+ * Resolve the chat id for a streaming turn, ownership-checked: if the caller
+ * passed a `chatId` AND it names a row owned by `userId`, continue that chat
+ * by returning the same id. Otherwise (no `chatId`, or a `chatId` that is
+ * unknown or owned by someone else) create a NEW `aiChats` row titled from
+ * the first user message and return its new id — this both closes the IDOR
+ * (never appends to another user's chat) and the FK gap (the id returned
+ * always references a real row owned by `userId`, so `appendMessages` can't
+ * violate `aiMessages.chatId → aiChats.id`).
  */
 export async function ensureChat({
   chatId,
@@ -20,7 +24,15 @@ export async function ensureChat({
   userId: string;
   firstUserText: string;
 }): Promise<string> {
-  if (chatId) return chatId;
+  if (chatId) {
+    const [owned] = await db
+      .select({ id: aiChats.id })
+      .from(aiChats)
+      .where(and(eq(aiChats.id, chatId), eq(aiChats.userId, userId)))
+      .limit(1);
+
+    if (owned) return owned.id;
+  }
 
   const [row] = await db
     .insert(aiChats)

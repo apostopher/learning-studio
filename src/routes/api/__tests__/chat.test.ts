@@ -71,13 +71,16 @@ describe('chatHandler', () => {
     expect(buildChatStream).not.toHaveBeenCalled();
   });
 
-  it('streams when authed', async () => {
+  it('streams when authed and surfaces the resolved chat id via x-chat-id', async () => {
     const res = await chatHandler(
       postReq({
         messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
       }),
     );
     expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-chat-id')).toBe('chat-1');
+    expect(ensureChat).toHaveBeenCalled();
     // Drain the response body so the stream's execute() (which awaits
     // buildChatStream) actually runs before we assert on the mock.
     await res.text();
