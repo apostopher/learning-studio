@@ -77,7 +77,7 @@ export function ChatWindow({
         onClose={onClose}
         dragBindings={dragBindings}
       />
-      <ChatWidgetMessages messages={messages} />
+      <ChatWidgetMessages messages={messages} isLoading={isLoading} />
       <ChatWidgetInput
         onSend={(text) => sendMessage({ text })}
         isLoading={isLoading}

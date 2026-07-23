@@ -2,10 +2,24 @@ import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStickToBottom } from 'use-stick-to-bottom';
 import { ChatMessage } from '#/components/chat-widget/chat-message';
+import { TypingDots } from '#/components/chat-widget/typing-dots';
 import { AIWriterDataNotificationSchema } from '#/types';
 
 export interface ChatWidgetMessagesProps {
   messages: UIMessage[];
+  /** True while a reply is pending/streaming (status submitted|streaming). */
+  isLoading: boolean;
+}
+
+/** Whether the assistant has started emitting visible text for the last turn.
+ * Once it has, the streaming text itself signals progress and the typing dots
+ * are hidden. */
+function assistantHasStartedAnswering(messages: UIMessage[]): boolean {
+  const last = messages.at(-1);
+  return (
+    last?.role === 'assistant' &&
+    last.parts.some((p) => p.type === 'text' && p.text.trim().length > 0)
+  );
 }
 
 /** Auto-scrolling message list for the chat widget. Container (not
@@ -14,8 +28,12 @@ export interface ChatWidgetMessagesProps {
  * user scrolls away. Renders each message's `text` parts via `ChatMessage`
  * and any `data-notification` parts (e.g. "Searching the knowledge base…")
  * as a muted status line — every other part type is skipped for v1. */
-export function ChatWidgetMessages({ messages }: ChatWidgetMessagesProps) {
+export function ChatWidgetMessages({
+  messages,
+  isLoading,
+}: ChatWidgetMessagesProps) {
   const { scrollRef, contentRef } = useStickToBottom();
+  const showTyping = isLoading && !assistantHasStartedAnswering(messages);
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3">
@@ -60,6 +78,17 @@ export function ChatWidgetMessages({ messages }: ChatWidgetMessagesProps) {
 
               return null;
             }),
+          )}
+          {showTyping && (
+            <motion.div
+              key="typing"
+              initial={{ opacity: 0, y: 8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+            >
+              <TypingDots />
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

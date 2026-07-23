@@ -67,6 +67,9 @@ export function ChatWidgetInput({ onSend, isLoading }: ChatWidgetInputProps) {
   }, [recorder.error]);
 
   const onSubmit = (data: FormData) => {
+    // Guard here too (not just the disabled button) so Enter can't send while a
+    // reply is streaming or the mic is busy.
+    if (isLoading || recorder.isRecording || recorder.isTranscribing) return;
     if (data.input.trim()) {
       onSend(data.input);
       form.reset();
