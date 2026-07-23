@@ -1,6 +1,6 @@
+import type { UIMessage } from 'ai';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { UIMessage } from 'ai';
 import { brand } from '#/ai/prompts/brand';
 import { cn } from '#/lib/cn';
 

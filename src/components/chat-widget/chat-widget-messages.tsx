@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStickToBottom } from 'use-stick-to-bottom';
-import { AIWriterDataNotificationSchema } from '#/types';
 import { ChatMessage } from '#/components/chat-widget/chat-message';
+import { AIWriterDataNotificationSchema } from '#/types';
 
 export interface ChatWidgetMessagesProps {
   messages: UIMessage[];

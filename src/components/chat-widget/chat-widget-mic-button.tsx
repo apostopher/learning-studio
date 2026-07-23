@@ -1,7 +1,7 @@
 import { Loader2, Mic } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '#/lib/cn';
 import type { PushToTalkBindings } from '#/components/chat-widget/use-push-to-talk';
+import { cn } from '#/lib/cn';
 
 interface ChatWidgetMicButtonProps {
   isRecording: boolean;
@@ -61,7 +61,7 @@ export function ChatWidgetMicButton({
       className={cn(
         'flex size-9 shrink-0 touch-none select-none items-center justify-center rounded-lg border',
         'transition-colors duration-200',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
         'disabled:cursor-not-allowed',
         active
           ? // Solid red-9 needs text-black (not white) to clear WCAG AA — see
@@ -73,7 +73,9 @@ export function ChatWidgetMicButton({
     >
       <motion.span
         className="flex items-center justify-center"
-        animate={pulsing && !reducedMotion ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+        animate={
+          pulsing && !reducedMotion ? { scale: [1, 1.12, 1] } : { scale: 1 }
+        }
         transition={
           pulsing && !reducedMotion
             ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }

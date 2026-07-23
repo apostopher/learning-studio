@@ -3,8 +3,8 @@ import { Tooltip } from '@base-ui/react/tooltip';
 import { ALargeSmall, Shrink, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { brand } from '#/ai/prompts/brand';
-import { cn } from '#/lib/cn';
 import type { DragBindings } from '#/components/chat-widget/use-chat-window-geometry';
+import { cn } from '#/lib/cn';
 
 interface ChatWidgetHeaderProps {
   isDirty: boolean;
@@ -37,7 +37,7 @@ const HeaderControlButton = ({
           className={cn(
             'flex size-7 items-center justify-center rounded-md text-gray-11 transition-colors',
             'hover:bg-gray-4 hover:text-gray-12',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
           )}
         />
       }
@@ -72,7 +72,7 @@ export function ChatWidgetHeader({
       {...dragBindings}
       className="flex cursor-grab touch-none select-none items-center gap-3 border-gray-6 border-b px-4 py-3 active:cursor-grabbing"
     >
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-apple-9 text-apple-contrast text-xs font-bold">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-9 text-accent-contrast text-xs font-bold">
         V7
       </div>
       <div className="min-w-0 flex-1">

@@ -128,8 +128,8 @@ export function ChatWidgetInput({ onSend, isLoading }: ChatWidgetInputProps) {
         aria-label="Send message"
         className={cn(
           'flex size-9 shrink-0 items-center justify-center rounded-lg',
-          'bg-apple-9 text-apple-contrast transition-colors duration-200',
-          'hover:bg-apple-10',
+          'bg-accent-9 text-accent-contrast transition-colors duration-200',
+          'hover:bg-accent-10',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}
       >

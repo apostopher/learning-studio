@@ -1,10 +1,10 @@
 import { useRouterState } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { AnimatePresence, motion } from 'motion/react';
+import { chatWidgetFontSizeAtom } from '#/atoms/chat-widget';
 import { ChatWindow } from '#/components/chat-widget/chat-window';
 import { MessageCircle } from '#/components/chat-widget/message-circle';
 import { useChatWidget } from '#/components/chat-widget/use-chat-widget';
-import { chatWidgetFontSizeAtom } from '#/atoms/chat-widget';
 import { authClient } from '#/lib/auth-client';
 import { cn } from '#/lib/cn';
 
@@ -59,8 +59,8 @@ export function ChatWidget() {
             aria-label="Open chat"
             className={cn(
               'pointer-events-auto fixed bottom-6 end-6 flex size-14 items-center justify-center rounded-full shadow-lg',
-              'bg-apple-9 text-apple-contrast',
-              'transition-colors duration-200 hover:bg-apple-10',
+              'bg-accent-9 text-accent-contrast',
+              'transition-colors duration-200 hover:bg-accent-10',
             )}
           >
             <MessageCircle className="size-6" />
