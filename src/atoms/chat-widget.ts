@@ -1,4 +1,9 @@
+import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+
+/** Whether the chat widget window is open. Not persisted — always starts
+ * closed on load. */
+export const chatWidgetOpenAtom = atom(false);
 
 /** Font size (px) of chat message body text. Persisted so the user's
  * preferred reading size stays across reloads. Toggled between 18 and 16. */
