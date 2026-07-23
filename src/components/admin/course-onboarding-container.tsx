@@ -153,7 +153,17 @@ export const CourseOnboardingContainer = ({
       onRemove={remove}
       onDragEnd={onDragEnd}
       status={status}
-      onRetry={() => update.mutate({ questions: form.getValues('questions') })}
+      onRetry={() => {
+        const questions = form.getValues('questions');
+        update.mutate(
+          { questions },
+          {
+            onSuccess: () => {
+              lastSavedRef.current = JSON.stringify(questions);
+            },
+          },
+        );
+      }}
     />
   );
 };

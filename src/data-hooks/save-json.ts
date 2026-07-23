@@ -26,6 +26,9 @@ export async function saveJson<T>({
     typeof navigator !== 'undefined' &&
     typeof navigator.sendBeacon === 'function'
   ) {
+    // Note: sendBeacon (and the keepalive fetch fallback) cap bodies at ~64KB;
+    // very large payloads may be dropped on a hard unload — the normal
+    // (uncapped) debounced fetch covers the common path.
     const blob = new Blob([JSON.stringify(body)], {
       type: 'application/json',
     });
