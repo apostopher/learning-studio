@@ -27,10 +27,12 @@ import { AIWriterDataSchema } from '#/types';
  *    documented interception point.
  *  - **outgoing:** `DefaultChatTransport`'s `prepareSendMessagesRequest`
  *    option (`PrepareSendMessagesRequest<UI_MESSAGE>`, same file) is called
- *    for every send with the request's resolved `body`; returning
- *    `{ body: { ...body, chatId: chatIdRef.current } }` injects the
- *    remembered id into every subsequent request body, matching the
- *    `chatId` field the route's `chatRequestSchema` accepts.
+ *    for every send. Its returned `body` REPLACES the whole request body —
+ *    it does NOT merge with the transport's default — so we must reconstruct
+ *    the standard fields (`id`, `messages`, `trigger`, `messageId`) ourselves
+ *    and add `chatId`. (Only spreading the `body` arg drops `messages`, which
+ *    is `undefined` here since we pass no custom `body` → the route's
+ *    `chatRequestSchema` then rejects the empty payload with a 400.)
  */
 export function useChatWidget() {
   const [isOpen, setIsOpen] = useAtom(chatWidgetOpenAtom);
@@ -48,8 +50,8 @@ export function useChatWidget() {
         }
         return response;
       },
-      prepareSendMessagesRequest: ({ body }) => ({
-        body: { ...body, chatId: chatIdRef.current },
+      prepareSendMessagesRequest: ({ id, messages, trigger, messageId, body }) => ({
+        body: { id, messages, trigger, messageId, ...body, chatId: chatIdRef.current },
       }),
     }),
     onData: (dataPart) => {
