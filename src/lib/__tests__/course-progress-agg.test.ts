@@ -8,23 +8,23 @@ import { watchedMilestones } from '#/lib/course-milestones';
 const FULL = watchedMilestones.length; // 18 — all watched-milestones hit
 
 describe('aggregateCourseProgress', () => {
-  it('lesson% is round(hits/18·100); watched ⇔ all 18 hit', () => {
+  it('lesson% is round(hits/18·100); watched ⇔ all 18 hit; carries videoId', () => {
     const rows: LessonProgressRow[] = [
-      { moduleId: 1, lessonId: 10, watchedHits: FULL }, // 100, watched
-      { moduleId: 1, lessonId: 11, watchedHits: 17 }, // 94, not watched
-      { moduleId: 1, lessonId: 12, watchedHits: 0 }, // 0, not watched
+      { moduleId: 1, lessonId: 10, videoId: 'v10', watchedHits: FULL }, // 100, watched
+      { moduleId: 1, lessonId: 11, videoId: 'v11', watchedHits: 17 }, // 94, not watched
+      { moduleId: 1, lessonId: 12, videoId: null, watchedHits: 0 }, // 0, no video
     ];
     const { lessons } = aggregateCourseProgress('c', rows);
     expect(lessons).toEqual([
-      { lessonId: 10, moduleId: 1, percent: 100, watched: true },
-      { lessonId: 11, moduleId: 1, percent: 94, watched: false },
-      { lessonId: 12, moduleId: 1, percent: 0, watched: false },
+      { lessonId: 10, moduleId: 1, videoId: 'v10', percent: 100, watched: true },
+      { lessonId: 11, moduleId: 1, videoId: 'v11', percent: 94, watched: false },
+      { lessonId: 12, moduleId: 1, videoId: null, percent: 0, watched: false },
     ]);
   });
 
   it('caps a lesson at 100% even if extra milestones (incl. 100) are hit', () => {
     const rows: LessonProgressRow[] = [
-      { moduleId: 1, lessonId: 10, watchedHits: FULL + 1 },
+      { moduleId: 1, lessonId: 10, videoId: 'v10', watchedHits: FULL + 1 },
     ];
     const { lessons } = aggregateCourseProgress('c', rows);
     expect(lessons[0].percent).toBe(100);
@@ -33,8 +33,8 @@ describe('aggregateCourseProgress', () => {
 
   it('module% is the average of its lessons; counts watched/total', () => {
     const rows: LessonProgressRow[] = [
-      { moduleId: 1, lessonId: 10, watchedHits: FULL }, // 100
-      { moduleId: 1, lessonId: 11, watchedHits: 9 }, // 50
+      { moduleId: 1, lessonId: 10, videoId: 'v10', watchedHits: FULL }, // 100
+      { moduleId: 1, lessonId: 11, videoId: 'v11', watchedHits: 9 }, // 50
     ];
     const { modules } = aggregateCourseProgress('c', rows);
     expect(modules).toEqual([
@@ -45,12 +45,13 @@ describe('aggregateCourseProgress', () => {
   it('course% is the average of module percents (not lesson-weighted)', () => {
     const rows: LessonProgressRow[] = [
       // module A: 2 lessons, both 100% → module 100%
-      { moduleId: 1, lessonId: 10, watchedHits: FULL },
-      { moduleId: 1, lessonId: 11, watchedHits: FULL },
+      { moduleId: 1, lessonId: 10, videoId: 'v10', watchedHits: FULL },
+      { moduleId: 1, lessonId: 11, videoId: 'v11', watchedHits: FULL },
       // module B: 20 lessons at 50% each → module 50%
       ...Array.from({ length: 20 }, (_, i) => ({
         moduleId: 2,
         lessonId: 100 + i,
+        videoId: `v${100 + i}`,
         watchedHits: 9,
       })),
     ];
@@ -63,8 +64,8 @@ describe('aggregateCourseProgress', () => {
 
   it('keeps an empty module as 0% and includes it in the course average', () => {
     const rows: LessonProgressRow[] = [
-      { moduleId: 1, lessonId: 10, watchedHits: FULL }, // module 100%
-      { moduleId: 2, lessonId: null, watchedHits: 0 }, // empty module → 0%
+      { moduleId: 1, lessonId: 10, videoId: 'v10', watchedHits: FULL }, // module 100%
+      { moduleId: 2, lessonId: null, videoId: null, watchedHits: 0 }, // empty module → 0%
     ];
     const result = aggregateCourseProgress('c', rows);
     expect(result.modules).toEqual([
@@ -77,9 +78,9 @@ describe('aggregateCourseProgress', () => {
 
   it('preserves the row order for modules and lessons', () => {
     const rows: LessonProgressRow[] = [
-      { moduleId: 5, lessonId: 50, watchedHits: 0 },
-      { moduleId: 5, lessonId: 51, watchedHits: 0 },
-      { moduleId: 3, lessonId: 30, watchedHits: 0 },
+      { moduleId: 5, lessonId: 50, videoId: 'v50', watchedHits: 0 },
+      { moduleId: 5, lessonId: 51, videoId: 'v51', watchedHits: 0 },
+      { moduleId: 3, lessonId: 30, videoId: 'v30', watchedHits: 0 },
     ];
     const result = aggregateCourseProgress('c', rows);
     expect(result.modules.map((m) => m.moduleId)).toEqual([5, 3]);

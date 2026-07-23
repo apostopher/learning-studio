@@ -15,12 +15,14 @@ const WATCHED_TOTAL = watchedMilestones.length;
 export type LessonProgressRow = {
   moduleId: number;
   lessonId: number | null;
+  videoId: string | null;
   watchedHits: number;
 };
 
 export type LessonProgress = {
   lessonId: number;
   moduleId: number;
+  videoId: string | null;
   percent: number;
   watched: boolean;
 };
@@ -74,6 +76,7 @@ export function aggregateCourseProgress(
     moduleLessons.push({
       lessonId: row.lessonId,
       moduleId: row.moduleId,
+      videoId: row.videoId,
       percent: lessonPercent(row.watchedHits),
       watched: row.watchedHits >= WATCHED_TOTAL,
     });
