@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import { Toaster } from 'sonner';
+import { ChatWidget } from '../components/chat-widget/chat-widget';
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
 import TanstackQueryProvider from '../integrations/tanstack-query/root-provider';
 import { getAuthContext, type getSession } from '../lib/auth-functions';
@@ -73,7 +74,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased wrap-anywhere">
         <TanstackQueryProvider>
-          <Tooltip.Provider delay={0}>{children}</Tooltip.Provider>
+          <Tooltip.Provider delay={0}>
+            {children}
+            <ChatWidget />
+          </Tooltip.Provider>
 
           <TanStackDevtools
             config={{
