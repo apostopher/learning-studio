@@ -13,4 +13,6 @@ export const dataKeys = {
     ['admin', 'course-embeddings', courseId] as const,
   courseOnboarding: (courseId: number) =>
     ['admin', 'course-onboarding', courseId] as const,
+  videoProgress: (videoId: string) =>
+    ['user', 'video-progress', videoId] as const,
 } as const;
