@@ -16,20 +16,18 @@ export const CourseSidebarHeader = ({
   lessonCount,
   coursePercent,
 }: CourseSidebarHeaderProps) => (
-  <header className="flex flex-col gap-sidebar-row-gap px-sidebar-row-inline py-sidebar-row-block">
-    <div className="flex items-center gap-2">
-      <h2 className="flex-1 min-w-0 text-sm font-semibold text-gray-12 break-words">
-        {title}
-      </h2>
-      <CircularProgress
-        value={coursePercent}
-        size={24}
-        strokeWidth={8}
-        ariaLabel={`Course ${title} progress`}
-      />
+  <header className="flex items-center gap-2 px-sidebar-row-inline py-sidebar-row-block">
+    <div className="flex min-w-0 flex-1 flex-col gap-sidebar-row-gap">
+      <h2 className="text-sm font-semibold text-gray-12 break-words">{title}</h2>
+      <p className="text-xs text-gray-11">
+        {plural(moduleCount, 'module')} · {plural(lessonCount, 'lesson')}
+      </p>
     </div>
-    <p className="text-xs text-gray-11">
-      {plural(moduleCount, 'module')} · {plural(lessonCount, 'lesson')}
-    </p>
+    <CircularProgress
+      value={coursePercent}
+      size={24}
+      strokeWidth={8}
+      ariaLabel={`Course ${title} progress`}
+    />
   </header>
 );
