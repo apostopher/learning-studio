@@ -43,6 +43,7 @@ export const CourseOnboardingContainer = ({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateRef = useRef(update);
   updateRef.current = update;
+  const resaveRef = useRef(false);
 
   // Seed the form + baselines the first time the query resolves.
   useEffect(() => {
@@ -54,24 +55,36 @@ export const CourseOnboardingContainer = ({
     }
   }, [query.data, form]);
 
-  // Debounced auto-save on any form change.
+  // Debounced auto-save on any change. Serialized: at most one save in flight;
+  // if edits arrive during a save, requeue and re-save the latest on settle.
   useEffect(() => {
+    const saveNow = (questions: OnboardingQuestion[]) => {
+      const snapshot = JSON.stringify(questions);
+      if (snapshot === lastSavedRef.current) return;
+      if (updateRef.current.isPending) {
+        resaveRef.current = true;
+        return;
+      }
+      updateRef.current.mutate(
+        { questions },
+        {
+          onSuccess: () => {
+            lastSavedRef.current = snapshot;
+          },
+          onSettled: () => {
+            if (resaveRef.current) {
+              resaveRef.current = false;
+              saveNow(currentRef.current);
+            }
+          },
+        },
+      );
+    };
     const sub = form.watch((value) => {
       const questions = (value.questions ?? []) as OnboardingQuestion[];
       currentRef.current = questions;
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        const snapshot = JSON.stringify(questions);
-        if (snapshot === lastSavedRef.current) return;
-        updateRef.current.mutate(
-          { questions },
-          {
-            onSuccess: () => {
-              lastSavedRef.current = snapshot;
-            },
-          },
-        );
-      }, DEBOUNCE_MS);
+      timerRef.current = setTimeout(() => saveNow(questions), DEBOUNCE_MS);
     });
     return () => sub.unsubscribe();
   }, [form]);
@@ -84,6 +97,8 @@ export const CourseOnboardingContainer = ({
       const snapshot = JSON.stringify(questions);
       if (snapshot === lastSavedRef.current) return;
       lastSavedRef.current = snapshot;
+      // Beacon even if a normal save is in flight — that fetch is cancelled on
+      // a real page unload, so this is the only guaranteed write.
       updateRef.current.mutate({ questions, fireAndForget: true });
     };
     window.addEventListener('pagehide', flush);
@@ -111,7 +126,7 @@ export const CourseOnboardingContainer = ({
         ? 'unsaved'
         : 'saved';
 
-  if (query.isLoading) {
+  if (query.isLoading || !seededRef.current) {
     return (
       <div className="flex justify-center py-10">
         <Loader2

@@ -94,30 +94,35 @@ export const OnboardingQuestionsEditor = ({
           Add question
         </button>
 
-        {status === 'saving' ? (
-          <span className="flex items-center gap-1.5 text-gray-10 text-sm">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-            Saving…
-          </span>
-        ) : status === 'error' ? (
-          <span className="flex items-center gap-2 text-sm">
-            <span className="text-red-11">Couldn’t save.</span>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="rounded-md px-2 py-1 font-medium text-gray-12 text-xs hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-            >
-              Retry
-            </button>
-          </span>
-        ) : status === 'unsaved' ? (
-          <span className="text-gray-10 text-sm">Unsaved changes…</span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-gray-10 text-sm">
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            All changes saved
-          </span>
-        )}
+        <span aria-live="polite" className="min-w-0">
+          {status === 'saving' ? (
+            <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+              <Loader2
+                className="h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
+              Saving…
+            </span>
+          ) : status === 'error' ? (
+            <span className="flex items-center gap-2 text-sm">
+              <span className="text-red-11">Couldn’t save.</span>
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-md px-2 py-1 font-medium text-gray-12 text-xs hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              >
+                Retry
+              </button>
+            </span>
+          ) : status === 'unsaved' ? (
+            <span className="text-gray-10 text-sm">Unsaved changes…</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              All changes saved
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );
