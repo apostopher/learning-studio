@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
@@ -58,6 +59,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAiRagRoute = ApiAiRagRouteImport.update({
@@ -246,6 +252,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthedAdminRouteWithChildren
   '/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -321,6 +329,7 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/app': typeof AuthedAppRoute
   '/api/ai-rag': typeof ApiAiRagRoute
+  '/api/chat': typeof ApiChatRoute
   '/auth/login': typeof AuthLoginRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -360,6 +369,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/app'
     | '/api/ai-rag'
+    | '/api/chat'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -396,6 +406,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/api/ai-rag'
+    | '/api/chat'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -434,6 +445,7 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/app'
     | '/api/ai-rag'
+    | '/api/chat'
     | '/auth/login'
     | '/api/admin/courses'
     | '/api/admin/uploads'
@@ -471,6 +483,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   ApiAiRagRoute: typeof ApiAiRagRoute
+  ApiChatRoute: typeof ApiChatRoute
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
@@ -512,6 +525,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ai-rag': {
@@ -864,6 +884,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   ApiAiRagRoute: ApiAiRagRoute,
+  ApiChatRoute: ApiChatRoute,
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
