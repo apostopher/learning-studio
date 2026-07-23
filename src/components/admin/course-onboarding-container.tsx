@@ -126,6 +126,14 @@ export const CourseOnboardingContainer = ({
         ? 'unsaved'
         : 'saved';
 
+  if (query.isError) {
+    return (
+      <p className="py-8 text-center text-red-11 text-sm">
+        Couldn't load onboarding questions. Please close and reopen the dialog.
+      </p>
+    );
+  }
+
   if (query.isLoading || !seededRef.current) {
     return (
       <div className="flex justify-center py-10">
