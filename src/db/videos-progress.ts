@@ -151,6 +151,22 @@ export async function hasWatchedVideo({
   return (row?.count ?? 0) === milestones.length;
 }
 
+/**
+ * Append a video-progress milestone row for a user. Append-only by design —
+ * repeated milestone hits power the watch-window / coverage detection above.
+ */
+export async function recordVideoProgress({
+  userId,
+  videoId,
+  progress,
+}: {
+  userId: string;
+  videoId: string;
+  progress: number;
+}): Promise<void> {
+  await db.insert(videoProgressTable).values({ userId, videoId, progress });
+}
+
 export async function getVideoWatchHistory({
   userId,
   videoId,
