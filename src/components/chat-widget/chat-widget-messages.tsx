@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useStickToBottom } from 'use-stick-to-bottom';
 import { ChatMessage } from '#/components/chat-widget/chat-message';
 import { TypingDots } from '#/components/chat-widget/typing-dots';
+import { ScrollArea } from '#/components/scroll-area';
 import { AIWriterDataNotificationSchema } from '#/types';
 
 export interface ChatWidgetMessagesProps {
@@ -36,7 +37,11 @@ export function ChatWidgetMessages({
   const showTyping = isLoading && !assistantHasStartedAnswering(messages);
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3">
+    <ScrollArea
+      viewportRef={scrollRef}
+      className="min-h-0 flex-1"
+      viewportClassName="px-3 py-3"
+    >
       <div ref={contentRef} className="flex flex-col gap-3">
         <AnimatePresence initial={false}>
           {messages.map((message) =>
@@ -92,6 +97,6 @@ export function ChatWidgetMessages({
           )}
         </AnimatePresence>
       </div>
-    </div>
+    </ScrollArea>
   );
 }

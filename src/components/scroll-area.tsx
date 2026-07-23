@@ -1,5 +1,5 @@
 import { ScrollArea as BaseScrollArea } from "@base-ui/react/scroll-area";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 type Orientation = "vertical" | "horizontal" | "both";
 
@@ -8,6 +8,9 @@ type ScrollAreaProps = {
   className?: string;
   viewportClassName?: string;
   orientation?: Orientation;
+  /** Ref to the scrolling viewport element — e.g. for `use-stick-to-bottom`,
+   * which needs to read/set scrollTop on the actual scroll container. */
+  viewportRef?: Ref<HTMLDivElement>;
 };
 
 export const ScrollArea = ({
@@ -15,6 +18,7 @@ export const ScrollArea = ({
   className,
   viewportClassName,
   orientation = "vertical",
+  viewportRef,
 }: ScrollAreaProps) => {
   const showVertical = orientation !== "horizontal";
   const showHorizontal = orientation !== "vertical";
@@ -26,6 +30,7 @@ export const ScrollArea = ({
       }
     >
       <BaseScrollArea.Viewport
+        ref={viewportRef}
         data-orientation={orientation}
         className={
           viewportClassName
