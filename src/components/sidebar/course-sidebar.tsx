@@ -24,6 +24,7 @@ type CourseSidebarProps = {
   activeLessonSlug: string | null;
   lessonPercents?: Record<string, number>;
   modulePercents?: Record<number, number>;
+  coursePercent?: number;
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -39,6 +40,7 @@ export const CourseSidebar = ({
   activeLessonSlug,
   lessonPercents,
   modulePercents,
+  coursePercent,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -85,6 +87,7 @@ export const CourseSidebar = ({
               title={title ?? ''}
               moduleCount={moduleCount ?? 0}
               lessonCount={lessonCount ?? 0}
+              coursePercent={coursePercent ?? 0}
             />
             <ModuleAccordion
               modules={modules ?? []}

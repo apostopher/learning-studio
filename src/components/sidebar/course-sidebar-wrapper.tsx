@@ -81,6 +81,7 @@ export const CourseSidebarWrapper = () => {
       activeLessonSlug={params.lessonSlug ?? null}
       lessonPercents={lessonPercents}
       modulePercents={modulePercents}
+      coursePercent={progressQuery.data?.percent ?? 0}
     />
   );
 };
