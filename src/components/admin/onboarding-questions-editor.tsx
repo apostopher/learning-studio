@@ -1,9 +1,9 @@
 import {
+  closestCenter,
   DndContext,
   type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
-  closestCenter,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -12,7 +12,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Loader2, Plus } from 'lucide-react';
+import { Check, Loader2, Plus } from 'lucide-react';
 import type { UseFormRegister } from 'react-hook-form';
 import { SortableOnboardingQuestion } from './sortable-onboarding-question';
 
@@ -20,31 +20,33 @@ interface OnboardingFormValues {
   questions: { id: string; text: string }[];
 }
 
+export type OnboardingSaveStatus = 'saving' | 'saved' | 'unsaved' | 'error';
+
 interface OnboardingQuestionsEditorProps {
   fields: { key: string; id: string }[];
   register: UseFormRegister<OnboardingFormValues>;
   onAdd: () => void;
   onRemove: (index: number) => void;
   onDragEnd: (event: DragEndEvent) => void;
-  isSaving: boolean;
-  isDirty: boolean;
-  onSave: () => void;
+  status: OnboardingSaveStatus;
+  onRetry: () => void;
 }
 
-/** Onboarding questions list: drag-reorder rows, add, and save. */
+/** Onboarding questions list: drag-reorder rows, add, and auto-save. */
 export const OnboardingQuestionsEditor = ({
   fields,
   register,
   onAdd,
   onRemove,
   onDragEnd,
-  isSaving,
-  isDirty,
-  onSave,
+  status,
+  onRetry,
 }: OnboardingQuestionsEditorProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   return (
@@ -91,17 +93,31 @@ export const OnboardingQuestionsEditor = ({
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add question
         </button>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!isDirty || isSaving}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-3 px-4 py-2 font-medium text-gray-12 transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : null}
-          Save
-        </button>
+
+        {status === 'saving' ? (
+          <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            Saving…
+          </span>
+        ) : status === 'error' ? (
+          <span className="flex items-center gap-2 text-sm">
+            <span className="text-red-11">Couldn’t save.</span>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-md px-2 py-1 font-medium text-gray-12 text-xs hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            >
+              Retry
+            </button>
+          </span>
+        ) : status === 'unsaved' ? (
+          <span className="text-gray-10 text-sm">Unsaved changes…</span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            All changes saved
+          </span>
+        )}
       </div>
     </div>
   );
