@@ -17,24 +17,42 @@ function wrapper() {
 afterEach(() => vi.restoreAllMocks());
 
 describe('useUpdateCourseOnboarding', () => {
-  it('PUTs the questions and returns saved', async () => {
+  it('POSTs the questions and returns saved (normal mode)', async () => {
     const questions = [{ id: 'a', text: 'Q1' }];
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => questions,
-    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => questions });
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => useUpdateCourseOnboarding(4), {
       wrapper: wrapper(),
     });
-    result.current.mutate(questions);
+    result.current.mutate({ questions });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/admin/courses/4/onboarding');
-    expect(init.method).toBe('PUT');
+    expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ questions });
     expect(result.current.data).toEqual(questions);
+  });
+
+  it('uses sendBeacon in fire-and-forget mode', async () => {
+    const questions = [{ id: 'a', text: 'Q1' }];
+    const beacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useUpdateCourseOnboarding(4), {
+      wrapper: wrapper(),
+    });
+    result.current.mutate({ questions, fireAndForget: true });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(beacon).toHaveBeenCalledTimes(1);
+    expect(beacon.mock.calls[0][0]).toBe('/api/admin/courses/4/onboarding');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.data).toEqual(questions); // echoed optimistically
   });
 });
