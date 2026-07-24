@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "3.0.91",
+    "@ai-sdk/react": "4.0.32",
     "@base-ui/react": "1.4.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -79,11 +80,14 @@
     "react-dom": "^19.2.0",
     "react-easy-crop": "6.2.2",
     "react-hook-form": "7.80.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
     "resend": "6.14.0",
     "sonner": "^2.0.7",
     "storybook": "^10.2.15",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "^4.1.18",
+    "use-stick-to-bottom": "1.1.6",
     "xstate": "^5.32.4",
     "zod": "^4.3.6"
   },
