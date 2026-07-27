@@ -56,7 +56,7 @@ export const SortableOnboardingQuestion = ({
         type="button"
         aria-label={`Remove question ${index + 1}`}
         onClick={onRemove}
-        className="mt-1.5 rounded-md p-1 text-tertiary transition-colors hover:bg-red-9/15 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+        className="mt-1.5 rounded-md p-1 text-tertiary transition-colors hover:bg-error-9/15 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </button>

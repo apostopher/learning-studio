@@ -52,7 +52,7 @@ export const ImageUploadField = ({
               type="button"
               onClick={onRemove}
               aria-label="Remove cover image"
-              className="absolute end-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-gray-1/80 text-secondary backdrop-blur transition-colors hover:bg-gray-1 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-9"
+              className="absolute end-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-gray-1/80 text-secondary backdrop-blur transition-colors hover:bg-gray-1 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>

@@ -249,7 +249,7 @@ export const CourseVideoIntegrationsContainer = ({
                     disabled={isDeleting}
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-error-text text-xs',
-                      'transition-colors hover:bg-red-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-9',
+                      'transition-colors hover:bg-error-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9',
                       'disabled:cursor-not-allowed disabled:opacity-60',
                     )}
                   >
