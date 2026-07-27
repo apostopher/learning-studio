@@ -121,8 +121,8 @@ which matches existing repo precedent — `--duration-scroll-area-thumb` and
   /* Foreground */
   --color-primary:   var(--color-gray-12);
   --color-secondary: var(--color-gray-11);
-  --color-tertiary:  var(--color-gray-10);   /* rmtp extension, see note */
-  --color-disabled:  var(--color-gray-a8);
+  --color-tertiary:  var(--color-gray-11);   /* rmtp extension, see note */
+  --color-disabled:  var(--color-gray-a8);   /* exempt from 1.4.3, see note */
 
   /* Surfaces */
   --color-body:     var(--color-background);
@@ -166,11 +166,24 @@ Notes:
 - **`--color-tertiary` is an addition Astryx does not have.** Astryx offers
   primary/secondary/disabled only. Our 50 `text-gray-10` sites are tertiary
   meta-text (counts, timestamps, hints, empty-state copy, placeholder icons),
-  not disabled controls; labelling them `disabled` would be wrong. It is pinned
-  to `gray-10` to preserve current appearance. **Radix step 10 sits near 3:1
-  against the page background, so these sites are below WCAG AA today.** This
-  design does not change that, but it reduces the fix to one line
-  (`--color-tertiary: var(--color-gray-11)`) instead of 50 edits.
+  not disabled controls; labelling them `disabled` would be wrong.
+
+  **It resolves to `gray-11`, the same value as `--color-secondary`, and this
+  is deliberate.** Radix's gray scale exposes exactly two text steps: 11
+  (`low-contrast text`, ≥4.5:1) and 12 (`high-contrast text`). Step 10 is a
+  *solid background* step at roughly 3:1 and was never intended to carry text —
+  which is why the current 50 sites fail WCAG AA. An AA-compliant three-level
+  text hierarchy does not exist in colour alone on this scale. `tertiary` is
+  kept as a distinct **name** so those sites stay semantically labelled and can
+  be differentiated by weight or size rather than by contrast.
+
+  Consequence: those 50 sites render visibly darker than today. That is the
+  intended fix, not a regression.
+- **`--color-disabled` at `gray-a8` is below 4.5:1 and that is correct.**
+  WCAG 1.4.3 explicitly exempts inactive user-interface components from
+  contrast minimums. This token must only be applied to genuinely disabled
+  controls — never to de-emphasised active text, which is what `tertiary` is
+  for.
 - `--color-skeleton: gray-a4` is not a new decision. It is the value
   `.lesson-skeleton-player`, `.lesson-header__skeleton`, and the material
   skeletons already hardcode.
@@ -232,25 +245,26 @@ unmigrated code picks up the new geometry and stays coherent.
 
 ### Typography
 
-**Decision: retune Tailwind's ramp to Astryx values wholesale.** This was
-raised as a concern and reaffirmed — see Accepted tradeoffs.
+**Decision: do NOT retune Tailwind's ramp. Add semantic tokens only.**
 
-Retuned ramp, with line-heights taken from the corresponding semantic token:
+Legibility is a hard requirement for this product, and Astryx's ramp is tuned
+for a dense internal tool — adopting it would take body copy to 12px and
+captions to 10px across 209 usages. Rejected.
 
-| Tailwind token | was | becomes | line-height | usages |
-| --- | --- | --- | --- | --- |
-| `--text-xs` | `0.75rem` | `0.625rem` | `1.6` | 44× |
-| `--text-sm` | `0.875rem` | `0.75rem` | `1.6667` | 165× |
-| `--text-base` | `1rem` | `0.875rem` | `1.4286` | 6× |
-| `--text-lg` | `1.125rem` | `1.0625rem` | `1.4118` | 16× |
-| `--text-xl` | `1.25rem` | `1.25rem` | `1.4` | 1× |
-| `--text-2xl` | `1.5rem` | `1.5rem` | `1.3333` | 3× |
-| `--text-3xl` | `1.875rem` | `1.8125rem` | `1.2414` | |
-| `--text-4xl` | `2.25rem` | `2.1875rem` | `1.2571` | 1× |
-| `--text-5xl` | `3rem` | `2.625rem` | `1.2381` | |
+No retune is needed anyway, because the semantic tokens already coincide with
+what the codebase uses:
 
-New small sizes: `--text-2xs` `0.5rem`, `--text-3xs` `0.4375rem`,
-`--text-4xs` `0.375rem`.
+| Astryx semantic | value | current Tailwind equivalent |
+| --- | --- | --- |
+| Body | `0.875rem / 400 / 1.4286` | `text-sm` — identical, including the line-height Tailwind v4 already computes |
+| Supporting | `0.75rem / 400` | `text-xs` — identical size |
+| H1 | `1.5rem / 600` | `text-2xl` — identical size |
+| H2 | `1.25rem / 600` | `text-xl` — identical size |
+
+`--text-xs` … `--text-5xl` keep their Tailwind defaults untouched. The
+sub-`xs` sizes from Astryx's ramp (`4xs` 6px, `3xs` 7px, `2xs` 8px) are **not
+added** — there is no legitimate use for 6–8px text here and defining the
+tokens would only invite it.
 
 Fourteen semantic type tokens at Astryx's exact values, using Tailwind v4's
 `--text-*--line-height` and `--text-*--font-weight` modifiers:
@@ -271,6 +285,10 @@ Fourteen semantic type tokens at Astryx's exact values, using Tailwind v4's
 | `--text-label` | `0.875rem` | 500 | `1.4286` |
 | `--text-code` | `0.875rem` | 400 | `1.4286` |
 | `--text-supporting` | `0.75rem` | 400 | `1.6667` |
+
+`--text-h5` (12px) and `--text-h6` (10px) are dense heading labels. They must
+not be used for body copy; `--text-body` and `--text-supporting` are the body
+defaults.
 
 ### Elevation
 
@@ -383,30 +401,54 @@ Extend `scripts/generate-theme-css.test.ts`:
 - a user-declared `success`/`warning`/`error` overrides the default
 - the 12-entry cap counts user-declared entries only
 
-New contrast test:
+New contrast suite — **AA is a hard product requirement, so it is enforced in
+CI across every text token, not just the `on-*` pairs.** All assertions run in
+both light and dark appearance, using the `checkContrast` helper in
+`src/utils/colors.ts`.
 
-- assert `--color-on-accent`, `--color-on-success`, `--color-on-warning`, and
-  `--color-on-error` each clear **WCAG AA 4.5:1** against their paired step-9
-  solid, in both light and dark appearance, using the `checkContrast` helper in
-  `src/utils/colors.ts`.
+1. **Labels on solid fills** — `--color-on-accent`, `--color-on-success`,
+   `--color-on-warning`, `--color-on-error` each clear 4.5:1 against their
+   paired step-9 solid. `--color-red-contrast` is currently `#fff`, which does
+   pass against `#cb0d39`, but nothing asserts it today.
+2. **Body text on page and panel** — `--color-primary`, `--color-secondary`,
+   and `--color-tertiary` each clear 4.5:1 against both `--color-body` and
+   `--color-surface`. This is the assertion that would have caught the existing
+   `text-gray-10` failures.
+3. **Text on tinted surfaces** — for every generated scale, `--color-N-text`
+   (step 11) clears 4.5:1 against `--color-N-subtle` (step 3) and against
+   `--color-body`. Covers `bg-error-subtle text-error-text` alert patterns.
+4. **`--color-disabled` is explicitly excluded** with a comment citing the
+   WCAG 1.4.3 inactive-component exemption, so its absence reads as deliberate
+   rather than an oversight.
 
-This last one converts a standing worry — whether solid destructive buttons
-have a legible label — into something CI enforces. `--color-red-contrast` is
-currently `#fff`, which does pass against `#cb0d39`, but nothing asserts it.
+Because these run against generated output, they also guard future brand
+changes: a new `VITE_BRAND_COLORS` value that produces an illegible pairing
+fails the build rather than shipping.
 
 Test constraints to respect (existing repo behaviour): vitest cannot resolve the
 `@/` alias — use `#/`. Presentational components under render-test must stay
 hookless.
 
+## Accessibility position
+
+Legibility and WCAG AA are hard requirements for this product, not tradeoffs.
+Two consequences run through this design:
+
+- Astryx's type ramp is **not** adopted; its sizes are tuned for a dense
+  internal tool and would take body copy to 12px and captions to 10px. The
+  semantic type vocabulary is adopted without the sizes.
+- The 50 existing sub-AA `text-gray-10` sites are **fixed** as part of this
+  work, not carried forward. `--color-tertiary` resolves to `gray-11`.
+
+AA is enforced by the contrast suite above, so regressions fail the build.
+
 ## Accepted tradeoffs
 
-1. **Text gets smaller everywhere.** `text-sm` 14px → 12px across 165 usages,
-   `text-xs` 12px → 10px across 44. Astryx is a dense internal tool; this is a
-   courseware app. 10px caption text is below common accessibility guidance for
-   body copy. This was raised, and the denser ramp was chosen deliberately.
-   Recorded as accepted, not resolved.
-2. **`--color-tertiary` stays below WCAG AA** to preserve current appearance.
-   One-line remedy documented above.
+1. **Tertiary and secondary text share a colour.** Radix offers only two
+   AA-safe text steps, so a three-level hierarchy has to be expressed through
+   weight or size instead. The names stay distinct to keep that option open.
+2. **50 sites get visibly darker text.** The intended fix for the existing AA
+   failures, but it is a visible change and worth a look once it lands.
 3. **Radius changes on ~140 elements at once.** Intended, but the change most
    likely to need a visual pass.
 4. **Generated CSS grows.** Three more scales (light + dark + P3) plus four
@@ -417,6 +459,8 @@ hookless.
 
 - Adopting Astryx as a dependency, or StyleX.
 - Astryx's colour *values* — all colour derives from `generateRadixColors`.
+- Astryx's font *sizes* — the semantic type vocabulary is adopted, the ramp is
+  not. See Accessibility position.
 - `light-dark()`.
 - Spacing tokens.
 - A lint rule banning raw scale steps.
