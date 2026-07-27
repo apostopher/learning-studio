@@ -251,3 +251,38 @@ describe('buildThemeModule', () => {
     expect(out).toContain("export const brandNames = ['solo'] as const")
   })
 })
+
+import { resolveContrast } from './generate-theme-css'
+import { checkContrast } from '../src/utils/colors'
+
+describe('resolveContrast', () => {
+  it('keeps the candidate when it already clears AA', () => {
+    // light red-9 #cb0d39 with #fff measures 5.74
+    expect(resolveContrast('#cb0d39', '#fff')).toBe('#fff')
+  })
+
+  it('replaces a failing candidate on dark red-9 with black', () => {
+    // dark red-9 #f44f5f with #fff measures 3.43; black measures 6.13
+    expect(resolveContrast('#f44f5f', '#fff')).toBe('#000')
+  })
+
+  it('replaces a failing candidate on dark link-9 with black', () => {
+    // dark link-9 #2997ff with #fff measures 3.02; black measures 6.96
+    expect(resolveContrast('#2997ff', '#fff')).toBe('#000')
+  })
+
+  it('picks white when the fill is dark', () => {
+    expect(resolveContrast('#1a2f40', '#808080')).toBe('#fff')
+  })
+
+  it('always returns a colour clearing AA, for any fill', () => {
+    const fills = [
+      '#cb0d39', '#f44f5f', '#2997ff', '#e9e28f', '#1a2f40',
+      '#808080', '#767676', '#000000', '#ffffff', '#30a46c',
+    ]
+    for (const fill of fills) {
+      const out = resolveContrast(fill, '#fff')
+      expect(checkContrast(out, fill).wcagAA).toBe(true)
+    }
+  })
+})

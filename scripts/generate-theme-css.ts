@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { BrandEntry } from '../src/utils/brand-colors'
-import { generateRadixColors } from '../src/utils/colors'
+import { checkContrast, generateRadixColors } from '../src/utils/colors'
 
 export type FontSlotKey = 'sans' | 'mono' | 'display'
 export type FontSpecs = Record<FontSlotKey, string>
@@ -79,6 +79,22 @@ type ScaleInput = {
   accentScaleAlpha: readonly string[]
   accentContrast?: string
   accentSurface?: string
+}
+
+/**
+ * `generateRadixColors` returns an `accentContrast` that is not guaranteed to
+ * clear WCAG AA — dark-theme red-9 and link-9 both come back as #fff at ~3.4
+ * and ~3.0. Measure it, and fall back to whichever of black/white scores
+ * higher.
+ *
+ * This cannot fail: white-vs-black contrast against any fill bottoms out at
+ * 4.58 where the two curves cross, which is above the 4.5 threshold.
+ */
+export function resolveContrast(step9: string, candidate: string): string {
+  if (checkContrast(candidate, step9).wcagAA) return candidate
+  return checkContrast('#000', step9).ratio >= checkContrast('#fff', step9).ratio
+    ? '#000'
+    : '#fff'
 }
 
 export function buildScaleBlock(name: string, scale: ScaleInput): string {
