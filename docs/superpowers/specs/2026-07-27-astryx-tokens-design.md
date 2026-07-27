@@ -58,6 +58,12 @@ alias onto `gold`.
    1049 lines and contains three `@theme` blocks (sidebar tokens L330–359,
    scroll-area tokens L403–411) interleaved with component rules.
 
+6. **The generated `contrast` tokens are not AA-safe.** `--color-red-contrast`
+   and `--color-link-contrast` are `#fff` in dark theme, scoring 3.43 and 3.02
+   against their step-9 fills. Solid destructive and link buttons are illegible
+   in dark mode unless a component hardcodes `text-black`, which one already
+   does. Nothing detects this.
+
 ## Architecture
 
 ```
@@ -351,6 +357,31 @@ to add, nothing to retune, nothing to migrate.
 4. `--color-shadow` needs a concrete primitive; it resolves through
    `--color-gray-a6`, which the gray scale already provides.
 
+5. **Replace `accentContrast` with a measured AA-safe label colour.**
+   `generateRadixColors` returns an `accentContrast` that is not guaranteed to
+   clear 4.5:1. Measured against the current palette:
+
+   | scale | step 9 | `contrast` | ratio | |
+   | --- | --- | --- | --- | --- |
+   | light `red` | `#cb0d39` | `#fff` | 5.74 | pass |
+   | light `link` | `#06c` | `#fff` | 5.57 | pass |
+   | light `gold` | `#d9cc3d` | `#25230a` | 9.56 | pass |
+   | light `apple` | `#1a2f40` | `#fff` | 13.77 | pass |
+   | **dark `red`** | `#f44f5f` | `#fff` | **3.43** | **fail** (black = 6.13) |
+   | **dark `link`** | `#2997ff` | `#fff` | **3.02** | **fail** (black = 6.96) |
+   | dark `gold` | `#e9e28f` | `#25230a` | 11.89 | pass |
+   | dark `apple` | `#f2f9ff` | `#0f2433` | 14.97 | pass |
+
+   `buildScaleBlock` must therefore compute `--color-N-contrast` itself:
+   measure the candidate against step 9 and fall back to whichever of
+   black/white scores higher when `accentContrast` fails 4.5:1. This is what
+   makes `--color-on-error` trustworthy in dark theme.
+
+   This defect is already known in the codebase and worked around by hand —
+   `src/components/admin/delete-module-confirm-form.tsx` hardcodes
+   `text-black` on its solid red button precisely because the token could not
+   be trusted. That workaround can be removed once the token is correct.
+
 `src/utils/brand-colors.ts`: reintroduce `RESERVED_BRAND_NAMES` alongside a
 `STATUS_DEFAULTS` map.
 
@@ -407,9 +438,11 @@ both light and dark appearance, using the `checkContrast` helper in
 `src/utils/colors.ts`.
 
 1. **Labels on solid fills** — `--color-on-accent`, `--color-on-success`,
-   `--color-on-warning`, `--color-on-error` each clear 4.5:1 against their
-   paired step-9 solid. `--color-red-contrast` is currently `#fff`, which does
-   pass against `#cb0d39`, but nothing asserts it today.
+   `--color-on-warning`, `--color-on-error`, and every `--color-N-contrast`
+   clear 4.5:1 against their paired step-9 solid.
+
+   **This assertion fails on the current palette** — see the
+   `accentContrast` defect below.
 2. **Body text on page and panel** — `--color-primary`, `--color-secondary`,
    and `--color-tertiary` each clear 4.5:1 against both `--color-body` and
    `--color-surface`. This is the assertion that would have caught the existing
@@ -439,8 +472,14 @@ Two consequences run through this design:
   semantic type vocabulary is adopted without the sizes.
 - The 50 existing sub-AA `text-gray-10` sites are **fixed** as part of this
   work, not carried forward. `--color-tertiary` resolves to `gray-11`.
+- The two sub-AA `contrast` tokens (dark `red`, dark `link`) are **fixed** by
+  computing the label colour from a measured ratio instead of trusting
+  `generateRadixColors`.
 
 AA is enforced by the contrast suite above, so regressions fail the build.
+Three existing defects are repaired as part of this work rather than
+grandfathered: the 50 `text-gray-10` sites, the two dark-theme `contrast`
+tokens, and the dead `text-green-11` / `text-amber-11` classes.
 
 ## Accepted tradeoffs
 
