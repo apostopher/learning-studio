@@ -34,9 +34,12 @@
     --footer-height: 0px;
     --shell-padding: var(--layout-separator-size);
     --shell-gap: var(--layout-separator-size);
-    --shell-bg: var(--color-background);
+    /* Panels (header/aside/main/footer) and the shell frame/gutter around
+       them are explicit theme tokens (VITE_PANEL_BG_* / VITE_SHELL_BG_*),
+       set independently of the page background and gray scale. */
+    --shell-bg: var(--color-shell-bg);
 
-    --panel-bg: var(--color-gray-2);
+    --panel-bg: var(--color-panel-bg);
     --panel-radius: 0rem;
 
     --unsupported-bg: var(--color-background);
@@ -935,7 +938,8 @@
     border-radius: 0.25rem;
     padding-block: 0.125rem;
     padding-inline: 0.25rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.85em;
     color: var(--color-gray-12);
   }
@@ -945,7 +949,8 @@
     padding: 0.75rem;
     margin-block: 0.5rem;
     overflow-x: auto;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.85em;
   }
   .material-prose pre code {

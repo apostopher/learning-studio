@@ -1,11 +1,7 @@
 import { createEnv } from '@t3-oss/env-core';
 import Color from 'colorjs.io';
 import { z } from 'zod';
-import {
-  BRAND_NAME_REGEX,
-  parseBrandColorEntries,
-  RESERVED_BRAND_NAMES,
-} from './utils/brand-colors';
+import { BRAND_NAME_REGEX, parseBrandColorEntries } from './utils/brand-colors';
 
 const colorStr = z.string().refine(
   (v) => {
@@ -39,8 +35,6 @@ const logoStr = z
 // For display/single-variant fonts, the bare family name is also accepted: "Bebas Neue"
 const fontStr = z.string().min(1);
 
-const reservedNames = new Set<string>(RESERVED_BRAND_NAMES);
-
 const brandColorsSchema = z
   .string()
   .min(1)
@@ -59,14 +53,9 @@ const brandColorsSchema = z
     z
       .array(
         z.object({
-          name: z
-            .string()
-            .regex(BRAND_NAME_REGEX, {
-              message: 'brand name must match /^[a-z][a-z0-9-]*$/',
-            })
-            .refine((n) => !reservedNames.has(n), {
-              message: `brand name is reserved (${[...reservedNames].join(', ')})`,
-            }),
+          name: z.string().regex(BRAND_NAME_REGEX, {
+            message: 'brand name must match /^[a-z][a-z0-9-]*$/',
+          }),
           light: colorStr,
           dark: colorStr,
         }),
@@ -94,6 +83,10 @@ export const env = createEnv({
     // Shared secret for the Vercel Cron blob-sweep endpoint. Optional: the
     // endpoint stays disabled (401) until it's set.
     CRON_SECRET: z.string().min(1).optional(),
+    // Google Generative AI key — powers gemini-embedding-001 (RAG embeddings)
+    // and PDF→HTML conversion via the gateway.
+    GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
+    ELEVENLABS_API_KEY: z.string().min(1),
   },
 
   clientPrefix: 'VITE_',
@@ -107,6 +100,15 @@ export const env = createEnv({
 
     VITE_BG_LIGHT: colorStr.default('#ffffff'),
     VITE_BG_DARK: colorStr.default('#111111'),
+
+    // Explicit shell-chrome backgrounds. Panels (header/aside/main/footer) and
+    // the shell frame/gutter around them are their own tokens so they can be
+    // set independently of the page background and the gray scale.
+    VITE_PANEL_BG_LIGHT: colorStr.default('#ffffff'),
+    VITE_PANEL_BG_DARK: colorStr.default('#111111'),
+
+    VITE_SHELL_BG_LIGHT: colorStr.default('#ffffff'),
+    VITE_SHELL_BG_DARK: colorStr.default('#111111'),
 
     VITE_FONT_SANS: fontStr,
     VITE_FONT_MONO: fontStr,

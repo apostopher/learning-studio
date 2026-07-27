@@ -104,6 +104,8 @@ describe('buildThemeCss', () => {
   const baseInputs = {
     gray: { light: '#8B8D98', dark: '#8B8D98' },
     bg: { light: '#ffffff', dark: '#111111' },
+    panelBg: { light: '#fafafa', dark: '#1a1a1a' },
+    shellBg: { light: '#eeeeee', dark: '#222222' },
     fontFamilies: {
       sans: 'Inter',
       mono: 'IBM Plex Mono',
@@ -145,8 +147,10 @@ describe('buildThemeCss', () => {
     // --color-brand-* must be entirely gone
     expect(css).not.toMatch(/--color-brand-/)
 
-    // Background + fonts
+    // Background + explicit panel/shell chrome + fonts
     expect(css).toContain('--color-background: #ffffff;')
+    expect(css).toContain('--color-panel-bg: #fafafa;')
+    expect(css).toContain('--color-shell-bg: #eeeeee;')
     expect(css).toContain('--font-sans: Inter,')
     expect(css).toContain('--font-mono: IBM Plex Mono,')
     expect(css).toContain('--font-display: Bebas Neue,')
@@ -154,6 +158,8 @@ describe('buildThemeCss', () => {
     // .dark block — has primary/danger concrete overrides, no accent aliases
     const darkBlock = css.slice(css.indexOf('.dark {'), css.indexOf('@supports'))
     expect(darkBlock).toContain('--color-background: #111111;')
+    expect(darkBlock).toContain('--color-panel-bg: #1a1a1a;')
+    expect(darkBlock).toContain('--color-shell-bg: #222222;')
     expect(darkBlock).toContain('--color-primary-1:')
     expect(darkBlock).toContain('--color-danger-1:')
     expect(darkBlock).not.toMatch(/--color-accent-/)

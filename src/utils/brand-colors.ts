@@ -2,13 +2,6 @@ export type BrandEntry = { name: string; light: string; dark: string }
 
 export const BRAND_NAME_REGEX = /^[a-z][a-z0-9-]*$/
 
-export const RESERVED_BRAND_NAMES = [
-  'gray',
-  'accent',
-  'brand',
-  'background',
-] as const
-
 /**
  * Parses "name:#light/#dark, name2:#light/#dark, ..." into structured entries.
  * Validates only the *shape* — name/hex semantic validation is the caller's job

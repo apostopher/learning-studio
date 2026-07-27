@@ -121,6 +121,8 @@ export type ThemeColorInputs = {
   gray: { light: string; dark: string }
   brandColors: BrandEntry[]
   bg: { light: string; dark: string }
+  panelBg: { light: string; dark: string }
+  shellBg: { light: string; dark: string }
   fontFamilies: Record<FontSlotKey, string>
 }
 
@@ -218,6 +220,8 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     ),
     buildAliasBlock('accent', firstName),
     `  --color-background: ${inputs.bg.light};`,
+    `  --color-panel-bg: ${inputs.panelBg.light};`,
+    `  --color-shell-bg: ${inputs.shellBg.light};`,
     fontVars,
     '}',
   ].join('\n')
@@ -229,6 +233,8 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
       buildScaleBlock(name, asScaleInput(colors, 'accent')),
     ),
     `  --color-background: ${inputs.bg.dark};`,
+    `  --color-panel-bg: ${inputs.panelBg.dark};`,
+    `  --color-shell-bg: ${inputs.shellBg.dark};`,
     '}',
   ].join('\n')
 
@@ -300,6 +306,8 @@ export function generateTheme(): void {
     gray: { light: env.VITE_GRAY_LIGHT, dark: env.VITE_GRAY_DARK },
     brandColors: env.VITE_BRAND_COLORS,
     bg: { light: env.VITE_BG_LIGHT, dark: env.VITE_BG_DARK },
+    panelBg: { light: env.VITE_PANEL_BG_LIGHT, dark: env.VITE_PANEL_BG_DARK },
+    shellBg: { light: env.VITE_SHELL_BG_LIGHT, dark: env.VITE_SHELL_BG_DARK },
     fontFamilies: fonts.families,
   })
 

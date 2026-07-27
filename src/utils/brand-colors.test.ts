@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  BRAND_NAME_REGEX,
-  RESERVED_BRAND_NAMES,
-  parseBrandColorEntries,
-} from './brand-colors'
+import { BRAND_NAME_REGEX, parseBrandColorEntries } from './brand-colors'
 
 describe('parseBrandColorEntries', () => {
   it('parses a single entry', () => {
@@ -81,8 +77,16 @@ describe('BRAND_NAME_REGEX', () => {
   })
 })
 
-describe('RESERVED_BRAND_NAMES', () => {
-  it('covers the four reserved tokens', () => {
-    expect(RESERVED_BRAND_NAMES).toEqual(['gray', 'accent', 'brand', 'background'])
+describe('formerly-reserved names', () => {
+  it('accepts brand, background, accent, and gray as valid name shapes', () => {
+    for (const name of ['brand', 'background', 'accent', 'gray']) {
+      expect(BRAND_NAME_REGEX.test(name)).toBe(true)
+    }
+  })
+
+  it('parses an entry named "brand"', () => {
+    expect(parseBrandColorEntries('brand:#cb0d39/#f44f5f')).toEqual([
+      { name: 'brand', light: '#cb0d39', dark: '#f44f5f' },
+    ])
   })
 })
