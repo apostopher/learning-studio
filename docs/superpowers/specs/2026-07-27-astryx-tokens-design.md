@@ -203,8 +203,33 @@ tokens named for what the Radix step is:
 --color-N-subtle: var(--color-N-3);    /* bg-N-subtle     */
 --color-N-border: var(--color-N-6);    /* border-N-border */
 --color-N-solid:  var(--color-N-9);    /* bg-N-solid      */
---color-N-text:   var(--color-N-11);   /* text-N-text     */
+--color-N-text:   var(--color-N-11);   /* text-N-text — see caveat below */
 ```
+
+**`-text` is adaptive, not fixed at step 11.** Radix guarantees step 11 clears
+4.5:1 against steps 1–2, *not* step 3. Measured against the real palette, three
+of six light-theme scales fail `text` on their own `subtle` fill:
+
+| scale | text (step 11) | subtle (step 3) | ratio | |
+| --- | --- | --- | --- | --- |
+| `gold` (= accent) | `#7e7612` | `#f8f6cd` | 4.246 | fail |
+| `warning` | `#a96600` | `#fff0cb` | 4.050 | fail |
+| `success` | `#00814c` | `#e5f6eb` | 4.409 | fail |
+| `apple` / `link` / `error` | | | 4.66–4.77 | pass |
+
+Dark theme passes everywhere (7.0–11.6). This is a **live defect**, not a
+hypothetical: `.sidebar-row-active` (`src/styles.css`) already pairs
+`--color-accent-3` with `--color-accent-11`, so the active lesson row ships at
+4.246:1.
+
+The generator therefore measures step 11 against step 3 and emits **step 12**
+when step 11 fails — the same measure-don't-trust principle applied to
+`--color-N-contrast`. Scales already safe at step 11 keep it.
+
+The decision must be computed **once from the sRGB values and reused for the
+wide-gamut block**. Measuring each gamut independently would let a scale near
+the threshold resolve differently in P3 than in sRGB, so wide-gamut browsers
+would render a different text colour from everyone else.
 
 `text-N-text` and `border-N-border` stutter. Accepted: the naming is
 unambiguous, and the alternative (`text-text-gold`) is worse.
@@ -448,9 +473,16 @@ both light and dark appearance, using the `checkContrast` helper in
    `--color-surface`. This is the assertion that would have caught the existing
    `text-gray-10` failures.
 3. **Text on tinted surfaces** — for every generated scale, `--color-N-text`
-   (step 11) clears 4.5:1 against `--color-N-subtle` (step 3) and against
-   `--color-body`. Covers `bg-error-subtle text-error-text` alert patterns.
-4. **`--color-disabled` is explicitly excluded** with a comment citing the
+   clears 4.5:1 against `--color-N-subtle` (step 3) and against `--color-body`.
+   Covers `bg-error-subtle text-error-text` alert patterns.
+
+   **This assertion failed on first run** and exposed the step-11 defect
+   described above. It is what forced `-text` to become adaptive.
+
+4. **Gamut agreement** — for a scale that falls back to step 12, the base
+   `@theme` block and the `@supports (color: oklch(0 0 0))` block select the
+   same step, so wide-gamut browsers do not diverge.
+5. **`--color-disabled` is explicitly excluded** with a comment citing the
    WCAG 1.4.3 inactive-component exemption, so its absence reads as deliberate
    rather than an oversight.
 
@@ -475,11 +507,15 @@ Two consequences run through this design:
 - The two sub-AA `contrast` tokens (dark `red`, dark `link`) are **fixed** by
   computing the label colour from a measured ratio instead of trusting
   `generateRadixColors`.
+- The sub-AA `text`-on-`subtle` pairings (light `gold`, `success`, `warning`)
+  are **fixed** by making `-text` fall back to step 12 when step 11 fails. This
+  repairs the live `.sidebar-row-active` failure.
 
 AA is enforced by the contrast suite above, so regressions fail the build.
-Three existing defects are repaired as part of this work rather than
+Four existing defects are repaired as part of this work rather than
 grandfathered: the 50 `text-gray-10` sites, the two dark-theme `contrast`
-tokens, and the dead `text-green-11` / `text-amber-11` classes.
+tokens, the three light-theme `text`-on-`subtle` pairings, and the dead
+`text-green-11` / `text-amber-11` classes.
 
 ## Accepted tradeoffs
 
