@@ -89,7 +89,11 @@ export const env = createEnv({
     // Google Generative AI key — powers gemini-embedding-001 (RAG embeddings)
     // and PDF→HTML conversion via the gateway.
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
-    ELEVENLABS_API_KEY: z.string().min(1),
+    // Declared ahead of use — not yet read anywhere in tracked source. Keep
+    // optional until a call site consumes it, otherwise every clone/CI/
+    // preview build fails with "Invalid environment variables" before
+    // anything compiles (there's no .env.example and .env is gitignored).
+    ELEVENLABS_API_KEY: z.string().min(1).optional(),
   },
 
   clientPrefix: 'VITE_',
