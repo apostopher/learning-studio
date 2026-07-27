@@ -345,7 +345,7 @@
   /* Active-lesson row appearance. */
   .sidebar-row-active {
     background-color: var(--color-accent-3);
-    color: var(--color-accent-11);
+    color: var(--color-accent-text);
     border-inline-start-width: var(--border-width-sidebar-active);
     border-inline-start-style: solid;
     border-inline-start-color: var(--color-accent-7);
