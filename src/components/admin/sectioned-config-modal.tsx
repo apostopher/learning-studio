@@ -54,10 +54,10 @@ export const SectionedConfigModal = ({
           className="fixed inset-0 z-40 m-auto grid h-[85vh] max-h-[calc(100vh-2rem)] w-[var(--modal-dialog-width)] max-w-[calc(100vw-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl"
         >
           <div className="flex items-center justify-between gap-4 border-gray-6 border-b px-6 py-4">
-            <Dialog.Title className="font-semibold text-gray-12 text-lg">
+            <Dialog.Title className="font-semibold text-primary text-lg">
               {title}
             </Dialog.Title>
-            <Dialog.Close className="shrink-0 rounded-md p-1.5 text-gray-11 transition-colors hover:bg-gray-4 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
+            <Dialog.Close className="shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
               <X className="h-5 w-5" aria-hidden="true" />
             </Dialog.Close>
           </div>
@@ -74,7 +74,7 @@ export const SectionedConfigModal = ({
                   <Tabs.Tab
                     key={section.value}
                     value={section.value}
-                    className="border-gray-6 border-b px-4 py-3 text-start font-medium text-gray-11 text-sm transition-colors hover:bg-gray-3 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-gray-12"
+                    className="border-gray-6 border-b px-4 py-3 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
                   >
                     {section.title}
                   </Tabs.Tab>
@@ -83,7 +83,7 @@ export const SectionedConfigModal = ({
 
               <ScrollArea className="min-h-0" viewportClassName="p-6">
                 <div className="flex flex-col gap-6">
-                  <h2 className="break-words font-semibold text-2xl text-gray-12">
+                  <h2 className="break-words font-semibold text-2xl text-primary">
                     {heading}
                   </h2>
                   {sections.map((section) => (

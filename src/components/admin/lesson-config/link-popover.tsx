@@ -40,7 +40,7 @@ export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
       <Popover.Trigger
         aria-label="Link"
         aria-pressed={editor.isActive('link')}
-        className="rounded p-1.5 text-gray-11 transition-colors hover:bg-gray-4 hover:text-gray-12 aria-pressed:bg-gray-4 aria-pressed:text-gray-12"
+        className="rounded p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary aria-pressed:bg-gray-4 aria-pressed:text-primary"
       >
         <Link2 className="h-4 w-4" aria-hidden="true" />
       </Popover.Trigger>
@@ -56,7 +56,7 @@ export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
                 name="href"
                 placeholder="https://…"
                 aria-label="Link URL"
-                className="w-56 rounded-md border border-gray-6 bg-gray-1 px-2 py-1 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                className="w-56 rounded-md border border-gray-6 bg-gray-1 px-2 py-1 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
               />
               <Popover.Close
                 type="submit"
@@ -68,7 +68,7 @@ export const LinkPopover = ({ editor }: { editor: RichTextEditorApi }) => {
                 type="button"
                 onClick={removeLink}
                 aria-label="Remove link"
-                className="rounded-md p-1.5 text-gray-11 hover:bg-gray-4 hover:text-gray-12"
+                className="rounded-md p-1.5 text-secondary hover:bg-gray-4 hover:text-primary"
               >
                 <Link2Off className="h-4 w-4" aria-hidden="true" />
               </Popover.Close>

@@ -1,6 +1,6 @@
-import { motion, useReducedMotion } from "motion/react";
-import { ArrowRight, Check, X } from "lucide-react";
-import type { AIEvaluationResult, AITestQuestion } from "#/ai/schemas";
+import { ArrowRight, Check, X } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
 
 type EvaluationCardProps = {
   question: AITestQuestion;
@@ -12,11 +12,9 @@ type EvaluationCardProps = {
 };
 
 const scoreBadgeClass = (score: number) => {
-  if (score >= 80)
-    return "border border-green-7 bg-green-3 text-green-11";
-  if (score >= 50)
-    return "border border-amber-7 bg-amber-3 text-amber-11";
-  return "border border-red-7 bg-red-3 text-red-11";
+  if (score >= 80) return 'border border-green-7 bg-green-3 text-success-text';
+  if (score >= 50) return 'border border-amber-7 bg-amber-3 text-warning-text';
+  return 'border border-red-7 bg-red-3 text-error-text';
 };
 
 export const EvaluationCard = ({
@@ -38,7 +36,7 @@ export const EvaluationCard = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-11">
+        <span className="text-sm font-medium text-secondary">
           {index + 1} of {total}
         </span>
         <span
@@ -49,25 +47,25 @@ export const EvaluationCard = ({
       </div>
 
       {/* Question text */}
-      <p className="text-base font-medium text-gray-12">{question.question}</p>
+      <p className="text-base font-medium text-primary">{question.question}</p>
 
       {/* MCQ result */}
-      {question.type === "mcq" && (
+      {question.type === 'mcq' && (
         <ol className="flex flex-col gap-2">
           {question.options.map((option) => {
             const isCorrect = option.id === question.correctOptionId;
             const isUserPick = option.id === evaluation.userAnswer;
             const isWrongPick = isUserPick && !isCorrect;
 
-            let optionClass =
-              "border border-gray-6 bg-gray-1 text-gray-9";
+            let optionClass = 'border border-gray-6 bg-gray-1 text-gray-9';
             let Icon: React.ElementType | null = null;
 
             if (isCorrect) {
-              optionClass = "border border-green-7 bg-green-3 text-green-11";
+              optionClass =
+                'border border-green-7 bg-green-3 text-success-text';
               Icon = Check;
             } else if (isWrongPick) {
-              optionClass = "border border-red-7 bg-red-3 text-red-11";
+              optionClass = 'border border-red-7 bg-red-3 text-error-text';
               Icon = X;
             }
 
@@ -89,12 +87,12 @@ export const EvaluationCard = ({
       )}
 
       {/* Free-text result */}
-      {question.type === "free-text" && (
+      {question.type === 'free-text' && (
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-10">
+          <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
             Your answer
           </span>
-          <div className="rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-sm text-gray-12">
+          <div className="rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-sm text-primary">
             {evaluation.userAnswer || (
               <span className="italic text-gray-9">No answer provided</span>
             )}
@@ -104,10 +102,10 @@ export const EvaluationCard = ({
 
       {/* Explanation */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-10">
+        <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
           Explanation
         </span>
-        <div className="rounded-lg border border-gray-6 bg-gray-2 px-3 py-2.5 text-sm leading-relaxed text-gray-12">
+        <div className="rounded-lg border border-gray-6 bg-gray-2 px-3 py-2.5 text-sm leading-relaxed text-primary">
           {evaluation.explanation}
         </div>
       </div>
@@ -119,7 +117,7 @@ export const EvaluationCard = ({
           onClick={onNext}
           className="ms-auto inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10"
         >
-          {isLast ? "See Results" : "Next"}
+          {isLast ? 'See Results' : 'Next'}
           <ArrowRight className="size-4" aria-hidden="true" />
         </button>
       </div>

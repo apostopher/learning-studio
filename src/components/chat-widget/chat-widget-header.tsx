@@ -35,8 +35,8 @@ const HeaderControlButton = ({
           onClick={onClick}
           aria-label={label}
           className={cn(
-            'flex size-7 items-center justify-center rounded-md text-gray-11 transition-colors',
-            'hover:bg-gray-4 hover:text-gray-12',
+            'flex size-7 items-center justify-center rounded-md text-secondary transition-colors',
+            'hover:bg-gray-4 hover:text-primary',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
           )}
         />
@@ -76,8 +76,8 @@ export function ChatWidgetHeader({
         V7
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-12">{brand.ai.name}</p>
-        <p className="text-xs text-gray-11">AI Assistant</p>
+        <p className="text-sm font-semibold text-primary">{brand.ai.name}</p>
+        <p className="text-xs text-secondary">AI Assistant</p>
       </div>
 
       <AnimatePresence>

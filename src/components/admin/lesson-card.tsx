@@ -17,7 +17,7 @@ export const LessonCard = ({
   onDelete?: () => void;
 }) => {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-gray-12">
+    <div className="flex items-center gap-1.5 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary">
       <span
         className={cn(
           'h-1.5 w-1.5 shrink-0 rounded-full',
@@ -44,7 +44,7 @@ export const LessonCard = ({
         type="button"
         aria-label="Drag to reorder lesson"
         {...dragHandleProps}
-        className="-me-1 shrink-0 cursor-grab rounded p-1 text-gray-10 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
+        className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
       >
         <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
       </button>

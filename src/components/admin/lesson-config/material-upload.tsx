@@ -29,7 +29,7 @@ export const MaterialUpload = ({
         type="button"
         disabled={isPending}
         onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-6 px-3.5 py-2 font-medium text-gray-12 text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-6 px-3.5 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
       >
         {isPending ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -38,12 +38,12 @@ export const MaterialUpload = ({
         )}
         {isPending ? 'Generating…' : 'Fill form from Word doc (.docx)'}
       </button>
-      <p className="text-gray-10 text-xs">
+      <p className="text-tertiary text-xs">
         Extracts text, key points, pro tips, and quiz into the form below for
         review. Overwrites the current form values.
       </p>
       {error && (
-        <p role="alert" className="text-red-11 text-sm">
+        <p role="alert" className="text-error-text text-sm">
           {error}
         </p>
       )}

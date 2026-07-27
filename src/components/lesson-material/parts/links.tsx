@@ -7,7 +7,7 @@ type LinksProps = {
 export const Links = ({ links }: LinksProps) => {
   if (!links || links.length === 0) {
     return (
-      <p className="text-sm text-gray-11">
+      <p className="text-sm text-secondary">
         No links available for this lesson yet.
       </p>
     );

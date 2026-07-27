@@ -60,10 +60,10 @@ export const ImageUploadFieldContainer = ({
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-50 bg-gray-1/70 backdrop-blur-sm" />
           <Dialog.Popup className="fixed inset-0 z-50 m-auto h-fit w-[calc(100%-2rem)] max-w-2xl rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
-            <Dialog.Title className="text-lg font-semibold text-gray-12">
+            <Dialog.Title className="text-lg font-semibold text-primary">
               Crop cover image
             </Dialog.Title>
-            <Dialog.Description className="mt-1 mb-4 text-sm text-gray-11">
+            <Dialog.Description className="mt-1 mb-4 text-sm text-secondary">
               Position the 16:9 area to use as the cover.
             </Dialog.Description>
             {pendingFile && (

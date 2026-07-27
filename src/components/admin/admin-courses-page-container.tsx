@@ -10,8 +10,8 @@ export const AdminCoursesPageContainer = () => {
       <div className="content flex flex-col gap-6">
         <header className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold text-gray-12">Courses</h1>
-            <p className="text-sm text-gray-11">
+            <h1 className="text-2xl font-semibold text-primary">Courses</h1>
+            <p className="text-sm text-secondary">
               Manage your courses and their modules.
             </p>
           </div>
@@ -19,15 +19,15 @@ export const AdminCoursesPageContainer = () => {
         </header>
 
         {isLoading ? (
-          <p className="text-sm text-gray-11">Loading courses…</p>
+          <p className="text-sm text-secondary">Loading courses…</p>
         ) : error ? (
-          <p className="text-sm text-red-11">
+          <p className="text-sm text-error-text">
             Failed to load courses. Please try again.
           </p>
         ) : !courses || courses.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-6 bg-gray-2 p-10 text-center">
-            <p className="text-sm font-medium text-gray-12">No courses yet</p>
-            <p className="mt-1 text-sm text-gray-11">
+            <p className="text-sm font-medium text-primary">No courses yet</p>
+            <p className="mt-1 text-sm text-secondary">
               Create your first course to get started.
             </p>
           </div>

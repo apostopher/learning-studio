@@ -31,7 +31,7 @@ export const VideoUrlForm = ({
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="video-url" className="font-medium text-gray-12 text-sm">
+        <label htmlFor="video-url" className="font-medium text-primary text-sm">
           Video URL or ID
         </label>
         <input
@@ -44,7 +44,7 @@ export const VideoUrlForm = ({
           aria-invalid={!!urlError}
           aria-describedby={urlError ? 'video-url-error' : 'video-url-hint'}
           className={cn(
-            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-gray-12 outline-none transition-colors duration-100 placeholder:text-gray-8',
+            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-gray-8',
             'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
             urlError
               ? 'border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9'
@@ -56,7 +56,7 @@ export const VideoUrlForm = ({
             id="video-url-error"
             role="alert"
             aria-live="polite"
-            className="text-red-11 text-sm"
+            className="text-error-text text-sm"
           >
             {urlError}
           </p>
@@ -76,12 +76,12 @@ export const VideoUrlForm = ({
           <p
             id="video-url-hint"
             aria-live="polite"
-            className="text-red-11 text-sm"
+            className="text-error-text text-sm"
           >
             Unsupported URL — see the setup steps below for a supported format.
           </p>
         ) : (
-          <p id="video-url-hint" className="text-gray-10 text-sm">
+          <p id="video-url-hint" className="text-tertiary text-sm">
             Supported: Mux playback URLs/IDs, Synthesia video URLs/IDs.
           </p>
         )}
@@ -90,7 +90,7 @@ export const VideoUrlForm = ({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-red-9/40 bg-red-9/15 px-3 py-2.5 text-red-11 text-sm"
+          className="rounded-lg border border-red-9/40 bg-red-9/15 px-3 py-2.5 text-error-text text-sm"
         >
           {serverError}
         </p>
@@ -101,7 +101,7 @@ export const VideoUrlForm = ({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 font-medium text-gray-11 text-sm transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+            className="rounded-lg px-4 py-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
           >
             Cancel
           </button>

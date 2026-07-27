@@ -43,7 +43,7 @@ export const DeleteCourseDialogContainer = () => {
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
         <Dialog.Popup className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
-          <Dialog.Title className="text-lg font-semibold text-gray-12">
+          <Dialog.Title className="text-lg font-semibold text-primary">
             Delete course
           </Dialog.Title>
           <div className="mt-4">
@@ -51,7 +51,7 @@ export const DeleteCourseDialogContainer = () => {
               warning={
                 <>
                   Deleting{' '}
-                  <span className="font-medium text-gray-12">
+                  <span className="font-medium text-primary">
                     {target?.name ?? ''}
                   </span>{' '}
                   will permanently delete the course, all of its modules, and

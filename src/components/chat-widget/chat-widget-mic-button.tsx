@@ -67,7 +67,7 @@ export function ChatWidgetMicButton({
           ? // Solid red-9 needs text-black (not white) to clear WCAG AA — see
             // the red-9-button-contrast note this repo already follows.
             'border-transparent bg-red-9 text-black hover:bg-red-10'
-          : 'border-gray-6 bg-gray-1 text-gray-11 hover:bg-gray-4',
+          : 'border-gray-6 bg-gray-1 text-secondary hover:bg-gray-4',
         !isSupported && 'opacity-50',
       )}
     >

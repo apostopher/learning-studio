@@ -24,8 +24,8 @@ export const LessonLink = ({
     'ps-sidebar-lesson-indent pe-sidebar-row-inline py-sidebar-row-block',
     'text-sm',
     'rounded-sidebar-row',
-    'hover:bg-gray-a3 hover:text-gray-12',
-    isActive ? 'sidebar-row-active' : 'text-gray-11',
+    'hover:bg-gray-a3 hover:text-primary',
+    isActive ? 'sidebar-row-active' : 'text-secondary',
   ].join(' ');
 
   return (
@@ -38,7 +38,7 @@ export const LessonLink = ({
     >
       <span
         aria-hidden="true"
-        className="tabular-nums text-gray-10 text-xs font-medium shrink-0"
+        className="tabular-nums text-tertiary text-xs font-medium shrink-0"
       >
         {String(rank).padStart(2, '0')}
       </span>

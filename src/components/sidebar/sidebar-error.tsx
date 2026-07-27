@@ -7,7 +7,7 @@ export const SidebarError = ({
 }: SidebarErrorProps) => (
   <p
     role="alert"
-    className="px-sidebar-row-inline py-sidebar-row-block text-sm text-gray-11"
+    className="px-sidebar-row-inline py-sidebar-row-block text-sm text-secondary"
   >
     {message}
   </p>

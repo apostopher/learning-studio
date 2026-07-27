@@ -1,14 +1,14 @@
-import { atom, useAtom } from "jotai";
-import { Loader2 } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { atom, useAtom } from 'jotai';
+import { Loader2 } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import type {
-  AITestMCQQuestion,
   AITestFreeTextQuestion,
+  AITestMCQQuestion,
   AITestQuestion,
-} from "#/ai/schemas";
+} from '#/ai/schemas';
 
-export const selectedOptionAtom = atom("");
-export const freeTextAnswerAtom = atom("");
+export const selectedOptionAtom = atom('');
+export const freeTextAnswerAtom = atom('');
 
 // ─── MCQInput ────────────────────────────────────────────────────────────────
 
@@ -23,18 +23,22 @@ const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="radiogroup" aria-label="Answer options" className="flex flex-col gap-2">
+      <div
+        role="radiogroup"
+        aria-label="Answer options"
+        className="flex flex-col gap-2"
+      >
         {question.options.map((option) => {
           const isSelected = selected === option.id;
           return (
             <label
               key={option.id}
               className={[
-                "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors",
+                'flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
                 isSelected
-                  ? "border-accent-8 bg-accent-3 text-gray-12"
-                  : "border-gray-6 bg-gray-2 text-gray-11 hover:border-gray-7 hover:bg-gray-3",
-              ].join(" ")}
+                  ? 'border-accent-8 bg-accent-3 text-primary'
+                  : 'border-gray-6 bg-gray-2 text-secondary hover:border-gray-7 hover:bg-gray-3',
+              ].join(' ')}
             >
               <input
                 type="radio"
@@ -48,11 +52,11 @@ const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
               <span
                 aria-hidden="true"
                 className={[
-                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                   isSelected
-                    ? "border-accent-9 bg-accent-9"
-                    : "border-gray-7 bg-transparent",
-                ].join(" ")}
+                    ? 'border-accent-9 bg-accent-9'
+                    : 'border-gray-7 bg-transparent',
+                ].join(' ')}
               >
                 {isSelected && (
                   <span className="h-1.5 w-1.5 rounded-full bg-accent-contrast" />
@@ -99,7 +103,7 @@ const FreeTextInput = ({
         placeholder="Type your answer..."
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-gray-12 placeholder:text-gray-9 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
+        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-gray-9 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
       />
 
       <button
@@ -143,21 +147,21 @@ export const QuestionCard = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-10 tabular-nums">
+        <span className="text-xs font-medium text-tertiary tabular-nums">
           {index + 1} of {total}
         </span>
-        <span className="rounded-full border border-gray-6 px-2 py-0.5 text-xs font-medium text-gray-10 capitalize">
-          {question.type === "mcq" ? "Multiple choice" : "Free text"}
+        <span className="rounded-full border border-gray-6 px-2 py-0.5 text-xs font-medium text-tertiary capitalize">
+          {question.type === 'mcq' ? 'Multiple choice' : 'Free text'}
         </span>
       </div>
 
       {/* Question text */}
-      <p className="text-sm font-medium leading-relaxed text-gray-12">
+      <p className="text-sm font-medium leading-relaxed text-primary">
         {question.question}
       </p>
 
       {/* Input */}
-      {question.type === "mcq" ? (
+      {question.type === 'mcq' ? (
         <MCQInput
           question={question}
           isEvaluating={isEvaluating}

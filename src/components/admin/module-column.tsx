@@ -29,7 +29,7 @@ export const ModuleColumn = ({
       <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
         <ClampedText
           text={mod.name}
-          className="min-w-0 flex-1 text-sm font-semibold text-gray-12"
+          className="min-w-0 flex-1 text-sm font-semibold text-primary"
         />
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
@@ -54,7 +54,7 @@ export const ModuleColumn = ({
           type="button"
           aria-label="Drag to reorder module"
           {...dragHandleProps}
-          className="-me-1 shrink-0 cursor-grab rounded p-1 text-gray-10 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
+          className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -75,14 +75,14 @@ export const ModuleColumn = ({
         )}
       </div>
 
-      <p className="px-3 pt-3 pb-1 font-medium text-gray-10 text-xs uppercase tracking-wide">
+      <p className="px-3 pt-3 pb-1 font-medium text-tertiary text-xs uppercase tracking-wide">
         Lessons
       </p>
 
       <div className="flex flex-col gap-2 px-3 pb-3">
         {lessonsSlot ??
           (mod.lessons.length === 0 ? (
-            <p className="px-1 py-4 text-center text-gray-10 text-xs">
+            <p className="px-1 py-4 text-center text-tertiary text-xs">
               No lessons
             </p>
           ) : (

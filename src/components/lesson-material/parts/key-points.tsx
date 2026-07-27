@@ -9,7 +9,7 @@ export const KeyPoints = ({ points }: KeyPointsProps) => {
 
   if (!points || points.length === 0) {
     return (
-      <p className="text-sm text-gray-11">
+      <p className="text-sm text-secondary">
         No key points available for this lesson yet.
       </p>
     );
@@ -36,7 +36,7 @@ export const KeyPoints = ({ points }: KeyPointsProps) => {
             {index + 1}
           </span>
           <div
-            className="material-prose text-sm leading-relaxed text-balance text-gray-12"
+            className="material-prose text-sm leading-relaxed text-balance text-primary"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: lesson key points are stored as sanitized HTML upstream
             dangerouslySetInnerHTML={{ __html: point }}
           />

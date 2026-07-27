@@ -15,10 +15,10 @@ export const ScoreRing = ({
 
   const color =
     score >= 80
-      ? "var(--color-green-9, #30a46c)"
+      ? 'var(--color-green-9, #30a46c)'
       : score >= 50
-        ? "var(--color-amber-9, #f5a623)"
-        : "var(--color-red-9, #e5484d)";
+        ? 'var(--color-amber-9, #f5a623)'
+        : 'var(--color-red-9, #e5484d)';
 
   return (
     <div
@@ -50,12 +50,10 @@ export const ScoreRing = ({
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.6s ease-out" }}
+          style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
         />
       </svg>
-      <span className="absolute text-lg font-bold text-gray-12">
-        {score}%
-      </span>
+      <span className="absolute text-lg font-bold text-primary">{score}%</span>
     </div>
   );
 };

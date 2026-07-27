@@ -40,7 +40,7 @@ export const SortableOnboardingQuestion = ({
       <button
         type="button"
         aria-label={`Reorder question ${index + 1}`}
-        className="mt-1.5 cursor-grab rounded-md p-1 text-gray-10 hover:bg-gray-4 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+        className="mt-1.5 cursor-grab rounded-md p-1 text-tertiary hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
         {...attributes}
         {...listeners}
       >
@@ -56,7 +56,7 @@ export const SortableOnboardingQuestion = ({
         type="button"
         aria-label={`Remove question ${index + 1}`}
         onClick={onRemove}
-        className="mt-1.5 rounded-md p-1 text-gray-10 transition-colors hover:bg-red-9/15 hover:text-red-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+        className="mt-1.5 rounded-md p-1 text-tertiary transition-colors hover:bg-red-9/15 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </button>

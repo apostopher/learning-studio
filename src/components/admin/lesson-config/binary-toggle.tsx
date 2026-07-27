@@ -47,8 +47,8 @@ export const BinaryToggle = <V extends string>({
           value={option.value}
           disabled={option.value === disabledValue}
           className={cn(
-            'rounded-md px-3 py-1.5 font-medium text-gray-11 text-sm transition-colors',
-            'hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
+            'rounded-md px-3 py-1.5 font-medium text-secondary text-sm transition-colors',
+            'hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
             'data-[pressed]:bg-apple-9 data-[pressed]:text-apple-contrast',
             'disabled:cursor-not-allowed disabled:opacity-50',
           )}

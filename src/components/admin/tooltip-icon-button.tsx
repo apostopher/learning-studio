@@ -7,11 +7,11 @@ type IconButtonVariant = 'default' | 'danger';
 /** Shared visual styling for the icon-only action buttons in admin toolbars. */
 export const iconButtonClass = (variant: IconButtonVariant = 'default') =>
   cn(
-    'inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-10 transition-colors',
+    'inline-flex h-7 w-7 items-center justify-center rounded-md text-tertiary transition-colors',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
     variant === 'danger'
-      ? 'hover:bg-red-9/15 hover:text-red-11'
-      : 'hover:bg-gray-4 hover:text-gray-12',
+      ? 'hover:bg-red-9/15 hover:text-error-text'
+      : 'hover:bg-gray-4 hover:text-primary',
   );
 
 /** Tooltip popup shared across admin icon buttons. Requires a `Tooltip.Provider` ancestor. */

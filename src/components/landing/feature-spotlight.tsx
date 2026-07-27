@@ -1,13 +1,18 @@
-import { type ReactNode, useRef } from "react";
-import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
-import { cn } from "../../lib/cn";
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from 'motion/react';
+import { type ReactNode, useRef } from 'react';
+import { cn } from '../../lib/cn';
 
 interface FeatureSpotlightProps {
-  number: "01" | "02";
+  number: '01' | '02';
   badge: string;
   heading: string;
   body: string;
-  textSide: "left" | "right";
+  textSide: 'left' | 'right';
   visual: ReactNode;
   bgClass: string;
 }
@@ -26,7 +31,7 @@ export const FeatureSpotlight = ({
 
   const { scrollYProgress } = useScroll({
     target: ref,
-    offset: ["start end", "end start"],
+    offset: ['start end', 'end start'],
   });
 
   const numberY = useTransform(
@@ -35,15 +40,15 @@ export const FeatureSpotlight = ({
     shouldReduce ? [0, 0] : [20, -40],
   );
 
-  const isTextLeft = textSide === "left";
+  const isTextLeft = textSide === 'left';
 
   return (
     <section
       ref={ref}
       className={cn(
-        "relative overflow-hidden py-32 -my-8",
+        'relative overflow-hidden py-32 -my-8',
         bgClass,
-        "[clip-path:polygon(0_4%,100%_0,100%_96%,0_100%)]",
+        '[clip-path:polygon(0_4%,100%_0,100%_96%,0_100%)]',
       )}
     >
       {/* Decorative oversized number — parallax scroll */}
@@ -60,30 +65,34 @@ export const FeatureSpotlight = ({
           <div className="flex gap-16 items-center">
             {/* Text block — order-2 when text is on the right */}
             <motion.div
-              className={cn("flex-1", !isTextLeft && "order-2")}
-              initial={shouldReduce ? false : { opacity: 0, x: isTextLeft ? -24 : 24 }}
+              className={cn('flex-1', !isTextLeft && 'order-2')}
+              initial={
+                shouldReduce ? false : { opacity: 0, x: isTextLeft ? -24 : 24 }
+              }
               whileInView={shouldReduce ? {} : { opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              viewport={{ once: true, margin: '-80px' }}
             >
               <span className="inline-block rounded-full bg-link-3 text-link-11 text-xs font-semibold px-3 py-1 mb-4">
                 {badge}
               </span>
-              <h2 className="font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] uppercase text-gray-12 whitespace-pre-line">
+              <h2 className="font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] uppercase text-primary whitespace-pre-line">
                 {heading}
               </h2>
-              <p className="mt-4 text-base text-gray-11 leading-relaxed max-w-sm">
+              <p className="mt-4 text-base text-secondary leading-relaxed max-w-sm">
                 {body}
               </p>
             </motion.div>
 
             {/* Visual block — order-1 when text is on the right */}
             <motion.div
-              className={cn("flex-1", !isTextLeft && "order-1")}
-              initial={shouldReduce ? false : { opacity: 0, x: isTextLeft ? 24 : -24 }}
+              className={cn('flex-1', !isTextLeft && 'order-1')}
+              initial={
+                shouldReduce ? false : { opacity: 0, x: isTextLeft ? 24 : -24 }
+              }
               whileInView={shouldReduce ? {} : { opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
+              viewport={{ once: true, margin: '-80px' }}
             >
               {visual}
             </motion.div>

@@ -30,7 +30,7 @@ export const LessonBoardContainer = ({
     <div ref={setNodeRef} className="flex min-h-12 flex-col gap-2">
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {lessons.length === 0 ? (
-          <p className="px-1 py-4 text-center text-xs text-gray-10">
+          <p className="px-1 py-4 text-center text-xs text-tertiary">
             No lessons
           </p>
         ) : (

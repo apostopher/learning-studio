@@ -203,9 +203,9 @@ export const VideoSectionContainer = ({
       {hasVideo && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-gray-11 text-sm">
+            <p className="text-secondary text-sm">
               Current video:{' '}
-              <span className="font-medium text-gray-12">
+              <span className="font-medium text-primary">
                 {activeProvider ? VIDEO_PROVIDERS[activeProvider].label : ''}
               </span>
             </p>
@@ -213,7 +213,7 @@ export const VideoSectionContainer = ({
               <button
                 type="button"
                 onClick={() => setReplaceMode(true)}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-gray-11 text-sm transition-colors hover:bg-gray-4 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
               >
                 <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                 Replace video
@@ -225,7 +225,7 @@ export const VideoSectionContainer = ({
             <>
               <VideoPreview playback={playback.data ?? null} />
               {playback.isLoading && (
-                <p className="flex items-center gap-1.5 text-gray-10 text-sm">
+                <p className="flex items-center gap-1.5 text-tertiary text-sm">
                   <Loader2
                     className="h-3.5 w-3.5 animate-spin"
                     aria-hidden="true"
@@ -234,7 +234,7 @@ export const VideoSectionContainer = ({
                 </p>
               )}
               {playback.isError && (
-                <p role="alert" className="text-red-11 text-sm">
+                <p role="alert" className="text-error-text text-sm">
                   Couldn't resolve playback: {playback.error.message}
                 </p>
               )}
@@ -242,7 +242,7 @@ export const VideoSectionContainer = ({
           ) : (
             activeProvider && (
               <div className="flex flex-col gap-4">
-                <p className="text-gray-11 text-sm">
+                <p className="text-secondary text-sm">
                   Connect {VIDEO_PROVIDERS[activeProvider].label} for this
                   course to preview and serve this video.
                 </p>

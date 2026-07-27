@@ -1,9 +1,9 @@
 import { Plus, X } from 'lucide-react';
 import type { CourseLessonQuiz } from '#/types';
 
-const labelCls = 'font-medium text-gray-11 text-xs uppercase tracking-wide';
+const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 const controlCls =
-  'rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9';
+  'rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9';
 
 /** New id from an existing set, avoiding Math.random for stable behavior. */
 function nextId(prefix: string, existing: string[]): string {
@@ -70,7 +70,7 @@ export const QuizField = ({
               type="button"
               aria-label={`Remove question ${qi + 1}`}
               onClick={() => onChange(value.filter((_, i) => i !== qi))}
-              className="rounded-md p-2 text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+              className="rounded-md p-2 text-tertiary transition-colors hover:bg-gray-4 hover:text-primary"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -120,7 +120,7 @@ export const QuizField = ({
                           : q.correctOptionId,
                     });
                   }}
-                  className="rounded-md p-2 text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+                  className="rounded-md p-2 text-tertiary transition-colors hover:bg-gray-4 hover:text-primary"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -142,7 +142,7 @@ export const QuizField = ({
                   ],
                 })
               }
-              className="inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-gray-11 text-sm transition-colors hover:bg-gray-4 hover:text-gray-12"
+              className="inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Add option
@@ -154,7 +154,7 @@ export const QuizField = ({
       <button
         type="button"
         onClick={addQuestion}
-        className="inline-flex w-fit items-center gap-1.5 rounded-md border border-gray-6 px-3 py-2 font-medium text-gray-11 text-sm transition-colors hover:bg-gray-4 hover:text-gray-12"
+        className="inline-flex w-fit items-center gap-1.5 rounded-md border border-gray-6 px-3 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
         Add question
