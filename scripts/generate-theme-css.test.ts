@@ -276,11 +276,38 @@ describe('resolveContrast', () => {
   })
 
   it('always returns a colour clearing AA, for any fill', () => {
-    const fills = [
+    // Regression set: real-world Radix colours that previously failed AA
+    const regressionFills = [
       '#cb0d39', '#f44f5f', '#2997ff', '#e9e28f', '#1a2f40',
       '#808080', '#767676', '#000000', '#ffffff', '#30a46c',
     ]
-    for (const fill of fills) {
+
+    // Systematic sweep: generate fills across the colour space using OKLCH
+    // to verify the guarantee holds across hue, lightness, and chroma dimensions
+    const Color = require('colorjs.io').default
+    const generatedFills: string[] = []
+
+    // Sweep hue 0-350° in 10° steps, at multiple lightness levels
+    for (let hue = 0; hue < 360; hue += 10) {
+      // Low lightness (dark colours, L=0.25)
+      generatedFills.push(
+        new Color('oklch', [0.25, 0.1, hue]).to('srgb').toString({ format: 'hex' }),
+      )
+      // Mid lightness (L=0.5)
+      generatedFills.push(
+        new Color('oklch', [0.5, 0.15, hue]).to('srgb').toString({ format: 'hex' }),
+      )
+      // High lightness (light colours, L=0.75)
+      generatedFills.push(
+        new Color('oklch', [0.75, 0.12, hue]).to('srgb').toString({ format: 'hex' }),
+      )
+    }
+
+    // Combine regression set and generated fills
+    const allFills = [...regressionFills, ...generatedFills]
+
+    // Verify every fill returns AA-safe contrast
+    for (const fill of allFills) {
       const out = resolveContrast(fill, '#fff')
       expect(checkContrast(out, fill).wcagAA).toBe(true)
     }
