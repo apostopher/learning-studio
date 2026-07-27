@@ -61,7 +61,10 @@ const brandColorsSchema = z
         }),
       )
       .min(1, 'VITE_BRAND_COLORS must contain at least one entry')
-      .max(12, 'VITE_BRAND_COLORS supports at most 12 entries')
+      .max(
+        12,
+        'VITE_BRAND_COLORS supports at most 12 user-declared entries (success/warning/error are added automatically)',
+      )
       .refine((arr) => new Set(arr.map((e) => e.name)).size === arr.length, {
         message: 'brand names must be unique',
       }),
