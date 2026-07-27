@@ -58,7 +58,7 @@ const markdownComponents: Components = {
   ),
   a: ({ children, ...props }) => (
     <a
-      className="text-accent-11 underline decoration-1 underline-offset-2 transition-colors hover:text-accent-12"
+      className="rounded-sm text-accent-text underline decoration-1 underline-offset-2 transition-colors hover:bg-tint-hover"
       target="_blank"
       rel="noopener noreferrer"
       {...props}
@@ -112,7 +112,7 @@ export const ChatMessage = ({
       <p
         className={cn(
           'mb-1 text-xs font-semibold',
-          isAssistant ? 'text-secondary' : 'text-accent-11',
+          isAssistant ? 'text-secondary' : 'text-accent-text',
         )}
       >
         {isAssistant ? brand.ai.name : 'You'}

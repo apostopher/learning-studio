@@ -934,14 +934,19 @@
     margin-block: 1rem;
   }
   .material-prose a {
-    color: var(--color-accent-11);
+    color: var(--color-accent-text);
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 2px;
-    transition: color 150ms ease-out;
+    border-radius: 0.125rem;
+    transition: background-color 150ms ease-out;
   }
   .material-prose a:hover {
-    color: var(--color-accent-12);
+    /* --color-accent-text is already step 12 in light theme, so a step-12
+       hover target would be a no-op there (and only a subtle 11→12 shift in
+       dark). A background tint stays visible in both themes regardless of
+       which step accent-text resolves to. */
+    background-color: var(--color-tint-hover);
   }
   .material-prose a:focus-visible {
     outline: 2px solid var(--color-accent-8);
