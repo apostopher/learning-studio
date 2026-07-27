@@ -65,7 +65,7 @@ export const LessonMaterialView = ({
               {tab.label}
             </Tabs.Tab>
           ))}
-          <Tabs.Indicator className="absolute bottom-0 left-0 h-px w-(--active-tab-width) translate-x-(--active-tab-left) bg-gray-12 transition-all duration-200 ease-in-out" />
+          <Tabs.Indicator className="absolute bottom-0 left-0 h-px w-(--active-tab-width) translate-x-(--active-tab-left) bg-primary transition-all duration-200 ease-in-out" />
         </Tabs.List>
       </ScrollArea>
 

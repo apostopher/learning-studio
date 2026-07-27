@@ -10,7 +10,7 @@ export const iconButtonClass = (variant: IconButtonVariant = 'default') =>
     'inline-flex h-7 w-7 items-center justify-center rounded-md text-tertiary transition-colors',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
     variant === 'danger'
-      ? 'hover:bg-red-9/15 hover:text-error-text'
+      ? 'hover:bg-error-9/15 hover:text-error-text'
       : 'hover:bg-gray-4 hover:text-primary',
   );
 
@@ -18,7 +18,7 @@ export const iconButtonClass = (variant: IconButtonVariant = 'default') =>
 export const IconButtonTooltip = ({ label }: { label: string }) => (
   <Tooltip.Portal>
     <Tooltip.Positioner sideOffset={6} className="z-50">
-      <Tooltip.Popup className="rounded-md bg-gray-12 px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
+      <Tooltip.Popup className="rounded-md bg-inverted px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
         {label}
       </Tooltip.Popup>
     </Tooltip.Positioner>

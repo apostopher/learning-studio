@@ -31,7 +31,7 @@ export const KeyPoints = ({ points }: KeyPointsProps) => {
         >
           <span
             aria-hidden="true"
-            className="mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gray-12 px-1.5 text-[11px] font-semibold tabular-nums text-gray-1"
+            className="mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-inverted px-1.5 text-[11px] font-semibold tabular-nums text-gray-1"
           >
             {index + 1}
           </span>

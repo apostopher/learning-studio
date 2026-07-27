@@ -29,7 +29,7 @@ export const TrainingDocRow = ({
     <Popover.Root>
       <Popover.Trigger
         aria-label={`Delete ${sourcePath}`}
-        className="rounded-md p-1.5 text-tertiary transition-colors hover:bg-red-9/15 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+        className="rounded-md p-1.5 text-tertiary transition-colors hover:bg-error-9/15 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </Popover.Trigger>
@@ -47,7 +47,7 @@ export const TrainingDocRow = ({
                 type="button"
                 onClick={onDelete}
                 disabled={isDeleting}
-                className="inline-flex items-center gap-1 rounded-md bg-red-9 px-2 py-1 font-medium text-black text-xs disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-md bg-error px-2 py-1 font-medium text-on-error text-xs disabled:opacity-60"
               >
                 {isDeleting ? (
                   <Loader2

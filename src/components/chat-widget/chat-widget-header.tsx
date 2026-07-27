@@ -46,7 +46,7 @@ const HeaderControlButton = ({
     </Tooltip.Trigger>
     <Tooltip.Portal>
       <Tooltip.Positioner sideOffset={6} className="z-50">
-        <Tooltip.Popup className="rounded-md bg-gray-12 px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
+        <Tooltip.Popup className="rounded-md bg-inverted px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
           {label}
         </Tooltip.Popup>
       </Tooltip.Positioner>
