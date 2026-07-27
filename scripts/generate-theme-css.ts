@@ -105,8 +105,24 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
   scale.accentScaleAlpha.forEach((hex, i) => {
     lines.push(`  --color-${name}-a${i + 1}: ${hex};`)
   })
+
+  // Step-role aliases. Radix steps are 1-indexed; these arrays are 0-indexed.
+  const step = (n: number) => scale.accentScale[n - 1]
+  const subtle = step(3)
+  const border = step(6)
+  const solid = step(9)
+  const text = step(11)
+  if (subtle) lines.push(`  --color-${name}-subtle: ${subtle};`)
+  if (border) lines.push(`  --color-${name}-border: ${border};`)
+  if (solid) lines.push(`  --color-${name}-solid: ${solid};`)
+  if (text) lines.push(`  --color-${name}-text: ${text};`)
+
   if (scale.accentContrast) {
-    lines.push(`  --color-${name}-contrast: ${scale.accentContrast};`)
+    // Never emit accentContrast unchecked — see resolveContrast.
+    const contrast = solid
+      ? resolveContrast(solid, scale.accentContrast)
+      : scale.accentContrast
+    lines.push(`  --color-${name}-contrast: ${contrast};`)
   }
   if (scale.accentSurface) {
     lines.push(`  --color-${name}-surface: ${scale.accentSurface};`)
@@ -116,7 +132,7 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
 
 /**
  * Emits `--color-<from>-<suffix>: var(--color-<to>-<suffix>);` for every
- * suffix a scale block produces (1..12, a1..a12, contrast, surface).
+ * suffix a scale block produces (1..12, a1..a12, subtle, border, solid, text, contrast, surface).
  * Used to alias `accent` to the first brand entry in one place — dark/P3
  * swaps propagate automatically via `var()`.
  */
@@ -127,6 +143,9 @@ export function buildAliasBlock(fromName: string, toName: string): string {
   }
   for (let i = 1; i <= 12; i += 1) {
     lines.push(`  --color-${fromName}-a${i}: var(--color-${toName}-a${i});`)
+  }
+  for (const suffix of ['subtle', 'border', 'solid', 'text']) {
+    lines.push(`  --color-${fromName}-${suffix}: var(--color-${toName}-${suffix});`)
   }
   lines.push(`  --color-${fromName}-contrast: var(--color-${toName}-contrast);`)
   lines.push(`  --color-${fromName}-surface: var(--color-${toName}-surface);`)

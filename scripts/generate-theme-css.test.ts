@@ -97,7 +97,7 @@ describe('parseLogo', () => {
   })
 })
 
-import { buildScaleBlock, buildThemeCss } from './generate-theme-css'
+import { buildScaleBlock, buildThemeCss, buildAliasBlock } from './generate-theme-css'
 import type { BrandEntry } from '../src/utils/brand-colors'
 
 describe('buildThemeCss', () => {
@@ -311,5 +311,47 @@ describe('resolveContrast', () => {
       const out = resolveContrast(fill, '#fff')
       expect(checkContrast(out, fill).wcagAA).toBe(true)
     }
+  })
+})
+
+describe('step-role tokens', () => {
+  const scale = {
+    accentScale: Array.from({ length: 12 }, (_, i) => `#0000${i}${i}`),
+    accentScaleAlpha: Array.from({ length: 12 }, (_, i) => `#a000${i}${i}`),
+    accentContrast: '#fff',
+    accentSurface: '#eeeeee',
+  }
+
+  it('maps subtle/border/solid/text onto Radix steps 3/6/9/11', () => {
+    const out = buildScaleBlock('demo', scale)
+    // The builder above produces `#0000` + index + index, so index 2 (step 3)
+    // is #000022 and index 10 (step 11) is #00001010.
+    expect(out).toContain('--color-demo-subtle: #000022;')
+    expect(out).toContain('--color-demo-border: #000055;')
+    expect(out).toContain('--color-demo-solid: #000088;')
+    expect(out).toContain('--color-demo-text: #00001010;')
+  })
+
+  it('corrects a contrast token that fails against its own step 9', () => {
+    // step 9 here is a light yellow; #fff against it fails, black passes.
+    const failing = {
+      ...scale,
+      accentScale: [
+        ...Array.from({ length: 8 }, () => '#111111'),
+        '#e9e28f',
+        ...Array.from({ length: 3 }, () => '#111111'),
+      ],
+      accentContrast: '#fff',
+    }
+    const out = buildScaleBlock('demo', failing)
+    expect(out).toContain('--color-demo-contrast: #000;')
+  })
+
+  it('aliases the four step-role suffixes so accent resolves', () => {
+    const out = buildAliasBlock('accent', 'gold')
+    expect(out).toContain('--color-accent-subtle: var(--color-gold-subtle);')
+    expect(out).toContain('--color-accent-border: var(--color-gold-border);')
+    expect(out).toContain('--color-accent-solid: var(--color-gold-solid);')
+    expect(out).toContain('--color-accent-text: var(--color-gold-text);')
   })
 })
