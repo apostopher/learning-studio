@@ -330,37 +330,6 @@
   }
 }
 
-@theme {
-  /* sidebar spacing */
-  --spacing-sidebar-row-block: calc(var(--spacing) * 2);
-  --spacing-sidebar-row-inline: calc(var(--spacing) * 3);
-  --spacing-sidebar-lesson-indent: calc(var(--spacing) * 6);
-  --spacing-sidebar-row-gap: calc(var(--spacing) * 1);
-  --spacing-sidebar-section-gap: calc(var(--spacing) * 3);
-
-  /* sidebar shape */
-  --radius-sidebar-row: var(--radius-md);
-
-  /* sidebar static tokens (no utility generation) */
-  --border-width-sidebar-active: 2px;
-  --outline-width-sidebar-focus: 2px;
-  --outline-offset-sidebar-focus: 2px;
-  --color-sidebar-focus-ring: var(--color-accent-9);
-
-  /* sidebar animation */
-  --duration-sidebar-chevron: 200ms;
-  --duration-sidebar-reveal: 320ms;
-  --duration-sidebar-shimmer: 1400ms;
-  --ease-sidebar: var(--ease-out-cubic);
-  --blur-sidebar-reveal: 2px;
-  --sidebar-skeleton-row-opacity-step: 0.12;
-
-  /* sidebar skeleton row heights */
-  --block-size-sidebar-skeleton-header: calc(var(--spacing) * 10);
-  --block-size-sidebar-skeleton-module: calc(var(--spacing) * 9);
-  --block-size-sidebar-skeleton-lesson: calc(var(--spacing) * 7);
-}
-
 @layer components {
   /* Focus-visible ring applied via semantic class; no Tailwind arbitrary values. */
   .sidebar-focus-ring:focus-visible {
@@ -401,16 +370,6 @@
       background-color: var(--color-gray-3);
     }
   }
-}
-
-@theme {
-  /* scroll area shape + color */
-  --size-scroll-area-thumb: calc(var(--spacing) * 1.5);
-  --spacing-scroll-area-thumb-inset: 2px;
-  --radius-scroll-area-thumb: 9999px;
-  --color-scroll-area-thumb: var(--color-gray-a7);
-  --color-scroll-area-thumb-hover: var(--color-gray-a8);
-  --duration-scroll-area-thumb: 160ms;
 }
 
 @layer components {

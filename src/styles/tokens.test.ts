@@ -39,8 +39,13 @@ describe('tokens.css referential integrity', () => {
   })
 
   it('every var() reference resolves to a generated primitive or a local token', () => {
+    // Declared on `html` in styles.css's base layer, not in @theme.
+    const externalPrimitives = new Set(['--ease-out-cubic', '--spacing'])
     const unresolved = [...new Set(referenced)].filter(
-      (name) => !defined.has(name) && !generatedCss.includes(`${name}:`),
+      (name) =>
+        !defined.has(name) &&
+        !externalPrimitives.has(name) &&
+        !generatedCss.includes(`${name}:`),
     )
     expect(unresolved, `unresolved: ${unresolved.join(', ')}`).toEqual([])
   })
