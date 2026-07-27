@@ -18,8 +18,10 @@ const gradeLabel = (score: number): string => {
 };
 
 const scoreBadgeClass = (score: number) => {
-  if (score >= 80) return 'border border-green-7 bg-green-3 text-success-text';
-  if (score >= 50) return 'border border-amber-7 bg-amber-3 text-warning-text';
+  if (score >= 80)
+    return 'border border-success-7 bg-success-3 text-success-text';
+  if (score >= 50)
+    return 'border border-warning-7 bg-warning-3 text-warning-text';
   return 'border border-error-7 bg-error-3 text-error-text';
 };
 

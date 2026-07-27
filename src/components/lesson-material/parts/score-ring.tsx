@@ -15,9 +15,9 @@ export const ScoreRing = ({
 
   const color =
     score >= 80
-      ? 'var(--color-green-9, #30a46c)'
+      ? 'var(--color-success-9, #30a46c)'
       : score >= 50
-        ? 'var(--color-amber-9, #f5a623)'
+        ? 'var(--color-warning-9, #f5a623)'
         : 'var(--color-error-9, #e5484d)';
 
   return (
