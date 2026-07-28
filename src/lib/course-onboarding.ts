@@ -67,3 +67,29 @@ export const isOnboardingComplete = (
   // typed `Date | null` signature no longer holds. Do not tighten to `!==`.
   onboardingCompletedAt != null &&
   pendingQuestions(questions, answers).length === 0;
+
+export type OnboardingOfferState = {
+  onboardingCompletedAt: Date | null;
+  consentDeclinedAt: Date | null;
+};
+
+/**
+ * Whether onboarding should be offered to this user for this course.
+ *
+ * A declined consent is a decision, not a pending task: it suppresses the
+ * offer permanently. The user can still start onboarding themselves — this
+ * governs only whether we bring it up.
+ *
+ * Deliberately NOT folded into isOnboardingComplete: someone who declined is
+ * not complete, they opted out, and conflating the two would make an opt-out
+ * indistinguishable from a finished interview in any admin view.
+ *
+ * Loose null checks (`== null`) are deliberate — do not tighten to `===`.
+ * They catch a timestamp arriving as undefined across a serialization
+ * boundary, same as isOnboardingComplete above.
+ */
+export const shouldOfferOnboarding = (
+  row: OnboardingOfferState | null,
+): boolean =>
+  row == null ||
+  (row.onboardingCompletedAt == null && row.consentDeclinedAt == null);

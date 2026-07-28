@@ -3,6 +3,7 @@ import {
   hashQuestionSet,
   isOnboardingComplete,
   pendingQuestions,
+  shouldOfferOnboarding,
 } from '#/lib/course-onboarding';
 import type { OnboardingAnswers, OnboardingQuestions } from '#/types';
 
@@ -162,5 +163,58 @@ describe('isOnboardingComplete', () => {
     expect(
       isOnboardingComplete(QUESTIONS, answered, undefined as unknown as null),
     ).toBe(false);
+  });
+});
+
+describe('shouldOfferOnboarding', () => {
+  it('offers when there is no row at all', () => {
+    expect(shouldOfferOnboarding(null)).toBe(true);
+  });
+
+  it('offers when the row exists but is untouched', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: null,
+        consentDeclinedAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not offer once onboarding is complete', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: new Date(0),
+        consentDeclinedAt: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer once consent was declined', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: null,
+        consentDeclinedAt: new Date(0),
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer when both are set', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: new Date(0),
+        consentDeclinedAt: new Date(0),
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer when a timestamp arrives as undefined', () => {
+    // Loose null checks, same reasoning as isOnboardingComplete.
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: undefined as unknown as null,
+        consentDeclinedAt: null,
+      }),
+    ).toBe(true);
+    expect(shouldOfferOnboarding(undefined as unknown as null)).toBe(true);
   });
 });
