@@ -85,6 +85,38 @@ export const OnboardingAnswersSchema = z
   });
 export type OnboardingAnswers = z.infer<typeof OnboardingAnswersSchema>;
 
+/** The consent gate's decision. Nothing is asked until this returns consented. */
+export const OnboardingConsentEvaluationSchema = z.object({
+  status: z.enum(['consented', 'declined', 'needs_clarification']),
+  reply: z.string().max(2000).nullable(),
+});
+export type OnboardingConsentEvaluation = z.infer<
+  typeof OnboardingConsentEvaluationSchema
+>;
+
+/**
+ * What a user's reply to an onboarding question means. `status` is the pivot
+ * that turns free text into a state transition.
+ *
+ * The 5000-char cap on `answer` matches OnboardingAnswersSchema's per-answer
+ * cap — an evaluation that could not be stored is not a valid evaluation.
+ */
+export const OnboardingReplyEvaluationSchema = z.object({
+  status: z.enum([
+    'answered',
+    'needs_follow_up',
+    'declined',
+    'wants_pause',
+    'wants_delete',
+  ]),
+  answer: z.string().max(5000).nullable(),
+  followUp: z.string().max(2000).nullable(),
+  hesitancy: z.boolean(),
+});
+export type OnboardingReplyEvaluation = z.infer<
+  typeof OnboardingReplyEvaluationSchema
+>;
+
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
   value: z.string().describe('The value of the option in markdown format'),
