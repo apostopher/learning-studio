@@ -1,4 +1,4 @@
-import type { OnboardingQuestions } from '#/types';
+import type { OnboardingAnswers, OnboardingQuestions } from '#/types';
 
 const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
@@ -32,3 +32,35 @@ export const hashQuestionSet = (questions: OnboardingQuestions): string => {
   }
   return hash.toString(16).padStart(16, '0');
 };
+
+/**
+ * The course's questions that have no answer yet — the source of truth for
+ * what to prompt. Derived from the data, never from questionSetHash.
+ *
+ * A key present in `answers` counts as answered even when the value is an
+ * empty string: the user visited that question and left it blank, and
+ * re-prompting them forever would be wrong. Callers must therefore only write
+ * a key for a question the user actually visited.
+ *
+ * Uses Object.hasOwn rather than `in` so a question with id `toString` or
+ * `constructor` is not silently treated as answered.
+ */
+export const pendingQuestions = (
+  questions: OnboardingQuestions,
+  answers: OnboardingAnswers,
+): OnboardingQuestions =>
+  questions.filter((q) => !Object.hasOwn(answers, q.id));
+
+/**
+ * A user is done only when they finished the flow AND nothing is pending.
+ * Both conditions, not either: someone who completed onboarding before three
+ * new questions were added is complete-but-pending, which is a distinct state
+ * from never-started and from fully-done.
+ */
+export const isOnboardingComplete = (
+  questions: OnboardingQuestions,
+  answers: OnboardingAnswers,
+  onboardingCompletedAt: Date | null,
+): boolean =>
+  onboardingCompletedAt !== null &&
+  pendingQuestions(questions, answers).length === 0;

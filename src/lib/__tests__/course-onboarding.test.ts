@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { hashQuestionSet } from '#/lib/course-onboarding';
-import type { OnboardingQuestions } from '#/types';
+import {
+  hashQuestionSet,
+  isOnboardingComplete,
+  pendingQuestions,
+} from '#/lib/course-onboarding';
+import type { OnboardingAnswers, OnboardingQuestions } from '#/types';
 
 const QUESTIONS: OnboardingQuestions = [
   { id: 'q1', text: 'What is your flying experience?' },
@@ -65,5 +69,87 @@ describe('hashQuestionSet', () => {
     const b: OnboardingQuestions = [{ id: 'q1', text: 'cafe ✈︎' }];
     expect(hashQuestionSet(a)).toMatch(/^[0-9a-f]{16}$/);
     expect(hashQuestionSet(a)).not.toBe(hashQuestionSet(b));
+  });
+});
+
+describe('pendingQuestions', () => {
+  it('returns every question when there are no answers', () => {
+    expect(pendingQuestions(QUESTIONS, {})).toEqual(QUESTIONS);
+  });
+
+  it('returns nothing when every question is answered', () => {
+    const answers: OnboardingAnswers = { q1: 'a', q2: 'b' };
+    expect(pendingQuestions(QUESTIONS, answers)).toEqual([]);
+  });
+
+  it('returns only the unanswered questions', () => {
+    expect(pendingQuestions(QUESTIONS, { q1: 'a' })).toEqual([QUESTIONS[1]]);
+  });
+
+  it('preserves the course question order', () => {
+    const three: OnboardingQuestions = [
+      ...QUESTIONS,
+      { id: 'q3', text: 'Anything else?' },
+    ];
+    expect(pendingQuestions(three, { q2: 'b' })).toEqual([three[0], three[2]]);
+  });
+
+  it('treats an empty-string answer as answered', () => {
+    // The user visited the question and left it blank. Re-prompting forever
+    // would be wrong.
+    expect(pendingQuestions(QUESTIONS, { q1: '', q2: '' })).toEqual([]);
+  });
+
+  it('ignores orphan answers for questions that no longer exist', () => {
+    const answers: OnboardingAnswers = { q1: 'a', q2: 'b', qGone: 'old' };
+    expect(pendingQuestions(QUESTIONS, answers)).toEqual([]);
+  });
+
+  it('reports a newly added question as pending', () => {
+    const added: OnboardingQuestions = [
+      ...QUESTIONS,
+      { id: 'q3', text: 'Anything else?' },
+    ];
+    expect(pendingQuestions(added, { q1: 'a', q2: 'b' })).toEqual([added[2]]);
+  });
+
+  it('does not treat inherited Object properties as answers', () => {
+    const tricky: OnboardingQuestions = [
+      { id: 'toString', text: 'Trick question' },
+      { id: 'constructor', text: 'Another one' },
+    ];
+    expect(pendingQuestions(tricky, {})).toEqual(tricky);
+  });
+
+  it('returns nothing when the course has no questions', () => {
+    expect(pendingQuestions([], {})).toEqual([]);
+  });
+});
+
+describe('isOnboardingComplete', () => {
+  const answered: OnboardingAnswers = { q1: 'a', q2: 'b' };
+
+  it('is false when the user never finished the flow', () => {
+    expect(isOnboardingComplete(QUESTIONS, answered, null)).toBe(false);
+  });
+
+  it('is true when the flow is finished and nothing is pending', () => {
+    expect(isOnboardingComplete(QUESTIONS, answered, new Date(0))).toBe(true);
+  });
+
+  it('is false when finished earlier but a new question was since added', () => {
+    const added: OnboardingQuestions = [
+      ...QUESTIONS,
+      { id: 'q3', text: 'Anything else?' },
+    ];
+    expect(isOnboardingComplete(added, answered, new Date(0))).toBe(false);
+  });
+
+  it('is false when the flow is unfinished even with nothing pending', () => {
+    expect(isOnboardingComplete(QUESTIONS, answered, null)).toBe(false);
+  });
+
+  it('is true for a course with no questions once the flow is finished', () => {
+    expect(isOnboardingComplete([], {}, new Date(0))).toBe(true);
   });
 });
