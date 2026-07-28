@@ -49,7 +49,7 @@ export type AdvanceOnboardingResult =
  * replying, not two writes racing inside one millisecond, and the row's
  * unique index plus `appendMessage`'s idempotent insert cover that case.
  */
-const serialiseUpdatedAt = (value: Date): string => value.toISOString();
+export const serialiseUpdatedAt = (value: Date): string => value.toISOString();
 
 /**
  * The status of a session the user has already closed, or null if it is still
@@ -72,7 +72,7 @@ const serialiseUpdatedAt = (value: Date): string => value.toISOString();
  * also catches a timestamp arriving as undefined across a serialisation
  * boundary. Do not tighten to `!==`.
  */
-const closedSessionStatus = ({
+export const closedSessionStatus = ({
   deletedAt,
   consentDeclinedAt,
   onboardingCompletedAt,
@@ -173,12 +173,32 @@ export const advanceOnboarding = async ({
     event,
   });
 
+  // Skip the persist write entirely when this turn was a pure no-op replay:
+  // `event === null` (a "start") that restored an existing snapshot and
+  // produced no new turns. `course.$courseSlug.index.tsx` calls `start` on
+  // every render to derive its "should offer onboarding" prompt, so without
+  // this guard every such page view bumps `updatedAt` and can 409 another
+  // tab's in-flight reply for no reason. Narrow on purpose: any event-bearing
+  // call (reply, confirm) or a brand-new session (nothing to restore, or new
+  // turns produced even on a `start` replay) always persists as before.
+  const isNoOpReplay =
+    event === null &&
+    result.restoredFromSnapshot &&
+    result.newTurns.length === 0;
+
   // A turn that ended in `deleted` has already had its row tombstoned by the
-  // machine's own deleteOnboarding actor. Persisting this turn's snapshot
-  // would put the transcript and answers straight back — the snapshot embeds
-  // the whole machine context — so the snapshot is cleared instead of saved.
-  const updatedAt =
-    result.status === 'deleted'
+  // machine's own deleteOnboarding actor, and one that ended in `failed` has
+  // hit a terminal error state (any LLM/actor call failing lands here) that
+  // must never be replayed — restoring a `failed` snapshot only reproduces
+  // the same failure forever, so it is discarded instead, matching the
+  // design's stated degradation policy: `answers` is durable, so the next
+  // `start` after a clear rebuilds a fresh machine and resumes at the right
+  // question. Persisting a `deleted` turn's snapshot would put the
+  // transcript and answers straight back — the snapshot embeds the whole
+  // machine context — so both cases clear the snapshot instead of saving it.
+  const updatedAt = isNoOpReplay
+    ? row.updatedAt
+    : result.status === 'deleted' || result.status === 'failed'
       ? await clearMachineSnapshot({ onboardingId: row.id })
       : await saveMachineSnapshot({
           onboardingId: row.id,
