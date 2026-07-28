@@ -193,9 +193,17 @@ function makeAnsweringActor(
   questions = DEFAULT_ONBOARDING_QUESTIONS,
 ) {
   const queue = [...replyVerdicts];
-  const saveAnswer = vi.fn(async () => {});
+  const saveAnswer = vi.fn(
+    async (_args: {
+      input: { onboardingId: number; questionId: string; answer: string };
+    }) => {},
+  );
   const completeOnboarding = vi.fn(async () => {});
   const deleteOnboarding = vi.fn(async () => {});
+  const summarise = vi.fn(
+    async (_args: { input: { context: OnboardingContext } }) =>
+      "Here's what I heard…",
+  );
 
   const actor = createActor(
     onboardingMachine.provide({
@@ -217,7 +225,7 @@ function makeAnsweringActor(
           return next;
         }),
         saveAnswer: fromPromise(saveAnswer),
-        summarise: fromPromise(async () => "Here's what I heard…"),
+        summarise: fromPromise(summarise),
         completeOnboarding: fromPromise(completeOnboarding),
         deleteOnboarding: fromPromise(deleteOnboarding),
       },
@@ -225,7 +233,7 @@ function makeAnsweringActor(
     { input: { ...INPUT, questions } },
   );
 
-  return { actor, saveAnswer, completeOnboarding, deleteOnboarding };
+  return { actor, saveAnswer, completeOnboarding, deleteOnboarding, summarise };
 }
 
 const answered = (answer: string): OnboardingReplyEvaluation => ({
@@ -343,7 +351,37 @@ describe('onboardingMachine — question loop', () => {
     actor.send({ type: 'REPLY', text: "I'd rather not say" });
     await waitFor(actor, (s) => s.matches('confirming'));
     expect(saveAnswer).toHaveBeenCalledTimes(1);
+    // Assert on what actually reached the persistence layer, not just that it
+    // was called — a regression in persisting's input expression could still
+    // call saveAnswer once while sending the wrong value.
+    expect(saveAnswer.mock.calls[0][0].input).toEqual({
+      onboardingId: INPUT.onboardingId,
+      questionId: 'q1',
+      answer: '',
+    });
     expect(actor.getSnapshot().context.answers).toEqual({ q1: '' });
+  });
+
+  it('stores the actual reply as the answer once follow-ups are exhausted', async () => {
+    // A capped-out reply must be taken as the answer, not discarded as an
+    // empty string — an empty string is indistinguishable from a decline.
+    const { actor } = makeAnsweringActor(
+      Array.from({ length: FOLLOW_UP_CAP + 1 }, () => vague),
+      ONE,
+    );
+    await reachAsking(actor);
+    for (let i = 0; i <= FOLLOW_UP_CAP; i++) {
+      await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+      const replyText = i === FOLLOW_UP_CAP ? 'about a year I think' : 'dunno';
+      actor.send({ type: 'REPLY', text: replyText });
+      if (i < FOLLOW_UP_CAP) {
+        await waitFor(actor, (s) => s.context.followUpCount === i + 1);
+      }
+    }
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(actor.getSnapshot().context.answers).toEqual({
+      q1: 'about a year I think',
+    });
   });
 
   it('pauses on request, leaving the row incomplete', async () => {
@@ -377,8 +415,30 @@ describe('onboardingMachine — question loop', () => {
     expect(completeOnboarding).not.toHaveBeenCalled();
   });
 
+  it('carries the correction text through to the next summarise call', async () => {
+    // A correction sent from `confirming` must actually reach the
+    // summariser — otherwise summarising re-runs against byte-identical
+    // context, re-emits the same summary, and the user is stuck correcting
+    // forever.
+    const { actor, summarise } = makeAnsweringActor(
+      [answered('Two years.')],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'REPLY', text: 'actually it was three years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(summarise).toHaveBeenCalledTimes(2);
+    const secondCallArgs = summarise.mock.calls[1][0];
+    expect(secondCallArgs.input.context.lastReply).toBe(
+      'actually it was three years',
+    );
+  });
+
   it('skips straight to summarising when every question is already answered', async () => {
     // The resume case: a returning user with a full answers map.
+    const askQuestion = vi.fn(async () => 'q');
     const resumed = createActor(
       onboardingMachine.provide({
         actors: {
@@ -392,7 +452,7 @@ describe('onboardingMachine — question loop', () => {
           })),
           signOff: fromPromise(async () => 'bye'),
           declineConsent: fromPromise(async () => {}),
-          askQuestion: fromPromise(async () => 'q'),
+          askQuestion: fromPromise(askQuestion),
           evaluateReply: fromPromise(async () => answered('x')),
           saveAnswer: fromPromise(async () => {}),
           summarise: fromPromise(async () => 'summary'),
@@ -407,5 +467,9 @@ describe('onboardingMachine — question loop', () => {
     resumed.send({ type: 'REPLY', text: 'yes' });
     await waitFor(resumed, (s) => s.matches('confirming'));
     expect(resumed.getSnapshot().matches('confirming')).toBe(true);
+    // The point of this test: with everything already answered, `asking`
+    // must bypass askQuestion entirely via its `always` transition — no
+    // question should ever be asked on resume.
+    expect(askQuestion).not.toHaveBeenCalled();
   });
 });

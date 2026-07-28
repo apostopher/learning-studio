@@ -258,12 +258,16 @@ export const onboardingMachine = setup({
           {
             // answered, declined, or follow-ups exhausted. A declined question
             // stores an empty string — a present key counts as answered, so it
-            // never re-prompts.
+            // never re-prompts. An exhausted follow-up takes the user's actual
+            // reply as the answer rather than discarding it as an empty string.
             target: 'persisting',
             actions: assign({
               answers: ({ context, event }) => ({
                 ...context.answers,
-                [context.currentQuestionId ?? '']: event.output.answer ?? '',
+                [context.currentQuestionId ?? '']:
+                  event.output.status === 'needs_follow_up'
+                    ? (context.lastReply ?? '')
+                    : (event.output.answer ?? ''),
               }),
             }),
           },
@@ -296,7 +300,13 @@ export const onboardingMachine = setup({
 
     confirming: {
       on: {
-        REPLY: { target: 'summarising' },
+        REPLY: {
+          target: 'summarising',
+          actions: assign({
+            lastReply: ({ event }) => event.text,
+            turnCount: ({ context }) => context.turnCount + 1,
+          }),
+        },
         CONFIRM: { target: 'completing' },
         PAUSE: { target: 'paused' },
         DELETE: { target: 'deleting' },
