@@ -56,8 +56,24 @@ describe('CourseCard', () => {
   });
 
   it('shows a fallback icon when there is no cover image', async () => {
-    const { container } = await renderInRouter(<CourseCard course={course} />);
-    expect(container.querySelector('svg')).not.toBeNull();
+    await renderInRouter(<CourseCard course={course} />);
+    expect(screen.getByTestId('cover-fallback')).toBeDefined();
+  });
+
+  it('renders the cover image instead of the fallback when one is set', async () => {
+    await renderInRouter(
+      <CourseCard
+        course={{
+          ...course,
+          imageUrlAvif: 'https://example.test/cover.avif',
+          imageUrlWebp: 'https://example.test/cover.webp',
+        }}
+      />,
+    );
+    expect(screen.queryByTestId('cover-fallback')).toBeNull();
+    expect(
+      screen.getByRole('img', { name: /3D Airmanship cover/ }),
+    ).toBeDefined();
   });
 
   it('shows the progress value in an accessible label', async () => {

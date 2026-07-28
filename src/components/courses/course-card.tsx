@@ -26,7 +26,10 @@ export const CourseCard = ({ course }: CourseCardProps) => {
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-gray-8">
+          <div
+            data-testid="cover-fallback"
+            className="flex h-full w-full items-center justify-center text-gray-8"
+          >
             <ImageIcon className="h-8 w-8" aria-hidden="true" />
           </div>
         )}
