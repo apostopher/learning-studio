@@ -33,7 +33,8 @@ export const evaluateReply = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls: context.turnCount >= HESITANCY_TURN_THRESHOLD,
+    remindControls:
+      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
   });
 
   const question = context.questions.find((q) => q.id === questionId);

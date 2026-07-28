@@ -23,7 +23,8 @@ export const summarise = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls: context.turnCount >= HESITANCY_TURN_THRESHOLD,
+    remindControls:
+      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
   });
 
   const coveredLines = context.questions.map((question) => {

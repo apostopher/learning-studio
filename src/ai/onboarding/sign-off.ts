@@ -19,7 +19,8 @@ export const signOff = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls: context.turnCount >= HESITANCY_TURN_THRESHOLD,
+    remindControls:
+      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
   });
 
   const prompt = `The trainee has chosen not to proceed with this conversation. Produce a

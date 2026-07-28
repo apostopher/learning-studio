@@ -46,6 +46,20 @@ export type OnboardingContext = OnboardingInput & {
   turnCount: number;
   lastReply: string | null;
   lastClarification: string | null;
+  /**
+   * The evaluator's own follow-up question, carried from `evaluating` into
+   * `askingFollowUp` so `askQuestion` can deliver it verbatim instead of
+   * re-asking the base question. Cleared by `selectNextQuestion` — it must
+   * not survive past the question it was raised for.
+   */
+  pendingFollowUp: string | null;
+  /**
+   * Set from the most recent reply evaluation's `hesitancy` flag. Combined
+   * with `turnCount` to decide `remindControls` in every actor's system
+   * prompt. Cleared by `selectNextQuestion` so the reminder fires at most
+   * once per question, not on every turn a hesitant trainee takes.
+   */
+  hesitancyFlagged: boolean;
 };
 
 export type OnboardingEvent =
@@ -107,6 +121,8 @@ export const onboardingMachine = setup({
       currentQuestionId: ({ context }) =>
         pendingQuestions(context.questions, context.answers)[0]?.id ?? null,
       followUpCount: 0,
+      pendingFollowUp: null,
+      hesitancyFlagged: false,
     }),
   },
 }).createMachine({
@@ -119,6 +135,8 @@ export const onboardingMachine = setup({
     turnCount: 0,
     lastReply: null,
     lastClarification: null,
+    pendingFollowUp: null,
+    hesitancyFlagged: false,
   }),
   initial: 'greeting',
   states: {
@@ -250,9 +268,11 @@ export const onboardingMachine = setup({
             guard: ({ context, event }) =>
               event.output.status === 'needs_follow_up' &&
               context.followUpCount < FOLLOW_UP_CAP,
-            target: 'awaitingAnswer',
+            target: 'askingFollowUp',
             actions: assign({
               followUpCount: ({ context }) => context.followUpCount + 1,
+              pendingFollowUp: ({ event }) => event.output.followUp,
+              hesitancyFlagged: ({ event }) => event.output.hesitancy,
             }),
           },
           {
@@ -269,9 +289,25 @@ export const onboardingMachine = setup({
                     ? (context.lastReply ?? '')
                     : (event.output.answer ?? ''),
               }),
+              hesitancyFlagged: ({ event }) => event.output.hesitancy,
             }),
           },
         ],
+        onError: { target: 'failed' },
+      },
+    },
+
+    // Delivers the evaluator's own follow-up question. Deliberately has no
+    // `entry: 'selectNextQuestion'` — that would reset followUpCount and
+    // make the follow-up loop unbounded, defeating FOLLOW_UP_CAP.
+    askingFollowUp: {
+      invoke: {
+        src: 'askQuestion',
+        input: ({ context }) => ({
+          context,
+          questionId: context.currentQuestionId ?? '',
+        }),
+        onDone: { target: 'awaitingAnswer' },
         onError: { target: 'failed' },
       },
     },

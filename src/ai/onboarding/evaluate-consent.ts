@@ -24,7 +24,8 @@ export const evaluateConsent = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls: context.turnCount >= HESITANCY_TURN_THRESHOLD,
+    remindControls:
+      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
   });
 
   const prompt = `The trainee was just asked whether they're ready to begin this onboarding

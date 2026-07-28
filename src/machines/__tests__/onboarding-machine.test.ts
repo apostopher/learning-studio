@@ -299,6 +299,58 @@ describe('onboardingMachine — question loop', () => {
     await waitFor(actor, (s) => s.matches('awaitingAnswer'));
   });
 
+  it('routes a vague reply through askingFollowUp and delivers the evaluator follow-up', async () => {
+    // Defect A: `needs_follow_up` used to target `awaitingAnswer` directly,
+    // invoking nothing — the evaluator's `followUp` text was discarded and
+    // the agent said nothing. `askingFollowUp` must invoke `askQuestion`
+    // again with `pendingFollowUp` set to that text.
+    const askQuestion = vi.fn(
+      async ({
+        input,
+      }: {
+        input: { context: OnboardingContext; questionId: string };
+      }) => input.context.pendingFollowUp ?? 'So, tell me a bit about you?',
+    );
+
+    const actor = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(async () => 'Welcome…'),
+          evaluateConsent: fromPromise<
+            OnboardingConsentEvaluation,
+            { context: OnboardingContext; reply: string }
+          >(async () => ({ status: 'consented', reply: null })),
+          signOff: fromPromise(async () => 'bye'),
+          declineConsent: fromPromise(async () => {}),
+          askQuestion: fromPromise(askQuestion),
+          evaluateReply: fromPromise(async () => vague),
+          saveAnswer: fromPromise(async () => {}),
+          summarise: fromPromise(async () => 'summary'),
+          completeOnboarding: fromPromise(async () => {}),
+          deleteOnboarding: fromPromise(async () => {}),
+        },
+      }),
+      { input: { ...INPUT, questions: ONE } },
+    );
+
+    actor.start();
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'yes' });
+    await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+    actor.send({ type: 'REPLY', text: 'a bit' });
+    await waitFor(
+      actor,
+      (s) =>
+        s.matches('awaitingAnswer') &&
+        s.context.pendingFollowUp === vague.followUp,
+    );
+
+    expect(askQuestion).toHaveBeenCalledTimes(2);
+    const secondCallArgs = askQuestion.mock.calls[1][0];
+    expect(secondCallArgs.input.context.pendingFollowUp).toBe(vague.followUp);
+    expect(secondCallArgs.input.questionId).toBe('q1');
+  });
+
   it('stops following up at the cap and takes the reply as the answer', async () => {
     // Without a cap, a user giving vague answers loops forever.
     const { actor, saveAnswer } = makeAnsweringActor(
@@ -333,6 +385,53 @@ describe('onboardingMachine — question loop', () => {
     actor.send({ type: 'REPLY', text: 'ok here is more' });
     await waitFor(actor, (s) => s.context.currentQuestionId === 'q2');
     expect(actor.getSnapshot().context.followUpCount).toBe(0);
+  });
+
+  it('flags hesitancy from an evaluation and clears it once the next question starts', async () => {
+    // Defect B: `hesitancy` was computed by evaluateReply and dropped —
+    // `remindControls` could only ever come from `turnCount`. It must reach
+    // context as `hesitancyFlagged`, and `selectNextQuestion` must clear it
+    // so the reminder fires at most once per question.
+    const TWO: OnboardingQuestions = [
+      { id: 'q1', text: 'First?' },
+      { id: 'q2', text: 'Second?' },
+    ];
+    const hesitantAnswer: OnboardingReplyEvaluation = {
+      status: 'answered',
+      answer: 'a',
+      followUp: null,
+      hesitancy: true,
+    };
+    const { actor } = makeAnsweringActor([hesitantAnswer, answered('b')], TWO);
+    await reachAsking(actor);
+
+    // Every stub here resolves instantly, so `persisting` (hesitancyFlagged
+    // set, still on q1) and `asking` (cleared, now on q2) can both complete
+    // within the same microtask flush that `waitFor`'s continuation runs in
+    // — inspecting `getSnapshot()` after an `await` would race past the
+    // intermediate state. Subscribing records every transition as it
+    // happens, so the transient state can't be skipped.
+    const snapshots: {
+      questionId: string | null;
+      hesitancyFlagged: boolean;
+    }[] = [];
+    const subscription = actor.subscribe((s) => {
+      snapshots.push({
+        questionId: s.context.currentQuestionId,
+        hesitancyFlagged: s.context.hesitancyFlagged,
+      });
+    });
+
+    actor.send({ type: 'REPLY', text: 'a' });
+    await waitFor(actor, (s) => s.context.currentQuestionId === 'q2');
+    subscription.unsubscribe();
+
+    expect(
+      snapshots.some(
+        (s) => s.questionId === 'q1' && s.hesitancyFlagged === true,
+      ),
+    ).toBe(true);
+    expect(actor.getSnapshot().context.hesitancyFlagged).toBe(false);
   });
 
   it('stores an empty string for a declined question so it never re-prompts', async () => {

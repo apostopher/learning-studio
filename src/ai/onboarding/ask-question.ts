@@ -7,6 +7,13 @@ import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
 /**
  * Produces the current question, phrased naturally given the conversation so
  * far — never the raw `text` field read aloud.
+ *
+ * When `context.pendingFollowUp` is set, this actor is being invoked from
+ * the machine's `askingFollowUp` state, not `asking`: the previous reply was
+ * vague and `evaluateReply` already composed a natural-language follow-up.
+ * That text is delivered as-is rather than re-asking the base question —
+ * it's already phrased for the trainee, and re-running it through the model
+ * would risk drifting from what the evaluator determined was missing.
  */
 export const askQuestion = async ({
   context,
@@ -17,10 +24,15 @@ export const askQuestion = async ({
   courseName: string;
   questionId: string;
 }): Promise<string> => {
+  if (context.pendingFollowUp !== null) {
+    return context.pendingFollowUp;
+  }
+
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls: context.turnCount >= HESITANCY_TURN_THRESHOLD,
+    remindControls:
+      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
   });
 
   const question = context.questions.find((q) => q.id === questionId);
