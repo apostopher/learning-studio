@@ -20,7 +20,7 @@ async function renderInRouter(ui: React.ReactNode) {
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
   const router = createRouter({
@@ -43,6 +43,7 @@ describe('LessonList', () => {
   it('renders one LessonLink per lesson in a single <ul>', async () => {
     await renderInRouter(
       <LessonList
+        courseSlug="3d-airmanship"
         moduleSlug="fundamentals"
         lessons={lessons}
         lessonPercents={{}}
@@ -59,6 +60,7 @@ describe('LessonList', () => {
   it('marks only the matching lesson as active', async () => {
     await renderInRouter(
       <LessonList
+        courseSlug="3d-airmanship"
         moduleSlug="fundamentals"
         lessons={lessons}
         lessonPercents={{}}

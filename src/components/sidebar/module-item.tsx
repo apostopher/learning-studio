@@ -14,6 +14,7 @@ type ModuleLike = {
 };
 
 type ModuleItemProps = {
+  courseSlug: string;
   module: ModuleLike;
   rank: number;
   isOpen: boolean;
@@ -48,6 +49,7 @@ const CONTENT_VARIANTS = {
 } as const;
 
 export const ModuleItem = ({
+  courseSlug,
   module,
   rank,
   isOpen,
@@ -93,6 +95,7 @@ export const ModuleItem = ({
           >
             <motion.div variants={CONTENT_VARIANTS}>
               <LessonList
+                courseSlug={courseSlug}
                 moduleSlug={module.slug}
                 lessons={module.lessons}
                 activeLessonSlug={activeLessonSlug}

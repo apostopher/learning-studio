@@ -31,7 +31,7 @@ async function renderStatus(props: Props) {
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
   const router = createRouter({
@@ -48,6 +48,7 @@ async function renderStatus(props: Props) {
 describe('CourseSidebar', () => {
   it('renders a nav landmark with the "Course contents" label', async () => {
     await renderStatus({
+      courseSlug: '3d-airmanship',
       status: 'loading',
       openModuleSlug: null,
       onOpenChange: () => {},
@@ -60,6 +61,7 @@ describe('CourseSidebar', () => {
 
   it('renders the skeleton when status is "loading"', async () => {
     const { container } = await renderStatus({
+      courseSlug: '3d-airmanship',
       status: 'loading',
       openModuleSlug: null,
       onOpenChange: () => {},
@@ -70,6 +72,7 @@ describe('CourseSidebar', () => {
 
   it('renders the error when status is "error"', async () => {
     await renderStatus({
+      courseSlug: '3d-airmanship',
       status: 'error',
       openModuleSlug: null,
       onOpenChange: () => {},
@@ -82,6 +85,7 @@ describe('CourseSidebar', () => {
 
   it('renders header + accordion when status is "ready"', async () => {
     await renderStatus({
+      courseSlug: '3d-airmanship',
       status: 'ready',
       title: '3D Airmanship',
       moduleCount: 1,

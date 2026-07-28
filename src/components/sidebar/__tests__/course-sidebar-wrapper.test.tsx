@@ -70,7 +70,7 @@ async function renderAt(path: string, details: DetailsResult) {
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => <CourseSidebarWrapper />,
   });
   const router = createRouter({
@@ -117,7 +117,7 @@ describe('CourseSidebarWrapper', () => {
   });
 
   it('renders header + modules when ready and marks the active lesson from the URL', async () => {
-    await renderAt('/modules/intermediate/lessons/yaw', {
+    await renderAt('/course/3d-airmanship/modules/intermediate/lessons/yaw', {
       data: fakeCourse,
       isLoading: false,
       isError: false,

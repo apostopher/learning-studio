@@ -4,6 +4,7 @@ import { CircularProgress } from '../ui/circular-progress';
 type LessonLike = { slug: string; name: string; videoId: string | null };
 
 type LessonLinkProps = {
+  courseSlug: string;
   moduleSlug: string;
   lesson: LessonLike;
   rank: number;
@@ -12,6 +13,7 @@ type LessonLinkProps = {
 };
 
 export const LessonLink = ({
+  courseSlug,
   moduleSlug,
   lesson,
   rank,
@@ -30,8 +32,8 @@ export const LessonLink = ({
 
   return (
     <Link
-      to="/modules/$moduleSlug/lessons/$lessonSlug"
-      params={{ moduleSlug, lessonSlug: lesson.slug }}
+      to="/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug"
+      params={{ courseSlug, moduleSlug, lessonSlug: lesson.slug }}
       aria-current={isActive ? 'page' : undefined}
       viewTransition
       className={classes}

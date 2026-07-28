@@ -6,19 +6,19 @@ import { computeLessonMainState } from './compute-lesson-main-state';
 import { findLesson } from './find-lesson';
 import { LessonMain } from './lesson-main';
 
-const COURSE_SLUG = '3d-airmanship';
-
 type LessonMainWrapperProps = {
+  courseSlug: string;
   moduleSlug: string;
   lessonSlug: string;
 };
 
 export const LessonMainWrapper = ({
+  courseSlug,
   moduleSlug,
   lessonSlug,
 }: LessonMainWrapperProps) => {
   const queryClient = useQueryClient();
-  const course = useCourseDetails(COURSE_SLUG);
+  const course = useCourseDetails(courseSlug);
   const courseData = course.data ?? undefined;
   const lesson = findLesson(courseData, moduleSlug, lessonSlug);
   const videoId = lesson?.videoId ?? '';
@@ -40,7 +40,7 @@ export const LessonMainWrapper = ({
     },
     onRetryCourse: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.courseDetails(COURSE_SLUG),
+        queryKey: queryKeys.courseDetails(courseSlug),
       });
     },
     onRetryVideo: () => {

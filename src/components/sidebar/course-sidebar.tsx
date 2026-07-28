@@ -14,6 +14,7 @@ type ModuleLike = {
 };
 
 type CourseSidebarProps = {
+  courseSlug: string;
   status: 'loading' | 'error' | 'ready';
   title?: string;
   moduleCount?: number;
@@ -30,6 +31,7 @@ type CourseSidebarProps = {
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
 
 export const CourseSidebar = ({
+  courseSlug,
   status,
   title,
   moduleCount,
@@ -90,6 +92,7 @@ export const CourseSidebar = ({
               coursePercent={coursePercent ?? 0}
             />
             <ModuleAccordion
+              courseSlug={courseSlug}
               modules={modules ?? []}
               openModuleSlug={openModuleSlug}
               onOpenChange={onOpenChange}
