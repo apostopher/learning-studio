@@ -39,7 +39,7 @@ describe('replyOnboardingHandler', () => {
   it('401 when not authenticated', async () => {
     getSession.mockResolvedValueOnce(null);
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'ppl', text: 'yes' }),
+      post({ type: 'reply', courseSlug: 'ppl', text: 'yes' }),
     );
     expect(res.status).toBe(401);
     expect(advanceOnboarding).not.toHaveBeenCalled();
@@ -47,7 +47,7 @@ describe('replyOnboardingHandler', () => {
 
   it('sends the reply as a REPLY event for the authed user', async () => {
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'ppl', text: 'yes please' }),
+      post({ type: 'reply', courseSlug: 'ppl', text: 'yes please' }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(body);
@@ -63,6 +63,7 @@ describe('replyOnboardingHandler', () => {
   it('forwards expectedUpdatedAt so the concurrency guard can fire', async () => {
     await replyOnboardingHandler(
       post({
+        type: 'reply',
         courseSlug: 'ppl',
         text: 'yes',
         expectedUpdatedAt: '2026-07-28T00:00:00.000Z',
@@ -81,6 +82,7 @@ describe('replyOnboardingHandler', () => {
     advanceOnboarding.mockResolvedValueOnce({ ok: false, reason: 'stale' });
     const res = await replyOnboardingHandler(
       post({
+        type: 'reply',
         courseSlug: 'ppl',
         text: 'yes',
         expectedUpdatedAt: '2026-07-28T00:00:00.000Z',
@@ -89,11 +91,70 @@ describe('replyOnboardingHandler', () => {
     expect(res.status).toBe(409);
   });
 
+  it('sends CONFIRM when the trainee accepts the summary', async () => {
+    // Without this the interview can never finish: `confirming` completes on
+    // CONFIRM only, and treats a REPLY as a correction back to `summarising`.
+    const res = await replyOnboardingHandler(
+      post({ type: 'confirm', courseSlug: 'ppl' }),
+    );
+    expect(res.status).toBe(200);
+    expect(advanceOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        courseSlug: 'ppl',
+        event: { type: 'CONFIRM' },
+      }),
+    );
+  });
+
+  it('applies the concurrency guard to a confirmation too', async () => {
+    advanceOnboarding.mockResolvedValueOnce({ ok: false, reason: 'stale' });
+    const res = await replyOnboardingHandler(
+      post({
+        type: 'confirm',
+        courseSlug: 'ppl',
+        expectedUpdatedAt: '2026-07-28T00:00:00.000Z',
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(advanceOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedUpdatedAt: '2026-07-28T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('ignores text smuggled alongside a confirmation', async () => {
+    // Acceptance is expressed by the discriminator alone — no text from a
+    // confirmation may reach the machine as a correction.
+    await replyOnboardingHandler(
+      post({ type: 'confirm', courseSlug: 'ppl', text: 'actually, change it' }),
+    );
+    expect(advanceOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({ event: { type: 'CONFIRM' } }),
+    );
+  });
+
+  it('400 when type is missing or unrecognised', async () => {
+    // No sentinel fallback: an unstated intent is rejected rather than
+    // guessed at from the message body.
+    const missing = await replyOnboardingHandler(
+      post({ courseSlug: 'ppl', text: 'yes' }),
+    );
+    expect(missing.status).toBe(400);
+
+    const unknown = await replyOnboardingHandler(
+      post({ type: 'pause', courseSlug: 'ppl' }),
+    );
+    expect(unknown.status).toBe(400);
+    expect(advanceOnboarding).not.toHaveBeenCalled();
+  });
+
   it('ignores a userId in the request body', async () => {
     // The property this pins: naming another user in the payload must not
     // reach the glue, which is where every ownership check keys off userId.
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'x', text: 'hi', userId: 'attacker' }),
+      post({ type: 'reply', courseSlug: 'x', text: 'hi', userId: 'attacker' }),
     );
     expect(res.status).toBe(200);
     expect(advanceOnboarding).toHaveBeenCalledWith(
@@ -110,20 +171,22 @@ describe('replyOnboardingHandler', () => {
       reason: 'course_not_found',
     });
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'nope', text: 'yes' }),
+      post({ type: 'reply', courseSlug: 'nope', text: 'yes' }),
     );
     expect(res.status).toBe(404);
   });
 
   it('400 when text is missing', async () => {
-    const res = await replyOnboardingHandler(post({ courseSlug: 'ppl' }));
+    const res = await replyOnboardingHandler(
+      post({ type: 'reply', courseSlug: 'ppl' }),
+    );
     expect(res.status).toBe(400);
     expect(advanceOnboarding).not.toHaveBeenCalled();
   });
 
   it('400 when text is empty', async () => {
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'ppl', text: '' }),
+      post({ type: 'reply', courseSlug: 'ppl', text: '' }),
     );
     expect(res.status).toBe(400);
     expect(advanceOnboarding).not.toHaveBeenCalled();
@@ -133,14 +196,16 @@ describe('replyOnboardingHandler', () => {
     // Matches OnboardingAnswersSchema's 5000-char per-answer cap: the
     // transport must not accept what the row could never store.
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'ppl', text: 'a'.repeat(5001) }),
+      post({ type: 'reply', courseSlug: 'ppl', text: 'a'.repeat(5001) }),
     );
     expect(res.status).toBe(400);
     expect(advanceOnboarding).not.toHaveBeenCalled();
   });
 
   it('400 when courseSlug is missing', async () => {
-    const res = await replyOnboardingHandler(post({ text: 'yes' }));
+    const res = await replyOnboardingHandler(
+      post({ type: 'reply', text: 'yes' }),
+    );
     expect(res.status).toBe(400);
     expect(advanceOnboarding).not.toHaveBeenCalled();
   });
@@ -159,7 +224,7 @@ describe('replyOnboardingHandler', () => {
   it('500 when the turn throws', async () => {
     advanceOnboarding.mockRejectedValueOnce(new Error('model down'));
     const res = await replyOnboardingHandler(
-      post({ courseSlug: 'ppl', text: 'yes' }),
+      post({ type: 'reply', courseSlug: 'ppl', text: 'yes' }),
     );
     expect(res.status).toBe(500);
   });

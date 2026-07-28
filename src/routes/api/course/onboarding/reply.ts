@@ -4,6 +4,17 @@ import { auth } from '#/lib/auth';
 import { advanceOnboarding } from '#/lib/onboarding-session.server';
 
 /**
+ * Fields both intents carry. `expectedUpdatedAt` is optional and nullable: a
+ * client that has not read a turn yet has nothing to compare, and JSON
+ * round-trips an absent value as either missing or null. The concurrency guard
+ * therefore works identically on a reply and on a confirmation.
+ */
+const replyBaseFields = {
+  courseSlug: z.string().min(1),
+  expectedUpdatedAt: z.string().min(1).nullish(),
+};
+
+/**
  * Zod strips unknown keys, which is load-bearing here rather than incidental:
  * a `userId` smuggled into the body never survives parsing, and the handler
  * only ever reads the id from the session. See the SECURITY note below.
@@ -12,18 +23,30 @@ import { advanceOnboarding } from '#/lib/onboarding-session.server';
  * the transport must not accept what storage would reject, or a long reply
  * would be evaluated and then fail to persist.
  *
- * `expectedUpdatedAt` is optional and nullable: a client that has not read a
- * turn yet has nothing to compare, and JSON round-trips an absent value as
- * either missing or null.
+ * The `type` discriminator is what makes the interview finishable. The
+ * machine's `confirming` state advances to `completing` on CONFIRM and treats
+ * a REPLY as a correction that loops back through `summarising`, so a route
+ * that only ever sent REPLY could never complete an interview: the trainee
+ * could correct the closing summary forever but never accept it, and
+ * `onboardingCompletedAt` would never be stamped.
+ *
+ * It is an explicit discriminator rather than a sentinel in `text` (e.g.
+ * treating the literal "confirm" as an accept) on purpose: the server must
+ * never infer control flow from message content — the same rule
+ * `OnboardingTurnResponse` states in the other direction for the client.
  */
-const ReplyBodySchema = z.object({
-  courseSlug: z.string().min(1),
-  text: z.string().min(1).max(5000),
-  expectedUpdatedAt: z.string().min(1).nullish(),
-});
+const ReplyBodySchema = z.discriminatedUnion('type', [
+  z.object({
+    ...replyBaseFields,
+    type: z.literal('reply'),
+    text: z.string().min(1).max(5000),
+  }),
+  z.object({ ...replyBaseFields, type: z.literal('confirm') }),
+]);
 
 /**
- * Feeds one reply into the interview and answers with the settled turn.
+ * Feeds one reply — or the trainee's acceptance of the closing summary — into
+ * the interview and answers with the settled turn.
  *
  * SECURITY: `userId` comes from `auth.api.getSession` and nowhere else — not
  * the body, not the query string, not a header. `advanceOnboarding` takes it
@@ -58,7 +81,13 @@ export async function replyOnboardingHandler(
     const result = await advanceOnboarding({
       userId: session.user.id,
       courseSlug: parsed.data.courseSlug,
-      event: { type: 'REPLY', text: parsed.data.text },
+      // 'confirm' accepts the closing summary (CONFIRM → completing →
+      // complete); anything else is a reply, which `confirming` treats as a
+      // correction. Mapped from the discriminator, never sniffed from `text`.
+      event:
+        parsed.data.type === 'confirm'
+          ? { type: 'CONFIRM' }
+          : { type: 'REPLY', text: parsed.data.text },
       expectedUpdatedAt: parsed.data.expectedUpdatedAt,
     });
 
