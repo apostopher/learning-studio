@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
+import { useCallback, useEffect, useRef } from 'react';
 import { z } from 'zod';
 import { dataKeys } from './keys';
 
@@ -138,6 +139,50 @@ const optimisticUserTurn = (
 });
 
 /**
+ * Picks whichever candidate's `error` is an `OnboardingRequestError` AND has
+ * the highest `seq` — i.e. failed most recently — rather than whichever
+ * comes first in the array. `seq` is a monotonic counter, not a wall-clock
+ * timestamp: immune to two failures landing in the same millisecond, which a
+ * `Date.now()`-based comparison would not be.
+ *
+ * A pure, exported function (not inlined in the hook) specifically so this
+ * precedence logic — the exact thing code review caught as a bug — can be
+ * unit tested directly, without rendering `useOnboardingChat` through React.
+ * That matters here: this repo's vitest setup cannot execute a bare
+ * `useRef`/`useCallback`/`useEffect` inside `renderHook` (confirmed with a
+ * scratch repro — a hook containing nothing but `useRef` also throws
+ * `Cannot read properties of null (reading 'useRef')`), which is why none of
+ * this repo's other tested data hooks touch a raw React hook; they only wrap
+ * `useQuery`/`useMutation`. Keeping the selection logic pure sidesteps that
+ * constraint instead of fighting it.
+ *
+ * Bug this fixes: `activeError` used to be `replyMutation.error ??
+ * confirmMutation.error ?? deleteMutation.error ?? query.error` — fixed
+ * declaration-order precedence, not recency. Concretely: a reply 409s, the
+ * user then retries via delete and *that* fails with a 500 — the old code
+ * still reported the stale reply conflict, because `??` only cares which
+ * operand is non-null first, never which failed last.
+ */
+export function selectLatestOnboardingError(
+  candidates: { error: unknown; seq: number }[],
+): OnboardingRequestError | null {
+  return (
+    candidates
+      .filter(
+        (
+          candidate,
+        ): candidate is { error: OnboardingRequestError; seq: number } =>
+          candidate.error instanceof OnboardingRequestError,
+      )
+      .reduce<{ error: OnboardingRequestError; seq: number } | null>(
+        (latest, candidate) =>
+          !latest || candidate.seq >= latest.seq ? candidate : latest,
+        null,
+      )?.error ?? null
+  );
+}
+
+/**
  * Drives the three onboarding API routes (`start`, `reply`, `delete`) for one
  * course's interview, and exposes it as chat state shaped for
  * `ChatWindowProps` (`chat-window.tsx:11-18`).
@@ -181,6 +226,27 @@ export function useOnboardingChat(courseSlug: string) {
     queryClient.setQueryData(queryKey, turn);
   };
 
+  /**
+   * Per-source sequence numbers fed to `selectLatestOnboardingError` below.
+   * A ref, not `useState`: every writer here (a mutation's `onError`, or the
+   * effect watching `query.error`) already causes TanStack Query to
+   * re-render this component on its own, so there's no update this ref could
+   * miss by not itself being state.
+   */
+  const errorSeqRef = useRef({ reply: 0, confirm: 0, delete: 0, query: 0 });
+  const nextErrorSeqRef = useRef(0);
+  // `useCallback` with an empty dependency array (it closes over refs only,
+  // never over render-scoped values) so it has a stable identity — that's
+  // what lets the effect below depend on it honestly instead of needing a
+  // lint suppression.
+  const recordFailure = useCallback(
+    (source: keyof typeof errorSeqRef.current) => {
+      nextErrorSeqRef.current += 1;
+      errorSeqRef.current[source] = nextErrorSeqRef.current;
+    },
+    [],
+  );
+
   const replyMutation = useMutation({
     mutationFn: (text: string) => {
       const expectedUpdatedAt =
@@ -203,6 +269,7 @@ export function useOnboardingChat(courseSlug: string) {
       return { previous };
     },
     onError: (_error, _text, context) => {
+      recordFailure('reply');
       // Roll the optimistic turn back — a 409 in particular means the
       // conversation moved on elsewhere, so re-showing the user's un-sent
       // text as if it landed would be actively misleading.
@@ -222,11 +289,13 @@ export function useOnboardingChat(courseSlug: string) {
         expectedUpdatedAt,
       });
     },
+    onError: () => recordFailure('confirm'),
     onSuccess: applyTurn,
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => postOnboardingDelete(courseSlug),
+    onError: () => recordFailure('delete'),
     onSuccess: () => {
       // The route's actual response is `{ ok: true }` — no transcript, no
       // `updatedAt` (see `onboardingDeleteSchema` above). Caching the prior
@@ -243,15 +312,21 @@ export function useOnboardingChat(courseSlug: string) {
     },
   });
 
+  // `useQuery` (TanStack Query v5) has no `onError` callback, so its failure
+  // is recorded from the `error` value itself rather than from a callback.
+  useEffect(() => {
+    if (query.error) recordFailure('query');
+  }, [query.error, recordFailure]);
+
   const turn = query.data;
   const messages: UIMessage[] = turn?.messages ?? [];
 
-  const activeError =
-    replyMutation.error ??
-    confirmMutation.error ??
-    deleteMutation.error ??
-    query.error ??
-    null;
+  const activeError = selectLatestOnboardingError([
+    { error: replyMutation.error, seq: errorSeqRef.current.reply },
+    { error: confirmMutation.error, seq: errorSeqRef.current.confirm },
+    { error: deleteMutation.error, seq: errorSeqRef.current.delete },
+    { error: query.error, seq: errorSeqRef.current.query },
+  ]);
 
   return {
     messages,
@@ -278,8 +353,10 @@ export function useOnboardingChat(courseSlug: string) {
     start: () => {
       query.refetch();
     },
-    /** The most recent failure across start/reply/confirm/delete, typed so a
-     * 409 conflict can be rendered distinctly from a generic error. */
-    error: activeError instanceof OnboardingRequestError ? activeError : null,
+    /** Whichever of start/reply/confirm/delete failed *most recently* (by
+     * `errorSeqRef`'s monotonic order, not declaration order — see the
+     * comment above `errorSeqRef`), typed so a 409 conflict can be rendered
+     * distinctly from a generic error. */
+    error: activeError,
   };
 }
