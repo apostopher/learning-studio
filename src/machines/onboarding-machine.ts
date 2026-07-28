@@ -39,6 +39,17 @@ export const HESITANCY_TURN_THRESHOLD = 12;
  */
 export const TRANSCRIPT_TURN_LIMIT = 20;
 
+/**
+ * Bump this whenever the machine's state names or context shape change.
+ * A persisted snapshot whose version differs is discarded rather than
+ * restored — see machineVersion in src/db/schema.ts for why that is safe.
+ *
+ * The version expresses intent; onboarding-runner.ts additionally wraps
+ * restoration in a try/catch, so a shape change that slips through without a
+ * bump still degrades to a fresh start rather than throwing.
+ */
+export const ONBOARDING_MACHINE_VERSION = '1';
+
 export type OnboardingMessage = { role: 'assistant' | 'user'; text: string };
 
 /**

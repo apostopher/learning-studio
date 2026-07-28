@@ -784,6 +784,21 @@ export const courseOnboardingTable = pgTable(
     // never re-offers onboarding to someone who withdrew. Distinct from
     // consentDeclinedAt, which means they never started.
     deletedAt: timestamp("deleted_at", { mode: "date" }),
+    // The machine's settled state after the last turn, from
+    // actor.getPersistedSnapshot(). Restored with
+    // createActor(machine, { snapshot }).
+    //
+    // Load-bearing, not a convenience: eight of OnboardingContext's ten
+    // fields are not reconstructible from other columns, so rebuilding
+    // context fresh each request would reset followUpCount and
+    // consentClarificationCount every turn — silently disabling both caps.
+    machineSnapshot: jsonb("machine_snapshot").$type<Record<string, unknown>>(),
+    // Guards the snapshot across deploys that change the machine's shape. On
+    // mismatch the snapshot is discarded and the machine starts fresh, which
+    // is safe: `answers` is durable, so pendingQuestions() resumes the user
+    // at their next unanswered question. Because the failure mode is mild,
+    // the guard is deliberately biased toward discarding.
+    machineVersion: varchar("machine_version", { length: 32 }),
     // Null means in-progress and resumable.
     onboardingCompletedAt: timestamp("onboarding_completed_at", {
       mode: "date",
