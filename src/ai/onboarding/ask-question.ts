@@ -11,9 +11,14 @@ import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
  * When `context.pendingFollowUp` is set, this actor is being invoked from
  * the machine's `askingFollowUp` state, not `asking`: the previous reply was
  * vague and `evaluateReply` already composed a natural-language follow-up.
- * That text is delivered as-is rather than re-asking the base question —
- * it's already phrased for the trainee, and re-running it through the model
- * would risk drifting from what the evaluator determined was missing.
+ * In the common case that text is delivered as-is — it's already phrased
+ * for the trainee, and re-running it through the model would risk drifting
+ * from what the evaluator determined was missing.
+ *
+ * The one exception is when `remindControls` is true: the control reminder
+ * has to be woven into whatever this turn says, so the verbatim shortcut is
+ * skipped and the model is asked to deliver the follow-up itself, with the
+ * reminder folded in — a bare verbatim return has nowhere to put it.
  */
 export const askQuestion = async ({
   context,
@@ -24,16 +29,36 @@ export const askQuestion = async ({
   courseName: string;
   questionId: string;
 }): Promise<string> => {
-  if (context.pendingFollowUp !== null) {
+  const remindControls =
+    context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged;
+
+  if (context.pendingFollowUp !== null && !remindControls) {
     return context.pendingFollowUp;
   }
 
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls:
-      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
+    remindControls,
   });
+
+  if (context.pendingFollowUp !== null) {
+    const prompt = `The trainee's last answer was too vague, so the next thing to say is
+this follow-up, in your own words rather than read verbatim:
+
+"${context.pendingFollowUp}"
+
+Your system prompt's Reminder section applies to this turn — weave the
+control reminder in naturally alongside the follow-up, not as a separate
+disclaimer bolted on.`;
+
+    const { text } = await generateText({
+      model: geminiFlash,
+      system,
+      prompt,
+    });
+    return text;
+  }
 
   const question = context.questions.find((q) => q.id === questionId);
   const questionLine =

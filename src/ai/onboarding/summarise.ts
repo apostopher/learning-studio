@@ -12,6 +12,13 @@ import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
  * `onboarding-machine.ts`) — those must be listed as "you chose not to
  * answer this one" rather than read back as if the trainee had said
  * something, which would fabricate an answer they never gave.
+ *
+ * `context.pendingCorrection` carries what the trainee said when they
+ * corrected a previous summary from `confirming`. It is intentionally a
+ * separate field from `context.lastReply`: on the very first summary,
+ * `lastReply` still holds the last *answer* reply, not a correction, so
+ * reading it here would treat an ordinary answer as a correction that was
+ * never made.
  */
 export const summarise = async ({
   context,
@@ -38,6 +45,18 @@ export const summarise = async ({
     return `- ${question.text}\n  Answer: ${answer}`;
   });
 
+  const correctionLine =
+    context.pendingCorrection === null
+      ? ''
+      : `\n\nThe trainee just corrected something in the summary you gave a moment
+ago. Their correction was:
+
+"${context.pendingCorrection}"
+
+Incorporate this correction into the new summary you produce now — do not
+simply repeat your previous summary unchanged. Where their correction
+conflicts with what's listed below, trust the correction.`;
+
   const prompt = `The conversation has covered the ground below. Produce the closing
 message described in your system prompt's Closing section: reflect back a
 short, warm summary of what you understood, invite them to correct
@@ -48,7 +67,7 @@ Only summarise what they actually told you. Where an item is marked as not
 answered or declined, leave it out of the summary rather than guessing or
 making something up on their behalf.
 
-${coveredLines.join('\n')}`;
+${coveredLines.join('\n')}${correctionLine}`;
 
   const { text } = await generateText({ model: sonnet, system, prompt });
   return text;

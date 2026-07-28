@@ -434,6 +434,66 @@ describe('onboardingMachine — question loop', () => {
     expect(actor.getSnapshot().context.hesitancyFlagged).toBe(false);
   });
 
+  it('delivers the reminder to askQuestion for the next question, not just into context', async () => {
+    // The previous fix only proved `hesitancyFlagged` transiently appeared
+    // in context — `selectNextQuestion` (asking's entry) cleared it before
+    // `askQuestion` was ever invoked for the next question, so no actor
+    // could ever actually receive it as `true`. Assert on what the actor
+    // received, not on transient context, so this can't pass over dead
+    // behaviour again.
+    const TWO: OnboardingQuestions = [
+      { id: 'q1', text: 'First?' },
+      { id: 'q2', text: 'Second?' },
+    ];
+    const hesitantAnswer: OnboardingReplyEvaluation = {
+      status: 'answered',
+      answer: 'a',
+      followUp: null,
+      hesitancy: true,
+    };
+
+    const askQuestion = vi.fn(
+      async ({
+        input,
+      }: {
+        input: { context: OnboardingContext; questionId: string };
+      }) => `question for ${input.questionId}`,
+    );
+
+    const actor = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(async () => 'Welcome…'),
+          evaluateConsent: fromPromise<
+            OnboardingConsentEvaluation,
+            { context: OnboardingContext; reply: string }
+          >(async () => ({ status: 'consented', reply: null })),
+          signOff: fromPromise(async () => 'bye'),
+          declineConsent: fromPromise(async () => {}),
+          askQuestion: fromPromise(askQuestion),
+          evaluateReply: fromPromise(async () => hesitantAnswer),
+          saveAnswer: fromPromise(async () => {}),
+          summarise: fromPromise(async () => 'summary'),
+          completeOnboarding: fromPromise(async () => {}),
+          deleteOnboarding: fromPromise(async () => {}),
+        },
+      }),
+      { input: { ...INPUT, questions: TWO } },
+    );
+
+    actor.start();
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'yes' });
+    await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+    actor.send({ type: 'REPLY', text: 'a' });
+    await waitFor(actor, (s) => s.context.currentQuestionId === 'q2');
+
+    expect(askQuestion).toHaveBeenCalledTimes(2);
+    const secondCallArgs = askQuestion.mock.calls[1][0];
+    expect(secondCallArgs.input.questionId).toBe('q2');
+    expect(secondCallArgs.input.context.hesitancyFlagged).toBe(true);
+  });
+
   it('stores an empty string for a declined question so it never re-prompts', async () => {
     const { actor, saveAnswer } = makeAnsweringActor(
       [
@@ -533,6 +593,44 @@ describe('onboardingMachine — question loop', () => {
     expect(secondCallArgs.input.context.lastReply).toBe(
       'actually it was three years',
     );
+  });
+
+  it('sets pendingCorrection for the re-summary call only, not the first', async () => {
+    // `lastReply` alone is not enough: on the very first summarise call it
+    // holds the last *answer* reply, not a correction, so `summarise`
+    // reading it as a correction would treat an ordinary answer as one the
+    // trainee never made. `pendingCorrection` must be null on the first
+    // call and set to exactly the correction text on the second.
+    const { actor, summarise } = makeAnsweringActor(
+      [answered('Two years.')],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'REPLY', text: 'actually it was three years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+
+    expect(summarise).toHaveBeenCalledTimes(2);
+    const firstCallArgs = summarise.mock.calls[0][0];
+    const secondCallArgs = summarise.mock.calls[1][0];
+    expect(firstCallArgs.input.context.pendingCorrection).toBeNull();
+    expect(secondCallArgs.input.context.pendingCorrection).toBe(
+      'actually it was three years',
+    );
+  });
+
+  it('clears pendingCorrection once the re-summary has been produced', async () => {
+    // Must apply to exactly the one re-summary it was raised for — if a
+    // second, unrelated REPLY reached `confirming` again it must not carry
+    // a stale correction forward.
+    const { actor } = makeAnsweringActor([answered('Two years.')], ONE);
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'REPLY', text: 'actually it was three years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(actor.getSnapshot().context.pendingCorrection).toBeNull();
   });
 
   it('skips straight to summarising when every question is already answered', async () => {

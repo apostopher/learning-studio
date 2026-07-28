@@ -56,10 +56,25 @@ export type OnboardingContext = OnboardingInput & {
   /**
    * Set from the most recent reply evaluation's `hesitancy` flag. Combined
    * with `turnCount` to decide `remindControls` in every actor's system
-   * prompt. Cleared by `selectNextQuestion` so the reminder fires at most
-   * once per question, not on every turn a hesitant trainee takes.
+   * prompt.
+   *
+   * Deliberately NOT cleared by `selectNextQuestion`: that action is the
+   * `entry` of `asking`, which runs *before* `askQuestion` is invoked for
+   * the next question — clearing it there would mean no actor ever sees it
+   * as `true`. It is cleared instead on `askQuestion`'s `onDone` (in both
+   * `asking` and `askingFollowUp`), once the turn that could actually carry
+   * the reminder has been produced. That gives "reminded once per hesitancy
+   * signal" rather than "reminded on every turn until the next question."
    */
   hesitancyFlagged: boolean;
+  /**
+   * Set from the reply text when the trainee corrects the summary from
+   * `confirming`, so `summarise` can incorporate that correction into the
+   * next reflect-back instead of silently re-emitting the same summary.
+   * Cleared on `summarising`'s `onDone` — it must apply to exactly the one
+   * re-summary it was raised for, not linger into later corrections.
+   */
+  pendingCorrection: string | null;
 };
 
 export type OnboardingEvent =
@@ -122,7 +137,6 @@ export const onboardingMachine = setup({
         pendingQuestions(context.questions, context.answers)[0]?.id ?? null,
       followUpCount: 0,
       pendingFollowUp: null,
-      hesitancyFlagged: false,
     }),
   },
 }).createMachine({
@@ -137,6 +151,7 @@ export const onboardingMachine = setup({
     lastClarification: null,
     pendingFollowUp: null,
     hesitancyFlagged: false,
+    pendingCorrection: null,
   }),
   initial: 'greeting',
   states: {
@@ -228,7 +243,13 @@ export const onboardingMachine = setup({
           context,
           questionId: context.currentQuestionId ?? '',
         }),
-        onDone: { target: 'awaitingAnswer' },
+        onDone: {
+          target: 'awaitingAnswer',
+          // The reminder (if any) has now been woven into the turn
+          // `askQuestion` just produced — clear it so it isn't repeated on
+          // every subsequent turn of this same question.
+          actions: assign({ hesitancyFlagged: false }),
+        },
         onError: { target: 'failed' },
       },
     },
@@ -307,7 +328,12 @@ export const onboardingMachine = setup({
           context,
           questionId: context.currentQuestionId ?? '',
         }),
-        onDone: { target: 'awaitingAnswer' },
+        onDone: {
+          target: 'awaitingAnswer',
+          // Same reasoning as `asking`'s onDone: the reminder has now been
+          // delivered as part of this follow-up turn.
+          actions: assign({ hesitancyFlagged: false }),
+        },
         onError: { target: 'failed' },
       },
     },
@@ -329,7 +355,13 @@ export const onboardingMachine = setup({
       invoke: {
         src: 'summarise',
         input: ({ context }) => ({ context }),
-        onDone: { target: 'confirming' },
+        onDone: {
+          target: 'confirming',
+          // The correction (if any) has now been folded into the summary
+          // `summarise` just produced — clear it so it applies to exactly
+          // this one re-summary, not to whatever the trainee says next.
+          actions: assign({ pendingCorrection: null }),
+        },
         onError: { target: 'failed' },
       },
     },
@@ -341,6 +373,7 @@ export const onboardingMachine = setup({
           actions: assign({
             lastReply: ({ event }) => event.text,
             turnCount: ({ context }) => context.turnCount + 1,
+            pendingCorrection: ({ event }) => event.text,
           }),
         },
         CONFIRM: { target: 'completing' },
