@@ -793,7 +793,12 @@ export const courseOnboardingTable = pgTable(
 export const courseOnboardingInsertSchema = createInsertSchema(
   courseOnboardingTable,
   {
-    answers: OnboardingAnswersSchema,
+    // drizzle-zod applies a column override verbatim, discarding the
+    // optional-wrapping it would otherwise derive from the column's DB
+    // default. Restate `.optional()` here so an insert that omits `answers`
+    // (relying on the column default of `{}`) still validates. Mirrors
+    // userProfileInsertSchema above for the same reason.
+    answers: OnboardingAnswersSchema.optional(),
   },
 );
 export type CourseOnboardingInsert = z.infer<

@@ -41,4 +41,35 @@ describe('OnboardingAnswersSchema', () => {
   it('rejects a non-object', () => {
     expect(OnboardingAnswersSchema.safeParse([]).success).toBe(false);
   });
+
+  it('rejects a key longer than 128 chars', () => {
+    const key = 'q'.repeat(129);
+    expect(OnboardingAnswersSchema.safeParse({ [key]: 'x' }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts a key of exactly 128 chars', () => {
+    const key = 'q'.repeat(128);
+    expect(OnboardingAnswersSchema.safeParse({ [key]: 'x' }).success).toBe(
+      true,
+    );
+  });
+
+  it('accepts a map with exactly 500 entries', () => {
+    const answers = Object.fromEntries(
+      Array.from({ length: 500 }, (_, i) => [`q${i}`, 'x']),
+    );
+    expect(OnboardingAnswersSchema.safeParse(answers).success).toBe(true);
+  });
+
+  it('rejects a map with 501 entries', () => {
+    // Deleted questions deliberately leave orphan answers in place, so this
+    // cap must stay well above the 50-question limit — it is not a stand-in
+    // for capping the number of current questions.
+    const answers = Object.fromEntries(
+      Array.from({ length: 501 }, (_, i) => [`q${i}`, 'x']),
+    );
+    expect(OnboardingAnswersSchema.safeParse(answers).success).toBe(false);
+  });
 });

@@ -62,5 +62,8 @@ export const isOnboardingComplete = (
   answers: OnboardingAnswers,
   onboardingCompletedAt: Date | null,
 ): boolean =>
-  onboardingCompletedAt !== null &&
+  // Loose `!= null` is deliberate, not a typo: it also catches `undefined`
+  // arriving here across a serialization boundary (e.g. JSON), where the
+  // typed `Date | null` signature no longer holds. Do not tighten to `!==`.
+  onboardingCompletedAt != null &&
   pendingQuestions(questions, answers).length === 0;

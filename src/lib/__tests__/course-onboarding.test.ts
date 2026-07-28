@@ -145,11 +145,22 @@ describe('isOnboardingComplete', () => {
     expect(isOnboardingComplete(added, answered, new Date(0))).toBe(false);
   });
 
-  it('is false when the flow is unfinished even with nothing pending', () => {
-    expect(isOnboardingComplete(QUESTIONS, answered, null)).toBe(false);
+  it('is false when an orphan answer exists for a question that no longer exists', () => {
+    expect(isOnboardingComplete(QUESTIONS, { qGone: 'x' }, new Date(0))).toBe(
+      false,
+    );
   });
 
   it('is true for a course with no questions once the flow is finished', () => {
     expect(isOnboardingComplete([], {}, new Date(0))).toBe(true);
+  });
+
+  it('is false when onboardingCompletedAt is undefined despite nothing being pending', () => {
+    // Guards against `!== null`, which is true for `undefined` too. The typed
+    // signature is `Date | null`, but `undefined` can still arrive here
+    // across a serialization boundary.
+    expect(
+      isOnboardingComplete(QUESTIONS, answered, undefined as unknown as null),
+    ).toBe(false);
   });
 });

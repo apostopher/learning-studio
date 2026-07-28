@@ -110,15 +110,18 @@ serve that query.
 Added to `src/types.ts`, beside `OnboardingQuestionsSchema`:
 
 ```ts
-export const OnboardingAnswersSchema = z.record(
-  z.string(),
-  z.string().max(5000),
-);
+export const OnboardingAnswersSchema = z
+  .record(z.string().max(128), z.string().max(5000))
+  .refine((answers) => Object.keys(answers).length <= 500, {
+    message: 'Too many onboarding answers',
+  });
 export type OnboardingAnswers = z.infer<typeof OnboardingAnswersSchema>;
 ```
 
-A map of `questionId → answer text`. The per-answer cap keeps a single row from
-being used to stuff the jsonb column.
+A map of `questionId → answer text`. The per-answer cap, the per-key cap, and
+a 500-entry cap on the map itself together keep a single row from being used
+to stuff the jsonb column — an unbounded key length or key count would let a
+single row balloon even with every value capped.
 
 The hash lives in its own column rather than inside the jsonb. It is queryable
 metadata, not user data — an admin query for "which users are on a stale
