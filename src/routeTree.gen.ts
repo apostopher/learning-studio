@@ -24,6 +24,7 @@ import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
+import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
 import { Route as ApiChatTranscribeRouteImport } from './routes/api/chat/transcribe'
@@ -126,6 +127,11 @@ const ApiCourseProgressSummaryRoute =
     path: '/api/course/progress-summary',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCourseMyCoursesRoute = ApiCourseMyCoursesRouteImport.update({
+  id: '/api/course/my-courses',
+  path: '/api/course/my-courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
   id: '/api/course/details',
   path: '/api/course/details',
@@ -279,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -405,6 +414,7 @@ export interface FileRouteTypes {
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -445,6 +455,7 @@ export interface FileRouteTypes {
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -526,6 +538,7 @@ export interface RootRouteChildren {
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
+  ApiCourseMyCoursesRoute: typeof ApiCourseMyCoursesRoute
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
@@ -646,6 +659,13 @@ declare module '@tanstack/react-router' {
       path: '/api/course/progress-summary'
       fullPath: '/api/course/progress-summary'
       preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/my-courses': {
+      id: '/api/course/my-courses'
+      path: '/api/course/my-courses'
+      fullPath: '/api/course/my-courses'
+      preLoaderRoute: typeof ApiCourseMyCoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/course/details': {
@@ -972,6 +992,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
+  ApiCourseMyCoursesRoute: ApiCourseMyCoursesRoute,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
