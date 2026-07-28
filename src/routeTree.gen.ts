@@ -24,12 +24,15 @@ import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
+import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
 import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
 import { Route as ApiChatTranscribeRouteImport } from './routes/api/chat/transcribe'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
+import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
+import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
 import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
@@ -47,8 +50,8 @@ import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/
 import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
 import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes/api/admin/courses.$courseId.credentials'
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
-import { Route as AuthedModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/modules.$moduleSlug.lessons.$lessonSlug'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
+import { Route as AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/course.$courseSlug.modules.$moduleSlug.lessons.$lessonSlug'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -126,6 +129,11 @@ const ApiCourseProgressSummaryRoute =
     path: '/api/course/progress-summary',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCourseMyCoursesRoute = ApiCourseMyCoursesRouteImport.update({
+  id: '/api/course/my-courses',
+  path: '/api/course/my-courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
   id: '/api/course/details',
   path: '/api/course/details',
@@ -156,6 +164,17 @@ const ApiAdminCoursesRoute = ApiAdminCoursesRouteImport.update({
   path: '/api/admin/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
+  id: '/course/$courseSlug',
+  path: '/course/$courseSlug',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedCourseCourseSlugIndexRoute =
+  AuthedCourseCourseSlugIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthedCourseCourseSlugRoute,
+  } as any)
 const ApiLessonAiTestSaveResultsRoute =
   ApiLessonAiTestSaveResultsRouteImport.update({
     id: '/api/lesson/ai-test/save-results',
@@ -252,17 +271,17 @@ const ApiAdminCoursesCourseIdBoardRoute =
     path: '/board',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
-const AuthedModulesModuleSlugLessonsLessonSlugRoute =
-  AuthedModulesModuleSlugLessonsLessonSlugRouteImport.update({
-    id: '/modules/$moduleSlug/lessons/$lessonSlug',
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
-    getParentRoute: () => AuthedRoute,
-  } as any)
 const ApiAdminCoursesCourseIdCredentialsProviderRoute =
   ApiAdminCoursesCourseIdCredentialsProviderRouteImport.update({
     id: '/$provider',
     path: '/$provider',
     getParentRoute: () => ApiAdminCoursesCourseIdCredentialsRoute,
+  } as any)
+const AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute =
+  AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport.update({
+    id: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -273,12 +292,14 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -295,7 +316,7 @@ export interface FileRoutesByFullPath {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
+  '/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
@@ -305,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -319,6 +341,7 @@ export interface FileRoutesByTo {
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -335,7 +358,7 @@ export interface FileRoutesByTo {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
+  '/course/$courseSlug': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
@@ -345,6 +368,7 @@ export interface FileRoutesByTo {
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -356,12 +380,14 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/_authed/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
   '/api/course/details': typeof ApiCourseDetailsRoute
+  '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -378,7 +404,7 @@ export interface FileRoutesById {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
-  '/_authed/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
+  '/_authed/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
@@ -388,6 +414,7 @@ export interface FileRoutesById {
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -399,12 +426,14 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/course/$courseSlug'
     | '/api/admin/courses'
     | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -421,7 +450,7 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
-    | '/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
@@ -431,6 +460,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -445,6 +475,7 @@ export interface FileRouteTypes {
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -461,7 +492,7 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
-    | '/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/course/$courseSlug'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
@@ -471,6 +502,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   id:
     | '__root__'
     | '/'
@@ -481,12 +513,14 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/_authed/course/$courseSlug'
     | '/api/admin/courses'
     | '/api/admin/uploads'
     | '/api/auth/$'
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
     | '/api/course/details'
+    | '/api/course/my-courses'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
@@ -503,7 +537,7 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
-    | '/_authed/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/_authed/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
@@ -513,6 +547,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -526,6 +561,7 @@ export interface RootRouteChildren {
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
+  ApiCourseMyCoursesRoute: typeof ApiCourseMyCoursesRoute
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
@@ -648,6 +684,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/course/my-courses': {
+      id: '/api/course/my-courses'
+      path: '/api/course/my-courses'
+      fullPath: '/api/course/my-courses'
+      preLoaderRoute: typeof ApiCourseMyCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/course/details': {
       id: '/api/course/details'
       path: '/api/course/details'
@@ -689,6 +732,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/courses'
       preLoaderRoute: typeof ApiAdminCoursesRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authed/course/$courseSlug': {
+      id: '/_authed/course/$courseSlug'
+      path: '/course/$courseSlug'
+      fullPath: '/course/$courseSlug'
+      preLoaderRoute: typeof AuthedCourseCourseSlugRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/course/$courseSlug/': {
+      id: '/_authed/course/$courseSlug/'
+      path: '/'
+      fullPath: '/course/$courseSlug/'
+      preLoaderRoute: typeof AuthedCourseCourseSlugIndexRouteImport
+      parentRoute: typeof AuthedCourseCourseSlugRoute
     }
     '/api/lesson/ai-test/save-results': {
       id: '/api/lesson/ai-test/save-results'
@@ -809,19 +866,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdBoardRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
-    '/_authed/modules/$moduleSlug/lessons/$lessonSlug': {
-      id: '/_authed/modules/$moduleSlug/lessons/$lessonSlug'
-      path: '/modules/$moduleSlug/lessons/$lessonSlug'
-      fullPath: '/modules/$moduleSlug/lessons/$lessonSlug'
-      preLoaderRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/api/admin/courses/$courseId/credentials/$provider': {
       id: '/api/admin/courses/$courseId/credentials/$provider'
       path: '/$provider'
       fullPath: '/api/admin/courses/$courseId/credentials/$provider'
       preLoaderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdCredentialsRoute
+    }
+    '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': {
+      id: '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
+      path: '/modules/$moduleSlug/lessons/$lessonSlug'
+      fullPath: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
+      preLoaderRoute: typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport
+      parentRoute: typeof AuthedCourseCourseSlugRoute
     }
   }
 }
@@ -840,17 +897,33 @@ const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
   AuthedAdminRouteChildren,
 )
 
+interface AuthedCourseCourseSlugRouteChildren {
+  AuthedCourseCourseSlugIndexRoute: typeof AuthedCourseCourseSlugIndexRoute
+  AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute: typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
+}
+
+const AuthedCourseCourseSlugRouteChildren: AuthedCourseCourseSlugRouteChildren =
+  {
+    AuthedCourseCourseSlugIndexRoute: AuthedCourseCourseSlugIndexRoute,
+    AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute:
+      AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute,
+  }
+
+const AuthedCourseCourseSlugRouteWithChildren =
+  AuthedCourseCourseSlugRoute._addFileChildren(
+    AuthedCourseCourseSlugRouteChildren,
+  )
+
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedAppRoute: typeof AuthedAppRoute
-  AuthedModulesModuleSlugLessonsLessonSlugRoute: typeof AuthedModulesModuleSlugLessonsLessonSlugRoute
+  AuthedCourseCourseSlugRoute: typeof AuthedCourseCourseSlugRouteWithChildren
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedAppRoute: AuthedAppRoute,
-  AuthedModulesModuleSlugLessonsLessonSlugRoute:
-    AuthedModulesModuleSlugLessonsLessonSlugRoute,
+  AuthedCourseCourseSlugRoute: AuthedCourseCourseSlugRouteWithChildren,
 }
 
 const AuthedRouteWithChildren =
@@ -972,6 +1045,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
+  ApiCourseMyCoursesRoute: ApiCourseMyCoursesRoute,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,

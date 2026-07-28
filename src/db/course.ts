@@ -7,10 +7,18 @@ import {
   moduleDependenciesTable,
   orgLessonsTable,
   orgsTable,
+  courseSubscriptionsTable,
+  videoProgressTable,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { inArray } from "drizzle-orm";
+import { and } from "drizzle-orm";
+import { asc } from "drizzle-orm";
+import { countDistinct } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { cacheWithRedis } from "@/integrations/upstash/redis";
+import { aggregatePercentByCourse } from "#/lib/course-progress-agg";
+import { watchedMilestones } from "#/lib/course-milestones";
 import type { DBModule, DBLesson } from "@/db/schema";
 import type {
   SubscriptionType,
@@ -176,3 +184,97 @@ export const getCourseDetailsWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
 >("course-details", getCourseDetails);
+
+export type MyCourseSummary = {
+  id: number;
+  name: string;
+  slug: string;
+  imageUrlAvif: string | null;
+  imageUrlWebp: string | null;
+  percent: number;
+};
+
+/**
+ * The courses a user is subscribed to, each with its overall progress
+ * percent from one batched query rather than one round trip per course.
+ *
+ * modulesTable is LEFT JOINed (not INNER) so a subscribed course with zero
+ * modules still appears in the result, at 0% — see ManyCourseProgressRow's
+ * doc comment for why that placeholder row exists.
+ */
+export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
+  const rows = await db
+    .select({
+      courseId: coursesTable.id,
+      name: coursesTable.name,
+      slug: coursesTable.slug,
+      imageUrlAvif: coursesTable.imageUrlAvif,
+      imageUrlWebp: coursesTable.imageUrlWebp,
+      moduleId: modulesTable.id,
+      lessonId: lessonsTable.id,
+      videoId: lessonsTable.videoId,
+      watchedHits: countDistinct(videoProgressTable.progress),
+    })
+    .from(courseSubscriptionsTable)
+    .innerJoin(
+      coursesTable,
+      eq(coursesTable.id, courseSubscriptionsTable.courseId),
+    )
+    .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
+    .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
+    .leftJoin(
+      videoProgressTable,
+      and(
+        eq(videoProgressTable.userId, userId),
+        // lessons.video_id is a uuid; videos_progress.video_id is the same
+        // value stored as text — cast to join. Matches getCourseProgress.
+        eq(videoProgressTable.videoId, sql`${lessonsTable.videoId}::text`),
+        inArray(videoProgressTable.progress, watchedMilestones),
+      ),
+    )
+    .where(eq(courseSubscriptionsTable.userId, userId))
+    .groupBy(
+      coursesTable.id,
+      coursesTable.name,
+      coursesTable.slug,
+      coursesTable.imageUrlAvif,
+      coursesTable.imageUrlWebp,
+      modulesTable.id,
+      modulesTable.rank,
+      lessonsTable.id,
+      lessonsTable.rank,
+      lessonsTable.videoId,
+    )
+    // courseId as an explicit tiebreak keeps each course's rows contiguous
+    // in the result, which the first-seen-wins loop below relies on.
+    .orderBy(
+      asc(coursesTable.name),
+      asc(coursesTable.id),
+      asc(modulesTable.rank),
+      asc(lessonsTable.rank),
+    );
+
+  const percents = aggregatePercentByCourse(
+    rows.map((r) => ({
+      courseId: r.courseId,
+      moduleId: r.moduleId,
+      lessonId: r.lessonId,
+      videoId: r.videoId,
+      watchedHits: Number(r.watchedHits),
+    })),
+  );
+
+  const courses = new Map<number, MyCourseSummary>();
+  for (const r of rows) {
+    if (courses.has(r.courseId)) continue;
+    courses.set(r.courseId, {
+      id: r.courseId,
+      name: r.name,
+      slug: r.slug,
+      imageUrlAvif: r.imageUrlAvif,
+      imageUrlWebp: r.imageUrlWebp,
+      percent: percents.get(r.courseId) ?? 0,
+    });
+  }
+  return [...courses.values()];
+}

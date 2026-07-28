@@ -2,18 +2,18 @@ import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { computeLessonHeaderState } from './compute-lesson-header-state';
 import { LessonHeader } from './lesson-header';
 
-const COURSE_SLUG = '3d-airmanship';
-
 type LessonHeaderWrapperProps = {
+  courseSlug: string;
   moduleSlug: string;
   lessonSlug: string;
 };
 
 export const LessonHeaderWrapper = ({
+  courseSlug,
   moduleSlug,
   lessonSlug,
 }: LessonHeaderWrapperProps) => {
-  const course = useCourseDetails(COURSE_SLUG);
+  const course = useCourseDetails(courseSlug);
   const courseData = course.data ?? undefined;
   const state = computeLessonHeaderState({
     course: {

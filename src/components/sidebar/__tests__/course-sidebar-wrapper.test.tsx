@@ -66,12 +66,12 @@ async function renderAt(path: string, details: DetailsResult) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <CourseSidebarWrapper />,
+    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
-    component: () => <CourseSidebarWrapper />,
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
+    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute, lessonRoute]),
@@ -117,7 +117,7 @@ describe('CourseSidebarWrapper', () => {
   });
 
   it('renders header + modules when ready and marks the active lesson from the URL', async () => {
-    await renderAt('/modules/intermediate/lessons/yaw', {
+    await renderAt('/course/3d-airmanship/modules/intermediate/lessons/yaw', {
       data: fakeCourse,
       isLoading: false,
       isError: false,

@@ -3,6 +3,7 @@ import { LessonLink } from './lesson-link';
 type LessonLike = { slug: string; name: string; videoId: string | null };
 
 type LessonListProps = {
+  courseSlug: string;
   moduleSlug: string;
   lessons: readonly LessonLike[];
   activeLessonSlug: string | null;
@@ -10,6 +11,7 @@ type LessonListProps = {
 };
 
 export const LessonList = ({
+  courseSlug,
   moduleSlug,
   lessons,
   activeLessonSlug,
@@ -19,6 +21,7 @@ export const LessonList = ({
     {lessons.map((lesson, index) => (
       <li key={lesson.slug}>
         <LessonLink
+          courseSlug={courseSlug}
           moduleSlug={moduleSlug}
           lesson={lesson}
           rank={index + 1}

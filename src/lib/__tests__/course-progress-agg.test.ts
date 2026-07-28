@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { watchedMilestones } from '#/lib/course-milestones';
 import {
   aggregateCourseProgress,
+  aggregatePercentByCourse,
   type LessonProgressRow,
+  type ManyCourseProgressRow,
 } from '#/lib/course-progress-agg';
-import { watchedMilestones } from '#/lib/course-milestones';
 
 const FULL = watchedMilestones.length; // 18 — all watched-milestones hit
 
@@ -16,9 +18,27 @@ describe('aggregateCourseProgress', () => {
     ];
     const { lessons } = aggregateCourseProgress('c', rows);
     expect(lessons).toEqual([
-      { lessonId: 10, moduleId: 1, videoId: 'v10', percent: 100, watched: true },
-      { lessonId: 11, moduleId: 1, videoId: 'v11', percent: 94, watched: false },
-      { lessonId: 12, moduleId: 1, videoId: null, percent: 0, watched: false },
+      {
+        lessonId: 10,
+        moduleId: 1,
+        videoId: 'v10',
+        percent: 100,
+        watched: true,
+      },
+      {
+        lessonId: 11,
+        moduleId: 1,
+        videoId: 'v11',
+        percent: 94,
+        watched: false,
+      },
+      {
+        lessonId: 12,
+        moduleId: 1,
+        videoId: null,
+        percent: 0,
+        watched: false,
+      },
     ]);
   });
 
@@ -96,5 +116,86 @@ describe('aggregateCourseProgress', () => {
       modules: [],
       lessons: [],
     });
+  });
+});
+
+describe('aggregatePercentByCourse', () => {
+  const FULL_ROW = { watchedHits: watchedMilestones.length };
+
+  it('computes each course independently, matching aggregateCourseProgress on the same rows', () => {
+    const rows: ManyCourseProgressRow[] = [
+      {
+        courseId: 1,
+        moduleId: 10,
+        lessonId: 100,
+        videoId: 'v100',
+        ...FULL_ROW,
+      },
+      {
+        courseId: 2,
+        moduleId: 20,
+        lessonId: 200,
+        videoId: 'v200',
+        watchedHits: 9,
+      },
+    ];
+    const percents = aggregatePercentByCourse(rows);
+    expect(percents.get(1)).toBe(100);
+    expect(percents.get(2)).toBe(50);
+  });
+
+  it('separates rows from different courses that happen to share module/lesson ids', () => {
+    // moduleId/lessonId are only unique within a course's own rows here —
+    // grouping must key on courseId, not accidentally merge across courses.
+    const rows: ManyCourseProgressRow[] = [
+      { courseId: 1, moduleId: 1, lessonId: 1, videoId: 'a', ...FULL_ROW },
+      { courseId: 2, moduleId: 1, lessonId: 1, videoId: 'b', watchedHits: 0 },
+    ];
+    const percents = aggregatePercentByCourse(rows);
+    expect(percents.get(1)).toBe(100);
+    expect(percents.get(2)).toBe(0);
+  });
+
+  it('registers a course with a null-moduleId placeholder row at 0%, not omitted', () => {
+    const rows: ManyCourseProgressRow[] = [
+      {
+        courseId: 3,
+        moduleId: null,
+        lessonId: null,
+        videoId: null,
+        watchedHits: 0,
+      },
+    ];
+    const percents = aggregatePercentByCourse(rows);
+    expect(percents.has(3)).toBe(true);
+    expect(percents.get(3)).toBe(0);
+  });
+
+  it('ignores a null-moduleId row for a course that also has real module rows', () => {
+    // Should not happen from the real query (a course either has modules or
+    // it doesn't), but the function must not let a stray null row drag down
+    // an otherwise-complete course.
+    const rows: ManyCourseProgressRow[] = [
+      {
+        courseId: 4,
+        moduleId: null,
+        lessonId: null,
+        videoId: null,
+        watchedHits: 0,
+      },
+      {
+        courseId: 4,
+        moduleId: 40,
+        lessonId: 400,
+        videoId: 'v400',
+        ...FULL_ROW,
+      },
+    ];
+    const percents = aggregatePercentByCourse(rows);
+    expect(percents.get(4)).toBe(100);
+  });
+
+  it('returns an empty map for no rows', () => {
+    expect(aggregatePercentByCourse([]).size).toBe(0);
   });
 });

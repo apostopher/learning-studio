@@ -1,21 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { AppShell } from '../../components/app-shell';
-import { LessonEmpty } from '../../components/lesson-main';
-import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
-import { appTitle } from '../../styles/theme.generated';
+import { MyCoursesPageContainer } from '../../components/courses/my-courses-page-container';
 
-export const Route = createFileRoute('/_authed/app')({ component: App });
-
-function App() {
-  return (
-    <AppShell
-      aside={<CourseSidebarWrapper />}
-      main={<LessonEmpty />}
-      footer={
-        <div className="flex items-center justify-between h-full ps-4 pe-4 text-secondary text-sm">
-          <span>© {appTitle}</span>
-        </div>
-      }
-    />
-  );
-}
+export const Route = createFileRoute('/_authed/app')({
+  component: MyCoursesPageContainer,
+});

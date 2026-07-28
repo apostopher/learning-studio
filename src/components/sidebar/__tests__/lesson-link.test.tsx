@@ -22,7 +22,7 @@ async function renderInRouter(ui: React.ReactNode, initialPath = '/') {
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
   const routeTree = rootRoute.addChildren([indexRoute, lessonRoute]);
@@ -47,6 +47,7 @@ describe('LessonLink', () => {
   it('renders a link to the lesson route', async () => {
     await renderInRouter(
       <LessonLink
+        courseSlug="3d-airmanship"
         moduleSlug="fundamentals"
         lesson={lesson}
         rank={1}
@@ -56,7 +57,7 @@ describe('LessonLink', () => {
     );
     const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.getAttribute('href')).toBe(
-      '/modules/fundamentals/lessons/pitch-and-roll',
+      '/course/3d-airmanship/modules/fundamentals/lessons/pitch-and-roll',
     );
     expect(link.hasAttribute('aria-current')).toBe(false);
     expect(link.className).not.toContain('sidebar-row-active');
@@ -65,6 +66,7 @@ describe('LessonLink', () => {
   it('marks the link as current and applies the active class when isActive is true', async () => {
     await renderInRouter(
       <LessonLink
+        courseSlug="3d-airmanship"
         moduleSlug="fundamentals"
         lesson={lesson}
         rank={1}
@@ -80,6 +82,7 @@ describe('LessonLink', () => {
   it('always applies the focus-ring class', async () => {
     await renderInRouter(
       <LessonLink
+        courseSlug="3d-airmanship"
         moduleSlug="fundamentals"
         lesson={lesson}
         rank={1}

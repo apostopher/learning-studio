@@ -30,6 +30,7 @@ async function renderInside(rank: number, activeLessonSlug: string | null) {
     component: () => (
       <Accordion.Root>
         <ModuleItem
+          courseSlug="3d-airmanship"
           module={module}
           rank={rank}
           isOpen={false}
@@ -42,7 +43,7 @@ async function renderInside(rank: number, activeLessonSlug: string | null) {
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
   const router = createRouter({

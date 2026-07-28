@@ -11,6 +11,7 @@ type ModuleLike = {
 };
 
 type ModuleAccordionProps = {
+  courseSlug: string;
   modules: readonly ModuleLike[];
   openModuleSlug: string | null;
   onOpenChange: (slug: string | null) => void;
@@ -20,6 +21,7 @@ type ModuleAccordionProps = {
 };
 
 export const ModuleAccordion = ({
+  courseSlug,
   modules,
   openModuleSlug,
   onOpenChange,
@@ -43,6 +45,7 @@ export const ModuleAccordion = ({
       {modules.map((module, index) => (
         <ModuleItem
           key={module.slug}
+          courseSlug={courseSlug}
           module={module}
           rank={index + 1}
           isOpen={openModuleSlug === module.slug}

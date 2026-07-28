@@ -36,6 +36,7 @@ async function renderIn(
     path: '/',
     component: () => (
       <ModuleAccordion
+        courseSlug="3d-airmanship"
         modules={modules}
         openModuleSlug={openModuleSlug}
         onOpenChange={onOpenChange}
@@ -47,7 +48,7 @@ async function renderIn(
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/modules/$moduleSlug/lessons/$lessonSlug',
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
   const router = createRouter({

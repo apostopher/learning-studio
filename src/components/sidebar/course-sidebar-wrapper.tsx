@@ -6,8 +6,6 @@ import { courseDetailsAtomFamily } from "#/hooks/data/use-course-details";
 import { openModuleSlugAtom } from "../../atoms/sidebar";
 import { CourseSidebar } from "./course-sidebar";
 
-const COURSE_SLUG = "3d-airmanship";
-
 type LessonLike = { slug: string; name: string; videoId: string | null };
 type ModuleLike = {
   id: number;
@@ -16,14 +14,18 @@ type ModuleLike = {
   lessons: readonly LessonLike[];
 };
 
-export const CourseSidebarWrapper = () => {
-  const detailsQuery = useAtomValue(courseDetailsAtomFamily(COURSE_SLUG));
-  const progressQuery = useCourseProgressSummary(COURSE_SLUG);
+type CourseSidebarWrapperProps = {
+  courseSlug: string;
+};
 
+export const CourseSidebarWrapper = ({
+  courseSlug,
+}: CourseSidebarWrapperProps) => {
   const params = useParams({ strict: false }) as {
-    moduleSlug?: string;
     lessonSlug?: string;
   };
+  const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
+  const progressQuery = useCourseProgressSummary(courseSlug);
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
 
   // Server-aggregated progress → the videoId-keyed / moduleId-keyed maps the
@@ -61,6 +63,7 @@ export const CourseSidebarWrapper = () => {
   if (derived.status === "loading" || derived.status === "error") {
     return (
       <CourseSidebar
+        courseSlug={courseSlug}
         status={derived.status}
         openModuleSlug={openModuleSlug}
         onOpenChange={setOpenModuleSlug}
@@ -71,6 +74,7 @@ export const CourseSidebarWrapper = () => {
 
   return (
     <CourseSidebar
+      courseSlug={courseSlug}
       status="ready"
       title={derived.title}
       moduleCount={derived.moduleCount}
