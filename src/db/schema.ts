@@ -31,6 +31,7 @@ import {
   PersonaSchema,
   OtherVideoIdsSchema,
   OnboardingQuestionsSchema,
+  OnboardingAnswersSchema,
 } from "@/types";
 
 export * from "./auth-schema";
@@ -58,6 +59,7 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   subscriptions: many(courseSubscriptionsTable),
   docs: many(docs),
   fileAssignments: many(blobFileAssignmentsTable),
+  onboarding: many(courseOnboardingTable),
 }));
 
 export const modulesTable = pgTable("modules", {
@@ -569,6 +571,7 @@ export const userProfileTableRelations = relations(
     favKeyPoints: many(favKeyPointsTable),
     userRoles: many(userProfileRolesTable),
     userOrganizations: many(userOrgTable),
+    courseOnboarding: many(courseOnboardingTable),
   }),
 );
 
@@ -742,6 +745,80 @@ export const courseSubscriptionsTableRelations = relations(
     }),
     course: one(coursesTable, {
       fields: [courseSubscriptionsTable.courseId],
+      references: [coursesTable.id],
+    }),
+  }),
+);
+
+export const courseOnboardingTable = pgTable(
+  "course_onboarding",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    // questionId -> answer text. Defaults to {} rather than null so "not
+    // answered yet" is an empty map, not a null check in every consumer.
+    answers: jsonb("answers")
+      .$type<z.infer<typeof OnboardingAnswersSchema>>()
+      .notNull()
+      .default({}),
+    // The question set this row was last reconciled against. Null until the
+    // first answer is written. Flags stale responses in admin views; it does
+    // NOT decide re-prompting — pendingQuestions() does.
+    questionSetHash: varchar("question_set_hash", { length: 64 }),
+    // Null means in-progress and resumable.
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      mode: "date",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One record per user per course. This is what makes the incremental-save
+    // upsert safe against double-submit, concurrent tabs, and retried requests.
+    uniqueIndex("course_onboarding_user_course_idx").on(
+      table.userId,
+      table.courseId,
+    ),
+    // The unique index is user-first, so it will not serve the admin
+    // "all responses for this course" query.
+    index("course_onboarding_course_id_idx").on(table.courseId),
+  ],
+);
+
+export const courseOnboardingInsertSchema = createInsertSchema(
+  courseOnboardingTable,
+  {
+    answers: OnboardingAnswersSchema,
+  },
+);
+export type CourseOnboardingInsert = z.infer<
+  typeof courseOnboardingInsertSchema
+>;
+
+export const courseOnboardingSelectSchema = createSelectSchema(
+  courseOnboardingTable,
+  {
+    answers: OnboardingAnswersSchema,
+  },
+);
+export type CourseOnboardingSelect = z.infer<
+  typeof courseOnboardingSelectSchema
+>;
+
+export const courseOnboardingTableRelations = relations(
+  courseOnboardingTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [courseOnboardingTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    course: one(coursesTable, {
+      fields: [courseOnboardingTable.courseId],
       references: [coursesTable.id],
     }),
   }),
