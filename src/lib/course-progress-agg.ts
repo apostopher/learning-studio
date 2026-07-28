@@ -110,3 +110,53 @@ export function aggregateCourseProgress(
 
   return { slug, percent, watchedLessons, totalLessons, modules, lessons };
 }
+
+/**
+ * One flat row tagged with which course it belongs to — the input shape for
+ * a query that spans multiple courses at once (see getMyCourses). `moduleId`
+ * is nullable here, unlike LessonProgressRow: a LEFT JOIN on modules yields
+ * exactly one placeholder row (moduleId: null) for a subscribed course that
+ * has zero modules, so that course still appears in the result rather than
+ * silently vanishing from a multi-course query.
+ */
+export type ManyCourseProgressRow = {
+  courseId: number;
+  moduleId: number | null;
+  lessonId: number | null;
+  videoId: string | null;
+  watchedHits: number;
+};
+
+/**
+ * Percent complete per course from a flat, course-tagged row set — the
+ * multi-course counterpart to aggregateCourseProgress, which it reuses
+ * per-group so the two stay in agreement on what "percent" means.
+ *
+ * A course is registered in the returned map as soon as any row for it is
+ * seen, even a moduleId: null placeholder — that is what keeps a
+ * zero-module course in the list at 0% instead of being omitted.
+ */
+export function aggregatePercentByCourse(
+  rows: ManyCourseProgressRow[],
+): Map<number, number> {
+  const byCourse = new Map<number, LessonProgressRow[]>();
+
+  for (const row of rows) {
+    if (!byCourse.has(row.courseId)) byCourse.set(row.courseId, []);
+    if (row.moduleId === null) continue;
+    byCourse.get(row.courseId)?.push({
+      moduleId: row.moduleId,
+      lessonId: row.lessonId,
+      videoId: row.videoId,
+      watchedHits: row.watchedHits,
+    });
+  }
+
+  const percents = new Map<number, number>();
+  for (const [courseId, courseRows] of byCourse) {
+    // The slug argument only affects aggregateCourseProgress's own `slug`
+    // output field, which this function discards — courseId is the key here.
+    percents.set(courseId, aggregateCourseProgress('', courseRows).percent);
+  }
+  return percents;
+}
