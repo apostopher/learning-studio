@@ -280,13 +280,22 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
 }
 
 /**
- * Resolve a course slug to its id. Returns null for an unknown slug so
- * callers can answer 404 rather than throwing.
+ * Resolve a course slug to the identity onboarding needs: its id, and the
+ * name every onboarding prompt is written around. Returns null for an unknown
+ * slug so callers can answer 404 rather than throwing.
+ *
+ * Renamed from `getCourseIdBySlug` (which had no call sites yet) rather than
+ * given a sibling query: the onboarding server glue needs both fields on
+ * every request, and two round trips for one row read — or a function called
+ * `…IdBySlug` that also returns a name — would both be worse than one honest
+ * name. `slug` is uniquely indexed, so destructuring one row is safe.
  */
-export async function getCourseIdBySlug(slug: string): Promise<number | null> {
+export async function getCourseIdentityBySlug(
+  slug: string,
+): Promise<{ id: number; name: string } | null> {
   const [row] = await db
-    .select({ id: coursesTable.id })
+    .select({ id: coursesTable.id, name: coursesTable.name })
     .from(coursesTable)
     .where(eq(coursesTable.slug, slug));
-  return row?.id ?? null;
+  return row ?? null;
 }

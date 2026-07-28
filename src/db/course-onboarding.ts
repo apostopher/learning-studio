@@ -234,6 +234,14 @@ export const declineConsent = async ({
  * questionSetHash, questionSource, consentDeclinedAt, and
  * onboardingCompletedAt are left untouched: they describe the session
  * itself, not content the user shared, so withdrawal doesn't erase them.
+ *
+ * machineSnapshot IS cleared, and that is not housekeeping: the persisted
+ * snapshot embeds the machine's whole context, including `answers` and up to
+ * TRANSCRIPT_TURN_LIMIT turns of `transcript` — i.e. copies of the exact
+ * things the two statements above are deleting. Leaving it would make
+ * withdrawal cosmetic, and would let the next request restore a machine
+ * holding the transcript this call just removed. machineVersion goes with it
+ * so no version/snapshot mismatch is left behind.
  */
 export const deleteOnboarding = async ({
   onboardingId,
@@ -249,6 +257,8 @@ export const deleteOnboarding = async ({
       .update(courseOnboardingTable)
       .set({
         answers: {},
+        machineSnapshot: null,
+        machineVersion: null,
         deletedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
@@ -260,6 +270,13 @@ export const deleteOnboarding = async ({
  * Persist the machine's settled state after a turn. `updatedAt` is set
  * explicitly — no table in this schema uses $onUpdate, and a stale
  * updatedAt would break the concurrency guard the routes rely on.
+ *
+ * Returns the `updatedAt` it just wrote (null if the row no longer exists).
+ * The turn response carries that value back to the client as the token for
+ * its next `expectedUpdatedAt`, so it has to be the post-write timestamp:
+ * echoing the value read before this UPDATE would make every follow-up reply
+ * look stale and 409 forever. `.returning()` keeps it in this one round trip
+ * rather than a second SELECT.
  */
 export const saveMachineSnapshot = async ({
   onboardingId,
@@ -269,13 +286,44 @@ export const saveMachineSnapshot = async ({
   onboardingId: number;
   snapshot: Record<string, unknown>;
   version: string;
-}): Promise<void> => {
-  await db
+}): Promise<Date | null> => {
+  const [updated] = await db
     .update(courseOnboardingTable)
     .set({
       machineSnapshot: snapshot,
       machineVersion: version,
       updatedAt: sql`now()`,
     })
-    .where(eq(courseOnboardingTable.id, onboardingId));
+    .where(eq(courseOnboardingTable.id, onboardingId))
+    .returning({ updatedAt: courseOnboardingTable.updatedAt });
+
+  return updated?.updatedAt ?? null;
+};
+
+/**
+ * Drop the persisted snapshot without touching anything else, returning the
+ * `updatedAt` it wrote (null if the row is gone).
+ *
+ * Needed for the turn that ends in `deleted`: the machine's own
+ * `deleteOnboarding` actor has already tombstoned the row, so writing that
+ * turn's snapshot would re-persist the transcript and answers the tombstone
+ * just cleared — see deleteOnboarding above. Clearing is idempotent, so it is
+ * safe to run after that actor has already nulled these columns.
+ */
+export const clearMachineSnapshot = async ({
+  onboardingId,
+}: {
+  onboardingId: number;
+}): Promise<Date | null> => {
+  const [updated] = await db
+    .update(courseOnboardingTable)
+    .set({
+      machineSnapshot: null,
+      machineVersion: null,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(courseOnboardingTable.id, onboardingId))
+    .returning({ updatedAt: courseOnboardingTable.updatedAt });
+
+  return updated?.updatedAt ?? null;
 };

@@ -37,6 +37,9 @@ import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/les
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
 import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
+import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/course/onboarding/start'
+import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
+import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
 import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
 import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
 import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
@@ -196,6 +199,24 @@ const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
   path: '/api/lesson/ai-test/evaluate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCourseOnboardingStartRoute =
+  ApiCourseOnboardingStartRouteImport.update({
+    id: '/api/course/onboarding/start',
+    path: '/api/course/onboarding/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseOnboardingReplyRoute =
+  ApiCourseOnboardingReplyRouteImport.update({
+    id: '/api/course/onboarding/reply',
+    path: '/api/course/onboarding/reply',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseOnboardingDeleteRoute =
+  ApiCourseOnboardingDeleteRouteImport.update({
+    id: '/api/course/onboarding/delete',
+    path: '/api/course/onboarding/delete',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
   id: '/api/admin/modules/$moduleId',
   path: '/api/admin/modules/$moduleId',
@@ -312,6 +333,9 @@ export interface FileRoutesByFullPath {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
+  '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
+  '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -354,6 +378,9 @@ export interface FileRoutesByTo {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
+  '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
+  '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -400,6 +427,9 @@ export interface FileRoutesById {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
+  '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
+  '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
@@ -446,6 +476,9 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/onboarding/delete'
+    | '/api/course/onboarding/reply'
+    | '/api/course/onboarding/start'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -488,6 +521,9 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/onboarding/delete'
+    | '/api/course/onboarding/reply'
+    | '/api/course/onboarding/start'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -533,6 +569,9 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/onboarding/delete'
+    | '/api/course/onboarding/reply'
+    | '/api/course/onboarding/start'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
@@ -571,6 +610,9 @@ export interface RootRouteChildren {
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
   ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRouteWithChildren
   ApiAdminModulesModuleIdRoute: typeof ApiAdminModulesModuleIdRouteWithChildren
+  ApiCourseOnboardingDeleteRoute: typeof ApiCourseOnboardingDeleteRoute
+  ApiCourseOnboardingReplyRoute: typeof ApiCourseOnboardingReplyRoute
+  ApiCourseOnboardingStartRoute: typeof ApiCourseOnboardingStartRoute
   ApiLessonAiTestEvaluateRoute: typeof ApiLessonAiTestEvaluateRoute
   ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
   ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
@@ -773,6 +815,27 @@ declare module '@tanstack/react-router' {
       path: '/api/lesson/ai-test/evaluate'
       fullPath: '/api/lesson/ai-test/evaluate'
       preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/start': {
+      id: '/api/course/onboarding/start'
+      path: '/api/course/onboarding/start'
+      fullPath: '/api/course/onboarding/start'
+      preLoaderRoute: typeof ApiCourseOnboardingStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/reply': {
+      id: '/api/course/onboarding/reply'
+      path: '/api/course/onboarding/reply'
+      fullPath: '/api/course/onboarding/reply'
+      preLoaderRoute: typeof ApiCourseOnboardingReplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/delete': {
+      id: '/api/course/onboarding/delete'
+      path: '/api/course/onboarding/delete'
+      fullPath: '/api/course/onboarding/delete'
+      preLoaderRoute: typeof ApiCourseOnboardingDeleteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/modules/$moduleId': {
@@ -1055,6 +1118,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminLessonMaterialParseRoute: ApiAdminLessonMaterialParseRoute,
   ApiAdminLessonsLessonIdRoute: ApiAdminLessonsLessonIdRouteWithChildren,
   ApiAdminModulesModuleIdRoute: ApiAdminModulesModuleIdRouteWithChildren,
+  ApiCourseOnboardingDeleteRoute: ApiCourseOnboardingDeleteRoute,
+  ApiCourseOnboardingReplyRoute: ApiCourseOnboardingReplyRoute,
+  ApiCourseOnboardingStartRoute: ApiCourseOnboardingStartRoute,
   ApiLessonAiTestEvaluateRoute: ApiLessonAiTestEvaluateRoute,
   ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
   ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
