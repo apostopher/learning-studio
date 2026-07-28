@@ -90,6 +90,51 @@ const restoreActor = (
   return actor;
 };
 
+const sameTurn = (a: OnboardingMessage, b: OnboardingMessage): boolean =>
+  a.role === b.role && a.text === b.text;
+
+/**
+ * The turns this call appended, found by diffing content rather than length.
+ *
+ * A length-based `transcript.slice(prior.length)` is wrong in two ways once a
+ * session gets long. The machine caps `context.transcript` at
+ * `TRANSCRIPT_TURN_LIMIT` (see `appendTranscript` in onboarding-machine.ts) —
+ * it trims when seeding from `initialMessages` and again on every append — so:
+ *
+ * 1. `input.initialMessages` is the RAW, untrimmed row set from the database
+ *    and can be far longer than the transcript the machine actually retains,
+ *    and on the restore path the transcript comes from the persisted snapshot
+ *    and has nothing to do with `initialMessages` at all.
+ * 2. Once the transcript sits AT the cap its length stops growing, so even the
+ *    correctly-trimmed prior length (`min(raw, TRANSCRIPT_TURN_LIMIT)`) still
+ *    indexes past the end.
+ *
+ * Either way `.slice()` silently returns `[]`, and a trainee resuming a long
+ * interview would be told the machine produced no new turns when it did.
+ *
+ * Trimming only ever drops from the front, so the settled transcript is
+ * `[...prior, ...appended]` with some prefix removed: the longest prefix of
+ * `settled` that equals a suffix of `prior` is what was carried over, and
+ * everything after it is new. Bounded by TRANSCRIPT_TURN_LIMIT, so the
+ * quadratic worst case is a few hundred string compares.
+ */
+const newTurnsSince = (
+  prior: OnboardingMessage[],
+  settled: OnboardingMessage[],
+): OnboardingMessage[] => {
+  for (
+    let carried = Math.min(prior.length, settled.length);
+    carried > 0;
+    carried--
+  ) {
+    const carriedTurns = prior.slice(prior.length - carried);
+    if (carriedTurns.every((turn, i) => sameTurn(turn, settled[i]))) {
+      return settled.slice(carried);
+    }
+  }
+  return settled;
+};
+
 /**
  * Runs exactly one onboarding turn and returns the machine's settled state.
  *
@@ -121,6 +166,13 @@ export const runOnboardingTurn = async ({
 
   const actor = restored ?? createActor(machine, { input });
 
+  // The transcript this turn starts from, read before `start()` so it reflects
+  // what the machine actually holds: the snapshot's own transcript on the
+  // restore path, and `initialMessages` already trimmed to
+  // TRANSCRIPT_TURN_LIMIT on the fresh path. XState computes the initial
+  // snapshot in `createActor`, so this is populated before the actor runs.
+  const priorTranscript = actor.getSnapshot().context.transcript;
+
   actor.start();
 
   if (event) {
@@ -138,7 +190,7 @@ export const runOnboardingTurn = async ({
   // and children, and the persisted snapshot must describe the settled turn.
   const persisted = actor.getPersistedSnapshot();
   const transcript = settled.context.transcript;
-  const newTurns = transcript.slice(input.initialMessages.length);
+  const newTurns = newTurnsSince(priorTranscript, transcript);
 
   actor.stop();
 

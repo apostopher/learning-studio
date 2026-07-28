@@ -6,6 +6,7 @@ import {
   ONBOARDING_MACHINE_VERSION,
   type OnboardingContext,
   type OnboardingInput,
+  TRANSCRIPT_TURN_LIMIT,
 } from '#/machines/onboarding-machine';
 import type {
   OnboardingConsentEvaluation,
@@ -128,6 +129,66 @@ describe('runOnboardingTurn — starting', () => {
     });
     expect(result.transcript.length).toBeGreaterThan(priorTurns.length);
     expect(result.newTurns).not.toContainEqual(priorTurns[0]);
+  });
+});
+
+describe('runOnboardingTurn — newTurns past the transcript cap', () => {
+  // Distinct texts so the content diff has no ambiguous match to find.
+  const longHistory = Array.from(
+    { length: TRANSCRIPT_TURN_LIMIT + 5 },
+    (_, i) => ({
+      role: (i % 2 === 0 ? 'assistant' : 'user') as 'assistant' | 'user',
+      text: `seeded turn ${i}`,
+    }),
+  );
+
+  it('reports the produced turn when initialMessages exceeds the cap', async () => {
+    // The machine trims its transcript to the last TRANSCRIPT_TURN_LIMIT turns
+    // both when seeding and when appending, so the RAW initialMessages length
+    // is past the end of the transcript the machine actually holds. Slicing by
+    // it returned [] — the trainee would have seen no reply at all.
+    const result = await runOnboardingTurn({
+      snapshot: null,
+      snapshotVersion: null,
+      input: baseInput({ initialMessages: longHistory }),
+      implementations: stubs(),
+      event: null,
+    });
+
+    expect(result.transcript).toHaveLength(TRANSCRIPT_TURN_LIMIT);
+    expect(result.newTurns).toEqual([
+      { role: 'assistant', text: 'Welcome — may I ask a few questions?' },
+    ]);
+  });
+
+  it('reports only this call’s turns when resuming a capped session', async () => {
+    const start = await runOnboardingTurn({
+      snapshot: null,
+      snapshotVersion: null,
+      input: baseInput({ initialMessages: longHistory }),
+      implementations: stubs(),
+      event: null,
+    });
+
+    const consent = await runOnboardingTurn({
+      snapshot: start.snapshot,
+      snapshotVersion: ONBOARDING_MACHINE_VERSION,
+      input: baseInput({ initialMessages: longHistory }),
+      implementations: stubs(),
+      event: { type: 'REPLY', text: 'yes please' },
+    });
+
+    expect(consent.status).toBe('awaiting_answer');
+    expect(consent.restoredFromSnapshot).toBe(true);
+    // Exactly the user turn this call carried plus the question it produced —
+    // not the whole trimmed transcript, and not [].
+    expect(consent.newTurns).toEqual([
+      { role: 'user', text: 'yes please' },
+      { role: 'assistant', text: 'So, tell me about you?' },
+    ]);
+    // Still at the cap, so length alone could not have told us that.
+    expect(consent.transcript).toHaveLength(TRANSCRIPT_TURN_LIMIT);
+    expect(consent.newTurns).not.toContainEqual(longHistory[0]);
   });
 });
 
