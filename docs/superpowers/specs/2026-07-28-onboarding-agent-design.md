@@ -103,19 +103,49 @@ questions — they are machine states, covered below.
 
 Both additive. Applied with `pnpm db:push` (this repo's convention).
 
-### `course_onboarding` — one new column
+### `course_onboarding` — two new columns
 
 ```ts
 // 'admin' | 'default' — the question source frozen at row creation, so an
 // admin adding questions later cannot re-interview users who answered the
 // built-in defaults.
 questionSource: varchar("question_source", { length: 16 }),
+
+// Set when the user declines the consent framing. The row persists with an
+// empty answers map so onboarding is never auto-offered again — declining is
+// respected, not re-pitched on the next visit.
+consentDeclinedAt: timestamp("consent_declined_at", { mode: "date" }),
 ```
 
-Nullable, because rows created by step 1 predate it. A null is read as
-`'admin'` when the course has questions and `'default'` when it does not —
-i.e. the pre-freeze behaviour, which is correct for rows that have no answers
-yet.
+`questionSource` is nullable because rows created by step 1 predate it. A null
+is read as `'admin'` when the course has questions and `'default'` when it does
+not — i.e. the pre-freeze behaviour, which is correct for rows that have no
+answers yet.
+
+`consentDeclinedAt` is nullable and null for every existing row.
+
+### Whether to offer onboarding
+
+A new pure helper in `src/lib/course-onboarding.ts`, beside step 1's:
+
+```ts
+/**
+ * Whether onboarding should be offered to this user for this course.
+ *
+ * A declined consent is a decision, not a pending task: it suppresses the
+ * offer permanently. The user can still start onboarding themselves — this
+ * governs only whether we bring it up.
+ */
+export const shouldOfferOnboarding = (
+  row: { onboardingCompletedAt: Date | null; consentDeclinedAt: Date | null } | null,
+): boolean =>
+  row == null ||
+  (row.onboardingCompletedAt == null && row.consentDeclinedAt == null);
+```
+
+Note this is deliberately **not** folded into `isOnboardingComplete`. A user who
+declined consent is not complete — they opted out. Conflating the two would
+make an opt-out indistinguishable from a finished interview in any admin view.
 
 ### `course_onboarding_messages` — new table
 
@@ -167,24 +197,58 @@ server supplies real ones.
 
 ```
 loading
-  └→ greeting            deliver warm open + consent/control framing
-       └→ asking          emit the question for currentQuestionId
-            └→ awaitingAnswer
-                 └→ evaluating
-                      ├→ asking          (needs_follow_up, under cap)
-                      ├→ persisting      (answered | declined)
-                      ├→ paused
-                      └→ deleted
-       persisting
-         ├→ asking        (pending questions remain)
-         └→ summarising   (nothing pending)
-              └→ confirming
-                   ├→ summarising  (user corrects)
-                   └→ complete
+  └→ greeting              warm open + consent/control framing
+       └→ awaitingConsent
+            └→ evaluatingConsent
+                 ├→ greeting          (needs_clarification, under cap)
+                 ├→ asking            (consented)
+                 └→ signingOff        (declined)
+                      └→ consentDeclined      terminal
+
+  asking                   emit the question for currentQuestionId
+    └→ awaitingAnswer
+         └→ evaluating
+              ├→ asking               (needs_follow_up, under cap)
+              ├→ persisting           (answered | declined)
+              ├→ paused
+              └→ deleted
+
+  persisting
+    ├→ asking              (pending questions remain)
+    └→ summarising         (nothing pending)
+         └→ confirming
+              ├→ summarising          (user corrects)
+              └→ complete
 ```
 
 `paused` and `deleted` are reachable from any waiting state — the doc promises
 those controls are available *at any point*.
+
+### The consent gate
+
+No question is asked until the user agrees to proceed. `signingOff` generates a
+warm, brief acknowledgement — no re-pitching, no asking why — appends it as the
+final assistant turn, stamps `consentDeclinedAt`, and ends.
+
+`evaluatingConsent` is a separate actor from `evaluateReply`, not an extra
+status on it. The judgment is materially different — "did they agree to
+proceed" versus "does this reply answer the question" — and merging them would
+mean one prompt doing two unrelated jobs.
+
+```ts
+export const OnboardingConsentEvaluationSchema = z.object({
+  status: z.enum(['consented', 'declined', 'needs_clarification']),
+  reply: z.string().max(2000).nullable(),
+});
+```
+
+`needs_clarification` covers the user who responds with a question rather than
+a yes or no ("what do you do with this?"). It loops back to `greeting` to
+answer them, capped at 2 clarifications.
+
+**On reaching the cap, or on an ambiguous reply, the machine treats it as
+`declined`.** Consent must be affirmative — proceeding to collect background,
+schedule, and career information on an unclear signal is the wrong default.
 
 ### Context
 
@@ -198,6 +262,7 @@ those controls are available *at any point*.
   answers: OnboardingAnswers;
   currentQuestionId: string | null;
   followUpCount: number;
+  consentClarificationCount: number;
   turnCount: number;
   messages: OnboardingMessage[];
 }
@@ -211,9 +276,12 @@ the single source of truth for what is outstanding.
 
 | Actor | AI SDK call | Returns |
 |---|---|---|
+| `greet` | `generateText` | the warm open + consent/control framing |
+| `evaluateConsent` | `generateObject` + zod | `OnboardingConsentEvaluationSchema` |
 | `askQuestion` | `generateText` | the question, phrased naturally given history |
 | `evaluateReply` | `generateObject` + zod | the structured decision below |
 | `summarise` | `generateText` | the closing reflect-back |
+| `signOff` | `generateText` | the polite acknowledgement on declined consent |
 
 ```ts
 export const OnboardingReplyEvaluationSchema = z.object({
@@ -266,6 +334,8 @@ unenforceable.
   answer into the map and restamps the hash.
 - `appendMessage(onboardingId, role, parts, order)` — one turn.
 - `completeOnboarding(onboardingId)` — stamps `onboardingCompletedAt`.
+- `declineConsent(onboardingId)` — stamps `consentDeclinedAt`. The row and its
+  greeting/sign-off turns are kept; the answers map stays empty.
 - `deleteOnboarding(onboardingId)` — deletes the row; the transcript goes with
   it by cascade.
 
@@ -293,9 +363,12 @@ Models come from `src/ai/ai-provider.ts` (gateway-routed string ids). Use
 | `src/lib/onboarding-default-questions.ts` | `DEFAULT_ONBOARDING_QUESTIONS` with `core:*` ids |
 | `src/lib/onboarding-session.ts` | pure resolution of the effective question set + source |
 | `src/ai/prompts/onboarding.ts` | persona/system prompt built from `docs/onboarding.md` |
+| `src/ai/onboarding/greet.ts` | `generateText` actor — open + consent framing |
+| `src/ai/onboarding/evaluate-consent.ts` | `generateObject` actor |
 | `src/ai/onboarding/ask-question.ts` | `generateText` actor |
 | `src/ai/onboarding/evaluate-reply.ts` | `generateObject` actor |
 | `src/ai/onboarding/summarise.ts` | `generateText` actor |
+| `src/ai/onboarding/sign-off.ts` | `generateText` actor — declined-consent close |
 | `src/db/course-onboarding.ts` | the persistence functions above |
 | `src/db/schema.ts` | the column + table above |
 
@@ -304,6 +377,15 @@ Models come from `src/ai/ai-provider.ts` (gateway-routed string ids). Use
 - Machine transition tests with stubbed actors: the happy path, follow-up
   under and over the cap, `declined`, `wants_pause`, `wants_delete`, correction
   from `confirming`, and completion.
+- Consent gate tests: `consented` proceeds to `asking`; `declined` reaches
+  `consentDeclined` via `signingOff` and stamps `consentDeclinedAt`;
+  `needs_clarification` loops to `greeting` under the cap and is treated as
+  `declined` at the cap. Assert that **no question is ever asked and `answers`
+  stays empty** on every declined path — that is the property the gate exists
+  to guarantee.
+- `shouldOfferOnboarding`: true for a null row and for an untouched row; false
+  once `onboardingCompletedAt` is set; false once `consentDeclinedAt` is set;
+  false when both are set.
 - `DEFAULT_ONBOARDING_QUESTIONS` passes `OnboardingQuestionsSchema`; ids are
   `core:`-namespaced and unique.
 - Effective-set resolution: admin questions win when present; defaults when the
