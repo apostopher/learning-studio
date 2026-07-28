@@ -158,10 +158,10 @@ export const CourseVideoIntegrationsContainer = ({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="font-medium text-gray-12 text-sm">
+      <span className="font-medium text-primary text-sm">
         Video integrations
       </span>
-      <p className="text-gray-10 text-xs">
+      <p className="text-tertiary text-xs">
         Connect provider credentials so lesson videos can be resolved and
         played. Keys are stored encrypted and never shown again — only an
         identifying fragment.
@@ -193,20 +193,20 @@ export const CourseVideoIntegrationsContainer = ({
                 >
                   <ChevronDown
                     className={cn(
-                      'h-4 w-4 shrink-0 text-gray-10 transition-transform duration-150',
+                      'h-4 w-4 shrink-0 text-tertiary transition-transform duration-150',
                       isExpanded && 'rotate-180',
                     )}
                     aria-hidden="true"
                   />
                   <div className="flex flex-1 flex-col gap-0.5">
-                    <span className="font-medium text-gray-12 text-sm">
+                    <span className="font-medium text-primary text-sm">
                       {meta.label}
                     </span>
                     {credentials.isLoading ? (
                       // Query still in flight with no cached data yet — avoid
                       // flashing a misleading "Not connected" for providers
                       // that may actually be configured.
-                      <span className="inline-flex items-center gap-1.5 text-gray-10 text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-tertiary text-xs">
                         <Loader2
                           className="h-3 w-3 animate-spin"
                           aria-hidden="true"
@@ -214,21 +214,21 @@ export const CourseVideoIntegrationsContainer = ({
                         Loading…
                       </span>
                     ) : isConfigured ? (
-                      <span className="inline-flex items-center gap-1.5 text-green-11 text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-success-text text-xs">
                         <CheckCircle2
                           className="h-3.5 w-3.5"
                           aria-hidden="true"
                         />
                         {formatDisplay(summary.display)}
                         {summary.lastValidatedAt && (
-                          <span className="text-gray-10">
+                          <span className="text-tertiary">
                             · verified{' '}
                             {dateTimeFormatter.format(summary.lastValidatedAt)}
                           </span>
                         )}
                       </span>
                     ) : (
-                      <span className="text-gray-10 text-xs">
+                      <span className="text-tertiary text-xs">
                         Not connected
                       </span>
                     )}
@@ -248,8 +248,8 @@ export const CourseVideoIntegrationsContainer = ({
                     }
                     disabled={isDeleting}
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-red-11 text-xs',
-                      'transition-colors hover:bg-red-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-9',
+                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-error-text text-xs',
+                      'transition-colors hover:bg-error-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9',
                       'disabled:cursor-not-allowed disabled:opacity-60',
                     )}
                   >
@@ -296,7 +296,7 @@ export const CourseVideoIntegrationsContainer = ({
       </div>
 
       {credentials.isError && (
-        <p role="alert" className="text-red-11 text-sm">
+        <p role="alert" className="text-error-text text-sm">
           Couldn't load video integrations.
         </p>
       )}

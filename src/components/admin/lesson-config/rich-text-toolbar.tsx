@@ -32,7 +32,7 @@ const ToolbarButton = ({
     aria-pressed={active}
     onMouseDown={(e) => e.preventDefault()}
     onClick={onClick}
-    className="rounded p-1.5 text-gray-11 transition-colors hover:bg-gray-4 hover:text-gray-12 aria-pressed:bg-gray-4 aria-pressed:text-gray-12"
+    className="rounded p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary aria-pressed:bg-gray-4 aria-pressed:text-primary"
   >
     <Icon className="h-4 w-4" aria-hidden />
   </button>

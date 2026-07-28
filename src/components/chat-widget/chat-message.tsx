@@ -29,11 +29,11 @@ const markdownComponents: Components = {
   ),
   li: ({ children }) => <li className="mb-1 last:mb-0">{children}</li>,
   strong: ({ children }) => (
-    <strong className="font-semibold text-gray-12">{children}</strong>
+    <strong className="font-semibold text-primary">{children}</strong>
   ),
   em: ({ children }) => <em className="italic">{children}</em>,
   blockquote: ({ children }) => (
-    <blockquote className="mb-3 border-gray-7 border-s-2 ps-3 text-gray-11 italic last:mb-0">
+    <blockquote className="mb-3 border-gray-7 border-s-2 ps-3 text-secondary italic last:mb-0">
       {children}
     </blockquote>
   ),
@@ -45,7 +45,7 @@ const markdownComponents: Components = {
       </code>
     ) : (
       <code
-        className="rounded bg-gray-4 px-1 py-0.5 font-mono text-[0.85em] text-gray-12"
+        className="rounded bg-gray-4 px-1 py-0.5 font-mono text-[0.85em] text-primary"
         {...props}
       >
         {children}
@@ -58,7 +58,7 @@ const markdownComponents: Components = {
   ),
   a: ({ children, ...props }) => (
     <a
-      className="text-accent-11 underline decoration-1 underline-offset-2 transition-colors hover:text-accent-12"
+      className="rounded-sm text-accent-text underline decoration-1 underline-offset-2 transition-colors hover:bg-tint-hover"
       target="_blank"
       rel="noopener noreferrer"
       {...props}
@@ -72,7 +72,7 @@ const markdownComponents: Components = {
     </div>
   ),
   th: ({ children }) => (
-    <th className="border-gray-6 border-b px-2 py-1 text-start font-semibold text-gray-12">
+    <th className="border-gray-6 border-b px-2 py-1 text-start font-semibold text-primary">
       {children}
     </th>
   ),
@@ -105,14 +105,14 @@ export const ChatMessage = ({
     <div
       className={cn(
         'rounded-lg p-3',
-        isAssistant ? 'bg-gray-3 text-gray-12' : 'bg-accent-3 text-accent-12',
+        isAssistant ? 'bg-gray-3 text-primary' : 'bg-accent-3 text-accent-12',
         className,
       )}
     >
       <p
         className={cn(
           'mb-1 text-xs font-semibold',
-          isAssistant ? 'text-gray-11' : 'text-accent-11',
+          isAssistant ? 'text-secondary' : 'text-accent-text',
         )}
       >
         {isAssistant ? brand.ai.name : 'You'}

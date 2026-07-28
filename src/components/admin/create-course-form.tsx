@@ -16,7 +16,7 @@ interface CreateCourseFormProps {
 }
 
 const inputBase = cn(
-  'w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-gray-12 outline-none',
+  'w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none',
   'placeholder:text-gray-8',
   'transition-colors duration-100',
   'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
@@ -39,7 +39,7 @@ export const CreateCourseForm = ({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="course-name"
-          className="text-sm font-medium text-gray-12"
+          className="text-sm font-medium text-primary"
         >
           Name
         </label>
@@ -53,7 +53,7 @@ export const CreateCourseForm = ({
           className={cn(
             inputBase,
             errors.name
-              ? 'border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9'
+              ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
               : 'border-gray-6 hover:border-gray-8',
           )}
         />
@@ -62,7 +62,7 @@ export const CreateCourseForm = ({
             id="course-name-error"
             role="alert"
             aria-live="polite"
-            className="text-sm text-red-11"
+            className="text-sm text-error-text"
           >
             {errors.name}
           </p>
@@ -73,9 +73,9 @@ export const CreateCourseForm = ({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="course-description"
-          className="text-sm font-medium text-gray-12"
+          className="text-sm font-medium text-primary"
         >
-          Description <span className="text-gray-10">(optional)</span>
+          Description <span className="text-tertiary">(optional)</span>
         </label>
         <textarea
           {...registerDescription}
@@ -89,7 +89,7 @@ export const CreateCourseForm = ({
             inputBase,
             'resize-y',
             errors.description
-              ? 'border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9'
+              ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
               : 'border-gray-6 hover:border-gray-8',
           )}
         />
@@ -98,7 +98,7 @@ export const CreateCourseForm = ({
             id="course-description-error"
             role="alert"
             aria-live="polite"
-            className="text-sm text-red-11"
+            className="text-sm text-error-text"
           >
             {errors.description}
           </p>
@@ -107,8 +107,8 @@ export const CreateCourseForm = ({
 
       {/* Cover image */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-12">
-          Cover image <span className="text-gray-10">(optional)</span>
+        <span className="text-sm font-medium text-primary">
+          Cover image <span className="text-tertiary">(optional)</span>
         </span>
         {imageField}
       </div>
@@ -116,7 +116,7 @@ export const CreateCourseForm = ({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-red-9/40 bg-red-9/15 px-3 py-2.5 text-sm text-red-11"
+          className="rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-sm text-error-text"
         >
           {serverError}
         </p>
@@ -126,7 +126,7 @@ export const CreateCourseForm = ({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-11 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+          className="rounded-lg px-4 py-2.5 text-sm font-medium text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
         >
           Cancel
         </button>

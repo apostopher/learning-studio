@@ -18,17 +18,14 @@ function LessonRoute() {
   return (
     <AppShell
       headerMain={
-        <LessonHeaderWrapper
-          moduleSlug={moduleSlug}
-          lessonSlug={lessonSlug}
-        />
+        <LessonHeaderWrapper moduleSlug={moduleSlug} lessonSlug={lessonSlug} />
       }
       aside={<CourseSidebarWrapper />}
       main={
         <LessonMainWrapper moduleSlug={moduleSlug} lessonSlug={lessonSlug} />
       }
       footer={
-        <div className="flex items-center justify-between h-full ps-4 pe-4 text-gray-11 text-sm">
+        <div className="flex items-center justify-between h-full ps-4 pe-4 text-secondary text-sm">
           <span>© {appTitle}</span>
         </div>
       }

@@ -1,18 +1,19 @@
-import { CtaSection } from "./cta-section";
-import { FeatureCards } from "./feature-cards";
-import { FeatureSpotlight } from "./feature-spotlight";
-import { HeroSection } from "./hero-section";
+import { CtaSection } from './cta-section';
+import { FeatureCards } from './feature-cards';
+import { FeatureSpotlight } from './feature-spotlight';
+import { HeroSection } from './hero-section';
 
 const AiEvaluationVisual = () => (
   <div className="rounded-2xl border border-gray-6 bg-gray-surface p-6 space-y-4">
-    <p className="text-sm font-medium text-gray-12">
+    <p className="text-sm font-medium text-primary">
       What is the standard circuit height for a fixed-wing aircraft?
     </p>
     <div className="rounded-xl bg-apple-3 border border-apple-6 p-4">
       <p className="text-xs font-semibold text-apple-11 mb-1">AI Feedback</p>
-      <p className="text-sm text-gray-11 leading-relaxed">
+      <p className="text-sm text-secondary leading-relaxed">
         Correct. 1,000 ft AGL is the standard circuit height. At controlled
-        aerodromes, always check ERSA and ATC for published circuit requirements.
+        aerodromes, always check ERSA and ATC for published circuit
+        requirements.
       </p>
     </div>
   </div>
@@ -20,7 +21,7 @@ const AiEvaluationVisual = () => (
 
 const RetentionCurveVisual = () => (
   <div className="rounded-2xl border border-gray-6 bg-gray-surface p-6">
-    <p className="text-xs font-medium text-gray-11 mb-4 uppercase tracking-wide">
+    <p className="text-xs font-medium text-secondary mb-4 uppercase tracking-wide">
       Retention over time
     </p>
     <svg
@@ -45,15 +46,17 @@ const RetentionCurveVisual = () => (
         strokeWidth="2.5"
       />
       {/* Review markers */}
-      {([
-        { cx: 70, cy: 65 },
-        { cx: 120, cy: 28 },
-        { cx: 170, cy: 56 },
-      ] as const).map(({ cx, cy }) => (
+      {(
+        [
+          { cx: 70, cy: 65 },
+          { cx: 120, cy: 28 },
+          { cx: 170, cy: 56 },
+        ] as const
+      ).map(({ cx, cy }) => (
         <circle key={cx} cx={cx} cy={cy} r="3.5" fill="var(--color-link-9)" />
       ))}
     </svg>
-    <div className="mt-3 flex items-center gap-4 text-xs text-gray-11">
+    <div className="mt-3 flex items-center gap-4 text-xs text-secondary">
       <span className="flex items-center gap-1.5">
         <span className="inline-block w-4 h-0.5 border-t-2 border-dashed border-gray-7" />
         Without practice
@@ -73,7 +76,7 @@ export const LandingPage = () => (
     <FeatureSpotlight
       number="01"
       badge="Powered by AI"
-      heading={"Instant,\nIntelligent\nFeedback"}
+      heading={'Instant,\nIntelligent\nFeedback'}
       body="Our AI evaluates your answers in context — not just right or wrong, but why, with references to relevant regulations and procedures."
       textSide="left"
       visual={<AiEvaluationVisual />}
@@ -82,7 +85,7 @@ export const LandingPage = () => (
     <FeatureSpotlight
       number="02"
       badge="Research-backed"
-      heading={"Remember\nMore,\nForever"}
+      heading={'Remember\nMore,\nForever'}
       body="Spaced repetition schedules review sessions at the exact moment your memory needs reinforcing — based on decades of cognitive science."
       textSide="right"
       visual={<RetentionCurveVisual />}

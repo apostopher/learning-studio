@@ -16,8 +16,8 @@ export const ConfigSettingRow = ({
   return (
     <div className="flex items-center justify-between gap-6 border-gray-6 border-b py-4 last:border-b-0">
       <div className="flex flex-col gap-1">
-        <h3 className="font-medium text-gray-12 text-sm">{title}</h3>
-        <p className="text-gray-11 text-sm">{description}</p>
+        <h3 className="font-medium text-primary text-sm">{title}</h3>
+        <p className="text-secondary text-sm">{description}</p>
       </div>
       <div className="shrink-0">{children}</div>
     </div>

@@ -18,8 +18,10 @@ export const CourseSidebarHeader = ({
 }: CourseSidebarHeaderProps) => (
   <header className="flex items-center gap-2 px-sidebar-row-inline py-sidebar-row-block">
     <div className="flex min-w-0 flex-1 flex-col gap-sidebar-row-gap">
-      <h2 className="text-sm font-semibold text-gray-12 break-words">{title}</h2>
-      <p className="text-xs text-gray-11">
+      <h2 className="text-sm font-semibold text-primary break-words">
+        {title}
+      </h2>
+      <p className="text-xs text-secondary">
         {plural(moduleCount, 'module')} · {plural(lessonCount, 'lesson')}
       </p>
     </div>

@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { BrandEntry } from '../src/utils/brand-colors'
-import { generateRadixColors } from '../src/utils/colors'
+import { mergeStatusDefaults } from '../src/utils/brand-colors'
+import { checkContrast, generateRadixColors } from '../src/utils/colors'
 
 export type FontSlotKey = 'sans' | 'mono' | 'display'
 export type FontSpecs = Record<FontSlotKey, string>
@@ -79,6 +80,42 @@ type ScaleInput = {
   accentScaleAlpha: readonly string[]
   accentContrast?: string
   accentSurface?: string
+  // Which step (11 or 12) --color-N-text should use. When omitted,
+  // buildScaleBlock measures it from accentScale itself — see
+  // computeTextStep. Callers building both an sRGB and a wide-gamut block
+  // for the *same* underlying scale should measure once from the sRGB
+  // values and pass the result to both, so the two gamuts never disagree.
+  textStep?: 11 | 12
+}
+
+/**
+ * Radix's contrast guarantee for step 11 only holds against steps 1–2, not
+ * step 3 (`subtle`). For hues with a narrow light-mode lightness range
+ * (pale yellows, light saturated greens/oranges), step 11 on step 3 can land
+ * just under WCAG AA. Measure it, and fall back to step 12 — never lower
+ * the threshold or hand-tune the palette to dodge this.
+ */
+export function computeTextStep(accentScale: readonly string[]): 11 | 12 {
+  const step3 = accentScale[2]
+  const step11 = accentScale[10]
+  if (step3 && step11 && checkContrast(step11, step3).wcagAA) return 11
+  return 12
+}
+
+/**
+ * `generateRadixColors` returns an `accentContrast` that is not guaranteed to
+ * clear WCAG AA — dark-theme red-9 and link-9 both come back as #fff at ~3.4
+ * and ~3.0. Measure it, and fall back to whichever of black/white scores
+ * higher.
+ *
+ * This cannot fail: white-vs-black contrast against any fill bottoms out at
+ * 4.58 where the two curves cross, which is above the 4.5 threshold.
+ */
+export function resolveContrast(step9: string, candidate: string): string {
+  if (checkContrast(candidate, step9).wcagAA) return candidate
+  return checkContrast('#000', step9).ratio >= checkContrast('#fff', step9).ratio
+    ? '#000'
+    : '#fff'
 }
 
 export function buildScaleBlock(name: string, scale: ScaleInput): string {
@@ -89,8 +126,25 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
   scale.accentScaleAlpha.forEach((hex, i) => {
     lines.push(`  --color-${name}-a${i + 1}: ${hex};`)
   })
+
+  // Step-role aliases. Radix steps are 1-indexed; these arrays are 0-indexed.
+  const step = (n: number) => scale.accentScale[n - 1]
+  const subtle = step(3)
+  const border = step(6)
+  const solid = step(9)
+  const textStep = scale.textStep ?? computeTextStep(scale.accentScale)
+  const text = step(textStep)
+  if (subtle) lines.push(`  --color-${name}-subtle: ${subtle};`)
+  if (border) lines.push(`  --color-${name}-border: ${border};`)
+  if (solid) lines.push(`  --color-${name}-solid: ${solid};`)
+  if (text) lines.push(`  --color-${name}-text: ${text};`)
+
   if (scale.accentContrast) {
-    lines.push(`  --color-${name}-contrast: ${scale.accentContrast};`)
+    // Never emit accentContrast unchecked — see resolveContrast.
+    const contrast = solid
+      ? resolveContrast(solid, scale.accentContrast)
+      : scale.accentContrast
+    lines.push(`  --color-${name}-contrast: ${contrast};`)
   }
   if (scale.accentSurface) {
     lines.push(`  --color-${name}-surface: ${scale.accentSurface};`)
@@ -100,7 +154,7 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
 
 /**
  * Emits `--color-<from>-<suffix>: var(--color-<to>-<suffix>);` for every
- * suffix a scale block produces (1..12, a1..a12, contrast, surface).
+ * suffix a scale block produces (1..12, a1..a12, subtle, border, solid, text, contrast, surface).
  * Used to alias `accent` to the first brand entry in one place — dark/P3
  * swaps propagate automatically via `var()`.
  */
@@ -112,6 +166,9 @@ export function buildAliasBlock(fromName: string, toName: string): string {
   for (let i = 1; i <= 12; i += 1) {
     lines.push(`  --color-${fromName}-a${i}: var(--color-${toName}-a${i});`)
   }
+  for (const suffix of ['subtle', 'border', 'solid', 'text']) {
+    lines.push(`  --color-${fromName}-${suffix}: var(--color-${toName}-${suffix});`)
+  }
   lines.push(`  --color-${fromName}-contrast: var(--color-${toName}-contrast);`)
   lines.push(`  --color-${fromName}-surface: var(--color-${toName}-surface);`)
   return lines.join('\n')
@@ -121,45 +178,58 @@ export type ThemeColorInputs = {
   gray: { light: string; dark: string }
   brandColors: BrandEntry[]
   bg: { light: string; dark: string }
+  panelBg: { light: string; dark: string }
+  shellBg: { light: string; dark: string }
   fontFamilies: Record<FontSlotKey, string>
 }
 
 type GenResult = ReturnType<typeof generateRadixColors>
 
 // Shape a generateRadixColors result as a ScaleInput for buildScaleBlock.
+// Computes textStep from the sRGB scale so callers can hand the same
+// decision to asScaleInputP3 for the wide-gamut block of the same scale.
 const asScaleInput = (
   g: GenResult,
   kind: 'gray' | 'accent',
-): ScaleInput =>
-  kind === 'gray'
-    ? {
-        accentScale: g.grayScale,
-        accentScaleAlpha: g.grayScaleAlpha,
-        accentSurface: g.graySurface,
-      }
-    : {
-        accentScale: g.accentScale,
-        accentScaleAlpha: g.accentScaleAlpha,
-        accentContrast: g.accentContrast,
-        accentSurface: g.accentSurface,
-      }
+): ScaleInput & { textStep: 11 | 12 } => {
+  const base =
+    kind === 'gray'
+      ? {
+          accentScale: g.grayScale,
+          accentScaleAlpha: g.grayScaleAlpha,
+          accentSurface: g.graySurface,
+        }
+      : {
+          accentScale: g.accentScale,
+          accentScaleAlpha: g.accentScaleAlpha,
+          accentContrast: g.accentContrast,
+          accentSurface: g.accentSurface,
+        }
+  return { ...base, textStep: computeTextStep(base.accentScale) }
+}
 
-// Same as asScaleInput but uses wide-gamut (oklch) arrays.
+// Same as asScaleInput but uses wide-gamut (oklch) arrays. `textStep` must
+// be measured from the sRGB scale (asScaleInput) and passed in here — never
+// measured independently from the oklch strings — so the sRGB and P3 blocks
+// for the same scale always agree on which step --color-N-text uses.
 const asScaleInputP3 = (
   g: GenResult,
   kind: 'gray' | 'accent',
+  textStep: 11 | 12,
 ): ScaleInput =>
   kind === 'gray'
     ? {
         accentScale: g.grayScaleWideGamut,
         accentScaleAlpha: g.grayScaleAlphaWideGamut,
         accentSurface: g.graySurfaceWideGamut,
+        textStep,
       }
     : {
         accentScale: g.accentScaleWideGamut,
         accentScaleAlpha: g.accentScaleAlphaWideGamut,
         accentContrast: g.accentContrast,
         accentSurface: g.accentSurfaceWideGamut,
+        textStep,
       }
 
 export function buildThemeCss(inputs: ThemeColorInputs): string {
@@ -210,40 +280,62 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
 
   const firstName = inputs.brandColors[0]!.name
 
+  // Compute each scale's sRGB ScaleInput (and its textStep) once, so the
+  // wide-gamut (P3) block below can reuse the same textStep decision rather
+  // than re-measuring against the oklch strings.
+  const lightGrayInput = asScaleInput(lightGray, 'gray')
+  const darkGrayInput = asScaleInput(darkGray, 'gray')
+  const lightInputs = light.map(({ name, colors }) => ({
+    name,
+    colors,
+    input: asScaleInput(colors, 'accent'),
+  }))
+  const darkInputs = dark.map(({ name, colors }) => ({
+    name,
+    colors,
+    input: asScaleInput(colors, 'accent'),
+  }))
+
   const lightThemeBlock = [
     '@theme {',
-    buildScaleBlock('gray', asScaleInput(lightGray, 'gray')),
-    ...light.map(({ name, colors }) =>
-      buildScaleBlock(name, asScaleInput(colors, 'accent')),
-    ),
+    buildScaleBlock('gray', lightGrayInput),
+    ...lightInputs.map(({ name, input }) => buildScaleBlock(name, input)),
     buildAliasBlock('accent', firstName),
     `  --color-background: ${inputs.bg.light};`,
+    `  --color-panel-bg: ${inputs.panelBg.light};`,
+    `  --color-shell-bg: ${inputs.shellBg.light};`,
     fontVars,
     '}',
   ].join('\n')
 
   const darkThemeBlock = [
     '.dark {',
-    buildScaleBlock('gray', asScaleInput(darkGray, 'gray')),
-    ...dark.map(({ name, colors }) =>
-      buildScaleBlock(name, asScaleInput(colors, 'accent')),
-    ),
+    buildScaleBlock('gray', darkGrayInput),
+    ...darkInputs.map(({ name, input }) => buildScaleBlock(name, input)),
     `  --color-background: ${inputs.bg.dark};`,
+    `  --color-panel-bg: ${inputs.panelBg.dark};`,
+    `  --color-shell-bg: ${inputs.shellBg.dark};`,
     '}',
   ].join('\n')
 
   const p3Block = [
     '@supports (color: oklch(0 0 0)) {',
     '  @theme {',
-    buildScaleBlock('gray', asScaleInputP3(lightGray, 'gray')),
-    ...light.map(({ name, colors }) =>
-      buildScaleBlock(name, asScaleInputP3(colors, 'accent')),
+    buildScaleBlock(
+      'gray',
+      asScaleInputP3(lightGray, 'gray', lightGrayInput.textStep),
+    ),
+    ...lightInputs.map(({ name, colors, input }) =>
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.textStep)),
     ),
     '  }',
     '  .dark {',
-    buildScaleBlock('gray', asScaleInputP3(darkGray, 'gray')),
-    ...dark.map(({ name, colors }) =>
-      buildScaleBlock(name, asScaleInputP3(colors, 'accent')),
+    buildScaleBlock(
+      'gray',
+      asScaleInputP3(darkGray, 'gray', darkGrayInput.textStep),
+    ),
+    ...darkInputs.map(({ name, colors, input }) =>
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.textStep)),
     ),
     '  }',
     '}',
@@ -298,8 +390,10 @@ export function generateTheme(): void {
 
   const css = buildThemeCss({
     gray: { light: env.VITE_GRAY_LIGHT, dark: env.VITE_GRAY_DARK },
-    brandColors: env.VITE_BRAND_COLORS,
+    brandColors: mergeStatusDefaults(env.VITE_BRAND_COLORS),
     bg: { light: env.VITE_BG_LIGHT, dark: env.VITE_BG_DARK },
+    panelBg: { light: env.VITE_PANEL_BG_LIGHT, dark: env.VITE_PANEL_BG_DARK },
+    shellBg: { light: env.VITE_SHELL_BG_LIGHT, dark: env.VITE_SHELL_BG_DARK },
     fontFamilies: fonts.families,
   })
 

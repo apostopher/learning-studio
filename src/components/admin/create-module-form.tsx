@@ -29,7 +29,7 @@ export const CreateModuleForm = ({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="module-name"
-          className="text-sm font-medium text-gray-12"
+          className="text-sm font-medium text-primary"
         >
           Name
         </label>
@@ -41,10 +41,10 @@ export const CreateModuleForm = ({
           aria-invalid={!!nameError}
           aria-describedby={nameError ? 'module-name-error' : undefined}
           className={cn(
-            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-gray-12 outline-none transition-colors duration-100 placeholder:text-gray-8',
+            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-gray-8',
             'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
             nameError
-              ? 'border-red-9 focus-visible:ring-red-9 focus-visible:border-red-9'
+              ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
               : 'border-gray-6 hover:border-gray-8',
           )}
         />
@@ -53,7 +53,7 @@ export const CreateModuleForm = ({
             id="module-name-error"
             role="alert"
             aria-live="polite"
-            className="text-sm text-red-11"
+            className="text-sm text-error-text"
           >
             {nameError}
           </p>
@@ -62,8 +62,8 @@ export const CreateModuleForm = ({
 
       {/* Cover image */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-12">
-          Cover image <span className="text-gray-10">(optional)</span>
+        <span className="text-sm font-medium text-primary">
+          Cover image <span className="text-tertiary">(optional)</span>
         </span>
         {imageField}
       </div>
@@ -71,7 +71,7 @@ export const CreateModuleForm = ({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-red-9/40 bg-red-9/15 px-3 py-2.5 text-sm text-red-11"
+          className="rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-sm text-error-text"
         >
           {serverError}
         </p>
@@ -81,7 +81,7 @@ export const CreateModuleForm = ({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-11 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+          className="rounded-lg px-4 py-2.5 text-sm font-medium text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
         >
           Cancel
         </button>

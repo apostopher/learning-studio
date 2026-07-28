@@ -42,7 +42,7 @@ export const ImageUploadField = ({
           {busy && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-1/60">
               <Loader2
-                className="h-5 w-5 animate-spin text-gray-12"
+                className="h-5 w-5 animate-spin text-primary"
                 aria-hidden="true"
               />
             </div>
@@ -52,7 +52,7 @@ export const ImageUploadField = ({
               type="button"
               onClick={onRemove}
               aria-label="Remove cover image"
-              className="absolute end-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-gray-1/80 text-gray-11 backdrop-blur transition-colors hover:bg-gray-1 hover:text-red-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-9"
+              className="absolute end-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-gray-1/80 text-secondary backdrop-blur transition-colors hover:bg-gray-1 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -61,8 +61,8 @@ export const ImageUploadField = ({
       ) : (
         <label
           className={cn(
-            'flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-6 bg-gray-1 text-center text-gray-11 transition-colors',
-            'hover:border-gray-8 hover:text-gray-12 focus-within:ring-2 focus-within:ring-apple-9',
+            'flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-6 bg-gray-1 text-center text-secondary transition-colors',
+            'hover:border-gray-8 hover:text-primary focus-within:ring-2 focus-within:ring-apple-9',
             busy && 'pointer-events-none opacity-70',
           )}
         >
@@ -77,7 +77,7 @@ export const ImageUploadField = ({
               <span className="text-sm font-medium">
                 Click to upload a cover
               </span>
-              <span className="text-xs text-gray-10">
+              <span className="text-xs text-tertiary">
                 JPEG, PNG, WebP or AVIF · up to 8MB
               </span>
             </>
@@ -92,7 +92,7 @@ export const ImageUploadField = ({
         </label>
       )}
       {status === 'error' && (
-        <p role="alert" className="text-sm text-red-11">
+        <p role="alert" className="text-sm text-error-text">
           {errorMessage ?? 'Upload failed.'}
         </p>
       )}

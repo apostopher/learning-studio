@@ -7,7 +7,7 @@ type LinksProps = {
 export const Links = ({ links }: LinksProps) => {
   if (!links || links.length === 0) {
     return (
-      <p className="text-sm text-gray-11">
+      <p className="text-sm text-secondary">
         No links available for this lesson yet.
       </p>
     );
@@ -21,7 +21,7 @@ export const Links = ({ links }: LinksProps) => {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex items-start gap-2 rounded-md px-2 py-1.5 text-sm text-accent-11 transition-colors hover:bg-gray-3 hover:text-accent-12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-8"
+            className="group flex items-start gap-2 rounded-md px-2 py-1.5 text-sm text-accent-text transition-colors hover:bg-gray-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-8"
           >
             <ExternalLink
               aria-hidden="true"

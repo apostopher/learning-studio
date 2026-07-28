@@ -1,7 +1,7 @@
-import { Collapsible } from "@base-ui/react/collapsible";
-import { ChevronDown, RotateCcw } from "lucide-react";
-import type { AIEvaluationResult, AITestQuestion } from "#/ai/schemas";
-import { ScoreRing } from "./score-ring";
+import { Collapsible } from '@base-ui/react/collapsible';
+import { ChevronDown, RotateCcw } from 'lucide-react';
+import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
+import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
   score: number;
@@ -11,18 +11,18 @@ type ScoreReportProps = {
 };
 
 const gradeLabel = (score: number): string => {
-  if (score >= 90) return "Excellent";
-  if (score >= 70) return "Good";
-  if (score >= 50) return "Needs Review";
-  return "Keep Practicing";
+  if (score >= 90) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 50) return 'Needs Review';
+  return 'Keep Practicing';
 };
 
 const scoreBadgeClass = (score: number) => {
   if (score >= 80)
-    return "border border-green-7 bg-green-3 text-green-11";
+    return 'border border-success-7 bg-success-3 text-success-text';
   if (score >= 50)
-    return "border border-amber-7 bg-amber-3 text-amber-11";
-  return "border border-red-7 bg-red-3 text-red-11";
+    return 'border border-warning-7 bg-warning-3 text-warning-text';
+  return 'border border-error-7 bg-error-3 text-error-text';
 };
 
 export const ScoreReport = ({
@@ -40,10 +40,10 @@ export const ScoreReport = ({
         <ScoreRing score={score} size={96} strokeWidth={8} />
 
         <div className="flex flex-col gap-1">
-          <p className="text-xl font-semibold text-gray-12">
+          <p className="text-xl font-semibold text-primary">
             {gradeLabel(score)}
           </p>
-          <p className="text-sm text-gray-11">
+          <p className="text-sm text-secondary">
             {correctCount} of {questions.length} questions correct
           </p>
         </div>
@@ -51,7 +51,7 @@ export const ScoreReport = ({
         <button
           type="button"
           onClick={onRetake}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-gray-12 hover:bg-gray-3"
+          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           Retake Quiz
@@ -60,7 +60,7 @@ export const ScoreReport = ({
 
       {/* Question review */}
       <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-gray-12">
+        <h2 className="text-base font-semibold text-primary">
           Question Review
         </h2>
 
@@ -71,14 +71,13 @@ export const ScoreReport = ({
             );
 
             const userAnswerDisplay =
-              question.type === "mcq" && evaluation
-                ? (question.options.find(
-                    (o) => o.id === evaluation.userAnswer,
-                  )?.value ?? evaluation.userAnswer)
-                : (evaluation?.userAnswer ?? "—");
+              question.type === 'mcq' && evaluation
+                ? (question.options.find((o) => o.id === evaluation.userAnswer)
+                    ?.value ?? evaluation.userAnswer)
+                : (evaluation?.userAnswer ?? '—');
 
             const correctAnswerDisplay =
-              question.type === "mcq"
+              question.type === 'mcq'
                 ? (question.options.find(
                     (o) => o.id === question.correctOptionId,
                   )?.value ?? question.correctOptionId)
@@ -92,7 +91,7 @@ export const ScoreReport = ({
             return (
               <Collapsible.Root key={question.id} className="group">
                 <Collapsible.Trigger className="flex w-full items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-start text-sm hover:bg-gray-2">
-                  <span className="shrink-0 font-medium text-gray-11">
+                  <span className="shrink-0 font-medium text-secondary">
                     Q{i + 1}
                   </span>
                   {evaluation && (
@@ -102,11 +101,11 @@ export const ScoreReport = ({
                       {evaluation.score}/100
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate text-gray-12">
+                  <span className="min-w-0 flex-1 truncate text-primary">
                     {truncatedQuestion}
                   </span>
                   <ChevronDown
-                    className="size-4 shrink-0 text-gray-10 transition-transform duration-200 group-data-[open]:rotate-180"
+                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]:rotate-180"
                     aria-hidden="true"
                   />
                 </Collapsible.Trigger>
@@ -114,16 +113,16 @@ export const ScoreReport = ({
                 <Collapsible.Panel className="overflow-hidden data-[ending-hidden]:animate-collapse data-[starting-hidden]:animate-collapse">
                   <div className="flex flex-col gap-3 rounded-b-lg border border-t-0 border-gray-6 bg-gray-1 px-3 pb-4 pt-3">
                     {/* Full question */}
-                    <p className="text-sm font-medium text-gray-12">
+                    <p className="text-sm font-medium text-primary">
                       {question.question}
                     </p>
 
                     {/* Your answer */}
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-gray-10">
+                      <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
                         Your answer
                       </span>
-                      <p className="text-sm text-gray-12">
+                      <p className="text-sm text-primary">
                         {userAnswerDisplay || (
                           <span className="italic text-gray-9">
                             No answer provided
@@ -135,10 +134,10 @@ export const ScoreReport = ({
                     {/* Correct answer (MCQ only) */}
                     {correctAnswerDisplay && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium uppercase tracking-wide text-gray-10">
+                        <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
                           Correct answer
                         </span>
-                        <p className="text-sm text-green-11">
+                        <p className="text-sm text-success-text">
                           {correctAnswerDisplay}
                         </p>
                       </div>
@@ -147,10 +146,10 @@ export const ScoreReport = ({
                     {/* Explanation */}
                     {evaluation?.explanation && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium uppercase tracking-wide text-gray-10">
+                        <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
                           Explanation
                         </span>
-                        <p className="text-sm leading-relaxed text-gray-12">
+                        <p className="text-sm leading-relaxed text-primary">
                           {evaluation.explanation}
                         </p>
                       </div>

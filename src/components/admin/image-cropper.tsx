@@ -115,7 +115,10 @@ export const ImageCropper = ({
 
       {/* Zoom */}
       <div className="flex items-center gap-3">
-        <ZoomOut className="h-4 w-4 shrink-0 text-gray-11" aria-hidden="true" />
+        <ZoomOut
+          className="h-4 w-4 shrink-0 text-secondary"
+          aria-hidden="true"
+        />
         <input
           type="range"
           min={MIN_ZOOM}
@@ -126,7 +129,10 @@ export const ImageCropper = ({
           aria-label="Zoom"
           className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-gray-6 accent-apple-9"
         />
-        <ZoomIn className="h-4 w-4 shrink-0 text-gray-11" aria-hidden="true" />
+        <ZoomIn
+          className="h-4 w-4 shrink-0 text-secondary"
+          aria-hidden="true"
+        />
       </div>
 
       <div className="flex items-center justify-end gap-3">
@@ -134,7 +140,7 @@ export const ImageCropper = ({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-11 transition-colors hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7 disabled:opacity-60"
+          className="rounded-lg px-4 py-2.5 text-sm font-medium text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7 disabled:opacity-60"
         >
           Cancel
         </button>

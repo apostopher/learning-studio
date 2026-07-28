@@ -1,22 +1,22 @@
-import type { RefObject } from "react";
-import { Tabs } from "@base-ui/react/tabs";
-import { ScrollArea } from "#/components/scroll-area";
-import type { LessonMaterial } from "#/db/lesson";
-import { useActiveTab, useCurrentTest } from "#/hooks/data/use-lesson-ai-test";
-import { Assignments } from "./parts/assignments";
-import { DebriefQuizContainer } from "./parts/debrief-quiz-container";
-import { JobOfTheDay } from "./parts/job-of-the-day";
-import { KeyPoints } from "./parts/key-points";
-import { Links } from "./parts/links";
-import { ProTips } from "./parts/pro-tips";
+import { Tabs } from '@base-ui/react/tabs';
+import type { RefObject } from 'react';
+import { ScrollArea } from '#/components/scroll-area';
+import type { LessonMaterial } from '#/db/lesson';
+import { useActiveTab, useCurrentTest } from '#/hooks/data/use-lesson-ai-test';
+import { Assignments } from './parts/assignments';
+import { DebriefQuizContainer } from './parts/debrief-quiz-container';
+import { JobOfTheDay } from './parts/job-of-the-day';
+import { KeyPoints } from './parts/key-points';
+import { Links } from './parts/links';
+import { ProTips } from './parts/pro-tips';
 
 type LessonMaterialTab =
-  | "keyPoints"
-  | "quiz"
-  | "proTips"
-  | "links"
-  | "assignments"
-  | "jobOfTheDay";
+  | 'keyPoints'
+  | 'quiz'
+  | 'proTips'
+  | 'links'
+  | 'assignments'
+  | 'jobOfTheDay';
 
 type TabConfig = {
   value: LessonMaterialTab;
@@ -24,12 +24,12 @@ type TabConfig = {
 };
 
 const TABS: readonly TabConfig[] = [
-  { value: "keyPoints", label: "Key Points" },
-  { value: "quiz", label: "Quiz" },
-  { value: "proTips", label: "Pro Tips" },
-  { value: "links", label: "Links" },
-  { value: "assignments", label: "Assignments" },
-  { value: "jobOfTheDay", label: "Job of the Day" },
+  { value: 'keyPoints', label: 'Key Points' },
+  { value: 'quiz', label: 'Quiz' },
+  { value: 'proTips', label: 'Pro Tips' },
+  { value: 'links', label: 'Links' },
+  { value: 'assignments', label: 'Assignments' },
+  { value: 'jobOfTheDay', label: 'Job of the Day' },
 ] as const;
 
 type LessonMaterialProps = {
@@ -60,12 +60,12 @@ export const LessonMaterialView = ({
             <Tabs.Tab
               key={tab.value}
               value={tab.value}
-              className="flex h-9 items-center justify-center px-3 text-sm font-medium text-gray-11 outline-hidden select-none whitespace-nowrap hover:text-gray-12 data-selected:text-gray-12"
+              className="flex h-9 items-center justify-center px-3 text-sm font-medium text-secondary outline-hidden select-none whitespace-nowrap hover:text-primary data-selected:text-primary"
             >
               {tab.label}
             </Tabs.Tab>
           ))}
-          <Tabs.Indicator className="absolute bottom-0 left-0 h-px w-(--active-tab-width) translate-x-(--active-tab-left) bg-gray-12 transition-all duration-200 ease-in-out" />
+          <Tabs.Indicator className="absolute bottom-0 left-0 h-px w-(--active-tab-width) translate-x-(--active-tab-left) bg-primary transition-all duration-200 ease-in-out" />
         </Tabs.List>
       </ScrollArea>
 
@@ -80,7 +80,7 @@ export const LessonMaterialView = ({
             material={material}
           />
         ) : (
-          <pre className="text-sm text-gray-11">
+          <pre className="text-sm text-secondary">
             {JSON.stringify(material.quiz, null, 2)}
           </pre>
         )}

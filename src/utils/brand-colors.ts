@@ -2,13 +2,6 @@ export type BrandEntry = { name: string; light: string; dark: string }
 
 export const BRAND_NAME_REGEX = /^[a-z][a-z0-9-]*$/
 
-export const RESERVED_BRAND_NAMES = [
-  'gray',
-  'accent',
-  'brand',
-  'background',
-] as const
-
 /**
  * Parses "name:#light/#dark, name2:#light/#dark, ..." into structured entries.
  * Validates only the *shape* — name/hex semantic validation is the caller's job
@@ -56,4 +49,29 @@ export function parseBrandColorEntries(raw: string): BrandEntry[] {
 
     return { name, light, dark }
   })
+}
+
+/**
+ * Status hues the generator always produces, so `--color-success` and friends
+ * can never resolve to nothing. Declaring any of these in VITE_BRAND_COLORS
+ * overrides the seed below.
+ */
+export const RESERVED_BRAND_NAMES = ['success', 'warning', 'error'] as const
+
+export const STATUS_DEFAULTS: readonly BrandEntry[] = [
+  { name: 'success', light: '#30a46c', dark: '#3dd68c' },
+  { name: 'warning', light: '#f5a524', dark: '#ffb224' },
+  { name: 'error', light: '#cb0d39', dark: '#f44f5f' },
+]
+
+/**
+ * Appends any status hue the caller did not declare. User entries stay first
+ * so `accent` keeps aliasing the first declared brand rather than a status.
+ */
+export function mergeStatusDefaults(entries: BrandEntry[]): BrandEntry[] {
+  const declared = new Set(entries.map((e) => e.name))
+  return [
+    ...entries,
+    ...STATUS_DEFAULTS.filter((d) => !declared.has(d.name)),
+  ]
 }

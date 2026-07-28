@@ -51,12 +51,12 @@ export const OnboardingQuestionsEditor = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-gray-11 text-sm">
+      <p className="text-secondary text-sm">
         Questions shown to users when they start this course. Drag to reorder.
       </p>
 
       {fields.length === 0 ? (
-        <p className="rounded-lg border border-gray-6 border-dashed py-8 text-center text-gray-10 text-sm">
+        <p className="rounded-lg border border-gray-6 border-dashed py-8 text-center text-tertiary text-sm">
           No onboarding questions yet.
         </p>
       ) : (
@@ -88,7 +88,7 @@ export const OnboardingQuestionsEditor = ({
         <button
           type="button"
           onClick={onAdd}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-6 px-3 py-2 font-medium text-gray-12 text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-6 px-3 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add question
@@ -96,7 +96,7 @@ export const OnboardingQuestionsEditor = ({
 
         <span aria-live="polite" className="min-w-0">
           {status === 'saving' ? (
-            <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+            <span className="flex items-center gap-1.5 text-tertiary text-sm">
               <Loader2
                 className="h-3.5 w-3.5 animate-spin"
                 aria-hidden="true"
@@ -105,19 +105,19 @@ export const OnboardingQuestionsEditor = ({
             </span>
           ) : status === 'error' ? (
             <span className="flex items-center gap-2 text-sm">
-              <span className="text-red-11">Couldn’t save.</span>
+              <span className="text-error-text">Couldn’t save.</span>
               <button
                 type="button"
                 onClick={onRetry}
-                className="rounded-md px-2 py-1 font-medium text-gray-12 text-xs hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                className="rounded-md px-2 py-1 font-medium text-primary text-xs hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
               >
                 Retry
               </button>
             </span>
           ) : status === 'unsaved' ? (
-            <span className="text-gray-10 text-sm">Unsaved changes…</span>
+            <span className="text-tertiary text-sm">Unsaved changes…</span>
           ) : (
-            <span className="flex items-center gap-1.5 text-gray-10 text-sm">
+            <span className="flex items-center gap-1.5 text-tertiary text-sm">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               All changes saved
             </span>

@@ -99,8 +99,8 @@ const Body = ({
 
   return (
     <>
-      <p className="mb-4 text-gray-11 text-sm">
-        Course: <span className="font-medium text-gray-12">{courseName}</span>
+      <p className="mb-4 text-secondary text-sm">
+        Course: <span className="font-medium text-primary">{courseName}</span>
       </p>
       <TrainingDocUploadCard
         fileName={file?.name ?? null}

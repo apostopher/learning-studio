@@ -11,7 +11,7 @@ import { QuizField } from './quiz-field';
 import { RichTextEditor } from './rich-text-editor';
 import { StringListField } from './string-list-field';
 
-const labelCls = 'font-medium text-gray-11 text-xs uppercase tracking-wide';
+const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 
 /**
  * Presentational body of the material edit form. Prose fields (text, proTips,
@@ -51,7 +51,7 @@ export const MaterialForm = ({
           )}
         />
         {errors.text && (
-          <p role="alert" className="text-red-11 text-sm">
+          <p role="alert" className="text-error-text text-sm">
             {errors.text.message}
           </p>
         )}
@@ -97,7 +97,7 @@ export const MaterialForm = ({
           id="material-job"
           type="text"
           {...register('jobOfTheDay')}
-          className="rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+          className="rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
         />
       </div>
 
@@ -145,7 +145,7 @@ export const MaterialForm = ({
       />
 
       {saveError && (
-        <p role="alert" className="text-red-11 text-sm">
+        <p role="alert" className="text-error-text text-sm">
           {saveError}
         </p>
       )}

@@ -74,7 +74,7 @@ export function ChatWidgetMessages({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="px-1 text-xs text-gray-11 italic"
+                    className="px-1 text-xs text-secondary italic"
                   >
                     {notification.data.data.text}
                   </motion.p>

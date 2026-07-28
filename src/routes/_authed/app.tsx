@@ -12,7 +12,7 @@ function App() {
       aside={<CourseSidebarWrapper />}
       main={<LessonEmpty />}
       footer={
-        <div className="flex items-center justify-between h-full ps-4 pe-4 text-gray-11 text-sm">
+        <div className="flex items-center justify-between h-full ps-4 pe-4 text-secondary text-sm">
           <span>© {appTitle}</span>
         </div>
       }

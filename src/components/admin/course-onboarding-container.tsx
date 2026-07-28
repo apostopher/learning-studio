@@ -131,7 +131,7 @@ export const CourseOnboardingContainer = ({
 
   if (query.isError) {
     return (
-      <p className="py-8 text-center text-red-11 text-sm">
+      <p className="py-8 text-center text-error-text text-sm">
         Couldn't load onboarding questions. Please close and reopen the dialog.
       </p>
     );
@@ -141,7 +141,7 @@ export const CourseOnboardingContainer = ({
     return (
       <div className="flex justify-center py-10">
         <Loader2
-          className="h-5 w-5 animate-spin text-gray-10"
+          className="h-5 w-5 animate-spin text-tertiary"
           aria-hidden="true"
         />
       </div>

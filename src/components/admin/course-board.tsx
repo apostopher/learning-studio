@@ -15,12 +15,12 @@ export const CourseBoard = ({
       <header className="flex h-[var(--board-header-height)] items-center gap-3 border-b border-gray-6 px-4">
         <Link
           to="/admin"
-          className="shrink-0 text-gray-11 transition-colors hover:text-gray-12"
+          className="shrink-0 text-secondary transition-colors hover:text-primary"
           aria-label="Back to courses"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Link>
-        <h1 className="min-w-0 truncate text-base font-semibold text-gray-12">
+        <h1 className="min-w-0 truncate text-base font-semibold text-primary">
           {courseName}
         </h1>
       </header>

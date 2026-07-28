@@ -32,7 +32,7 @@ export const StringListField = ({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="font-medium text-gray-11 text-xs uppercase tracking-wide">
+      <legend className="font-medium text-secondary text-xs uppercase tracking-wide">
         {label}
       </legend>
       {value.map((item, i) => (
@@ -55,7 +55,7 @@ export const StringListField = ({
                 id={`${label}-${i}`}
                 value={item}
                 onChange={(e) => update(i, e.target.value)}
-                className="flex-1 rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-gray-12 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                className="flex-1 rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
               />
             </>
           )}
@@ -63,7 +63,7 @@ export const StringListField = ({
             type="button"
             onClick={() => remove(i)}
             aria-label={`Remove ${itemNoun} ${i + 1}`}
-            className="rounded-md p-2 text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12"
+            className="rounded-md p-2 text-tertiary transition-colors hover:bg-gray-4 hover:text-primary"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -72,7 +72,7 @@ export const StringListField = ({
       <button
         type="button"
         onClick={() => onChange([...value, ''])}
-        className="inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-gray-11 text-sm transition-colors hover:bg-gray-4 hover:text-gray-12"
+        className="inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         Add {itemNoun}

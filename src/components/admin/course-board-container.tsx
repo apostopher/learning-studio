@@ -7,15 +7,17 @@ export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
   const { data: board, isLoading, error } = useCourseBoard(courseId);
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-gray-11">Loading board…</div>;
+    return <div className="p-6 text-sm text-secondary">Loading board…</div>;
   }
   if (error) {
     return (
-      <div className="p-6 text-sm text-red-11">Failed to load the board.</div>
+      <div className="p-6 text-sm text-error-text">
+        Failed to load the board.
+      </div>
     );
   }
   if (!board) {
-    return <div className="p-6 text-sm text-gray-11">Course not found.</div>;
+    return <div className="p-6 text-sm text-secondary">Course not found.</div>;
   }
 
   return (
@@ -25,7 +27,7 @@ export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
     >
       {board.modules.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-gray-11">No modules yet</p>
+          <p className="text-sm text-secondary">No modules yet</p>
         </div>
       ) : (
         <ModuleBoardContainer courseId={courseId} modules={board.modules} />

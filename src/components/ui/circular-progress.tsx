@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from 'motion/react';
 
 type CircularProgressProps = {
   value: number;
@@ -31,10 +31,10 @@ export const CircularProgress = ({
       aria-valuenow={Math.round(clamped)}
       aria-valuetext={label}
       className={[
-        "relative inline-flex shrink-0 items-center justify-center",
-        className ?? "",
+        'relative inline-flex shrink-0 items-center justify-center',
+        className ?? '',
       ]
-        .join(" ")
+        .join(' ')
         .trim()}
       style={{ width: size, height: size }}
     >
@@ -67,14 +67,14 @@ export const CircularProgress = ({
           transition={
             reduced
               ? { duration: 0 }
-              : { type: "spring", bounce: 0.2, visualDuration: 0.6 }
+              : { type: 'spring', bounce: 0.2, visualDuration: 0.6 }
           }
         />
       </svg>
       {showLabel ? (
         <span
           aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center text-[9px] font-medium tabular-nums text-gray-12"
+          className="absolute inset-0 flex items-center justify-center text-[9px] font-medium tabular-nums text-primary"
         >
           {label}
         </span>
