@@ -255,3 +255,27 @@ export const deleteOnboarding = async ({
       .where(eq(courseOnboardingTable.id, onboardingId));
   });
 };
+
+/**
+ * Persist the machine's settled state after a turn. `updatedAt` is set
+ * explicitly — no table in this schema uses $onUpdate, and a stale
+ * updatedAt would break the concurrency guard the routes rely on.
+ */
+export const saveMachineSnapshot = async ({
+  onboardingId,
+  snapshot,
+  version,
+}: {
+  onboardingId: number;
+  snapshot: Record<string, unknown>;
+  version: string;
+}): Promise<void> => {
+  await db
+    .update(courseOnboardingTable)
+    .set({
+      machineSnapshot: snapshot,
+      machineVersion: version,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(courseOnboardingTable.id, onboardingId));
+};

@@ -278,3 +278,15 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
   }
   return [...courses.values()];
 }
+
+/**
+ * Resolve a course slug to its id. Returns null for an unknown slug so
+ * callers can answer 404 rather than throwing.
+ */
+export async function getCourseIdBySlug(slug: string): Promise<number | null> {
+  const [row] = await db
+    .select({ id: coursesTable.id })
+    .from(coursesTable)
+    .where(eq(coursesTable.slug, slug));
+  return row?.id ?? null;
+}
