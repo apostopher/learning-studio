@@ -779,6 +779,11 @@ export const courseOnboardingTable = pgTable(
     // empty answers map so onboarding is never auto-offered again — declining
     // is respected, not re-pitched on the next visit.
     consentDeclinedAt: timestamp("consent_declined_at", { mode: "date" }),
+    // Set when the user asks to delete everything they've shared. The row is
+    // kept as a tombstone — answers cleared, transcript removed — so the agent
+    // never re-offers onboarding to someone who withdrew. Distinct from
+    // consentDeclinedAt, which means they never started.
+    deletedAt: timestamp("deleted_at", { mode: "date" }),
     // Null means in-progress and resumable.
     onboardingCompletedAt: timestamp("onboarding_completed_at", {
       mode: "date",

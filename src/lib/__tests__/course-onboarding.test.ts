@@ -176,6 +176,7 @@ describe('shouldOfferOnboarding', () => {
       shouldOfferOnboarding({
         onboardingCompletedAt: null,
         consentDeclinedAt: null,
+        deletedAt: null,
       }),
     ).toBe(true);
   });
@@ -185,6 +186,7 @@ describe('shouldOfferOnboarding', () => {
       shouldOfferOnboarding({
         onboardingCompletedAt: new Date(0),
         consentDeclinedAt: null,
+        deletedAt: null,
       }),
     ).toBe(false);
   });
@@ -194,6 +196,7 @@ describe('shouldOfferOnboarding', () => {
       shouldOfferOnboarding({
         onboardingCompletedAt: null,
         consentDeclinedAt: new Date(0),
+        deletedAt: null,
       }),
     ).toBe(false);
   });
@@ -203,6 +206,49 @@ describe('shouldOfferOnboarding', () => {
       shouldOfferOnboarding({
         onboardingCompletedAt: new Date(0),
         consentDeclinedAt: new Date(0),
+        deletedAt: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer once the user withdrew (deletedAt set alone)', () => {
+    // The user asked to delete everything they shared. Re-offering on their
+    // next visit would be the exact re-pitch they withdrew from.
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: null,
+        consentDeclinedAt: null,
+        deletedAt: new Date(0),
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer when deletedAt is set alongside onboardingCompletedAt', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: new Date(0),
+        consentDeclinedAt: null,
+        deletedAt: new Date(0),
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer when deletedAt is set alongside consentDeclinedAt', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: null,
+        consentDeclinedAt: new Date(0),
+        deletedAt: new Date(0),
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer when all three timestamps are set', () => {
+    expect(
+      shouldOfferOnboarding({
+        onboardingCompletedAt: new Date(0),
+        consentDeclinedAt: new Date(0),
+        deletedAt: new Date(0),
       }),
     ).toBe(false);
   });
@@ -213,6 +259,7 @@ describe('shouldOfferOnboarding', () => {
       shouldOfferOnboarding({
         onboardingCompletedAt: undefined as unknown as null,
         consentDeclinedAt: null,
+        deletedAt: null,
       }),
     ).toBe(true);
     expect(shouldOfferOnboarding(undefined as unknown as null)).toBe(true);

@@ -218,16 +218,40 @@ export const declineConsent = async ({
 };
 
 /**
- * Deletes the row; course_onboarding_messages.onboarding_id cascades, so the
- * transcript goes with it. One operation is what makes "stop and delete
- * everything shared, no explanation needed" true.
+ * Tombstones the row rather than deleting it: clears the shared answers and
+ * removes the transcript, but keeps the row so shouldOfferOnboarding sees
+ * `deletedAt` set and never re-offers onboarding to someone who withdrew.
+ * Deleting the row outright would have un-declined the user — `row == null`
+ * reads as "never asked" to shouldOfferOnboarding, which is the exact
+ * re-pitch withdrawal is meant to prevent.
+ *
+ * The messages table's cascade only fires on a real row delete, so with the
+ * row surviving, the transcript is no longer cleaned up for free — it must
+ * be deleted explicitly here. That delete and the tombstoning update run in
+ * one transaction so a partial failure cannot leave answers cleared with the
+ * transcript intact, or vice versa.
+ *
+ * questionSetHash, questionSource, consentDeclinedAt, and
+ * onboardingCompletedAt are left untouched: they describe the session
+ * itself, not content the user shared, so withdrawal doesn't erase them.
  */
 export const deleteOnboarding = async ({
   onboardingId,
 }: {
   onboardingId: number;
 }): Promise<void> => {
-  await db
-    .delete(courseOnboardingTable)
-    .where(eq(courseOnboardingTable.id, onboardingId));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(courseOnboardingMessagesTable)
+      .where(eq(courseOnboardingMessagesTable.onboardingId, onboardingId));
+
+    await tx
+      .update(courseOnboardingTable)
+      .set({
+        answers: {},
+        deletedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(courseOnboardingTable.id, onboardingId));
+  });
 };

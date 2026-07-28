@@ -71,6 +71,7 @@ export const isOnboardingComplete = (
 export type OnboardingOfferState = {
   onboardingCompletedAt: Date | null;
   consentDeclinedAt: Date | null;
+  deletedAt: Date | null;
 };
 
 /**
@@ -80,8 +81,15 @@ export type OnboardingOfferState = {
  * offer permanently. The user can still start onboarding themselves — this
  * governs only whether we bring it up.
  *
- * Deliberately NOT folded into isOnboardingComplete: someone who declined is
- * not complete, they opted out, and conflating the two would make an opt-out
+ * A tombstoned row (deletedAt set) is the same kind of permanent decision:
+ * the user asked to delete everything they shared, and re-pitching
+ * onboarding on their next visit would be the exact re-offer they withdrew
+ * from. Distinct from consentDeclinedAt (never started) and from
+ * onboardingCompletedAt (finished) — an admin view needs to tell all three
+ * apart.
+ *
+ * Deliberately NOT folded into isOnboardingComplete: someone who declined or
+ * withdrew is not complete, and conflating the two would make an opt-out
  * indistinguishable from a finished interview in any admin view.
  *
  * Loose null checks (`== null`) are deliberate — do not tighten to `===`.
@@ -92,4 +100,6 @@ export const shouldOfferOnboarding = (
   row: OnboardingOfferState | null,
 ): boolean =>
   row == null ||
-  (row.onboardingCompletedAt == null && row.consentDeclinedAt == null);
+  (row.onboardingCompletedAt == null &&
+    row.consentDeclinedAt == null &&
+    row.deletedAt == null);
