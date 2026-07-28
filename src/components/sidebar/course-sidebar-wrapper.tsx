@@ -14,16 +14,18 @@ type ModuleLike = {
   lessons: readonly LessonLike[];
 };
 
-export const CourseSidebarWrapper = () => {
+type CourseSidebarWrapperProps = {
+  courseSlug: string;
+};
+
+export const CourseSidebarWrapper = ({
+  courseSlug,
+}: CourseSidebarWrapperProps) => {
   const params = useParams({ strict: false }) as {
-    courseSlug?: string;
-    moduleSlug?: string;
     lessonSlug?: string;
   };
-  const detailsQuery = useAtomValue(
-    courseDetailsAtomFamily(params.courseSlug ?? ""),
-  );
-  const progressQuery = useCourseProgressSummary(params.courseSlug ?? "");
+  const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
+  const progressQuery = useCourseProgressSummary(courseSlug);
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
 
   // Server-aggregated progress → the videoId-keyed / moduleId-keyed maps the
@@ -61,7 +63,7 @@ export const CourseSidebarWrapper = () => {
   if (derived.status === "loading" || derived.status === "error") {
     return (
       <CourseSidebar
-        courseSlug={params.courseSlug ?? ""}
+        courseSlug={courseSlug}
         status={derived.status}
         openModuleSlug={openModuleSlug}
         onOpenChange={setOpenModuleSlug}
@@ -72,7 +74,7 @@ export const CourseSidebarWrapper = () => {
 
   return (
     <CourseSidebar
-      courseSlug={params.courseSlug ?? ""}
+      courseSlug={courseSlug}
       status="ready"
       title={derived.title}
       moduleCount={derived.moduleCount}

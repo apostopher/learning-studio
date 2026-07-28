@@ -23,5 +23,12 @@ export function useMyCourses() {
       return myCourseSchema.array().parse(await res.json());
     },
     staleTime: 60_000,
+    // /app is the hub users land on right after finishing a lesson, so a
+    // cached percentage here isn't merely stale — it's a visibly wrong
+    // number on the page they just navigated to. Always refetch on arrival
+    // and on refocus so it reflects reality. No refetchInterval: unlike the
+    // course progress summary, nobody sits on /app watching it tick.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }

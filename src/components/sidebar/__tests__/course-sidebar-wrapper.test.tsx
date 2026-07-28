@@ -66,12 +66,12 @@ async function renderAt(path: string, details: DetailsResult) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <CourseSidebarWrapper />,
+    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
-    component: () => <CourseSidebarWrapper />,
+    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute, lessonRoute]),

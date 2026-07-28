@@ -16,25 +16,28 @@ function CourseLayout() {
   // two params. This only needs to distinguish two leaf shapes (course home
   // vs. a lesson); if a third leaf ever needs its own headerMain content,
   // revisit this rather than extending the presence check further.
-  const lessonParams = useParams({ strict: false }) as {
+  //
+  // headerMain is rendered here (rather than by the lesson leaf itself)
+  // because AppShell places it in a fixed grid row while `main` sits inside
+  // a ScrollArea — a header rendered by the leaf would scroll away with the
+  // lesson body instead of staying pinned.
+  const { moduleSlug, lessonSlug } = useParams({ strict: false }) as {
     moduleSlug?: string;
     lessonSlug?: string;
   };
-  const isLessonRoute =
-    lessonParams.moduleSlug != null && lessonParams.lessonSlug != null;
 
   return (
     <AppShell
       headerMain={
-        isLessonRoute ? (
+        moduleSlug != null && lessonSlug != null ? (
           <LessonHeaderWrapper
             courseSlug={courseSlug}
-            moduleSlug={lessonParams.moduleSlug as string}
-            lessonSlug={lessonParams.lessonSlug as string}
+            moduleSlug={moduleSlug}
+            lessonSlug={lessonSlug}
           />
         ) : undefined
       }
-      aside={<CourseSidebarWrapper />}
+      aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
       main={<Outlet />}
       footer={
         <div className="flex items-center justify-between h-full ps-4 pe-4 text-secondary text-sm">

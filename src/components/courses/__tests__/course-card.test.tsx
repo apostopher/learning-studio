@@ -78,6 +78,7 @@ describe('CourseCard', () => {
 
   it('shows the progress value in an accessible label', async () => {
     await renderInRouter(<CourseCard course={course} />);
-    expect(screen.getByLabelText(/3D Airmanship.*progress/i)).toBeDefined();
+    const progress = screen.getByLabelText(/3D Airmanship.*progress/i);
+    expect(progress.getAttribute('aria-valuenow')).toBe('42');
   });
 });
