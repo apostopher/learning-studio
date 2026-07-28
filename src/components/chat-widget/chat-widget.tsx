@@ -1,6 +1,7 @@
 import { useRouterState } from '@tanstack/react-router';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect } from 'react';
 import {
   chatWidgetFontSizeAtom,
   chatWidgetModeAtom,
@@ -14,6 +15,7 @@ import { authClient } from '#/lib/auth-client';
 import { cn } from '#/lib/cn';
 
 interface ChatWindowChromeProps {
+  isOpen: boolean;
   fontSize: number;
   onToggleFontSize: () => void;
   onClose: () => void;
@@ -22,11 +24,27 @@ interface ChatWindowChromeProps {
 /**
  * Viper7 assistant conversation. Wraps `useChatWidget()` (the streaming
  * `/api/chat` hook) and feeds its result into the shared, mode-agnostic
- * `ChatWindow`. Sibling to `OnboardingChat` below — the top-level
- * `ChatWidget` mounts exactly one of the two, so this never calls
- * `useOnboardingChat` and never fires an onboarding request.
+ * `ChatWindow`.
+ *
+ * Always mounted by the top-level `ChatWidget` regardless of `isOpen` or
+ * `chatWidgetModeAtom` — `useChatWidget()` has no server-side rehydration on
+ * mount (no `initialMessages`), so its `useChat` instance and `chatIdRef`
+ * are the ONLY thing holding the live conversation client-side. Unmounting
+ * this component (as the widget used to, by nesting it inside
+ * `{isOpen && ...}`) destroys that state: `messages` resets to empty and
+ * `chatIdRef.current` goes back to `undefined`, so the next reply's
+ * `ensureChat` call inserts a brand new `aiChats` row instead of continuing
+ * the old one — silent data loss and an orphaned DB row on every
+ * close/reopen. `isOpen` is taken as a prop purely to decide whether to
+ * render the `<ChatWindow>` (with its own `AnimatePresence` for the
+ * enter/exit spring); it never gates whether this component itself exists.
+ *
+ * Contrast with `OnboardingChat` below, which mounts/unmounts freely — its
+ * hook rehydrates the persisted transcript from the server on every mount by
+ * design, specifically so pause/resume never loses data.
  */
 function Viper7Chat({
+  isOpen,
   fontSize,
   onToggleFontSize,
   onClose,
@@ -34,14 +52,18 @@ function Viper7Chat({
   const { messages, sendMessage, isLoading } = useChatWidget();
 
   return (
-    <ChatWindow
-      fontSize={fontSize}
-      onToggleFontSize={onToggleFontSize}
-      onClose={onClose}
-      messages={messages}
-      sendMessage={sendMessage}
-      isLoading={isLoading}
-    />
+    <AnimatePresence>
+      {isOpen && (
+        <ChatWindow
+          fontSize={fontSize}
+          onToggleFontSize={onToggleFontSize}
+          onClose={onClose}
+          messages={messages}
+          sendMessage={sendMessage}
+          isLoading={isLoading}
+        />
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -51,31 +73,61 @@ function Viper7Chat({
  * result into the same `ChatWindow` used by `Viper7Chat`, passing `status`
  * and `confirm` through so the window can offer the "Looks good" affordance
  * needed to advance a `'confirming'` session (see `ChatWindowProps`' doc
- * comments in `chat-window.tsx`). Sibling to `Viper7Chat`, not a shared
- * "call both hooks" component — only one of the two is ever mounted, so
- * `useOnboardingChat`'s unconditional `start` query never fires while the
- * widget is in Viper7 mode.
+ * comments in `chat-window.tsx`).
+ *
+ * Mounted by the top-level `ChatWidget` only while `chatWidgetModeAtom` is
+ * `'onboarding'` — unlike `Viper7Chat`, that's safe here: `useOnboardingChat`
+ * re-fetches the persisted session on every mount (`start` doubles as its
+ * `useQuery`), so mounting/unmounting this component never loses data; it's
+ * exactly the "rehydrate per request" architecture the backend was built
+ * around, which is what lets closing mid-interview act as a supported pause.
+ *
+ * Reports back to the parent via `onSettled` once the interview reaches a
+ * terminal status (`'complete'`, `'declined'`, `'deleted'`) — see
+ * `ChatWidget`'s `handleOnboardingSettled` for what that does.
  */
 function OnboardingChat({
   courseSlug,
+  isOpen,
   fontSize,
   onToggleFontSize,
   onClose,
-}: ChatWindowChromeProps & { courseSlug: string }) {
+  onSettled,
+}: ChatWindowChromeProps & { courseSlug: string; onSettled: () => void }) {
   const { messages, sendMessage, isLoading, status, confirm } =
     useOnboardingChat(courseSlug);
 
+  // Terminal statuses mean there is nothing left to resume — staying in
+  // onboarding mode past this point would strand the shared widget on a
+  // dead conversation with no way back to Viper7 (see `handleOnboardingSettled`).
+  // 'awaiting_consent' / 'awaiting_answer' / 'confirming' are deliberately
+  // NOT included: those must keep the widget in onboarding mode across a
+  // close/reopen so resuming a paused interview keeps working.
+  useEffect(() => {
+    if (
+      status === 'complete' ||
+      status === 'declined' ||
+      status === 'deleted'
+    ) {
+      onSettled();
+    }
+  }, [status, onSettled]);
+
   return (
-    <ChatWindow
-      fontSize={fontSize}
-      onToggleFontSize={onToggleFontSize}
-      onClose={onClose}
-      messages={messages}
-      sendMessage={sendMessage}
-      isLoading={isLoading}
-      status={status}
-      onConfirm={confirm}
-    />
+    <AnimatePresence>
+      {isOpen && (
+        <ChatWindow
+          fontSize={fontSize}
+          onToggleFontSize={onToggleFontSize}
+          onClose={onClose}
+          messages={messages}
+          sendMessage={sendMessage}
+          isLoading={isLoading}
+          status={status}
+          onConfirm={confirm}
+        />
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -87,57 +139,80 @@ function OnboardingChat({
  * Owns the chrome shared by every conversation mode — open/close state, font
  * size, the launcher bubble, the signed-in/non-admin gate — directly off
  * `chatWidgetOpenAtom`/`chatWidgetFontSizeAtom` so that state stays shared
- * regardless of which mode is active. Which conversation actually drives the
- * window is `chatWidgetModeAtom`: `'viper7'` mounts `Viper7Chat`,
- * `'onboarding'` mounts `OnboardingChat`. Exactly one is ever mounted — this
- * is ordinary conditional rendering, not a conditional-hooks violation; each
- * mode is its own component instance, not a hook called conditionally within
- * one.
+ * regardless of which mode is active.
  *
- * Gated to signed-in, non-admin routes: hidden entirely (renders `null`) when
- * there is no session, or when the current route is under `/admin` — the
- * admin surface has its own tooling and shouldn't show the learner-facing
- * chat launcher.
+ * `Viper7Chat` is always mounted (its `isOpen` prop only ever gates whether
+ * its `<ChatWindow>` renders) so its live conversation state survives every
+ * open/close and every mode switch. `OnboardingChat` mounts only while
+ * `chatWidgetModeAtom.kind === 'onboarding'` — safe because it rehydrates
+ * from the server on every mount. `handleOnboardingSettled` resets the mode
+ * atom back to `'viper7'` once an interview reaches a terminal status, which
+ * is the only thing that unmounts `OnboardingChat` again; closing the widget
+ * alone never does, so a paused mid-interview session stays reachable.
+ *
+ * Gated to signed-in, non-admin routes: the launcher bubble, both
+ * conversation windows, and `OnboardingChat` itself are all hidden while
+ * there is no session or the current route is under `/admin` — the admin
+ * surface has its own tooling and shouldn't show the learner-facing chat
+ * launcher. `Viper7Chat`, however, is NOT gated by this — see its own doc
+ * comment above for why: `ChatWidget` is mounted once, unconditionally, at
+ * the app root (`src/routes/__root.tsx`), so it never itself unmounts across
+ * route navigation. Before this component grew a mode split, `useChatWidget`
+ * was called directly in `ChatWidget`'s body, so it kept running (and its
+ * `useChat` state stayed alive) on every render where this admin/session
+ * check made the component return `null`. Making that same check unmount a
+ * *child* component holding the hook would reintroduce exactly the kind of
+ * state loss this task's review caught — just triggered by admin navigation
+ * instead of closing the widget. So the check here only ever suppresses
+ * `Viper7Chat`'s window (via its `isOpen` prop) and the rest of the visible
+ * chrome, never the component itself.
  */
 export function ChatWidget() {
   const [fontSize, setFontSize] = useAtom(chatWidgetFontSizeAtom);
   const [isOpen, setIsOpen] = useAtom(chatWidgetOpenAtom);
   const mode = useAtomValue(chatWidgetModeAtom);
+  const setMode = useSetAtom(chatWidgetModeAtom);
   const { data: session } = authClient.useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  if (!session || pathname.startsWith('/admin')) return null;
+  const hidden = !session || pathname.startsWith('/admin');
 
   const toggleFontSize = () =>
     setFontSize((current) => (current === 16 ? 18 : 16));
   const onClose = () => setIsOpen(false);
+  // Stable identity so `OnboardingChat`'s effect can depend on it honestly.
+  const handleOnboardingSettled = useCallback(
+    () => setMode({ kind: 'viper7' }),
+    [setMode],
+  );
 
   return (
     <div className="pointer-events-none fixed inset-0 z-50">
-      {/* Window (open): a free-floating, draggable, resizable OS-style window */}
-      <AnimatePresence>
-        {isOpen &&
-          (mode.kind === 'onboarding' ? (
-            <OnboardingChat
-              key="onboarding"
-              courseSlug={mode.courseSlug}
-              fontSize={fontSize}
-              onToggleFontSize={toggleFontSize}
-              onClose={onClose}
-            />
-          ) : (
-            <Viper7Chat
-              key="viper7"
-              fontSize={fontSize}
-              onToggleFontSize={toggleFontSize}
-              onClose={onClose}
-            />
-          ))}
-      </AnimatePresence>
+      {/* Window (open): a free-floating, draggable, resizable OS-style window.
+          Always mounted (see doc comment above) — `hidden` only ever
+          suppresses its window via `isOpen`, never the component itself. */}
+      <Viper7Chat
+        isOpen={!hidden && isOpen && mode.kind === 'viper7'}
+        fontSize={fontSize}
+        onToggleFontSize={toggleFontSize}
+        onClose={onClose}
+      />
+
+      {!hidden && mode.kind === 'onboarding' && (
+        <OnboardingChat
+          key={mode.courseSlug}
+          courseSlug={mode.courseSlug}
+          isOpen={isOpen}
+          fontSize={fontSize}
+          onToggleFontSize={toggleFontSize}
+          onClose={onClose}
+          onSettled={handleOnboardingSettled}
+        />
+      )}
 
       {/* Trigger bubble (closed): its own fixed anchor, hidden while the window is open */}
       <AnimatePresence>
-        {!isOpen && (
+        {!hidden && !isOpen && (
           <motion.button
             type="button"
             initial={{ scale: 0, opacity: 0 }}
