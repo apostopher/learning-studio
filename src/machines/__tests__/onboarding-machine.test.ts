@@ -4,9 +4,14 @@ import { DEFAULT_ONBOARDING_QUESTIONS } from '#/lib/onboarding-default-questions
 import type { OnboardingContext } from '#/machines/onboarding-machine';
 import {
   CONSENT_CLARIFICATION_CAP,
+  FOLLOW_UP_CAP,
   onboardingMachine,
 } from '#/machines/onboarding-machine';
-import type { OnboardingConsentEvaluation } from '#/types';
+import type {
+  OnboardingConsentEvaluation,
+  OnboardingQuestions,
+  OnboardingReplyEvaluation,
+} from '#/types';
 
 const INPUT = {
   onboardingId: 1,
@@ -73,8 +78,11 @@ describe('onboardingMachine — consent gate', () => {
     actor.start();
     await waitFor(actor, (s) => s.matches('awaitingConsent'));
     actor.send({ type: 'REPLY', text: 'sure, go ahead' });
-    await waitFor(actor, (s) => s.matches('asking'));
-    expect(actor.getSnapshot().matches('asking')).toBe(true);
+    // `asking` invokes askQuestion, which the default stub resolves
+    // immediately — re-querying getSnapshot() here would race against that
+    // invoke's onDone. Assert on the snapshot waitFor already resolved with.
+    const snapshot = await waitFor(actor, (s) => s.matches('asking'));
+    expect(snapshot.matches('asking')).toBe(true);
   });
 
   it('signs off and records the decline when consent is refused', async () => {
@@ -107,8 +115,10 @@ describe('onboardingMachine — consent gate', () => {
     await waitFor(actor, (s) => s.context.consentClarificationCount === 1);
     await waitFor(actor, (s) => s.matches('awaitingConsent'));
     actor.send({ type: 'REPLY', text: 'ok that makes sense' });
-    await waitFor(actor, (s) => s.matches('asking'));
-    expect(actor.getSnapshot().matches('asking')).toBe(true);
+    // Same race as above: `asking` invokes askQuestion and can advance to
+    // `awaitingAnswer` before a separate getSnapshot() call would run.
+    const snapshot = await waitFor(actor, (s) => s.matches('asking'));
+    expect(snapshot.matches('asking')).toBe(true);
   });
 
   it('treats a capped-out clarification loop as declined', async () => {
@@ -174,5 +184,228 @@ describe('onboardingMachine — consent gate', () => {
     expect(greet).toHaveBeenCalledTimes(2);
     const secondCallArgs = greet.mock.calls[1][0];
     expect(secondCallArgs.input.context.lastClarification).toBe(unclear.reply);
+  });
+});
+
+/** Actor already past the consent gate, with scripted reply verdicts. */
+function makeAnsweringActor(
+  replyVerdicts: OnboardingReplyEvaluation[],
+  questions = DEFAULT_ONBOARDING_QUESTIONS,
+) {
+  const queue = [...replyVerdicts];
+  const saveAnswer = vi.fn(async () => {});
+  const completeOnboarding = vi.fn(async () => {});
+  const deleteOnboarding = vi.fn(async () => {});
+
+  const actor = createActor(
+    onboardingMachine.provide({
+      actors: {
+        greet: fromPromise(async () => 'Welcome…'),
+        evaluateConsent: fromPromise<
+          OnboardingConsentEvaluation,
+          { context: OnboardingContext; reply: string }
+        >(async () => ({
+          status: 'consented',
+          reply: null,
+        })),
+        signOff: fromPromise(async () => 'bye'),
+        declineConsent: fromPromise(async () => {}),
+        askQuestion: fromPromise(async () => 'So, tell me a bit about you?'),
+        evaluateReply: fromPromise(async () => {
+          const next = queue.shift();
+          if (!next) throw new Error('evaluateReply called more than scripted');
+          return next;
+        }),
+        saveAnswer: fromPromise(saveAnswer),
+        summarise: fromPromise(async () => "Here's what I heard…"),
+        completeOnboarding: fromPromise(completeOnboarding),
+        deleteOnboarding: fromPromise(deleteOnboarding),
+      },
+    }),
+    { input: { ...INPUT, questions } },
+  );
+
+  return { actor, saveAnswer, completeOnboarding, deleteOnboarding };
+}
+
+const answered = (answer: string): OnboardingReplyEvaluation => ({
+  status: 'answered',
+  answer,
+  followUp: null,
+  hesitancy: false,
+});
+
+const vague: OnboardingReplyEvaluation = {
+  status: 'needs_follow_up',
+  answer: null,
+  followUp: 'Could you say a bit more?',
+  hesitancy: false,
+};
+
+/** Drives the actor from start through the consent gate to the first question. */
+async function reachAsking(
+  actor: ReturnType<typeof makeAnsweringActor>['actor'],
+) {
+  actor.start();
+  await waitFor(actor, (s) => s.matches('awaitingConsent'));
+  actor.send({ type: 'REPLY', text: 'yes' });
+  await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+}
+
+describe('onboardingMachine — question loop', () => {
+  const ONE: OnboardingQuestions = [{ id: 'q1', text: 'Only question?' }];
+
+  it('asks the first pending question', async () => {
+    const { actor } = makeAnsweringActor([answered('yes')], ONE);
+    await reachAsking(actor);
+    expect(actor.getSnapshot().context.currentQuestionId).toBe('q1');
+  });
+
+  it('persists an answer and completes when nothing is left pending', async () => {
+    const { actor, saveAnswer, completeOnboarding } = makeAnsweringActor(
+      [answered('Two years, mostly FPV.')],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years, mostly FPV' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'CONFIRM' });
+    await waitFor(actor, (s) => s.status === 'done');
+    expect(actor.getSnapshot().matches('complete')).toBe(true);
+    expect(saveAnswer).toHaveBeenCalledTimes(1);
+    expect(completeOnboarding).toHaveBeenCalledTimes(1);
+    expect(actor.getSnapshot().context.answers).toEqual({
+      q1: 'Two years, mostly FPV.',
+    });
+  });
+
+  it('follows up on a vague reply without persisting an answer', async () => {
+    const { actor, saveAnswer } = makeAnsweringActor(
+      [vague, answered('Two years.')],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'a bit' });
+    await waitFor(actor, (s) => s.context.followUpCount === 1);
+    expect(saveAnswer).not.toHaveBeenCalled();
+    await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+  });
+
+  it('stops following up at the cap and takes the reply as the answer', async () => {
+    // Without a cap, a user giving vague answers loops forever.
+    const { actor, saveAnswer } = makeAnsweringActor(
+      Array.from({ length: FOLLOW_UP_CAP + 1 }, () => vague),
+      ONE,
+    );
+    await reachAsking(actor);
+    for (let i = 0; i <= FOLLOW_UP_CAP; i++) {
+      await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+      actor.send({ type: 'REPLY', text: 'dunno' });
+      if (i < FOLLOW_UP_CAP) {
+        await waitFor(actor, (s) => s.context.followUpCount === i + 1);
+      }
+    }
+    await waitFor(actor, (_s) => saveAnswer.mock.calls.length === 1);
+    expect(saveAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the follow-up count when moving to the next question', async () => {
+    const TWO: OnboardingQuestions = [
+      { id: 'q1', text: 'First?' },
+      { id: 'q2', text: 'Second?' },
+    ];
+    const { actor } = makeAnsweringActor(
+      [vague, answered('a'), answered('b')],
+      TWO,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'hmm' });
+    await waitFor(actor, (s) => s.context.followUpCount === 1);
+    await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+    actor.send({ type: 'REPLY', text: 'ok here is more' });
+    await waitFor(actor, (s) => s.context.currentQuestionId === 'q2');
+    expect(actor.getSnapshot().context.followUpCount).toBe(0);
+  });
+
+  it('stores an empty string for a declined question so it never re-prompts', async () => {
+    const { actor, saveAnswer } = makeAnsweringActor(
+      [
+        {
+          status: 'declined',
+          answer: null,
+          followUp: null,
+          hesitancy: true,
+        },
+      ],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: "I'd rather not say" });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(saveAnswer).toHaveBeenCalledTimes(1);
+    expect(actor.getSnapshot().context.answers).toEqual({ q1: '' });
+  });
+
+  it('pauses on request, leaving the row incomplete', async () => {
+    const { actor, completeOnboarding } = makeAnsweringActor([], ONE);
+    await reachAsking(actor);
+    actor.send({ type: 'PAUSE' });
+    await waitFor(actor, (s) => s.status === 'done');
+    expect(actor.getSnapshot().matches('paused')).toBe(true);
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('deletes on request', async () => {
+    const { actor, deleteOnboarding } = makeAnsweringActor([], ONE);
+    await reachAsking(actor);
+    actor.send({ type: 'DELETE' });
+    await waitFor(actor, (s) => s.status === 'done');
+    expect(actor.getSnapshot().matches('deleted')).toBe(true);
+    expect(deleteOnboarding).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-summarises when the user corrects the summary', async () => {
+    const { actor, completeOnboarding } = makeAnsweringActor(
+      [answered('Two years.')],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'REPLY', text: 'actually it was three years' });
+    await waitFor(actor, (s) => s.matches('summarising'));
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('skips straight to summarising when every question is already answered', async () => {
+    // The resume case: a returning user with a full answers map.
+    const resumed = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(async () => 'Welcome back…'),
+          evaluateConsent: fromPromise<
+            OnboardingConsentEvaluation,
+            { context: OnboardingContext; reply: string }
+          >(async () => ({
+            status: 'consented',
+            reply: null,
+          })),
+          signOff: fromPromise(async () => 'bye'),
+          declineConsent: fromPromise(async () => {}),
+          askQuestion: fromPromise(async () => 'q'),
+          evaluateReply: fromPromise(async () => answered('x')),
+          saveAnswer: fromPromise(async () => {}),
+          summarise: fromPromise(async () => 'summary'),
+          completeOnboarding: fromPromise(async () => {}),
+          deleteOnboarding: fromPromise(async () => {}),
+        },
+      }),
+      { input: { ...INPUT, questions: ONE, answers: { q1: 'already done' } } },
+    );
+    resumed.start();
+    await waitFor(resumed, (s) => s.matches('awaitingConsent'));
+    resumed.send({ type: 'REPLY', text: 'yes' });
+    await waitFor(resumed, (s) => s.matches('confirming'));
+    expect(resumed.getSnapshot().matches('confirming')).toBe(true);
   });
 });
