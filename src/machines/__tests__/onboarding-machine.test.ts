@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '#/lib/onboarding-default-questions';
+import type { OnboardingContext } from '#/machines/onboarding-machine';
 import {
   CONSENT_CLARIFICATION_CAP,
   onboardingMachine,
@@ -129,5 +130,49 @@ describe('onboardingMachine — consent gate', () => {
     await waitFor(actor, (s) => s.status === 'done');
     expect(actor.getSnapshot().matches('consentDeclined')).toBe(true);
     expect(declineConsent).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the clarification reply through to the next greeting', async () => {
+    // The re-greet after "needs_clarification" is supposed to answer the
+    // question the user raised, not repeat itself verbatim — that requires
+    // the clarification text to survive the trip back through context.
+    const queue = [unclear, consented];
+    const greet = vi.fn(
+      async ({ input }: { input: { context: OnboardingContext } }) => {
+        void input;
+        return 'Welcome — before we start…';
+      },
+    );
+
+    const actor = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(greet),
+          evaluateConsent: fromPromise(async () => {
+            const next = queue.shift();
+            if (!next)
+              throw new Error('evaluateConsent called more than scripted');
+            return next;
+          }),
+          signOff: fromPromise(
+            async () => 'No problem at all. Enjoy the course.',
+          ),
+          declineConsent: fromPromise(async () => {}),
+        },
+      }),
+      { input: INPUT },
+    );
+
+    actor.start();
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'what do you do with this?' });
+    await waitFor(actor, (s) => s.context.consentClarificationCount === 1);
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'ok that makes sense' });
+    await waitFor(actor, (s) => s.matches('asking'));
+
+    expect(greet).toHaveBeenCalledTimes(2);
+    const secondCallArgs = greet.mock.calls[1][0];
+    expect(secondCallArgs.input.context.lastClarification).toBe(unclear.reply);
   });
 });

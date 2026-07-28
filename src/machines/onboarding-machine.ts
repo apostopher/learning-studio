@@ -29,6 +29,7 @@ export type OnboardingContext = OnboardingInput & {
   consentClarificationCount: number;
   turnCount: number;
   lastReply: string | null;
+  lastClarification: string | null;
 };
 
 export type OnboardingEvent =
@@ -62,6 +63,7 @@ export const onboardingMachine = setup({
     consentClarificationCount: 0,
     turnCount: 0,
     lastReply: null,
+    lastClarification: null,
   }),
   initial: 'greeting',
   states: {
@@ -109,6 +111,7 @@ export const onboardingMachine = setup({
             actions: assign({
               consentClarificationCount: ({ context }) =>
                 context.consentClarificationCount + 1,
+              lastClarification: ({ event }) => event.output.reply,
             }),
           },
           {
