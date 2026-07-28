@@ -47,4 +47,10 @@ describe('onboardingSystemPrompt', () => {
       onboardingSystemPrompt({ ...base, questions: [] }),
     ).not.toThrow();
   });
+
+  it('gives a progression hint to ease into personal ground on the normal path', () => {
+    const prompt = onboardingSystemPrompt(base).toLowerCase();
+    expect(prompt).toContain('ease in');
+    expect(prompt).toContain('most exposing');
+  });
 });

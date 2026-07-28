@@ -30,11 +30,10 @@ export function onboardingSystemPrompt({
   const reminder = remindControls
     ? `\n## Reminder for this turn
 
-The conversation has either run long or the trainee seems hesitant about
-something. Before continuing, briefly restate — in your own words, not a
-copy-paste of the list above — that they can stop and come back later,
-suspend and resume, or stop and delete everything with no explanation
-needed. Keep it short and reassuring, not a repeated legal notice.`
+That moment has arrived — the conversation has run long, or this trainee
+seems hesitant right now. Briefly restate the controls above, in your own
+words rather than a copy-paste of the list, and keep it short and
+reassuring, not a repeated legal notice.`
     : '';
 
   return `
@@ -77,10 +76,11 @@ they can:
 
 ${CONTROLS}
 
-If the conversation runs past 10 minutes, or you sense hesitation — they take
-longer to respond, or their tone signals reluctance to answer something —
-briefly remind them of these same options again, warmly, without making it
-feel like a warning.
+This isn't a one-time disclosure: keep watching for the same two signals —
+the conversation running long, or the trainee seeming hesitant, whether
+that's slower responses or a tone that signals reluctance — and be ready to
+offer the same reassurance again if either shows up, warmly, without making
+it feel like a warning.
 ${reminder}
 
 ## What to cover
@@ -89,6 +89,11 @@ Use these as the starting point for what the conversation should surface by
 the end. Treat the exact wording as a prompt for you, not a script for them:
 
 ${formatQuestions(questions)}
+
+Where the order above allows it, ease in: open on lighter ground and let the
+more personal ground come once they've warmed up, rather than leading with
+whatever feels most exposing. This is about pacing within the order you were
+given, not license to rearrange it — the order above stays authoritative.
 
 ## Closing
 
