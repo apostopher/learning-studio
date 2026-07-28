@@ -34,8 +34,13 @@ async function renderStatus(props: Props) {
     path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
     component: () => null,
   });
+  const appRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/app',
+    component: () => null,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, lessonRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, lessonRoute, appRoute]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
   const result = render(<RouterProvider router={router} />);
@@ -99,5 +104,22 @@ describe('CourseSidebar', () => {
       '3D Airmanship',
     );
     expect(screen.getByRole('button', { name: /Fundamentals/ })).toBeDefined();
+  });
+
+  it('renders a "Courses" link back to /app', async () => {
+    await renderStatus({
+      courseSlug: '3d-airmanship',
+      status: 'ready',
+      title: '3D Airmanship',
+      moduleCount: 1,
+      lessonCount: 1,
+      modules,
+      openModuleSlug: null,
+      onOpenChange: () => {},
+      activeLessonSlug: null,
+    });
+    const backLink = screen.getByRole('link', { name: 'Courses' });
+    expect(backLink).toBeDefined();
+    expect(backLink.getAttribute('href')).toBe('/app');
   });
 });
