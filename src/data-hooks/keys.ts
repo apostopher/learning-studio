@@ -18,6 +18,8 @@ export const dataKeys = {
   courseProgressSummary: (slug: string) =>
     ['course', 'progress-summary', slug] as const,
   myCourses: () => ['user', 'my-courses'] as const,
+  onboardingSession: (courseSlug: string) =>
+    ['user', 'onboarding-session', courseSlug] as const,
   chats: () => ['user', 'chats'] as const,
   chatMessages: (chatId: string) => ['user', 'chat-messages', chatId] as const,
 } as const;
