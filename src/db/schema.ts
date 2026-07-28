@@ -31,6 +31,7 @@ import {
   PersonaSchema,
   OtherVideoIdsSchema,
   OnboardingQuestionsSchema,
+  OnboardingAnswersSchema,
 } from "@/types";
 
 export * from "./auth-schema";
@@ -58,6 +59,7 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   subscriptions: many(courseSubscriptionsTable),
   docs: many(docs),
   fileAssignments: many(blobFileAssignmentsTable),
+  onboarding: many(courseOnboardingTable),
 }));
 
 export const modulesTable = pgTable("modules", {
@@ -569,6 +571,7 @@ export const userProfileTableRelations = relations(
     favKeyPoints: many(favKeyPointsTable),
     userRoles: many(userProfileRolesTable),
     userOrganizations: many(userOrgTable),
+    courseOnboarding: many(courseOnboardingTable),
   }),
 );
 
@@ -743,6 +746,150 @@ export const courseSubscriptionsTableRelations = relations(
     course: one(coursesTable, {
       fields: [courseSubscriptionsTable.courseId],
       references: [coursesTable.id],
+    }),
+  }),
+);
+
+export const courseOnboardingTable = pgTable(
+  "course_onboarding",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    // questionId -> answer text. Defaults to {} rather than null so "not
+    // answered yet" is an empty map, not a null check in every consumer.
+    answers: jsonb("answers")
+      .$type<z.infer<typeof OnboardingAnswersSchema>>()
+      .notNull()
+      .default({}),
+    // The question set this row was last reconciled against. Null until the
+    // first answer is written. Flags stale responses in admin views; it does
+    // NOT decide re-prompting — pendingQuestions() does.
+    questionSetHash: varchar("question_set_hash", { length: 64 }),
+    // 'admin' | 'default' — the question source, frozen when the row is
+    // created. Without this, an admin adding the first question to a course
+    // would flip the effective set, orphan every default answer, and
+    // re-interview users who had already finished.
+    questionSource: varchar("question_source", { length: 16 }),
+    // Set when the user declines the consent framing. The row persists with an
+    // empty answers map so onboarding is never auto-offered again — declining
+    // is respected, not re-pitched on the next visit.
+    consentDeclinedAt: timestamp("consent_declined_at", { mode: "date" }),
+    // Set when the user asks to delete everything they've shared. The row is
+    // kept as a tombstone — answers cleared, transcript removed — so the agent
+    // never re-offers onboarding to someone who withdrew. Distinct from
+    // consentDeclinedAt, which means they never started.
+    deletedAt: timestamp("deleted_at", { mode: "date" }),
+    // Null means in-progress and resumable.
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      mode: "date",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One record per user per course. This is what makes the incremental-save
+    // upsert safe against double-submit, concurrent tabs, and retried requests.
+    uniqueIndex("course_onboarding_user_course_idx").on(
+      table.userId,
+      table.courseId,
+    ),
+    // The unique index is user-first, so it will not serve the admin
+    // "all responses for this course" query.
+    index("course_onboarding_course_id_idx").on(table.courseId),
+  ],
+);
+
+export const courseOnboardingInsertSchema = createInsertSchema(
+  courseOnboardingTable,
+  {
+    // drizzle-zod applies a column override verbatim, discarding the
+    // optional-wrapping it would otherwise derive from the column's DB
+    // default. Restate `.optional()` here so an insert that omits `answers`
+    // (relying on the column default of `{}`) still validates. Mirrors
+    // userProfileInsertSchema above for the same reason.
+    answers: OnboardingAnswersSchema.optional(),
+  },
+);
+export type CourseOnboardingInsert = z.infer<
+  typeof courseOnboardingInsertSchema
+>;
+
+export const courseOnboardingSelectSchema = createSelectSchema(
+  courseOnboardingTable,
+  {
+    answers: OnboardingAnswersSchema,
+  },
+);
+export type CourseOnboardingSelect = z.infer<
+  typeof courseOnboardingSelectSchema
+>;
+
+export const courseOnboardingTableRelations = relations(
+  courseOnboardingTable,
+  ({ one, many }) => ({
+    user: one(userProfileTable, {
+      fields: [courseOnboardingTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    course: one(coursesTable, {
+      fields: [courseOnboardingTable.courseId],
+      references: [coursesTable.id],
+    }),
+    messages: many(courseOnboardingMessagesTable),
+  }),
+);
+
+export const courseOnboardingMessagesTable = pgTable(
+  "course_onboarding_messages",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    onboardingId: integer("onboarding_id")
+      .notNull()
+      .references(() => courseOnboardingTable.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 16 }).notNull(), // 'assistant' | 'user'
+    // Mirrors aiMessages.parts so these rows are compatible with the AI SDK
+    // UIMessage shape when the UI is wired.
+    parts: jsonb("parts").notNull(),
+    order: integer("order").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    // A retried request must not append the same turn twice.
+    uniqueIndex("course_onboarding_messages_onboarding_order_idx").on(
+      table.onboardingId,
+      table.order,
+    ),
+    index("course_onboarding_messages_onboarding_id_idx").on(
+      table.onboardingId,
+    ),
+  ],
+);
+
+export const courseOnboardingMessagesInsertSchema = createInsertSchema(
+  courseOnboardingMessagesTable,
+);
+export type CourseOnboardingMessagesInsert = z.infer<
+  typeof courseOnboardingMessagesInsertSchema
+>;
+
+export const courseOnboardingMessagesSelectSchema = createSelectSchema(
+  courseOnboardingMessagesTable,
+);
+export type CourseOnboardingMessagesSelect = z.infer<
+  typeof courseOnboardingMessagesSelectSchema
+>;
+
+export const courseOnboardingMessagesTableRelations = relations(
+  courseOnboardingMessagesTable,
+  ({ one }) => ({
+    onboarding: one(courseOnboardingTable, {
+      fields: [courseOnboardingMessagesTable.onboardingId],
+      references: [courseOnboardingTable.id],
     }),
   }),
 );

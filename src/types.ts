@@ -69,6 +69,54 @@ export const OnboardingQuestionsSchema = z
   .max(50);
 export type OnboardingQuestions = z.infer<typeof OnboardingQuestionsSchema>;
 
+/**
+ * A user's onboarding answers, keyed by question id.
+ *
+ * The map itself is bounded, not just each answer: 128 chars is generous for
+ * a UUID id; 500 entries bounds a row at roughly 2.5 MB while leaving an
+ * order of magnitude of headroom over the 50-question cap for orphan answers
+ * (deleted questions deliberately leave their answer behind — see
+ * src/lib/course-onboarding.ts).
+ */
+export const OnboardingAnswersSchema = z
+  .record(z.string().max(128), z.string().max(5000))
+  .refine((answers) => Object.keys(answers).length <= 500, {
+    message: 'Too many onboarding answers',
+  });
+export type OnboardingAnswers = z.infer<typeof OnboardingAnswersSchema>;
+
+/** The consent gate's decision. Nothing is asked until this returns consented. */
+export const OnboardingConsentEvaluationSchema = z.object({
+  status: z.enum(['consented', 'declined', 'needs_clarification']),
+  reply: z.string().max(2000).nullable(),
+});
+export type OnboardingConsentEvaluation = z.infer<
+  typeof OnboardingConsentEvaluationSchema
+>;
+
+/**
+ * What a user's reply to an onboarding question means. `status` is the pivot
+ * that turns free text into a state transition.
+ *
+ * The 5000-char cap on `answer` matches OnboardingAnswersSchema's per-answer
+ * cap — an evaluation that could not be stored is not a valid evaluation.
+ */
+export const OnboardingReplyEvaluationSchema = z.object({
+  status: z.enum([
+    'answered',
+    'needs_follow_up',
+    'declined',
+    'wants_pause',
+    'wants_delete',
+  ]),
+  answer: z.string().max(5000).nullable(),
+  followUp: z.string().max(2000).nullable(),
+  hesitancy: z.boolean(),
+});
+export type OnboardingReplyEvaluation = z.infer<
+  typeof OnboardingReplyEvaluationSchema
+>;
+
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
   value: z.string().describe('The value of the option in markdown format'),
