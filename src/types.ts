@@ -69,6 +69,13 @@ export const OnboardingQuestionsSchema = z
   .max(50);
 export type OnboardingQuestions = z.infer<typeof OnboardingQuestionsSchema>;
 
+/** A user's onboarding answers, keyed by question id. */
+export const OnboardingAnswersSchema = z.record(
+  z.string(),
+  z.string().max(5000),
+);
+export type OnboardingAnswers = z.infer<typeof OnboardingAnswersSchema>;
+
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
   value: z.string().describe('The value of the option in markdown format'),
