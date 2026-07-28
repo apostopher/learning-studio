@@ -2,6 +2,7 @@ import { useRouterState } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   chatWidgetFontSizeAtom,
   chatWidgetModeAtom,
@@ -82,9 +83,10 @@ function Viper7Chat({
  * exactly the "rehydrate per request" architecture the backend was built
  * around, which is what lets closing mid-interview act as a supported pause.
  *
- * Reports back to the parent via `onSettled` once the interview reaches a
- * terminal status (`'complete'`, `'declined'`, `'deleted'`) — see
- * `ChatWidget`'s `handleOnboardingSettled` for what that does.
+ * Reports back to the parent via `onSettled`, but only when the learner
+ * closes the widget themselves while the interview is in a terminal status
+ * (`'complete'`, `'declined'`, `'deleted'`) — see `handleClose` below and
+ * `ChatWidget`'s `handleOnboardingSettled` for what `onSettled` does.
  */
 function OnboardingChat({
   courseSlug,
@@ -94,16 +96,34 @@ function OnboardingChat({
   onClose,
   onSettled,
 }: ChatWindowChromeProps & { courseSlug: string; onSettled: () => void }) {
-  const { messages, sendMessage, isLoading, status, confirm } =
+  const { messages, sendMessage, isLoading, status, confirm, error } =
     useOnboardingChat(courseSlug);
 
-  // Terminal statuses mean there is nothing left to resume — staying in
-  // onboarding mode past this point would strand the shared widget on a
-  // dead conversation with no way back to Viper7 (see `handleOnboardingSettled`).
-  // 'awaiting_consent' / 'awaiting_answer' / 'confirming' are deliberately
-  // NOT included: those must keep the widget in onboarding mode across a
-  // close/reopen so resuming a paused interview keeps working.
+  // The spec commits to surfacing a stale-turn 409 as "this conversation
+  // continued elsewhere" — otherwise the failure is invisible, and on a 409
+  // specifically the hook has already rolled back the learner's optimistic
+  // message, so without this toast their typed reply just silently vanishes.
   useEffect(() => {
+    if (!error) return;
+    toast.error(
+      error.kind === 'conflict'
+        ? 'This conversation continued elsewhere.'
+        : error.message,
+    );
+  }, [error]);
+
+  // Terminal statuses mean there is nothing left to resume, but the reset to
+  // Viper7 mode is deliberately NOT triggered from here: the machine's
+  // `signOff` actor appends the farewell message in the same response that
+  // sets `status: 'declined'`, and resetting mode as soon as that status
+  // arrives would unmount this component (and swap in an empty Viper7
+  // window) before the learner has actually read it. Instead, the reset is
+  // deferred to the learner's own close action — see `handleClose`.
+  // 'awaiting_consent' / 'awaiting_answer' / 'confirming' are deliberately
+  // NOT included there: those must keep the widget in onboarding mode across
+  // a close/reopen so resuming a paused interview keeps working.
+  const handleClose = () => {
+    onClose();
     if (
       status === 'complete' ||
       status === 'declined' ||
@@ -111,7 +131,7 @@ function OnboardingChat({
     ) {
       onSettled();
     }
-  }, [status, onSettled]);
+  };
 
   return (
     <AnimatePresence>
@@ -119,7 +139,7 @@ function OnboardingChat({
         <ChatWindow
           fontSize={fontSize}
           onToggleFontSize={onToggleFontSize}
-          onClose={onClose}
+          onClose={handleClose}
           messages={messages}
           sendMessage={sendMessage}
           isLoading={isLoading}
@@ -146,9 +166,14 @@ function OnboardingChat({
  * open/close and every mode switch. `OnboardingChat` mounts only while
  * `chatWidgetModeAtom.kind === 'onboarding'` — safe because it rehydrates
  * from the server on every mount. `handleOnboardingSettled` resets the mode
- * atom back to `'viper7'` once an interview reaches a terminal status, which
- * is the only thing that unmounts `OnboardingChat` again; closing the widget
- * alone never does, so a paused mid-interview session stays reachable.
+ * atom back to `'viper7'`, which is the only thing that unmounts
+ * `OnboardingChat` again; `OnboardingChat` calls it from its own `handleClose`
+ * only once the interview has reached a terminal status, and only when the
+ * learner closes the widget themselves — never eagerly on the status change
+ * itself, so a terminal interview's closing message stays on screen for as
+ * long as the learner keeps the window open. A paused (non-terminal)
+ * mid-interview session stays reachable across close/reopen exactly as
+ * before, since `handleClose` only calls `onSettled` for a terminal status.
  *
  * Gated to signed-in, non-admin routes: the launcher bubble, both
  * conversation windows, and `OnboardingChat` itself are all hidden while
