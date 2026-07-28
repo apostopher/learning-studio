@@ -1,6 +1,5 @@
 import { assign, fromPromise, setup } from 'xstate';
 import { pendingQuestions } from '#/lib/course-onboarding';
-import type { OnboardingQuestionSource } from '#/lib/onboarding-session';
 import type {
   OnboardingAnswers,
   OnboardingConsentEvaluation,
@@ -30,16 +29,49 @@ export const FOLLOW_UP_CAP = 2;
  */
 export const HESITANCY_TURN_THRESHOLD = 12;
 
+/**
+ * How many recent transcript turns are kept in context. Bounds prompt size
+ * for a long interview: every turn added to the transcript is echoed into
+ * `evaluateReply` and `askQuestion`'s prompts, so an unbounded transcript
+ * would grow those prompts (and the persisted machine snapshot) without
+ * limit over a long-running session. 20 comfortably covers a follow-up
+ * exchange on the current question plus the immediately preceding one.
+ */
+export const TRANSCRIPT_TURN_LIMIT = 20;
+
+export type OnboardingMessage = { role: 'assistant' | 'user'; text: string };
+
+/**
+ * Appends a turn and trims to `TRANSCRIPT_TURN_LIMIT`, oldest first.
+ */
+const appendTranscript = (
+  transcript: OnboardingMessage[],
+  message: OnboardingMessage,
+): OnboardingMessage[] =>
+  [...transcript, message].slice(-TRANSCRIPT_TURN_LIMIT);
+
 export type OnboardingInput = {
   onboardingId: number;
-  courseId: number;
-  userId: string;
   questions: OnboardingQuestions;
-  source: OnboardingQuestionSource;
   answers: OnboardingAnswers;
+  /**
+   * Seeds `context.transcript`. The caller populates this from
+   * `loadOnboardingSession`'s `messages` on session resume; a fresh session
+   * passes an empty array.
+   */
+  initialMessages: OnboardingMessage[];
 };
 
-export type OnboardingContext = OnboardingInput & {
+export type OnboardingContext = Omit<OnboardingInput, 'initialMessages'> & {
+  /**
+   * Bounded (see `TRANSCRIPT_TURN_LIMIT`) turn-by-turn history of what was
+   * actually said, in order. `lastReply` alone only ever holds the single
+   * message being evaluated right now — it cannot express a multi-turn
+   * exchange (e.g. a base question, a vague answer, a follow-up, and the
+   * reply that narrows it). `evaluateReply` and `askQuestion` read this to
+   * see the whole exchange, not just its last fragment.
+   */
+  transcript: OnboardingMessage[];
   currentQuestionId: string | null;
   followUpCount: number;
   consentClarificationCount: number;
@@ -65,6 +97,10 @@ export type OnboardingContext = OnboardingInput & {
    * `asking` and `askingFollowUp`), once the turn that could actually carry
    * the reminder has been produced. That gives "reminded once per hesitancy
    * signal" rather than "reminded on every turn until the next question."
+   *
+   * On the *final* question, `asking`'s `always` guard routes straight to
+   * `summarising` without ever invoking `askQuestion` — so that onDone never
+   * runs. `summarising`'s own `onDone` clears it too, for exactly this path.
    */
   hesitancyFlagged: boolean;
   /**
@@ -142,7 +178,10 @@ export const onboardingMachine = setup({
 }).createMachine({
   id: 'onboarding',
   context: ({ input }) => ({
-    ...input,
+    onboardingId: input.onboardingId,
+    questions: input.questions,
+    answers: input.answers,
+    transcript: input.initialMessages.slice(-TRANSCRIPT_TURN_LIMIT),
     currentQuestionId: null,
     followUpCount: 0,
     consentClarificationCount: 0,
@@ -159,7 +198,16 @@ export const onboardingMachine = setup({
       invoke: {
         src: 'greet',
         input: ({ context }) => ({ context }),
-        onDone: { target: 'awaitingConsent' },
+        onDone: {
+          target: 'awaitingConsent',
+          actions: assign({
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'assistant',
+                text: event.output,
+              }),
+          }),
+        },
         onError: { target: 'failed' },
       },
     },
@@ -171,6 +219,11 @@ export const onboardingMachine = setup({
           actions: assign({
             lastReply: ({ event }) => event.text,
             turnCount: ({ context }) => context.turnCount + 1,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'user',
+                text: event.text,
+              }),
           }),
         },
         PAUSE: { target: 'paused' },
@@ -199,7 +252,13 @@ export const onboardingMachine = setup({
             actions: assign({
               consentClarificationCount: ({ context }) =>
                 context.consentClarificationCount + 1,
-              lastClarification: ({ event }) => event.output.reply,
+              // `reply` is schema-nullable on every status. When null, fall
+              // back to the trainee's own words rather than leaving
+              // `lastClarification` at its previous value (null on the first
+              // clarification) — otherwise `greet` takes its first-message
+              // branch and re-emits the identical opening verbatim.
+              lastClarification: ({ context, event }) =>
+                event.output.reply ?? context.lastReply,
             }),
           },
           {
@@ -215,7 +274,16 @@ export const onboardingMachine = setup({
       invoke: {
         src: 'signOff',
         input: ({ context }) => ({ context }),
-        onDone: { target: 'recordingDecline' },
+        onDone: {
+          target: 'recordingDecline',
+          actions: assign({
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'assistant',
+                text: event.output,
+              }),
+          }),
+        },
         onError: { target: 'recordingDecline' },
       },
     },
@@ -245,10 +313,17 @@ export const onboardingMachine = setup({
         }),
         onDone: {
           target: 'awaitingAnswer',
-          // The reminder (if any) has now been woven into the turn
-          // `askQuestion` just produced — clear it so it isn't repeated on
-          // every subsequent turn of this same question.
-          actions: assign({ hesitancyFlagged: false }),
+          actions: assign({
+            // The reminder (if any) has now been woven into the turn
+            // `askQuestion` just produced — clear it so it isn't repeated on
+            // every subsequent turn of this same question.
+            hesitancyFlagged: false,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'assistant',
+                text: event.output,
+              }),
+          }),
         },
         onError: { target: 'failed' },
       },
@@ -261,6 +336,11 @@ export const onboardingMachine = setup({
           actions: assign({
             lastReply: ({ event }) => event.text,
             turnCount: ({ context }) => context.turnCount + 1,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'user',
+                text: event.text,
+              }),
           }),
         },
         PAUSE: { target: 'paused' },
@@ -300,15 +380,26 @@ export const onboardingMachine = setup({
             // answered, declined, or follow-ups exhausted. A declined question
             // stores an empty string — a present key counts as answered, so it
             // never re-prompts. An exhausted follow-up takes the user's actual
-            // reply as the answer rather than discarding it as an empty string.
+            // reply as the answer rather than discarding it as an empty
+            // string.
+            //
+            // `''` is only ever a legitimate answer for `declined` — the
+            // schema leaves `answer` nullable on every status with no
+            // per-status constraint, so a schema-legal
+            // `{status:'answered', answer:null}` must NOT fall through to
+            // `''`: that would both discard what the trainee said and
+            // misreport them to themselves (via `summarise`) as having
+            // refused. Key on `declined` specifically and otherwise fall
+            // back to `lastReply`, which also correctly covers the
+            // exhausted-follow-up case above.
             target: 'persisting',
             actions: assign({
               answers: ({ context, event }) => ({
                 ...context.answers,
                 [context.currentQuestionId ?? '']:
-                  event.output.status === 'needs_follow_up'
-                    ? (context.lastReply ?? '')
-                    : (event.output.answer ?? ''),
+                  event.output.status === 'declined'
+                    ? ''
+                    : (event.output.answer ?? context.lastReply ?? ''),
               }),
               hesitancyFlagged: ({ event }) => event.output.hesitancy,
             }),
@@ -330,9 +421,16 @@ export const onboardingMachine = setup({
         }),
         onDone: {
           target: 'awaitingAnswer',
-          // Same reasoning as `asking`'s onDone: the reminder has now been
-          // delivered as part of this follow-up turn.
-          actions: assign({ hesitancyFlagged: false }),
+          actions: assign({
+            // Same reasoning as `asking`'s onDone: the reminder has now been
+            // delivered as part of this follow-up turn.
+            hesitancyFlagged: false,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'assistant',
+                text: event.output,
+              }),
+          }),
         },
         onError: { target: 'failed' },
       },
@@ -357,10 +455,25 @@ export const onboardingMachine = setup({
         input: ({ context }) => ({ context }),
         onDone: {
           target: 'confirming',
-          // The correction (if any) has now been folded into the summary
-          // `summarise` just produced — clear it so it applies to exactly
-          // this one re-summary, not to whatever the trainee says next.
-          actions: assign({ pendingCorrection: null }),
+          actions: assign({
+            // The correction (if any) has now been folded into the summary
+            // `summarise` just produced — clear it so it applies to exactly
+            // this one re-summary, not to whatever the trainee says next.
+            pendingCorrection: null,
+            // `asking`'s `always` guard reaches `summarising` on the final
+            // question *without* invoking `askQuestion` (there is no more
+            // question to ask), so `askQuestion`'s onDone — the only other
+            // place this is cleared — never runs on that path. Left
+            // uncleared here, it stays true through every re-summary and
+            // into `completing`, making `remindControls` true on every
+            // closing turn regardless of how the trainee is actually doing.
+            hesitancyFlagged: false,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'assistant',
+                text: event.output,
+              }),
+          }),
         },
         onError: { target: 'failed' },
       },
@@ -374,6 +487,11 @@ export const onboardingMachine = setup({
             lastReply: ({ event }) => event.text,
             turnCount: ({ context }) => context.turnCount + 1,
             pendingCorrection: ({ event }) => event.text,
+            transcript: ({ context, event }) =>
+              appendTranscript(context.transcript, {
+                role: 'user',
+                text: event.text,
+              }),
           }),
         },
         CONFIRM: { target: 'completing' },

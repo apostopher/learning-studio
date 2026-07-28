@@ -40,18 +40,43 @@ export const evaluateReply = async ({
   const question = context.questions.find((q) => q.id === questionId);
   const questionLine = question?.text ?? '(question no longer available)';
 
+  // A follow-up loop re-invokes this actor multiple times for the SAME
+  // question — a vague first answer, a narrowing follow-up, then a reply
+  // that only makes sense combined with what came before it. `reply` alone
+  // is just the latest fragment; without the exchange that produced it, a
+  // three-turn answer collapses to its last sentence and the earlier turns
+  // are lost from `answer` even though they were never contradicted. The
+  // transcript (bounded, see `TRANSCRIPT_TURN_LIMIT`) supplies that context.
+  const transcriptLines = context.transcript
+    .map(
+      (message) =>
+        `${message.role === 'assistant' ? 'You' : 'Trainee'}: ${message.text}`,
+    )
+    .join('\n');
+
   const prompt = `The trainee was just asked (in your own phrasing, based on this underlying
 question): "${questionLine}"
 
-Their reply was:
+Here is the recent conversation, in order — it may include an earlier vague
+answer and your own follow-up on this same question, not only the latest
+reply:
+
+${transcriptLines}
+
+Their most recent reply was:
 
 "${reply}"
 
-Decide what this reply means:
+Decide what this reply means, weighing the WHOLE exchange above for this
+question, not just the latest reply in isolation:
 
-- "answered": they gave a substantive answer to the question. Set \`answer\`
-  to a clean, self-contained restatement of what they said, in their own
-  words — this is what gets stored, so do not lose meaningful detail.
+- "answered": they gave a substantive answer to the question, whether in
+  this reply alone or built up across this exchange. Set \`answer\` to a
+  clean, self-contained restatement of everything they've told you for this
+  question so far, in their own words — combine an earlier partial answer
+  with what this reply adds or narrows down, rather than reporting only the
+  latest fragment. This is what gets stored, so do not lose meaningful
+  detail from earlier turns in the exchange.
 - "needs_follow_up": they tried to answer but were vague, incomplete, or the
   reply doesn't clearly cover the question yet. Set \`followUp\` to a short,
   natural follow-up question that would draw out what's missing. Do not use

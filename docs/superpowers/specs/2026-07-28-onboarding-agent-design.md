@@ -406,3 +406,29 @@ guarantee a duration, because the user controls how long they take to reply.
 unchanged: a row-level `questionSetHash` cannot express per-question freshness,
 so an admin rewriting a question's text will not re-prompt a user who already
 answered it.
+
+**A summary correction reaches the summariser but never reaches the `answers`
+map or the database.** `pendingCorrection` shapes the next reflect-back only —
+it is read by `summarise` and then cleared; nothing writes it, or anything
+derived from it, back into `context.answers` or persists it via `saveAnswer`.
+Two consequences follow directly. First, a second correction reverts the
+first: each re-summary is rebuilt from the untouched `answers` map plus
+whichever single correction is currently pending, so a trainee who corrects
+twice loses the effect of the first correction the moment the second one is
+folded in. Second, a trainee who gives up mid-correction and just confirms
+stamps a row via `completeOnboarding` whose `answers` were never actually
+corrected — the summary they read and confirmed no longer matches what is
+stored. The correction loop is also the only uncapped model-invoking loop in
+the machine: `confirming` → `summarising` → `confirming` has no equivalent of
+`FOLLOW_UP_CAP` or `CONSENT_CLARIFICATION_CAP`, so a trainee who keeps
+correcting keeps re-invoking `summarise` indefinitely.
+
+Fixing this properly needs an evaluator that maps a free-text correction back
+onto the specific question id(s) it corrects — the same kind of judgment call
+`evaluateReply` makes for an original answer, but running in reverse against
+already-stored answers. That is deliberately deferred to the step that adds
+the API route and UI, rather than bolted on here without a caller to exercise
+it. Until then, `docs/onboarding.md`'s promise that the closing summary
+"confirms accuracy" is only partially met: the trainee can react to the
+summary and see their words reflected in the *next* summary, but a correction
+is never durably applied to what actually gets saved.

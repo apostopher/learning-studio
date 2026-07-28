@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '#/lib/onboarding-default-questions';
-import type { OnboardingContext } from '#/machines/onboarding-machine';
+import type {
+  OnboardingContext,
+  OnboardingMessage,
+} from '#/machines/onboarding-machine';
 import {
   CONSENT_CLARIFICATION_CAP,
   FOLLOW_UP_CAP,
@@ -15,11 +18,9 @@ import type {
 
 const INPUT = {
   onboardingId: 1,
-  courseId: 10,
-  userId: 'user_1',
   questions: DEFAULT_ONBOARDING_QUESTIONS,
-  source: 'default' as const,
   answers: {},
+  initialMessages: [],
 };
 
 /**
@@ -185,6 +186,57 @@ describe('onboardingMachine — consent gate', () => {
     const secondCallArgs = greet.mock.calls[1][0];
     expect(secondCallArgs.input.context.lastClarification).toBe(unclear.reply);
   });
+
+  it('falls back to the trainee reply when needs_clarification carries a null reply', async () => {
+    // The schema permits `reply: null` on any status, not just consented and
+    // declined. When null, `lastClarification` must not stay at its previous
+    // value (null, on the first clarification) — otherwise `greet` takes its
+    // very-first-message branch and re-emits the identical opening verbatim,
+    // exactly the defect an earlier fix round removed.
+    const queue: OnboardingConsentEvaluation[] = [
+      { status: 'needs_clarification', reply: null },
+      consented,
+    ];
+    const greet = vi.fn(
+      async ({ input }: { input: { context: OnboardingContext } }) => {
+        void input;
+        return 'Welcome — before we start…';
+      },
+    );
+
+    const actor = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(greet),
+          evaluateConsent: fromPromise(async () => {
+            const next = queue.shift();
+            if (!next)
+              throw new Error('evaluateConsent called more than scripted');
+            return next;
+          }),
+          signOff: fromPromise(
+            async () => 'No problem at all. Enjoy the course.',
+          ),
+          declineConsent: fromPromise(async () => {}),
+        },
+      }),
+      { input: INPUT },
+    );
+
+    actor.start();
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'huh, what do you mean?' });
+    await waitFor(actor, (s) => s.context.consentClarificationCount === 1);
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'ok that makes sense' });
+    await waitFor(actor, (s) => s.matches('asking'));
+
+    expect(greet).toHaveBeenCalledTimes(2);
+    const secondCallArgs = greet.mock.calls[1][0];
+    expect(secondCallArgs.input.context.lastClarification).toBe(
+      'huh, what do you mean?',
+    );
+  });
 });
 
 /** Actor already past the consent gate, with scripted reply verdicts. */
@@ -349,6 +401,100 @@ describe('onboardingMachine — question loop', () => {
     const secondCallArgs = askQuestion.mock.calls[1][0];
     expect(secondCallArgs.input.context.pendingFollowUp).toBe(vague.followUp);
     expect(secondCallArgs.input.questionId).toBe('q1');
+  });
+
+  it('threads the transcript through a follow-up exchange so the evaluator sees the whole exchange', async () => {
+    // Without a transcript, `evaluateReply` only ever sees `lastReply` — a
+    // single fragment. A three-turn exchange (base question, vague answer,
+    // follow-up, narrowing reply) must not collapse to just the final
+    // fragment: the evaluator needs the earlier turns to combine them into
+    // one answer, and this proves the plumbing actually delivers them.
+    const evaluateReply = vi.fn(
+      async ({
+        input,
+      }: {
+        input: {
+          context: OnboardingContext;
+          questionId: string;
+          reply: string;
+        };
+      }): Promise<OnboardingReplyEvaluation> => {
+        if (input.reply === 'a bit of drone stuff') {
+          return {
+            status: 'needs_follow_up',
+            answer: null,
+            followUp: 'Which platforms have you flown?',
+            hesitancy: false,
+          };
+        }
+        const priorUserTurn = input.context.transcript.find(
+          (m) => m.role === 'user' && m.text === 'a bit of drone stuff',
+        );
+        return {
+          status: 'answered',
+          answer:
+            priorUserTurn === undefined
+              ? input.reply
+              : `${priorUserTurn.text}; ${input.reply}`,
+          followUp: null,
+          hesitancy: false,
+        };
+      },
+    );
+
+    const askQuestion = vi.fn(
+      async ({
+        input,
+      }: {
+        input: { context: OnboardingContext; questionId: string };
+      }) => input.context.pendingFollowUp ?? 'So, tell me a bit about you?',
+    );
+
+    const actor = createActor(
+      onboardingMachine.provide({
+        actors: {
+          greet: fromPromise(async () => 'Welcome…'),
+          evaluateConsent: fromPromise<
+            OnboardingConsentEvaluation,
+            { context: OnboardingContext; reply: string }
+          >(async () => ({ status: 'consented', reply: null })),
+          signOff: fromPromise(async () => 'bye'),
+          declineConsent: fromPromise(async () => {}),
+          askQuestion: fromPromise(askQuestion),
+          evaluateReply: fromPromise(evaluateReply),
+          saveAnswer: fromPromise(async () => {}),
+          summarise: fromPromise(async () => 'summary'),
+          completeOnboarding: fromPromise(async () => {}),
+          deleteOnboarding: fromPromise(async () => {}),
+        },
+      }),
+      { input: { ...INPUT, questions: ONE } },
+    );
+
+    actor.start();
+    await waitFor(actor, (s) => s.matches('awaitingConsent'));
+    actor.send({ type: 'REPLY', text: 'yes' });
+    await waitFor(actor, (s) => s.matches('awaitingAnswer'));
+    actor.send({ type: 'REPLY', text: 'a bit of drone stuff' });
+    await waitFor(
+      actor,
+      (s) =>
+        s.matches('awaitingAnswer') &&
+        s.context.pendingFollowUp === 'Which platforms have you flown?',
+    );
+    actor.send({ type: 'REPLY', text: 'mostly DJI, a couple of years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+
+    expect(evaluateReply).toHaveBeenCalledTimes(2);
+    const secondCallArgs = evaluateReply.mock.calls[1][0];
+    expect(
+      (secondCallArgs.input.context.transcript as OnboardingMessage[]).some(
+        (m) => m.role === 'user' && m.text === 'a bit of drone stuff',
+      ),
+    ).toBe(true);
+    expect(actor.getSnapshot().context.answers).toEqual({
+      q1: 'a bit of drone stuff; mostly DJI, a couple of years',
+    });
   });
 
   it('stops following up at the cap and takes the reply as the answer', async () => {
@@ -519,6 +665,63 @@ describe('onboardingMachine — question loop', () => {
       answer: '',
     });
     expect(actor.getSnapshot().context.answers).toEqual({ q1: '' });
+  });
+
+  it('stores the trainee reply, not an empty string, when answered pairs with a null answer', async () => {
+    // `OnboardingReplyEvaluationSchema` leaves `answer` nullable on every
+    // status with no per-status constraint, so `{status:'answered',
+    // answer:null}` is schema-legal. `''` is only a legitimate answer for
+    // `declined` — falling back to it here would discard the trainee's
+    // reply AND misreport them to themselves (summarise renders '' as
+    // "chose not to answer").
+    const { actor, saveAnswer } = makeAnsweringActor(
+      [{ status: 'answered', answer: null, followUp: null, hesitancy: false }],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years, mostly FPV' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(saveAnswer.mock.calls[0][0].input).toEqual({
+      onboardingId: INPUT.onboardingId,
+      questionId: 'q1',
+      answer: 'two years, mostly FPV',
+    });
+    expect(actor.getSnapshot().context.answers).toEqual({
+      q1: 'two years, mostly FPV',
+    });
+  });
+
+  it('still stores an empty string when the evaluation is declined', async () => {
+    // Companion to the above: fixing the null-answer case must not regress
+    // the one status `''` is legitimately reserved for.
+    const { actor } = makeAnsweringActor(
+      [{ status: 'declined', answer: null, followUp: null, hesitancy: false }],
+      ONE,
+    );
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: "I'd rather not say" });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(actor.getSnapshot().context.answers).toEqual({ q1: '' });
+  });
+
+  it('clears hesitancyFlagged once summarising completes on the final question', async () => {
+    // `askQuestion`'s onDone is the only other place this is cleared, but
+    // `asking`'s `always` guard routes straight to `summarising` on the
+    // final question without ever invoking `askQuestion` — so that onDone
+    // never runs. Left uncleared, `remindControls` would read true on every
+    // closing turn (summarising, confirming, every re-summary, completing)
+    // regardless of how the trainee is actually doing.
+    const hesitantAnswer: OnboardingReplyEvaluation = {
+      status: 'answered',
+      answer: 'two years',
+      followUp: null,
+      hesitancy: true,
+    };
+    const { actor } = makeAnsweringActor([hesitantAnswer], ONE);
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    expect(actor.getSnapshot().context.hesitancyFlagged).toBe(false);
   });
 
   it('stores the actual reply as the answer once follow-ups are exhausted', async () => {

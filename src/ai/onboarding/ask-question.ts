@@ -65,10 +65,22 @@ disclaimer bolted on.`;
     question?.text ??
     "the next topic in the arc described in your system prompt's What to Cover section";
 
+  // The recent transcript (bounded, see `TRANSCRIPT_TURN_LIMIT`), not just
+  // `context.lastReply` — a single most-recent message can't show that the
+  // trainee gave a multi-turn answer to the previous question, so this turn
+  // has more than one message's worth of conversation to acknowledge before
+  // moving on.
+  const transcriptLines = context.transcript
+    .map(
+      (message) =>
+        `${message.role === 'assistant' ? 'You' : 'Trainee'}: ${message.text}`,
+    )
+    .join('\n');
+
   const previousReplyLine =
-    context.lastReply === null
+    context.transcript.length === 0
       ? ''
-      : `\n\nTheir most recent message was: "${context.lastReply}"\n\nLet it shape how you transition into the next question — follow up on
+      : `\n\nHere is the recent conversation so far, in order:\n\n${transcriptLines}\n\nLet it shape how you transition into the next question — follow up on
 anything worth acknowledging before moving on.`;
 
   const prompt = `The next thing to cover is: ${questionLine}

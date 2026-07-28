@@ -20,7 +20,11 @@ import {
 } from '@/db/course-onboarding';
 
 export type OnboardingDeps = {
-  /** The machine's context carries courseId, not the name. */
+  /**
+   * The machine's context deliberately carries no course or user
+   * identifiers (see the SECURITY note below) — the course name it needs
+   * for prompts is supplied here instead.
+   */
   courseName: string;
   /** Turns already persisted for this session; seeds the next turn's order. */
   initialMessageCount: number;
