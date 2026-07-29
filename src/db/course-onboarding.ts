@@ -132,6 +132,59 @@ export const loadOnboardingSession = async ({
 };
 
 /**
+ * Reads the course_onboarding row for this user+course WITHOUT creating one —
+ * unlike loadOnboardingSession, which always creates a row so the machine has
+ * something to run against. A pure status check must never have that side
+ * effect: merely checking whether onboarding has started must not itself
+ * start it.
+ */
+export const findOnboardingRow = async ({
+  userId,
+  courseId,
+}: {
+  userId: string;
+  courseId: number;
+}): Promise<CourseOnboardingSelect | null> => {
+  const [row] = await db
+    .select()
+    .from(courseOnboardingTable)
+    .where(
+      and(
+        eq(courseOnboardingTable.userId, userId),
+        eq(courseOnboardingTable.courseId, courseId),
+      ),
+    );
+
+  return row ?? null;
+};
+
+/**
+ * Whether the learner has ever sent at least one reply for this onboarding
+ * session — the signal that distinguishes "greeted but never responded to
+ * consent" from "actually engaged," without reading the machine's internal
+ * state (which would couple this check to the machine's state-name shape,
+ * something Task 2's design note explicitly avoids).
+ */
+export const hasUserReply = async ({
+  onboardingId,
+}: {
+  onboardingId: number;
+}): Promise<boolean> => {
+  const [row] = await db
+    .select({ id: courseOnboardingMessagesTable.id })
+    .from(courseOnboardingMessagesTable)
+    .where(
+      and(
+        eq(courseOnboardingMessagesTable.onboardingId, onboardingId),
+        eq(courseOnboardingMessagesTable.role, 'user'),
+      ),
+    )
+    .limit(1);
+
+  return row != null;
+};
+
+/**
  * Merges one answer into the row's jsonb answers map with a single UPDATE
  * (`answers || patch::jsonb`) instead of a read-modify-write. Two browser
  * tabs answering different questions concurrently both apply cleanly — the
