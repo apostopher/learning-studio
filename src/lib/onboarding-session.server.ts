@@ -137,6 +137,23 @@ export const getOnboardingProgress = async ({
     return { ok: true, status: closed };
   }
 
+  // An open (non-closed) row with a null snapshot is NOT the same thing as a
+  // fresh session: `advanceOnboarding` always either saves a fresh snapshot
+  // (on a successful, non-terminal turn) or clears it via
+  // `clearMachineSnapshot` (on `'deleted'` or `'failed'`) — every request
+  // that touches this row's machine does one or the other. Since the row is
+  // still open (not `'deleted'`, caught above), the only way it can have a
+  // null snapshot is that its most recent turn ended in `'failed'`. Reporting
+  // that as `'not_started'` would make the widget auto-reopen, re-attempt the
+  // greet, fail again, forever — with no explanatory UI, most likely during a
+  // real model/provider outage. `'in_progress'` isn't a perfect description
+  // of a failed turn, but it already means exactly what this decision needs:
+  // "don't auto-open." A dedicated status would require a schema change,
+  // which is out of scope here.
+  if (row.machineSnapshot == null) {
+    return { ok: true, status: 'in_progress' };
+  }
+
   const engaged = await hasUserReply({ onboardingId: row.id });
   return { ok: true, status: engaged ? 'in_progress' : 'not_started' };
 };
@@ -229,9 +246,9 @@ export const advanceOnboarding = async ({
 
   // Skip the persist write entirely when this turn was a pure no-op replay:
   // `event === null` (a "start") that restored an existing snapshot and
-  // produced no new turns. `course.$courseSlug.index.tsx` calls `start` on
-  // every render to derive its "should offer onboarding" prompt, so without
-  // this guard every such page view bumps `updatedAt` and can 409 another
+  // produced no new turns. `OnboardingChat` (rendered inside the chat widget
+  // once it's open) calls `start` via its own `useQuery` on every mount, so
+  // without this guard every such mount bumps `updatedAt` and can 409 another
   // tab's in-flight reply for no reason. Narrow on purpose: any event-bearing
   // call (reply, confirm) or a brand-new session (nothing to restore, or new
   // turns produced even on a `start` replay) always persists as before.

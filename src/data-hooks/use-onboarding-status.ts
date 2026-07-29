@@ -30,6 +30,15 @@ export function useOnboardingStatus(courseSlug: string) {
       }
       return onboardingProgressSchema.parse(await res.json()).status;
     },
-    staleTime: 5 * 60 * 1000,
+    // This decision (auto-open the widget onto a session the learner may have
+    // just declined/deleted/paused elsewhere) is consequential enough that
+    // freshness beats cache reuse: staleTime: 0 plus refetchOnMount: 'always'
+    // guarantee a real network round-trip on every mount, so a component that
+    // gates its action on this query's fetch actually settling (see
+    // course.$courseSlug.index.tsx) never acts on a value older than this
+    // visit. The route itself is read-only and cheap (no model call, no
+    // write), so there's no cost tradeoff being made here.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }

@@ -347,6 +347,7 @@ describe('getOnboardingProgress', () => {
     });
     expect(result).toEqual({ ok: true, status: 'not_started' });
     expect(hasUserReply).not.toHaveBeenCalled();
+    expect(loadOnboardingSession).not.toHaveBeenCalled();
   });
 
   it('reports a closed status without checking for a reply', async () => {
@@ -362,6 +363,7 @@ describe('getOnboardingProgress', () => {
     });
     expect(result).toEqual({ ok: true, status: 'complete' });
     expect(hasUserReply).not.toHaveBeenCalled();
+    expect(loadOnboardingSession).not.toHaveBeenCalled();
   });
 
   it('returns not_started when the row is open and has no user reply yet', async () => {
@@ -370,6 +372,7 @@ describe('getOnboardingProgress', () => {
       deletedAt: null,
       consentDeclinedAt: null,
       onboardingCompletedAt: null,
+      machineSnapshot: { some: 'snapshot' },
     });
     hasUserReply.mockResolvedValue(false);
     const result = await getOnboardingProgress({
@@ -386,6 +389,7 @@ describe('getOnboardingProgress', () => {
       deletedAt: null,
       consentDeclinedAt: null,
       onboardingCompletedAt: null,
+      machineSnapshot: { some: 'snapshot' },
     });
     hasUserReply.mockResolvedValue(true);
     const result = await getOnboardingProgress({
@@ -393,5 +397,27 @@ describe('getOnboardingProgress', () => {
       courseSlug: 'ppl',
     });
     expect(result).toEqual({ ok: true, status: 'in_progress' });
+  });
+
+  it('reports in_progress for an open row with a null machine snapshot, without checking for a reply (Fix 3)', async () => {
+    // An open (non-closed) row can only have a null snapshot because its most
+    // recent turn ended in `'failed'` — `advanceOnboarding` always either
+    // saves a fresh snapshot or clears it via `clearMachineSnapshot`, never
+    // leaves it null any other way. Reporting `'not_started'` here would make
+    // the widget auto-reopen and re-attempt (and re-fail) the greet forever.
+    // The snapshot check short-circuits before `hasUserReply` is ever needed.
+    findOnboardingRow.mockResolvedValue({
+      id: 1,
+      deletedAt: null,
+      consentDeclinedAt: null,
+      onboardingCompletedAt: null,
+      machineSnapshot: null,
+    });
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+    });
+    expect(result).toEqual({ ok: true, status: 'in_progress' });
+    expect(hasUserReply).not.toHaveBeenCalled();
   });
 });
