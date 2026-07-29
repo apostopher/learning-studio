@@ -84,7 +84,9 @@ describe('postOnboardingHandler', () => {
     expect(m.updateCourseOnboarding).not.toHaveBeenCalled();
   });
   it('saves and returns the questions', async () => {
-    const questions = [{ id: 'a', text: 'Q1' }];
+    const questions = [
+      { id: 'c1', name: 'Background', questions: [{ id: 'a', text: 'Q1' }] },
+    ];
     m.updateCourseOnboarding.mockResolvedValue(questions);
     const res = await postOnboardingHandler(postReq({ questions }), '1');
     expect(res.status).toBe(200);

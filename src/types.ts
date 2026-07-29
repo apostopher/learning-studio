@@ -64,10 +64,60 @@ export const OnboardingQuestionSchema = z.object({
   text: z.string().max(2000),
 });
 export type OnboardingQuestion = z.infer<typeof OnboardingQuestionSchema>;
+
+/** Total questions allowed across every category. Bounds the prompt, and
+ * preserves the cap the flat schema enforced before categories existed. */
+export const MAX_ONBOARDING_QUESTIONS = 50;
+export const MAX_ONBOARDING_CATEGORIES = 12;
+
+/**
+ * A named group of questions. The agent uses category boundaries to signpost
+ * moving between topics — see `src/ai/prompts/onboarding.ts`.
+ *
+ * Nesting (rather than a `category` field on each question) is deliberate: it
+ * makes contiguity structural. An admin cannot author
+ * `[techQ, motivationQ, techQ]`, so the agent can never introduce the same
+ * category twice.
+ */
+export const OnboardingCategorySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(100),
+  questions: z.array(OnboardingQuestionSchema),
+});
+export type OnboardingCategory = z.infer<typeof OnboardingCategorySchema>;
+
+/**
+ * A course's onboarding question set: ordered categories, each with ordered
+ * questions. Both levels are order-sensitive — the prompt states that the
+ * given order is authoritative.
+ *
+ * The question cap is enforced across the whole set rather than per category,
+ * so a course cannot dodge it by adding categories.
+ */
 export const OnboardingQuestionsSchema = z
-  .array(OnboardingQuestionSchema)
-  .max(50);
+  .array(OnboardingCategorySchema)
+  .max(MAX_ONBOARDING_CATEGORIES)
+  .refine(
+    (categories) =>
+      categories.reduce((sum, c) => sum + c.questions.length, 0) <=
+      MAX_ONBOARDING_QUESTIONS,
+    { message: `At most ${MAX_ONBOARDING_QUESTIONS} questions in total` },
+  );
 export type OnboardingQuestions = z.infer<typeof OnboardingQuestionsSchema>;
+
+/**
+ * A question paired with the category it came from — the shape the machine and
+ * prompts consume.
+ *
+ * The runtime deliberately works off this FLAT list, not the nested one:
+ * `pendingQuestions`, `selectNextQuestion`, the `answers` map and snapshot
+ * resume all predate categories and keep working untouched. Nesting is a
+ * storage and editor concern only.
+ */
+export type FlatOnboardingQuestion = OnboardingQuestion & {
+  categoryId: string;
+  categoryName: string;
+};
 
 /**
  * A user's onboarding answers, keyed by question id.

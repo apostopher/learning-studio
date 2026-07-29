@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type OnboardingQuestion, OnboardingQuestionsSchema } from '#/types';
+import { type OnboardingQuestions, OnboardingQuestionsSchema } from '#/types';
 import { dataKeys } from './keys';
 import { saveJson } from './save-json';
 
 interface UpdateOnboardingVars {
-  questions: OnboardingQuestion[];
+  questions: OnboardingQuestions;
   /** Save-on-close: prefer sendBeacon and don't await a response. */
   fireAndForget?: boolean;
 }
@@ -20,7 +20,7 @@ export function useUpdateCourseOnboarding(courseId: number) {
     mutationFn: async ({
       questions,
       fireAndForget,
-    }: UpdateOnboardingVars): Promise<OnboardingQuestion[]> => {
+    }: UpdateOnboardingVars): Promise<OnboardingQuestions> => {
       const saved = await saveJson({
         url: `/api/admin/courses/${courseId}/onboarding`,
         method: 'POST',

@@ -2,7 +2,7 @@ import { generateText } from 'ai';
 import { geminiFlash } from '#/ai/ai-provider';
 import { onboardingSystemPrompt } from '#/ai/prompts/onboarding';
 import type { OnboardingContext } from '#/machines/onboarding-machine';
-import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
+import { shouldRemindControls } from '#/machines/onboarding-machine';
 
 /**
  * Produces the warm open plus consent framing that starts (or re-starts) the
@@ -25,8 +25,7 @@ export const greet = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls:
-      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
+    remindControls: shouldRemindControls(context),
   });
 
   const prompt =

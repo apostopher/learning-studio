@@ -1,9 +1,9 @@
 import { assign, fromPromise, setup } from 'xstate';
 import { pendingQuestions } from '#/lib/course-onboarding';
 import type {
+  FlatOnboardingQuestion,
   OnboardingAnswers,
   OnboardingConsentEvaluation,
-  OnboardingQuestions,
   OnboardingReplyEvaluation,
 } from '#/types';
 
@@ -23,11 +23,30 @@ export const CONSENT_CLARIFICATION_CAP = 2;
 export const FOLLOW_UP_CAP = 2;
 
 /**
- * Turn count standing in for the doc's ten-minute mark — roughly two turns per
- * question across a five-to-seven question set. Past it, the agent re-states
- * the stop/suspend/delete controls, at most once per question.
+ * Turn-count backstop for "this conversation is running long" — roughly two
+ * turns per question across a five-to-seven question set.
+ *
+ * A backstop, not the primary signal: docs/onboarding.md keys the re-offer on
+ * TEN MINUTES, and turns are a poor proxy for that (a verbose trainee reaches
+ * 12 turns in four minutes, a terse one may take twenty). Both are checked —
+ * see `shouldRemindControls`.
  */
 export const HESITANCY_TURN_THRESHOLD = 12;
+
+/** The doc's actual signal: "Repeat this option briefly if the conversation
+ * runs more than 10 minutes" (docs/onboarding.md). */
+export const LONG_CONVERSATION_MINUTES = 10;
+
+/**
+ * Turns of silence before the long-conversation reminder may fire again.
+ *
+ * Without this the reminder LATCHES: `turnCount` only ever increases, so
+ * `turnCount >= HESITANCY_TURN_THRESHOLD` is true for every remaining turn of
+ * the interview once crossed, and the agent re-states the controls before
+ * every single question from that point on. The doc says "repeat briefly",
+ * not "repeat forever".
+ */
+export const CONTROLS_REMINDER_COOLDOWN_TURNS = 6;
 
 /**
  * How many recent transcript turns are kept in context. Bounds prompt size
@@ -48,7 +67,11 @@ export const TRANSCRIPT_TURN_LIMIT = 20;
  * restoration in a try/catch, so a shape change that slips through without a
  * bump still degrades to a fresh start rather than throwing.
  */
-export const ONBOARDING_MACHINE_VERSION = '1';
+// '2': context gained `elapsedMinutes` and `lastRemindedTurn` when the
+// controls reminder was changed from a permanent latch to a cooled-down
+// re-offer. A v1 snapshot has neither field, so restoring one would leave
+// `lastRemindedTurn` undefined and reinstate the latch for that session.
+export const ONBOARDING_MACHINE_VERSION = '2';
 
 export type OnboardingMessage = { role: 'assistant' | 'user'; text: string };
 
@@ -63,7 +86,16 @@ const appendTranscript = (
 
 export type OnboardingInput = {
   onboardingId: number;
-  questions: OnboardingQuestions;
+  /**
+   * FLAT and already ordered — category order, then question order within each
+   * category, produced by `flattenQuestions`. The machine deliberately never
+   * sees the nested category structure: `pendingQuestions`,
+   * `selectNextQuestion`, the `answers` map and snapshot resume all predate
+   * categories and keep working unchanged against a flat list. Each entry
+   * carries `categoryId`/`categoryName` so `askQuestion` can detect a category
+   * boundary without the machine needing to model categories at all.
+   */
+  questions: FlatOnboardingQuestion[];
   answers: OnboardingAnswers;
   /**
    * Seeds `context.transcript`. The caller populates this from
@@ -71,6 +103,17 @@ export type OnboardingInput = {
    * passes an empty array.
    */
   initialMessages: OnboardingMessage[];
+  /**
+   * Wall-clock minutes since this onboarding session began, computed by the
+   * caller from `course_onboarding.created_at`.
+   *
+   * Passed IN rather than read from a clock inside the machine, for two
+   * reasons: the machine stays pure (so tests can drive elapsed time directly
+   * instead of waiting or faking timers), and it is recomputed from the durable
+   * row on every request, so it survives pause/resume across separate HTTP
+   * calls where an in-context counter would not.
+   */
+  elapsedMinutes: number;
 };
 
 export type OnboardingContext = Omit<OnboardingInput, 'initialMessages'> & {
@@ -122,6 +165,59 @@ export type OnboardingContext = Omit<OnboardingInput, 'initialMessages'> & {
    * re-summary it was raised for, not linger into later corrections.
    */
   pendingCorrection: string | null;
+  /**
+   * `turnCount` at the moment a turn last carried the controls reminder, or
+   * null if it has never been given.
+   *
+   * This is what stops the long-conversation reminder latching. The
+   * "conversation is running long" condition is LEVEL-triggered on
+   * monotonically increasing inputs (`turnCount` never decreases, elapsed time
+   * never decreases), so once true it is true forever. Recording when the
+   * reminder was last delivered converts it into an edge: it fires, then stays
+   * quiet for `CONTROLS_REMINDER_COOLDOWN_TURNS`.
+   *
+   * Written wherever `hesitancyFlagged` is cleared — the same three sites, for
+   * the same reason: those are the points at which a produced turn has
+   * actually carried the reminder.
+   */
+  lastRemindedTurn: number | null;
+};
+
+/**
+ * Whether this turn should re-state the stop/suspend/delete controls.
+ *
+ * ONE definition, called by all six actors. It used to be an expression
+ * copy-pasted into each of them, which is how the latch below survived: fixing
+ * it meant finding six identical lines.
+ *
+ * Two independent triggers:
+ *
+ * - **Hesitancy** fires every time, uncooled. It is already edge-triggered by
+ *   construction — the evaluator sets `hesitancyFlagged`, the turn that
+ *   carries the reminder clears it — and it is a direct response to something
+ *   the trainee just did, so suppressing it would be wrong.
+ * - **A long conversation** is cooled down. Both of its inputs only ever
+ *   increase, so without `lastRemindedTurn` this returns true for every
+ *   remaining turn of the interview and the agent nags before every question.
+ */
+export const shouldRemindControls = (context: {
+  turnCount: number;
+  elapsedMinutes: number;
+  hesitancyFlagged: boolean;
+  lastRemindedTurn: number | null;
+}): boolean => {
+  if (context.hesitancyFlagged) return true;
+
+  const runningLong =
+    context.turnCount >= HESITANCY_TURN_THRESHOLD ||
+    context.elapsedMinutes >= LONG_CONVERSATION_MINUTES;
+  if (!runningLong) return false;
+
+  return (
+    context.lastRemindedTurn === null ||
+    context.turnCount - context.lastRemindedTurn >=
+      CONTROLS_REMINDER_COOLDOWN_TURNS
+  );
 };
 
 export type OnboardingEvent =
@@ -193,6 +289,7 @@ export const onboardingMachine = setup({
     questions: input.questions,
     answers: input.answers,
     transcript: input.initialMessages.slice(-TRANSCRIPT_TURN_LIMIT),
+    elapsedMinutes: input.elapsedMinutes,
     currentQuestionId: null,
     followUpCount: 0,
     consentClarificationCount: 0,
@@ -202,6 +299,7 @@ export const onboardingMachine = setup({
     pendingFollowUp: null,
     hesitancyFlagged: false,
     pendingCorrection: null,
+    lastRemindedTurn: null,
   }),
   initial: 'greeting',
   states: {
@@ -329,6 +427,12 @@ export const onboardingMachine = setup({
             // `askQuestion` just produced — clear it so it isn't repeated on
             // every subsequent turn of this same question.
             hesitancyFlagged: false,
+            // Start the cooldown, so the long-conversation trigger (whose
+            // inputs only ever increase) cannot re-fire on the very next turn.
+            lastRemindedTurn: ({ context }) =>
+              shouldRemindControls(context)
+                ? context.turnCount
+                : context.lastRemindedTurn,
             transcript: ({ context, event }) =>
               appendTranscript(context.transcript, {
                 role: 'assistant',
@@ -436,6 +540,10 @@ export const onboardingMachine = setup({
             // Same reasoning as `asking`'s onDone: the reminder has now been
             // delivered as part of this follow-up turn.
             hesitancyFlagged: false,
+            lastRemindedTurn: ({ context }) =>
+              shouldRemindControls(context)
+                ? context.turnCount
+                : context.lastRemindedTurn,
             transcript: ({ context, event }) =>
               appendTranscript(context.transcript, {
                 role: 'assistant',
@@ -479,6 +587,10 @@ export const onboardingMachine = setup({
             // into `completing`, making `remindControls` true on every
             // closing turn regardless of how the trainee is actually doing.
             hesitancyFlagged: false,
+            lastRemindedTurn: ({ context }) =>
+              shouldRemindControls(context)
+                ? context.turnCount
+                : context.lastRemindedTurn,
             transcript: ({ context, event }) =>
               appendTranscript(context.transcript, {
                 role: 'assistant',

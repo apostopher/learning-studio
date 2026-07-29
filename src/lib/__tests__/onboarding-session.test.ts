@@ -53,8 +53,14 @@ import {
 } from '#/lib/onboarding-session.server';
 
 const ADMIN: OnboardingQuestions = [
-  { id: 'a1b2', text: 'Which airframe do you fly most?' },
-  { id: 'c3d4', text: 'What does a good sortie look like to you?' },
+  {
+    id: 'cat1',
+    name: 'Flying background',
+    questions: [
+      { id: 'a1b2', text: 'Which airframe do you fly most?' },
+      { id: 'c3d4', text: 'What does a good sortie look like to you?' },
+    ],
+  },
 ];
 
 describe('resolveQuestionSet', () => {

@@ -38,6 +38,18 @@ interface ChatWindowProps {
 }
 
 /**
+ * `transformOrigin` uses physical values, not logical ones: it names a
+ * corner of THIS element's own scale transform, anchored to where the
+ * launcher bubble sits (`bottom-6 end-6` in chat-widget.tsx) — a visual
+ * anchor point for a transform, not a flow-relative direction. It matches
+ * `computeDefaultRect`'s deliberate `vp.width - MARGIN - width` / `vp.height
+ * - MARGIN - height` anchor (`use-chat-window-geometry.ts`), which is itself
+ * physical for the same reason: the bubble is always bottom-end of the
+ * *viewport*, not of the window's own (draggable) box.
+ */
+const WINDOW_TRANSFORM_ORIGIN = 'right bottom';
+
+/**
  * The free-floating, draggable/resizable chat window.
  *
  * Custom component — no Base UI equivalent: Base UI has no primitive for an
@@ -47,7 +59,9 @@ interface ChatWindowProps {
  *
  * Position/size ride the geometry hook's motion values (`left`/`top`/`width`/
  * `height`); the enter/exit spring rides scale+opacity only, so the two never
- * fight each other over the same frame.
+ * fight each other over the same frame. The spring itself grows FROM
+ * `WINDOW_TRANSFORM_ORIGIN` — the bubble's corner — so opening reads as the
+ * bubble expanding into the window, not an unrelated pop in empty space.
  */
 export function ChatWindow({
   fontSize,
@@ -82,7 +96,7 @@ export function ChatWindow({
           top,
           width,
           height,
-          transformOrigin: 'center',
+          transformOrigin: WINDOW_TRANSFORM_ORIGIN,
           '--chat-message-font-size': `${fontSize}px`,
         } as MotionStyle
       }

@@ -20,7 +20,9 @@ describe('useCourseOnboarding', () => {
   it('fetches the course onboarding questions', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => [{ id: 'a', text: 'Q1' }],
+      json: async () => [
+        { id: 'c1', name: 'Background', questions: [{ id: 'a', text: 'Q1' }] },
+      ],
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -30,6 +32,8 @@ describe('useCourseOnboarding', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/courses/4/onboarding');
-    expect(result.current.data).toEqual([{ id: 'a', text: 'Q1' }]);
+    expect(result.current.data).toEqual([
+      { id: 'c1', name: 'Background', questions: [{ id: 'a', text: 'Q1' }] },
+    ]);
   });
 });

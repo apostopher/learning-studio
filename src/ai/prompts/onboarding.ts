@@ -1,11 +1,20 @@
 import { brand } from '#/ai/prompts/brand';
-import type { OnboardingQuestions } from '#/types';
+import type { FlatOnboardingQuestion } from '#/types';
 
 const CONTROLS = `- Stop the conversation now and pick it up again later.
 - Suspend it and resume later from exactly where they left off.
 - Stop and delete everything they've shared so far — no explanation needed.`;
 
-function formatQuestions(questions: OnboardingQuestions): string {
+/**
+ * Renders the flat question list grouped under its category headings.
+ *
+ * Groups CONSECUTIVE runs of the same category rather than bucketing by id.
+ * That is safe because `flattenQuestions` emits category order then question
+ * order, so a category's questions are always contiguous — and it means a
+ * grouping bug would show up as a duplicated heading here rather than silently
+ * reordering the interview.
+ */
+function formatQuestions(questions: FlatOnboardingQuestion[]): string {
   if (questions.length === 0) {
     return `No specific questions were configured for this course. Fall back to the
 default arc: background and experience, motivation and goals, learning style
@@ -13,9 +22,21 @@ and preferences, schedule and logistics, and what they're anticipating about
 the final interview/exam.`;
   }
 
-  return questions
-    .map((question, index) => `${index + 1}. ${question.text}`)
-    .join('\n');
+  const lines: string[] = [];
+  let previousCategoryId: string | null = null;
+  let index = 0;
+
+  for (const question of questions) {
+    if (question.categoryId !== previousCategoryId) {
+      if (previousCategoryId !== null) lines.push('');
+      lines.push(`### ${question.categoryName}`);
+      previousCategoryId = question.categoryId;
+    }
+    index += 1;
+    lines.push(`${index}. ${question.text}`);
+  }
+
+  return lines.join('\n');
 }
 
 export function onboardingSystemPrompt({
@@ -24,7 +45,7 @@ export function onboardingSystemPrompt({
   remindControls,
 }: {
   courseName: string;
-  questions: OnboardingQuestions;
+  questions: FlatOnboardingQuestion[];
   remindControls: boolean;
 }): string {
   const reminder = remindControls
@@ -94,6 +115,28 @@ Where the order above allows it, ease in: open on lighter ground and let the
 more personal ground come once they've warmed up, rather than leading with
 whatever feels most exposing. This is about pacing within the order you were
 given, not license to rearrange it — the order above stays authoritative.
+
+## Moving between areas
+
+The questions are grouped under headings. Those headings are for your benefit,
+not labels to read out — never say "section", "category", or announce a
+heading by name as though reading a contents page.
+
+When the conversation crosses from one grouping into the next, you may mark
+the shift: round off what they just told you and ease into the new ground, in
+one breath, as part of asking the next question. Something closer to "that's a
+good picture of your flying background — let me ask what you're after from the
+course itself" than any kind of announcement.
+
+Use your judgement about whether to mark it at all. Sometimes a clean pivot is
+better than a signpost, and a real conversation does not narrate its own
+structure every few minutes. Vary it. Skipping it entirely is fine and often
+better.
+
+Do not summarise what they said if they said little — if they declined most of
+that ground, or answered thinly, just move on. Inventing warmth about answers
+they did not give is worse than saying nothing, and it lands especially badly
+with someone who was already reluctant.
 
 ## Closing
 

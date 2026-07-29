@@ -391,16 +391,21 @@ import { mergeStatusDefaults } from '../src/utils/brand-colors'
 
 describe('palette contrast (WCAG AA is a hard requirement)', () => {
   // The real configured palette, plus the status hues the generator adds.
+  // 'warning' is a user override (ITPS's real orange) — this must stay in
+  // sync with .env's VITE_BRAND_COLORS, or this suite silently stops
+  // exercising the deployed value and falls back to testing the generic
+  // STATUS_DEFAULTS seed instead.
   const userBrands: BrandEntry[] = [
     { name: 'gold', light: '#E9E28F', dark: '#E9E28F' },
     { name: 'apple', light: '#1A2F40', dark: '#F2F9FF' },
     { name: 'link', light: '#0066cc', dark: '#2997ff' },
+    { name: 'warning', light: '#FAA74A', dark: '#FAA74A' },
   ]
 
   const css = buildThemeCss({
     gray: { light: '#8B8D98', dark: '#8B8D98' },
     bg: { light: '#ffffff', dark: '#111111' },
-    panelBg: { light: '#ffffff', dark: '#111111' },
+    panelBg: { light: '#fafafa', dark: '#1a1a1a' },
     shellBg: { light: '#ffffff', dark: '#111111' },
     fontFamilies: { sans: 'Inter', mono: 'IBM Plex Mono', display: 'Inter' },
     brandColors: mergeStatusDefaults(userBrands),
@@ -513,5 +518,32 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     expect(token(p3LightBlock, 'gold-text')).not.toBe(
       light.accentScaleWideGamut[10],
     )
+  })
+
+  // WCAG 1.4.11 (non-text contrast): graphical objects — icons, chart
+  // strokes, focus rings — need only 3:1, not the 4.5:1 that applies to
+  // text. But status '-solid' (step 9) is tuned as a *fill* color, and
+  // yellow/orange hues in particular land far short of 3:1 against a light
+  // page even though their '-text' step clears 4.5:1 easily. Any consumer
+  // that strokes a graphical element with '-solid' instead of '-text' (as
+  // score-ring.tsx used to) can silently ship an illegible warning ring.
+  it('status -text (not -solid) clears the 3:1 non-text minimum against body and panel — the reason graphical strokes must use -text', () => {
+    for (const [label, block] of blocks) {
+      const bg = token(block, 'background')
+      const panel = token(block, 'panel-bg')
+      for (const name of ['success', 'warning', 'error']) {
+        const text = token(block, `${name}-text`)
+        for (const [surface, value] of [
+          ['background', bg],
+          ['panel', panel],
+        ] as const) {
+          const { ratio } = checkContrast(text, value)
+          expect(
+            ratio,
+            `${label} ${name}-text on ${surface} (${value}) = ${ratio.toFixed(2)}`,
+          ).toBeGreaterThanOrEqual(3)
+        }
+      }
+    }
   })
 })

@@ -39,6 +39,49 @@ export type RunTurnResult = {
 };
 
 /**
+ * Overlays request-scoped context values onto a persisted snapshot.
+ *
+ * Necessary because of the restore-path asymmetry documented in
+ * `restoreActor`: the machine's `context` factory does NOT run when a snapshot
+ * is restored, so anything arriving via `input` is ignored and the snapshot's
+ * own (now stale) value survives. That is correct for genuine machine state
+ * like `followUpCount`, and WRONG for `elapsedMinutes`, which is recomputed
+ * from the durable row on every request and describes the world outside the
+ * machine.
+ *
+ * Left unpatched, `elapsedMinutes` would stay pinned at whatever it was when
+ * the session was first created — effectively always 0 — and the
+ * ten-minute half of `shouldRemindControls` would never fire for anyone.
+ *
+ * Only ever ADDS/overwrites the listed keys, so a snapshot whose shape this
+ * function does not recognise passes through untouched and
+ * `restoreActor`'s error check still gets to reject it.
+ */
+const withRequestScopedContext = (
+  snapshot: unknown,
+  input: OnboardingInput,
+): unknown => {
+  if (
+    snapshot === null ||
+    typeof snapshot !== 'object' ||
+    !('context' in snapshot)
+  ) {
+    return snapshot;
+  }
+  const typed = snapshot as { context?: unknown };
+  if (typed.context === null || typeof typed.context !== 'object') {
+    return snapshot;
+  }
+  return {
+    ...typed,
+    context: {
+      ...(typed.context as Record<string, unknown>),
+      elapsedMinutes: input.elapsedMinutes,
+    },
+  };
+};
+
+/**
  * Builds an actor from a persisted snapshot, or returns null if that snapshot
  * cannot be restored.
  *
@@ -70,11 +113,13 @@ const restoreActor = (
     // cast back to XState's own persisted-snapshot type is unavoidable at this
     // boundary. Everything after this line is guarded by the status check.
     actor = createActor(machine, {
-      snapshot: snapshot as Snapshot<unknown>,
+      snapshot: withRequestScopedContext(snapshot, input) as Snapshot<unknown>,
       // `input` is required by createActor's types whenever the machine
-      // declares one, and harmless here: on the restore path the machine's
-      // `context` factory is never called (the snapshot already carries a
-      // fully-formed context), so this value is only used for the init event.
+      // declares one. On the restore path the machine's `context` factory is
+      // never called (the snapshot already carries a fully-formed context), so
+      // this value is only used for the init event — which is exactly why
+      // request-scoped values have to be overlaid onto the snapshot above
+      // rather than passed here.
       input,
     });
   } catch {
