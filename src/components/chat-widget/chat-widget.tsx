@@ -1,6 +1,6 @@
 import { useRouterState } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
@@ -212,50 +212,58 @@ export function ChatWidget() {
   );
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-50">
-      {/* Window (open): a free-floating, draggable, resizable OS-style window.
-          Always mounted (see doc comment above) — `hidden` only ever
-          suppresses its window via `isOpen`, never the component itself. */}
-      <Viper7Chat
-        isOpen={!hidden && isOpen && mode.kind === 'viper7'}
-        fontSize={fontSize}
-        onToggleFontSize={toggleFontSize}
-        onClose={onClose}
-      />
-
-      {!hidden && mode.kind === 'onboarding' && (
-        <OnboardingChat
-          key={mode.courseSlug}
-          courseSlug={mode.courseSlug}
-          isOpen={isOpen}
+    // `reducedMotion="user"` respects `prefers-reduced-motion` for every
+    // `motion` element below (the launcher bubble's pop-in/out, the window's
+    // open/close spring) by keeping only their opacity animation — the
+    // drag/resize geometry hook already handles its own reduced-motion case
+    // separately (see `useChatWindowGeometry`'s `reset`), so this covers the
+    // one gap: the open/close transition wasn't reduced-motion-aware at all.
+    <MotionConfig reducedMotion="user">
+      <div className="pointer-events-none fixed inset-0 z-50">
+        {/* Window (open): a free-floating, draggable, resizable OS-style window.
+            Always mounted (see doc comment above) — `hidden` only ever
+            suppresses its window via `isOpen`, never the component itself. */}
+        <Viper7Chat
+          isOpen={!hidden && isOpen && mode.kind === 'viper7'}
           fontSize={fontSize}
           onToggleFontSize={toggleFontSize}
           onClose={onClose}
-          onSettled={handleOnboardingSettled}
         />
-      )}
 
-      {/* Trigger bubble (closed): its own fixed anchor, hidden while the window is open */}
-      <AnimatePresence>
-        {!hidden && !isOpen && (
-          <motion.button
-            type="button"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: 'spring', bounce: 0.5, duration: 0.5 }}
-            onClick={() => setIsOpen(true)}
-            aria-label="Open chat"
-            className={cn(
-              'pointer-events-auto fixed bottom-6 end-6 flex size-14 items-center justify-center rounded-full shadow-lg',
-              'bg-accent-9 text-accent-contrast',
-              'transition-colors duration-200 hover:bg-accent-10',
-            )}
-          >
-            <MessageCircle className="size-6" />
-          </motion.button>
+        {!hidden && mode.kind === 'onboarding' && (
+          <OnboardingChat
+            key={mode.courseSlug}
+            courseSlug={mode.courseSlug}
+            isOpen={isOpen}
+            fontSize={fontSize}
+            onToggleFontSize={toggleFontSize}
+            onClose={onClose}
+            onSettled={handleOnboardingSettled}
+          />
         )}
-      </AnimatePresence>
-    </div>
+
+        {/* Trigger bubble (closed): its own fixed anchor, hidden while the window is open */}
+        <AnimatePresence>
+          {!hidden && !isOpen && (
+            <motion.button
+              type="button"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: 'spring', bounce: 0.5, duration: 0.5 }}
+              onClick={() => setIsOpen(true)}
+              aria-label="Open chat"
+              className={cn(
+                'pointer-events-auto fixed bottom-6 end-6 flex size-14 items-center justify-center rounded-full shadow-lg',
+                'bg-accent-9 text-accent-contrast',
+                'transition-colors duration-200 hover:bg-accent-10',
+              )}
+            >
+              <MessageCircle className="size-6" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
   );
 }
