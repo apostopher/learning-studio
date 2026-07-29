@@ -10,41 +10,51 @@ const ONBOARDING_MODE: ChatWidgetMode = {
 const VIPER7_MODE: ChatWidgetMode = { kind: 'viper7' };
 
 describe('shouldAutoOpenOnboarding', () => {
-  it('opens when not_started and the widget is closed', () => {
+  const resumableStatuses: OnboardingProgress[] = [
+    'not_started',
+    'in_progress',
+  ];
+
+  it.each(
+    resumableStatuses,
+  )('opens when %s and the widget is closed', (status) => {
     expect(
       shouldAutoOpenOnboarding({
-        status: 'not_started',
+        status,
         isWidgetOpen: false,
         widgetMode: VIPER7_MODE,
       }),
     ).toBe(true);
   });
 
-  it('opens when not_started and the widget is already open in onboarding mode', () => {
+  it.each(
+    resumableStatuses,
+  )('opens when %s and the widget is already open in onboarding mode', (status) => {
     // Re-affirming an already-open onboarding session is harmless.
     expect(
       shouldAutoOpenOnboarding({
-        status: 'not_started',
+        status,
         isWidgetOpen: true,
         widgetMode: ONBOARDING_MODE,
       }),
     ).toBe(true);
   });
 
-  it('refuses when not_started but the widget is open on a Viper7 conversation', () => {
+  it.each(
+    resumableStatuses,
+  )('refuses when %s but the widget is open on a Viper7 conversation', (status) => {
     // The hijack guard: never swap the window out from under an active
     // Viper7 conversation.
     expect(
       shouldAutoOpenOnboarding({
-        status: 'not_started',
+        status,
         isWidgetOpen: true,
         widgetMode: VIPER7_MODE,
       }),
     ).toBe(false);
   });
 
-  const otherStatuses: (OnboardingProgress | undefined)[] = [
-    'in_progress',
+  const closedStatuses: (OnboardingProgress | undefined)[] = [
     'complete',
     'declined',
     'deleted',
@@ -52,7 +62,7 @@ describe('shouldAutoOpenOnboarding', () => {
   ];
 
   it.each(
-    otherStatuses,
+    closedStatuses,
   )('refuses for status %s even when the widget is closed', (status) => {
     expect(
       shouldAutoOpenOnboarding({

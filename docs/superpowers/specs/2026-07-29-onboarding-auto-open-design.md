@@ -91,4 +91,12 @@ Once the learner replies (even just to answer the consent question), the server-
 - `closedSessionStatus`'s three closed values map through unchanged (reusing its existing test coverage — no new precedence logic to re-test).
 - The "any user message" check is exercised for both an empty and a non-empty case.
 - The course page's effect is proven to fire when status is `not_started` and to NOT fire (or re-fire) for `in_progress`/`complete`/`declined`/`deleted`.
+
+## Addendum (2026-07-29, post-merge): `in_progress` now also auto-opens
+
+The "never started only" decision above turned out to have a real hole: a session interrupted by a timeout, an API error, or simply closing the widget mid-conversation correctly stays `in_progress` (never `complete`/`declined`/`deleted`), but with the manual "Start"/resume prompt removed by this same plan, nothing offered a way back into it. A user hit exactly this (a genuine `waitFor` 30s timeout on a `reply`) and found onboarding silently unreachable afterward — not because anything was wrongly marked done, but because `in_progress` had no path back in at all.
+
+Fix: `shouldAutoOpenOnboarding` (`src/lib/onboarding-auto-open.ts`) now also returns `true` for `status === 'in_progress'`, subject to the same Viper7-hijack guard as `not_started`. `complete`/`declined`/`deleted`/unknown are unaffected. This directly reverses the "Rejected: also auto-resuming a paused mid-interview" line above — that rejection was reconsidered once a real interruption showed the cost of not having a resume path outweighed the "naggy" concern it was meant to avoid.
+
+Consequence: the "Risks accepted" note above about a learner who repeatedly closes the widget without responding now also applies to a learner who repeatedly closes it mid-interview — same accepted trade-off (no dismissal memory), now covering a second case.
 - Every route rejects an unauthenticated request, matching `start.ts`/`reply.ts`/`delete.ts`'s existing tests.

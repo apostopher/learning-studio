@@ -8,7 +8,10 @@ import { LessonEmpty } from '../../components/lesson-main';
 
 /**
  * Container: auto-opens the shared chat widget into onboarding mode when the
- * learner has never engaged with onboarding for this course.
+ * learner has a resumable onboarding session for this course — never started,
+ * or started and interrupted (an error, a timeout, just closing the widget)
+ * short of an explicit decline, completion, or deletion. See
+ * shouldAutoOpenOnboarding for the exact status logic.
  *
  * useOnboardingStatus is read-only (no model call) but now fetches fresh on
  * every mount (staleTime: 0, refetchOnMount: 'always') rather than trusting
