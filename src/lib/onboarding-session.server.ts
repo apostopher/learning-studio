@@ -7,6 +7,7 @@ import {
   loadOnboardingSession,
   saveMachineSnapshot,
 } from '#/db/course-onboarding';
+import { elapsedMinutesSince, flattenQuestions } from '#/lib/course-onboarding';
 import { runOnboardingTurn } from '#/lib/onboarding-runner';
 import {
   messageRowsToTranscript,
@@ -228,8 +229,18 @@ export const advanceOnboarding = async ({
     snapshotVersion: row.machineVersion,
     input: {
       onboardingId: row.id,
-      questions,
+      // FLATTENED for the machine, NESTED for the implementations below. The
+      // machine walks an ordered question list and knows nothing about
+      // categories; `hashQuestionSet` (reached via `saveAnswer`) hashes
+      // category id/name/order and needs the authored structure. Passing the
+      // same shape to both would either break the machine's traversal or drop
+      // categories out of the hash.
+      questions: flattenQuestions(questions),
       answers: row.answers,
+      // Recomputed from the durable row on every request, so a session paused
+      // overnight and resumed reports the real gap rather than restarting from
+      // zero — and so the machine itself never reads a clock.
+      elapsedMinutes: elapsedMinutesSince(row.createdAt),
       // Both of onboarding's dangling wires get their producer here: the
       // persisted transcript seeds the machine's context, and its row count
       // seeds the `order` sequence the implementations append with. They come

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fromPromise } from 'xstate';
+import { flattenQuestions } from '#/lib/course-onboarding';
 import { runOnboardingTurn } from '#/lib/onboarding-runner';
 import {
   FOLLOW_UP_CAP,
@@ -10,11 +11,19 @@ import {
 } from '#/machines/onboarding-machine';
 import type {
   OnboardingConsentEvaluation,
-  OnboardingQuestions,
   OnboardingReplyEvaluation,
 } from '#/types';
 
-const ONE: OnboardingQuestions = [{ id: 'q1', text: 'Only question?' }];
+// The machine takes the FLATTENED list, so these go through the real
+// `flattenQuestions` rather than being hand-written flat — a fixture that
+// skipped it could disagree with what production actually feeds the machine.
+const ONE = flattenQuestions([
+  {
+    id: 'c1',
+    name: 'Only category',
+    questions: [{ id: 'q1', text: 'Only question?' }],
+  },
+]);
 
 const baseInput = (
   overrides: Partial<OnboardingInput> = {},
@@ -23,6 +32,7 @@ const baseInput = (
   questions: ONE,
   answers: {},
   initialMessages: [],
+  elapsedMinutes: 0,
   ...overrides,
 });
 
@@ -290,10 +300,16 @@ describe('runOnboardingTurn — version guard', () => {
     // The reason discarding is safe: `answers` is durable, so a fresh
     // machine still places the user correctly rather than restarting the
     // interview.
-    const TWO: OnboardingQuestions = [
-      { id: 'q1', text: 'First?' },
-      { id: 'q2', text: 'Second?' },
-    ];
+    const TWO = flattenQuestions([
+      {
+        id: 'c1',
+        name: 'Only category',
+        questions: [
+          { id: 'q1', text: 'First?' },
+          { id: 'q2', text: 'Second?' },
+        ],
+      },
+    ]);
     const result = await runOnboardingTurn({
       snapshot: { nonsense: true },
       snapshotVersion: 'stale',
@@ -354,5 +370,101 @@ describe('runOnboardingTurn — terminal paths', () => {
       event: { type: 'DELETE' },
     });
     expect(deleted.status).toBe('deleted');
+  });
+});
+
+describe('runOnboardingTurn — request-scoped elapsedMinutes', () => {
+  /**
+   * `elapsedMinutes` is the one context field that describes the world OUTSIDE
+   * the machine, so it must be refreshed on every request rather than restored.
+   *
+   * The restore path does not run the machine's `context` factory (see
+   * `restoreActor`), so passing a fresh value via `input` alone is silently
+   * ignored — the snapshot's stale value wins. Since a session is created at
+   * elapsed ~0, that meant the ten-minute trigger could never fire for anybody.
+   *
+   * These assert on what an ACTOR was called with, not on context, because
+   * "the value reached context" is exactly the check that would have passed
+   * over the dead wiring.
+   */
+  const captureAskQuestion = () => {
+    const seen: number[] = [];
+    const askQuestion = fromPromise<
+      string,
+      { context: OnboardingContext; questionId: string }
+    >(async ({ input }) => {
+      seen.push(input.context.elapsedMinutes);
+      return 'So, tell me about you?';
+    });
+    return { seen, askQuestion };
+  };
+
+  it('passes the fresh elapsedMinutes to actors when resuming a snapshot', async () => {
+    const start = await runOnboardingTurn({
+      snapshot: null,
+      snapshotVersion: null,
+      input: baseInput({ elapsedMinutes: 0 }),
+      implementations: stubs(),
+      event: null,
+    });
+
+    const { seen, askQuestion } = captureAskQuestion();
+    const resumed = await runOnboardingTurn({
+      snapshot: start.snapshot,
+      snapshotVersion: ONBOARDING_MACHINE_VERSION,
+      // The trainee came back 42 minutes later.
+      input: baseInput({ elapsedMinutes: 42 }),
+      implementations: { actors: { ...stubs().actors, askQuestion } },
+      event: { type: 'REPLY', text: 'yes' },
+    });
+
+    expect(resumed.restoredFromSnapshot).toBe(true);
+    expect(seen).toEqual([42]);
+  });
+
+  it('does not let a stale snapshot value shadow the fresh one', async () => {
+    const start = await runOnboardingTurn({
+      snapshot: null,
+      snapshotVersion: null,
+      input: baseInput({ elapsedMinutes: 3 }),
+      implementations: stubs(),
+      event: null,
+    });
+    // The snapshot genuinely carries the old value…
+    const persisted = start.snapshot as { context: { elapsedMinutes: number } };
+    expect(persisted.context.elapsedMinutes).toBe(3);
+
+    // …and the actor must still see the new one.
+    const { seen, askQuestion } = captureAskQuestion();
+    await runOnboardingTurn({
+      snapshot: start.snapshot,
+      snapshotVersion: ONBOARDING_MACHINE_VERSION,
+      input: baseInput({ elapsedMinutes: 99 }),
+      implementations: { actors: { ...stubs().actors, askQuestion } },
+      event: { type: 'REPLY', text: 'yes' },
+    });
+    expect(seen).toEqual([99]);
+  });
+
+  it('leaves genuine machine state alone while refreshing elapsedMinutes', async () => {
+    // The overlay must not become a general-purpose context reset: turnCount is
+    // real machine state and has to survive the round-trip.
+    const start = await runOnboardingTurn({
+      snapshot: null,
+      snapshotVersion: null,
+      input: baseInput({ elapsedMinutes: 0 }),
+      implementations: stubs(),
+      event: null,
+    });
+    const resumed = await runOnboardingTurn({
+      snapshot: start.snapshot,
+      snapshotVersion: ONBOARDING_MACHINE_VERSION,
+      input: baseInput({ elapsedMinutes: 42 }),
+      implementations: stubs(),
+      event: { type: 'REPLY', text: 'yes' },
+    });
+    const ctx = (resumed.snapshot as { context: OnboardingContext }).context;
+    expect(ctx.elapsedMinutes).toBe(42);
+    expect(ctx.turnCount).toBe(1);
   });
 });

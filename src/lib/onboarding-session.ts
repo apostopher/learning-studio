@@ -1,3 +1,4 @@
+import { countQuestions } from '#/lib/course-onboarding';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '#/lib/onboarding-default-questions';
 import type { OnboardingQuestions } from '#/types';
 
@@ -17,13 +18,19 @@ export type ResolvedQuestionSet = {
  *
  * `frozenSource` null/undefined means the row predates the column, so resolve
  * fresh — correct, because such rows have no answers yet.
+ *
+ * The admin/default test counts QUESTIONS, not categories. A course whose
+ * categories are all empty has a non-zero `courseQuestions.length` but nothing
+ * to ask: treating that as 'admin' would hand the machine an empty question
+ * list, `selectNextQuestion` would resolve to null immediately, and the
+ * interview would jump straight to summarising having asked nothing.
  */
 export const resolveQuestionSet = (
   courseQuestions: OnboardingQuestions,
   frozenSource?: OnboardingQuestionSource | null,
 ): ResolvedQuestionSet => {
   const source: OnboardingQuestionSource =
-    frozenSource ?? (courseQuestions.length > 0 ? 'admin' : 'default');
+    frozenSource ?? (countQuestions(courseQuestions) > 0 ? 'admin' : 'default');
 
   return {
     questions:

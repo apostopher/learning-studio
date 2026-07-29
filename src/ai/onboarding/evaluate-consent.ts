@@ -2,7 +2,7 @@ import { generateObject } from 'ai';
 import { sonnet } from '#/ai/ai-provider';
 import { onboardingSystemPrompt } from '#/ai/prompts/onboarding';
 import type { OnboardingContext } from '#/machines/onboarding-machine';
-import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
+import { shouldRemindControls } from '#/machines/onboarding-machine';
 import type { OnboardingConsentEvaluation } from '#/types';
 import { OnboardingConsentEvaluationSchema } from '#/types';
 
@@ -24,8 +24,7 @@ export const evaluateConsent = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls:
-      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
+    remindControls: shouldRemindControls(context),
   });
 
   const prompt = `The trainee was just asked whether they're ready to begin this onboarding

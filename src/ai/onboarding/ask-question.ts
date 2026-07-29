@@ -2,7 +2,7 @@ import { generateText } from 'ai';
 import { geminiFlash } from '#/ai/ai-provider';
 import { onboardingSystemPrompt } from '#/ai/prompts/onboarding';
 import type { OnboardingContext } from '#/machines/onboarding-machine';
-import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
+import { shouldRemindControls } from '#/machines/onboarding-machine';
 
 /**
  * Produces the current question, phrased naturally given the conversation so
@@ -29,8 +29,7 @@ export const askQuestion = async ({
   courseName: string;
   questionId: string;
 }): Promise<string> => {
-  const remindControls =
-    context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged;
+  const remindControls = shouldRemindControls(context);
 
   if (context.pendingFollowUp !== null && !remindControls) {
     return context.pendingFollowUp;
@@ -65,6 +64,40 @@ disclaimer bolted on.`;
     question?.text ??
     "the next topic in the arc described in your system prompt's What to Cover section";
 
+  // Category boundary detection.
+  //
+  // "The category of the last question they actually answered" — NOT the
+  // previous entry in the array. Those differ whenever a question was added
+  // mid-interview or a category was reordered, and answered-state is the only
+  // definition that survives a pause/resume: it is derived entirely from
+  // persisted `answers`, so resuming mid-category re-derives "no boundary
+  // here" without storing a flag anywhere.
+  //
+  // Both null-cases resolve to "no transition": the first question of the
+  // interview has nothing to close off (the greeting already did that), and a
+  // question whose id is unknown gives us no category to compare.
+  const answeredSoFar = context.questions.filter((q) =>
+    Object.hasOwn(context.answers, q.id),
+  );
+  const previousCategoryId =
+    answeredSoFar[answeredSoFar.length - 1]?.categoryId ?? null;
+
+  const crossedIntoNewCategory =
+    question != null &&
+    previousCategoryId !== null &&
+    question.categoryId !== previousCategoryId;
+
+  const previousCategoryName = crossedIntoNewCategory
+    ? (answeredSoFar[answeredSoFar.length - 1]?.categoryName ?? null)
+    : null;
+
+  const categoryLine =
+    crossedIntoNewCategory && question != null
+      ? `\n\nThis question moves from "${previousCategoryName}" into "${question.categoryName}".
+Your system prompt's "Moving between areas" section applies — mark the shift or
+don't, whichever reads better here.`
+      : '';
+
   // The recent transcript (bounded, see `TRANSCRIPT_TURN_LIMIT`), not just
   // `context.lastReply` — a single most-recent message can't show that the
   // trainee gave a multi-turn answer to the previous question, so this turn
@@ -86,7 +119,7 @@ anything worth acknowledging before moving on.`;
   const prompt = `The next thing to cover is: ${questionLine}
 
 Ask about it in your own words, as a natural continuation of the
-conversation — one question, not a list.${previousReplyLine}`;
+conversation — one question, not a list.${categoryLine}${previousReplyLine}`;
 
   const { text } = await generateText({ model: geminiFlash, system, prompt });
   return text;

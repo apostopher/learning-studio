@@ -18,7 +18,9 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('useUpdateCourseOnboarding', () => {
   it('POSTs the questions and returns saved (normal mode)', async () => {
-    const questions = [{ id: 'a', text: 'Q1' }];
+    const questions = [
+      { id: 'c1', name: 'Background', questions: [{ id: 'a', text: 'Q1' }] },
+    ];
     const fetchMock = vi
       .fn()
       .mockResolvedValue({ ok: true, json: async () => questions });
@@ -38,7 +40,9 @@ describe('useUpdateCourseOnboarding', () => {
   });
 
   it('uses sendBeacon in fire-and-forget mode', async () => {
-    const questions = [{ id: 'a', text: 'Q1' }];
+    const questions = [
+      { id: 'c1', name: 'Background', questions: [{ id: 'a', text: 'Q1' }] },
+    ];
     const beacon = vi.fn().mockReturnValue(true);
     vi.stubGlobal('navigator', { sendBeacon: beacon });
     const fetchMock = vi.fn();

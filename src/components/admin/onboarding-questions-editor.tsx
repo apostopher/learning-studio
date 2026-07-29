@@ -1,3 +1,4 @@
+import { Accordion } from '@base-ui/react/accordion';
 import {
   closestCenter,
   DndContext,
@@ -14,31 +15,59 @@ import {
 } from '@dnd-kit/sortable';
 import { Check, Loader2, Plus } from 'lucide-react';
 import type { UseFormRegister } from 'react-hook-form';
-import { SortableOnboardingQuestion } from './sortable-onboarding-question';
-
-interface OnboardingFormValues {
-  questions: { id: string; text: string }[];
-}
+import type { OnboardingFormValues } from '#/components/admin/onboarding-form-values';
+import { MAX_ONBOARDING_CATEGORIES, MAX_ONBOARDING_QUESTIONS } from '#/types';
+import { SortableOnboardingCategory } from './sortable-onboarding-category';
 
 export type OnboardingSaveStatus = 'saving' | 'saved' | 'unsaved' | 'error';
 
 interface OnboardingQuestionsEditorProps {
-  fields: { key: string; id: string }[];
+  /** Categories in order, each with its questions in order. */
+  categories: readonly {
+    key: string;
+    id: string;
+    questions: { id: string }[];
+  }[];
+  /** Names live in form state, not in `categories` — read them for labels. */
+  categoryNames: readonly string[];
+  questionCount: number;
   register: UseFormRegister<OnboardingFormValues>;
-  onAdd: () => void;
-  onRemove: (index: number) => void;
-  onDragEnd: (event: DragEndEvent) => void;
+  openCategories: string[];
+  onOpenCategoriesChange: (value: string[]) => void;
+  onAddCategory: () => void;
+  onRemoveCategory: (index: number) => void;
+  onCategoryDragEnd: (event: DragEndEvent) => void;
+  onAddQuestion: (categoryIndex: number) => void;
+  onRemoveQuestion: (categoryIndex: number, questionIndex: number) => void;
+  onQuestionDragEnd: (categoryIndex: number, event: DragEndEvent) => void;
   status: OnboardingSaveStatus;
   onRetry: () => void;
 }
 
-/** Onboarding questions list: drag-reorder rows, add, and auto-save. */
+/**
+ * Onboarding questions, grouped into drag-reorderable category accordions with
+ * auto-save.
+ *
+ * Presentational and hookless apart from dnd-kit's own sensor hooks (the same
+ * allowance `sortable-onboarding-question.tsx` already relies on). Accordion
+ * open state is CONTROLLED from the container rather than left to Base UI's
+ * uncontrolled `defaultValue`: `defaultValue` is only read on first render, so
+ * a newly added category would appear collapsed and the admin would have to
+ * expand it before they could type the question it was created with.
+ */
 export const OnboardingQuestionsEditor = ({
-  fields,
+  categories,
+  categoryNames,
+  questionCount,
   register,
-  onAdd,
-  onRemove,
-  onDragEnd,
+  openCategories,
+  onOpenCategoriesChange,
+  onAddCategory,
+  onRemoveCategory,
+  onCategoryDragEnd,
+  onAddQuestion,
+  onRemoveQuestion,
+  onQuestionDragEnd,
   status,
   onRetry,
 }: OnboardingQuestionsEditorProps) => {
@@ -49,50 +78,79 @@ export const OnboardingQuestionsEditor = ({
     }),
   );
 
+  const atCategoryCap = categories.length >= MAX_ONBOARDING_CATEGORIES;
+  const atQuestionCap = questionCount >= MAX_ONBOARDING_QUESTIONS;
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-secondary text-sm">
-        Questions shown to users when they start this course. Drag to reorder.
+        Questions shown to users when they start this course, grouped by topic.
+        Drag to reorder categories, or questions within a category. The
+        assistant uses the grouping to move between topics naturally — it never
+        reads category names aloud.
       </p>
 
-      {fields.length === 0 ? (
+      {categories.length === 0 ? (
         <p className="rounded-lg border border-gray-6 border-dashed py-8 text-center text-tertiary text-sm">
-          No onboarding questions yet.
+          No categories yet.
         </p>
       ) : (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
+          onDragEnd={onCategoryDragEnd}
         >
           <SortableContext
-            items={fields.map((f) => f.id)}
+            items={categories.map((c) => c.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="flex flex-col gap-3">
-              {fields.map((field, index) => (
-                <SortableOnboardingQuestion
-                  key={field.key}
-                  id={field.id}
+            <Accordion.Root
+              value={openCategories}
+              onValueChange={onOpenCategoriesChange}
+              className="flex flex-col gap-3"
+            >
+              {categories.map((category, index) => (
+                <SortableOnboardingCategory
+                  key={category.key}
+                  id={category.id}
                   index={index}
-                  register={register(`questions.${index}.text`)}
-                  onRemove={() => onRemove(index)}
+                  name={categoryNames[index] ?? ''}
+                  questions={category.questions}
+                  register={register}
+                  onAddQuestion={() => onAddQuestion(index)}
+                  onRemoveQuestion={(questionIndex) =>
+                    onRemoveQuestion(index, questionIndex)
+                  }
+                  onQuestionDragEnd={(event) => onQuestionDragEnd(index, event)}
+                  onRemoveCategory={() => onRemoveCategory(index)}
                 />
               ))}
-            </div>
+            </Accordion.Root>
           </SortableContext>
         </DndContext>
       )}
 
       <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-6 px-3 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add question
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onAddCategory}
+            disabled={atCategoryCap || atQuestionCap}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-6 px-3 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:text-disabled disabled:hover:bg-transparent"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add category
+          </button>
+          {atCategoryCap ? (
+            <span className="text-tertiary text-xs">
+              Limit of {MAX_ONBOARDING_CATEGORIES} categories reached.
+            </span>
+          ) : atQuestionCap ? (
+            <span className="text-tertiary text-xs">
+              Limit of {MAX_ONBOARDING_QUESTIONS} questions reached.
+            </span>
+          ) : null}
+        </div>
 
         <span aria-live="polite" className="min-w-0">
           {status === 'saving' ? (

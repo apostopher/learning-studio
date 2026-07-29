@@ -1,17 +1,71 @@
-import type { OnboardingAnswers, OnboardingQuestions } from '#/types';
+import type {
+  FlatOnboardingQuestion,
+  OnboardingAnswers,
+  OnboardingQuestions,
+} from '#/types';
 
 const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
 const UINT64_MASK = 0xffffffffffffffffn;
 
 /**
+ * Flatten the nested category structure into the ordered question list the
+ * machine and prompts consume, tagging each question with its category.
+ *
+ * Category order then question order — the same order the interview runs in,
+ * and the order the system prompt presents as authoritative.
+ */
+export const flattenQuestions = (
+  categories: OnboardingQuestions,
+): FlatOnboardingQuestion[] =>
+  categories.flatMap((category) =>
+    category.questions.map((question) => ({
+      ...question,
+      categoryId: category.id,
+      categoryName: category.name,
+    })),
+  );
+
+/** Total questions across every category. */
+export const countQuestions = (categories: OnboardingQuestions): number =>
+  categories.reduce((sum, category) => sum + category.questions.length, 0);
+
+/**
+ * Whole minutes between `startedAt` and `now`, floored, never negative.
+ *
+ * Clamped at zero because clock skew between the database (which stamps
+ * `created_at`) and the app server can put a just-created row slightly in the
+ * future; a negative elapsed time would be nonsense to reason about downstream.
+ *
+ * NOTE this is total wall-clock span, not active conversation time — a session
+ * paused overnight reports the whole gap. That is deliberate: re-offering the
+ * stop/suspend/delete controls to someone returning after a long break is
+ * useful, and the reminder cooldown stops it repeating.
+ */
+export const elapsedMinutesSince = (
+  startedAt: Date,
+  now: Date = new Date(),
+): number =>
+  Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 60_000));
+
+/**
  * Length-prefixed encoding of the question set. Prefixing each field with its
  * length means no question text can forge a delimiter: a plain `id:text` join
  * would render `{id:'a', text:'b:c'}` and `{id:'a:b', text:'c'}` identically.
+ *
+ * Category id and name are encoded too, so renaming or reordering a category
+ * changes the hash: both alter the interview the user is being given, which is
+ * exactly what this hash exists to detect.
  */
-const canonicalize = (questions: OnboardingQuestions): string =>
-  questions
-    .map((q) => `${q.id.length}:${q.id}${q.text.length}:${q.text}`)
+const canonicalize = (categories: OnboardingQuestions): string =>
+  categories
+    .map(
+      (category) =>
+        `${category.id.length}:${category.id}${category.name.length}:${category.name}` +
+        category.questions
+          .map((q) => `${q.id.length}:${q.id}${q.text.length}:${q.text}`)
+          .join(''),
+    )
     .join('');
 
 /**
@@ -46,9 +100,9 @@ export const hashQuestionSet = (questions: OnboardingQuestions): string => {
  * `constructor` is not silently treated as answered.
  */
 export const pendingQuestions = (
-  questions: OnboardingQuestions,
+  questions: FlatOnboardingQuestion[],
   answers: OnboardingAnswers,
-): OnboardingQuestions =>
+): FlatOnboardingQuestion[] =>
   questions.filter((q) => !Object.hasOwn(answers, q.id));
 
 /**
@@ -58,7 +112,7 @@ export const pendingQuestions = (
  * from never-started and from fully-done.
  */
 export const isOnboardingComplete = (
-  questions: OnboardingQuestions,
+  questions: FlatOnboardingQuestion[],
   answers: OnboardingAnswers,
   onboardingCompletedAt: Date | null,
 ): boolean =>

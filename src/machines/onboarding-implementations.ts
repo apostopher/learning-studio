@@ -32,6 +32,12 @@ export type OnboardingDeps = {
    * The course's effective question set. `saveAnswer` needs it to restamp
    * `questionSetHash` — the machine's `saveAnswer` actor input only carries
    * `{ onboardingId, questionId, answer }`, so this closes over it instead.
+   *
+   * NESTED, unlike the machine's own `context.questions`, which is the
+   * flattened list. `hashQuestionSet` hashes category id/name/order as well as
+   * the questions, so it needs the structure the admin actually authored —
+   * flattening would silently drop the category fields from the hash and stop
+   * a category rename from registering as a change.
    */
   questions: OnboardingQuestions;
 };

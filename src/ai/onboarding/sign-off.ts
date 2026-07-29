@@ -2,7 +2,7 @@ import { generateText } from 'ai';
 import { geminiFlash } from '#/ai/ai-provider';
 import { onboardingSystemPrompt } from '#/ai/prompts/onboarding';
 import type { OnboardingContext } from '#/machines/onboarding-machine';
-import { HESITANCY_TURN_THRESHOLD } from '#/machines/onboarding-machine';
+import { shouldRemindControls } from '#/machines/onboarding-machine';
 
 /**
  * Acknowledges a declined (or exhausted) consent gate. Brief and warm — no
@@ -19,8 +19,7 @@ export const signOff = async ({
   const system = onboardingSystemPrompt({
     courseName,
     questions: context.questions,
-    remindControls:
-      context.turnCount >= HESITANCY_TURN_THRESHOLD || context.hesitancyFlagged,
+    remindControls: shouldRemindControls(context),
   });
 
   const prompt = `The trainee has chosen not to proceed with this conversation. Produce a

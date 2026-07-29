@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { type OnboardingQuestion, OnboardingQuestionsSchema } from '#/types';
+import { type OnboardingQuestions, OnboardingQuestionsSchema } from '#/types';
 import { dataKeys } from './keys';
 
-/** A course's onboarding questions (ordered). */
+/** A course's onboarding question set: ordered categories, each with ordered questions. */
 export function useCourseOnboarding(courseId: number) {
   return useQuery({
     queryKey: dataKeys.courseOnboarding(courseId),
-    queryFn: async (): Promise<OnboardingQuestion[]> => {
+    queryFn: async (): Promise<OnboardingQuestions> => {
       const res = await fetch(`/api/admin/courses/${courseId}/onboarding`);
       if (!res.ok) {
         throw new Error(`Failed to load onboarding (${res.status})`);

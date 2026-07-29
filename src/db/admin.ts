@@ -43,7 +43,7 @@ import {
   resolvePlayback,
   validateCredentials,
 } from '@/lib/video-providers/resolve.server';
-import type { OnboardingQuestion, SubscriptionType } from '@/types';
+import type { OnboardingQuestions, SubscriptionType } from '@/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -726,7 +726,7 @@ export async function updateCourse(
 
 export async function getCourseOnboarding(
   courseId: number,
-): Promise<OnboardingQuestion[]> {
+): Promise<OnboardingQuestions> {
   const [row] = await db
     .select({ onboardingQuestions: coursesTable.onboardingQuestions })
     .from(coursesTable)
@@ -736,8 +736,8 @@ export async function getCourseOnboarding(
 
 export async function updateCourseOnboarding(
   courseId: number,
-  questions: OnboardingQuestion[],
-): Promise<OnboardingQuestion[]> {
+  questions: OnboardingQuestions,
+): Promise<OnboardingQuestions> {
   await db
     .update(coursesTable)
     .set({ onboardingQuestions: questions, updatedAt: new Date() })

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
+import { flattenQuestions } from '#/lib/course-onboarding';
 import { DEFAULT_ONBOARDING_QUESTIONS } from '#/lib/onboarding-default-questions';
 import type {
   OnboardingContext,
@@ -11,16 +12,21 @@ import {
   onboardingMachine,
 } from '#/machines/onboarding-machine';
 import type {
+  FlatOnboardingQuestion,
   OnboardingConsentEvaluation,
-  OnboardingQuestions,
   OnboardingReplyEvaluation,
 } from '#/types';
 
 const INPUT = {
   onboardingId: 1,
-  questions: DEFAULT_ONBOARDING_QUESTIONS,
+  // The machine consumes the flattened list, never the nested categories.
+  questions: flattenQuestions(DEFAULT_ONBOARDING_QUESTIONS),
   answers: {},
   initialMessages: [],
+  // Zero unless a test is specifically exercising the long-conversation
+  // reminder, so the controls reminder stays quiet and doesn't perturb
+  // assertions about anything else.
+  elapsedMinutes: 0,
 };
 
 /**
@@ -242,7 +248,7 @@ describe('onboardingMachine — consent gate', () => {
 /** Actor already past the consent gate, with scripted reply verdicts. */
 function makeAnsweringActor(
   replyVerdicts: OnboardingReplyEvaluation[],
-  questions = DEFAULT_ONBOARDING_QUESTIONS,
+  questions: FlatOnboardingQuestion[] = INPUT.questions,
 ) {
   const queue = [...replyVerdicts];
   const saveAnswer = vi.fn(
@@ -313,7 +319,13 @@ async function reachAsking(
 }
 
 describe('onboardingMachine — question loop', () => {
-  const ONE: OnboardingQuestions = [{ id: 'q1', text: 'Only question?' }];
+  const ONE = flattenQuestions([
+    {
+      id: 'c1',
+      name: 'Only category',
+      questions: [{ id: 'q1', text: 'Only question?' }],
+    },
+  ]);
 
   it('asks the first pending question', async () => {
     const { actor } = makeAnsweringActor([answered('yes')], ONE);
@@ -516,10 +528,16 @@ describe('onboardingMachine — question loop', () => {
   });
 
   it('resets the follow-up count when moving to the next question', async () => {
-    const TWO: OnboardingQuestions = [
-      { id: 'q1', text: 'First?' },
-      { id: 'q2', text: 'Second?' },
-    ];
+    const TWO = flattenQuestions([
+      {
+        id: 'c1',
+        name: 'Only category',
+        questions: [
+          { id: 'q1', text: 'First?' },
+          { id: 'q2', text: 'Second?' },
+        ],
+      },
+    ]);
     const { actor } = makeAnsweringActor(
       [vague, answered('a'), answered('b')],
       TWO,
@@ -538,10 +556,16 @@ describe('onboardingMachine — question loop', () => {
     // `remindControls` could only ever come from `turnCount`. It must reach
     // context as `hesitancyFlagged`, and `selectNextQuestion` must clear it
     // so the reminder fires at most once per question.
-    const TWO: OnboardingQuestions = [
-      { id: 'q1', text: 'First?' },
-      { id: 'q2', text: 'Second?' },
-    ];
+    const TWO = flattenQuestions([
+      {
+        id: 'c1',
+        name: 'Only category',
+        questions: [
+          { id: 'q1', text: 'First?' },
+          { id: 'q2', text: 'Second?' },
+        ],
+      },
+    ]);
     const hesitantAnswer: OnboardingReplyEvaluation = {
       status: 'answered',
       answer: 'a',
@@ -587,10 +611,16 @@ describe('onboardingMachine — question loop', () => {
     // could ever actually receive it as `true`. Assert on what the actor
     // received, not on transient context, so this can't pass over dead
     // behaviour again.
-    const TWO: OnboardingQuestions = [
-      { id: 'q1', text: 'First?' },
-      { id: 'q2', text: 'Second?' },
-    ];
+    const TWO = flattenQuestions([
+      {
+        id: 'c1',
+        name: 'Only category',
+        questions: [
+          { id: 'q1', text: 'First?' },
+          { id: 'q2', text: 'Second?' },
+        ],
+      },
+    ]);
     const hesitantAnswer: OnboardingReplyEvaluation = {
       status: 'answered',
       answer: 'a',
