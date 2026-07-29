@@ -1,26 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
-import {
-  chatWidgetModeAtom,
-  chatWidgetOpenAtom,
-  onboardingPromptDismissedAtom,
-} from '#/atoms/chat-widget';
-import { OnboardingPrompt } from '#/components/courses/onboarding-prompt';
-import { useOnboardingChat } from '#/data-hooks/use-onboarding-chat';
+import { useSetAtom } from 'jotai';
+import { useEffect } from 'react';
+import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
+import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
 import { LessonEmpty } from '../../components/lesson-main';
 
 /**
- * Container: offers to start the course-onboarding interview above the
- * lesson-picker empty state.
+ * Container: auto-opens the shared chat widget into onboarding mode when the
+ * learner has never engaged with onboarding for this course.
  *
- * No existing hook/loader exposes the onboarding row for this course, so
- * this reads `useOnboardingChat(courseSlug)`'s own status instead of adding
- * one: `status === 'awaiting_consent'` with no prior user turn means the
- * consent gate hasn't been engaged with yet. This is deliberately narrower
- * than `shouldOfferOnboarding` (`src/lib/course-onboarding.ts`), which also
- * covers resuming a mid-interview session — the prompt's copy here
- * ("Start" / "Not now") only reads correctly for the not-yet-started case,
- * so a resume-mid-interview affordance is intentionally out of scope.
+ * useOnboardingStatus is read-only (no model call, safe on every render); the
+ * effect only fires when its `status` dependency's VALUE changes, so closing
+ * the widget mid-visit without responding does not reopen it on an unrelated
+ * re-render (status is still 'not_started', same value, effect doesn't
+ * re-run) — but a fresh page visit (component remount) re-evaluates and
+ * reopens if still 'not_started'. No dismissal state is tracked by design.
  */
 export const Route = createFileRoute('/_authed/course/$courseSlug/')({
   component: CourseIndexContainer,
@@ -28,30 +22,16 @@ export const Route = createFileRoute('/_authed/course/$courseSlug/')({
 
 function CourseIndexContainer() {
   const { courseSlug } = Route.useParams();
-  const { messages, status } = useOnboardingChat(courseSlug);
-  const [dismissed, setDismissed] = useAtom(onboardingPromptDismissedAtom);
+  const { data: status } = useOnboardingStatus(courseSlug);
   const setMode = useSetAtom(chatWidgetModeAtom);
   const setOpen = useSetAtom(chatWidgetOpenAtom);
 
-  const shouldOffer =
-    !dismissed &&
-    status === 'awaiting_consent' &&
-    messages.every((message) => message.role !== 'user');
+  useEffect(() => {
+    if (status === 'not_started') {
+      setMode({ kind: 'onboarding', courseSlug });
+      setOpen(true);
+    }
+  }, [status, courseSlug, setMode, setOpen]);
 
-  const onStart = () => {
-    setMode({ kind: 'onboarding', courseSlug });
-    setOpen(true);
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      {shouldOffer && (
-        <OnboardingPrompt
-          onStart={onStart}
-          onDismiss={() => setDismissed(true)}
-        />
-      )}
-      <LessonEmpty />
-    </div>
-  );
+  return <LessonEmpty />;
 }

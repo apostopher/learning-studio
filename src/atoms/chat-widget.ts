@@ -45,11 +45,3 @@ export type ChatWidgetMode =
  * never returned to) would open the widget into a dead conversation on a
  * later, unrelated visit. */
 export const chatWidgetModeAtom = atom<ChatWidgetMode>({ kind: 'viper7' });
-
-/** Whether the learner dismissed ("Not now") the course page's onboarding
- * prompt for the currently-viewed course. Not persisted, same reasoning as
- * `chatWidgetOpenAtom` and `chatWidgetModeAtom` — it's a per-visit UI
- * decision, not a durable preference, and only one course page is ever on
- * screen at a time so a single module-scoped atom (not keyed per-course) is
- * sufficient. */
-export const onboardingPromptDismissedAtom = atom(false);
