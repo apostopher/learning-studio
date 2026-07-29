@@ -18,6 +18,8 @@ const {
   clearMachineSnapshot,
   runOnboardingTurn,
   createOnboardingImplementations,
+  findOnboardingRow,
+  hasUserReply,
 } = vi.hoisted(() => ({
   getCourseIdentityBySlug: vi.fn(),
   loadOnboardingSession: vi.fn(),
@@ -25,6 +27,8 @@ const {
   clearMachineSnapshot: vi.fn(),
   runOnboardingTurn: vi.fn(),
   createOnboardingImplementations: vi.fn(),
+  findOnboardingRow: vi.fn(),
+  hasUserReply: vi.fn(),
 }));
 
 vi.mock('#/db/course', () => ({ getCourseIdentityBySlug }));
@@ -33,6 +37,8 @@ vi.mock('#/db/course-onboarding', () => ({
   saveMachineSnapshot,
   clearMachineSnapshot,
   deleteOnboarding: vi.fn(),
+  findOnboardingRow,
+  hasUserReply,
 }));
 vi.mock('#/lib/onboarding-runner', () => ({ runOnboardingTurn }));
 vi.mock('#/machines/onboarding-implementations', () => ({
@@ -42,6 +48,7 @@ vi.mock('#/machines/onboarding-implementations', () => ({
 import {
   advanceOnboarding,
   closedSessionStatus,
+  getOnboardingProgress,
   serialiseUpdatedAt,
 } from '#/lib/onboarding-session.server';
 
@@ -313,5 +320,78 @@ describe('advanceOnboarding', () => {
     });
 
     expect(saveMachineSnapshot).toHaveBeenCalled();
+  });
+});
+
+describe('getOnboardingProgress', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCourseIdentityBySlug.mockResolvedValue({ id: 1, name: 'PPL' });
+  });
+
+  it('returns course_not_found when the slug does not resolve', async () => {
+    getCourseIdentityBySlug.mockResolvedValueOnce(null);
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'nope',
+    });
+    expect(result).toEqual({ ok: false, reason: 'course_not_found' });
+    expect(findOnboardingRow).not.toHaveBeenCalled();
+  });
+
+  it('returns not_started when no row exists, without checking for a reply', async () => {
+    findOnboardingRow.mockResolvedValue(null);
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+    });
+    expect(result).toEqual({ ok: true, status: 'not_started' });
+    expect(hasUserReply).not.toHaveBeenCalled();
+  });
+
+  it('reports a closed status without checking for a reply', async () => {
+    findOnboardingRow.mockResolvedValue({
+      id: 1,
+      deletedAt: null,
+      consentDeclinedAt: null,
+      onboardingCompletedAt: new Date(),
+    });
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+    });
+    expect(result).toEqual({ ok: true, status: 'complete' });
+    expect(hasUserReply).not.toHaveBeenCalled();
+  });
+
+  it('returns not_started when the row is open and has no user reply yet', async () => {
+    findOnboardingRow.mockResolvedValue({
+      id: 1,
+      deletedAt: null,
+      consentDeclinedAt: null,
+      onboardingCompletedAt: null,
+    });
+    hasUserReply.mockResolvedValue(false);
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+    });
+    expect(result).toEqual({ ok: true, status: 'not_started' });
+    expect(hasUserReply).toHaveBeenCalledWith({ onboardingId: 1 });
+  });
+
+  it('returns in_progress when the row is open and has a user reply', async () => {
+    findOnboardingRow.mockResolvedValue({
+      id: 1,
+      deletedAt: null,
+      consentDeclinedAt: null,
+      onboardingCompletedAt: null,
+    });
+    hasUserReply.mockResolvedValue(true);
+    const result = await getOnboardingProgress({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+    });
+    expect(result).toEqual({ ok: true, status: 'in_progress' });
   });
 });

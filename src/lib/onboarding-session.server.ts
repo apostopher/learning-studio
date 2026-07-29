@@ -2,6 +2,8 @@ import { getCourseIdentityBySlug } from '#/db/course';
 import {
   clearMachineSnapshot,
   deleteOnboarding,
+  findOnboardingRow,
+  hasUserReply,
   loadOnboardingSession,
   saveMachineSnapshot,
 } from '#/db/course-onboarding';
@@ -80,11 +82,63 @@ export const closedSessionStatus = ({
   deletedAt: Date | null;
   consentDeclinedAt: Date | null;
   onboardingCompletedAt: Date | null;
-}): OnboardingStatus | null => {
+}): 'deleted' | 'declined' | 'complete' | null => {
   if (deletedAt != null) return 'deleted';
   if (consentDeclinedAt != null) return 'declined';
   if (onboardingCompletedAt != null) return 'complete';
   return null;
+};
+
+/**
+ * A coarser status than OnboardingStatus (the machine's per-turn state):
+ * answers "has this learner engaged with onboarding at all," which is all
+ * the course page needs to decide whether to auto-open the widget. Shares
+ * its three closed values with OnboardingStatus by convention, not by type
+ * alias — see closedSessionStatus's retyped signature above.
+ */
+export type OnboardingProgress =
+  | 'not_started'
+  | 'in_progress'
+  | 'complete'
+  | 'declined'
+  | 'deleted';
+
+export type GetOnboardingProgressResult =
+  | { ok: true; status: OnboardingProgress }
+  | { ok: false; reason: 'course_not_found' };
+
+/**
+ * Answers "should the widget auto-open into onboarding for this learner and
+ * course" without ever running the machine: at most one plain SELECT
+ * (findOnboardingRow, which — unlike loadOnboardingSession — never creates a
+ * row) plus one existence check on the messages table. No model call, no
+ * snapshot restore, no write of any kind — safe to call on every
+ * course-page render.
+ */
+export const getOnboardingProgress = async ({
+  userId,
+  courseSlug,
+}: {
+  userId: string;
+  courseSlug: string;
+}): Promise<GetOnboardingProgressResult> => {
+  const course = await getCourseIdentityBySlug(courseSlug);
+  if (!course) {
+    return { ok: false, reason: 'course_not_found' };
+  }
+
+  const row = await findOnboardingRow({ userId, courseId: course.id });
+  if (!row) {
+    return { ok: true, status: 'not_started' };
+  }
+
+  const closed = closedSessionStatus(row);
+  if (closed) {
+    return { ok: true, status: closed };
+  }
+
+  const engaged = await hasUserReply({ onboardingId: row.id });
+  return { ok: true, status: engaged ? 'in_progress' : 'not_started' };
 };
 
 /**
