@@ -1,6 +1,11 @@
 import { and, asc, countDistinct, eq, inArray, sql } from 'drizzle-orm';
+import { getUserRoleNames } from '#/db/admin';
+import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
+import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { resolveCardResume } from '#/lib/course-card-resume';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
+import type { ResumeTarget } from '#/lib/course-resume';
 import { shapeModuleLessons } from '#/lib/course-shaping';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
@@ -174,6 +179,8 @@ export type MyCourseSummary = {
   imageUrlAvif: string | null;
   imageUrlWebp: string | null;
   percent: number;
+  /** Where a click on this course's card should land. See getMyCourses. */
+  resume: ResumeTarget;
 };
 
 /**
@@ -246,7 +253,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
     })),
   );
 
-  const courses = new Map<number, MyCourseSummary>();
+  const courses = new Map<number, Omit<MyCourseSummary, 'resume'>>();
   for (const r of rows) {
     if (courses.has(r.courseId)) continue;
     courses.set(r.courseId, {
@@ -258,7 +265,44 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       percent: percents.get(r.courseId) ?? 0,
     });
   }
-  return [...courses.values()];
+
+  // Resolve each card's destination here so a click can go straight to the
+  // lesson instead of bouncing through /course/$slug's redirect. Cost is one
+  // extra batched query plus the already-cached course payloads — not a round
+  // trip per course. All the real logic is in resolveCardResume, which is pure
+  // and tested; this is just plumbing.
+  const [pointers, roles] = await Promise.all([
+    getLastViewedLessonIdsByCourse(userId),
+    getUserRoleNames(userId),
+  ]);
+  const bypassLocks = roles.includes(ADMIN_ROLE);
+
+  return Promise.all(
+    [...courses.values()].map(async (course): Promise<MyCourseSummary> => {
+      const details = await getCourseDetailsWithCache(course.slug);
+      // A missing payload means Redis is down or a cache race lost. Falling
+      // back to 'no-lessons' keeps the card clickable via the /course/$slug
+      // route, which re-resolves properly — better than failing the whole grid.
+      if (!details) {
+        return { ...course, resume: { kind: 'none', reason: 'no-lessons' } };
+      }
+
+      return {
+        ...course,
+        resume: resolveCardResume({
+          details,
+          lessonHits: rows
+            .filter((r) => r.courseId === course.id && r.lessonId != null)
+            .map((r) => ({
+              lessonId: r.lessonId as number,
+              watchedHits: Number(r.watchedHits),
+            })),
+          pointerLessonId: pointers.get(course.id) ?? null,
+          bypassLocks,
+        }),
+      };
+    }),
+  );
 }
 
 /**

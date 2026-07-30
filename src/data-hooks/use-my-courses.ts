@@ -2,6 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { dataKeys } from './keys';
 
+const resumeSchema = z.union([
+  z.object({
+    kind: z.literal('lesson'),
+    moduleSlug: z.string(),
+    lessonSlug: z.string(),
+  }),
+  z.object({ kind: z.literal('none') }).passthrough(),
+]);
+
 const myCourseSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -9,6 +18,7 @@ const myCourseSchema = z.object({
   imageUrlAvif: z.string().nullable(),
   imageUrlWebp: z.string().nullable(),
   percent: z.number(),
+  resume: resumeSchema,
 });
 
 export type MyCourse = z.infer<typeof myCourseSchema>;

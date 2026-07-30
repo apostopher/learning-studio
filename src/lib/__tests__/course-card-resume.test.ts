@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest';
+import { watchedMilestones } from '#/lib/course-milestones';
+import { resolveCardResume } from '../course-card-resume';
+
+const lesson = (
+  id: number,
+  slug: string,
+  dependsOn: { lessonSlug: string }[] = [],
+) => ({
+  id,
+  slug,
+  name: slug,
+  isAvailable: true,
+  videoId: `video-${id}`,
+  needsVideoWatch: true,
+  dependsOn,
+});
+
+// Two lessons where the second is gated on finishing the first.
+const details = {
+  modules: [
+    {
+      id: 1,
+      slug: 'navigation',
+      name: 'Navigation',
+      dependsOn: [],
+      lessons: [
+        lesson(1, 'pilotage'),
+        lesson(2, 'dead-reckoning', [{ lessonSlug: 'pilotage' }]),
+      ],
+    },
+  ],
+};
+
+describe('resolveCardResume', () => {
+  it('does NOT treat a partially watched lesson as complete', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [{ lessonId: 1, watchedHits: 1 }],
+      pointerLessonId: 2,
+      bypassLocks: false,
+    });
+    // Lesson 1 is unfinished, so lesson 2 is still locked and the pointer must
+    // hop back to the blocker rather than land on a lock screen.
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'pilotage',
+    });
+  });
+
+  it('treats a lesson as complete only when every milestone is hit', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [{ lessonId: 1, watchedHits: watchedMilestones.length }],
+      pointerLessonId: 2,
+      bypassLocks: false,
+    });
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'dead-reckoning',
+    });
+  });
+
+  it('resolves the pointer id to its slug', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [],
+      pointerLessonId: 1,
+      bypassLocks: false,
+    });
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'pilotage',
+    });
+  });
+
+  it('treats a pointer to a lesson no longer in the course as no pointer', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [],
+      pointerLessonId: 9999,
+      bypassLocks: false,
+    });
+    // Falls back to the first open lesson rather than throwing.
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'pilotage',
+    });
+  });
+
+  it('ignores locks for an admin', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [],
+      pointerLessonId: 2,
+      bypassLocks: true,
+    });
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'dead-reckoning',
+    });
+  });
+});

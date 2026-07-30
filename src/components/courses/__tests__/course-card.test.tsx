@@ -23,8 +23,13 @@ async function renderInRouter(ui: React.ReactNode) {
     path: '/course/$courseSlug',
     component: () => null,
   });
+  const lessonRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
+    component: () => null,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, courseRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, courseRoute, lessonRoute]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
   const result = render(<RouterProvider router={router} />);
@@ -41,10 +46,30 @@ const course = {
   imageUrlAvif: null,
   imageUrlWebp: null,
   percent: 42,
+  resume: { kind: 'none', reason: 'no-lessons' } as const,
 };
 
 describe('CourseCard', () => {
-  it('links to the course route by slug', async () => {
+  it('links straight to the resume lesson when there is one', async () => {
+    await renderInRouter(
+      <CourseCard
+        course={{
+          ...course,
+          resume: {
+            kind: 'lesson',
+            moduleSlug: 'navigation',
+            lessonSlug: 'pilotage',
+          },
+        }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /3D Airmanship/ });
+    expect(link.getAttribute('href')).toBe(
+      '/course/3d-airmanship/modules/navigation/lessons/pilotage',
+    );
+  });
+
+  it('falls back to the course route when there is nothing to resume', async () => {
     await renderInRouter(<CourseCard course={course} />);
     const link = screen.getByRole('link', { name: /3D Airmanship/ });
     expect(link.getAttribute('href')).toBe('/course/3d-airmanship');

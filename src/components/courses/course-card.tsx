@@ -11,10 +11,28 @@ type CourseCardProps = {
 export const CourseCard = ({ course }: CourseCardProps) => {
   const hasCover = Boolean(course.imageUrlWebp ?? course.imageUrlAvif);
 
+  const resume = course.resume;
+
+  const linkProps =
+    resume.kind === 'lesson'
+      ? ({
+          to: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
+          params: {
+            courseSlug: course.slug,
+            moduleSlug: resume.moduleSlug,
+            lessonSlug: resume.lessonSlug,
+          },
+        } as const)
+      : // Nothing to resume: fall back to the course route, whose beforeLoad
+        // re-resolves and lands on the empty state.
+        ({
+          to: '/course/$courseSlug',
+          params: { courseSlug: course.slug },
+        } as const);
+
   return (
     <Link
-      to="/course/$courseSlug"
-      params={{ courseSlug: course.slug }}
+      {...linkProps}
       className="group flex flex-col overflow-hidden rounded-xl border border-gray-6 bg-gray-2 transition-colors hover:border-gray-8"
     >
       <div className="aspect-video w-full overflow-hidden bg-gray-3">
