@@ -771,10 +771,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: Task 1's `GateCourse`/`evaluateLessonLock`/`evaluateMaterialLock`; Task 3's `getCourseSlugForLesson`/`isSubscribedToCourse`
 - Produces:
-  - `type LessonGateResult = { courseSlug: string; courseId: number; isAdmin: boolean; subscribed: boolean; lessonLock: LessonLock; materialLock: MaterialLock }`
-  - `evaluateLessonGate(args: { userId: string; lessonSlug: string }): Promise<LessonGateResult | null>`
-  - `toGateCourse(details: CourseDetails): GateCourse`
-  - `watchedLessonSlugs(details: CourseDetails, progress: CourseProgress): Set<string>`
+  - in **`src/lib/lesson-gating-inputs.ts`** (pure, client-safe — Task 13's sidebar imports it too, so it must not pull in `#/db`): `DetailsCourse`, `DetailsModule`, `DetailsLesson`, `toGateCourse(details: DetailsCourse): GateCourse`, `watchedLessonSlugs(details: DetailsCourse, progress: { lessons: readonly { lessonId: number; watched: boolean }[] }): Set<string>`
+  - in `src/lib/lesson-gating.server.ts`: `type LessonGateResult = { courseSlug: string; courseId: number; isAdmin: boolean; subscribed: boolean; lessonLock: LessonLock; materialLock: MaterialLock }` and `evaluateLessonGate(args: { userId: string; lessonSlug: string }): Promise<LessonGateResult | null>`
 
 Implements decisions 8, 15, 20. Per-user data is combined here, never written back into the Redis-cached course payload.
 
@@ -919,34 +917,18 @@ Expected: FAIL — `Failed to resolve import "#/lib/lesson-gating.server"`
 
 - [ ] **Step 3: Write the implementation**
 
+Put the two pure helpers and their types in their own client-safe file first:
+
 ```ts
-// src/lib/lesson-gating.server.ts
-import { getUserRoleNames } from '#/db/admin';
-import { getCourseDetailsWithCache } from '#/db/course';
-import { getCourseProgress } from '#/db/course-progress';
-import {
-  getCourseSlugForLesson,
-  isSubscribedToCourse,
-} from '#/db/lesson-access';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
-import {
-  evaluateLessonLock,
-  evaluateMaterialLock,
-  type GateCourse,
-  type LessonLock,
-  type MaterialLock,
-} from '#/lib/lesson-gating';
+// src/lib/lesson-gating-inputs.ts
+import type { GateCourse } from '#/lib/lesson-gating';
 
-export type LessonGateResult = {
-  courseSlug: string;
-  courseId: number;
-  isAdmin: boolean;
-  subscribed: boolean;
-  lessonLock: LessonLock;
-  materialLock: MaterialLock;
-};
-
-type DetailsLesson = {
+/**
+ * The subset of the course payload the gate needs. Declared structurally
+ * rather than imported from `#/db/course` so this file stays free of drizzle
+ * — the sidebar imports it in the browser.
+ */
+export type DetailsLesson = {
   id: number;
   slug: string;
   name: string;
@@ -955,14 +937,14 @@ type DetailsLesson = {
   needsVideoWatch: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };
-type DetailsModule = {
+export type DetailsModule = {
   id: number;
   slug: string;
   name: string;
   dependsOn: readonly string[];
   lessons: readonly DetailsLesson[];
 };
-type DetailsCourse = { modules: readonly DetailsModule[] };
+export type DetailsCourse = { modules: readonly DetailsModule[] };
 
 /** Narrow the cached course payload to the fields the predicate needs. */
 export function toGateCourse(details: DetailsCourse): GateCourse {
@@ -986,9 +968,9 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
 /**
  * The lesson slugs whose video this user has watched.
  *
- * getCourseProgress keys by lessonId while the predicate keys by slug, so the
- * course payload supplies the id→slug mapping. Keying by videoId instead would
- * be wrong the moment two lessons share a video.
+ * Progress is keyed by lessonId while the predicate is keyed by slug, so the
+ * course payload supplies the id→slug mapping. Keying by videoId instead
+ * would break the moment two lessons share a video.
  */
 export function watchedLessonSlugs(
   details: DetailsCourse,
@@ -1006,6 +988,42 @@ export function watchedLessonSlugs(
   }
   return watched;
 }
+```
+
+Then the server file, which imports them rather than redefining them:
+
+```ts
+// src/lib/lesson-gating.server.ts
+import { getUserRoleNames } from '#/db/admin';
+import { getCourseDetailsWithCache } from '#/db/course';
+import { getCourseProgress } from '#/db/course-progress';
+import {
+  getCourseSlugForLesson,
+  isSubscribedToCourse,
+} from '#/db/lesson-access';
+import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import {
+  evaluateLessonLock,
+  evaluateMaterialLock,
+  type LessonLock,
+  type MaterialLock,
+} from '#/lib/lesson-gating';
+import {
+  type DetailsCourse,
+  toGateCourse,
+  watchedLessonSlugs,
+} from '#/lib/lesson-gating-inputs';
+
+export * from '#/lib/lesson-gating-inputs';
+
+export type LessonGateResult = {
+  courseSlug: string;
+  courseId: number;
+  isAdmin: boolean;
+  subscribed: boolean;
+  lessonLock: LessonLock;
+  materialLock: MaterialLock;
+};
 
 /**
  * Evaluate every gate for one user and one lesson. Returns null when the
@@ -2122,13 +2140,20 @@ and pass the user through:
         getCourseContentForAgent(courseSlug, { userId: opts.userId }),
 ```
 
-In `src/ai/chat.ts:70`, pass the real course and user instead of relying on the default:
+**Course context — decided at pre-flight, implement exactly this.** `buildChatStream` currently has no course or user id at all, which is why the tool defaulted to `'3d-airmanship'`. The chain is:
+
+1. `chatRequestSchema` (`src/routes/api/chat.ts:14`) gains `courseSlug: z.string().optional()`.
+2. The chat widget sends the current route's `courseSlug` when it has one. On `/app` it has none, and that is expected.
+3. `BuildChatStreamOptions` gains `courseSlug?: string` and `userId: string`; `chatHandler` passes `parsed.data.courseSlug` and `session.user.id`.
+4. `makeSearchKBTool` takes `courseSlug?: string`.
 
 ```ts
-      searchKB: makeSearchKBTool({ writer, courseSlug, courseId, userId }),
+      searchKB: makeSearchKBTool({ writer, courseSlug, userId }),
 ```
 
-Thread `courseSlug`, `courseId`, and `userId` into that function from its caller. If the chat request does not currently carry a course, use the course of the lesson the user is on; if neither is available, the tool must be constructed with the user's single subscribed course rather than a hard-coded slug.
+5. **When `courseSlug` is absent, pass no course content at all** — `getCourseContentForAgent` is not called, and the tool answers from `searchKB` documents plus help topics only. Do NOT substitute a default slug, do not guess from subscriptions, and do not fall back to every subscribed course.
+
+Make `courseSlug` required on `makeSearchKBTool`'s option type only if every call site can supply it; otherwise keep it optional and branch on it inside `execute`. Either way the hard-coded `'3d-airmanship'` default must be gone — grep for it in `src/ai/` before committing.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -2292,7 +2317,7 @@ In `src/atoms/lesson-material.ts`, change the query type to `LessonMaterialRespo
     gcTime: 1000 * 60 * 60,
 ```
 
-If this TanStack Query version does not accept a function for `staleTime`, set `staleTime: 0` and add `refetchOnMount: 'always'` only when the cached value is locked, using a `select`-free wrapper in the hook.
+The function form is supported — `@tanstack/query-core@5.99.0` types `staleTime` as `StaleTimeFunction`. No fallback needed.
 
 - [ ] **Step 6: Update the wrapper**
 
@@ -2743,7 +2768,11 @@ Expected: FAIL — cannot resolve `../compute-lesson-locks`
 ```ts
 // src/components/sidebar/compute-lesson-locks.ts
 import { evaluateLessonLock, type LessonLock } from '#/lib/lesson-gating';
-import { toGateCourse, watchedLessonSlugs } from './gate-inputs';
+import {
+  type DetailsCourse,
+  toGateCourse,
+  watchedLessonSlugs,
+} from '#/lib/lesson-gating-inputs';
 
 /**
  * Lock state per lesson slug, for the sidebar.
@@ -2757,7 +2786,7 @@ import { toGateCourse, watchedLessonSlugs } from './gate-inputs';
  * a lesson to discover it was locked.
  */
 export function computeLessonLocks(
-  details: Parameters<typeof toGateCourse>[0] | undefined,
+  details: DetailsCourse | undefined,
   progress: { lessons: readonly { lessonId: number; watched: boolean }[] } | undefined,
 ): Record<string, LessonLock> {
   if (!details || !progress) return {};
@@ -2773,7 +2802,7 @@ export function computeLessonLocks(
 }
 ```
 
-Move `toGateCourse` and `watchedLessonSlugs` out of `lesson-gating.server.ts` into a new client-safe `src/components/sidebar/gate-inputs.ts` — or better, into `src/lib/lesson-gating.ts` itself, and have `lesson-gating.server.ts` re-export them. Prefer the latter: they are pure, and one home avoids drift. If you move them, update Task 4's imports.
+`toGateCourse` and `watchedLessonSlugs` already live in the client-safe `src/lib/lesson-gating-inputs.ts` (created in Task 4) — import them from there. Do not copy them into the sidebar, and do not import `#/lib/lesson-gating.server` from client code: it pulls in drizzle.
 
 - [ ] **Step 4: Render the lock**
 
@@ -2885,9 +2914,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Spec coverage.** Decisions 1–27 all map to tasks: 1/25/26 → Task 1; 2/4/22/23 → Task 1; 3/27 → Task 2; 5 → Task 7 (reuses `isVideoWatched`); 6/7 → Tasks 1, 5; 8/15 → Tasks 4, 5; 9/10 → Tasks 7, 8; 11 → Task 8; 12 → Task 10; 13/14 → Task 9; 16/17 → Tasks 6, 11; 18 → Task 12; 19/20/21 → Task 13; 24 (no kill switch) is satisfied by its absence. The assumed defaults (500 on gate error, gate-before-404, one panel not seven, accessible reason, admin note) are covered in Tasks 5, 10, 11, 13.
 
-**Known gaps to watch during execution.**
-- Task 9 Step 4 depends on `chat.ts` having a `courseSlug`/`userId` in scope. If it does not, that is a real blocker — surface it rather than reinstating a default slug.
-- Task 10 Step 5 assumes this TanStack Query version accepts a function for `staleTime`; a fallback is written into the step.
-- Task 13 Step 3 relocates `toGateCourse`/`watchedLessonSlugs` into `src/lib/lesson-gating.ts`; do that move in Task 13 and update Task 4's imports rather than duplicating them.
+**Pre-flight resolutions (checked before execution, 2026-07-30).**
+- `staleTime` as a function is supported — `@tanstack/query-core@5.99.0` types it as `StaleTimeFunction`. Task 10's fallback removed.
+- `toGateCourse`/`watchedLessonSlugs` live in `src/lib/lesson-gating-inputs.ts` from Task 4, imported by both the server file and the sidebar. No relocation in Task 13; the earlier contradiction between Tasks 4 and 13 is gone.
+- `buildChatStream` (`src/ai/chat.ts:52`) has **no** `courseSlug`, `courseId`, or `userId` — only `subscriptions` and a `userInfo` without an id. `chatHandler` (`src/routes/api/chat.ts:39`) does have `session.user.id` and `userRoles`, so the user side threads cleanly; the course side needs a decision recorded in Task 9 below.
 
 **Type consistency.** `LessonLock`, `MaterialLock`, `LockedMaterialResponse`, `LessonMaterialResponse<T>`, `GateCourse`, `GateLesson`, `GateModule` are defined once in Task 1 and imported everywhere after. `evaluateLessonGate` returns `LessonGateResult | null` in Tasks 4, 5, 6. `useMilestoneReporter` takes `(playerId, videoId, lessonSlug)` in Tasks 8 and 12.
