@@ -27,4 +27,6 @@ export const dataKeys = {
   subscribedSlugs: () => ['user', 'subscribed-slugs'] as const,
   courseResume: (courseSlug: string) =>
     ['course', 'resume', courseSlug] as const,
+  lessonQuizResult: (lessonSlug: string) =>
+    ['user', 'lesson-quiz-result', lessonSlug] as const,
 } as const;
