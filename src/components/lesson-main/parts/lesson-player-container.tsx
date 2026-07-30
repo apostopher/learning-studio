@@ -1,8 +1,9 @@
-import { atom, useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
 import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
 import { VideoPlayerContainer } from '#/components/video-player';
+import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
 import { DebriefOverlay } from '#/components/video-player/parts/debrief-overlay';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
@@ -16,8 +17,7 @@ import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { watchedMilestones } from '#/lib/course-milestones';
 import type { VideoFetchState } from '../types';
 import { computePlayerOverlay } from './compute-player-overlay';
-
-const videoEndedAtom = atom(false);
+import { videoReachedEndAtomFamily } from './lesson-player-atoms';
 
 type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
@@ -32,7 +32,20 @@ export const LessonPlayerContainer = ({
 }: LessonPlayerContainerProps) => {
   const playerId = useId();
   useMilestoneReporter(playerId, videoId, lessonSlug);
-  const [videoEnded, setVideoEnded] = useAtom(videoEndedAtom);
+  const [reachedEnd, setReachedEnd] = useAtom(
+    videoReachedEndAtomFamily(videoId),
+  );
+  // Live playback state, so the end-of-video overlay comes off the moment the
+  // student resumes or seeks back — see computePlayerOverlay.
+  //
+  // This re-renders on every `timeupdate` (~4Hz), which is deliberate rather
+  // than overlooked: VideoPlayerContainer already reads the same atom and
+  // re-renders at that rate, and an overlay is only ever mounted while the
+  // video is paused at the end, when no timeupdate fires at all. So the extra
+  // renders paint a null overlay and nothing else. A selectAtom projection
+  // would trade that for a second copy of the at-the-end rule living apart
+  // from computePlayerOverlay, which is the drift this feature keeps paying for.
+  const playerState = useAtomValue(videoPlayerStateAtomFamily(playerId));
   const setActiveTab = useSetAtom(activeTabAtom);
   const isGenerating = useIsGenerating();
   const currentTest = useCurrentTest();
@@ -51,8 +64,8 @@ export const LessonPlayerContainer = ({
   const hit = progress.data?.milestonesHit.filter((m) => m !== 100).length ?? 0;
 
   const onEnded = useCallback(() => {
-    setVideoEnded(true);
-  }, [setVideoEnded]);
+    setReachedEnd(true);
+  }, [setReachedEnd]);
 
   const onDebrief = useCallback(async () => {
     if (!material?.keyPoints?.length || !material?.text) return;
@@ -73,7 +86,12 @@ export const LessonPlayerContainer = ({
   }, [generateTest, lessonSlug, material, setActiveTab]);
 
   const overlayKind = computePlayerOverlay({
-    videoEnded,
+    reachedEnd,
+    playback: {
+      paused: playerState.paused,
+      currentTime: playerState.currentTime,
+      duration: playerState.duration,
+    },
     materialLocked,
     hasCurrentTest: Boolean(currentTest),
   });
