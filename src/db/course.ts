@@ -279,10 +279,25 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
 
   return Promise.all(
     [...courses.values()].map(async (course): Promise<MyCourseSummary> => {
-      const details = await getCourseDetailsWithCache(course.slug);
-      // A missing payload means Redis is down or a cache race lost. Falling
-      // back to 'no-lessons' keeps the card clickable via the /course/$slug
-      // route, which re-resolves properly — better than failing the whole grid.
+      // getCourseDetailsWithCache has no internal try/catch, so a Redis outage
+      // throws here rather than resolving to null — without this .catch, that
+      // throw would reject the surrounding Promise.all and 500 the whole /app
+      // grid, a dependency on Redis /app never had before this resume lookup.
+      // Caught and logged per-course instead, so one bad course degrades only
+      // its own card.
+      const details = await getCourseDetailsWithCache(course.slug).catch(
+        (error) => {
+          console.error(
+            `Failed to load course details for resume resolution (slug: ${course.slug}):`,
+            error,
+          );
+          return null;
+        },
+      );
+      // A missing payload (Redis outage, caught above; or a genuine cache
+      // miss with no course row) falls back to 'no-lessons', which keeps the
+      // card clickable via the /course/$slug route — that route re-resolves
+      // the resume target itself, so the learner still lands correctly.
       if (!details) {
         return { ...course, resume: { kind: 'none', reason: 'no-lessons' } };
       }
