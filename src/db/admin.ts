@@ -10,7 +10,13 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import type { DBCourse } from '@/db/schema';
+import { getCourseDetailsWithCache } from '#/db/course';
+import {
+  getCourseSlugForCourseId,
+  getCourseSlugForLessonId,
+  getCourseSlugForModuleId,
+} from '#/db/lesson-access';
+import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
   courseVideoProvidersTable,
@@ -19,8 +25,8 @@ import {
   userProfileRolesTable,
   userProfileTable,
   userRolesTable,
-} from '@/db/schema';
-import { env } from '@/env';
+} from '#/db/schema';
+import { env } from '#/env';
 import type {
   AdminCourseSummary,
   BoardLesson,
@@ -30,24 +36,45 @@ import type {
   CredentialSummary,
   SaveCredentialInput,
   UpdateCourseInput,
-} from '@/lib/admin-schemas';
+} from '#/lib/admin-schemas';
 import {
   decryptJson,
   encryptJson,
   type SecretEnvelope,
-} from '@/lib/crypto.server';
-import { slugify } from '@/lib/slugify';
-import { type ProviderId, VIDEO_PROVIDERS } from '@/lib/video-providers';
+} from '#/lib/crypto.server';
+import { slugify } from '#/lib/slugify';
+import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import {
   type Playback,
   resolvePlayback,
   validateCredentials,
-} from '@/lib/video-providers/resolve.server';
-import type { OnboardingQuestions, SubscriptionType } from '@/types';
+} from '#/lib/video-providers/resolve.server';
+import type { OnboardingQuestions, SubscriptionType } from '#/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
-export type { AdminCourseSummary } from '@/lib/admin-schemas';
+export type { AdminCourseSummary } from '#/lib/admin-schemas';
+
+/**
+ * Evict the learner-facing `getCourseDetailsWithCache` entry for a course so
+ * an admin save is visible immediately instead of waiting out the 6h TTL.
+ *
+ * Best-effort, same pattern as `deleteBlobs`/`deleteOrphanedBlob` elsewhere:
+ * a Redis outage must not turn a successful admin write into a failed
+ * response, so failures are logged and swallowed rather than thrown. `slug`
+ * is `null` when the owning course couldn't be resolved (e.g. a dangling
+ * id) — nothing to invalidate in that case.
+ */
+async function invalidateCourseDetailsCache(
+  slug: string | null,
+): Promise<void> {
+  if (!slug) return;
+  try {
+    await getCourseDetailsWithCache.invalidate(slug);
+  } catch (error) {
+    console.error('Failed to invalidate course-details cache:', error);
+  }
+}
 
 /** All courses with their module and lesson counts, newest-updated first. */
 export async function listAdminCourses(): Promise<AdminCourseSummary[]> {
@@ -164,6 +191,10 @@ export async function createModule(input: {
     })
     .returning();
 
+  await invalidateCourseDetailsCache(
+    await getCourseSlugForCourseId(input.courseId),
+  );
+
   return {
     id: created.id,
     name: created.name,
@@ -207,6 +238,10 @@ export async function createLesson(input: {
       rank: String(rank),
     })
     .returning();
+
+  await invalidateCourseDetailsCache(
+    await getCourseSlugForModuleId(input.moduleId),
+  );
 
   return {
     id: created.id,
@@ -398,7 +433,11 @@ export async function setLessonVideo(
     .set({ videoProvider: provider, videoRef: ref, updatedAt: sql`now()` })
     .where(eq(lessonsTable.id, lessonId))
     .returning({ id: lessonsTable.id });
-  return updated ?? null;
+  if (!updated) return null;
+
+  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+
+  return updated;
 }
 
 export async function resolveLessonPlayback(
@@ -443,8 +482,13 @@ export async function reorderModule(input: {
     .set({ rank: rankExpr, updatedAt: sql`now()` })
     .where(eq(modulesTable.id, input.moduleId))
     .returning({ id: modulesTable.id, rank: modulesTable.rank });
+  if (!updated) return null;
 
-  return updated ? { id: updated.id, rank: Number(updated.rank) } : null;
+  await invalidateCourseDetailsCache(
+    await getCourseSlugForModuleId(input.moduleId),
+  );
+
+  return { id: updated.id, rank: Number(updated.rank) };
 }
 
 /**
@@ -471,6 +515,11 @@ export async function moveLesson(input: {
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
   else rankExpr = sql`1`;
 
+  // Resolve the lesson's *current* course before the move — a cross-module
+  // drag can also be a cross-course drag, and after the update the lesson's
+  // moduleId (and therefore this join) would already point at the target.
+  const sourceCourseSlug = await getCourseSlugForLessonId(input.lessonId);
+
   const [updated] = await db
     .update(lessonsTable)
     .set({
@@ -484,10 +533,19 @@ export async function moveLesson(input: {
       rank: lessonsTable.rank,
       moduleId: lessonsTable.moduleId,
     });
+  if (!updated) return null;
 
-  return updated
-    ? { id: updated.id, rank: Number(updated.rank), moduleId: updated.moduleId }
-    : null;
+  const targetCourseSlug = await getCourseSlugForModuleId(input.targetModuleId);
+  await invalidateCourseDetailsCache(sourceCourseSlug);
+  if (targetCourseSlug !== sourceCourseSlug) {
+    await invalidateCourseDetailsCache(targetCourseSlug);
+  }
+
+  return {
+    id: updated.id,
+    rank: Number(updated.rank),
+    moduleId: updated.moduleId,
+  };
 }
 
 export async function updateLessonName(
@@ -499,7 +557,11 @@ export async function updateLessonName(
     .set({ name, updatedAt: sql`now()` })
     .where(eq(lessonsTable.id, lessonId))
     .returning({ id: lessonsTable.id, name: lessonsTable.name });
-  return updated ?? null;
+  if (!updated) return null;
+
+  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+
+  return updated;
 }
 
 export async function updateLessonConfig(
@@ -529,6 +591,9 @@ export async function updateLessonConfig(
       requiredSubscriptions: lessonsTable.requiredSubscriptions,
     });
   if (!updated) return null;
+
+  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+
   return {
     ...updated,
     requiredSubscriptions: updated.requiredSubscriptions as SubscriptionType[],
@@ -536,11 +601,18 @@ export async function updateLessonConfig(
 }
 
 export async function deleteLesson(lessonId: number): Promise<boolean> {
+  // Resolve before the delete — once the row is gone, the module/course join
+  // used to find the owning slug has nothing to join against.
+  const courseSlug = await getCourseSlugForLessonId(lessonId);
+
   const [deleted] = await db
     .delete(lessonsTable)
     .where(eq(lessonsTable.id, lessonId))
     .returning({ id: lessonsTable.id });
-  return Boolean(deleted);
+  if (!deleted) return false;
+
+  await invalidateCourseDetailsCache(courseSlug);
+  return true;
 }
 
 // Grace period so a just-uploaded-but-not-yet-saved cover isn't swept while the
@@ -669,6 +741,7 @@ export async function updateModule(
     },
     { avif: input.imageUrlAvif ?? null, webp: input.imageUrlWebp ?? null },
   );
+  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
   return updated;
 }
 
@@ -681,6 +754,10 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
     .from(modulesTable)
     .where(eq(modulesTable.id, moduleId));
 
+  // Resolve before the delete — once the row is gone, the course join used
+  // to find the owning slug has nothing to join against.
+  const courseSlug = await getCourseSlugForModuleId(moduleId);
+
   const [deleted] = await db
     .delete(modulesTable)
     .where(eq(modulesTable.id, moduleId))
@@ -688,6 +765,7 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
   if (!deleted) return false;
 
   await deleteBlobs([existing?.imageUrlAvif, existing?.imageUrlWebp]);
+  await invalidateCourseDetailsCache(courseSlug);
   return true;
 }
 
@@ -727,6 +805,9 @@ export async function updateCourse(
     },
     { avif: updated.imageUrlAvif, webp: updated.imageUrlWebp },
   );
+  // Slug is immutable here (see doc comment), so the row just returned
+  // already carries the key the cache is keyed by — no extra lookup needed.
+  await invalidateCourseDetailsCache(updated.slug);
   return updated;
 }
 
@@ -748,15 +829,19 @@ export async function updateCourseOnboarding(
     .update(coursesTable)
     .set({ onboardingQuestions: questions, updatedAt: new Date() })
     .where(eq(coursesTable.id, courseId));
+  await invalidateCourseDetailsCache(await getCourseSlugForCourseId(courseId));
   return questions;
 }
 
 /** Delete a course; its modules and lessons cascade via FK. */
 export async function deleteCourse(courseId: number): Promise<boolean> {
   // Collect the course cover and every cascade-deleted module cover so their
-  // blobs can be removed after the row is gone.
+  // blobs can be removed after the row is gone. Also grab the slug here,
+  // before the delete — once the row is gone there is nothing left to
+  // resolve it from.
   const [course] = await db
     .select({
+      slug: coursesTable.slug,
       imageUrlAvif: coursesTable.imageUrlAvif,
       imageUrlWebp: coursesTable.imageUrlWebp,
     })
@@ -776,6 +861,7 @@ export async function deleteCourse(courseId: number): Promise<boolean> {
     .returning({ id: coursesTable.id });
   if (!deleted) return false;
 
+  await invalidateCourseDetailsCache(course?.slug ?? null);
   await deleteBlobs([
     course?.imageUrlAvif,
     course?.imageUrlWebp,
