@@ -3,14 +3,17 @@ import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
 import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
 import { VideoPlayerContainer } from '#/components/video-player';
+import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
 import { DebriefOverlay } from '#/components/video-player/parts/debrief-overlay';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
+import { useVideoProgress } from '#/data-hooks/use-video-progress';
 import {
   useCurrentTest,
   useGenerateTest,
   useIsGenerating,
 } from '#/hooks/data/use-lesson-ai-test';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
+import { watchedMilestones } from '#/lib/course-milestones';
 import type { VideoFetchState } from '../types';
 
 const videoEndedAtom = atom(false);
@@ -35,6 +38,9 @@ export const LessonPlayerContainer = ({
   const generateTest = useGenerateTest();
   const { data } = useLessonMaterial(lessonSlug);
   const material = data && !data.locked ? data.material : null;
+  const materialLocked = Boolean(data?.locked);
+  const progress = useVideoProgress(videoId);
+  const hit = progress.data?.milestonesHit.filter((m) => m !== 100).length ?? 0;
 
   const onEnded = useCallback(() => {
     setVideoEnded(true);
@@ -58,7 +64,8 @@ export const LessonPlayerContainer = ({
     }
   }, [generateTest, lessonSlug, material, setActiveTab]);
 
-  const showDebrief = videoEnded && !currentTest;
+  const showCoverageNotice = videoEnded && materialLocked;
+  const showDebrief = videoEnded && !materialLocked && !currentTest;
 
   return (
     <VideoPlayerContainer
@@ -69,7 +76,9 @@ export const LessonPlayerContainer = ({
       onEnded={onEnded}
       overlay={
         <AnimatePresence>
-          {showDebrief ? (
+          {showCoverageNotice ? (
+            <CoverageNotice hit={hit} total={watchedMilestones.length} />
+          ) : showDebrief ? (
             <DebriefOverlay loading={isGenerating} onDebrief={onDebrief} />
           ) : null}
         </AnimatePresence>
