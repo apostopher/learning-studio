@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { PROVIDER_IDS } from '@/lib/video-providers';
-import { SubscriptionsSchema } from '@/types';
+import { PROVIDER_IDS } from '#/lib/video-providers';
+import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
+import { SubscriptionsSchema } from '#/types';
 
 export const ADMIN_ROLE = 'admin';
 
@@ -196,6 +197,13 @@ export type SetLessonVideoInput = z.infer<typeof setLessonVideoInputSchema>;
 export const lessonPlaybackSchema = z.object({
   url: z.string().url(),
   kind: z.enum(['hls', 'file']),
-  expiresAt: z.number().nullable(),
+  /** Seconds the URL stays valid from when it was resolved — a TTL, not a timestamp. */
+  expiresInSeconds: z.number().nonnegative().nullable(),
 });
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
+
+/** Body of a 502 from the video-playback route — `code` is what the UI branches on. */
+export const playbackErrorSchema = z.object({
+  error: z.string(),
+  code: z.enum(PLAYBACK_FAILURE_CODES),
+});

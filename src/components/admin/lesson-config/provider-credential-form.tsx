@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import type { FormEventHandler } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 
 export interface CredentialField {
   name: string;
@@ -17,6 +17,8 @@ interface ProviderCredentialFormProps {
   serverError?: string;
   isPending: boolean;
   submitLabel?: string;
+  /** When present, renders a Cancel button beside submit — used when a key already exists and the form is a replacement. */
+  onCancel?: () => void;
 }
 
 /**
@@ -31,6 +33,7 @@ export const ProviderCredentialForm = ({
   serverError,
   isPending,
   submitLabel = 'Save credentials',
+  onCancel,
 }: ProviderCredentialFormProps) => {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
@@ -83,7 +86,16 @@ export const ProviderCredentialForm = ({
         </p>
       )}
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+          >
+            Cancel
+          </button>
+        )}
         <button
           type="submit"
           disabled={isPending}

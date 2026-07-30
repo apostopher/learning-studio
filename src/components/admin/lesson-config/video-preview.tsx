@@ -1,9 +1,19 @@
 import { Video } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import type { LessonPlayback } from '@/lib/admin-schemas';
+import type { LessonPlayback } from '#/lib/admin-schemas';
 
 interface VideoPreviewProps {
   playback: LessonPlayback | null;
+  /**
+   * Called when the media request for an HLS manifest is refused with 401/403.
+   *
+   * This is the only way a revoked Mux signing key ever surfaces: Mux JWTs are
+   * signed locally on our server, so `resolvePlayback` succeeds and only Mux's
+   * own edge rejects the token. Caveat: it relies on hls.js exposing the
+   * response status, so it does not fire on browsers playing HLS natively
+   * (Safari), where the media error carries no status.
+   */
+  onForbidden?: () => void;
 }
 
 /**
@@ -16,15 +26,30 @@ interface VideoPreviewProps {
  * explicitly carve out this case ("may use refs for direct DOM manipulation,
  * such as for animations") — a media player is the same category of concern.
  */
-export const VideoPreview = ({ playback }: VideoPreviewProps) => {
+export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Held in a ref so an inline arrow from the caller cannot land in the effect
+  // below's dependency list — that would tear down and re-attach hls.js on
+  // every parent render.
+  const onForbiddenRef = useRef(onForbidden);
+  useEffect(() => {
+    onForbiddenRef.current = onForbidden;
+  }, [onForbidden]);
+
+  // Destructured so the effect depends on the URL rather than the object's
+  // identity: playback is re-resolved on a timer to keep the signed URL alive,
+  // and remounting the player on a refetch that returned the same URL would
+  // reset the viewer's position for nothing.
+  const url = playback?.url ?? null;
+  const kind = playback?.kind ?? null;
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !playback) return;
+    if (!video || !url || !kind) return;
 
-    if (playback.kind === 'file') {
-      video.src = playback.url;
+    if (kind === 'file') {
+      video.src = url;
       return () => {
         video.removeAttribute('src');
         video.load();
@@ -34,7 +59,7 @@ export const VideoPreview = ({ playback }: VideoPreviewProps) => {
     // kind === 'hls'. Safari (and other WebKit-based browsers) can play HLS
     // natively via the <video> element — no library needed there.
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = playback.url;
+      video.src = url;
       return () => {
         video.removeAttribute('src');
         video.load();
@@ -48,7 +73,11 @@ export const VideoPreview = ({ playback }: VideoPreviewProps) => {
     import('hls.js').then(({ default: Hls }) => {
       if (destroyed || !videoRef.current || !Hls.isSupported()) return;
       hls = new Hls();
-      hls.loadSource(playback.url);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        const status = data.response?.code;
+        if (status === 401 || status === 403) onForbiddenRef.current?.();
+      });
+      hls.loadSource(url);
       hls.attachMedia(videoRef.current);
     });
 
@@ -56,7 +85,7 @@ export const VideoPreview = ({ playback }: VideoPreviewProps) => {
       destroyed = true;
       hls?.destroy();
     };
-  }, [playback]);
+  }, [url, kind]);
 
   if (!playback) {
     return (

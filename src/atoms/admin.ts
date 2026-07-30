@@ -60,11 +60,12 @@ export const videoDraftDetectionAtom = atom<{
 export const videoReplaceModeAtom = atom(false);
 
 /**
- * Which provider's credential form is expanded in the course edit dialog's
- * "Video integrations" section, or null when every row is collapsed. Reset
- * whenever the dialog is pointed at a different course.
+ * Set when the browser's own request for a resolved playback URL is refused
+ * (401/403). This is the only signal that a Mux signing key has been revoked:
+ * Mux JWTs are signed locally on our server, so playback resolution succeeds and
+ * only Mux's edge rejects the token. Reset when the modal switches lessons.
  */
-export const expandedVideoProviderAtom = atom<ProviderId | null>(null);
+export const videoPlaybackForbiddenAtom = atom(false);
 
 /** Course whose training-documents (AI embeddings) modal is open. */
 export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);

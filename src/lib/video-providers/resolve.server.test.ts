@@ -10,10 +10,30 @@ vi.mock('@mux/mux-node', () => ({
   })),
 }));
 
-const { getVideoDetails, getVideoExpiry } = vi.hoisted(() => ({
-  getVideoDetails: vi.fn(),
-  getVideoExpiry: vi.fn(),
-}));
+const { getVideoDetails, getVideoExpiry, SynthesiaRequestError } = vi.hoisted(
+  () => {
+    // Declared inside vi.hoisted, not as a top-level const: the vi.mock factory
+    // below is hoisted above module-level declarations and would capture this
+    // binding before initialization.
+    //
+    // It must also be the class the mock exports, because resolve.server
+    // narrows on it with `instanceof` — a separate stub would make every
+    // classification branch silently fall through to PROVIDER_UNAVAILABLE.
+    class SynthesiaRequestError extends Error {
+      readonly status: number;
+      constructor(status: number) {
+        super('GET_VIDEO_URL_ERROR');
+        this.name = 'SynthesiaRequestError';
+        this.status = status;
+      }
+    }
+    return {
+      getVideoDetails: vi.fn(),
+      getVideoExpiry: vi.fn(),
+      SynthesiaRequestError,
+    };
+  },
+);
 
 // Relative path, not `@/` — this repo's vitest (vite@7 peer, vs vite@8 in
 // the app) does not resolve the `@/` tsconfig-paths alias at all, so
@@ -23,8 +43,10 @@ const { getVideoDetails, getVideoExpiry } = vi.hoisted(() => ({
 vi.mock('../../integrations/synthesia/videos', () => ({
   getVideoDetails,
   getVideoExpiry,
+  SynthesiaRequestError,
 }));
 
+import { PlaybackError } from './errors';
 import { resolvePlayback, validateCredentials } from './resolve.server';
 
 const muxCreds = { keyId: 'key_123', privateKey: 'priv_abc' };
@@ -53,7 +75,10 @@ describe('resolvePlayback', () => {
     expect(result.url).toBe(
       'https://stream.mux.com/playback123.m3u8?token=signed-jwt-token',
     );
-    expect(result.expiresAt).toEqual(expect.any(Number));
+    // A TTL, not a timestamp. This used to be `Date.now()/1000 + TTL` here
+    // while the Synthesia branch returned seconds-remaining under the same
+    // field name and type.
+    expect(result.expiresInSeconds).toBe(3600);
 
     // The exact option keys the implementation passes to the Mux SDK.
     expect(signPlaybackId).toHaveBeenCalledWith('playback123', {
@@ -78,7 +103,7 @@ describe('resolvePlayback', () => {
     expect(result).toEqual({
       url: availableVideo.download,
       kind: 'file',
-      expiresAt: 3599,
+      expiresInSeconds: 3599,
     });
   });
 
@@ -98,12 +123,101 @@ describe('resolvePlayback', () => {
     expect(result.kind).toBe('hls');
   });
 
+  it('clamps an already-expired Synthesia URL to a zero TTL', async () => {
+    getVideoDetails.mockResolvedValue(availableVideo);
+    getVideoExpiry.mockReturnValue(-120);
+
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+
+    // The field promises "seconds remaining"; a negative would make every
+    // consumer's arithmetic wrong rather than merely stale.
+    expect(result.expiresInSeconds).toBe(0);
+  });
+
+  it('passes through a null TTL when the URL carries no expiry', async () => {
+    getVideoDetails.mockResolvedValue(availableVideo);
+    getVideoExpiry.mockReturnValue(null);
+
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+
+    expect(result.expiresInSeconds).toBeNull();
+  });
+
   it('throws VIDEO_NOT_AVAILABLE when the Synthesia video is not ready', async () => {
     getVideoDetails.mockResolvedValue({ id: 'vid_1', status: 'in_progress' });
 
     await expect(
       resolvePlayback('synthesia', 'video-ref-1', synthesiaCreds),
     ).rejects.toThrow('VIDEO_NOT_AVAILABLE');
+  });
+
+  describe('failure classification', () => {
+    /** Resolves to the PlaybackError `resolvePlayback` threw. */
+    async function codeFor(thrown: unknown) {
+      getVideoDetails.mockRejectedValue(thrown);
+      try {
+        await resolvePlayback('synthesia', 'video-ref-1', synthesiaCreds);
+      } catch (error) {
+        return error;
+      }
+      throw new Error('expected resolvePlayback to reject');
+    }
+
+    it.each([
+      401, 403,
+    ])('reports a refused Synthesia key as PROVIDER_AUTH_REJECTED on %i', async (status) => {
+      const error = await codeFor(new SynthesiaRequestError(status));
+
+      // This is the distinction the whole feature turns on: only this code
+      // tells the admin their key is dead rather than their video.
+      expect(error).toBeInstanceOf(PlaybackError);
+      expect((error as PlaybackError).code).toBe('PROVIDER_AUTH_REJECTED');
+      expect((error as PlaybackError).message).toContain(String(status));
+    });
+
+    it('reports a missing Synthesia video as VIDEO_NOT_AVAILABLE, not a key problem', async () => {
+      const error = await codeFor(new SynthesiaRequestError(404));
+
+      expect((error as PlaybackError).code).toBe('VIDEO_NOT_AVAILABLE');
+    });
+
+    it('reports a Synthesia outage as PROVIDER_UNAVAILABLE', async () => {
+      const error = await codeFor(new SynthesiaRequestError(503));
+
+      expect((error as PlaybackError).code).toBe('PROVIDER_UNAVAILABLE');
+    });
+
+    it('reports a network failure as PROVIDER_UNAVAILABLE', async () => {
+      const error = await codeFor(new TypeError('fetch failed'));
+
+      expect((error as PlaybackError).code).toBe('PROVIDER_UNAVAILABLE');
+    });
+
+    it('preserves the underlying failure as the cause', async () => {
+      const underlying = new SynthesiaRequestError(401);
+      const error = await codeFor(underlying);
+
+      expect((error as PlaybackError).cause).toBe(underlying);
+    });
+
+    it('reports an unusable Mux signing key as PROVIDER_AUTH_REJECTED', async () => {
+      signPlaybackId.mockRejectedValue(new Error('invalid key format'));
+
+      const error = await resolvePlayback('mux', 'pb1', muxCreds).catch(
+        (e) => e,
+      );
+
+      expect(error).toBeInstanceOf(PlaybackError);
+      expect((error as PlaybackError).code).toBe('PROVIDER_AUTH_REJECTED');
+    });
   });
 });
 

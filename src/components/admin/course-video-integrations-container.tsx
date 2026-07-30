@@ -1,79 +1,30 @@
-import { useAtom } from 'jotai';
-import { CheckCircle2, ChevronDown, Loader2, Trash2 } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
+import { useMemo } from 'react';
 
-import { expandedVideoProviderAtom } from '@/atoms/admin';
-import { useCourseCredentials } from '@/data-hooks/use-course-credentials';
-import { useDeleteCredential } from '@/data-hooks/use-delete-credential';
-import { useSaveCredential } from '@/data-hooks/use-save-credential';
-import type {
-  CredentialSummary,
-  SaveCredentialInput,
-} from '@/lib/admin-schemas';
-import { cn } from '@/lib/cn';
+import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
+import type { CredentialSummary } from '#/lib/admin-schemas';
 import {
   PROVIDER_IDS,
   type ProviderId,
   VIDEO_PROVIDERS,
-} from '@/lib/video-providers';
-import {
-  type CredentialField,
-  ProviderCredentialForm,
-} from './lesson-config/provider-credential-form';
-import { ProviderHowTo } from './lesson-config/provider-how-to';
-
-/** Superset of every provider's credential fields — RHF only registers the ones a given provider actually renders. */
-interface CredentialFormValues {
-  keyId?: string;
-  privateKey?: string;
-  apiKey?: string;
-}
-
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
-/** Turns `{ apiKeyLast4: '1234' }` into "Api key last4: 1234" for display — generic across providers. */
-function formatDisplay(display: Record<string, unknown>): string {
-  return Object.entries(display)
-    .map(([key, value]) => {
-      const label = key
-        .replace(/([A-Z0-9]+)/g, ' $1')
-        .replace(/^./, (c) => c.toUpperCase())
-        .trim();
-      return `${label}: ${String(value)}`;
-    })
-    .join(' · ');
-}
+} from '#/lib/video-providers';
+import { CredentialFlowContainer } from './lesson-config/credential-flow-container';
+import { CredentialProviderRow } from './lesson-config/credential-provider-row';
 
 interface CourseVideoIntegrationsContainerProps {
   courseId: number;
 }
 
 /**
- * "Video integrations" section of the course edit dialog: lists every known
- * video provider, shows whether the course has stored credentials for it
- * (secret-free display only), and lets the admin add/update or remove them.
+ * "Video integrations" section of the course edit dialog: one credential flow
+ * per known video provider. Owns the credentials query and hands each provider
+ * its own summary; every row drives its own `credentialMachine` actor.
+ *
  * The durable place to rotate provider keys, independent of any one lesson.
  */
 export const CourseVideoIntegrationsContainer = ({
   courseId,
 }: CourseVideoIntegrationsContainerProps) => {
   const credentials = useCourseCredentials(courseId);
-  const [expandedProvider, setExpandedProvider] = useAtom(
-    expandedVideoProviderAtom,
-  );
-  const saveCredential = useSaveCredential(courseId);
-  const deleteCredential = useDeleteCredential(courseId);
-
-  // Collapse any open form whenever the dialog is pointed at a different course.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: courseId intentionally re-triggers the reset on course switch even though setExpandedProvider's identity is stable.
-  useEffect(() => {
-    setExpandedProvider(null);
-  }, [courseId]);
 
   const credentialsByProvider = useMemo(() => {
     const map = new Map<ProviderId, CredentialSummary>();
@@ -82,79 +33,6 @@ export const CourseVideoIntegrationsContainer = ({
     }
     return map;
   }, [credentials.data]);
-
-  const credentialForm = useForm<CredentialFormValues>({ mode: 'onSubmit' });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed only on expandedProvider — clears stale values from a previously-expanded provider's fields when the selection changes; credentialForm's identity is stable across renders.
-  useEffect(() => {
-    credentialForm.reset();
-    saveCredential.reset();
-  }, [expandedProvider]);
-
-  const handleCredentialSubmit = credentialForm.handleSubmit((values) => {
-    if (!expandedProvider) return;
-    // Credential fields differ per provider, so the schema is chosen at
-    // runtime — there's no single static type to hand to zodResolver here.
-    // Validate manually with the provider's own client-safe schema instead.
-    const parsed =
-      VIDEO_PROVIDERS[expandedProvider].credentialSchema.safeParse(values);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0];
-        if (typeof field === 'string') {
-          credentialForm.setError(field as keyof CredentialFormValues, {
-            message: issue.message,
-          });
-        }
-      }
-      return;
-    }
-    saveCredential.mutate(
-      {
-        provider: expandedProvider,
-        ...(parsed.data as CredentialFormValues),
-      } as SaveCredentialInput,
-      {
-        onSuccess: () => {
-          toast.success(`${VIDEO_PROVIDERS[expandedProvider].label} connected`);
-          setExpandedProvider(null);
-        },
-      },
-    );
-  });
-
-  // Plain array, not useMemo: `credentialForm` is a stable reference, so a
-  // memo keyed on it would never recompute after `credentialForm.setError`
-  // runs inside handleCredentialSubmit, leaving validation errors stuck at
-  // `undefined`. Recomputing every render keeps RHF's errors proxy live.
-  const credentialFields: CredentialField[] =
-    expandedProvider === 'mux'
-      ? [
-          {
-            name: 'keyId',
-            label: 'Signing key ID',
-            type: 'text',
-            register: credentialForm.register('keyId'),
-            error: credentialForm.formState.errors.keyId?.message,
-          },
-          {
-            name: 'privateKey',
-            label: 'Signing key (private, Base64)',
-            type: 'password',
-            register: credentialForm.register('privateKey'),
-            error: credentialForm.formState.errors.privateKey?.message,
-          },
-        ]
-      : expandedProvider === 'synthesia'
-        ? [
-            {
-              name: 'apiKey',
-              label: 'API key',
-              type: 'password',
-              register: credentialForm.register('apiKey'),
-              error: credentialForm.formState.errors.apiKey?.message,
-            },
-          ]
-        : [];
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -169,128 +47,30 @@ export const CourseVideoIntegrationsContainer = ({
 
       <div className="mt-1 flex flex-col gap-2">
         {PROVIDER_IDS.map((providerId) => {
-          const meta = VIDEO_PROVIDERS[providerId];
-          const summary = credentialsByProvider.get(providerId);
-          const isConfigured = summary !== undefined;
-          const isExpanded = expandedProvider === providerId;
-          const isDeleting =
-            deleteCredential.isPending &&
-            deleteCredential.variables === providerId;
-
+          // A failed query also means "we don't know", not "no key" — a row
+          // must not claim Not connected on the strength of missing data.
+          const isUnknown = credentials.isLoading || credentials.isError;
           return (
-            <div
+            <CredentialProviderRow
               key={providerId}
-              className="flex flex-col rounded-lg border border-gray-6 bg-gray-1"
+              label={VIDEO_PROVIDERS[providerId].label}
+              isLoading={isUnknown}
             >
-              <div className="flex items-center gap-3 p-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedProvider(isExpanded ? null : providerId)
-                  }
-                  aria-expanded={isExpanded}
-                  className="flex flex-1 items-center gap-3 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-                >
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 shrink-0 text-tertiary transition-transform duration-150',
-                      isExpanded && 'rotate-180',
-                    )}
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-1 flex-col gap-0.5">
-                    <span className="font-medium text-primary text-sm">
-                      {meta.label}
-                    </span>
-                    {credentials.isLoading ? (
-                      // Query still in flight with no cached data yet — avoid
-                      // flashing a misleading "Not connected" for providers
-                      // that may actually be configured.
-                      <span className="inline-flex items-center gap-1.5 text-tertiary text-xs">
-                        <Loader2
-                          className="h-3 w-3 animate-spin"
-                          aria-hidden="true"
-                        />
-                        Loading…
-                      </span>
-                    ) : isConfigured ? (
-                      <span className="inline-flex items-center gap-1.5 text-success-text text-xs">
-                        <CheckCircle2
-                          className="h-3.5 w-3.5"
-                          aria-hidden="true"
-                        />
-                        {formatDisplay(summary.display)}
-                        {summary.lastValidatedAt && (
-                          <span className="text-tertiary">
-                            · verified{' '}
-                            {dateTimeFormatter.format(summary.lastValidatedAt)}
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-tertiary text-xs">
-                        Not connected
-                      </span>
-                    )}
-                  </div>
-                </button>
-
-                {isConfigured && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      deleteCredential.mutate(providerId, {
-                        onSuccess: () =>
-                          toast.success(`${meta.label} disconnected`),
-                        onError: () =>
-                          toast.error(`Couldn't remove ${meta.label}`),
-                      })
-                    }
-                    disabled={isDeleting}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-error-text text-xs',
-                      'transition-colors hover:bg-error-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9',
-                      'disabled:cursor-not-allowed disabled:opacity-60',
-                    )}
-                  >
-                    {isDeleting ? (
-                      <Loader2
-                        className="h-3.5 w-3.5 animate-spin"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              {isExpanded && (
-                <div className="flex flex-col gap-4 border-gray-6 border-t p-4">
-                  <ProviderHowTo provider={providerId} />
-                  <ProviderCredentialForm
-                    fields={credentialFields}
-                    // This container renders inside the course-edit <form>
-                    // (via the videoIntegrations slot in create-course-form.tsx).
-                    // ProviderCredentialForm renders its own nested <form>, and
-                    // the native `submit` event bubbles even through React's
-                    // synthetic nested form elements — stop it here so clicking
-                    // "Save/Update credentials" doesn't also submit the outer
-                    // course-edit form and fire an unintended updateCourse.mutate.
-                    onSubmit={(e) => {
-                      e.stopPropagation();
-                      handleCredentialSubmit(e);
-                    }}
-                    serverError={saveCredential.error?.message}
-                    isPending={saveCredential.isPending}
-                    submitLabel={
-                      isConfigured ? 'Update credentials' : 'Save credentials'
-                    }
-                  />
-                </div>
-              )}
-            </div>
+              <CredentialFlowContainer
+                courseId={courseId}
+                provider={providerId}
+                summary={credentialsByProvider.get(providerId)}
+                isLoadingCredentials={isUnknown}
+                // This section renders inside the course-edit <form> (via the
+                // videoIntegrations slot in create-course-form.tsx), and a
+                // nested form's native submit event bubbles even through
+                // React's synthetic tree — so the row must stop it reaching
+                // updateCourse.mutate.
+                stopSubmitPropagation
+                // The durable place to rotate or drop a course's keys.
+                allowRemove
+              />
+            </CredentialProviderRow>
           );
         })}
       </div>

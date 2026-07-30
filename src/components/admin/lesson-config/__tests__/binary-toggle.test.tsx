@@ -54,6 +54,25 @@ describe('BinaryToggle', () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
+  it('renders the selection pill inside the active segment only', () => {
+    // The pill is a decorative span carrying the shared `layoutId` that makes it
+    // travel between segments. Rendering it in both (or neither) is the silent
+    // failure mode when the active-segment wiring breaks, and no colour or
+    // aria-pressed assertion would catch it.
+    render(
+      <BinaryToggle
+        label="Debrief"
+        value="off"
+        onValueChange={() => {}}
+        options={options}
+      />,
+    );
+    const on = screen.getByRole('button', { name: 'On' });
+    const off = screen.getByRole('button', { name: 'Off' });
+    expect(off.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(on.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
   it('disables the option named by disabledValue', () => {
     render(
       <BinaryToggle

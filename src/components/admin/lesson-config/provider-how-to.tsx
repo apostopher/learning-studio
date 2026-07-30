@@ -1,5 +1,5 @@
-import type { ProviderId } from '@/lib/video-providers';
-import { VIDEO_PROVIDERS } from '@/lib/video-providers';
+import type { ProviderId } from '#/lib/video-providers';
+import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 
 interface ProviderHowToProps {
   provider: ProviderId;

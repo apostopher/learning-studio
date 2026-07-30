@@ -8,6 +8,23 @@ import {
   VideosPageSchema,
 } from '@/types';
 
+/**
+ * A non-OK response from the Synthesia API, carrying the status so callers can
+ * tell a refused API key (401/403) from a missing video (404) from an outage.
+ *
+ * The message stays `GET_VIDEO_URL_ERROR` for continuity with existing callers
+ * and log greps; the status is the part that's new.
+ */
+export class SynthesiaRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super('GET_VIDEO_URL_ERROR');
+    this.name = 'SynthesiaRequestError';
+    this.status = status;
+  }
+}
+
 export async function getVideoDetails(
   videoId: string,
   apiKey: string = env.SYNTHESIA_API_KEY,
@@ -24,7 +41,7 @@ export async function getVideoDetails(
     },
   );
   if (!response.ok) {
-    throw new Error('GET_VIDEO_URL_ERROR');
+    throw new SynthesiaRequestError(response.status);
   }
   const data = await response.json();
   return VideoResponseSchema.parse(data);
@@ -145,9 +162,13 @@ export const getAllVideosWithCache = cacheWithRedis<
 });
 
 /**
- * Extracts the Expires parameter from a video URL as a number.
+ * Seconds remaining until a pre-signed video URL's `Expires` stamp, i.e. a TTL
+ * — used both as a Redis cache TTL and as `Playback.expiresInSeconds`.
+ *
  * @param videoURL The video URL containing the Expires query parameter.
- * @returns The Expires value as a number, or null if not found/invalid.
+ * @returns Seconds remaining (may be negative if already past), or null if the
+ * parameter is missing or unparseable. Callers that need a non-negative TTL
+ * clamp it themselves.
  */
 export function getVideoExpiry(videoURL: string): number | null {
   try {
@@ -155,7 +176,6 @@ export function getVideoExpiry(videoURL: string): number | null {
     const expires = url.searchParams.get('Expires');
     if (!expires) return null;
     const expiresNum = Number(expires);
-    // give 1 minute buffer
     if (!Number.isFinite(expiresNum)) return null;
     const ExpiresDate = new Date(expiresNum * 1000);
     const now = new Date();

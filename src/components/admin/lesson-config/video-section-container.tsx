@@ -5,19 +5,19 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { videoDraftDetectionAtom, videoReplaceModeAtom } from '@/atoms/admin';
-import { useCourseCredentials } from '@/data-hooks/use-course-credentials';
-import { useLessonVideoPlayback } from '@/data-hooks/use-lesson-video-playback';
-import { useSaveCredential } from '@/data-hooks/use-save-credential';
-import { useSetLessonVideo } from '@/data-hooks/use-set-lesson-video';
-import type { BoardLesson, SaveCredentialInput } from '@/lib/admin-schemas';
-import { VIDEO_PROVIDERS } from '@/lib/video-providers';
-import { detectVideoUrl } from '@/lib/video-providers/detect';
 import {
-  type CredentialField,
-  ProviderCredentialForm,
-} from './provider-credential-form';
-import { ProviderHowTo } from './provider-how-to';
+  videoDraftDetectionAtom,
+  videoPlaybackForbiddenAtom,
+  videoReplaceModeAtom,
+} from '#/atoms/admin';
+import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
+import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
+import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
+import type { BoardLesson } from '#/lib/admin-schemas';
+import { VIDEO_PROVIDERS } from '#/lib/video-providers';
+import { detectVideoUrl } from '#/lib/video-providers/detect';
+import { PlaybackError } from '#/lib/video-providers/errors';
+import { CredentialFlowContainer } from './credential-flow-container';
 import { VideoPreview } from './video-preview';
 import { VideoUrlForm } from './video-url-form';
 
@@ -26,29 +26,24 @@ const videoUrlFormSchema = z.object({
 });
 type VideoUrlFormValues = z.infer<typeof videoUrlFormSchema>;
 
-/** Superset of every provider's credential fields — RHF only registers the ones a given provider actually renders. */
-interface CredentialFormValues {
-  keyId?: string;
-  privateKey?: string;
-  apiKey?: string;
-}
-
 interface VideoSectionContainerProps {
   courseId: number;
   lesson: BoardLesson;
 }
 
 /**
- * Orchestrates the Video tab: URL entry → provider detection → persist the
- * ref on the lesson → (if the course has no credential for that provider)
- * how-to + credential form → resolved playback preview.
+ * Orchestrates the Video tab: URL entry → provider detection → persist the ref
+ * on the lesson → (if the course has no credential for that provider) hand off
+ * to `CredentialFlowContainer` → resolved playback preview.
  *
- * State machine (no-video → detecting → needs-credentials → resolving →
- * playing | error) is derived from server data (the lesson's persisted
- * provider/ref, the course's configured credentials, and the playback
- * query) plus two small jotai atoms for the sliver of state that has no
- * server home yet: a not-yet-confirmed URL detection, and whether the
+ * The *video* side is still derived from server data (the lesson's persisted
+ * provider/ref and the playback query) plus two jotai atoms for the sliver with
+ * no server home yet: a not-yet-confirmed URL detection, and whether the
  * "replace video" form is showing over an already-configured video.
+ *
+ * The *credential* side is not derived here — `credentialMachine` owns it, via
+ * the same container the course-edit dialog uses. This file only decides
+ * whether a credential is needed at all.
  */
 export const VideoSectionContainer = ({
   courseId,
@@ -56,10 +51,12 @@ export const VideoSectionContainer = ({
 }: VideoSectionContainerProps) => {
   const [draftDetection, setDraftDetection] = useAtom(videoDraftDetectionAtom);
   const [replaceMode, setReplaceMode] = useAtom(videoReplaceModeAtom);
+  const [playbackForbidden, setPlaybackForbidden] = useAtom(
+    videoPlaybackForbiddenAtom,
+  );
 
   const credentials = useCourseCredentials(courseId);
   const setLessonVideo = useSetLessonVideo(courseId);
-  const saveCredential = useSaveCredential(courseId);
 
   // Reset the modal's transient state whenever it's pointed at a different
   // lesson. lesson.id isn't read in the body — it's the trigger, not a value.
@@ -67,7 +64,8 @@ export const VideoSectionContainer = ({
   useEffect(() => {
     setDraftDetection(null);
     setReplaceMode(false);
-  }, [lesson.id, setDraftDetection, setReplaceMode]);
+    setPlaybackForbidden(false);
+  }, [lesson.id, setDraftDetection, setReplaceMode, setPlaybackForbidden]);
 
   // Once the board confirms the draft (refetches with matching provider/ref),
   // drop the local draft so the lesson's own fields become the source of truth.
@@ -130,71 +128,24 @@ export const VideoSectionContainer = ({
     );
   });
 
-  const credentialForm = useForm<CredentialFormValues>({ mode: 'onSubmit' });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed only on activeProvider — clears stale values from a previously-detected provider's fields when the provider selection changes; credentialForm's identity is stable across renders.
-  useEffect(() => {
-    credentialForm.reset();
-  }, [activeProvider]);
+  // Two independent ways a stored key turns out to be dead, because the
+  // providers fail in different places: Synthesia refuses our server's API call
+  // (coded 502 → PlaybackError), while Mux accepts the locally-signed JWT and
+  // only its edge refuses the browser's manifest request (→ onForbidden).
+  const serverRejection =
+    playback.error instanceof PlaybackError &&
+    playback.error.code === 'PROVIDER_AUTH_REJECTED'
+      ? playback.error.message
+      : null;
+  const keyRejection =
+    serverRejection ??
+    (playbackForbidden
+      ? 'The provider refused the signed playback request, which means the stored key is no longer valid.'
+      : null);
 
-  const handleCredentialSubmit = credentialForm.handleSubmit((values) => {
-    if (!activeProvider) return;
-    // Credential fields differ per provider, so the schema is chosen at
-    // runtime — there's no single static type to hand to zodResolver here.
-    // Validate manually with the provider's own client-safe schema instead.
-    const parsed =
-      VIDEO_PROVIDERS[activeProvider].credentialSchema.safeParse(values);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0];
-        if (typeof field === 'string') {
-          credentialForm.setError(field as keyof CredentialFormValues, {
-            message: issue.message,
-          });
-        }
-      }
-      return;
-    }
-    saveCredential.mutate(
-      {
-        provider: activeProvider,
-        ...(parsed.data as CredentialFormValues),
-      } as SaveCredentialInput,
-      { onSuccess: () => credentialForm.reset() },
-    );
-  });
-
-  const credentialFields: CredentialField[] = useMemo(() => {
-    if (activeProvider === 'mux') {
-      return [
-        {
-          name: 'keyId',
-          label: 'Signing key ID',
-          type: 'text',
-          register: credentialForm.register('keyId'),
-          error: credentialForm.formState.errors.keyId?.message,
-        },
-        {
-          name: 'privateKey',
-          label: 'Signing key (private, Base64)',
-          type: 'password',
-          register: credentialForm.register('privateKey'),
-          error: credentialForm.formState.errors.privateKey?.message,
-        },
-      ];
-    }
-    if (activeProvider === 'synthesia') {
-      return [
-        {
-          name: 'apiKey',
-          label: 'API key',
-          type: 'password',
-          register: credentialForm.register('apiKey'),
-          error: credentialForm.formState.errors.apiKey?.message,
-        },
-      ];
-    }
-    return [];
-  }, [activeProvider, credentialForm]);
+  // A dead key is still "configured" as far as the credentials query knows, so
+  // this has to override it — otherwise we'd render a player that cannot play.
+  const canPlay = isProviderConfigured && keyRejection === null;
 
   const showUrlForm = !hasVideo || replaceMode;
 
@@ -221,9 +172,12 @@ export const VideoSectionContainer = ({
             )}
           </div>
 
-          {isProviderConfigured ? (
+          {canPlay ? (
             <>
-              <VideoPreview playback={playback.data ?? null} />
+              <VideoPreview
+                playback={playback.data ?? null}
+                onForbidden={() => setPlaybackForbidden(true)}
+              />
               {playback.isLoading && (
                 <p className="flex items-center gap-1.5 text-tertiary text-sm">
                   <Loader2
@@ -242,16 +196,29 @@ export const VideoSectionContainer = ({
           ) : (
             activeProvider && (
               <div className="flex flex-col gap-4">
-                <p className="text-secondary text-sm">
-                  Connect {VIDEO_PROVIDERS[activeProvider].label} for this
-                  course to preview and serve this video.
-                </p>
-                <ProviderHowTo provider={activeProvider} />
-                <ProviderCredentialForm
-                  fields={credentialFields}
-                  onSubmit={handleCredentialSubmit}
-                  serverError={saveCredential.error?.message}
-                  isPending={saveCredential.isPending}
+                {keyRejection === null && (
+                  <p className="text-secondary text-sm">
+                    Connect {VIDEO_PROVIDERS[activeProvider].label} for this
+                    course to preview and serve this video.
+                  </p>
+                )}
+                {/*
+                  Same flow as the course dialog's Video integrations section,
+                  minus the card chrome — the heading above already names the
+                  provider. Opens straight into the form: the admin got here by
+                  pasting a video that cannot play without a key.
+                */}
+                <CredentialFlowContainer
+                  courseId={courseId}
+                  provider={activeProvider}
+                  summary={credentials.data?.find(
+                    (c) => c.provider === activeProvider,
+                  )}
+                  isLoadingCredentials={
+                    credentials.isLoading || credentials.isError
+                  }
+                  openFormImmediately
+                  providerRejection={keyRejection}
                 />
               </div>
             )
