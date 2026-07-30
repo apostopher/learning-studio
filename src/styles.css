@@ -1019,7 +1019,19 @@
    TanStack Router's <Link> sets data-transitioning="transitioning" on itself
    while its own navigation is in flight, and clears it on onResolved. That
    gives us a per-link pending state with no JS of our own, and it cannot get
-   stuck: a cancelled or redirected navigation clears it too. */
+   stuck: a cancelled or redirected navigation clears it too.
+
+   Deliberately unlayered (not @layer components/utilities): cascade layers
+   rank a whole property — including the transition-property list a shorthand
+   expands to — by layer, not by which values actually differ. Putting this
+   in any named layer would put it below Tailwind's own utilities layer, so
+   .transition-colors' transition-property (color, background-color,
+   border-color, ...) would win outright and drop transform/opacity from the
+   list entirely, killing the scale/dim feedback below instead of just the
+   border-color hover transition this block already had to fix. Staying
+   unlayered keeps this block's transition list authoritative, so
+   border-color is listed explicitly to keep .course-card's
+   hover:border-gray-8 transition animating instead of snapping. */
 
 .course-grid a[data-transitioning] {
   transform: scale(0.98);
@@ -1036,14 +1048,17 @@
 .course-grid a {
   transition:
     transform 150ms ease-out,
-    opacity 150ms ease-out;
+    opacity 150ms ease-out,
+    border-color 150ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Keep the opacity signal, drop the movement — reduced motion means
-     gentler, not none. */
+  /* Keep the opacity and border-color signals, drop the movement — reduced
+     motion means gentler, not none. */
   .course-grid a {
-    transition: opacity 150ms ease-out;
+    transition:
+      opacity 150ms ease-out,
+      border-color 150ms ease-out;
   }
   .course-grid a[data-transitioning] {
     transform: none;

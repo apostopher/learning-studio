@@ -296,8 +296,14 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       );
       // A missing payload (Redis outage, caught above; or a genuine cache
       // miss with no course row) falls back to 'no-lessons', which keeps the
-      // card clickable via the /course/$slug route — that route re-resolves
-      // the resume target itself, so the learner still lands correctly.
+      // card clickable via the /course/$slug route. During a Redis outage
+      // that route's own beforeLoad (getCourseResumeTarget) hits the same
+      // missing payload and throws, so the learner does not land correctly
+      // either way — the course page is broken during a Redis outage, and
+      // this branch doesn't change that. The point of falling back here
+      // rather than rejecting is narrower: it keeps /app itself rendering
+      // and degrades only this card's destination, instead of one bad
+      // course's Redis miss 500ing the whole grid via Promise.all.
       if (!details) {
         return { ...course, resume: { kind: 'none', reason: 'no-lessons' } };
       }

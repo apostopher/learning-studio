@@ -18,6 +18,20 @@ const courses = [
     imageUrlAvif: null,
     imageUrlWebp: null,
     percent: 42,
+    resume: {
+      kind: 'lesson',
+      moduleSlug: 'ground-school',
+      lessonSlug: 'weight-and-balance',
+    },
+  },
+  {
+    id: 2,
+    name: 'Instrument Rating',
+    slug: 'instrument-rating',
+    imageUrlAvif: null,
+    imageUrlWebp: null,
+    percent: 0,
+    resume: { kind: 'none', reason: 'no-lessons' },
   },
 ];
 
