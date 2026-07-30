@@ -12,11 +12,7 @@ import {
   type LessonLock,
   type MaterialLock,
 } from '#/lib/lesson-gating';
-import {
-  type DetailsCourse,
-  toGateCourse,
-  watchedLessonSlugs,
-} from '#/lib/lesson-gating-inputs';
+import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 
 export * from '#/lib/lesson-gating-inputs';
 
@@ -54,6 +50,19 @@ export async function evaluateLessonGate({
     getCourseProgress({ userId, slug: course.courseSlug }),
   ]);
 
+  // A gate that cannot be evaluated must never fail open. This is not the
+  // "lesson doesn't exist" case (that already returned above) — the lesson
+  // and course are known good, but the cached course payload didn't come
+  // back, e.g. a Redis outage or a cache-population race. Serving locks as
+  // "open" here would let a student through with unmet prerequisites, and
+  // silently, since nothing would look broken. Throwing surfaces it as a 500
+  // (see Task 5's route handler) so the failure is visible and retryable —
+  // including for admins, since a missing payload means something is
+  // genuinely wrong and a bypass would hide that.
+  if (!details) {
+    throw new Error(`Course payload unavailable for ${course.courseSlug}`);
+  }
+
   const isAdmin = roles.includes(ADMIN_ROLE);
   if (isAdmin) {
     return {
@@ -66,21 +75,8 @@ export async function evaluateLessonGate({
   }
 
   const subscribed = await isSubscribedToCourse(userId, course.courseId);
-  if (!details) {
-    return {
-      ...course,
-      isAdmin: false,
-      subscribed,
-      lessonLock: { kind: 'open' },
-      materialLock: { kind: 'open' },
-    };
-  }
-
-  const gateCourse = toGateCourse(details as unknown as DetailsCourse);
-  const watched = watchedLessonSlugs(
-    details as unknown as DetailsCourse,
-    progress,
-  );
+  const gateCourse = toGateCourse(details);
+  const watched = watchedLessonSlugs(details, progress);
 
   return {
     ...course,

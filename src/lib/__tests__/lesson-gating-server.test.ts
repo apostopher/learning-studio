@@ -130,6 +130,30 @@ describe('evaluateLessonGate', () => {
     expect(result?.subscribed).toBe(false);
   });
 
+  it('rejects rather than failing open when the course payload is unavailable', async () => {
+    // A Redis outage or cache-population race can return null from
+    // getCourseDetailsWithCache even though the lesson/course are known
+    // good. The gate must not fail open in that case (see decision on
+    // "unevaluable gate returns 500, never a silent pass") — assert on the
+    // rejection itself, not on some returned "safe" value, since the whole
+    // point is that the caller cannot mistake this for success.
+    getCourseDetailsWithCache.mockResolvedValue(null);
+    await expect(
+      evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' }),
+    ).rejects.toThrow(/c1/);
+  });
+
+  it('rejects for an admin too when the course payload is unavailable', async () => {
+    // The admin bypass exists for gate/subscription checks, not for "the
+    // data we need to evaluate anything is missing." An admin silently
+    // sailing through here would hide a genuine outage.
+    getUserRoleNames.mockResolvedValue(['admin']);
+    getCourseDetailsWithCache.mockResolvedValue(null);
+    await expect(
+      evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' }),
+    ).rejects.toThrow(/c1/);
+  });
+
   it('maps watched progress by lesson id, not by video id', async () => {
     // progress-summary keys by lessonId; the predicate keys by lesson slug.
     // Getting this mapping wrong silently unlocks or locks the wrong lesson.
