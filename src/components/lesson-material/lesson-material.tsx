@@ -9,6 +9,7 @@ import { JobOfTheDay } from './parts/job-of-the-day';
 import { KeyPoints } from './parts/key-points';
 import { Links } from './parts/links';
 import { ProTips } from './parts/pro-tips';
+import { LessonQuizContainer } from './parts/quiz/lesson-quiz-container';
 
 type LessonMaterialTab =
   | 'keyPoints'
@@ -80,9 +81,10 @@ export const LessonMaterialView = ({
             material={material}
           />
         ) : (
-          <pre className="text-sm text-secondary">
-            {JSON.stringify(material.quiz, null, 2)}
-          </pre>
+          <LessonQuizContainer
+            lessonSlug={material.lessonSlug}
+            quiz={material.quiz}
+          />
         )}
       </Tabs.Panel>
 

@@ -6,6 +6,7 @@ import {
   lockedResponse,
 } from '#/lib/lesson-gating';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import { partitionQuiz } from '#/lib/lesson-quiz';
 
 /**
  * The exact union the four UI surfaces switch on. Every success body is
@@ -14,6 +15,38 @@ import { evaluateLessonGate } from '#/lib/lesson-gating.server';
  * rather than a runtime surprise in a component.
  */
 type MaterialPayload = LessonMaterialResponse<NonNullable<LessonMaterial>>;
+
+/**
+ * Surface quiz questions the client will have to drop.
+ *
+ * The quiz UI filters unaskable questions (no correct option, fewer than two
+ * options, duplicate ids) rather than showing a student a question that marks
+ * them wrong and highlights nothing. Dropping quietly would hide an authoring
+ * bug from everyone, so it is reported here — Sentry is initialised on the
+ * server only (`instrument.server.mjs`), so a client-side capture would go
+ * nowhere. Imported dynamically to keep the SDK out of any client chunk, and
+ * never allowed to affect the response.
+ */
+function reportUnaskableQuizQuestions(
+  lessonSlug: string,
+  quiz: NonNullable<LessonMaterial>['quiz'],
+): void {
+  const { droppedIds } = partitionQuiz(quiz);
+  if (droppedIds.length === 0) return;
+
+  import('@sentry/tanstackstart-react')
+    .then((Sentry) => {
+      Sentry.captureMessage('Unaskable quiz questions dropped', {
+        level: 'warning',
+        extra: { lessonSlug, droppedIds },
+      });
+    })
+    .catch(() => {
+      console.warn(
+        `Unaskable quiz questions on ${lessonSlug}: ${droppedIds.join(', ')}`,
+      );
+    });
+}
 
 /**
  * A lesson's material for the learner, gated.
@@ -65,6 +98,8 @@ export async function getLessonMaterialHandler(
         { status: 404 },
       );
     }
+    reportUnaskableQuizQuestions(lessonSlug, material.quiz);
+
     const payload: MaterialPayload = {
       locked: false,
       adminBypass: gate.isAdmin,

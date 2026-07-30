@@ -34,6 +34,8 @@ import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
+import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
+import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
 import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
@@ -185,6 +187,16 @@ const AuthedCourseCourseSlugIndexRoute =
     path: '/',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
+const ApiLessonQuizResultRoute = ApiLessonQuizResultRouteImport.update({
+  id: '/api/lesson/quiz/result',
+  path: '/api/lesson/quiz/result',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonQuizAnswersRoute = ApiLessonQuizAnswersRouteImport.update({
+  id: '/api/lesson/quiz/answers',
+  path: '/api/lesson/quiz/answers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLessonAiTestSaveResultsRoute =
   ApiLessonAiTestSaveResultsRouteImport.update({
     id: '/api/lesson/ai-test/save-results',
@@ -355,6 +367,8 @@ export interface FileRoutesByFullPath {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
+  '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -402,6 +416,8 @@ export interface FileRoutesByTo {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
+  '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -453,6 +469,8 @@ export interface FileRoutesById {
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
+  '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/_authed/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -504,6 +522,8 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/quiz/answers'
+    | '/api/lesson/quiz/result'
     | '/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -551,6 +571,8 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/quiz/answers'
+    | '/api/lesson/quiz/result'
     | '/course/$courseSlug'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -601,6 +623,8 @@ export interface FileRouteTypes {
     | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/quiz/answers'
+    | '/api/lesson/quiz/result'
     | '/_authed/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -644,6 +668,8 @@ export interface RootRouteChildren {
   ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
   ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
   ApiLessonAiTestSaveResultsRoute: typeof ApiLessonAiTestSaveResultsRoute
+  ApiLessonQuizAnswersRoute: typeof ApiLessonQuizAnswersRoute
+  ApiLessonQuizResultRoute: typeof ApiLessonQuizResultRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -822,6 +848,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/course/$courseSlug/'
       preLoaderRoute: typeof AuthedCourseCourseSlugIndexRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
+    }
+    '/api/lesson/quiz/result': {
+      id: '/api/lesson/quiz/result'
+      path: '/api/lesson/quiz/result'
+      fullPath: '/api/lesson/quiz/result'
+      preLoaderRoute: typeof ApiLessonQuizResultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/quiz/answers': {
+      id: '/api/lesson/quiz/answers'
+      path: '/api/lesson/quiz/answers'
+      fullPath: '/api/lesson/quiz/answers'
+      preLoaderRoute: typeof ApiLessonQuizAnswersRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/lesson/ai-test/save-results': {
       id: '/api/lesson/ai-test/save-results'
@@ -1168,6 +1208,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
   ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
   ApiLessonAiTestSaveResultsRoute: ApiLessonAiTestSaveResultsRoute,
+  ApiLessonQuizAnswersRoute: ApiLessonQuizAnswersRoute,
+  ApiLessonQuizResultRoute: ApiLessonQuizResultRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
