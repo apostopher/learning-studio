@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { LessonMaterialWrapper } from '#/components/lesson-material';
 import { VideoPlayer } from '#/components/video-player';
 import { LessonError } from './parts/lesson-error';
+import { LessonLocked } from './parts/lesson-locked';
 import { LessonNoVideo } from './parts/lesson-no-video';
 import { LessonNotFound } from './parts/lesson-not-found';
 import { LessonPlayerContainer } from './parts/lesson-player-container';
@@ -71,6 +72,14 @@ const renderArticleBody = (state: LessonMainState) => {
       return <LessonNotFound lessonSlug={state.lessonSlug} />;
     case 'no-video':
       return <LessonNoVideo lessonName={state.lessonName} />;
+    case 'locked':
+      return (
+        <LessonLocked
+          lessonName={state.lessonName}
+          courseSlug={state.courseSlug}
+          lock={state.lock}
+        />
+      );
     case 'ready':
       return (
         <>

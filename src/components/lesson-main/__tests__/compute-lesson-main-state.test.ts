@@ -143,4 +143,52 @@ describe('computeLessonMainState', () => {
       videoState: { status: 'error', message: 'net' },
     });
   });
+
+  it('locks the whole page when the material reports a prerequisite gate', () => {
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: {
+        data: {
+          locked: true,
+          reason: 'lesson',
+          blockedBy: { lessonSlug: 'a', moduleSlug: 'm-1', lessonName: 'A' },
+        },
+        isLoading: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+
+    // A prerequisite-locked lesson must not render the player at all: if the
+    // student can watch the whole video, the sequencing did not happen.
+    expect(state).toMatchObject({
+      kind: 'locked',
+      lessonName: 'Lesson One',
+      courseSlug: 'course-1',
+      lock: {
+        reason: 'lesson',
+        blockedBy: { lessonSlug: 'a', moduleSlug: 'm-1', lessonName: 'A' },
+      },
+    });
+  });
+
+  it('does not lock the page for a video-only gate', () => {
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: { data: { locked: true, reason: 'video' }, isLoading: false },
+      onRetryCourse,
+      onRetryVideo,
+    });
+
+    // The video gate locks material only — the video is how it is satisfied.
+    expect(state.kind).toBe('ready');
+  });
 });

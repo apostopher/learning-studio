@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
+import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useLessonVideo } from '#/hooks/data/use-lesson-video';
 import { computeLessonMainState } from './compute-lesson-main-state';
 import { findLesson } from './find-lesson';
@@ -23,6 +24,7 @@ export const LessonMainWrapper = ({
   const lesson = findLesson(courseData, moduleSlug, lessonSlug);
   const videoId = lesson?.videoId ?? '';
   const video = useLessonVideo(videoId);
+  const material = useLessonMaterial(lessonSlug);
 
   const state = computeLessonMainState({
     course: {
@@ -38,6 +40,10 @@ export const LessonMainWrapper = ({
       data: video.data,
       isError: video.isError,
       error: video.error,
+    },
+    material: {
+      data: material.data,
+      isLoading: material.isLoading,
     },
     onRetryCourse: () => {
       queryClient.invalidateQueries({

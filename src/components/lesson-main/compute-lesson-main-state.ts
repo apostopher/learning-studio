@@ -1,3 +1,4 @@
+import type { LessonMaterialResponse } from '#/lib/lesson-gating';
 import type { VideoResponse } from '#/types';
 import { findLesson } from './find-lesson';
 import type { LessonMainState } from './types';
@@ -23,12 +24,23 @@ type VideoQueryShape = {
   error?: unknown;
 };
 
+type MaterialQueryShape = {
+  data: LessonMaterialResponse<unknown> | undefined;
+  isLoading: boolean;
+};
+
 export type ComputeArgs = {
   course: CourseQueryShape;
   courseSlug: string;
   moduleSlug: string;
   lessonSlug: string;
   video: VideoQueryShape;
+  /**
+   * Optional so every pre-existing call site (and test) that predates the
+   * lesson-lock gate keeps compiling unchanged. Omitting it is equivalent to
+   * "material query has not resolved yet" — never locks the page.
+   */
+  material?: MaterialQueryShape;
   onRetryCourse: () => void;
   onRetryVideo: () => void;
 };
@@ -42,6 +54,7 @@ export const computeLessonMainState = ({
   moduleSlug,
   lessonSlug,
   video,
+  material,
   onRetryCourse,
   onRetryVideo,
 }: ComputeArgs): LessonMainState => {
@@ -55,6 +68,25 @@ export const computeLessonMainState = ({
   }
   const lesson = findLesson(course.data, moduleSlug, lessonSlug);
   if (!lesson) return { kind: 'not-found', lessonSlug };
+
+  // The material response is the single signal for a page-level lock. A
+  // `lesson`/`module` reason means the whole lesson — video included — is
+  // unreachable, so the player must never be rendered for it. A `video`
+  // reason is deliberately excluded: it locks material only, because
+  // watching the video is how that gate gets satisfied.
+  const materialData = material?.data;
+  if (
+    materialData?.locked &&
+    (materialData.reason === 'lesson' || materialData.reason === 'module')
+  ) {
+    return {
+      kind: 'locked',
+      lessonName: lesson.name,
+      courseSlug,
+      lock: materialData,
+    };
+  }
+
   if (!lesson.videoId) {
     return { kind: 'no-video', lessonName: lesson.name };
   }
