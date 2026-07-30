@@ -152,6 +152,16 @@ export async function createCourse(
       imageUrlWebp: input.imageUrlWebp ?? null,
     })
     .returning();
+
+  // A "fresh" slug isn't guaranteed cache-free: deleteCourse invalidates on
+  // delete, but if an admin session reads /api/course/details for that slug
+  // in the window between the delete and this create, getCourseDetailsWithCache
+  // caches the `null` result for the full TTL (cacheWithRedis has no
+  // if(result) guard — it caches misses same as hits). A same-named recreate
+  // then hands the freed slug straight back here, and without this call the
+  // new course would be invisible behind that cached null for up to 6h.
+  await invalidateCourseDetailsCache(created.slug);
+
   return created;
 }
 

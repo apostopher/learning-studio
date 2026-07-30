@@ -151,6 +151,7 @@ vi.mock('#/lib/video-providers/resolve.server', () => ({
 }));
 
 const {
+  createCourse,
   createLesson,
   createModule,
   deleteCourse,
@@ -173,6 +174,33 @@ beforeEach(() => {
 });
 
 describe('course-details cache invalidation', () => {
+  // Guards against a narrower gap than the others: deleteCourse frees a slug
+  // back to the pool, cacheWithRedis caches a `null` miss same as a hit (no
+  // if(result) guard), so an admin read for the freed slug between the
+  // delete and this create can plant a 6h-cached null that a same-named
+  // recreate would otherwise sail past silently. Invalidating the freshly
+  // assigned slug unconditionally closes that window without having to
+  // reason about whether a stale entry actually exists.
+  it('createCourse invalidates the newly assigned slug (closes the delete-then-recreate gap)', async () => {
+    db.select.mockReturnValueOnce(makeChain([])); // taken slugs
+    db.insert.mockReturnValueOnce(
+      makeChain([
+        {
+          id: 5,
+          name: 'Flight Basics',
+          slug: 'flight-basics',
+          description: null,
+          imageUrlAvif: null,
+          imageUrlWebp: null,
+        },
+      ]),
+    );
+
+    await createCourse({ name: 'Flight Basics' });
+
+    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+  });
+
   it('createModule invalidates the owning course, resolved from courseId', async () => {
     db.select
       .mockReturnValueOnce(makeChain([])) // taken slugs
