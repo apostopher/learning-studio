@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Scripts,
+  useRouter,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import { Toaster } from 'sonner';
@@ -54,6 +55,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // The router's context client, not a fresh one — this is the same instance
+  // setupRouterSsrQueryIntegration dehydrates into and that route beforeLoads
+  // prime via ensureQueryData. useRouter() rather than Route.useRouteContext()
+  // because this component also renders on the SSR shell path.
+  const { queryClient } = useRouter().options.context;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -73,7 +80,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="font-sans antialiased wrap-anywhere">
-        <TanstackQueryProvider>
+        <TanstackQueryProvider client={queryClient}>
           <Tooltip.Provider delay={0}>
             {children}
             <ChatWidget />
