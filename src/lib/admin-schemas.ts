@@ -87,6 +87,8 @@ export const boardLessonSchema = z.object({
   rank: z.coerce.number(),
   isAvailable: z.boolean(),
   hasDebrief: z.boolean(),
+  /** Whether the learner must watch the video before the lesson completes. */
+  needsVideoWatch: z.boolean(),
   requiredSubscriptions: SubscriptionsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
@@ -150,6 +152,7 @@ export const updateLessonConfigInputSchema = z
   .object({
     isAvailable: z.boolean().optional(),
     hasDebrief: z.boolean().optional(),
+    needsVideoWatch: z.boolean().optional(),
     requiredSubscriptions: SubscriptionsSchema.optional(),
   })
   .strict()

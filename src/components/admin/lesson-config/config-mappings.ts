@@ -4,12 +4,42 @@ import type { SubscriptionType } from '@/types';
 export type AvailabilityValue = 'public' | 'private';
 export type AccessValue = 'free' | 'subscription';
 export type DebriefValue = 'on' | 'off';
+export type VideoWatchValue = 'required' | 'optional';
 
 export const availabilityValue = (lesson: BoardLesson): AvailabilityValue =>
   lesson.isAvailable ? 'public' : 'private';
 
 export const debriefValue = (lesson: BoardLesson): DebriefValue =>
   lesson.hasDebrief ? 'on' : 'off';
+
+export const videoWatchValue = (lesson: BoardLesson): VideoWatchValue =>
+  lesson.needsVideoWatch ? 'required' : 'optional';
+
+/**
+ * Whether the "Required" choice should be disabled.
+ *
+ * True only when the lesson has no video AND is not already set to Required:
+ * you may LEAVE an unsatisfiable state but not ENTER one. Disabling it
+ * unconditionally would render the *selected* option greyed out — with
+ * `aria-pressed="true"` on a disabled control — for the lessons that already
+ * carry `needsVideoWatch: true` with no video (20 of them at the time of
+ * writing, inherited from the course import).
+ */
+export const isVideoWatchRequiredDisabled = (lesson: BoardLesson): boolean =>
+  !lesson.isConfigured && !lesson.needsVideoWatch;
+
+/**
+ * Why the Video watch row is restricted, or null when it is unremarkable.
+ *
+ * Two distinct cases, deliberately worded differently: one prevents a bad
+ * setting, the other reports an existing one that cannot be satisfied.
+ */
+export const videoWatchWarning = (lesson: BoardLesson): string | null => {
+  if (lesson.isConfigured) return null;
+  return lesson.needsVideoWatch
+    ? 'This lesson has no video, so a required watch can never be satisfied. Add a video, or set this to Optional.'
+    : 'This lesson has no video yet — add one before a watch can be required.';
+};
 
 export const accessValue = (lesson: BoardLesson): AccessValue =>
   lesson.requiredSubscriptions.length > 0 ? 'subscription' : 'free';

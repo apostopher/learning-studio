@@ -28,6 +28,7 @@ const lesson: BoardLesson = {
   rank: 1,
   isAvailable: true,
   hasDebrief: true,
+  needsVideoWatch: true,
   requiredSubscriptions: [],
   isConfigured: false,
   videoProvider: null,
@@ -35,6 +36,19 @@ const lesson: BoardLesson = {
 };
 const privateLesson: BoardLesson = { ...lesson, isAvailable: false };
 const debriefOffLesson: BoardLesson = { ...lesson, hasDebrief: false };
+/** Has a video, so Video watch is fully editable. */
+const videoLesson: BoardLesson = {
+  ...lesson,
+  isConfigured: true,
+  videoProvider: 'synthesia',
+  videoRef: 'ref',
+};
+/** No video and not currently required — Required must be blocked. */
+const noVideoOptionalLesson: BoardLesson = {
+  ...lesson,
+  isConfigured: false,
+  needsVideoWatch: false,
+};
 const subscriptionLesson: BoardLesson = {
   ...lesson,
   requiredSubscriptions: ['associate'],
@@ -52,7 +66,7 @@ const paidModule: BoardModule = {
 const freeModule: BoardModule = { ...paidModule, requiredSubscriptions: [] };
 
 describe('ConfigSectionContainer', () => {
-  it('renders the three setting rows', () => {
+  it('renders the four setting rows', () => {
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -63,6 +77,7 @@ describe('ConfigSectionContainer', () => {
     );
     expect(screen.getByRole('heading', { name: 'Availability' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Access' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Video watch' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Debrief' })).toBeTruthy();
   });
 
@@ -219,5 +234,90 @@ describe('ConfigSectionContainer', () => {
       lessonId: subscriptionLesson.id,
       patch: { requiredSubscriptions: [] },
     });
+  });
+
+  it('clicking Optional sends needsVideoWatch: false', () => {
+    render(
+      <ConfigSectionContainer
+        courseId={1}
+        lesson={videoLesson}
+        module={freeModule}
+      />,
+      { wrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Optional' }));
+    expect(mutate).toHaveBeenCalledWith({
+      lessonId: videoLesson.id,
+      patch: { needsVideoWatch: false },
+    });
+  });
+
+  it('clicking Required from an optional lesson with a video sends true', () => {
+    render(
+      <ConfigSectionContainer
+        courseId={1}
+        lesson={{ ...videoLesson, needsVideoWatch: false }}
+        module={freeModule}
+      />,
+      { wrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Required' }));
+    expect(mutate).toHaveBeenCalledWith({
+      lessonId: videoLesson.id,
+      patch: { needsVideoWatch: true },
+    });
+  });
+
+  it('disables Required and warns when the lesson has no video', () => {
+    render(
+      <ConfigSectionContainer
+        courseId={1}
+        lesson={noVideoOptionalLesson}
+        module={freeModule}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByRole('button', { name: 'Required' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('status').textContent).toMatch(/no video yet/i);
+  });
+
+  it('leaves Required clickable when it is already selected without a video', () => {
+    // The 20 imported lessons in this state must not render their selected
+    // option disabled — and must be able to move to Optional.
+    render(
+      <ConfigSectionContainer
+        courseId={1}
+        lesson={lesson}
+        module={freeModule}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByRole('button', { name: 'Required' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(screen.getByRole('status').textContent).toMatch(
+      /never be satisfied/i,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Optional' }));
+    expect(mutate).toHaveBeenCalledWith({
+      lessonId: lesson.id,
+      patch: { needsVideoWatch: false },
+    });
+  });
+
+  it('shows no warning when the lesson has a video', () => {
+    render(
+      <ConfigSectionContainer
+        courseId={1}
+        lesson={videoLesson}
+        module={freeModule}
+      />,
+      { wrapper },
+    );
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

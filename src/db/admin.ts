@@ -215,6 +215,7 @@ export async function createLesson(input: {
     rank: Number(created.rank),
     isAvailable: created.isAvailable,
     hasDebrief: created.hasDebrief,
+    needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     isConfigured: created.videoId !== null,
     videoProvider: created.videoProvider as ProviderId | null,
@@ -263,6 +264,7 @@ export async function getCourseBoard(
           rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
           hasDebrief: lessonsTable.hasDebrief,
+          needsVideoWatch: lessonsTable.needsVideoWatch,
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
           videoId: lessonsTable.videoId,
           videoProvider: lessonsTable.videoProvider,
@@ -297,6 +299,7 @@ export async function getCourseBoard(
         rank: Number(l.rank),
         isAvailable: l.isAvailable,
         hasDebrief: l.hasDebrief,
+        needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
         isConfigured: l.videoRef !== null || l.videoId !== null,
         videoProvider: l.videoProvider as ProviderId | null,
@@ -504,12 +507,14 @@ export async function updateLessonConfig(
   patch: {
     isAvailable?: boolean;
     hasDebrief?: boolean;
+    needsVideoWatch?: boolean;
     requiredSubscriptions?: SubscriptionType[];
   },
 ): Promise<{
   id: number;
   isAvailable: boolean;
   hasDebrief: boolean;
+  needsVideoWatch: boolean;
   requiredSubscriptions: SubscriptionType[];
 } | null> {
   const [updated] = await db
@@ -520,6 +525,7 @@ export async function updateLessonConfig(
       id: lessonsTable.id,
       isAvailable: lessonsTable.isAvailable,
       hasDebrief: lessonsTable.hasDebrief,
+      needsVideoWatch: lessonsTable.needsVideoWatch,
       requiredSubscriptions: lessonsTable.requiredSubscriptions,
     });
   if (!updated) return null;

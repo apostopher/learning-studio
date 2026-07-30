@@ -10,6 +10,10 @@ import {
   type DebriefValue,
   debriefValue,
   isSubscriptionDisabled,
+  isVideoWatchRequiredDisabled,
+  type VideoWatchValue,
+  videoWatchValue,
+  videoWatchWarning,
 } from './config-mappings';
 import { ConfigSettingRow } from './config-setting-row';
 
@@ -19,7 +23,13 @@ interface ConfigSectionContainerProps {
   module: BoardModule;
 }
 
-/** Config tab: availability / access / debrief toggles, each auto-saving on change. */
+/**
+ * Config tab: availability / access / video watch / debrief toggles, each
+ * auto-saving on change.
+ *
+ * Video watch sits before Debrief to follow the learner's own sequence — watch
+ * the video, then get the debrief.
+ */
 export const ConfigSectionContainer = ({
   courseId,
   lesson,
@@ -71,6 +81,30 @@ export const ConfigSectionContainer = ({
           options={[
             { value: 'free', label: 'Free' },
             { value: 'subscription', label: 'Subscription' },
+          ]}
+        />
+      </ConfigSettingRow>
+
+      <ConfigSettingRow
+        title="Video watch"
+        description="Whether learners must watch the video before the lesson counts as complete."
+        warning={videoWatchWarning(lesson) ?? undefined}
+      >
+        <BinaryToggle<VideoWatchValue>
+          label="Video watch"
+          value={videoWatchValue(lesson)}
+          disabledValue={
+            isVideoWatchRequiredDisabled(lesson) ? 'required' : undefined
+          }
+          onValueChange={(next) =>
+            updateConfig.mutate({
+              lessonId: lesson.id,
+              patch: { needsVideoWatch: next === 'required' },
+            })
+          }
+          options={[
+            { value: 'required', label: 'Required' },
+            { value: 'optional', label: 'Optional' },
           ]}
         />
       </ConfigSettingRow>

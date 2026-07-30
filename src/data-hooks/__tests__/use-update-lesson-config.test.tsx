@@ -41,6 +41,7 @@ function makeHarness() {
             rank: 1,
             isAvailable: false,
             hasDebrief: true,
+            needsVideoWatch: true,
             requiredSubscriptions: [],
             isConfigured: false,
             videoProvider: null,
