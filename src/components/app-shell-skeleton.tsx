@@ -1,7 +1,7 @@
-import { LessonSkeleton } from './lesson-main/parts/lesson-skeleton';
-import { SidebarSkeleton } from './sidebar/sidebar-skeleton';
 import { AppShell } from './app-shell';
 import { AppShellFooter } from './app-shell-footer';
+import { LessonSkeleton } from './lesson-main/parts/lesson-skeleton';
+import { SidebarSkeleton } from './sidebar/sidebar-skeleton';
 
 /**
  * What the learner sees while a course route's `beforeLoad` guards resolve.
@@ -17,9 +17,7 @@ export const AppShellSkeleton = () => (
     aside={<SidebarSkeleton />}
     main={
       <>
-        <p className="sr-only" role="status">
-          Loading course
-        </p>
+        <output className="sr-only">Loading course</output>
         <LessonSkeleton />
       </>
     }

@@ -17,7 +17,7 @@ describe('LessonMain crossfade', () => {
   });
 
   it('replaces the skeleton with content once loaded', () => {
-    const { container, rerender } = render(<LessonMain state={loading} />);
+    const { rerender } = render(<LessonMain state={loading} />);
     rerender(<LessonMain state={notFound} />);
     expect(screen.getByText(/missing-lesson/)).toBeDefined();
   });
