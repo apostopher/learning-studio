@@ -1,11 +1,44 @@
 import { useChat } from '@ai-sdk/react';
 import { useParams } from '@tanstack/react-router';
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, type UIMessage } from 'ai';
 import { useAtom } from 'jotai';
 import { useRef } from 'react';
 import { toast } from 'sonner';
 import { chatWidgetOpenAtom } from '#/atoms/chat-widget';
 import { AIWriterDataSchema } from '#/types';
+
+/**
+ * Assembles the outgoing `/api/chat` request body. Pulled out of
+ * `prepareSendMessagesRequest` below as a pure function specifically so it's
+ * unit-testable: this repo's Vite pipeline (react-compiler + TanStack Start
+ * under Vitest) nulls the React hook dispatcher for any hook that calls a raw
+ * React/router hook (`useRef`, `useParams`, ...) when exercised via
+ * `renderHook` — a pre-existing, repo-wide infra issue documented on the
+ * skipped tests in `use-chat-window-geometry.test.ts` and on
+ * `use-onboarding-chat.test.ts`'s `selectLatestOnboardingError` extraction,
+ * which uses this exact same workaround. `useChatWidget` itself (below) is
+ * NOT covered by a render test for that reason; this function is the
+ * verifiable half of its `courseSlug` plumbing — the other half, `useParams`
+ * actually reading the matched route's `courseSlug`, is type-checked but
+ * otherwise verified only by static reading.
+ *
+ * `prepareSendMessagesRequest`'s returned `body` REPLACES the transport's
+ * default body (it does NOT merge), so every field the route needs —
+ * `id`/`messages`/`trigger`/`messageId` from the transport, plus `chatId`
+ * and `courseSlug` from the hook — must be reconstructed here explicitly.
+ */
+export function buildChatRequestBody(input: {
+  id: string;
+  messages: UIMessage[];
+  trigger: 'submit-message' | 'regenerate-message';
+  messageId: string | undefined;
+  body: Record<string, unknown> | undefined;
+  chatId: string | undefined;
+  courseSlug: string | undefined;
+}) {
+  const { id, messages, trigger, messageId, body, chatId, courseSlug } = input;
+  return { id, messages, trigger, messageId, ...body, chatId, courseSlug };
+}
 
 /**
  * Data layer for the chat widget: wraps `@ai-sdk/react`'s `useChat`, pointed
@@ -64,15 +97,15 @@ export function useChatWidget() {
         messageId,
         body,
       }) => ({
-        body: {
+        body: buildChatRequestBody({
           id,
           messages,
           trigger,
           messageId,
-          ...body,
+          body,
           chatId: chatIdRef.current,
           courseSlug,
-        },
+        }),
       }),
     }),
     onData: (dataPart) => {

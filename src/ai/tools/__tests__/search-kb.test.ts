@@ -77,13 +77,19 @@ describe('makeSearchKBTool', () => {
     expect(getCourseContentForAgent).not.toHaveBeenCalled();
   });
 
-  it('never substitutes a default course when courseSlug is omitted, even across calls', async () => {
+  // Distinct from the previous test: that one proves the producer
+  // (getCourseContentForAgent) is never invoked; this one proves the actual
+  // string handed to the model — what the consumer receives — carries no
+  // course content either, so a stray default slug reintroduced upstream of
+  // this tool couldn't leak course material back out even if it slipped past
+  // the `not.toHaveBeenCalled()` check above.
+  it('returns no course content in the context handed to the model when courseSlug is omitted', async () => {
     const kbTool = makeSearchKBTool({});
     // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
-    await kbTool.execute!({ query: 'tell me about drones' }, toolCallOptions);
-    expect(getCourseContentForAgent).not.toHaveBeenCalledWith(
-      '3d-airmanship',
-      expect.anything(),
+    const result = await kbTool.execute!(
+      { query: 'tell me about drones' },
+      toolCallOptions,
     );
+    expect(result).not.toContain('<h1>Course</h1>');
   });
 });

@@ -40,6 +40,35 @@ export async function isSubscribedToCourse(
 }
 
 /**
+ * Whether the user holds a subscription for the course with this slug.
+ *
+ * A second small query (joined by slug) rather than a slug→id round trip
+ * through `isSubscribedToCourse` — callers here (`getCourseContentForAgent`)
+ * only ever have the slug, not the id, so this reads cleaner than resolving
+ * one first.
+ */
+export async function isSubscribedToCourseSlug(
+  userId: string,
+  courseSlug: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: courseSubscriptionsTable.id })
+    .from(courseSubscriptionsTable)
+    .innerJoin(
+      coursesTable,
+      eq(coursesTable.id, courseSubscriptionsTable.courseId),
+    )
+    .where(
+      and(
+        eq(courseSubscriptionsTable.userId, userId),
+        eq(coursesTable.slug, courseSlug),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * The lesson a Synthesia video belongs to, so /api/lesson/video can apply the
  * same gates as the material route.
  *
@@ -48,9 +77,11 @@ export async function isSubscribedToCourse(
  * no lesson. Callers must treat "no lesson" as denied, not as open, or this
  * becomes the bypass it was written to close.
  */
-export async function getLessonByVideoId(
-  videoId: string,
-): Promise<{ lessonSlug: string; courseSlug: string; courseId: number } | null> {
+export async function getLessonByVideoId(videoId: string): Promise<{
+  lessonSlug: string;
+  courseSlug: string;
+  courseId: number;
+} | null> {
   const rows = await db
     .select({
       lessonSlug: lessonsTable.slug,

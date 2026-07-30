@@ -3,6 +3,7 @@ import { db } from '#/db';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
+import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import {
   coursesTable,
   lessonMaterialTable,
@@ -61,11 +62,19 @@ export function filterGatedLessons<T extends GatedRow>(
  * lessons.slug = lesson_material.lesson_slug), ordered by rank, and hands the
  * assembled shape to the pure builder in src/lib/course-content.ts.
  *
- * When `opts.userId` is supplied, rows are run through `filterGatedLessons`
- * first so a locked lesson's text/proTips never reach the caller (the chat
- * agent's searchKB tool). Without a `userId` — an unauthenticated or system
- * caller — gating is skipped entirely and every lesson's material is
- * returned, same as before this filter existed.
+ * When `opts.userId` is supplied, two things happen before any content is
+ * assembled: (1) a non-admin who is not subscribed to `slug` gets nothing at
+ * all — the same empty result as when no course is in context — because
+ * `evaluateLessonLock`/`evaluateMaterialLock` alone only prove a lesson's
+ * prerequisites are satisfied, never that the caller is allowed in the course
+ * to begin with (`getCourseProgress` happily returns an all-unwatched result
+ * for a user with no subscription, so skipping this check would let a
+ * subscriber of Course A ask about a lesson in Course B that merely has no
+ * unmet prerequisites and no video). (2) rows are then run through
+ * `filterGatedLessons` so a locked lesson's text/proTips never reach the
+ * caller either. Without a `userId` — an unauthenticated or system caller —
+ * both checks are skipped and every lesson's material is returned, same as
+ * before this filter existed.
  */
 export async function getCourseContentForAgent(
   slug: string,
@@ -97,8 +106,27 @@ export async function getCourseContentForAgent(
   let gatedRows = rows;
   if (opts?.userId) {
     const userId = opts.userId;
-    const [roles, details, progress] = await Promise.all([
+    const [roles, subscribed] = await Promise.all([
       getUserRoleNames(userId),
+      isSubscribedToCourseSlug(userId, slug),
+    ]);
+    const isAdmin = roles.includes(ADMIN_ROLE);
+
+    // Subscription is checked BEFORE any lock is evaluated, and before any
+    // course content is assembled: the lock predicates only prove a lesson's
+    // prerequisites are satisfied, they say nothing about whether this user
+    // is allowed in the course at all. `getCourseProgress` does not error for
+    // a non-enrolled user — it left-joins by userId and simply returns an
+    // all-unwatched result — so without this check, a lesson with no unmet
+    // module/lesson prerequisites and no video would pass both locks for a
+    // subscriber of an entirely different course. Fail toward NO content,
+    // never partial content: a non-admin, non-subscriber gets nothing from
+    // this course's corpus, same as when no courseSlug is in context at all.
+    if (!isAdmin && !subscribed) {
+      return '';
+    }
+
+    const [details, progress] = await Promise.all([
       getCourseDetailsWithCache(slug),
       getCourseProgress({ userId, slug }),
     ]);
@@ -112,7 +140,6 @@ export async function getCourseContentForAgent(
       throw new Error(`Course payload unavailable for ${slug}`);
     }
 
-    const isAdmin = roles.includes(ADMIN_ROLE);
     const gateCourse = toGateCourse(details);
     const watched = watchedLessonSlugs(details, progress);
 
