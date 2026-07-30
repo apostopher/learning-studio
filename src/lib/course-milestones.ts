@@ -9,19 +9,6 @@ export const milestones: number[] = [
 ];
 
 /**
- * Milestones at or below `percent` (0–100) that are not already in `reported`.
- * Pure — used by the player to decide which new milestones to report as
- * playback advances.
- */
-export function unreportedMilestones(
-  percent: number,
-  reported: ReadonlySet<number>,
-): number[] {
-  if (!Number.isFinite(percent) || percent <= 0) return [];
-  return milestones.filter((m) => m <= percent && !reported.has(m));
-}
-
-/**
  * Milestones required to count a video as "watched": every milestone EXCEPT the
  * final 100 — most users stop a few seconds before the end, so requiring 100
  * would leave nearly every video incomplete.
@@ -47,11 +34,11 @@ export const SEEK_THRESHOLD_SECONDS = 2;
  * Milestones the playhead crossed moving from `prevPercent` to
  * `currentPercent`, excluding any already in `reported`.
  *
- * Contrast with `unreportedMilestones`, which returns every milestone at or
- * below the current position: from a fresh set that reported all 19 the
- * instant the playhead reached the end, so pressing End or dragging the
- * scrubber recorded a complete watch. Only what playback actually crossed
- * counts here — that is the anti-skip guarantee.
+ * Unlike a naive "every milestone at or below the current position" check,
+ * this only counts what playback actually crossed: from a fresh set, a jump
+ * straight to the end (pressing End or dragging the scrubber) reports
+ * nothing, instead of recording a complete watch. That is the anti-skip
+ * guarantee.
  *
  * Order is irrelevant: coverage is what unlocks, so watching the end first and
  * the start later accumulates correctly across sessions.
