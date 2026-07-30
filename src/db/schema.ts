@@ -115,6 +115,20 @@ export const lessonsTable = pgTable("lessons", {
   isAvailable: boolean("is_available").notNull().default(false),
   exclusivePerDay: boolean("exclusive_per_day").notNull().default(false),
   hasDebrief: boolean("has_debrief").notNull().default(true),
+  /**
+   * PRESERVED FOR PARITY — no learner-side consumer yet.
+   *
+   * Re-added so the `iTPS UAS Remote` import could carry the old platform's
+   * per-lesson setting across losslessly (13 of its 102 lessons had it
+   * deliberately false, and the old database is not guaranteed to remain
+   * available). Now editable from the lesson Config tab's "Video watch" row.
+   *
+   * The old app gated lesson completion on it — a lesson did not count as
+   * complete until its video had been watched. Whatever reinstates that
+   * behaviour is the intended consumer; until then this is admin-config only,
+   * exactly like `hasDebrief` above, which has no learner-side reader either.
+   */
+  needsVideoWatch: boolean("needs_video_watch").notNull().default(true),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
