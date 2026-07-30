@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { getCourseResumeTarget } from '#/lib/course-resume-functions';
+import { courseResumeQueryOptions } from '#/data-hooks/course-access-queries';
 import { LessonEmpty, LessonSkeleton } from '../../components/lesson-main';
 
 /**
@@ -21,10 +21,10 @@ import { LessonEmpty, LessonSkeleton } from '../../components/lesson-main';
  * the learner. See docs/superpowers/specs/2026-07-30-course-resume-redirect-ledger.md.
  */
 export const Route = createFileRoute('/_authed/course/$courseSlug/')({
-  beforeLoad: async ({ params }) => {
-    const resume = await getCourseResumeTarget({
-      data: { courseSlug: params.courseSlug },
-    });
+  beforeLoad: async ({ context, params }) => {
+    const resume = await context.queryClient.ensureQueryData(
+      courseResumeQueryOptions(params.courseSlug),
+    );
 
     if (resume.kind === 'lesson') {
       throw redirect({

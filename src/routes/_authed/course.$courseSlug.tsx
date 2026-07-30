@@ -7,9 +7,9 @@ import {
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useRef } from 'react';
 import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
+import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
 import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
 import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
-import { getMySubscribedSlugs } from '@/lib/course-functions';
 import { AppShell } from '../../components/app-shell';
 import { AppShellFooter } from '../../components/app-shell-footer';
 import { AppShellSkeleton } from '../../components/app-shell-skeleton';
@@ -17,8 +17,10 @@ import { LessonHeaderWrapper } from '../../components/lesson-main';
 import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
 
 export const Route = createFileRoute('/_authed/course/$courseSlug')({
-  beforeLoad: async ({ params }) => {
-    const slugs = await getMySubscribedSlugs();
+  beforeLoad: async ({ context, params }) => {
+    const slugs = await context.queryClient.ensureQueryData(
+      subscribedSlugsQueryOptions(),
+    );
     if (!slugs.includes(params.courseSlug)) {
       // Redirect (not notFound()) for three reasons:
       // 1. `admin.tsx` already establishes redirect-to-`/app` as this
