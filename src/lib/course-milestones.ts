@@ -35,3 +35,36 @@ export const watchedMilestones: number[] = milestones.filter((m) => m !== 100);
 export function isVideoWatched(reached: ReadonlySet<number>): boolean {
   return watchedMilestones.every((m) => reached.has(m));
 }
+
+/**
+ * Largest single playback advance, in seconds, still treated as watching.
+ * `timeupdate` fires roughly four times a second, so anything beyond this is a
+ * seek — even at 2× playback a normal tick stays well under it.
+ */
+export const SEEK_THRESHOLD_SECONDS = 2;
+
+/**
+ * Milestones the playhead crossed moving from `prevPercent` to
+ * `currentPercent`, excluding any already in `reported`.
+ *
+ * Contrast with `unreportedMilestones`, which returns every milestone at or
+ * below the current position: from a fresh set that reported all 19 the
+ * instant the playhead reached the end, so pressing End or dragging the
+ * scrubber recorded a complete watch. Only what playback actually crossed
+ * counts here — that is the anti-skip guarantee.
+ *
+ * Order is irrelevant: coverage is what unlocks, so watching the end first and
+ * the start later accumulates correctly across sessions.
+ */
+export function crossedMilestones(
+  prevPercent: number,
+  currentPercent: number,
+  reported: ReadonlySet<number>,
+): number[] {
+  if (!Number.isFinite(prevPercent) || !Number.isFinite(currentPercent)) {
+    return [];
+  }
+  return milestones.filter(
+    (m) => m > prevPercent && m <= currentPercent && !reported.has(m),
+  );
+}

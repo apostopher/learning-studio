@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  crossedMilestones,
   isVideoWatched,
   milestones,
   unreportedMilestones,
@@ -60,5 +61,49 @@ describe('watchedMilestones / isVideoWatched', () => {
 
   it('is not watched for someone who only reached the end (skipped to it)', () => {
     expect(isVideoWatched(new Set([100]))).toBe(false);
+  });
+});
+
+describe('crossedMilestones', () => {
+  it('reports only milestones crossed by this advance', () => {
+    expect(crossedMilestones(8, 12, new Set())).toEqual([10]);
+  });
+
+  it('reports nothing when no milestone lies in the interval', () => {
+    expect(crossedMilestones(11, 12, new Set())).toEqual([]);
+  });
+
+  it('does NOT report every milestone below the current position', () => {
+    // This is the whole point. The old unreportedMilestones(95, new Set())
+    // returned all 19 milestones, so one scrubber drag or a press of End
+    // recorded a full watch and unlocked the material instantly.
+    expect(crossedMilestones(94, 95, new Set())).toEqual([95]);
+  });
+
+  it('skips milestones already reported', () => {
+    expect(crossedMilestones(8, 22, new Set([10, 15]))).toEqual([20]);
+  });
+
+  it('reports a contiguous run when a tick spans several milestones', () => {
+    expect(crossedMilestones(8, 22, new Set())).toEqual([10, 15, 20]);
+  });
+
+  it('returns nothing for a backwards interval', () => {
+    expect(crossedMilestones(50, 20, new Set())).toEqual([]);
+  });
+
+  it('returns nothing for non-finite input', () => {
+    expect(crossedMilestones(Number.NaN, 50, new Set())).toEqual([]);
+    expect(crossedMilestones(0, Number.POSITIVE_INFINITY, new Set())).toEqual(
+      [],
+    );
+  });
+
+  it('supports out-of-order coverage across sessions', () => {
+    // Watching the last three minutes, then the first three, must add up.
+    const reported = new Set<number>();
+    for (const m of crossedMilestones(84, 100, reported)) reported.add(m);
+    for (const m of crossedMilestones(0, 83, reported)) reported.add(m);
+    expect(isVideoWatched(reported)).toBe(true);
   });
 });
