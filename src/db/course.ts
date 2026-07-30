@@ -1,30 +1,25 @@
-import { db } from ".";
+import { and, asc, countDistinct, eq, inArray, sql } from 'drizzle-orm';
+import { watchedMilestones } from '#/lib/course-milestones';
+import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
+import type { DBLesson, DBModule } from '@/db/schema';
 import {
+  courseSubscriptionsTable,
   coursesTable,
-  modulesTable,
-  lessonsTable,
   lessonDependenciesTable,
+  lessonsTable,
   moduleDependenciesTable,
+  modulesTable,
   orgLessonsTable,
   orgsTable,
-  courseSubscriptionsTable,
   videoProgressTable,
-} from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { inArray } from "drizzle-orm";
-import { and } from "drizzle-orm";
-import { asc } from "drizzle-orm";
-import { countDistinct } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-import { cacheWithRedis } from "@/integrations/upstash/redis";
-import { aggregatePercentByCourse } from "#/lib/course-progress-agg";
-import { watchedMilestones } from "#/lib/course-milestones";
-import type { DBModule, DBLesson } from "@/db/schema";
+} from '@/db/schema';
+import { cacheWithRedis } from '@/integrations/upstash/redis';
 import type {
+  CourseLessonDependencies,
   SubscriptionType,
   VideoResponse,
-  CourseLessonDependencies,
-} from "@/types";
+} from '@/types';
+import { db } from '.';
 
 type LessonDetails = DBLesson & {
   dependsOn: CourseLessonDependencies;
@@ -36,6 +31,28 @@ type ModuleDetails = DBModule & {
   dependsOn: string[];
   lessons: LessonDetails[];
 };
+
+type ShapeableLesson = { id: number; isAvailable: boolean; rank: string };
+type ShapeableModule<L extends ShapeableLesson> = { lessons: L[] };
+
+/**
+ * Drop WIP lessons and order the rest by rank, in place, for every module.
+ *
+ * Previously this filter and sort were computed into a local array that was
+ * never assigned back, so every `is_available = false` lesson was served to
+ * students and modules came back in join order. Exported so the shaping is
+ * testable without a database.
+ */
+export function shapeModuleLessons<
+  L extends ShapeableLesson,
+  M extends ShapeableModule<L>,
+>(modules: Iterable<M>): void {
+  for (const mod of modules) {
+    mod.lessons = mod.lessons
+      .filter((lesson) => lesson.isAvailable)
+      .sort((a, b) => Number(a.rank) - Number(b.rank));
+  }
+}
 
 export async function getCourseDetails(slug: string) {
   // 1️⃣ Get course and its modules in a single query
@@ -108,7 +125,7 @@ export async function getCourseDetails(slug: string) {
         ...lesson,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
-        videoId: lesson.videoId || "",
+        videoId: lesson.videoId || '',
         otherVideoIds: lesson.otherVideoIds || [],
         videoDetails: undefined, // will be populated later
         dependsOn: [],
@@ -151,24 +168,10 @@ export async function getCourseDetails(slug: string) {
     }
   }
 
-  // sort each module.lessons by rank
-  moduleMapWithDependencies.forEach((mod) => {
-    const modLessons = mod.lessons
-      .filter((lesson) => lesson.isAvailable)
-      .sort((a, b) => Number(a.rank) - Number(b.rank));
-    // add depends on for module ids 2 to 5
-    if (mod.id > 1 && mod.id < 6) {
-      modLessons.forEach((lesson, index) => {
-        const isFree = lesson.requiredSubscriptions.includes("associate");
-        if (index > 0 && !isFree && lesson.dependsOn.length === 0) {
-          lesson.dependsOn.push({
-            moduleSlug: mod.slug,
-            lessonSlug: modLessons[index - 1].slug,
-          });
-        }
-      });
-    }
-  });
+  // Drop WIP lessons and order by rank. Gating is enforced against the real
+  // lesson_dependencies rows only — the synthetic "chain every lesson in
+  // module ids 2..5" block that used to live here was demo scaffolding.
+  shapeModuleLessons(moduleMapWithDependencies.values());
 
   return {
     ...course,
@@ -183,7 +186,7 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
 export const getCourseDetailsWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
->("course-details", getCourseDetails);
+>('course-details', getCourseDetails);
 
 export type MyCourseSummary = {
   id: number;
