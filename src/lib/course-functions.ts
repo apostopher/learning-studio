@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequestHeaders } from '@tanstack/react-start/server';
-import { getMyCourses } from '@/db/course';
+import { getSubscribedCourseSlugs } from '@/db/course';
 import { auth } from '@/lib/auth';
 
 /**
@@ -16,7 +16,6 @@ export const getMySubscribedSlugs = createServerFn({ method: 'GET' }).handler(
     const headers = getRequestHeaders();
     const session = await auth.api.getSession({ headers });
     if (!session) return [];
-    const courses = await getMyCourses(session.user.id);
-    return courses.map((c) => c.slug);
+    return getSubscribedCourseSlugs(session.user.id);
   },
 );

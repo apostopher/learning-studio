@@ -262,6 +262,30 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
 }
 
 /**
+ * Just the slugs this user is subscribed to, for the course route's
+ * enrollment guard.
+ *
+ * Separate from getMyCourses deliberately: the guard runs on the critical
+ * path of every course navigation and needs one column, while getMyCourses
+ * joins modules, lessons and video progress to compute a percentage the guard
+ * then discards.
+ */
+export async function getSubscribedCourseSlugs(
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ slug: coursesTable.slug })
+    .from(courseSubscriptionsTable)
+    .innerJoin(
+      coursesTable,
+      eq(coursesTable.id, courseSubscriptionsTable.courseId),
+    )
+    .where(eq(courseSubscriptionsTable.userId, userId))
+    .orderBy(asc(coursesTable.name));
+  return rows.map((r) => r.slug);
+}
+
+/**
  * Resolve a course slug to the identity onboarding needs: its id, and the
  * name every onboarding prompt is written around. Returns null for an unknown
  * slug so callers can answer 404 rather than throwing.
