@@ -750,6 +750,77 @@ export const courseSubscriptionsTable = pgTable(
   ],
 );
 
+/**
+ * The lesson a learner was last on in a course, so `/course/:slug` can resume
+ * them there instead of showing an empty "pick a lesson" page.
+ *
+ * A separate table rather than two columns on course_subscriptions, which is
+ * the same grain: it keeps learning activity out of the entitlement row, and
+ * gives a future "delete my learning history" something it can truncate
+ * without touching enrolment.
+ *
+ * Written only when a lesson renders UNLOCKED content — a lock screen is a
+ * door you bounced off, not a place you were. See
+ * docs/superpowers/specs/2026-07-30-course-resume-redirect-ledger.md.
+ */
+export const courseLastViewedTable = pgTable(
+  "course_last_viewed",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
+    courseId: integer("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    /**
+     * MUST be `set null`, not the `cascade` used by every other FK in this
+     * file. On cascade, an admin deleting a lesson would delete the whole row
+     * — and if this ever moves onto course_subscriptions, it would delete the
+     * ENROLMENT of every learner last seen on that lesson, silently revoking
+     * course access. Null here simply means "no pointer", which
+     * resolveResumeTarget already handles as a first visit.
+     */
+    lessonId: integer("lesson_id").references(() => lessonsTable.id, {
+      onDelete: "set null",
+    }),
+    viewedAt: timestamp("viewed_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One pointer per user per course — this is what makes the upsert on
+    // every lesson view a conflict-update rather than an unbounded insert.
+    uniqueIndex("course_last_viewed_user_course_idx").on(
+      table.userId,
+      table.courseId,
+    ),
+  ],
+);
+
+export const courseLastViewedSelectSchema = createSelectSchema(
+  courseLastViewedTable,
+);
+export type CourseLastViewedSelect = z.infer<
+  typeof courseLastViewedSelectSchema
+>;
+
+export const courseLastViewedTableRelations = relations(
+  courseLastViewedTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [courseLastViewedTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    course: one(coursesTable, {
+      fields: [courseLastViewedTable.courseId],
+      references: [coursesTable.id],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [courseLastViewedTable.lessonId],
+      references: [lessonsTable.id],
+    }),
+  }),
+);
+
 export const courseSubscriptionsTableRelations = relations(
   courseSubscriptionsTable,
   ({ one }) => ({

@@ -1,84 +1,50 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useRef } from 'react';
-import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
-import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
-import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { getCourseResumeTarget } from '#/lib/course-resume-functions';
 import { LessonEmpty } from '../../components/lesson-main';
 
 /**
- * Container: auto-opens the shared chat widget into onboarding mode when the
- * learner has a resumable onboarding session for this course — never started,
- * or started and interrupted (an error, a timeout, just closing the widget)
- * short of an explicit decline, completion, or deletion. See
- * shouldAutoOpenOnboarding for the exact status logic.
+ * `/course/$courseSlug` is a pure redirector, not a page. The sidebar
+ * (CourseSidebarWrapper, rendered by the parent layout) already IS the course
+ * overview — every module, lesson, progress bar and lock — so an index page
+ * here would be a second, worse copy of what is permanently on screen.
  *
- * useOnboardingStatus is read-only (no model call) but now fetches fresh on
- * every mount (staleTime: 0, refetchOnMount: 'always') rather than trusting
- * the cache — this decision is consequential enough (it can reopen the
- * widget) that a stale cached `'not_started'` served synchronously on remount
- * is not an acceptable source of truth. `hasCheckedRef` gates the actual
- * decision so it only runs once this mount's own fetch has settled (see the
- * effect below); until then the effect simply does nothing, so a fresh page
- * visit re-evaluates against real data and a mid-visit re-render never
- * re-fires once it's already decided.
+ * Resolving in `beforeLoad` rather than in an effect is what makes the
+ * onboarding widget unable to flash on a doomed page: on a cold load this runs
+ * on the server, so the redirect is decided before anything renders and this
+ * component never mounts at all. (That is also why the resume pointer lives in
+ * Postgres — `localStorage` does not exist here.)
+ *
+ * `replace: true` keeps the index out of history, so Back from a lesson goes
+ * to `/app` instead of bouncing forward through the redirect again.
+ *
+ * The component below is reached only when there is genuinely nowhere to send
+ * the learner. See docs/superpowers/specs/2026-07-30-course-resume-redirect-ledger.md.
  */
 export const Route = createFileRoute('/_authed/course/$courseSlug/')({
+  beforeLoad: async ({ params }) => {
+    const resume = await getCourseResumeTarget({
+      data: { courseSlug: params.courseSlug },
+    });
+
+    if (resume.kind === 'lesson') {
+      throw redirect({
+        to: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
+        params: {
+          courseSlug: params.courseSlug,
+          moduleSlug: resume.moduleSlug,
+          lessonSlug: resume.lessonSlug,
+        },
+        replace: true,
+      });
+    }
+
+    return { resume };
+  },
   component: CourseIndexContainer,
 });
 
 function CourseIndexContainer() {
   const { courseSlug } = Route.useParams();
-  const query = useOnboardingStatus(courseSlug);
-  const setMode = useSetAtom(chatWidgetModeAtom);
-  const setOpen = useSetAtom(chatWidgetOpenAtom);
-  const isWidgetOpen = useAtomValue(chatWidgetOpenAtom);
-  const widgetMode = useAtomValue(chatWidgetModeAtom);
-
-  // Whether this visit has already made its auto-open decision (acted or
-  // correctly declined to). Reset on courseSlug change so navigating to a
-  // different course's page re-evaluates fresh.
-  const hasCheckedRef = useRef(false);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: courseSlug intentionally re-triggers the reset on course switch even though it isn't read in the body.
-  useEffect(() => {
-    hasCheckedRef.current = false;
-  }, [courseSlug]);
-
-  useEffect(() => {
-    if (hasCheckedRef.current) return;
-    // Don't act on a value from before THIS mount's own fetch resolved: with
-    // refetchOnMount: 'always', a fetch is guaranteed to be in flight, so
-    // waiting for it to finish (isFetched) and not be in flight (!isFetching)
-    // means `query.data` reflects this visit, never a leftover cached value
-    // from before the learner declined/deleted/paused elsewhere.
-    if (query.isFetching || !query.isFetched) return;
-
-    hasCheckedRef.current = true;
-
-    // A query error (isFetched still becomes true, data stays undefined) is
-    // deliberately treated as "don't auto-open" — fail closed rather than
-    // risk reopening the widget on bad information.
-    if (
-      shouldAutoOpenOnboarding({
-        status: query.data,
-        isWidgetOpen,
-        widgetMode,
-      })
-    ) {
-      setMode({ kind: 'onboarding', courseSlug });
-      setOpen(true);
-    }
-  }, [
-    query.isFetching,
-    query.isFetched,
-    query.data,
-    isWidgetOpen,
-    widgetMode,
-    courseSlug,
-    setMode,
-    setOpen,
-  ]);
-
-  return <LessonEmpty />;
+  const { resume } = Route.useRouteContext();
+  return <LessonEmpty courseSlug={courseSlug} state={resume} />;
 }

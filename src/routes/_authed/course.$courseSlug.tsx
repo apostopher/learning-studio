@@ -4,6 +4,11 @@ import {
   redirect,
   useParams,
 } from '@tanstack/react-router';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useRef } from 'react';
+import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
+import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
+import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
 import { getMySubscribedSlugs } from '@/lib/course-functions';
 import { AppShell } from '../../components/app-shell';
 import { LessonHeaderWrapper } from '../../components/lesson-main';
@@ -29,8 +34,84 @@ export const Route = createFileRoute('/_authed/course/$courseSlug')({
   component: CourseLayout,
 });
 
+/**
+ * Auto-opens the shared chat widget into onboarding mode when the learner has
+ * a resumable onboarding session for this course — never started, or started
+ * and interrupted (an error, a timeout, just closing the widget) short of an
+ * explicit decline, completion, or deletion. See shouldAutoOpenOnboarding for
+ * the exact status logic.
+ *
+ * Lives on the LAYOUT, not on the course index, because the index is now a
+ * pure redirector whose component never mounts — leaving this there would have
+ * silently disabled the feature. The layout is the true "entered this course"
+ * boundary: it mounts on arrival and stays mounted while the learner moves
+ * between lessons, so this fires once per course visit, the same cadence as
+ * before. It also now covers a case the index never did — arriving directly at
+ * a bookmarked lesson URL.
+ *
+ * useOnboardingStatus is read-only (no model call) but fetches fresh on every
+ * mount (staleTime: 0, refetchOnMount: 'always') rather than trusting the
+ * cache — this decision is consequential enough (it can reopen the widget)
+ * that a stale cached 'not_started' served synchronously is not an acceptable
+ * source of truth. `hasCheckedRef` gates the decision so it only runs once
+ * this mount's own fetch has settled; until then the effect does nothing.
+ */
+function useAutoOpenOnboarding(courseSlug: string) {
+  const query = useOnboardingStatus(courseSlug);
+  const setMode = useSetAtom(chatWidgetModeAtom);
+  const setOpen = useSetAtom(chatWidgetOpenAtom);
+  const isWidgetOpen = useAtomValue(chatWidgetOpenAtom);
+  const widgetMode = useAtomValue(chatWidgetModeAtom);
+
+  // Whether this visit has already made its auto-open decision (acted or
+  // correctly declined to). Reset on courseSlug change because this layout is
+  // REUSED, not remounted, when navigating between two courses.
+  const hasCheckedRef = useRef(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: courseSlug intentionally re-triggers the reset on course switch even though it isn't read in the body.
+  useEffect(() => {
+    hasCheckedRef.current = false;
+  }, [courseSlug]);
+
+  useEffect(() => {
+    if (hasCheckedRef.current) return;
+    // Don't act on a value from before THIS mount's own fetch resolved: with
+    // refetchOnMount: 'always', a fetch is guaranteed to be in flight, so
+    // waiting for it to finish (isFetched) and not be in flight (!isFetching)
+    // means `query.data` reflects this visit, never a leftover cached value
+    // from before the learner declined/deleted/paused elsewhere.
+    if (query.isFetching || !query.isFetched) return;
+
+    hasCheckedRef.current = true;
+
+    // A query error (isFetched still becomes true, data stays undefined) is
+    // deliberately treated as "don't auto-open" — fail closed rather than
+    // risk reopening the widget on bad information.
+    if (
+      shouldAutoOpenOnboarding({
+        status: query.data,
+        isWidgetOpen,
+        widgetMode,
+      })
+    ) {
+      setMode({ kind: 'onboarding', courseSlug });
+      setOpen(true);
+    }
+  }, [
+    query.isFetching,
+    query.isFetched,
+    query.data,
+    isWidgetOpen,
+    widgetMode,
+    courseSlug,
+    setMode,
+    setOpen,
+  ]);
+}
+
 function CourseLayout() {
   const { courseSlug } = Route.useParams();
+  useAutoOpenOnboarding(courseSlug);
   // Loose read: these two params belong to the deeper lesson route, not this
   // layout's own path. Their presence is how the layout knows which leaf is
   // active — the same idiom CourseSidebarWrapper already uses for the same

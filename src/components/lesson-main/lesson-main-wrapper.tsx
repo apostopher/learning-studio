@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { useRecordLastViewedLesson } from '#/data-hooks/use-record-last-viewed';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
@@ -6,6 +7,7 @@ import { useLessonVideo } from '#/hooks/data/use-lesson-video';
 import { computeLessonMainState } from './compute-lesson-main-state';
 import { findLesson } from './find-lesson';
 import { LessonMain } from './lesson-main';
+import { shouldRecordLastViewed } from './should-record-last-viewed';
 
 type LessonMainWrapperProps = {
   courseSlug: string;
@@ -63,6 +65,15 @@ export const LessonMainWrapper = ({
         queryKey: queryKeys.lessonVideo(videoId),
       });
     },
+  });
+
+  // Move the resume pointer only once this lesson has actually rendered its
+  // content unlocked — never for a lock screen, an error, or a still-loading
+  // page. Derived from the computed state rather than from the params, so the
+  // pointer can never claim a lesson the learner was not shown.
+  useRecordLastViewedLesson({
+    lessonSlug,
+    enabled: shouldRecordLastViewed(state),
   });
 
   return <LessonMain state={state} />;
