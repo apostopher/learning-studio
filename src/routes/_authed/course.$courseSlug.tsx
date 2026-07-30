@@ -11,9 +11,10 @@ import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
 import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
 import { getMySubscribedSlugs } from '@/lib/course-functions';
 import { AppShell } from '../../components/app-shell';
+import { AppShellFooter } from '../../components/app-shell-footer';
+import { AppShellSkeleton } from '../../components/app-shell-skeleton';
 import { LessonHeaderWrapper } from '../../components/lesson-main';
 import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
-import { appTitle } from '../../styles/theme.generated';
 
 export const Route = createFileRoute('/_authed/course/$courseSlug')({
   beforeLoad: async ({ params }) => {
@@ -32,6 +33,16 @@ export const Route = createFileRoute('/_authed/course/$courseSlug')({
     }
   },
   component: CourseLayout,
+  // Without a pendingComponent the router never starts its pending timer and
+  // leaves the PREVIOUS page mounted for the whole of beforeLoad — which is
+  // why clicking a course card used to look like nothing happened.
+  // 120ms is below the ~200ms threshold where a click starts to feel ignored,
+  // but above one frame, so a cache-warm navigation skips the skeleton
+  // entirely. pendingMinMs keeps it up long enough to read as progress
+  // rather than a flicker.
+  pendingComponent: AppShellSkeleton,
+  pendingMs: 120,
+  pendingMinMs: 400,
 });
 
 /**
@@ -141,11 +152,7 @@ function CourseLayout() {
       }
       aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
       main={<Outlet />}
-      footer={
-        <div className="flex items-center justify-between h-full ps-4 pe-4 text-secondary text-sm">
-          <span>© {appTitle}</span>
-        </div>
-      }
+      footer={<AppShellFooter />}
     />
   );
 }

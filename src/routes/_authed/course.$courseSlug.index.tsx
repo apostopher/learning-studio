@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { getCourseResumeTarget } from '#/lib/course-resume-functions';
-import { LessonEmpty } from '../../components/lesson-main';
+import { LessonEmpty, LessonSkeleton } from '../../components/lesson-main';
 
 /**
  * `/course/$courseSlug` is a pure redirector, not a page. The sidebar
@@ -41,6 +41,12 @@ export const Route = createFileRoute('/_authed/course/$courseSlug/')({
     return { resume };
   },
   component: CourseIndexContainer,
+  // LessonSkeleton alone, with no AppShell wrapper: by the time this route is
+  // pending its parent layout has committed and is already supplying the
+  // shell. Rendering another would nest two shells.
+  pendingComponent: LessonSkeleton,
+  pendingMs: 120,
+  pendingMinMs: 400,
 });
 
 function CourseIndexContainer() {

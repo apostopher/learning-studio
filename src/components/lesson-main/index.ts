@@ -4,4 +4,5 @@ export { LessonHeaderWrapper } from './lesson-header-wrapper';
 export { LessonMain } from './lesson-main';
 export { LessonMainWrapper } from './lesson-main-wrapper';
 export { LessonEmpty } from './parts/lesson-empty';
+export { LessonSkeleton } from './parts/lesson-skeleton';
 export type { LessonMainState, VideoFetchState } from './types';
