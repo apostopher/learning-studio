@@ -14,6 +14,7 @@ import { auth } from '#/lib/auth';
 const chatRequestSchema = z.object({
   chatId: z.string().optional(),
   messages: z.array(z.any()).min(1),
+  courseSlug: z.string().optional(),
 });
 
 /** Extracts the plain-text content of a UI message's text parts, joined. */
@@ -54,9 +55,14 @@ export async function chatHandler(request: Request): Promise<Response> {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { chatId: requestChatId, messages } = parsed.data as {
+  const {
+    chatId: requestChatId,
+    messages,
+    courseSlug,
+  } = parsed.data as {
     chatId?: string;
     messages: UIMessage[];
+    courseSlug?: string;
   };
 
   const [persona, userRoles] = await Promise.all([
@@ -98,6 +104,8 @@ export async function chatHandler(request: Request): Promise<Response> {
         persona: persona?.content,
         userInfo,
         subscriptions,
+        courseSlug,
+        userId: session.user.id,
         // `BuildChatStreamOptions.writer` is typed as `{ write: (p: unknown) => void }`
         // (loosened so #/ai/chat doesn't need to import ai@6's UIMessageStreamWriter
         // type directly) which is contravariantly narrower than the real ai@6

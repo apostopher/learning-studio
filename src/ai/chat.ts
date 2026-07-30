@@ -30,6 +30,12 @@ export type BuildChatStreamOptions = {
   };
   subscriptions: string[];
   writer?: { write: (p: unknown) => void };
+  /** The course the chat widget is currently mounted on, if any (e.g. absent
+   * on `/app`). Threaded through to `searchKB` so it only ever pulls one
+   * course's material — see that tool's doc comment for why no default or
+   * subscription-derived fallback is used when this is absent. */
+  courseSlug?: string;
+  userId: string;
 };
 
 /**
@@ -55,6 +61,8 @@ export async function buildChatStream({
   userInfo,
   subscriptions,
   writer,
+  courseSlug,
+  userId,
 }: BuildChatStreamOptions) {
   const modelMessages = await convertToModelMessages(messages);
 
@@ -67,7 +75,7 @@ export async function buildChatStream({
     }),
     messages: modelMessages,
     tools: {
-      searchKB: makeSearchKBTool({ writer }),
+      searchKB: makeSearchKBTool({ writer, courseSlug, userId }),
       checkFlyability: makeCheckFlyabilityTool({
         messages: modelMessages,
         uiMessages,

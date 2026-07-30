@@ -86,4 +86,32 @@ describe('chatHandler', () => {
     await res.text();
     expect(buildChatStream).toHaveBeenCalled();
   });
+
+  it('passes the request courseSlug and the session userId through to buildChatStream', async () => {
+    const res = await chatHandler(
+      postReq({
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+        courseSlug: 'itps-uas-remote',
+      }),
+    );
+    await res.text();
+    expect(buildChatStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        courseSlug: 'itps-uas-remote',
+        userId: 'u1',
+      }),
+    );
+  });
+
+  it('passes courseSlug through as undefined when the request omits it (e.g. /app)', async () => {
+    const res = await chatHandler(
+      postReq({
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+      }),
+    );
+    await res.text();
+    expect(buildChatStream).toHaveBeenCalledWith(
+      expect.objectContaining({ courseSlug: undefined, userId: 'u1' }),
+    );
+  });
 });

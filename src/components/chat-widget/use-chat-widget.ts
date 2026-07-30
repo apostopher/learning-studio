@@ -1,4 +1,5 @@
 import { useChat } from '@ai-sdk/react';
+import { useParams } from '@tanstack/react-router';
 import { DefaultChatTransport } from 'ai';
 import { useAtom } from 'jotai';
 import { useRef } from 'react';
@@ -37,6 +38,12 @@ import { AIWriterDataSchema } from '#/types';
 export function useChatWidget() {
   const [isOpen, setIsOpen] = useAtom(chatWidgetOpenAtom);
   const chatIdRef = useRef<string | undefined>(undefined);
+  // `strict: false` reads whatever route is currently matched without
+  // requiring this hook's caller to be inside a course route — the widget is
+  // mounted once at the app root (`__root.tsx`) and stays mounted across
+  // every route, course-scoped or not (e.g. `/app` has no course, and
+  // `courseSlug` is `undefined` there, which is expected).
+  const { courseSlug } = useParams({ strict: false });
 
   const { messages, status, sendMessage } = useChat({
     id: 'viper7-widget',
@@ -50,8 +57,22 @@ export function useChatWidget() {
         }
         return response;
       },
-      prepareSendMessagesRequest: ({ id, messages, trigger, messageId, body }) => ({
-        body: { id, messages, trigger, messageId, ...body, chatId: chatIdRef.current },
+      prepareSendMessagesRequest: ({
+        id,
+        messages,
+        trigger,
+        messageId,
+        body,
+      }) => ({
+        body: {
+          id,
+          messages,
+          trigger,
+          messageId,
+          ...body,
+          chatId: chatIdRef.current,
+          courseSlug,
+        },
       }),
     }),
     onData: (dataPart) => {

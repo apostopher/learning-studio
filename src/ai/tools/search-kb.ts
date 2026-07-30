@@ -24,14 +24,12 @@ export function buildKBContext(input: {
     .join('\n\n');
 }
 
-export function makeSearchKBTool(
-  opts: {
-    writer?: { write: (p: unknown) => void };
-    courseSlug?: string;
-    courseId?: number;
-  } = {},
-) {
-  const courseSlug = opts.courseSlug ?? '3d-airmanship';
+export function makeSearchKBTool(opts: {
+  writer?: { write: (p: unknown) => void };
+  courseSlug?: string;
+  courseId?: number;
+  userId?: string;
+}) {
   return tool({
     description:
       'Search the comprehensive knowledge base about the course, drones, aircraft & airmanship. Always call this FIRST for any course/airmanship question, then supplement with general aviation knowledge if needed.',
@@ -45,13 +43,19 @@ export function makeSearchKBTool(
         data: { text: 'Thinking...' },
         transient: true,
       });
+      // No course in context (e.g. the widget on `/app`, with no course
+      // route matched) means no course content — never substitute a default
+      // slug, guess from subscriptions, or fall back to every subscribed
+      // course. The tool answers from `searchKB` documents + help topics only.
       const [kbResults, courseHtml, helpTopics] = await Promise.all([
         searchKB(query, {
           maxResults: maxResults ?? 5,
           minScore: minScore ?? 0,
           courseId: opts.courseId,
         }),
-        getCourseContentForAgent(courseSlug),
+        opts.courseSlug
+          ? getCourseContentForAgent(opts.courseSlug, { userId: opts.userId })
+          : Promise.resolve(''),
         getAllHelpTopics(),
       ]);
       return buildKBContext({ kbResults, courseHtml, helpTopics });
