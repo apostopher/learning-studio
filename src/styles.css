@@ -1033,34 +1033,83 @@
    border-color is listed explicitly to keep .course-card's
    hover:border-gray-8 transition animating instead of snapping. */
 
+/* Deliberately UNLAYERED. Tailwind's `transition-colors` utility lives in
+   @layer utilities; a layered rule here would rank below it and Tailwind would
+   own `transition-property` outright, dropping transform/opacity from the list
+   and killing the press feedback entirely. Unlayered outranks every layer, so
+   this rule owns the whole transition — which is why border-color has to be
+   listed here too, or the card's hover border would stop animating. */
+.course-grid a {
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out,
+    border-color 150ms ease-out;
+}
+
+/* The press itself, at pointer-down — before the router has done anything.
+   `transition-duration: 0s` makes it land on the same frame as the press:
+   easing INTO a press state makes the feedback lag the finger, which is the
+   one thing press feedback must never do. It eases back OUT on release,
+   because that direction is a settle, not a response. */
+.course-grid a:active {
+  transform: scale(0.97);
+  transition-duration: 0s;
+}
+
+/* Held for as long as the navigation is actually in flight. Same scale as
+   :active so releasing the mouse mid-navigation causes no visible jump —
+   press, hold, and load read as one continuous state. */
 .course-grid a[data-transitioning] {
-  transform: scale(0.98);
+  transform: scale(0.97);
   /* transform is a visual-axis effect, not a flow-relative one, so scale()
      is correct here rather than a logical property. */
 }
 
-/* Dim the cards the learner did NOT click, so the one they did stands out.
-   :has() scopes this to the moment a navigation is actually in flight. */
+/* Recede the cards the learner did NOT pick, so the chosen one stands out.
+   :has() scopes this to the moment a navigation is genuinely in flight. */
 .course-grid:has(a[data-transitioning]) a:not([data-transitioning]) {
-  opacity: 0.6;
+  opacity: 0.45;
 }
 
-.course-grid a {
-  transition:
-    transform 150ms ease-out,
-    opacity 150ms ease-out,
-    border-color 150ms ease-out;
+/* Swap the progress ring for a spinner on the card being opened. Both are in
+   the DOM; only one is ever visible. `visibility: hidden` (not opacity) also
+   pulls the progressbar out of the accessibility tree while it is covered. */
+.course-card__spinner {
+  display: none;
+  color: var(--color-accent-9);
+}
+
+.course-grid a[data-transitioning] .course-card__spinner {
+  display: block;
+}
+
+.course-grid a[data-transitioning] .course-card__progress {
+  visibility: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Keep the opacity and border-color signals, drop the movement — reduced
-     motion means gentler, not none. */
+  /* Keep every signal, drop only the movement — reduced motion means gentler,
+     not none. The scale goes; opacity, the border, and the spinner stay, so a
+     press is still unmistakably acknowledged. */
   .course-grid a {
     transition:
-      opacity 150ms ease-out,
+      opacity 200ms ease-out,
       border-color 150ms ease-out;
   }
+
+  .course-grid a:active,
   .course-grid a[data-transitioning] {
     transform: none;
+  }
+
+  /* Without the scale, this opacity dip becomes the whole press signal. */
+  .course-grid a:active {
+    opacity: 0.85;
+    transition-duration: 0s;
+  }
+
+  /* A spinner is load-bearing feedback, so it keeps turning — just slower. */
+  .course-card__spinner {
+    animation-duration: 2s;
   }
 }

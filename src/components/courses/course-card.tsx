@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, Loader2 } from 'lucide-react';
 import { OptimizedPicture } from '#/components/admin/optimized-picture';
 import { CircularProgress } from '#/components/ui/circular-progress';
 import type { MyCourse } from '#/data-hooks/use-my-courses';
@@ -57,12 +57,23 @@ export const CourseCard = ({ course }: CourseCardProps) => {
         <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-primary">
           {course.name}
         </h3>
-        <CircularProgress
-          value={course.percent}
-          size={32}
-          strokeWidth={8}
-          ariaLabel={`${course.name} progress`}
-        />
+        {/* The progress ring is swapped for a spinner while this card's own
+            navigation is in flight. Both are rendered and CSS picks one, so
+            the swap needs no React state — TanStack Router already sets
+            data-transitioning on the Link for exactly this. */}
+        <span className="course-card__status relative inline-flex shrink-0">
+          <CircularProgress
+            value={course.percent}
+            size={32}
+            strokeWidth={8}
+            ariaLabel={`${course.name} progress`}
+            className="course-card__progress"
+          />
+          <Loader2
+            aria-hidden="true"
+            className="course-card__spinner absolute inset-0 m-auto h-4 w-4 animate-spin"
+          />
+        </span>
       </div>
     </Link>
   );

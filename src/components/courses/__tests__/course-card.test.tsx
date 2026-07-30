@@ -106,4 +106,21 @@ describe('CourseCard', () => {
     const progress = screen.getByLabelText(/3D Airmanship.*progress/i);
     expect(progress.getAttribute('aria-valuenow')).toBe('42');
   });
+
+  // The press/loading feedback is driven entirely by CSS keyed on these two
+  // class names plus the data-transitioning attribute TanStack Router sets on
+  // the Link. Nothing in JS reads them, so renaming either would silently
+  // remove the feedback with every other test still green. These pin the
+  // contract the stylesheet depends on.
+  it('renders both the progress ring and the spinner for CSS to swap between', async () => {
+    const { container } = await renderInRouter(<CourseCard course={course} />);
+    expect(container.querySelector('.course-card__progress')).not.toBeNull();
+    expect(container.querySelector('.course-card__spinner')).not.toBeNull();
+  });
+
+  it('hides the spinner from assistive tech, since the ring carries the label', async () => {
+    const { container } = await renderInRouter(<CourseCard course={course} />);
+    const spinner = container.querySelector('.course-card__spinner');
+    expect(spinner?.getAttribute('aria-hidden')).toBe('true');
+  });
 });
