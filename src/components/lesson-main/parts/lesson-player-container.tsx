@@ -15,6 +15,7 @@ import {
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { watchedMilestones } from '#/lib/course-milestones';
 import type { VideoFetchState } from '../types';
+import { computePlayerOverlay } from './compute-player-overlay';
 
 const videoEndedAtom = atom(false);
 
@@ -38,7 +39,14 @@ export const LessonPlayerContainer = ({
   const generateTest = useGenerateTest();
   const { data } = useLessonMaterial(lessonSlug);
   const material = data && !data.locked ? data.material : null;
-  const materialLocked = Boolean(data?.locked);
+  // Task 11 routes 'lesson'/'module' locks to a page-level gate that never
+  // mounts this container, so 'video' is the only reason this component
+  // should ever see in practice. Narrowing explicitly — instead of
+  // collapsing every lock reason to a boolean — means a future change to
+  // that upstream routing fails loudly here rather than silently showing
+  // CoverageNotice's "watch the parts you skipped" copy for a lesson/module
+  // lock it doesn't describe.
+  const materialLocked = data?.locked === true && data.reason === 'video';
   const progress = useVideoProgress(videoId);
   const hit = progress.data?.milestonesHit.filter((m) => m !== 100).length ?? 0;
 
@@ -64,8 +72,11 @@ export const LessonPlayerContainer = ({
     }
   }, [generateTest, lessonSlug, material, setActiveTab]);
 
-  const showCoverageNotice = videoEnded && materialLocked;
-  const showDebrief = videoEnded && !materialLocked && !currentTest;
+  const overlayKind = computePlayerOverlay({
+    videoEnded,
+    materialLocked,
+    hasCurrentTest: Boolean(currentTest),
+  });
 
   return (
     <VideoPlayerContainer
@@ -76,9 +87,9 @@ export const LessonPlayerContainer = ({
       onEnded={onEnded}
       overlay={
         <AnimatePresence>
-          {showCoverageNotice ? (
+          {overlayKind === 'coverage' ? (
             <CoverageNotice hit={hit} total={watchedMilestones.length} />
-          ) : showDebrief ? (
+          ) : overlayKind === 'debrief' ? (
             <DebriefOverlay loading={isGenerating} onDebrief={onDebrief} />
           ) : null}
         </AnimatePresence>
