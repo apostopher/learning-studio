@@ -14,6 +14,7 @@ describe('computeLessonMainState', () => {
     expect(
       computeLessonMainState({
         course: { data: undefined, isLoading: true, isError: false },
+        courseSlug: 'course-1',
         moduleSlug: 'm-1',
         lessonSlug: 'l-1',
         video: { data: undefined, isError: false },
@@ -31,6 +32,7 @@ describe('computeLessonMainState', () => {
         isError: true,
         error: new Error('boom'),
       },
+      courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
@@ -44,6 +46,7 @@ describe('computeLessonMainState', () => {
     expect(
       computeLessonMainState({
         course: { data: baseCourse, isLoading: false, isError: false },
+        courseSlug: 'course-1',
         moduleSlug: 'm-1',
         lessonSlug: 'missing',
         video: { data: undefined, isError: false },
@@ -67,6 +70,7 @@ describe('computeLessonMainState', () => {
         isLoading: false,
         isError: false,
       },
+      courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
@@ -79,6 +83,7 @@ describe('computeLessonMainState', () => {
   it('returns ready with videoState=fetching when video data is undefined', () => {
     const result = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
@@ -88,6 +93,7 @@ describe('computeLessonMainState', () => {
     expect(result).toMatchObject({
       kind: 'ready',
       lessonName: 'Lesson One',
+      courseSlug: 'course-1',
       videoId: 'v1',
       videoState: { status: 'fetching' },
     });
@@ -96,6 +102,7 @@ describe('computeLessonMainState', () => {
   it('returns ready with videoState=ready when video data has download', () => {
     const result = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: {
@@ -120,6 +127,7 @@ describe('computeLessonMainState', () => {
   it('returns ready with videoState=error when video query errored', () => {
     const result = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: {

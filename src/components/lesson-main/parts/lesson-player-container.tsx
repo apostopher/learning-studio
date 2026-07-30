@@ -33,7 +33,8 @@ export const LessonPlayerContainer = ({
   const isGenerating = useIsGenerating();
   const currentTest = useCurrentTest();
   const generateTest = useGenerateTest();
-  const { data: material } = useLessonMaterial(lessonSlug);
+  const { data } = useLessonMaterial(lessonSlug);
+  const material = data && !data.locked ? data.material : null;
 
   const onEnded = useCallback(() => {
     setVideoEnded(true);

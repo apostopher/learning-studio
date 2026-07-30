@@ -4,8 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('#/components/lesson-material', () => ({
-  LessonMaterialWrapper: ({ lessonSlug }: { lessonSlug: string }) => (
-    <div data-testid="lesson-material">{lessonSlug}</div>
+  LessonMaterialWrapper: ({
+    lessonSlug,
+    courseSlug,
+  }: {
+    lessonSlug: string;
+    courseSlug: string;
+  }) => (
+    <div data-testid="lesson-material">
+      {lessonSlug}:{courseSlug}
+    </div>
   ),
 }));
 
@@ -66,6 +74,7 @@ describe('LessonMain', () => {
           kind: 'ready',
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
+          courseSlug: 'course-one',
           videoId: 'v1',
           videoState: { status: 'fetching' },
         }}
@@ -74,5 +83,10 @@ describe('LessonMain', () => {
     // h1 is in the header now, not the article body.
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.getByRole('region', { name: 'Video player' })).toBeTruthy();
+    // The material slot must receive courseSlug so a locked panel can link
+    // to the blocking lesson — not just lessonSlug.
+    expect(screen.getByTestId('lesson-material').textContent).toBe(
+      'lesson-one:course-one',
+    );
   });
 });

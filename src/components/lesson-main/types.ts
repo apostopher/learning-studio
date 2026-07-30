@@ -17,6 +17,7 @@ export type LessonMainState =
       kind: 'ready';
       lessonName: string;
       lessonSlug: string;
+      courseSlug: string;
       videoId: string;
       videoState: VideoFetchState;
     };

@@ -25,6 +25,7 @@ type VideoQueryShape = {
 
 export type ComputeArgs = {
   course: CourseQueryShape;
+  courseSlug: string;
   moduleSlug: string;
   lessonSlug: string;
   video: VideoQueryShape;
@@ -37,6 +38,7 @@ const errorMessage = (err: unknown): string =>
 
 export const computeLessonMainState = ({
   course,
+  courseSlug,
   moduleSlug,
   lessonSlug,
   video,
@@ -68,6 +70,7 @@ export const computeLessonMainState = ({
     kind: 'ready',
     lessonName: lesson.name,
     lessonSlug: lesson.slug,
+    courseSlug,
     videoId: lesson.videoId,
     videoState,
   };

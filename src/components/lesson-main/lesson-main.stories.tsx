@@ -44,6 +44,7 @@ export const ReadyFetching: Story = {
       kind: 'ready',
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
+      courseSlug: 'itps-uas-remote',
       videoId: 'v1',
       videoState: { status: 'fetching' },
     },
@@ -56,6 +57,7 @@ export const ReadyRendering: Story = {
       kind: 'ready',
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
+      courseSlug: 'itps-uas-remote',
       videoId: 'v1',
       videoState: { status: 'rendering' },
     },
@@ -68,6 +70,7 @@ export const ReadyError: Story = {
       kind: 'ready',
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
+      courseSlug: 'itps-uas-remote',
       videoId: 'v1',
       videoState: {
         status: 'error',
@@ -84,6 +87,7 @@ export const ReadyPlaying: Story = {
       kind: 'ready',
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
+      courseSlug: 'itps-uas-remote',
       videoId: 'v1',
       videoState: {
         status: 'ready',

@@ -59,8 +59,8 @@ const renderPlayerSlot = (
   );
 };
 
-const renderLessonMaterialSlot = (lessonSlug: string) => (
-  <LessonMaterialWrapper lessonSlug={lessonSlug} />
+const renderLessonMaterialSlot = (lessonSlug: string, courseSlug: string) => (
+  <LessonMaterialWrapper lessonSlug={lessonSlug} courseSlug={courseSlug} />
 );
 
 const renderArticleBody = (state: LessonMainState) => {
@@ -75,9 +75,13 @@ const renderArticleBody = (state: LessonMainState) => {
       return (
         <>
           <div className="lesson-player">
-            {renderPlayerSlot(state.videoState, state.lessonSlug, state.videoId)}
+            {renderPlayerSlot(
+              state.videoState,
+              state.lessonSlug,
+              state.videoId,
+            )}
           </div>
-          {renderLessonMaterialSlot(state.lessonSlug)}
+          {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
         </>
       );
     case 'course-loading': {

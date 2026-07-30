@@ -31,6 +31,7 @@ export const LessonMainWrapper = ({
       isError: course.isError,
       error: course.error,
     },
+    courseSlug,
     moduleSlug,
     lessonSlug,
     video: {
