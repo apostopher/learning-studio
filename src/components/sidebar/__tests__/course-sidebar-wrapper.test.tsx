@@ -117,11 +117,22 @@ const gatedCourse = {
   ],
 };
 
-async function renderAt(path: string, details: DetailsResult) {
+async function renderAt(
+  path: string,
+  details: DetailsResult,
+  // The real root route's beforeLoad puts `roles` into the router context
+  // (src/routes/__root.tsx); useIsAdmin reads it from there. Injecting it the
+  // same way is the only honest way to prove the wrapper threads the flag
+  // through to the rendered rows.
+  roles: string[] = [],
+) {
   const store = createStore();
   store.set(detailsAtom, details);
 
-  const rootRoute = createRootRoute({ component: () => <Outlet /> });
+  const rootRoute = createRootRoute({
+    beforeLoad: () => ({ roles }),
+    component: () => <Outlet />,
+  });
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
@@ -232,6 +243,39 @@ describe('CourseSidebarWrapper', () => {
     );
     expect(yawLink?.textContent).not.toContain('Finish');
     expect(rollLink?.textContent).toContain('Finish Yaw first');
+  });
+
+  it('shows an admin no lock reason on a row a student would see locked', async () => {
+    // Identical inputs to the test above, which proves Roll's row DOES carry
+    // "Finish Yaw first" for a non-admin. Admins bypass all three gates
+    // server-side, so the row opened when they clicked it — the sidebar was
+    // telling them something untrue.
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [
+          { lessonId: 2, watched: false },
+          { lessonId: 3, watched: false },
+        ],
+        modules: [],
+      },
+    });
+    await renderAt(
+      '/',
+      { data: gatedCourse, isLoading: false, isError: false },
+      ['admin'],
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
+    await waitFor(() => {
+      expect(
+        screen
+          .queryAllByRole('link')
+          .some((a) => a.getAttribute('href')?.includes('/lessons/roll')),
+      ).toBe(true);
+    });
+    const rollLink = screen
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href')?.includes('/lessons/roll'));
+    expect(rollLink?.textContent).not.toContain('Finish');
   });
 
   it('opens the row once its prerequisite is watched', async () => {

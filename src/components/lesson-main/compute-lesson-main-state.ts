@@ -27,6 +27,15 @@ type VideoQueryShape = {
 type MaterialQueryShape = {
   data: LessonMaterialResponse<unknown> | undefined;
   isLoading: boolean;
+  /**
+   * Required, not optional. This shape deliberately carried only `data` and
+   * `isLoading`, which meant a failed material query fell through to
+   * `kind: 'ready'` and the material area rendered nothing at all — no
+   * message, no retry. It matters now that the branch has a real 500 path
+   * (`lesson-gating.server.ts` throws on a missing cached payload).
+   */
+  isError: boolean;
+  error?: unknown;
 };
 
 export type ComputeArgs = {
@@ -43,6 +52,12 @@ export type ComputeArgs = {
   material?: MaterialQueryShape;
   onRetryCourse: () => void;
   onRetryVideo: () => void;
+  /**
+   * Optional for the same reason `material` is — call sites that predate the
+   * gate keep compiling. A 'material-error' state can only arise from a
+   * `material` that reports `isError`, and the wrapper supplies both together.
+   */
+  onRetryMaterial?: () => void;
 };
 
 const errorMessage = (err: unknown): string =>
@@ -57,7 +72,20 @@ export const computeLessonMainState = ({
   material,
   onRetryCourse,
   onRetryVideo,
+  onRetryMaterial,
 }: ComputeArgs): LessonMainState => {
+  // Course errors are reported BEFORE the combined loading gate below. React
+  // Query drops isLoading on error, so the course query alone would be fine
+  // either way — but `material?.isLoading` would otherwise keep a course that
+  // failed fast behind the skeleton until the material query settled, hiding a
+  // retryable error behind a spinner.
+  if (course.isError) {
+    return {
+      kind: 'course-error',
+      message: errorMessage(course.error),
+      onRetry: onRetryCourse,
+    };
+  }
   // Hold at the loading state until BOTH course and material have resolved.
   // Reusing 'course-loading' rather than adding a state, since the skeleton
   // it renders is generic. This deliberately delays the player until the
@@ -72,15 +100,22 @@ export const computeLessonMainState = ({
   if (course.isLoading || material?.isLoading) {
     return { kind: 'course-loading' };
   }
-  if (course.isError) {
+  const lesson = findLesson(course.data, moduleSlug, lessonSlug);
+  // Checked before material.isError: the material endpoint 404s for a lesson
+  // that does not exist (or is WIP), and "this lesson doesn't exist" is a
+  // better answer than "material failed, retry" for the same underlying fact.
+  if (!lesson) return { kind: 'not-found', lessonSlug };
+
+  // A failed material query means the lock state is unknown, and unknown must
+  // not render as unlocked — the same rule as the loading gate above, for the
+  // same reason. Retryable, never a false lock.
+  if (material?.isError) {
     return {
-      kind: 'course-error',
-      message: errorMessage(course.error),
-      onRetry: onRetryCourse,
+      kind: 'material-error',
+      message: errorMessage(material.error),
+      onRetry: onRetryMaterial ?? onRetryCourse,
     };
   }
-  const lesson = findLesson(course.data, moduleSlug, lessonSlug);
-  if (!lesson) return { kind: 'not-found', lessonSlug };
 
   // The material response is the single signal for a page-level lock. A
   // `lesson`/`module` reason means the whole lesson — video included — is

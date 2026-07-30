@@ -17,9 +17,11 @@ type LessonLinkProps = {
 };
 
 /**
- * The reason a locked row states, as a full sentence — never "Locked". Governs
- * both the icon's accessible name and the row's visible caption, so the
- * explanation survives on touch and for screen readers, not just on hover.
+ * The reason a locked row states, as a full sentence — never "Locked".
+ * Rendered as visible text inside the link, which makes it part of the row's
+ * accessible name: the explanation survives on touch and for screen readers,
+ * not just on hover. The lock icon beside it is decorative and aria-hidden, so
+ * the reason is announced exactly once.
  */
 function lockReason(lock: LessonLock): string | null {
   if (lock.kind === 'lesson-locked') return `Finish ${lock.lessonName} first`;
@@ -70,7 +72,7 @@ export const LessonLink = ({
           <span className="text-xs text-tertiary">{reason}</span>
         ) : null}
       </span>
-      {reason ? <LessonLockIcon reason={reason} /> : null}
+      {reason ? <LessonLockIcon /> : null}
       <CircularProgress
         value={progressPercent}
         size={20}

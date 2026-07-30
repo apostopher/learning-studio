@@ -68,6 +68,16 @@ const renderArticleBody = (state: LessonMainState) => {
   switch (state.kind) {
     case 'course-error':
       return <LessonError message={state.message} onRetry={state.onRetry} />;
+    case 'material-error':
+      // No player either: the material response is the only page-level lock
+      // signal, so with it unresolved we cannot claim the lesson is open.
+      return (
+        <LessonError
+          message={state.message}
+          onRetry={state.onRetry}
+          subject="this lesson"
+        />
+      );
     case 'not-found':
       return <LessonNotFound lessonSlug={state.lessonSlug} />;
     case 'no-video':

@@ -62,4 +62,21 @@ describe('computeLessonLocks', () => {
   it('returns an empty map when progress has not loaded', () => {
     expect(computeLessonLocks(details, undefined)).toEqual({});
   });
+
+  it('shows an admin no locks at all, because every row opens for them', () => {
+    // Admins bypass all three gates server-side, so a locked row in their
+    // sidebar was a lie in the permissive direction: they clicked it and it
+    // opened. Same inputs as the first test, which proves 'b' would otherwise
+    // be locked here.
+    const progress = {
+      lessons: [
+        { lessonId: 10, watched: false },
+        { lessonId: 11, watched: false },
+      ],
+    };
+    expect(computeLessonLocks(details, progress, false).b).toMatchObject({
+      kind: 'lesson-locked',
+    });
+    expect(computeLessonLocks(details, progress, true)).toEqual({});
+  });
 });

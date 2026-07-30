@@ -19,13 +19,21 @@ import {
  * Returns an empty map when either input has not resolved yet, so a
  * half-loaded sidebar never shows a spurious lock — a student briefly seeing
  * every lesson locked would be worse than seeing none locked.
+ *
+ * Also returns an empty map for an admin. Admins bypass all three gates on the
+ * server (decision #15), so every row the sidebar marked locked opened fine
+ * when they clicked it — a lock affordance that lies in the permissive
+ * direction, which is exactly the "click in to find out" guessing the governing
+ * principle rules out. The gate itself is unaffected; this is display only.
  */
 export function computeLessonLocks(
   details: DetailsCourse | undefined,
   progress:
     | { lessons: readonly { lessonId: number; watched: boolean }[] }
     | undefined,
+  isAdmin = false,
 ): Record<string, LessonLock> {
+  if (isAdmin) return {};
   if (!details || !progress) return {};
   const course = toGateCourse(details);
   const watched = watchedLessonSlugs(details, progress);

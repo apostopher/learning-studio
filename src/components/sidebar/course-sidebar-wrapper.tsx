@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
+import { useIsAdmin } from '#/hooks/use-is-admin';
 import { openModuleSlugAtom } from '../../atoms/sidebar';
 import { computeLessonLocks } from './compute-lesson-locks';
 import { CourseSidebar } from './course-sidebar';
@@ -27,6 +28,7 @@ export const CourseSidebarWrapper = ({
   };
   const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
   const progressQuery = useCourseProgressSummary(courseSlug);
+  const isAdmin = useIsAdmin();
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
 
   // Server-aggregated progress → the videoId-keyed / moduleId-keyed maps the
@@ -48,11 +50,16 @@ export const CourseSidebarWrapper = ({
   // Computed client-side from the two queries above — never written back to
   // getCourseDetailsWithCache, whose Redis entry is shared across every
   // student. Resolves to {} until both queries have data, so a half-loaded
-  // sidebar never shows a lock nobody can yet explain.
+  // sidebar never shows a lock nobody can yet explain, and to {} for an admin,
+  // whose rows all open regardless of what the predicate says.
   const lessonLocks = useMemo(
     () =>
-      computeLessonLocks(detailsQuery.data ?? undefined, progressQuery.data),
-    [detailsQuery.data, progressQuery.data],
+      computeLessonLocks(
+        detailsQuery.data ?? undefined,
+        progressQuery.data,
+        isAdmin,
+      ),
+    [detailsQuery.data, progressQuery.data, isAdmin],
   );
 
   const derived = useMemo(() => {

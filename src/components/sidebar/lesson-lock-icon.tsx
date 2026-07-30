@@ -1,25 +1,19 @@
 import { Lock } from 'lucide-react';
 
-type LessonLockIconProps = {
-  /** Why the lesson is locked — becomes the accessible name. */
-  reason: string;
-};
-
 /**
- * The lock marker on a sidebar row. `reason` is a full sentence, not
- * "Locked": the reason must be available to a screen reader and must not be
- * hover-only, so it also renders as visible text next to the lesson name
- * (see LessonLink) — this icon alone is not the fix, the text is.
+ * The lock marker on a sidebar row — decoration only.
  *
- * Presentational and hookless (see Global Constraints) — takes props only.
+ * Deliberately `aria-hidden` and prop-less. The reason a row is locked is
+ * already a visible full sentence next to the lesson name (see LessonLink),
+ * and both sit inside the same `<Link>`, so giving this icon a `title` or
+ * `aria-label` made the accessible name announce the reason twice: "Pitch and
+ * roll Finish Intro first Finish Intro first". The visible text is the
+ * accessible name; the icon adds nothing a screen reader needs.
+ *
+ * Presentational and hookless (see Global Constraints).
  */
-export const LessonLockIcon = ({ reason }: LessonLockIconProps) => (
-  <span
-    className="shrink-0 text-tertiary"
-    title={reason}
-    aria-label={reason}
-    role="img"
-  >
-    <Lock className="size-3.5" aria-hidden="true" />
+export const LessonLockIcon = () => (
+  <span className="shrink-0 text-tertiary" aria-hidden="true">
+    <Lock className="size-3.5" />
   </span>
 );

@@ -44,6 +44,13 @@ const lesson = {
   videoId: null,
 };
 
+// The lock glyph is the only `aria-hidden` span in the row that wraps an svg:
+// the rank span is aria-hidden but holds text, and CircularProgress puts
+// aria-hidden on the svg itself, inside a role="progressbar" span. Selecting
+// structurally rather than by role because the icon must NOT expose a role —
+// see the double-announcement test below.
+const LOCK_ICON_SELECTOR = 'span[aria-hidden="true"] > svg';
+
 describe('LessonLink', () => {
   it('renders a link to the lesson route', async () => {
     await renderInRouter(
@@ -106,7 +113,7 @@ describe('LessonLink', () => {
         progressPercent={0}
       />,
     );
-    expect(container.querySelector('[role="img"]')).toBeNull();
+    expect(container.querySelector(LOCK_ICON_SELECTOR)).toBeNull();
   });
 
   it('renders no lock affordance when lock is open', async () => {
@@ -121,7 +128,7 @@ describe('LessonLink', () => {
         lock={{ kind: 'open' }}
       />,
     );
-    expect(container.querySelector('[role="img"]')).toBeNull();
+    expect(container.querySelector(LOCK_ICON_SELECTOR)).toBeNull();
   });
 
   it('states the reason as visible text, not just an icon, for a lesson-locked row', async () => {
@@ -144,9 +151,43 @@ describe('LessonLink', () => {
     const link = screen.getByRole('link', { name: /Pitch and roll/ });
     // Visible on the row, not hidden behind a hover-only title.
     expect(link.textContent).toContain('Finish Intro first');
-    const icon = link.querySelector('[role="img"]');
-    expect(icon).not.toBeNull();
-    expect(icon?.getAttribute('aria-label')).toBe('Finish Intro first');
+    expect(link.querySelector(LOCK_ICON_SELECTOR)).not.toBeNull();
+  });
+
+  it('states the reason exactly once in the accessible name', async () => {
+    await renderInRouter(
+      <LessonLink
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive={false}
+        progressPercent={0}
+        lock={{
+          kind: 'lesson-locked',
+          lessonSlug: 'intro',
+          moduleSlug: 'fundamentals',
+          lessonName: 'Intro',
+        }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
+    // The visible <span> and the icon both sat inside this one link, and the
+    // icon carried aria-label={reason} + role="img", so the row's accessible
+    // name announced "…Finish Intro first Finish Intro first".
+    expect(link.textContent?.match(/Finish Intro first/g)).toHaveLength(1);
+    // Nothing inside the row may contribute the reason a second time through
+    // an aria-label or title. (CircularProgress legitimately carries its own,
+    // unrelated aria-label, so this filters on the reason text rather than
+    // banning labelled descendants outright.)
+    const repeats = Array.from(
+      link.querySelectorAll('[aria-label], [title]'),
+    ).filter((el) =>
+      `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`.includes(
+        'Finish Intro first',
+      ),
+    );
+    expect(repeats).toEqual([]);
   });
 
   it('states the reason for a module-locked row', async () => {

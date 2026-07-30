@@ -46,6 +46,30 @@ describe('LessonMain', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  it('renders a retryable error and no player when state.kind is material-error', async () => {
+    const onRetry = vi.fn();
+    render(
+      <LessonMain
+        state={{
+          kind: 'material-error',
+          message: 'material 500',
+          onRetry,
+        }}
+      />,
+    );
+    // Previously a material failure fell through to 'ready': the player
+    // rendered and the material area below it was silently empty. The lock
+    // state is unknown here, so neither may render.
+    expect(screen.queryByRole('region', { name: 'Video player' })).toBeNull();
+    expect(screen.queryByTestId('lesson-material')).toBeNull();
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('material 500')).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Retry loading this lesson' }),
+    );
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('renders not-found status with the slug', () => {
     render(
       <LessonMain
