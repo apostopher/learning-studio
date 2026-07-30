@@ -4,7 +4,11 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
 import type { RichTextEditorApi } from './rich-text-editor-api';
-import { RichTextToolbar } from './rich-text-toolbar';
+import {
+  RichTextToolbar,
+  TOOLBAR_CONTROLS,
+  type ToolbarControl,
+} from './rich-text-toolbar';
 
 /** TipTap's empty document serializes to `<p></p>`; treat that as empty. */
 export function normalizeEditorHtml(html: string): string {
@@ -18,6 +22,16 @@ interface RichTextEditorProps {
   placeholder?: string;
   ariaLabel?: string;
   toolbar?: 'fixed' | 'bubble';
+  /**
+   * Which toolbar buttons to offer. Defaults to all of them, so omitting it
+   * leaves an editor exactly as it was.
+   *
+   * Restricts the TOOLBAR ONLY — the TipTap schema is untouched, so content
+   * that already contains headings or lists (as imported key points do) still
+   * parses, renders, and saves. Hiding a button does not remove the markup, and
+   * pasted markup is unaffected.
+   */
+  controls?: readonly ToolbarControl[];
 }
 
 /**
@@ -38,8 +52,12 @@ export const RichTextEditor = ({
   placeholder = 'Start writing…',
   ariaLabel,
   toolbar = 'fixed',
+  controls = TOOLBAR_CONTROLS,
 }: RichTextEditorProps) => {
   const compact = toolbar === 'bubble';
+  // An empty `controls` would render an empty bar or an empty floating bubble,
+  // which reads as a rendering bug rather than as "no formatting offered".
+  const hasControls = controls.length > 0;
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
@@ -83,19 +101,22 @@ export const RichTextEditor = ({
 
   return (
     <div className="rich-editor rounded-lg border border-gray-6 bg-gray-1 focus-within:ring-2 focus-within:ring-apple-9">
-      {toolbar === 'fixed' && editor && (
+      {toolbar === 'fixed' && editor && hasControls && (
         <div className="flex flex-wrap items-center gap-0.5 border-gray-6 border-b p-1">
-          <RichTextToolbar editor={editor as unknown as RichTextEditorApi} />
+          <RichTextToolbar
+            editor={editor as unknown as RichTextEditorApi}
+            controls={controls}
+          />
         </div>
       )}
-      {toolbar === 'bubble' && editor && (
+      {toolbar === 'bubble' && editor && hasControls && (
         <BubbleMenu
           editor={editor}
           className="flex items-center gap-0.5 rounded-lg border border-gray-6 bg-gray-2 p-1 shadow-lg"
         >
           <RichTextToolbar
             editor={editor as unknown as RichTextEditorApi}
-            compact
+            controls={controls}
           />
         </BubbleMenu>
       )}

@@ -57,9 +57,75 @@ describe('RichTextToolbar', () => {
     ).toBe('false');
   });
 
-  it('compact mode omits headings', () => {
-    render(<RichTextToolbar editor={makeEditor()} compact />);
-    expect(screen.queryByRole('button', { name: /heading 1/i })).toBeNull();
+  it('renders every control when `controls` is omitted', () => {
+    // Existing call sites pass no `controls`, so the default must stay "all" —
+    // otherwise adding the prop silently strips the prose editors' toolbars.
+    render(<RichTextToolbar editor={makeEditor()} />);
+    for (const name of [
+      /bold/i,
+      /italic/i,
+      /heading 1/i,
+      /heading 2/i,
+      /heading 3/i,
+      /bullet list/i,
+      /ordered list/i,
+      /blockquote/i,
+      /inline code/i,
+      /link/i,
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+
+  it('renders only the requested controls', () => {
+    render(
+      <RichTextToolbar editor={makeEditor()} controls={['bold', 'italic']} />,
+    );
     expect(screen.getByRole('button', { name: /bold/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /italic/i })).toBeTruthy();
+    for (const name of [
+      /heading 1/i,
+      /bullet list/i,
+      /ordered list/i,
+      /blockquote/i,
+      /inline code/i,
+      /link/i,
+    ]) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+  });
+
+  it('emits no separator when only one group is present', () => {
+    // The separators used to be literal <span>s between JSX blocks, so a
+    // bold+italic-only toolbar rendered a divider against nothing after it.
+    const { container } = render(
+      <RichTextToolbar editor={makeEditor()} controls={['bold', 'italic']} />,
+    );
+    expect(container.querySelectorAll('span[aria-hidden]')).toHaveLength(0);
+  });
+
+  it('separates groups but never leads or trails with one', () => {
+    const { container } = render(
+      <RichTextToolbar
+        editor={makeEditor()}
+        controls={['italic', 'bulletList', 'link']}
+      />,
+    );
+    // Three groups represented -> exactly two dividers, both between buttons.
+    const children = [...(container.firstElementChild?.children ?? [])];
+    expect(
+      children.filter((c) => c.getAttribute('aria-hidden') !== null),
+    ).toHaveLength(2);
+    expect(children.at(0)?.getAttribute('aria-hidden')).toBeNull();
+    expect(children.at(-1)?.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('keeps the link popover working when link is the only control', () => {
+    // `link` is a LinkPopover, not a ToolbarButton, so it takes a separate
+    // branch from the icon-button map and could be dropped by a filter that
+    // only knows about buttons.
+    render(<RichTextToolbar editor={makeEditor()} controls={['link']} />);
+    expect(screen.getByRole('button', { name: /link/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /bold/i })).toBeNull();
   });
 });

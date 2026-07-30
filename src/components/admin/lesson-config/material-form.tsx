@@ -9,6 +9,7 @@ import {
 import type { LessonMaterialGeneration } from '#/types';
 import { QuizField } from './quiz-field';
 import { RichTextEditor } from './rich-text-editor';
+import { INLINE_CONTROLS } from './rich-text-toolbar';
 import { StringListField } from './string-list-field';
 
 const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
@@ -115,6 +116,7 @@ export const MaterialForm = ({
                 value={value}
                 onChange={onChange}
                 toolbar="bubble"
+                controls={INLINE_CONTROLS}
                 ariaLabel={`Key point ${index + 1}`}
                 placeholder="Key point…"
               />

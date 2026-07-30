@@ -1,9 +1,9 @@
 import { Plus, X } from 'lucide-react';
 import type { CourseLessonQuiz } from '#/types';
+import { RichTextEditor } from './rich-text-editor';
+import { INLINE_CONTROLS } from './rich-text-toolbar';
 
 const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
-const controlCls =
-  'rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9';
 
 /** New id from an existing set, avoiding Math.random for stable behavior. */
 function nextId(prefix: string, existing: string[]): string {
@@ -14,8 +14,18 @@ function nextId(prefix: string, existing: string[]): string {
 
 /**
  * Controlled quiz editor. Pure — the container owns the value via an RHF
- * Controller. Prose is markdown (per the quiz schema); rendered as plain
- * text inputs so tags/markdown are visible and editable.
+ * Controller.
+ *
+ * Question and option prose are HTML, edited with RichTextEditor limited to
+ * bold/italic (bubble menu on selection). Block structure is deliberately not
+ * offered: a question renders as a single line and an option sits in a radio
+ * row, so a heading or list there is broken layout.
+ *
+ * NOTE the schema's `.describe('...in markdown format')` on
+ * `CourseLessonQuizQuestionSchema` is inaccurate and predates this — the stored
+ * content is HTML. Measured across the imported set: 268 questions and 1037
+ * options containing `<p>`, `<strong>`, `<b>`, `<em>` and zero markdown
+ * emphasis. Plain inputs previously showed those tags as literal text.
  */
 export const QuizField = ({
   value,
@@ -56,16 +66,16 @@ export const QuizField = ({
           className="flex flex-col gap-3 rounded-lg border border-gray-6 p-4"
         >
           <div className="flex items-start justify-between gap-2">
-            <label htmlFor={`quiz-q-${q.id}`} className="sr-only">
-              Question {qi + 1}
-            </label>
-            <textarea
-              id={`quiz-q-${q.id}`}
-              rows={2}
-              value={q.question}
-              onChange={(e) => patchQuestion(qi, { question: e.target.value })}
-              className={`flex-1 ${controlCls}`}
-            />
+            <div className="min-w-0 flex-1">
+              <RichTextEditor
+                value={q.question}
+                onChange={(html) => patchQuestion(qi, { question: html })}
+                toolbar="bubble"
+                controls={INLINE_CONTROLS}
+                ariaLabel={`Question ${qi + 1}`}
+                placeholder="Question…"
+              />
+            </div>
             <button
               type="button"
               aria-label={`Remove question ${qi + 1}`}
@@ -89,24 +99,22 @@ export const QuizField = ({
                   }
                   className="h-4 w-4"
                 />
-                <label
-                  htmlFor={`quiz-opt-${q.id}-${opt.id}`}
-                  className="sr-only"
-                >
-                  Option {oi + 1}
-                </label>
-                <input
-                  id={`quiz-opt-${q.id}-${opt.id}`}
-                  value={opt.value}
-                  onChange={(e) =>
-                    patchQuestion(qi, {
-                      options: q.options.map((o, i) =>
-                        i === oi ? { ...o, value: e.target.value } : o,
-                      ),
-                    })
-                  }
-                  className={`flex-1 ${controlCls}`}
-                />
+                <div className="min-w-0 flex-1">
+                  <RichTextEditor
+                    value={opt.value}
+                    onChange={(html) =>
+                      patchQuestion(qi, {
+                        options: q.options.map((o, i) =>
+                          i === oi ? { ...o, value: html } : o,
+                        ),
+                      })
+                    }
+                    toolbar="bubble"
+                    controls={INLINE_CONTROLS}
+                    ariaLabel={`Option ${oi + 1}`}
+                    placeholder="Option…"
+                  />
+                </div>
                 <button
                   type="button"
                   aria-label={`Remove option ${oi + 1}`}
