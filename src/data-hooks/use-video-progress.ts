@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { dataKeys } from './keys';
 
-const videoProgressSchema = z.object({
+export const videoProgressSchema = z.object({
   /** Distinct milestones the user has reached for this video, in order. */
   milestonesHit: z.array(z.number()),
   /** Whether the video counts as watched (every milestone except 100). */

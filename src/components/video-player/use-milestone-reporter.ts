@@ -3,14 +3,16 @@ import { useAtomValue } from 'jotai';
 import { useEffect, useRef } from 'react';
 import { dataKeys } from '#/data-hooks/keys';
 import { useReportVideoProgress } from '#/data-hooks/use-report-video-progress';
-import { useVideoProgress } from '#/data-hooks/use-video-progress';
-import { queryKeys } from '#/hooks/data/keys';
 import {
-  crossedMilestones,
-  isVideoWatched,
-  SEEK_THRESHOLD_SECONDS,
-} from '#/lib/course-milestones';
+  useVideoProgress,
+  videoProgressSchema,
+} from '#/data-hooks/use-video-progress';
+import { queryKeys } from '#/hooks/data/keys';
 import { videoPlayerStateAtomFamily } from './atoms';
+import {
+  computeMilestoneTick,
+  initialMilestoneReporterState,
+} from './milestone-tick';
 import { reconcileCoverage } from './reconcile-coverage';
 
 async function fetchProgress(videoId: string) {
@@ -18,7 +20,10 @@ async function fetchProgress(videoId: string) {
     `/api/user/video-progress?videoId=${encodeURIComponent(videoId)}`,
   );
   if (!res.ok) throw new Error(`Failed to load video progress (${res.status})`);
-  return (await res.json()) as { milestonesHit: number[]; watched: boolean };
+  // Same endpoint and shape useVideoProgress reads — reuse its schema rather
+  // than casting, so a server-side shape drift fails loudly instead of
+  // silently feeding reconcileCoverage malformed data.
+  return videoProgressSchema.parse(await res.json());
 }
 
 /**
@@ -37,6 +42,21 @@ async function fetchProgress(videoId: string) {
  * 3. NO POLLING — because the client is the only writer, the seeded set
  *    mirrors the server exactly, so completion is detected locally on the tick
  *    that finishes it, out-of-order watching included.
+ *
+ * The reset/seed/tick decision itself lives in the pure `computeMilestoneTick`
+ * (`./milestone-tick.ts`), called fresh from THIS single effect on every
+ * commit that can change any of its inputs (all four are in the dependency
+ * array below, including `milestonesHit`). That is deliberate: an earlier
+ * version split reset and seed across two separate effects with different
+ * dependency arrays, and a same-commit videoId change + already-cached
+ * progress data raced them — see `computeMilestoneTick`'s doc comment for
+ * the full failure mode. Not render-tested here: this repo's Vite pipeline
+ * (react-compiler + TanStack Start under Vitest) nulls the hook dispatcher
+ * for any of our own hooks that call `useRef`/`useEffect` directly inside a
+ * render test (pre-existing, see `src/components/video-player/hooks.ts`'s
+ * top-of-file note and `rich-text-editor.test.tsx`'s skipped render test for
+ * the same root cause) — the decision logic is covered instead via
+ * `milestone-tick.test.ts`, which needs no render.
  */
 export function useMilestoneReporter(
   playerId: string,
@@ -49,60 +69,31 @@ export function useMilestoneReporter(
   const report = useReportVideoProgress();
   const queryClient = useQueryClient();
   const progress = useVideoProgress(videoId);
+  const milestonesHit = progress.data?.milestonesHit;
 
   const reportRef = useRef(report);
   reportRef.current = report;
   const lessonSlugRef = useRef(lessonSlug);
   lessonSlugRef.current = lessonSlug;
 
-  const reportedRef = useRef<Set<number>>(new Set());
-  const seededForRef = useRef<string | null>(null);
-  const lastTimeRef = useRef(0);
-  const reconciledRef = useRef(false);
-  const videoIdRef = useRef(videoId);
-
-  const milestonesHit = progress.data?.milestonesHit;
+  const stateRef = useRef(initialMilestoneReporterState);
 
   useEffect(() => {
-    if (!videoId || !milestonesHit) return;
-    if (seededForRef.current === videoId) return;
-    reportedRef.current = new Set(milestonesHit);
-    seededForRef.current = videoId;
-  }, [videoId, milestonesHit]);
-
-  useEffect(() => {
-    if (videoIdRef.current !== videoId) {
-      videoIdRef.current = videoId;
-      reportedRef.current = new Set();
-      seededForRef.current = null;
-      lastTimeRef.current = 0;
-      reconciledRef.current = false;
-    }
-    if (!videoId || !Number.isFinite(duration) || duration <= 0) return;
-    if (seededForRef.current !== videoId) return;
-
-    const prevTime = lastTimeRef.current;
-    const advance = currentTime - prevTime;
-    lastTimeRef.current = currentTime;
-    if (advance < 0 || advance > SEEK_THRESHOLD_SECONDS) return;
-
-    const crossed = crossedMilestones(
-      (prevTime / duration) * 100,
-      (currentTime / duration) * 100,
-      reportedRef.current,
+    const { state, crossed, shouldReconcile } = computeMilestoneTick(
+      stateRef.current,
+      { videoId, currentTime, duration, milestonesHit },
     );
+    stateRef.current = state;
+
     for (const milestone of crossed) {
-      reportedRef.current.add(milestone);
       reportRef.current.mutate({ videoId, progress: milestone });
     }
 
-    if (reconciledRef.current) return;
-    if (!isVideoWatched(reportedRef.current)) return;
-    reconciledRef.current = true;
+    if (!shouldReconcile) return;
 
     void reconcileCoverage({
       videoId,
-      reported: reportedRef.current,
+      reported: state.reported,
       report: (input) => reportRef.current.mutate(input),
       fetchProgress,
     }).then(() => {
@@ -113,5 +104,5 @@ export function useMilestoneReporter(
         queryKey: dataKeys.videoProgress(videoId),
       });
     });
-  }, [currentTime, duration, videoId, queryClient]);
+  }, [currentTime, duration, videoId, milestonesHit, queryClient]);
 }
