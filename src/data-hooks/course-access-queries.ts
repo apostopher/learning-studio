@@ -1,6 +1,6 @@
+import { getMySubscribedSlugs } from '#/lib/course-functions';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { getCourseResumeTarget } from '#/lib/course-resume-functions';
-import { getMySubscribedSlugs } from '#/lib/course-functions';
 import { dataKeys } from './keys';
 
 /**
