@@ -1,30 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-
-// `src/db/course.ts` imports `@/db/schema`, `#/db` (which relatively imports
-// the real schema.ts), and `@/integrations/upstash/redis` at module scope.
-// The `@/` alias never resolves under Vitest in this project (only `#/`
-// does — see tsconfig.json / vite.config.ts), and `@/integrations/upstash/redis`
-// calls `Redis.fromEnv()` at import time, which throws without live Upstash
-// env vars. `shapeModuleLessons` never touches any of these, so they're
-// stubbed here purely to let the module load; this does not change what the
-// production code imports.
-vi.mock('#/db', () => ({ db: {} }));
-vi.mock('@/db/schema', () => ({
-  coursesTable: {},
-  modulesTable: {},
-  lessonsTable: {},
-  lessonDependenciesTable: {},
-  moduleDependenciesTable: {},
-  orgLessonsTable: {},
-  orgsTable: {},
-  courseSubscriptionsTable: {},
-  videoProgressTable: {},
-}));
-vi.mock('@/integrations/upstash/redis', () => ({
-  cacheWithRedis: (_keyPrefix: string, fn: unknown) => fn,
-}));
-
-import { shapeModuleLessons } from '#/db/course';
+import { describe, expect, it } from 'vitest';
+import { shapeModuleLessons } from '#/lib/course-shaping';
 
 const lesson = (id: number, rank: string, isAvailable = true) => ({
   id,

@@ -1,6 +1,7 @@
 import { and, asc, countDistinct, eq, inArray, sql } from 'drizzle-orm';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
+import { shapeModuleLessons } from '#/lib/course-shaping';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
   courseSubscriptionsTable,
@@ -31,28 +32,6 @@ type ModuleDetails = DBModule & {
   dependsOn: string[];
   lessons: LessonDetails[];
 };
-
-type ShapeableLesson = { id: number; isAvailable: boolean; rank: string };
-type ShapeableModule<L extends ShapeableLesson> = { lessons: L[] };
-
-/**
- * Drop WIP lessons and order the rest by rank, in place, for every module.
- *
- * Previously this filter and sort were computed into a local array that was
- * never assigned back, so every `is_available = false` lesson was served to
- * students and modules came back in join order. Exported so the shaping is
- * testable without a database.
- */
-export function shapeModuleLessons<
-  L extends ShapeableLesson,
-  M extends ShapeableModule<L>,
->(modules: Iterable<M>): void {
-  for (const mod of modules) {
-    mod.lessons = mod.lessons
-      .filter((lesson) => lesson.isAvailable)
-      .sort((a, b) => Number(a.rank) - Number(b.rank));
-  }
-}
 
 export async function getCourseDetails(slug: string) {
   // 1️⃣ Get course and its modules in a single query
