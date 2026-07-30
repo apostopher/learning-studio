@@ -37,11 +37,12 @@ export const LessonLocked = ({
         >
           {lock.blockedBy.lessonName}
         </a>{' '}
-        to unlock this lesson.
+        first to unlock this lesson.
       </p>
     ) : (
       <p className="text-sm text-secondary">
-        Finish the {lock.blockedBy.moduleName} module to unlock this lesson.
+        Finish the {lock.blockedBy.moduleName} module first to unlock this
+        lesson.
       </p>
     )}
   </section>

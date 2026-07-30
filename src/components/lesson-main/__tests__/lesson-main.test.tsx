@@ -65,6 +65,37 @@ describe('LessonMain', () => {
     expect(screen.getByRole('status').textContent).toContain('Lesson Two');
   });
 
+  it('renders the lock reason and no player when state.kind is locked', () => {
+    render(
+      <LessonMain
+        state={{
+          kind: 'locked',
+          lessonName: 'Lesson Three',
+          courseSlug: 'course-one',
+          lock: {
+            locked: true,
+            reason: 'lesson',
+            blockedBy: {
+              lessonSlug: 'a',
+              moduleSlug: 'm-1',
+              lessonName: 'Lesson One',
+            },
+          },
+        }}
+      />,
+    );
+    // The player and material slots must never mount for a locked lesson —
+    // a prerequisite gate locks the whole page, not just the material panel.
+    expect(screen.queryByRole('region', { name: 'Video player' })).toBeNull();
+    expect(screen.queryByTestId('lesson-material')).toBeNull();
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain('Lesson Three');
+    expect(status.textContent).toContain('Lesson One');
+    expect(screen.getByRole('link').getAttribute('href')).toBe(
+      '/course/course-one/modules/m-1/lessons/a',
+    );
+  });
+
   it('renders the player when state.kind is ready with fetching video', () => {
     // ready+fetching uses the pure VideoPlayer (no container), so we don't
     // hit the project's vitest hook-resolution issue with VideoPlayerContainer.

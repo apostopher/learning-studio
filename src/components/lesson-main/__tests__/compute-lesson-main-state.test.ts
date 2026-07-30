@@ -191,4 +191,23 @@ describe('computeLessonMainState', () => {
     // The video gate locks material only — the video is how it is satisfied.
     expect(state.kind).toBe('ready');
   });
+
+  it('holds at course-loading while material is still in flight, even once course has resolved', () => {
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: { data: undefined, isLoading: true },
+      onRetryCourse,
+      onRetryVideo,
+    });
+
+    // If this fell through to 'ready' while the material query — the single
+    // signal for a page-level lock — is still unresolved, the player would
+    // render for a lesson that a moment later reports locked: exactly the
+    // flash this task's constraint forbids.
+    expect(state).toEqual({ kind: 'course-loading' });
+  });
 });

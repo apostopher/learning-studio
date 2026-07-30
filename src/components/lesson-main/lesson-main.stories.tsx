@@ -38,6 +38,43 @@ export const NoVideo: Story = {
   },
 };
 
+export const Locked: Story = {
+  args: {
+    state: {
+      kind: 'locked',
+      lessonName: 'Crosswind landings',
+      courseSlug: 'itps-uas-remote',
+      lock: {
+        locked: true,
+        reason: 'lesson',
+        blockedBy: {
+          lessonSlug: 'stabilized-approach',
+          moduleSlug: 'approach-and-landing',
+          lessonName: 'Stabilized approach',
+        },
+      },
+    },
+  },
+};
+
+export const LockedByModule: Story = {
+  args: {
+    state: {
+      kind: 'locked',
+      lessonName: 'Crosswind landings',
+      courseSlug: 'itps-uas-remote',
+      lock: {
+        locked: true,
+        reason: 'module',
+        blockedBy: {
+          moduleSlug: 'approach-and-landing',
+          moduleName: 'Approach and landing',
+        },
+      },
+    },
+  },
+};
+
 export const ReadyFetching: Story = {
   args: {
     state: {

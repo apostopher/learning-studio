@@ -58,7 +58,20 @@ export const computeLessonMainState = ({
   onRetryCourse,
   onRetryVideo,
 }: ComputeArgs): LessonMainState => {
-  if (course.isLoading) return { kind: 'course-loading' };
+  // Hold at the loading state until BOTH course and material have resolved.
+  // Reusing 'course-loading' rather than adding a state, since the skeleton
+  // it renders is generic. This deliberately delays the player until the
+  // slower of two parallel queries settles — an unlocked lesson can show the
+  // skeleton marginally longer than before. That is the accepted tradeoff:
+  // a `lesson`/`module` reason must prevent the player from rendering at
+  // all, not merely hide it after a transient render, and both queries start
+  // on mount and are usually cache-warm (courseDetails: 48h staleTime;
+  // material: 1h once unlocked), so the added wait is small. Do not "fix"
+  // this by dropping the material.isLoading check — that reintroduces the
+  // loading-race flash this exists to prevent.
+  if (course.isLoading || material?.isLoading) {
+    return { kind: 'course-loading' };
+  }
   if (course.isError) {
     return {
       kind: 'course-error',
