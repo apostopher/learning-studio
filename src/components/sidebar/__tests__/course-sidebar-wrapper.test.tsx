@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
+  RouterProvider,
 } from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { atom, Provider, createStore } from 'jotai';
 import type { Atom } from 'jotai';
-import { describe, expect, it, vi } from 'vitest';
+import { atom, createStore, Provider } from 'jotai';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type DetailsResult = {
   data: unknown;
@@ -26,11 +26,19 @@ const detailsAtom = atom<DetailsResult>({
 
 vi.mock('../../../hooks/data/use-course-details', () => ({
   useCourseDetails: vi.fn(),
-  courseDetailsAtomFamily: (() => detailsAtom) as (slug: string) => Atom<DetailsResult>,
+  courseDetailsAtomFamily: (() => detailsAtom) as (
+    slug: string,
+  ) => Atom<DetailsResult>,
 }));
 
+// A vi.fn() (not a static object) so individual tests can stand up a
+// per-user progress payload and prove the wrapper actually threads it into
+// the rendered rows, not just into unread state.
+const progressMock = vi.fn<() => { data: unknown }>(() => ({
+  data: undefined,
+}));
 vi.mock('../../../data-hooks/use-course-progress-summary', () => ({
-  useCourseProgressSummary: () => ({ data: undefined }),
+  useCourseProgressSummary: () => progressMock(),
 }));
 
 import { CourseSidebarWrapper } from '../course-sidebar-wrapper';
@@ -53,6 +61,57 @@ const fakeCourse = {
       lessons: [
         { slug: 'yaw', name: 'Yaw', videoId: null },
         { slug: 'roll', name: 'Roll', videoId: null },
+      ],
+    },
+  ],
+};
+
+const gatedCourse = {
+  id: 1,
+  slug: '3d-airmanship',
+  name: '3D Airmanship',
+  modules: [
+    {
+      id: 1,
+      slug: 'fundamentals',
+      name: 'Fundamentals',
+      dependsOn: [],
+      lessons: [
+        {
+          id: 1,
+          slug: 'pitch',
+          name: 'Pitch',
+          videoId: 'v-pitch',
+          isAvailable: true,
+          needsVideoWatch: true,
+          dependsOn: [],
+        },
+      ],
+    },
+    {
+      id: 2,
+      slug: 'intermediate',
+      name: 'Intermediate',
+      dependsOn: [],
+      lessons: [
+        {
+          id: 2,
+          slug: 'yaw',
+          name: 'Yaw',
+          videoId: 'v-yaw',
+          isAvailable: true,
+          needsVideoWatch: true,
+          dependsOn: [],
+        },
+        {
+          id: 3,
+          slug: 'roll',
+          name: 'Roll',
+          videoId: 'v-roll',
+          isAvailable: true,
+          needsVideoWatch: true,
+          dependsOn: [{ lessonSlug: 'yaw', moduleSlug: 'intermediate' }],
+        },
       ],
     },
   ],
@@ -89,6 +148,10 @@ async function renderAt(path: string, details: DetailsResult) {
 }
 
 describe('CourseSidebarWrapper', () => {
+  beforeEach(() => {
+    progressMock.mockReturnValue({ data: undefined });
+  });
+
   it('renders the skeleton while loading', async () => {
     const { container } = await renderAt('/', {
       data: undefined,
@@ -131,5 +194,72 @@ describe('CourseSidebarWrapper', () => {
       const yawLink = screen.getByRole('link', { name: /Yaw/ });
       expect(yawLink.getAttribute('aria-current')).toBe('page');
     });
+  });
+
+  it('shows a visible lock reason on a row whose prerequisite is unwatched, computed from the course payload and progress summary already fetched', async () => {
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [
+          { lessonId: 2, watched: false },
+          { lessonId: 3, watched: false },
+        ],
+        modules: [],
+      },
+    });
+    await renderAt('/', {
+      data: gatedCourse,
+      isLoading: false,
+      isError: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
+    await waitFor(() => {
+      expect(
+        screen
+          .queryAllByRole('link')
+          .some((a) => a.getAttribute('href')?.includes('/lessons/roll')),
+      ).toBe(true);
+    });
+    // Yaw's row carries no lock text of its own; Roll's does — identify each
+    // by its href rather than by accessible name, since Roll's own row text
+    // ("Finish Yaw first") would otherwise make a name-based query for "Yaw"
+    // ambiguous between the two rows.
+    const links = screen.getAllByRole('link');
+    const yawLink = links.find((a) =>
+      a.getAttribute('href')?.includes('/lessons/yaw'),
+    );
+    const rollLink = links.find((a) =>
+      a.getAttribute('href')?.includes('/lessons/roll'),
+    );
+    expect(yawLink?.textContent).not.toContain('Finish');
+    expect(rollLink?.textContent).toContain('Finish Yaw first');
+  });
+
+  it('opens the row once its prerequisite is watched', async () => {
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [
+          { lessonId: 2, watched: true },
+          { lessonId: 3, watched: false },
+        ],
+        modules: [],
+      },
+    });
+    await renderAt('/', {
+      data: gatedCourse,
+      isLoading: false,
+      isError: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
+    await waitFor(() => {
+      expect(
+        screen
+          .queryAllByRole('link')
+          .some((a) => a.getAttribute('href')?.includes('/lessons/roll')),
+      ).toBe(true);
+    });
+    const rollLink = screen
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href')?.includes('/lessons/roll'));
+    expect(rollLink?.textContent).not.toContain('Finish');
   });
 });

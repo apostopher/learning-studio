@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
+  RouterProvider,
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +47,7 @@ describe('LessonList', () => {
         moduleSlug="fundamentals"
         lessons={lessons}
         lessonPercents={{}}
+        lessonLocks={{}}
         activeLessonSlug={null}
       />,
     );
@@ -64,6 +65,7 @@ describe('LessonList', () => {
         moduleSlug="fundamentals"
         lessons={lessons}
         lessonPercents={{}}
+        lessonLocks={{}}
         activeLessonSlug="b"
       />,
     );
@@ -71,5 +73,31 @@ describe('LessonList', () => {
     expect(links[0].getAttribute('aria-current')).toBeNull();
     expect(links[1].getAttribute('aria-current')).toBe('page');
     expect(links[2].getAttribute('aria-current')).toBeNull();
+  });
+
+  it("passes each lesson's lock from lessonLocks down to its LessonLink", async () => {
+    await renderInRouter(
+      <LessonList
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lessons={lessons}
+        lessonPercents={{}}
+        lessonLocks={{
+          b: {
+            kind: 'lesson-locked',
+            lessonSlug: 'a',
+            moduleSlug: 'fundamentals',
+            lessonName: 'Lesson A',
+          },
+        }}
+        activeLessonSlug={null}
+      />,
+    );
+    const links = screen.getAllByRole('link');
+    const [openLink, lockedLink] = links;
+    expect(openLink.textContent).toContain('Lesson A');
+    expect(openLink.textContent).not.toContain('Finish');
+    expect(lockedLink.textContent).toContain('Lesson B');
+    expect(lockedLink.textContent).toContain('Finish Lesson A first');
   });
 });

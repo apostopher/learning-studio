@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { Accordion } from '@base-ui/react/accordion';
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
+  RouterProvider,
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -37,6 +37,7 @@ async function renderInside(rank: number, activeLessonSlug: string | null) {
           activeLessonSlug={activeLessonSlug}
           modulePercent={0}
           lessonPercents={{}}
+          lessonLocks={{}}
         />
       </Accordion.Root>
     ),

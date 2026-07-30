@@ -1,5 +1,7 @@
 import { Link } from '@tanstack/react-router';
+import type { LessonLock } from '#/lib/lesson-gating';
 import { CircularProgress } from '../ui/circular-progress';
+import { LessonLockIcon } from './lesson-lock-icon';
 
 type LessonLike = { slug: string; name: string; videoId: string | null };
 
@@ -10,7 +12,22 @@ type LessonLinkProps = {
   rank: number;
   isActive: boolean;
   progressPercent: number;
+  /** Absent or `{ kind: 'open' }` renders the row with no lock affordance. */
+  lock?: LessonLock;
 };
+
+/**
+ * The reason a locked row states, as a full sentence — never "Locked". Governs
+ * both the icon's accessible name and the row's visible caption, so the
+ * explanation survives on touch and for screen readers, not just on hover.
+ */
+function lockReason(lock: LessonLock): string | null {
+  if (lock.kind === 'lesson-locked') return `Finish ${lock.lessonName} first`;
+  if (lock.kind === 'module-locked') {
+    return `Finish the ${lock.moduleName} module first`;
+  }
+  return null;
+}
 
 export const LessonLink = ({
   courseSlug,
@@ -19,10 +36,13 @@ export const LessonLink = ({
   rank,
   isActive,
   progressPercent,
+  lock,
 }: LessonLinkProps) => {
+  const reason = lock ? lockReason(lock) : null;
+
   const classes = [
     'sidebar-focus-ring',
-    'flex items-baseline gap-2',
+    'flex items-center gap-2',
     'ps-sidebar-lesson-indent pe-sidebar-row-inline py-sidebar-row-block',
     'text-sm',
     'rounded-sidebar-row',
@@ -44,7 +64,13 @@ export const LessonLink = ({
       >
         {String(rank).padStart(2, '0')}
       </span>
-      <span className="min-w-0 flex-1 break-words">{lesson.name}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="break-words">{lesson.name}</span>
+        {reason ? (
+          <span className="text-xs text-tertiary">{reason}</span>
+        ) : null}
+      </span>
+      {reason ? <LessonLockIcon reason={reason} /> : null}
       <CircularProgress
         value={progressPercent}
         size={20}

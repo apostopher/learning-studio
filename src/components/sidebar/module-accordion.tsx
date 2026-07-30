@@ -1,5 +1,6 @@
 import { Accordion } from '@base-ui/react/accordion';
 import { MotionConfig } from 'motion/react';
+import type { LessonLock } from '#/lib/lesson-gating';
 import { ModuleItem } from './module-item';
 
 type LessonLike = { slug: string; name: string; videoId: string | null };
@@ -18,6 +19,7 @@ type ModuleAccordionProps = {
   activeLessonSlug: string | null;
   lessonPercents: Record<string, number>;
   modulePercents: Record<number, number>;
+  lessonLocks: Record<string, LessonLock>;
 };
 
 export const ModuleAccordion = ({
@@ -28,6 +30,7 @@ export const ModuleAccordion = ({
   activeLessonSlug,
   lessonPercents,
   modulePercents,
+  lessonLocks,
 }: ModuleAccordionProps) => (
   <MotionConfig
     reducedMotion="user"
@@ -52,6 +55,7 @@ export const ModuleAccordion = ({
           activeLessonSlug={activeLessonSlug}
           modulePercent={modulePercents[module.id] ?? 0}
           lessonPercents={lessonPercents}
+          lessonLocks={lessonLocks}
         />
       ))}
     </Accordion.Root>

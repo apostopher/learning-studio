@@ -2,6 +2,7 @@ import { Accordion } from '@base-ui/react/accordion';
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { inlineDirSign } from '#/lib/inline-direction';
+import type { LessonLock } from '#/lib/lesson-gating';
 import { CircularProgress } from '../ui/circular-progress';
 import { LessonList } from './lesson-list';
 
@@ -21,6 +22,7 @@ type ModuleItemProps = {
   activeLessonSlug: string | null;
   modulePercent: number;
   lessonPercents: Record<string, number>;
+  lessonLocks: Record<string, LessonLock>;
 };
 
 const TRIGGER_CLASSES = [
@@ -56,6 +58,7 @@ export const ModuleItem = ({
   activeLessonSlug,
   modulePercent,
   lessonPercents,
+  lessonLocks,
 }: ModuleItemProps) => (
   <Accordion.Item value={module.slug} className="flex flex-col">
     <Accordion.Header>
@@ -100,6 +103,7 @@ export const ModuleItem = ({
                 lessons={module.lessons}
                 activeLessonSlug={activeLessonSlug}
                 lessonPercents={lessonPercents}
+                lessonLocks={lessonLocks}
               />
             </motion.div>
           </motion.div>

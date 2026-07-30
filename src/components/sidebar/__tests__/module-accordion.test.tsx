@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
+  RouterProvider,
 } from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,7 @@ async function renderIn(
         activeLessonSlug={null}
         lessonPercents={{}}
         modulePercents={{}}
+        lessonLocks={{}}
       />
     ),
   });

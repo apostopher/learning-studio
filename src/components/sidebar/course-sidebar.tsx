@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import type { LessonLock } from '#/lib/lesson-gating';
 import { readSidebarMotionTokens } from '../../lib/sidebar-motion';
 import { CourseSidebarHeader } from './course-sidebar-header';
 import { ModuleAccordion } from './module-accordion';
@@ -26,6 +27,7 @@ type CourseSidebarProps = {
   lessonPercents?: Record<string, number>;
   modulePercents?: Record<number, number>;
   coursePercent?: number;
+  lessonLocks?: Record<string, LessonLock>;
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -43,6 +45,7 @@ export const CourseSidebar = ({
   lessonPercents,
   modulePercents,
   coursePercent,
+  lessonLocks,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -99,6 +102,7 @@ export const CourseSidebar = ({
               activeLessonSlug={activeLessonSlug}
               lessonPercents={lessonPercents ?? {}}
               modulePercents={modulePercents ?? {}}
+              lessonLocks={lessonLocks ?? {}}
             />
           </motion.div>
         )}

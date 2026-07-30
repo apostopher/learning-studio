@@ -1,10 +1,11 @@
-import { useParams } from "@tanstack/react-router";
-import { useAtom, useAtomValue } from "jotai";
-import { useMemo } from "react";
-import { useCourseProgressSummary } from "#/data-hooks/use-course-progress-summary";
-import { courseDetailsAtomFamily } from "#/hooks/data/use-course-details";
-import { openModuleSlugAtom } from "../../atoms/sidebar";
-import { CourseSidebar } from "./course-sidebar";
+import { useParams } from '@tanstack/react-router';
+import { useAtom, useAtomValue } from 'jotai';
+import { useMemo } from 'react';
+import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
+import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
+import { openModuleSlugAtom } from '../../atoms/sidebar';
+import { computeLessonLocks } from './compute-lesson-locks';
+import { CourseSidebar } from './course-sidebar';
 
 type LessonLike = { slug: string; name: string; videoId: string | null };
 type ModuleLike = {
@@ -38,21 +39,32 @@ export const CourseSidebarWrapper = ({
       for (const lesson of data.lessons) {
         if (lesson.videoId) lessonPercents[lesson.videoId] = lesson.percent;
       }
-      for (const mod of data.modules) modulePercents[mod.moduleId] = mod.percent;
+      for (const mod of data.modules)
+        modulePercents[mod.moduleId] = mod.percent;
     }
     return { lessonPercents, modulePercents };
   }, [progressQuery.data]);
 
+  // Computed client-side from the two queries above — never written back to
+  // getCourseDetailsWithCache, whose Redis entry is shared across every
+  // student. Resolves to {} until both queries have data, so a half-loaded
+  // sidebar never shows a lock nobody can yet explain.
+  const lessonLocks = useMemo(
+    () =>
+      computeLessonLocks(detailsQuery.data ?? undefined, progressQuery.data),
+    [detailsQuery.data, progressQuery.data],
+  );
+
   const derived = useMemo(() => {
-    if (detailsQuery.isLoading) return { status: "loading" as const };
+    if (detailsQuery.isLoading) return { status: 'loading' as const };
     if (detailsQuery.isError || detailsQuery.data == null)
-      return { status: "error" as const };
+      return { status: 'error' as const };
     const data = detailsQuery.data;
     const modules = data.modules as unknown as readonly ModuleLike[];
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((sum, m) => sum + m.lessons.length, 0);
     return {
-      status: "ready" as const,
+      status: 'ready' as const,
       title: data.name,
       moduleCount,
       lessonCount,
@@ -60,7 +72,7 @@ export const CourseSidebarWrapper = ({
     };
   }, [detailsQuery.data, detailsQuery.isError, detailsQuery.isLoading]);
 
-  if (derived.status === "loading" || derived.status === "error") {
+  if (derived.status === 'loading' || derived.status === 'error') {
     return (
       <CourseSidebar
         courseSlug={courseSlug}
@@ -86,6 +98,7 @@ export const CourseSidebarWrapper = ({
       lessonPercents={lessonPercents}
       modulePercents={modulePercents}
       coursePercent={progressQuery.data?.percent ?? 0}
+      lessonLocks={lessonLocks}
     />
   );
 };

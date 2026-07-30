@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
   Outlet,
+  RouterProvider,
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -30,11 +30,12 @@ async function renderInRouter(ui: React.ReactNode, initialPath = '/') {
     routeTree,
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
-  render(<RouterProvider router={router} />);
+  const result = render(<RouterProvider router={router} />);
   // Wait for router to complete initial routing
   await waitFor(() => {
     expect(router.state.isLoading).toBe(false);
   });
+  return result;
 }
 
 const lesson = {
@@ -92,5 +93,79 @@ describe('LessonLink', () => {
     );
     const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.className).toContain('sidebar-focus-ring');
+  });
+
+  it('renders no lock affordance when lock is absent', async () => {
+    const { container } = await renderInRouter(
+      <LessonLink
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive={false}
+        progressPercent={0}
+      />,
+    );
+    expect(container.querySelector('[role="img"]')).toBeNull();
+  });
+
+  it('renders no lock affordance when lock is open', async () => {
+    const { container } = await renderInRouter(
+      <LessonLink
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive={false}
+        progressPercent={0}
+        lock={{ kind: 'open' }}
+      />,
+    );
+    expect(container.querySelector('[role="img"]')).toBeNull();
+  });
+
+  it('states the reason as visible text, not just an icon, for a lesson-locked row', async () => {
+    await renderInRouter(
+      <LessonLink
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive={false}
+        progressPercent={0}
+        lock={{
+          kind: 'lesson-locked',
+          lessonSlug: 'intro',
+          moduleSlug: 'fundamentals',
+          lessonName: 'Intro',
+        }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
+    // Visible on the row, not hidden behind a hover-only title.
+    expect(link.textContent).toContain('Finish Intro first');
+    const icon = link.querySelector('[role="img"]');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('aria-label')).toBe('Finish Intro first');
+  });
+
+  it('states the reason for a module-locked row', async () => {
+    await renderInRouter(
+      <LessonLink
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lesson={lesson}
+        rank={1}
+        isActive={false}
+        progressPercent={0}
+        lock={{
+          kind: 'module-locked',
+          moduleSlug: 'intro',
+          moduleName: 'Intro',
+        }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /Pitch and roll/ });
+    expect(link.textContent).toContain('Finish the Intro module first');
   });
 });

@@ -1,3 +1,4 @@
+import type { LessonLock } from '#/lib/lesson-gating';
 import { LessonLink } from './lesson-link';
 
 type LessonLike = { slug: string; name: string; videoId: string | null };
@@ -8,6 +9,7 @@ type LessonListProps = {
   lessons: readonly LessonLike[];
   activeLessonSlug: string | null;
   lessonPercents: Record<string, number>;
+  lessonLocks: Record<string, LessonLock>;
 };
 
 export const LessonList = ({
@@ -16,6 +18,7 @@ export const LessonList = ({
   lessons,
   activeLessonSlug,
   lessonPercents,
+  lessonLocks,
 }: LessonListProps) => (
   <ul className="flex flex-col gap-sidebar-row-gap py-sidebar-row-block">
     {lessons.map((lesson, index) => (
@@ -29,6 +32,7 @@ export const LessonList = ({
           progressPercent={
             (lesson.videoId && lessonPercents[lesson.videoId]) || 0
           }
+          lock={lessonLocks[lesson.slug]}
         />
       </li>
     ))}
