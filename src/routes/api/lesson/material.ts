@@ -1,8 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { getLessonMaterial } from '#/db/lesson';
+import { getLessonMaterial, type LessonMaterial } from '#/db/lesson';
 import { auth } from '#/lib/auth';
-import { lockedResponse } from '#/lib/lesson-gating';
+import {
+  type LessonMaterialResponse,
+  lockedResponse,
+} from '#/lib/lesson-gating';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+
+/**
+ * The exact union the four UI surfaces switch on. Every success body is
+ * assigned to this type before serialising, so a drift between what the route
+ * emits and what `lessonMaterialAtomFamily` claims to receive is a tsc error
+ * rather than a runtime surprise in a component.
+ */
+type MaterialPayload = LessonMaterialResponse<NonNullable<LessonMaterial>>;
 
 /**
  * A lesson's material for the learner, gated.
@@ -41,7 +52,10 @@ export async function getLessonMaterialHandler(
       return new Response('Forbidden', { status: 403 });
     }
 
-    const locked = lockedResponse(gate.lessonLock, gate.materialLock);
+    const locked: MaterialPayload | null = lockedResponse(
+      gate.lessonLock,
+      gate.materialLock,
+    );
     if (locked) return Response.json(locked);
 
     const material = await getLessonMaterial(lessonSlug);
@@ -51,11 +65,12 @@ export async function getLessonMaterialHandler(
         { status: 404 },
       );
     }
-    return Response.json({
+    const payload: MaterialPayload = {
       locked: false,
       adminBypass: gate.isAdmin,
       material,
-    });
+    };
+    return Response.json(payload);
   } catch (error) {
     // Deliberately a 500, never a lock: a gate that fails closed would tell a
     // student to rewatch a video they already finished, with no way out.

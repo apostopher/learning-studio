@@ -53,13 +53,19 @@ import {
   getCourseContentForAgent,
 } from '#/db/course-content';
 
-const row = (lessonSlug: string, text: string, lessonId = 1) => ({
+const row = (
+  lessonSlug: string,
+  text: string,
+  lessonId = 1,
+  isAvailable = true,
+) => ({
   lessonId,
   lessonSlug,
   lessonName: lessonSlug,
   moduleId: 1,
   moduleName: 'M',
   courseName: 'C',
+  isAvailable,
   text,
   proTips: 'tips',
 });
@@ -112,11 +118,6 @@ describe('filterGatedLessons', () => {
       true,
     );
     expect(kept).toHaveLength(2);
-  });
-
-  it('keeps everything when no user context is available', () => {
-    const kept = filterGatedLessons([row('a', 'A body')], course, null, false);
-    expect(kept).toHaveLength(1);
   });
 });
 
@@ -202,6 +203,64 @@ describe('getCourseContentForAgent subscription gate', () => {
     });
 
     expect(html).toContain('B body');
+  });
+
+  // The gate predicate answers "unknown lesson -> open" by contract, and
+  // `getCourseDetailsWithCache` no longer carries `is_available = false`
+  // lessons at all (shapeModuleLessons strips them), so every WIP lesson is
+  // invisible to `evaluateLessonLock`/`evaluateMaterialLock` and sails through
+  // both. This function's own SELECT has to exclude them, or all 23 draft
+  // lessons' text/proTips land in the model's context. Fixtured with the WIP
+  // lesson ABSENT from the details payload, because that is exactly what the
+  // real cached payload looks like.
+  it('drops a WIP (is_available = false) lesson even though its gates read as open', async () => {
+    dbState.rows = [
+      row('a', 'A body', 10, true),
+      row('wip', 'WIP body', 11, false),
+    ];
+    getUserRoleNames.mockResolvedValue([]);
+    isSubscribedToCourseSlug.mockResolvedValue(true);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'a',
+          name: 'A',
+          isAvailable: true,
+          videoId: null,
+          needsVideoWatch: false,
+          dependsOn: [],
+        },
+      ]),
+    );
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+
+    const html = await getCourseContentForAgent('course-b', { userId: 'u1' });
+
+    expect(html).toContain('A body');
+    expect(html).not.toContain('WIP body');
+  });
+
+  it('withholds WIP lessons from an admin too — the agent corpus is the learner corpus', async () => {
+    // Decision #28 keeps WIP lessons visible in the admin *editor*, which
+    // reads getCourseBoard. The chat is not the editor, and
+    // getCourseDetailsWithCache already hides them from admins as well, so
+    // the corpus stays one thing for everybody.
+    dbState.rows = [
+      row('a', 'A body', 10, true),
+      row('wip', 'WIP body', 11, false),
+    ];
+    getUserRoleNames.mockResolvedValue(['admin']);
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    getCourseDetailsWithCache.mockResolvedValue(detailsFor([]));
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+
+    const html = await getCourseContentForAgent('course-b', {
+      userId: 'admin-1',
+    });
+
+    expect(html).toContain('A body');
+    expect(html).not.toContain('WIP body');
   });
 
   it('leaves a real subscriber unaffected, still applying the per-lesson locks', async () => {

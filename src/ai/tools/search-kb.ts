@@ -28,7 +28,8 @@ export function makeSearchKBTool(opts: {
   writer?: { write: (p: unknown) => void };
   courseSlug?: string;
   courseId?: number;
-  userId?: string;
+  /** Required: `getCourseContentForAgent` gates every lesson against it. */
+  userId: string;
 }) {
   return tool({
     description:

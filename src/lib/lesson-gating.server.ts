@@ -27,7 +27,8 @@ export type LessonGateResult = {
 
 /**
  * Evaluate every gate for one user and one lesson. Returns null when the
- * lesson does not exist, so callers can 404 without a second lookup.
+ * lesson does not exist — or is `is_available = false`, which on the learner
+ * path is the same thing — so callers can 404/403 without a second lookup.
  *
  * Admins bypass both gates AND the subscription check: they author this
  * content and should not sit through their own videos to proofread it. The
@@ -41,8 +42,24 @@ export async function evaluateLessonGate({
   userId: string;
   lessonSlug: string;
 }): Promise<LessonGateResult | null> {
-  const course = await getCourseSlugForLesson(lessonSlug);
-  if (!course) return null;
+  const lesson = await getCourseSlugForLesson(lessonSlug);
+  if (!lesson) return null;
+
+  // A WIP lesson is not servable to anyone on the learner path, admins
+  // included. This cannot be left to the predicate: `getCourseDetails` strips
+  // unavailable lessons, so `evaluateLessonLock` cannot locate them and
+  // answers "open" by contract (see lesson-gating.ts) — which means every
+  // gate passes and a subscriber who knows a draft slug gets its full
+  // material, and /api/lesson/video hands out its pre-signed download URL.
+  // Admins are not exempted because the same stripped payload already makes
+  // the lesson page render not-found for them; a servable material endpoint
+  // behind a not-found page would just be an inconsistency.
+  if (!lesson.isAvailable) return null;
+
+  // Deliberately re-projected rather than spread, so `isAvailable` — consumed
+  // entirely by the branch above — cannot ride along into LessonGateResult as
+  // a field with no reader.
+  const course = { courseSlug: lesson.courseSlug, courseId: lesson.courseId };
 
   const [roles, details, progress] = await Promise.all([
     getUserRoleNames(userId),

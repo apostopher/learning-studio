@@ -30,17 +30,20 @@ type GatedRow = { lessonSlug: string };
  *
  * The chat widget is mounted app-wide and its knowledge base is assembled from
  * lesson_material, so without this a student locked out of a lesson can simply
- * ask the assistant for its key points. A null `watched` set means "no user
- * context" (an unauthenticated or system caller) and keeps everything —
- * callers that need gating must pass a set.
+ * ask the assistant for its key points.
+ *
+ * `watchedLessonSlugsSet` is required, not nullable: the previous "null means
+ * no user context, keep everything" escape had no production call site and
+ * existed only as a fail-open branch a future caller could stumble into.
+ * Admin is the one and only bypass, and it is explicit.
  */
 export function filterGatedLessons<T extends GatedRow>(
   rows: T[],
   course: GateCourse,
-  watchedLessonSlugsSet: ReadonlySet<string> | null,
+  watchedLessonSlugsSet: ReadonlySet<string>,
   isAdmin: boolean,
 ): T[] {
-  if (isAdmin || watchedLessonSlugsSet === null) return rows;
+  if (isAdmin) return rows;
   return rows.filter((r) => {
     const lessonLock = evaluateLessonLock(
       course,
@@ -62,23 +65,35 @@ export function filterGatedLessons<T extends GatedRow>(
  * lessons.slug = lesson_material.lesson_slug), ordered by rank, and hands the
  * assembled shape to the pure builder in src/lib/course-content.ts.
  *
- * When `opts.userId` is supplied, two things happen before any content is
- * assembled: (1) a non-admin who is not subscribed to `slug` gets nothing at
- * all — the same empty result as when no course is in context — because
- * `evaluateLessonLock`/`evaluateMaterialLock` alone only prove a lesson's
- * prerequisites are satisfied, never that the caller is allowed in the course
- * to begin with (`getCourseProgress` happily returns an all-unwatched result
- * for a user with no subscription, so skipping this check would let a
- * subscriber of Course A ask about a lesson in Course B that merely has no
- * unmet prerequisites and no video). (2) rows are then run through
- * `filterGatedLessons` so a locked lesson's text/proTips never reach the
- * caller either. Without a `userId` — an unauthenticated or system caller —
- * both checks are skipped and every lesson's material is returned, same as
- * before this filter existed.
+ * Three filters run before any content is assembled, in this order:
+ *
+ * 1. **WIP lessons** (`is_available = false`) are dropped outright. The gate
+ *    predicate cannot do this job: `getCourseDetailsWithCache` no longer
+ *    carries unavailable lessons at all (`shapeModuleLessons` strips them), so
+ *    `evaluateLessonLock` cannot locate them and answers "open" by contract —
+ *    every draft lesson would sail through filter 3 straight into the model's
+ *    context. Applied for admins too: the cached course payload hides WIP
+ *    lessons from them as well, and the admin *editor* — the surface decision
+ *    #28 keeps unfiltered — reads `getCourseBoard`, not this function.
+ * 2. **Subscription.** A non-admin who is not subscribed to `slug` gets
+ *    nothing at all — the same empty result as when no course is in context —
+ *    because `evaluateLessonLock`/`evaluateMaterialLock` alone only prove a
+ *    lesson's prerequisites are satisfied, never that the caller is allowed in
+ *    the course to begin with (`getCourseProgress` happily returns an
+ *    all-unwatched result for a user with no subscription, so skipping this
+ *    check would let a subscriber of Course A ask about a lesson in Course B
+ *    that merely has no unmet prerequisites and no video).
+ * 3. **Per-lesson locks**, via `filterGatedLessons`, so a locked lesson's
+ *    text/proTips never reach the caller either.
+ *
+ * `userId` is required. It used to be optional, and calling without it skipped
+ * filters 2 and 3 entirely — full course content for anyone who called it the
+ * short way. The sole caller always had a session, so nothing needed that
+ * escape, and now no future caller can reach it by omission.
  */
 export async function getCourseContentForAgent(
   slug: string,
-  opts?: { userId?: string },
+  { userId }: { userId: string },
 ): Promise<string> {
   const rows = await db
     .select({
@@ -88,6 +103,7 @@ export async function getCourseContentForAgent(
       lessonId: lessonsTable.id,
       lessonSlug: lessonsTable.slug,
       lessonName: lessonsTable.name,
+      isAvailable: lessonsTable.isAvailable,
       text: lessonMaterialTable.text,
       proTips: lessonMaterialTable.proTips,
     })
@@ -103,67 +119,71 @@ export async function getCourseContentForAgent(
 
   if (rows.length === 0) return '';
 
-  let gatedRows = rows;
-  if (opts?.userId) {
-    const userId = opts.userId;
-    const [roles, subscribed] = await Promise.all([
-      getUserRoleNames(userId),
-      isSubscribedToCourseSlug(userId, slug),
-    ]);
-    const isAdmin = roles.includes(ADMIN_ROLE);
+  // Filter 1: WIP lessons, before any gate runs. `isAvailable` is notNull on
+  // lessonsTable, so it is only ever null for a module-only row (no lesson
+  // matched by the left join) — those carry no lesson material and are kept so
+  // an empty module still renders its heading, exactly as before.
+  const availableRows = rows.filter(
+    (r) => r.lessonId === null || r.isAvailable === true,
+  );
 
-    // Subscription is checked BEFORE any lock is evaluated, and before any
-    // course content is assembled: the lock predicates only prove a lesson's
-    // prerequisites are satisfied, they say nothing about whether this user
-    // is allowed in the course at all. `getCourseProgress` does not error for
-    // a non-enrolled user — it left-joins by userId and simply returns an
-    // all-unwatched result — so without this check, a lesson with no unmet
-    // module/lesson prerequisites and no video would pass both locks for a
-    // subscriber of an entirely different course. Fail toward NO content,
-    // never partial content: a non-admin, non-subscriber gets nothing from
-    // this course's corpus, same as when no courseSlug is in context at all.
-    if (!isAdmin && !subscribed) {
-      return '';
-    }
+  const [roles, subscribed] = await Promise.all([
+    getUserRoleNames(userId),
+    isSubscribedToCourseSlug(userId, slug),
+  ]);
+  const isAdmin = roles.includes(ADMIN_ROLE);
 
-    const [details, progress] = await Promise.all([
-      getCourseDetailsWithCache(slug),
-      getCourseProgress({ userId, slug }),
-    ]);
-
-    // A gate that cannot be evaluated must never fail open — mirrors
-    // evaluateLessonGate's server-side rule (src/lib/lesson-gating.server.ts):
-    // a missing cached payload means something is genuinely wrong (e.g. a
-    // Redis outage), and silently serving unfiltered material would leak
-    // locked lessons to the agent exactly the way this filter exists to stop.
-    if (!details) {
-      throw new Error(`Course payload unavailable for ${slug}`);
-    }
-
-    const gateCourse = toGateCourse(details);
-    const watched = watchedLessonSlugs(details, progress);
-
-    // Gate on the distinct lesson slugs rather than the raw (possibly
-    // duplicated, possibly lesson-less) rows, then filter the original rows
-    // by the resulting allow-list — this keeps `rows`' module/lesson rank
-    // ordering intact and leaves module-only rows (no matched lesson) alone,
-    // since they carry no lesson material to leak.
-    const distinctLessonRows = [
-      ...new Set(
-        rows
-          .map((r) => r.lessonSlug)
-          .filter((slug): slug is string => slug !== null),
-      ),
-    ].map((lessonSlug) => ({ lessonSlug }));
-    const allowedLessonSlugs = new Set(
-      filterGatedLessons(distinctLessonRows, gateCourse, watched, isAdmin).map(
-        (r) => r.lessonSlug,
-      ),
-    );
-    gatedRows = rows.filter(
-      (r) => r.lessonSlug === null || allowedLessonSlugs.has(r.lessonSlug),
-    );
+  // Filter 2: subscription, checked BEFORE any lock is evaluated and before
+  // any course content is assembled. The lock predicates only prove a lesson's
+  // prerequisites are satisfied, they say nothing about whether this user is
+  // allowed in the course at all. `getCourseProgress` does not error for a
+  // non-enrolled user — it left-joins by userId and simply returns an
+  // all-unwatched result — so without this check, a lesson with no unmet
+  // module/lesson prerequisites and no video would pass both locks for a
+  // subscriber of an entirely different course. Fail toward NO content, never
+  // partial content: a non-admin, non-subscriber gets nothing from this
+  // course's corpus, same as when no courseSlug is in context at all.
+  if (!isAdmin && !subscribed) {
+    return '';
   }
+
+  const [details, progress] = await Promise.all([
+    getCourseDetailsWithCache(slug),
+    getCourseProgress({ userId, slug }),
+  ]);
+
+  // A gate that cannot be evaluated must never fail open — mirrors
+  // evaluateLessonGate's server-side rule (src/lib/lesson-gating.server.ts):
+  // a missing cached payload means something is genuinely wrong (e.g. a
+  // Redis outage), and silently serving unfiltered material would leak
+  // locked lessons to the agent exactly the way this filter exists to stop.
+  if (!details) {
+    throw new Error(`Course payload unavailable for ${slug}`);
+  }
+
+  const gateCourse = toGateCourse(details);
+  const watched = watchedLessonSlugs(details, progress);
+
+  // Filter 3: per-lesson locks. Gate on the distinct lesson slugs rather than
+  // the raw (possibly duplicated, possibly lesson-less) rows, then filter the
+  // rows by the resulting allow-list — this keeps the module/lesson rank
+  // ordering intact and leaves module-only rows alone, since they carry no
+  // lesson material to leak.
+  const distinctLessonRows = [
+    ...new Set(
+      availableRows
+        .map((r) => r.lessonSlug)
+        .filter((lessonSlug): lessonSlug is string => lessonSlug !== null),
+    ),
+  ].map((lessonSlug) => ({ lessonSlug }));
+  const allowedLessonSlugs = new Set(
+    filterGatedLessons(distinctLessonRows, gateCourse, watched, isAdmin).map(
+      (r) => r.lessonSlug,
+    ),
+  );
+  const gatedRows = availableRows.filter(
+    (r) => r.lessonSlug === null || allowedLessonSlugs.has(r.lessonSlug),
+  );
 
   // `rows[0]` (not `gatedRows[0]`) — a user with every lesson locked still
   // gets a course name back, just with no modules underneath it.

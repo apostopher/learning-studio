@@ -78,7 +78,11 @@ const progress = (watchedLessonIds: number[]) => ({
 describe('evaluateLessonGate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getCourseSlugForLesson.mockResolvedValue({ courseSlug: 'c1', courseId: 7 });
+    getCourseSlugForLesson.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      isAvailable: true,
+    });
     getCourseDetailsWithCache.mockResolvedValue(details);
     getCourseProgress.mockResolvedValue(progress([]));
     isSubscribedToCourse.mockResolvedValue(true);
@@ -89,6 +93,37 @@ describe('evaluateLessonGate', () => {
     getCourseSlugForLesson.mockResolvedValue(null);
     expect(
       await evaluateLessonGate({ userId: 'u1', lessonSlug: 'nope' }),
+    ).toBeNull();
+  });
+
+  it('returns null for an is_available = false lesson, so the learner routes 404/403 it', async () => {
+    // WIP means "not ready for students". The predicate can't help here: the
+    // cached course payload no longer contains unavailable lessons at all, so
+    // locate() misses them and every gate reads as OPEN. Without this branch a
+    // subscriber who knows a draft slug gets its full material, and the
+    // /api/lesson/video route serves its pre-signed download URL.
+    getCourseSlugForLesson.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      isAvailable: false,
+    });
+    expect(
+      await evaluateLessonGate({ userId: 'u1', lessonSlug: 'draft' }),
+    ).toBeNull();
+  });
+
+  it('returns null for an unavailable lesson even for an admin', async () => {
+    // Consistent with the rest of the learner path: getCourseDetails strips
+    // WIP lessons for admins too, so the lesson page already renders
+    // not-found for them. The admin bypass covers gates, not existence.
+    getUserRoleNames.mockResolvedValue(['admin']);
+    getCourseSlugForLesson.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      isAvailable: false,
+    });
+    expect(
+      await evaluateLessonGate({ userId: 'u1', lessonSlug: 'draft' }),
     ).toBeNull();
   });
 

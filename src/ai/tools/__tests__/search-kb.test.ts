@@ -84,7 +84,7 @@ describe('makeSearchKBTool', () => {
   // this tool couldn't leak course material back out even if it slipped past
   // the `not.toHaveBeenCalled()` check above.
   it('returns no course content in the context handed to the model when courseSlug is omitted', async () => {
-    const kbTool = makeSearchKBTool({});
+    const kbTool = makeSearchKBTool({ userId: 'user-1' });
     // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
     const result = await kbTool.execute!(
       { query: 'tell me about drones' },

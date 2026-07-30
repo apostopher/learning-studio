@@ -7,12 +7,25 @@ import {
   modulesTable,
 } from '#/db/schema';
 
-/** The course a lesson belongs to, or null when the lesson doesn't exist. */
-export async function getCourseSlugForLesson(
-  lessonSlug: string,
-): Promise<{ courseSlug: string; courseId: number } | null> {
+/**
+ * The course a lesson belongs to, or null when the lesson doesn't exist.
+ *
+ * `isAvailable` comes back rather than being filtered in SQL so the caller
+ * decides what an unavailable (WIP) lesson means — `evaluateLessonGate` treats
+ * it as "does not exist" on the learner path. Filtering here would make the
+ * two cases indistinguishable to anyone debugging a 404.
+ */
+export async function getCourseSlugForLesson(lessonSlug: string): Promise<{
+  courseSlug: string;
+  courseId: number;
+  isAvailable: boolean;
+} | null> {
   const rows = await db
-    .select({ courseSlug: coursesTable.slug, courseId: coursesTable.id })
+    .select({
+      courseSlug: coursesTable.slug,
+      courseId: coursesTable.id,
+      isAvailable: lessonsTable.isAvailable,
+    })
     .from(lessonsTable)
     .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
     .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
