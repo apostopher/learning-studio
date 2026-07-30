@@ -102,3 +102,60 @@ Parked, with what would bring each back:
 
 - **`/api/lesson/video` authorization lookup.** Decision #16 requires a `videoRef → lesson → module → course` lookup that `video.ts:14-19` documents as not existing. It must be built; the shape is unresolved and it also closes that route's known gap. Forced open the moment implementation starts.
 - **Copy for each locked state.** Drafted above; needs your wording pass before shipping, since it's the entire "don't make them guess" surface.
+
+---
+
+## Post-implementation: what shipped, and what is still open
+
+Implemented across 24 commits (`f20bf4d..HEAD`), each task reviewed and each
+finding either fixed or recorded below. Final state: 141 test files / 1008
+tests passing, `tsc --noEmit` clean, no new lint findings, no schema change.
+
+The final whole-branch review found **no Critical findings** and confirmed no
+path delivers a published lesson's material or video to a student who has not
+cleared its gates.
+
+### Still owed: manual browser verification
+
+Cannot be automated; none of it has been done.
+
+1. Press `End` on a real video — confirm no milestones recorded, material stays locked, and the "You skipped ahead" notice appears with a coverage count.
+2. Watch a video through — confirm material unlocks **without a page refresh**.
+3. Ask the chat widget for a locked lesson's key points — confirm it does not have them.
+4. Confirm the 23 `is_available = false` lessons are gone from the learner sidebar but still listed in the admin editor, and that toggling availability still works.
+5. Confirm the coverage notice comes off when you press play after skipping, and returns at the end.
+6. Confirm re-entering an already-finished lesson does not flash the coverage notice over frame zero.
+
+### Open follow-ups, roughly by value
+
+- **`cacheWithRedis` caches `null` for the full TTL** with no `if (result)` guard (`src/integrations/upstash/redis.ts`). Deliberately untouched — changing a shared utility's caching semantics deserves its own consideration. `createCourse` now invalidates unconditionally so the known consequence is closed, but the hazard generalises to any cached function that can return null.
+- **The coverage notice can flash over frame zero** when re-entering a lesson finished earlier in the session, until `loadedmetadata` sets `duration` (`compute-player-overlay.ts`). One-line gate available: `if (!playback.hasPlayedOnce) return 'none'`.
+- **`courseId` is never supplied to `makeSearchKBTool`**, so `searchKB`'s *document* retrieval spans every course. Lesson material IS correctly scoped and gated; this is the admin-uploaded document corpus only, which decision 13 deliberately left ungated. `getCourseIdentityBySlug` already exists and `chatHandler` already runs a `Promise.all`, so the lookup is cheap.
+- **`/api/course/details` has no `try`/`catch`**, unlike its sibling routes, so a role-lookup or subscription-query throw is an unhandled 500 with nothing in the server log. The learner still sees a stated error with retry.
+- **No not-subscribed learner state exists.** A 403 surfaces as a generic course error with retry rather than the state this ledger's failure table describes.
+- **`compute-material-panel-state.test.ts`'s "prefers loading over a stale error"** asserts an input React Query cannot produce, so it protects nothing. The real gap it points at: after clicking Retry on the material error card there is no loading feedback until the refetch settles.
+- **`auth.api.getSession` sits outside the `try`** in the material and video routes — fails closed either way, but escapes the deliberate 500 path.
+- Minor: dead type exports in `src/lib/course-shaping.ts`; no test pins `module-locked` on the video route; the sidebar's `items-center` change is unpinned by any story; `reconcileCoverage` invalidates before its re-reported beacons can land; lesson `dependsOn` is not deduplicated across joined rows; `hit` re-derives "watched milestone" locally in the player container; the material route returns 500 on a gate error while the video route returns 502.
+
+### Test-infrastructure constraint worth fixing separately
+
+react-compiler plus Vitest nulls the React dispatcher, so this codebase cannot
+render its own hook-calling components under test. Four tasks worked around it
+by extracting decisions into pure functions (`milestone-tick.ts`,
+`compute-player-overlay.ts`, `compute-lesson-locks.ts`,
+`compute-material-panel-state.ts`, `buildChatRequestBody`) and testing those.
+That covers the logic but leaves the **wiring** untested — nothing verifies a
+container hands a pure function's answer to the right component. Two of this
+run's defects hid in exactly that seam. Fixing the infrastructure would remove
+a constraint that shaped four tasks' test strategy.
+
+### Process note
+
+Most defects found during implementation originated in this plan's own code
+rather than in the implementations — including a gate that failed open on a
+Redis miss, an effect race that would have silently awarded zero credit for a
+fully-watched video, a subscription bypass in the chat, and an `adminBypass`
+field the plan promised to render and never did. All type-checked, and several
+passed tests the plan also specified. They surfaced because reviewers traced
+stated invariants rather than trusting the diff. A plan's code needs reviewing
+as code.
