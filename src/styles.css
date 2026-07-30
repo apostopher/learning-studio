@@ -1014,3 +1014,38 @@
     pointer-events: none;
   }
 }
+
+/* ---- Navigation feedback -------------------------------------------------
+   TanStack Router's <Link> sets data-transitioning="transitioning" on itself
+   while its own navigation is in flight, and clears it on onResolved. That
+   gives us a per-link pending state with no JS of our own, and it cannot get
+   stuck: a cancelled or redirected navigation clears it too. */
+
+.course-grid a[data-transitioning] {
+  transform: scale(0.98);
+  /* transform is a visual-axis effect, not a flow-relative one, so scale()
+     is correct here rather than a logical property. */
+}
+
+/* Dim the cards the learner did NOT click, so the one they did stands out.
+   :has() scopes this to the moment a navigation is actually in flight. */
+.course-grid:has(a[data-transitioning]) a:not([data-transitioning]) {
+  opacity: 0.6;
+}
+
+.course-grid a {
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the opacity signal, drop the movement — reduced motion means
+     gentler, not none. */
+  .course-grid a {
+    transition: opacity 150ms ease-out;
+  }
+  .course-grid a[data-transitioning] {
+    transform: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { LessonMaterialWrapper } from '#/components/lesson-material';
 import { VideoPlayer } from '#/components/video-player';
@@ -119,17 +120,36 @@ const isVideoInFlight = (state: LessonMainState): boolean =>
   (state.videoState.status === 'fetching' ||
     state.videoState.status === 'rendering');
 
-export const LessonMain = ({ state }: LessonMainProps) => {
-  if (state.kind === 'course-loading') {
-    return <LessonSkeleton />;
-  }
-
-  return (
-    <article
-      className="lesson-main"
-      aria-busy={isVideoInFlight(state) ? true : undefined}
+/**
+ * Crossfade rather than a hard cut on the skeleton→content swap. Opacity only,
+ * and deliberately brief: this fires at the exact moment the learner has
+ * finished waiting, so a slow transition here would spend the time we just
+ * saved. mode="popLayout" lets the incoming content start fading in while the
+ * skeleton leaves, instead of queueing behind it the way mode="wait" would.
+ *
+ * Opacity-only motion is already safe under prefers-reduced-motion (no
+ * movement to suppress), so no reduced-motion branch is needed.
+ */
+export const LessonMain = ({ state }: LessonMainProps) => (
+  <AnimatePresence mode="popLayout" initial={false}>
+    <motion.div
+      key={state.kind}
+      data-lesson-main-phase={state.kind}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      {renderArticleBody(state)}
-    </article>
-  );
-};
+      {state.kind === 'course-loading' ? (
+        <LessonSkeleton />
+      ) : (
+        <article
+          className="lesson-main"
+          aria-busy={isVideoInFlight(state) ? true : undefined}
+        >
+          {renderArticleBody(state)}
+        </article>
+      )}
+    </motion.div>
+  </AnimatePresence>
+);

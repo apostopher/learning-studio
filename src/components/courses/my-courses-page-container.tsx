@@ -25,7 +25,7 @@ export const MyCoursesPageContainer = () => {
             </p>
           </div>
         ) : (
-          <ul className="grid-auto-fit list-none p-0">
+          <ul className="course-grid grid-auto-fit list-none p-0">
             {courses.map((course) => (
               <li key={course.id}>
                 <CourseCard course={course} />
