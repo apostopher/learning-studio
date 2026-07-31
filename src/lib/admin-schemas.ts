@@ -249,7 +249,6 @@ export const lessonPlaybackSchema = z.discriminatedUnion('status', [
   lessonPlaybackPendingSchema,
 ]);
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
-export type LessonPlaybackReady = z.infer<typeof lessonPlaybackReadySchema>;
 
 /** Body of a 502 from the video-playback route — `code` is what the UI branches on. */
 export const playbackErrorSchema = z.object({

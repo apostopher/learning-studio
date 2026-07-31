@@ -3,7 +3,7 @@ import { MotionConfig } from 'motion/react';
 import type { LessonLock } from '#/lib/lesson-gating';
 import { ModuleItem } from './module-item';
 
-type LessonLike = { slug: string; name: string; hasVideo: boolean };
+type LessonLike = { slug: string; name: string };
 type ModuleLike = {
   id: number;
   slug: string;

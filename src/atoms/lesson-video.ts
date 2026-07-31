@@ -8,11 +8,15 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 /**
  * `opts.fresh` maps to the playback route's `fresh=1` query flag, which
  * skips the server's Redis cache READ (still authorized by the same
- * session+gate checks — see `routes/api/lesson/playback.ts`). Exported
- * separately from the atom below so `refetchLessonPlaybackFresh` can reuse
- * it with a different `fresh` value against the SAME query cache entry.
+ * session+gate checks — see `routes/api/lesson/playback.ts`). Factored out
+ * from the atom below so `refetchLessonPlaybackFresh` can reuse it with a
+ * different `fresh` value against the SAME query cache entry, and exported
+ * (rather than just module-private) so tests can exercise this exact fetch —
+ * the one `lessonPlaybackAtomFamily`'s default `queryFn` actually calls —
+ * instead of asserting against a hand-rolled duplicate that could drift from
+ * it silently.
  */
-const fetchLessonPlayback = async (
+export const fetchLessonPlayback = async (
   lessonSlug: string,
   opts?: { fresh?: boolean },
 ): Promise<PlaybackResult> => {

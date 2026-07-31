@@ -20,11 +20,7 @@ import {
   videoProgressTable,
 } from '@/db/schema';
 import { cacheWithRedis } from '@/integrations/upstash/redis';
-import type {
-  CourseLessonDependencies,
-  SubscriptionType,
-  VideoResponse,
-} from '@/types';
+import type { CourseLessonDependencies, SubscriptionType } from '@/types';
 import { db } from '.';
 
 type LessonDetails = DBLesson & {
@@ -38,7 +34,6 @@ type LessonDetails = DBLesson & {
    * so nothing downstream needs to know which video, only whether one exists.
    */
   hasVideo: boolean;
-  videoDetails?: VideoResponse;
   organizations: { id: number; name: string }[];
 };
 type ModuleDetails = DBModule & {
@@ -119,7 +114,6 @@ export async function getCourseDetails(slug: string) {
           lesson.requiredSubscriptions as SubscriptionType[],
         hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
         otherVideoIds: lesson.otherVideoIds || [],
-        videoDetails: undefined, // will be populated later
         dependsOn: [],
         organizations: [],
       });

@@ -96,6 +96,16 @@ export const LessonPlayerContainer = ({
 
   return (
     <VideoPlayerContainer
+      // Forces a genuine remount per lesson. Without this, TanStack Router
+      // reuses this component across param changes (there is no other
+      // identity change here — `playerId` is a fresh `useId()` per mount, not
+      // per lesson), so `VideoPlayerContainer`'s internal refs
+      // (`recoveryAttemptsRef`, `pendingRestoreTimeRef`) survive a lesson
+      // navigation: the automatic-recovery budget leaks across lessons (two
+      // recoveries anywhere in a session exhausts it for every lesson after),
+      // and a pending seek-restore can carry a previous lesson's playhead
+      // into a newly opened one.
+      key={lessonSlug}
       playerId={playerId}
       src={videoState.src}
       kind={videoState.kind}

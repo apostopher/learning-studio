@@ -18,7 +18,7 @@ import { toLearnerCourseDetails } from '#/lib/course-details-shape';
  * could list them. It now requires a session (401) and a subscription to the
  * course (403), with admins bypassing, matching `/api/lesson/material` and
  * `/api/lesson/playback`. Every video-identifying field on each lesson —
- * `videoProvider`, `videoRef`, `otherVideoIds`, `videoDetails` —
+ * `videoProvider`, `videoRef`, `otherVideoIds` —
  * is additionally stripped (`toLearnerCourseDetails`, `#/lib/course-details-shape`)
  * before the response is built. `videoProvider`/`videoRef` matter most: this
  * route has no zod parse on the way out, only a cast, so

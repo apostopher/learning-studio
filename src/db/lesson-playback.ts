@@ -78,24 +78,49 @@ async function resolveLessonPlaybackUncached(
  * expired yet. Still goes through `evaluateLessonGate` upstream in the route
  * handler — this never becomes an unauthenticated way to hammer the
  * provider's API.
+ *
+ * Exposes `.invalidate(lessonSlug)` (see below) so a mutation that changes
+ * what this would resolve to — `setLessonVideo` in `#/db/admin` — can evict
+ * the stale entry instead of leaving learners on a previous video's
+ * still-validly-signed URL for up to the remainder of its TTL.
  */
-export async function getLessonPlayback(
+type LessonPlaybackReader = ((
   lessonSlug: string,
   options?: { skipCache?: boolean },
-): Promise<PlaybackResult | null> {
-  const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
+) => Promise<PlaybackResult | null>) & {
+  invalidate: (lessonSlug: string) => Promise<void>;
+};
 
-  if (!options?.skipCache) {
-    const cached = await redis.get<PlaybackResult>(key);
-    if (cached) return cached;
-  }
+export const getLessonPlayback: LessonPlaybackReader = Object.assign(
+  async (
+    lessonSlug: string,
+    options?: { skipCache?: boolean },
+  ): Promise<PlaybackResult | null> => {
+    const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
 
-  const result = await resolveLessonPlaybackUncached(lessonSlug);
+    if (!options?.skipCache) {
+      const cached = await redis.get<PlaybackResult>(key);
+      if (cached) return cached;
+    }
 
-  if (result?.status === 'ready' && result.expiresInSeconds !== null) {
-    const ex = Math.max(1, result.expiresInSeconds - 30);
-    await redis.set(key, JSON.stringify(result), { ex });
-  }
+    const result = await resolveLessonPlaybackUncached(lessonSlug);
 
-  return result;
-}
+    if (result?.status === 'ready' && result.expiresInSeconds !== null) {
+      const ex = Math.max(1, result.expiresInSeconds - 30);
+      await redis.set(key, JSON.stringify(result), { ex });
+    }
+
+    return result;
+  },
+  {
+    /**
+     * Evict a lesson's cached playback entry. Unconditional — unlike the
+     * read path's TTL-bounded writes, an admin video swap must invalidate
+     * regardless of whether a cache entry currently exists, so callers never
+     * have to reason about whether one does.
+     */
+    invalidate: async (lessonSlug: string): Promise<void> => {
+      await redis.del(`${CACHE_KEY_PREFIX}:${lessonSlug}`);
+    },
+  },
+);

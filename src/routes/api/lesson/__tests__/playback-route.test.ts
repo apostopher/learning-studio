@@ -75,6 +75,22 @@ describe('getLessonPlaybackHandler', () => {
     });
   });
 
+  // Regression guard: a handler that hardcoded the session id or read the
+  // wrong slug from the request would still pass every status-code assertion
+  // above (the gate mock resolves the same way regardless of its input), so
+  // nothing here previously proved the gate was even asked about THIS caller
+  // and THIS lesson. Model: report-video-progress.test.ts's equivalent test.
+  it('passes the session user id and the request lesson slug to the gate — not a hardcoded or mismatched value', async () => {
+    m.getSession.mockResolvedValueOnce({ user: { id: 'u-real' } });
+
+    await getLessonPlaybackHandler(req('lesson-real'));
+
+    expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u-real',
+      lessonSlug: 'lesson-real',
+    });
+  });
+
   it('passes skipCache through only when the caller sends fresh=1, after the same gate checks', async () => {
     const res = await getLessonPlaybackHandler(
       new Request('http://t/api/lesson/playback?lessonSlug=l1&fresh=1'),

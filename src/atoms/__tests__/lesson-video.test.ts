@@ -2,7 +2,10 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '#/hooks/data/keys';
-import { refetchLessonPlaybackFresh } from '../lesson-video';
+import {
+  fetchLessonPlayback,
+  refetchLessonPlaybackFresh,
+} from '../lesson-video';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -39,30 +42,6 @@ describe('refetchLessonPlaybackFresh', () => {
     );
   });
 
-  it('does not send fresh=1 on the plain (non-recovery) fetch path', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => readyBody });
-    vi.stubGlobal('fetch', fetchMock);
-    const queryClient = new QueryClient();
-
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.lessonPlayback('l-1'),
-      // Mirrors lessonPlaybackAtomFamily's own queryFn shape without
-      // rendering the atom (jotai-tanstack-query hooks can't be exercised
-      // under this repo's Vitest setup).
-      queryFn: async () => {
-        const r = await fetch(
-          `/api/lesson/playback?lessonSlug=${encodeURIComponent('l-1')}`,
-        );
-        return r.json();
-      },
-    });
-
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).not.toContain('fresh');
-  });
-
   it('rejects and writes nothing when the route responds non-OK', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
     const queryClient = new QueryClient();
@@ -73,5 +52,39 @@ describe('refetchLessonPlaybackFresh', () => {
     expect(
       queryClient.getQueryData(queryKeys.lessonPlayback('l-1')),
     ).toBeUndefined();
+  });
+});
+
+describe('fetchLessonPlayback', () => {
+  // This is the exact function `lessonPlaybackAtomFamily`'s default `queryFn`
+  // calls (`queryFn: () => fetchLessonPlayback(lessonSlug)`) — jotai-tanstack-
+  // query hooks can't be rendered under this repo's Vitest setup, so calling
+  // this directly, rather than a hand-rolled duplicate of its querystring
+  // logic, is the closest this suite can get to exercising the real atom's
+  // default (non-recovery) fetch path and still catch a regression in it.
+  it('does not send fresh=1 when called with no opts (the plain, non-recovery path)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => readyBody });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchLessonPlayback('l-1');
+
+    expect(result).toEqual(readyBody);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('lessonSlug=l-1');
+    expect(url).not.toContain('fresh');
+  });
+
+  it('sends fresh=1 only when explicitly asked for', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => readyBody });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchLessonPlayback('l-1', { fresh: true });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('fresh=1');
   });
 });

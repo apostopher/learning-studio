@@ -3,7 +3,7 @@ import type { LessonLock } from '#/lib/lesson-gating';
 import { CircularProgress } from '../ui/circular-progress';
 import { LessonLockIcon } from './lesson-lock-icon';
 
-type LessonLike = { slug: string; name: string; hasVideo: boolean };
+type LessonLike = { slug: string; name: string };
 
 type LessonLinkProps = {
   courseSlug: string;

@@ -197,12 +197,13 @@ async function main() {
     // Videos are Synthesia uuids; playback/captions are fetched live from
     // their API.
     //
-    // BOTH `video_id` and `video_ref` are set, because the two halves of the
-    // app read different fields:
-    //   - learner side (sidebar progress, lesson player) reads `videoId`
-    //   - admin editor and `resolveLessonPlayback` read `(videoProvider,
-    //     videoRef)` and ignore `videoId` entirely
-    // Leaving `video_ref` null made `hasVideo` false in
+    // Only `video_provider`/`video_ref` are written to the destination. The
+    // destination schema has already dropped `lessons.video_id` (this
+    // migration retired it in favor of provider-agnostic playback shared
+    // between the admin preview and the learner player), so it is derived
+    // from the SOURCE database's `row.video_id` below and used ONLY to
+    // compute `videoProvider`/`videoRef` — never written back out under its
+    // old name. Leaving `video_ref` null made `hasVideo` false in
     // video-section-container, so every imported lesson showed the empty
     // "paste a URL" state despite having a video.
     //
@@ -218,16 +219,15 @@ async function main() {
     );
     if (existing) {
       await newQ(
-        `update lessons set module_id=$2, name=$3, video_id=$4, other_video_ids=$5::jsonb,
-           video_provider=$6, video_ref=$14, required_subscriptions=$7, rank=$8,
-           is_available=$9, exclusive_per_day=$10, has_debrief=$11, needs_video_watch=$12,
-           updated_at=$13
+        `update lessons set module_id=$2, name=$3, other_video_ids=$4::jsonb,
+           video_provider=$5, video_ref=$13, required_subscriptions=$6, rank=$7,
+           is_available=$8, exclusive_per_day=$9, has_debrief=$10, needs_video_watch=$11,
+           updated_at=$12
          where id=$1`,
         [
           existing.id,
           moduleId,
           row.name,
-          row.video_id,
           otherVideoIds,
           videoProvider,
           row.required_subscriptions,
@@ -244,15 +244,14 @@ async function main() {
       lc.updated++;
     } else {
       const [ins] = await newQ<{ id: number }>(
-        `insert into lessons (module_id, name, slug, video_id, other_video_ids, video_provider,
+        `insert into lessons (module_id, name, slug, other_video_ids, video_provider,
            video_ref, required_subscriptions, rank, is_available, exclusive_per_day,
            has_debrief, needs_video_watch, created_at, updated_at)
-         values ($1,$2,$3,$4,$5::jsonb,$6,$15,$7,$8,$9,$10,$11,$12,$13,$14) returning id`,
+         values ($1,$2,$3,$4::jsonb,$5,$14,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
         [
           moduleId,
           row.name,
           row.slug,
-          row.video_id,
           otherVideoIds,
           videoProvider,
           row.required_subscriptions,

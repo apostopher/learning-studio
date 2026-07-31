@@ -8,7 +8,7 @@ import { openModuleSlugAtom } from '../../atoms/sidebar';
 import { computeLessonLocks } from './compute-lesson-locks';
 import { CourseSidebar } from './course-sidebar';
 
-type LessonLike = { slug: string; name: string; hasVideo: boolean };
+type LessonLike = { slug: string; name: string };
 type ModuleLike = {
   id: number;
   slug: string;

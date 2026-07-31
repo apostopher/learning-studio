@@ -249,61 +249,6 @@ export type CourseLessonDependencies = z.infer<
   typeof CourseLessonDependenciesSchema
 >;
 
-export const CourseLessonSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  slug: z.string(),
-  hasVideo: z.boolean(),
-  otherVideoIds: OtherVideoIdsSchema.nullable().default([]),
-  videoDetails: VideoResponseSchema.optional(),
-  requiredSubscriptions: z.array(SubscriptionSchema).optional(),
-  dependsOn: z.array(CourseLessonDependencySchema).default([]),
-  exclusivePerDay: z.boolean().optional(),
-  organizations: z
-    .array(
-      z.object({
-        id: z.number(),
-        name: z.string(),
-      }),
-    )
-    .default([]),
-});
-
-export type CourseLesson = z.infer<typeof CourseLessonSchema>;
-
-export const CourseLessonWithProgressSchema = CourseLessonSchema.extend({
-  progressPercentage: z.number().optional(),
-});
-export type CourseLessonWithProgress = z.infer<
-  typeof CourseLessonWithProgressSchema
->;
-
-export const CourseModuleSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  slug: z.string(),
-  dependsOn: z.array(z.string()),
-  lessons: z.array(CourseLessonSchema),
-  requiredSubscriptions: z.array(SubscriptionSchema).optional(),
-});
-export type CourseModule = z.infer<typeof CourseModuleSchema>;
-
-export const CourseModuleWithProgressSchema = CourseModuleSchema.extend({
-  progressPercentage: z.number().optional(),
-  lessons: z.array(CourseLessonWithProgressSchema),
-});
-export type CourseModuleWithProgress = z.infer<
-  typeof CourseModuleWithProgressSchema
->;
-
-export const CourseSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  slug: z.string(),
-  modules: z.array(CourseModuleSchema),
-});
-export type Course = z.infer<typeof CourseSchema>;
-
 export const UserPublicMetadataSchema = z.object({
   subscriptions: z.array(SubscriptionSchema).default(['associate']),
   role: z.enum(['admin', 'user']).default('user'),

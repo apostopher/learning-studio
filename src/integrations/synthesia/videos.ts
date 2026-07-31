@@ -47,18 +47,6 @@ export async function getVideoDetails(
   return VideoResponseSchema.parse(data);
 }
 
-export const getVideoDetailsWithCache = cacheWithRedis<string, VideoResponse>(
-  'video-details',
-  getVideoDetails,
-  (result) => {
-    if (isVideoAvailable(result)) {
-      if (!result.download) return null;
-      return getVideoExpiry(result.download);
-    }
-    return null;
-  },
-);
-
 /**
  * Fetches a page of videos from the Synthesia API.
  * @param page 1-based page number

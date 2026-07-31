@@ -14,16 +14,8 @@
  * file that imports it — this module and its consumers do not.
  */
 
-type SecretLessonFields =
-  | 'videoProvider'
-  | 'videoRef'
-  | 'otherVideoIds'
-  | 'videoDetails';
+type SecretLessonFields = 'videoProvider' | 'videoRef' | 'otherVideoIds';
 
-// `Partial<...>` — `videoDetails` is optional on the real `LessonDetails`
-// (`?: VideoResponse`), so a bound requiring the key to be always-present
-// would reject the real argument. Destructuring an absent optional key is
-// fine at runtime either way.
 function omitLessonSecrets<
   T extends Partial<Record<SecretLessonFields, unknown>>,
 >(lesson: T): Omit<T, SecretLessonFields> {
@@ -31,7 +23,6 @@ function omitLessonSecrets<
     videoProvider: _videoProvider,
     videoRef: _videoRef,
     otherVideoIds: _otherVideoIds,
-    videoDetails: _videoDetails,
     ...rest
   } = lesson;
   return rest;
@@ -44,8 +35,7 @@ type CourseShape = {
 
 /**
  * Drops every video-identifying field from each lesson before the payload
- * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`,
- * `videoDetails`.
+ * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`.
  *
  * `videoProvider`/`videoRef` matter most: this route has no zod
  * parse on the way out, only a cast, so whatever ships here lands in the

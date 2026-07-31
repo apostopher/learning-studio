@@ -27,9 +27,9 @@ const req = (query = '?slug=c1') =>
 
 // A trimmed stand-in for the real payload. Every field named here is one this
 // route used to hand to anonymous callers. `videoProvider`/`videoRef`/
-// `otherVideoIds`/`videoDetails` sit alongside `hasVideo` here to mirror the
-// real `CourseDetails` shape (db/course.ts's `LessonDetails` carries all of
-// them) — the handler strips all four before the response ships, which the
+// `otherVideoIds` sit alongside `hasVideo` here to mirror the real
+// `CourseDetails` shape (db/course.ts's `LessonDetails` carries all of them)
+// — the handler strips all three before the response ships, which the
 // assertions below prove. `videoProvider`/`videoRef` matter most: a bare Mux
 // `videoRef` is directly streamable unless every asset is signed-policy-only,
 // an operator setting this code cannot verify — shipping it would let a
@@ -52,7 +52,6 @@ const course = {
           videoProvider: 'mux',
           videoRef: 'ref-secret',
           otherVideoIds: [],
-          videoDetails: { id: 'vid-a', status: 'in_progress' as const },
           hasVideo: true,
           isAvailable: true,
           needsVideoWatch: true,
@@ -74,7 +73,6 @@ const learnerCourse = {
         videoProvider: _videoProvider,
         videoRef: _videoRef,
         otherVideoIds: _otherVideoIds,
-        videoDetails: _videoDetails,
         ...rest
       }) => rest,
     ),
@@ -135,7 +133,6 @@ describe('getCourseDetailsHandler', () => {
     expect(lesson).not.toHaveProperty('videoProvider');
     expect(lesson).not.toHaveProperty('videoRef');
     expect(lesson).not.toHaveProperty('otherVideoIds');
-    expect(lesson).not.toHaveProperty('videoDetails');
     expect(isSubscribedToCourseSlug).toHaveBeenCalledWith('u1', 'c1');
   });
 

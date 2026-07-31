@@ -1,4 +1,4 @@
-import { and, countDistinct, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { videoProgressTable } from '#/db/schema';
 
@@ -9,36 +9,7 @@ import { videoProgressTable } from '#/db/schema';
  */
 export { milestones } from '#/lib/course-milestones';
 
-import {
-  isVideoWatched,
-  milestones,
-  watchedMilestones,
-} from '#/lib/course-milestones';
-
-/**
- * Whether a single user has watched a single lesson. "Watched" tolerates
- * stopping a few seconds before the end — it requires every milestone except
- * the final 100 (see watchedMilestones), still guarding against skipping.
- */
-export async function hasWatchedLesson({
-  lessonId,
-  userId,
-}: {
-  lessonId: number;
-  userId: string;
-}): Promise<boolean> {
-  const [row] = await db
-    .select({ count: countDistinct(videoProgressTable.progress) })
-    .from(videoProgressTable)
-    .where(
-      and(
-        eq(videoProgressTable.userId, userId),
-        eq(videoProgressTable.lessonId, lessonId),
-        inArray(videoProgressTable.progress, watchedMilestones),
-      ),
-    );
-  return (row?.count ?? 0) === watchedMilestones.length;
-}
+import { isVideoWatched, milestones } from '#/lib/course-milestones';
 
 export type LessonProgress = {
   /** Distinct milestones the user has reached for this lesson, in order. */

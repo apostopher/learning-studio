@@ -17,6 +17,7 @@ import {
   getCourseSlugForLessonId,
   getCourseSlugForModuleId,
 } from '#/db/lesson-access';
+import { getLessonPlayback } from '#/db/lesson-playback';
 import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
@@ -78,6 +79,28 @@ async function invalidateCourseDetailsCache(
     await getCourseDetailsWithCache.invalidate(slug);
   } catch (error) {
     console.error('Failed to invalidate course-details cache:', error);
+  }
+}
+
+/**
+ * Evict the learner-facing `getLessonPlayback` cache entry for a lesson so an
+ * admin's video swap is visible immediately instead of serving the PREVIOUS
+ * video's still-validly-signed URL until it expires (up to ~59.5m for Mux —
+ * see `getLessonPlayback`'s doc comment for the TTL math). A stale-but-
+ * validly-signed URL plays fine, so the player's 401/403 recovery path never
+ * fires and nothing else recovers on its own.
+ *
+ * Best-effort, same pattern as `invalidateCourseDetailsCache`: a Redis outage
+ * must not turn a successful admin write into a failed response.
+ */
+async function invalidateLessonPlaybackCache(
+  lessonSlug: string | null,
+): Promise<void> {
+  if (!lessonSlug) return;
+  try {
+    await getLessonPlayback.invalidate(lessonSlug);
+  } catch (error) {
+    console.error('Failed to invalidate lesson-playback cache:', error);
   }
 }
 
@@ -502,12 +525,17 @@ export async function setLessonVideo(
     .update(lessonsTable)
     .set({ videoProvider: provider, videoRef: ref, updatedAt: sql`now()` })
     .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id });
+    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
   if (!updated) return null;
 
   await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+  // Evicted by slug (not `getCourseSlugForLessonId`'s course slug above) —
+  // `getLessonPlayback` is keyed per-lesson, not per-course, so an unrelated
+  // course-details invalidation would leave this lesson's stale playback
+  // entry untouched.
+  await invalidateLessonPlaybackCache(updated.slug);
 
-  return updated;
+  return { id: updated.id };
 }
 
 export async function resolveLessonPlayback(
