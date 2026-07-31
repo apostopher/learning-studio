@@ -1,4 +1,4 @@
-import { and, asc, countDistinct, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
 import { ADMIN_ROLE } from '#/lib/admin-schemas';
@@ -215,9 +215,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       videoProgressTable,
       and(
         eq(videoProgressTable.userId, userId),
-        // lessons.video_id is a uuid; videos_progress.video_id is the same
-        // value stored as text — cast to join. Matches getCourseProgress.
-        eq(videoProgressTable.videoId, sql`${lessonsTable.videoId}::text`),
+        eq(videoProgressTable.lessonId, lessonsTable.id),
         inArray(videoProgressTable.progress, watchedMilestones),
       ),
     )

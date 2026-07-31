@@ -1,16 +1,26 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
-import { recordVideoProgress } from '#/db/videos-progress';
+import { getLessonIdBySlug } from '#/db/lesson-access';
+import { recordLessonProgress } from '#/db/videos-progress';
 import { auth } from '#/lib/auth';
+import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
 const reportVideoProgressSchema = z.object({
-  videoId: z.string().min(1),
+  lessonSlug: z.string().min(1),
   progress: z.number().int().min(0).max(100),
 });
 
 /**
  * Record a video-progress milestone for the logged-in user (append-only).
- * Any authenticated user may report their own progress — no admin role needed.
+ * Any authenticated user may report their own progress — no admin role needed
+ * — but only for a lesson they are actually authorized to watch.
+ *
+ * The gate check is not optional: without it, any signed-in caller could
+ * self-report full coverage for an arbitrary lessonSlug and unlock every
+ * gated lesson in the platform, since gating reads progress rows to decide
+ * what's watched. "No such lesson", "not subscribed", and "locked" all
+ * collapse to the same 403 — distinguishing them hands an enumeration oracle
+ * to any signed-in caller, the same rule the playback route follows.
  */
 export async function reportVideoProgressHandler(
   request: Request,
@@ -32,10 +42,23 @@ export async function reportVideoProgressHandler(
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const gate = await evaluateLessonGate({
+    userId: session.user.id,
+    lessonSlug: parsed.data.lessonSlug,
+  });
+  if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  const lessonId = await getLessonIdBySlug(parsed.data.lessonSlug);
+  if (lessonId === null) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   try {
-    await recordVideoProgress({
+    await recordLessonProgress({
       userId: session.user.id,
-      videoId: parsed.data.videoId,
+      lessonId,
       progress: parsed.data.progress,
     });
   } catch (error) {

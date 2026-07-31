@@ -1,16 +1,16 @@
-import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
+import { watchedMilestones } from '#/lib/course-milestones';
+import {
+  aggregateCourseProgress,
+  type CourseProgress,
+} from '#/lib/course-progress-agg';
+import { db } from '@/db';
 import {
   coursesTable,
   lessonsTable,
   modulesTable,
   videoProgressTable,
-} from "@/db/schema";
-import { watchedMilestones } from "#/lib/course-milestones";
-import {
-  aggregateCourseProgress,
-  type CourseProgress,
-} from "#/lib/course-progress-agg";
+} from '@/db/schema';
 
 /**
  * Efficient course-scoped progress for one user. A single grouped query counts
@@ -41,9 +41,7 @@ export async function getCourseProgress({
       videoProgressTable,
       and(
         eq(videoProgressTable.userId, userId),
-        // lessons.video_id is a uuid; videos_progress.video_id is the same value
-        // stored as text — cast to join.
-        eq(videoProgressTable.videoId, sql`${lessonsTable.videoId}::text`),
+        eq(videoProgressTable.lessonId, lessonsTable.id),
         inArray(videoProgressTable.progress, watchedMilestones),
       ),
     )

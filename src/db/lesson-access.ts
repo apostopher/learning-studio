@@ -130,6 +130,22 @@ export async function isSubscribedToCourseSlug(
 }
 
 /**
+ * Numeric id for a lesson slug, or null when no lesson has that slug.
+ *
+ * Bridges the client's `lessonSlug` to the `lesson_id` FK progress rows carry.
+ * Callers must treat null as denied, not as open — mirrors
+ * `getLessonByVideoId`'s contract.
+ */
+export async function getLessonIdBySlug(slug: string): Promise<number | null> {
+  const rows = await db
+    .select({ id: lessonsTable.id })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.slug, slug))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/**
  * The lesson a Synthesia video belongs to, so /api/lesson/video can apply the
  * same gates as the material route.
  *

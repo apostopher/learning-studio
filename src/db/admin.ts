@@ -284,9 +284,10 @@ export async function createLesson(input: {
  * people out mid-module on their next page load, with no grandfathering, so
  * the count has to be on screen while the decision is made.
  *
- * `lessons.video_id` is a uuid and `videos_progress.video_id` the same value
- * as text — the cast mirrors getMyCourses. Only modules with progress appear
- * in the result; callers default the rest to zero.
+ * Joined directly on `videos_progress.lesson_id = lessons.id` — both
+ * integers, no cast needed now that progress is keyed on lesson id rather
+ * than the Synthesia video id. Only modules with progress appear in the
+ * result; callers default the rest to zero.
  */
 async function countLearnersByModule(
   moduleIds: number[],
@@ -300,7 +301,7 @@ async function countLearnersByModule(
     .innerJoin(
       videoProgressTable,
       and(
-        eq(videoProgressTable.videoId, sql`${lessonsTable.videoId}::text`),
+        eq(videoProgressTable.lessonId, lessonsTable.id),
         inArray(videoProgressTable.progress, watchedMilestones),
       ),
     )

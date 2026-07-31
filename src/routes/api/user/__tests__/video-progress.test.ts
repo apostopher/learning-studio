@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSession, getVideoProgress } = vi.hoisted(() => ({
+const { getSession, getLessonProgress, getLessonIdBySlug } = vi.hoisted(() => ({
   getSession: vi.fn(),
-  getVideoProgress: vi.fn(),
+  getLessonProgress: vi.fn(),
+  getLessonIdBySlug: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
-vi.mock('#/db/videos-progress', () => ({ getVideoProgress }));
+vi.mock('#/db/videos-progress', () => ({ getLessonProgress }));
+vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
 
 import { getVideoProgressHandler } from '../video-progress';
 
@@ -17,43 +19,59 @@ function req(url: string): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   getSession.mockResolvedValue({ user: { id: 'user-1' } });
-  getVideoProgress.mockResolvedValue({ milestonesHit: [10, 15], watched: false });
+  getLessonProgress.mockResolvedValue({
+    milestonesHit: [10, 15],
+    watched: false,
+  });
+  getLessonIdBySlug.mockResolvedValue(10);
 });
 
 describe('getVideoProgressHandler', () => {
   it('401 when not authenticated', async () => {
     getSession.mockResolvedValueOnce(null);
     const res = await getVideoProgressHandler(
-      req('http://test/api/user/video-progress?videoId=v1'),
+      req('http://test/api/user/video-progress?lessonSlug=l1'),
     );
     expect(res.status).toBe(401);
-    expect(getVideoProgress).not.toHaveBeenCalled();
+    expect(getLessonProgress).not.toHaveBeenCalled();
   });
 
-  it('400 when videoId is missing', async () => {
+  it('400 when lessonSlug is missing', async () => {
     const res = await getVideoProgressHandler(
       req('http://test/api/user/video-progress'),
     );
     expect(res.status).toBe(400);
-    expect(getVideoProgress).not.toHaveBeenCalled();
+    expect(getLessonProgress).not.toHaveBeenCalled();
   });
 
-  it('returns the single-video progress for the authed user', async () => {
+  it('returns the single-lesson progress for the authed user', async () => {
     const res = await getVideoProgressHandler(
-      req('http://test/api/user/video-progress?videoId=v1'),
+      req('http://test/api/user/video-progress?lessonSlug=l1'),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ milestonesHit: [10, 15], watched: false });
-    expect(getVideoProgress).toHaveBeenCalledWith({
+    expect(await res.json()).toEqual({
+      milestonesHit: [10, 15],
+      watched: false,
+    });
+    expect(getLessonProgress).toHaveBeenCalledWith({
       userId: 'user-1',
-      videoId: 'v1',
+      lessonId: 10,
     });
   });
 
-  it('500 when the db read fails', async () => {
-    getVideoProgress.mockRejectedValueOnce(new Error('db down'));
+  it('403s when the lesson slug cannot be resolved, no gate check needed', async () => {
+    getLessonIdBySlug.mockResolvedValueOnce(null);
     const res = await getVideoProgressHandler(
-      req('http://test/api/user/video-progress?videoId=v1'),
+      req('http://test/api/user/video-progress?lessonSlug=ghost'),
+    );
+    expect(res.status).toBe(403);
+    expect(getLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('500 when the db read fails', async () => {
+    getLessonProgress.mockRejectedValueOnce(new Error('db down'));
+    const res = await getVideoProgressHandler(
+      req('http://test/api/user/video-progress?lessonSlug=l1'),
     );
     expect(res.status).toBe(500);
   });

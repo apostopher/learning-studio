@@ -1,54 +1,54 @@
+import { relations, sql } from 'drizzle-orm';
 import {
+  boolean,
+  index,
   integer,
+  json,
+  jsonb,
+  numeric,
   pgTable,
   primaryKey,
-  varchar,
-  timestamp,
-  index,
-  json,
-  text,
-  numeric,
-  uuid,
-  jsonb,
-  boolean,
-  vector,
   serial,
-  uniqueIndex,
+  text,
+  timestamp,
   unique,
-} from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { z } from "zod";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+  uniqueIndex,
+  uuid,
+  varchar,
+  vector,
+} from 'drizzle-orm/pg-core';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { z } from 'zod';
 import {
-  CourseLessonQuizAnswerSchema,
-  CourseLessonQuizSchema,
-  CourseLessonDependenciesSchema,
-  SubscriptionsSchema,
-  CourseLessonQuizAnswersSchema,
   AddressSchema,
+  type CourseLessonDependenciesSchema,
+  CourseLessonQuizAnswerSchema,
+  CourseLessonQuizAnswersSchema,
+  CourseLessonQuizSchema,
+  OnboardingAnswersSchema,
+  type OnboardingQuestionsSchema,
+  type OtherVideoIdsSchema,
+  PersonaSchema,
   PilotLicensesSchema,
   ProfileVisibilitySchema,
-  PersonaSchema,
-  OtherVideoIdsSchema,
-  OnboardingQuestionsSchema,
-  OnboardingAnswersSchema,
-} from "@/types";
+  SubscriptionsSchema,
+} from '@/types';
 
-export * from "./auth-schema";
+export * from './auth-schema';
 
-export const coursesTable = pgTable("courses", {
+export const coursesTable = pgTable('courses', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  description: text("description"),
-  imageUrlAvif: text("image_url_avif"),
-  imageUrlWebp: text("image_url_webp"),
-  onboardingQuestions: jsonb("onboarding_questions")
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  imageUrlAvif: text('image_url_avif'),
+  imageUrlWebp: text('image_url_webp'),
+  onboardingQuestions: jsonb('onboarding_questions')
     .$type<z.infer<typeof OnboardingQuestionsSchema>>()
     .notNull()
     .default([]),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const dbCourseSchema = createSelectSchema(coursesTable);
@@ -62,19 +62,19 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   onboarding: many(courseOnboardingTable),
 }));
 
-export const modulesTable = pgTable("modules", {
+export const modulesTable = pgTable('modules', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  courseId: integer("course_id")
+  courseId: integer('course_id')
     .notNull()
-    .references(() => coursesTable.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  imageUrlAvif: text("image_url_avif"),
-  imageUrlWebp: text("image_url_webp"),
-  requiredSubscriptions: text("required_subscriptions").array().notNull(),
-  rank: numeric("rank", { precision: 30, scale: 15 }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    .references(() => coursesTable.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  imageUrlAvif: text('image_url_avif'),
+  imageUrlWebp: text('image_url_webp'),
+  requiredSubscriptions: text('required_subscriptions').array().notNull(),
+  rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const dbModuleSchema = createSelectSchema(modulesTable, {
@@ -97,24 +97,24 @@ export const modulesTableRelations = relations(
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_modules_required_subs ON modules USING GIN (required_subscriptions);`;
 
-export const lessonsTable = pgTable("lessons", {
+export const lessonsTable = pgTable('lessons', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  moduleId: integer("module_id")
+  moduleId: integer('module_id')
     .notNull()
-    .references(() => modulesTable.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  videoId: uuid("video_id"),
-  otherVideoIds: jsonb("other_video_ids")
+    .references(() => modulesTable.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  videoId: uuid('video_id'),
+  otherVideoIds: jsonb('other_video_ids')
     .$type<z.infer<typeof OtherVideoIdsSchema>>()
     .default([]),
-  videoProvider: text("video_provider"), // 'mux' | 'synthesia' | null
-  videoRef: text("video_ref"),
-  requiredSubscriptions: text("required_subscriptions").array().notNull(),
-  rank: numeric("rank", { precision: 30, scale: 15 }).notNull(),
-  isAvailable: boolean("is_available").notNull().default(false),
-  exclusivePerDay: boolean("exclusive_per_day").notNull().default(false),
-  hasDebrief: boolean("has_debrief").notNull().default(true),
+  videoProvider: text('video_provider'), // 'mux' | 'synthesia' | null
+  videoRef: text('video_ref'),
+  requiredSubscriptions: text('required_subscriptions').array().notNull(),
+  rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+  isAvailable: boolean('is_available').notNull().default(false),
+  exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
+  hasDebrief: boolean('has_debrief').notNull().default(true),
   /**
    * PRESERVED FOR PARITY — no learner-side consumer yet.
    *
@@ -128,9 +128,9 @@ export const lessonsTable = pgTable("lessons", {
    * behaviour is the intended consumer; until then this is admin-config only,
    * exactly like `hasDebrief` above, which has no learner-side reader either.
    */
-  needsVideoWatch: boolean("needs_video_watch").notNull().default(true),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  needsVideoWatch: boolean('needs_video_watch').notNull().default(true),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const dbLessonSchema = createSelectSchema(lessonsTable, {
@@ -157,20 +157,20 @@ export const lessonsTableRelations = relations(
 void sql`CREATE INDEX IF NOT EXISTS idx_lessons_required_subs ON lessons USING GIN (required_subscriptions);`;
 
 export const courseVideoProvidersTable = pgTable(
-  "course_video_providers",
+  'course_video_providers',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    courseId: integer("course_id")
+    courseId: integer('course_id')
       .notNull()
-      .references(() => coursesTable.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // 'mux' | 'synthesia'
-    secrets: jsonb("secrets").notNull(), // AES-GCM envelope { v, iv, tag, ct }
-    lastValidatedAt: timestamp("last_validated_at", { mode: "date" }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(), // 'mux' | 'synthesia'
+    secrets: jsonb('secrets').notNull(), // AES-GCM envelope { v, iv, tag, ct }
+    lastValidatedAt: timestamp('last_validated_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("course_video_providers_course_provider_idx").on(
+    uniqueIndex('course_video_providers_course_provider_idx').on(
       table.courseId,
       table.provider,
     ),
@@ -178,25 +178,25 @@ export const courseVideoProvidersTable = pgTable(
 );
 
 export const moduleDependenciesTable = pgTable(
-  "module_dependencies",
+  'module_dependencies',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    moduleId: integer("module_id")
+    moduleId: integer('module_id')
       .unique()
       .notNull()
-      .references(() => modulesTable.id, { onDelete: "cascade" }),
-    dependsOn: text("depends_on").array().notNull(),
+      .references(() => modulesTable.id, { onDelete: 'cascade' }),
+    dependsOn: text('depends_on').array().notNull(),
   },
-  (table) => [index("module_depends_on_idx").on(table.dependsOn)],
+  (table) => [index('module_depends_on_idx').on(table.dependsOn)],
 );
 
-export const lessonDependenciesTable = pgTable("lesson_dependencies", {
+export const lessonDependenciesTable = pgTable('lesson_dependencies', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  lessonId: integer("lesson_id")
+  lessonId: integer('lesson_id')
     .unique()
     .notNull()
-    .references(() => lessonsTable.id, { onDelete: "cascade" }),
-  dependsOn: jsonb("depends_on")
+    .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+  dependsOn: jsonb('depends_on')
     .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
     .notNull(),
 });
@@ -205,20 +205,22 @@ export const lessonDependenciesTable = pgTable("lesson_dependencies", {
 void sql`CREATE INDEX IF NOT EXISTS idx_lesson_dependencies_depends_on ON lesson_dependencies USING GIN (depends_on);`;
 
 export const videoProgressTable = pgTable(
-  "videos_progress",
+  'videos_progress',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    videoId: varchar("video_id", { length: 255 }).notNull(),
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
     progress: integer().notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("videos_progress_user_id_idx").on(table.userId),
-    index("videos_progress_user_video_idx").on(table.userId, table.videoId),
-    index("videos_progress_user_created_idx").on(table.userId, table.createdAt),
+    index('videos_progress_user_id_idx').on(table.userId),
+    index('videos_progress_user_lesson_idx').on(table.userId, table.lessonId),
+    index('videos_progress_user_created_idx').on(table.userId, table.createdAt),
   ],
 );
 
@@ -239,23 +241,23 @@ export const videoProgressTableRelations = relations(
 );
 
 export const lessonQuizAnswersTable = pgTable(
-  "lesson_quiz_answers",
+  'lesson_quiz_answers',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    lessonSlug: varchar("lesson_slug", { length: 255 })
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonSlug: varchar('lesson_slug', { length: 255 })
       .notNull()
-      .references(() => lessonsTable.slug, { onDelete: "cascade" }),
-    answers: json("answers")
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    answers: json('answers')
       .$type<z.infer<typeof CourseLessonQuizAnswersSchema>>()
       .notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("lesson_quiz_answers_user_id_idx").on(table.userId),
-    index("lesson_quiz_answers_user_lesson_idx").on(
+    index('lesson_quiz_answers_user_id_idx').on(table.userId),
+    index('lesson_quiz_answers_user_lesson_idx').on(
       table.userId,
       table.lessonSlug,
     ),
@@ -297,23 +299,23 @@ export const lessonQuizAnswersTableRelations = relations(
 );
 
 export const lessonMaterialTable = pgTable(
-  "lesson_material",
+  'lesson_material',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    lessonSlug: text("lesson_slug")
+    lessonSlug: text('lesson_slug')
       .notNull()
-      .references(() => lessonsTable.slug, { onDelete: "cascade" }),
-    text: text("text").notNull(),
-    keyPoints: json("key_points").$type<string[]>(),
-    quiz: json("quiz").$type<z.infer<typeof CourseLessonQuizSchema>>(),
-    proTips: text("pro_tips"),
-    links: text("links").array(),
-    assignments: text("assignments"),
-    jobOfTheDay: text("job_of_the_day"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    keyPoints: json('key_points').$type<string[]>(),
+    quiz: json('quiz').$type<z.infer<typeof CourseLessonQuizSchema>>(),
+    proTips: text('pro_tips'),
+    links: text('links').array(),
+    assignments: text('assignments'),
+    jobOfTheDay: text('job_of_the_day'),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
-  (table) => [index("lesson_material_lesson_slug_idx").on(table.lessonSlug)],
+  (table) => [index('lesson_material_lesson_slug_idx').on(table.lessonSlug)],
 );
 
 export const lessonMaterialInsertSchema = createInsertSchema(
@@ -343,22 +345,22 @@ export const lessonMaterialTableRelations = relations(
 );
 
 export const lessonMaterialProgressTable = pgTable(
-  "lesson_material_progress",
+  'lesson_material_progress',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    lessonSlug: varchar("lesson_slug", { length: 255 })
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonSlug: varchar('lesson_slug', { length: 255 })
       .notNull()
-      .references(() => lessonsTable.slug, { onDelete: "cascade" }),
-    sectionName: text("section_name").notNull(),
-    completed: boolean("completed").notNull().default(false),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    sectionName: text('section_name').notNull(),
+    completed: boolean('completed').notNull().default(false),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("lesson_material_progress_user_lesson_section_idx").on(
+    uniqueIndex('lesson_material_progress_user_lesson_section_idx').on(
       table.userId,
       table.lessonSlug,
       table.sectionName,
@@ -395,22 +397,22 @@ export const lessonMaterialProgressTableRelations = relations(
 );
 
 export const favKeyPointsTable = pgTable(
-  "fav_key_points",
+  'fav_key_points',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    lessonSlug: varchar("lesson_slug", { length: 255 }).references(
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonSlug: varchar('lesson_slug', { length: 255 }).references(
       () => lessonsTable.slug,
       {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       },
     ),
-    keyPoint: text("key_point").notNull(),
+    keyPoint: text('key_point').notNull(),
   },
   (table) => [
-    uniqueIndex("fav_key_points_user_lesson_key_point_idx").on(
+    uniqueIndex('fav_key_points_user_lesson_key_point_idx').on(
       table.userId,
       table.lessonSlug,
       table.keyPoint,
@@ -425,7 +427,7 @@ export const favKeyPointsSelectSchema = createSelectSchema(favKeyPointsTable);
 export type FavKeyPointsSelect = z.infer<typeof favKeyPointsSelectSchema>;
 
 export const blobFilesTable = pgTable(
-  "blob_files",
+  'blob_files',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: varchar({ length: 255 }).notNull(),
@@ -433,12 +435,12 @@ export const blobFilesTable = pgTable(
     size: integer().notNull(),
     type: varchar({ length: 100 }).notNull(),
     uploadedBy: varchar({ length: 255 }).notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("blob_files_uploaded_by_idx").on(table.uploadedBy),
-    index("blob_files_created_at_idx").on(table.createdAt),
-    index("blob_files_url_idx").on(table.url),
+    index('blob_files_uploaded_by_idx').on(table.uploadedBy),
+    index('blob_files_created_at_idx').on(table.createdAt),
+    index('blob_files_url_idx').on(table.url),
   ],
 );
 
@@ -456,30 +458,30 @@ export const blobFilesTableRelations = relations(
 );
 
 export const blobFileAssignmentsTable = pgTable(
-  "blob_file_assignments",
+  'blob_file_assignments',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    fileId: integer("file_id")
+    fileId: integer('file_id')
       .notNull()
-      .references(() => blobFilesTable.id, { onDelete: "cascade" }),
+      .references(() => blobFilesTable.id, { onDelete: 'cascade' }),
     // Integer FKs (not slugs): immutable, smaller/faster indexes and joins.
     // Each is nullable — a file can be assigned at course, module, or lesson level.
-    courseId: integer("course_id").references(() => coursesTable.id, {
-      onDelete: "cascade",
+    courseId: integer('course_id').references(() => coursesTable.id, {
+      onDelete: 'cascade',
     }),
-    moduleId: integer("module_id").references(() => modulesTable.id, {
-      onDelete: "cascade",
+    moduleId: integer('module_id').references(() => modulesTable.id, {
+      onDelete: 'cascade',
     }),
-    lessonId: integer("lesson_id").references(() => lessonsTable.id, {
-      onDelete: "cascade",
+    lessonId: integer('lesson_id').references(() => lessonsTable.id, {
+      onDelete: 'cascade',
     }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("blob_file_assignments_file_id_idx").on(table.fileId),
-    index("blob_file_assignments_course_id_idx").on(table.courseId),
-    index("blob_file_assignments_module_id_idx").on(table.moduleId),
-    index("blob_file_assignments_lesson_id_idx").on(table.lessonId),
+    index('blob_file_assignments_file_id_idx').on(table.fileId),
+    index('blob_file_assignments_course_id_idx').on(table.courseId),
+    index('blob_file_assignments_module_id_idx').on(table.moduleId),
+    index('blob_file_assignments_lesson_id_idx').on(table.lessonId),
   ],
 );
 
@@ -521,38 +523,38 @@ export type BlobFileAssignmentsSelect = z.infer<
 >;
 
 export const userProfileTable = pgTable(
-  "user_profiles",
+  'user_profiles',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 }).notNull().unique(),
-    associateNumber: varchar("associate_number", { length: 12 }).unique(),
-    callSign: varchar("call_sign", { length: 100 }),
-    firstName: varchar("first_name", { length: 100 }),
-    lastName: varchar("last_name", { length: 100 }),
-    email: varchar("email", { length: 100 }).notNull().unique(),
-    phoneNumber: varchar("phone_number", { length: 100 }),
-    avatarURL: varchar("avatar_url"),
-    age: integer("age"),
-    gender: varchar("gender", { enum: ["M", "F"] }),
-    pilotLicenses: json("pilot_licenses")
+    userId: varchar('user_id', { length: 255 }).notNull().unique(),
+    associateNumber: varchar('associate_number', { length: 12 }).unique(),
+    callSign: varchar('call_sign', { length: 100 }),
+    firstName: varchar('first_name', { length: 100 }),
+    lastName: varchar('last_name', { length: 100 }),
+    email: varchar('email', { length: 100 }).notNull().unique(),
+    phoneNumber: varchar('phone_number', { length: 100 }),
+    avatarURL: varchar('avatar_url'),
+    age: integer('age'),
+    gender: varchar('gender', { enum: ['M', 'F'] }),
+    pilotLicenses: json('pilot_licenses')
       .$type<z.infer<typeof PilotLicensesSchema>>()
       .array(),
-    uasLicenseCountry: varchar("uas_license_country", { length: 3 }), // 3 letter country code
-    uasLicenseType: varchar("uas_license_type").array(),
-    uasType: varchar("uas_type").array(),
-    uasWeightClass: varchar("uas_weight_class"),
-    address: json("address").$type<z.infer<typeof AddressSchema>>(),
+    uasLicenseCountry: varchar('uas_license_country', { length: 3 }), // 3 letter country code
+    uasLicenseType: varchar('uas_license_type').array(),
+    uasType: varchar('uas_type').array(),
+    uasWeightClass: varchar('uas_weight_class'),
+    address: json('address').$type<z.infer<typeof AddressSchema>>(),
     visibility:
-      json("visibility").$type<z.infer<typeof ProfileVisibilitySchema>>(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+      json('visibility').$type<z.infer<typeof ProfileVisibilitySchema>>(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("user_profile_user_id_idx").on(table.userId),
-    index("user_profile_call_sign_idx").on(table.callSign),
-    index("user_profile_first_name_idx").on(table.firstName),
-    index("user_profile_last_name_idx").on(table.lastName),
-    index("user_profile_created_at_idx").on(table.createdAt),
+    index('user_profile_user_id_idx').on(table.userId),
+    index('user_profile_call_sign_idx').on(table.callSign),
+    index('user_profile_first_name_idx').on(table.firstName),
+    index('user_profile_last_name_idx').on(table.lastName),
+    index('user_profile_created_at_idx').on(table.createdAt),
   ],
 );
 
@@ -590,16 +592,16 @@ export const userProfileTableRelations = relations(
 );
 
 export const userRolesTable = pgTable(
-  "user_roles",
+  'user_roles',
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
     // Use enum for integrity; make it unique so each logical role appears once.
-    name: varchar("name", { length: 100 }).notNull().unique(),
-    description: text("description"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    name: varchar('name', { length: 100 }).notNull().unique(),
+    description: text('description'),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
-  (t) => [index("user_roles_name_idx").on(t.name)],
+  (t) => [index('user_roles_name_idx').on(t.name)],
 );
 
 export const userRolesInsertSchema = createInsertSchema(userRolesTable);
@@ -616,21 +618,21 @@ export const userRolesTableRelations = relations(
 );
 
 export const userProfileRolesTable = pgTable(
-  "user_profile_roles",
+  'user_profile_roles',
   {
-    userProfileId: integer("user_profile_id")
+    userProfileId: integer('user_profile_id')
       .notNull()
-      .references(() => userProfileTable.id, { onDelete: "cascade" }),
-    roleId: integer("role_id")
+      .references(() => userProfileTable.id, { onDelete: 'cascade' }),
+    roleId: integer('role_id')
       .notNull()
-      .references(() => userRolesTable.id, { onDelete: "restrict" }),
-    assignedBy: varchar("assigned_by", { length: 255 }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => userRolesTable.id, { onDelete: 'restrict' }),
+    assignedBy: varchar('assigned_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ columns: [t.userProfileId, t.roleId], name: "upr_pk" }),
-    index("upr_user_idx").on(t.userProfileId),
-    index("upr_role_idx").on(t.roleId),
+    primaryKey({ columns: [t.userProfileId, t.roleId], name: 'upr_pk' }),
+    index('upr_user_idx').on(t.userProfileId),
+    index('upr_role_idx').on(t.roleId),
   ],
 );
 
@@ -648,17 +650,17 @@ export const userProfileRolesRelations = relations(
   }),
 );
 
-export const newsSourcesTable = pgTable("news_sources", {
+export const newsSourcesTable = pgTable('news_sources', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
-  url: text("url").notNull().unique(),
-  selectors: text("selectors").array().default([]),
-  imageURL: text("image_url").notNull(),
-  tintColor: text("tint_color"),
-  active: boolean("active").notNull().default(true),
-  rank: numeric("rank", { precision: 10, scale: 5 }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  name: text('name').notNull(),
+  url: text('url').notNull().unique(),
+  selectors: text('selectors').array().default([]),
+  imageURL: text('image_url').notNull(),
+  tintColor: text('tint_color'),
+  active: boolean('active').notNull().default(true),
+  rank: numeric('rank', { precision: 10, scale: 5 }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const newsSourcesInsertSchema = createInsertSchema(newsSourcesTable);
@@ -675,18 +677,18 @@ export const newsSourcesTableRelations = relations(
 );
 
 export const userNewsSourcesTable = pgTable(
-  "user_news_sources",
+  'user_news_sources',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    newsSourceId: integer("news_source_id")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    newsSourceId: integer('news_source_id')
       .notNull()
-      .references(() => newsSourcesTable.id, { onDelete: "cascade" }),
+      .references(() => newsSourcesTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    uniqueIndex("user_news_sources_user_source_idx").on(
+    uniqueIndex('user_news_sources_user_source_idx').on(
       table.userId,
       table.newsSourceId,
     ),
@@ -715,13 +717,13 @@ export const userNewsSourcesTableRelations = relations(
   }),
 );
 
-export const helpTopicsTable = pgTable("help_topics", {
+export const helpTopicsTable = pgTable('help_topics', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  title: text("title").notNull().unique(),
-  content: text("content").notNull(),
-  rank: numeric("rank", { precision: 10, scale: 5 }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  title: text('title').notNull().unique(),
+  content: text('content').notNull(),
+  rank: numeric('rank', { precision: 10, scale: 5 }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const helpTopicsInsertSchema = createInsertSchema(helpTopicsTable);
@@ -730,20 +732,20 @@ export type HelpTopicsInsert = z.infer<typeof helpTopicsInsertSchema>;
 export const helpTopicsSelectSchema = createSelectSchema(helpTopicsTable);
 export type HelpTopicsSelect = z.infer<typeof helpTopicsSelectSchema>;
 export const courseSubscriptionsTable = pgTable(
-  "course_subscriptions",
+  'course_subscriptions',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    courseId: integer("course_id")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
       .notNull()
-      .references(() => coursesTable.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("course_subscriptions_user_course_idx").on(
+    uniqueIndex('course_subscriptions_user_course_idx').on(
       table.userId,
       table.courseId,
     ),
@@ -764,15 +766,15 @@ export const courseSubscriptionsTable = pgTable(
  * docs/superpowers/specs/2026-07-30-course-resume-redirect-ledger.md.
  */
 export const courseLastViewedTable = pgTable(
-  "course_last_viewed",
+  'course_last_viewed',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    courseId: integer("course_id")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
       .notNull()
-      .references(() => coursesTable.id, { onDelete: "cascade" }),
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
     /**
      * MUST be `set null`, not the `cascade` used by every other FK in this
      * file. On cascade, an admin deleting a lesson would delete the whole row
@@ -781,15 +783,15 @@ export const courseLastViewedTable = pgTable(
      * course access. Null here simply means "no pointer", which
      * resolveResumeTarget already handles as a first visit.
      */
-    lessonId: integer("lesson_id").references(() => lessonsTable.id, {
-      onDelete: "set null",
+    lessonId: integer('lesson_id').references(() => lessonsTable.id, {
+      onDelete: 'set null',
     }),
-    viewedAt: timestamp("viewed_at", { mode: "date" }).notNull().defaultNow(),
+    viewedAt: timestamp('viewed_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     // One pointer per user per course — this is what makes the upsert on
     // every lesson view a conflict-update rather than an unbounded insert.
-    uniqueIndex("course_last_viewed_user_course_idx").on(
+    uniqueIndex('course_last_viewed_user_course_idx').on(
       table.userId,
       table.courseId,
     ),
@@ -836,39 +838,39 @@ export const courseSubscriptionsTableRelations = relations(
 );
 
 export const courseOnboardingTable = pgTable(
-  "course_onboarding",
+  'course_onboarding',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    courseId: integer("course_id")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
       .notNull()
-      .references(() => coursesTable.id, { onDelete: "cascade" }),
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
     // questionId -> answer text. Defaults to {} rather than null so "not
     // answered yet" is an empty map, not a null check in every consumer.
-    answers: jsonb("answers")
+    answers: jsonb('answers')
       .$type<z.infer<typeof OnboardingAnswersSchema>>()
       .notNull()
       .default({}),
     // The question set this row was last reconciled against. Null until the
     // first answer is written. Flags stale responses in admin views; it does
     // NOT decide re-prompting — pendingQuestions() does.
-    questionSetHash: varchar("question_set_hash", { length: 64 }),
+    questionSetHash: varchar('question_set_hash', { length: 64 }),
     // 'admin' | 'default' — the question source, frozen when the row is
     // created. Without this, an admin adding the first question to a course
     // would flip the effective set, orphan every default answer, and
     // re-interview users who had already finished.
-    questionSource: varchar("question_source", { length: 16 }),
+    questionSource: varchar('question_source', { length: 16 }),
     // Set when the user declines the consent framing. The row persists with an
     // empty answers map so onboarding is never auto-offered again — declining
     // is respected, not re-pitched on the next visit.
-    consentDeclinedAt: timestamp("consent_declined_at", { mode: "date" }),
+    consentDeclinedAt: timestamp('consent_declined_at', { mode: 'date' }),
     // Set when the user asks to delete everything they've shared. The row is
     // kept as a tombstone — answers cleared, transcript removed — so the agent
     // never re-offers onboarding to someone who withdrew. Distinct from
     // consentDeclinedAt, which means they never started.
-    deletedAt: timestamp("deleted_at", { mode: "date" }),
+    deletedAt: timestamp('deleted_at', { mode: 'date' }),
     // The machine's settled state after the last turn, from
     // actor.getPersistedSnapshot(). Restored with
     // createActor(machine, { snapshot }).
@@ -877,30 +879,30 @@ export const courseOnboardingTable = pgTable(
     // fields are not reconstructible from other columns, so rebuilding
     // context fresh each request would reset followUpCount and
     // consentClarificationCount every turn — silently disabling both caps.
-    machineSnapshot: jsonb("machine_snapshot").$type<Record<string, unknown>>(),
+    machineSnapshot: jsonb('machine_snapshot').$type<Record<string, unknown>>(),
     // Guards the snapshot across deploys that change the machine's shape. On
     // mismatch the snapshot is discarded and the machine starts fresh, which
     // is safe: `answers` is durable, so pendingQuestions() resumes the user
     // at their next unanswered question. Because the failure mode is mild,
     // the guard is deliberately biased toward discarding.
-    machineVersion: varchar("machine_version", { length: 32 }),
+    machineVersion: varchar('machine_version', { length: 32 }),
     // Null means in-progress and resumable.
-    onboardingCompletedAt: timestamp("onboarding_completed_at", {
-      mode: "date",
+    onboardingCompletedAt: timestamp('onboarding_completed_at', {
+      mode: 'date',
     }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     // One record per user per course. This is what makes the incremental-save
     // upsert safe against double-submit, concurrent tabs, and retried requests.
-    uniqueIndex("course_onboarding_user_course_idx").on(
+    uniqueIndex('course_onboarding_user_course_idx').on(
       table.userId,
       table.courseId,
     ),
     // The unique index is user-first, so it will not serve the admin
     // "all responses for this course" query.
-    index("course_onboarding_course_id_idx").on(table.courseId),
+    index('course_onboarding_course_id_idx').on(table.courseId),
   ],
 );
 
@@ -945,26 +947,26 @@ export const courseOnboardingTableRelations = relations(
 );
 
 export const courseOnboardingMessagesTable = pgTable(
-  "course_onboarding_messages",
+  'course_onboarding_messages',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    onboardingId: integer("onboarding_id")
+    onboardingId: integer('onboarding_id')
       .notNull()
-      .references(() => courseOnboardingTable.id, { onDelete: "cascade" }),
-    role: varchar("role", { length: 16 }).notNull(), // 'assistant' | 'user'
+      .references(() => courseOnboardingTable.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 16 }).notNull(), // 'assistant' | 'user'
     // Mirrors aiMessages.parts so these rows are compatible with the AI SDK
     // UIMessage shape when the UI is wired.
-    parts: jsonb("parts").notNull(),
-    order: integer("order").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    parts: jsonb('parts').notNull(),
+    order: integer('order').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     // A retried request must not append the same turn twice.
-    uniqueIndex("course_onboarding_messages_onboarding_order_idx").on(
+    uniqueIndex('course_onboarding_messages_onboarding_order_idx').on(
       table.onboardingId,
       table.order,
     ),
-    index("course_onboarding_messages_onboarding_id_idx").on(
+    index('course_onboarding_messages_onboarding_id_idx').on(
       table.onboardingId,
     ),
   ],
@@ -995,30 +997,30 @@ export const courseOnboardingMessagesTableRelations = relations(
 );
 
 export const docs = pgTable(
-  "docs",
+  'docs',
   {
-    id: serial("id").primaryKey(),
+    id: serial('id').primaryKey(),
     // Null = org-wide doc (shared across all courses); set = course-specific.
-    courseId: integer("course_id").references(() => coursesTable.id, {
-      onDelete: "cascade",
+    courseId: integer('course_id').references(() => coursesTable.id, {
+      onDelete: 'cascade',
     }),
-    sourcePath: text("source_path").notNull(),
-    heading: text("heading"),
-    chunk: text("chunk").notNull(),
+    sourcePath: text('source_path').notNull(),
+    heading: text('heading'),
+    chunk: text('chunk').notNull(),
     // 1536 for gemini-embedding-001, 3072 for -large
-    embedding: vector("embedding", { dimensions: 3072 }).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    embedding: vector('embedding', { dimensions: 3072 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [
     // Course-scoped dedup key: the same source chunk can be embedded per
     // course. A unique constraint (not index) so it can be NULLS NOT DISTINCT —
     // org-wide rows (null course_id / null heading) still dedupe; Postgres
     // otherwise treats every NULL as a distinct value.
-    unique("uniq_course_source_heading_chunk")
+    unique('uniq_course_source_heading_chunk')
       .on(t.courseId, t.sourcePath, t.heading, t.chunk)
       .nullsNotDistinct(),
     // Filter embeddings by course before similarity search.
-    index("docs_course_id_idx").on(t.courseId),
+    index('docs_course_id_idx').on(t.courseId),
   ],
 );
 
@@ -1043,18 +1045,18 @@ export const docsRelations = relations(docs, ({ one }) => ({
 }));
 
 export const docURLs = pgTable(
-  "doc_urls",
+  'doc_urls',
   {
-    id: serial("id").primaryKey(),
+    id: serial('id').primaryKey(),
     // Null = org-wide; set = course-specific. Matches docs.courseId scoping.
-    courseId: integer("course_id").references(() => coursesTable.id, {
-      onDelete: "cascade",
+    courseId: integer('course_id').references(() => coursesTable.id, {
+      onDelete: 'cascade',
     }),
-    sourcePath: text("source_path").notNull(),
-    url: text("url"),
+    sourcePath: text('source_path').notNull(),
+    url: text('url'),
   },
   (t) => [
-    unique("uniq_course_source_path_url")
+    unique('uniq_course_source_path_url')
       .on(t.courseId, t.sourcePath, t.url)
       .nullsNotDistinct(),
   ],
@@ -1067,30 +1069,30 @@ export const docURLsSelectSchema = createSelectSchema(docURLs);
 export type DocURLsSelect = z.infer<typeof docURLsSelectSchema>;
 
 export const aiChats = pgTable(
-  "ai_chats",
+  'ai_chats',
   {
-    id: varchar("id", { length: 255 })
+    id: varchar('id', { length: 255 })
       .notNull()
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    title: varchar("title", { length: 255 }).notNull(),
-    createdAt: timestamp("created_at", {
-      mode: "date",
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 255 }).notNull(),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
       withTimezone: true,
     })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: timestamp("updated_at", {
-      mode: "date",
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
       withTimezone: true,
     })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
-  (chat) => [index("chat_user_id_idx").on(chat.userId)],
+  (chat) => [index('chat_user_id_idx').on(chat.userId)],
 );
 
 export const aichatsRelations = relations(aiChats, ({ one, many }) => ({
@@ -1102,28 +1104,28 @@ export const aichatsRelations = relations(aiChats, ({ one, many }) => ({
 }));
 
 export const aiMessages = pgTable(
-  "ai_messages",
+  'ai_messages',
   {
-    id: varchar("id", { length: 255 })
+    id: varchar('id', { length: 255 })
       .notNull()
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    chatId: varchar("chat_id", { length: 255 })
+    chatId: varchar('chat_id', { length: 255 })
       .notNull()
-      .references(() => aiChats.id, { onDelete: "cascade" }),
-    role: varchar("role", { length: 50 }).notNull(),
-    parts: json("parts").notNull(),
-    order: integer("order").notNull(),
-    createdAt: timestamp("created_at", {
-      mode: "date",
+      .references(() => aiChats.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 50 }).notNull(),
+    parts: json('parts').notNull(),
+    order: integer('order').notNull(),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
       withTimezone: true,
     })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (message) => [
-    index("message_chat_id_idx").on(message.chatId),
-    index("message_order_idx").on(message.order),
+    index('message_chat_id_idx').on(message.chatId),
+    index('message_order_idx').on(message.order),
   ],
 );
 
@@ -1134,12 +1136,12 @@ export const aiMessagesRelations = relations(aiMessages, ({ one }) => ({
   }),
 }));
 
-export const personaTable = pgTable("personas", {
+export const personaTable = pgTable('personas', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull().unique(),
-  content: jsonb("content").notNull().$type<z.infer<typeof PersonaSchema>>(),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  name: text('name').notNull().unique(),
+  content: jsonb('content').notNull().$type<z.infer<typeof PersonaSchema>>(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const personaInsertSchema = createInsertSchema(personaTable, {
@@ -1149,19 +1151,19 @@ export const personaSelectSchema = createSelectSchema(personaTable, {
   content: PersonaSchema,
 });
 
-export const associateCountersTable = pgTable("associate_counters", {
-  yymm: varchar("yymm", { length: 4 }).primaryKey().notNull(), // e.g., "2510"
-  lastSerial: integer("last_serial").notNull(), // last issued 4-digit serial for this YYMM
-  seededAt: timestamp("seeded_at", { mode: "date" }), // optional audit
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow(),
+export const associateCountersTable = pgTable('associate_counters', {
+  yymm: varchar('yymm', { length: 4 }).primaryKey().notNull(), // e.g., "2510"
+  lastSerial: integer('last_serial').notNull(), // last issued 4-digit serial for this YYMM
+  seededAt: timestamp('seeded_at', { mode: 'date' }), // optional audit
+  updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow(),
 });
 
-export const orgsTable = pgTable("organizations", {
+export const orgsTable = pgTable('organizations', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
-  logoURL: text("logo_url"),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  name: text('name').notNull(),
+  logoURL: text('logo_url'),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
 
 export const orgsInsertSchema = createInsertSchema(orgsTable);
@@ -1179,22 +1181,22 @@ export const orgsTableRelations = relations(orgsTable, ({ many }) => ({
 }));
 
 export const userOrgTable = pgTable(
-  "user_organizations",
+  'user_organizations',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userRoles: varchar("user_roles", { length: 255 })
+    userRoles: varchar('user_roles', { length: 255 })
       .array()
       .default([])
       .notNull(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    orgId: integer("org_id")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    orgId: integer('org_id')
       .notNull()
-      .references(() => orgsTable.id, { onDelete: "cascade" }),
+      .references(() => orgsTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    uniqueIndex("user_orgs_user_org_idx").on(table.userId, table.orgId),
+    uniqueIndex('user_orgs_user_org_idx').on(table.userId, table.orgId),
   ],
 );
 
@@ -1210,20 +1212,20 @@ export const userOrgTableRelations = relations(userOrgTable, ({ one }) => ({
 }));
 
 export const orgLessonsTable = pgTable(
-  "organization_lessons",
+  'organization_lessons',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    orgId: integer("org_id")
+    orgId: integer('org_id')
       .notNull()
-      .references(() => orgsTable.id, { onDelete: "cascade" }),
-    lessonId: integer("lesson_id")
+      .references(() => orgsTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
       .notNull()
-      .references(() => lessonsTable.id, { onDelete: "cascade" }),
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    uniqueIndex("org_lessons_org_lesson_idx").on(table.orgId, table.lessonId),
-    index("org_lessons_org_id_idx").on(table.orgId),
-    index("org_lessons_lesson_id_idx").on(table.lessonId),
+    uniqueIndex('org_lessons_org_lesson_idx').on(table.orgId, table.lessonId),
+    index('org_lessons_org_id_idx').on(table.orgId),
+    index('org_lessons_lesson_id_idx').on(table.lessonId),
   ],
 );
 
@@ -1242,47 +1244,47 @@ export const orgLessonsTableRelations = relations(
 );
 
 export const accountDeletionRequestsTable = pgTable(
-  "account_deletion_requests",
+  'account_deletion_requests',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
       .unique()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    reason: text("reason").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
 );
 
-export const airportsTable = pgTable("airports", {
+export const airportsTable = pgTable('airports', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   // ICAO code of this airport. May also be a combination of country code and a number. e.g. LEMD, EHTX, ES-0071 etc.
-  icao: varchar("icao").unique().notNull(),
-  name: text("name").notNull(),
-  lat: numeric("lat", { precision: 10, scale: 5 }).notNull(),
-  lng: numeric("lng", { precision: 10, scale: 5 }).notNull(),
-  countryCode: varchar("country_code", { length: 2 }).notNull(),
+  icao: varchar('icao').unique().notNull(),
+  name: text('name').notNull(),
+  lat: numeric('lat', { precision: 10, scale: 5 }).notNull(),
+  lng: numeric('lng', { precision: 10, scale: 5 }).notNull(),
+  countryCode: varchar('country_code', { length: 2 }).notNull(),
 });
 
 export const lessonTestResultsTable = pgTable(
-  "lesson_test_results",
+  'lesson_test_results',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: varchar("user_id", { length: 255 })
+    userId: varchar('user_id', { length: 255 })
       .notNull()
-      .references(() => userProfileTable.userId, { onDelete: "cascade" }),
-    lessonSlug: text("lesson_slug")
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonSlug: text('lesson_slug')
       .notNull()
-      .references(() => lessonsTable.slug, { onDelete: "cascade" }),
-    questions: json("questions").notNull(),
-    answers: json("answers").notNull().default([]),
-    totalScore: integer("total_score"),
-    completedAt: timestamp("completed_at", { mode: "date" }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    questions: json('questions').notNull(),
+    answers: json('answers').notNull().default([]),
+    totalScore: integer('total_score'),
+    completedAt: timestamp('completed_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    index("lesson_test_results_user_id_idx").on(table.userId),
-    index("lesson_test_results_user_lesson_idx").on(
+    index('lesson_test_results_user_id_idx').on(table.userId),
+    index('lesson_test_results_user_lesson_idx').on(
       table.userId,
       table.lessonSlug,
     ),
