@@ -1,5 +1,6 @@
 import { Combobox } from '@base-ui/react/combobox';
 import { Check, X } from 'lucide-react';
+import { ScrollArea } from '#/components/scroll-area';
 
 export interface DependencyOption {
   slug: string;
@@ -78,35 +79,45 @@ export const ModuleDependencyPicker = ({
 
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={4} className="z-50">
-          <Combobox.Popup className="max-h-64 w-[var(--anchor-width)] overflow-y-auto rounded-md border border-gray-6 bg-gray-2 py-1 shadow-lg">
+          {/*
+            The list scrolls inside the shared ScrollArea rather than on the
+            popup itself: a raw `overflow-y-auto` here renders the platform
+            scrollbar, which on macOS is an opaque bar flush to the edge that
+            paints over the popup's rounded corner. ScrollArea's overlay thumb
+            only appears while hovering or scrolling, matching every other
+            scrolling surface in the app.
+          */}
+          <Combobox.Popup className="w-[var(--anchor-width)] rounded-md border border-gray-6 bg-gray-2 py-1 shadow-lg">
             <Combobox.Empty className="px-3 py-2 text-secondary text-sm">
               No matching modules
             </Combobox.Empty>
-            <Combobox.List>
-              {(slug: string) => {
-                const blockedReason = blockedBySlug.get(slug) ?? null;
-                return (
-                  <Combobox.Item
-                    key={slug}
-                    value={slug}
-                    disabled={blockedReason !== null}
-                    className="flex cursor-default items-start gap-2 px-3 py-2 text-primary text-sm data-disabled:cursor-not-allowed data-disabled:text-tertiary data-highlighted:bg-gray-4"
-                  >
-                    <Combobox.ItemIndicator className="mt-0.5">
-                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Combobox.ItemIndicator>
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span>{nameBySlug.get(slug) ?? slug}</span>
-                      {blockedReason && (
-                        <span className="text-tertiary text-xs">
-                          {blockedReason}
-                        </span>
-                      )}
-                    </span>
-                  </Combobox.Item>
-                );
-              }}
-            </Combobox.List>
+            <ScrollArea className="max-h-64">
+              <Combobox.List>
+                {(slug: string) => {
+                  const blockedReason = blockedBySlug.get(slug) ?? null;
+                  return (
+                    <Combobox.Item
+                      key={slug}
+                      value={slug}
+                      disabled={blockedReason !== null}
+                      className="flex cursor-default items-start gap-2 px-3 py-2 text-primary text-sm data-disabled:cursor-not-allowed data-disabled:text-tertiary data-highlighted:bg-gray-4"
+                    >
+                      <Combobox.ItemIndicator className="mt-0.5">
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Combobox.ItemIndicator>
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span>{nameBySlug.get(slug) ?? slug}</span>
+                        {blockedReason && (
+                          <span className="text-tertiary text-xs">
+                            {blockedReason}
+                          </span>
+                        )}
+                      </span>
+                    </Combobox.Item>
+                  );
+                }}
+              </Combobox.List>
+            </ScrollArea>
           </Combobox.Popup>
         </Combobox.Positioner>
       </Combobox.Portal>
