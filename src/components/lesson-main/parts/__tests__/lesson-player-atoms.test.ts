@@ -20,7 +20,7 @@ describe('videoReachedEndAtomFamily', () => {
     expect(store.get(videoReachedEndAtomFamily('v-lesson-a'))).toBe(true);
   });
 
-  it('returns the same atom for the same videoId, so the container and its overlay agree', () => {
+  it('returns the same atom for the same lessonSlug, so the container and its overlay agree', () => {
     expect(videoReachedEndAtomFamily('v-1')).toBe(
       videoReachedEndAtomFamily('v-1'),
     );

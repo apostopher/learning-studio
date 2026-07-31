@@ -22,18 +22,16 @@ import { videoReachedEndAtomFamily } from './lesson-player-atoms';
 type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
   lessonSlug: string;
-  videoId: string;
 };
 
 export const LessonPlayerContainer = ({
   videoState,
   lessonSlug,
-  videoId,
 }: LessonPlayerContainerProps) => {
   const playerId = useId();
-  useMilestoneReporter(playerId, videoId, lessonSlug);
+  useMilestoneReporter(playerId, lessonSlug);
   const [reachedEnd, setReachedEnd] = useAtom(
-    videoReachedEndAtomFamily(videoId),
+    videoReachedEndAtomFamily(lessonSlug),
   );
   // Live playback state, so the end-of-video overlay comes off the moment the
   // student resumes or seeks back — see computePlayerOverlay.
@@ -60,7 +58,7 @@ export const LessonPlayerContainer = ({
   // CoverageNotice's "watch the parts you skipped" copy for a lesson/module
   // lock it doesn't describe.
   const materialLocked = data?.locked === true && data.reason === 'video';
-  const progress = useVideoProgress(videoId);
+  const progress = useVideoProgress(lessonSlug);
   const hit = progress.data?.milestonesHit.filter((m) => m !== 100).length ?? 0;
 
   const onEnded = useCallback(() => {

@@ -13,8 +13,8 @@ export const dataKeys = {
     ['admin', 'course-embeddings', courseId] as const,
   courseOnboarding: (courseId: number) =>
     ['admin', 'course-onboarding', courseId] as const,
-  videoProgress: (videoId: string) =>
-    ['user', 'video-progress', videoId] as const,
+  lessonProgress: (lessonSlug: string) =>
+    ['user', 'video-progress', lessonSlug] as const,
   courseProgressSummary: (slug: string) =>
     ['course', 'progress-summary', slug] as const,
   myCourses: () => ['user', 'my-courses'] as const,

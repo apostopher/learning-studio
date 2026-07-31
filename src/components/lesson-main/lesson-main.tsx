@@ -16,18 +16,10 @@ type LessonMainProps = {
   state: LessonMainState;
 };
 
-const renderPlayerSlot = (
-  videoState: VideoFetchState,
-  lessonSlug: string,
-  videoId: string,
-) => {
+const renderPlayerSlot = (videoState: VideoFetchState, lessonSlug: string) => {
   if (videoState.status === 'ready') {
     return (
-      <LessonPlayerContainer
-        videoState={videoState}
-        lessonSlug={lessonSlug}
-        videoId={videoId}
-      />
+      <LessonPlayerContainer videoState={videoState} lessonSlug={lessonSlug} />
     );
   }
   if (videoState.status === 'fetching' || videoState.status === 'rendering') {
@@ -95,11 +87,7 @@ const renderArticleBody = (state: LessonMainState) => {
       return (
         <>
           <div className="lesson-player">
-            {renderPlayerSlot(
-              state.videoState,
-              state.lessonSlug,
-              state.videoId,
-            )}
+            {renderPlayerSlot(state.videoState, state.lessonSlug)}
           </div>
           {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
         </>

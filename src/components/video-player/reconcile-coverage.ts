@@ -13,19 +13,19 @@ export type ProgressSnapshot = { milestonesHit: number[]; watched: boolean };
  * and a locked response is cached with staleTime 0.
  */
 export async function reconcileCoverage({
-  videoId,
+  lessonSlug,
   reported,
   report,
   fetchProgress,
 }: {
-  videoId: string;
+  lessonSlug: string;
   reported: ReadonlySet<number>;
-  report: (input: { videoId: string; progress: number }) => void;
-  fetchProgress: (videoId: string) => Promise<ProgressSnapshot>;
+  report: (input: { lessonSlug: string; progress: number }) => void;
+  fetchProgress: (lessonSlug: string) => Promise<ProgressSnapshot>;
 }): Promise<number[]> {
   let snapshot: ProgressSnapshot;
   try {
-    snapshot = await fetchProgress(videoId);
+    snapshot = await fetchProgress(lessonSlug);
   } catch {
     return [];
   }
@@ -35,6 +35,6 @@ export async function reconcileCoverage({
   const missing = [...reported]
     .filter((m) => !onServer.has(m))
     .sort((a, b) => a - b);
-  for (const progress of missing) report({ videoId, progress });
+  for (const progress of missing) report({ lessonSlug, progress });
   return missing;
 }

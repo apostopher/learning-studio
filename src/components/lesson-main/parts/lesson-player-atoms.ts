@@ -1,12 +1,13 @@
 import { atom } from 'jotai';
-import { atomFamily } from 'jotai/utils';
+import { atomFamily } from 'jotai-family';
 
 /**
- * Whether a given video has fired `ended` at least once this session.
+ * Whether a given lesson's video has fired `ended` at least once this
+ * session.
  *
- * Keyed by videoId, matching `videoPlayerStateAtomFamily`. It used to be one
- * module-level `atom(false)` shared by every lesson, and nothing ever set it
- * back: finishing lesson A and clicking lesson B mounted B with
+ * Keyed by lessonSlug, matching `videoPlayerStateAtomFamily`. It used to be
+ * one module-level `atom(false)` shared by every lesson, and nothing ever
+ * set it back: finishing lesson A and clicking lesson B mounted B with
  * `videoEnded === true`, so B opened with "You skipped ahead. You've watched 0
  * of 18 sections" laid over a video that had not started.
  *
@@ -21,6 +22,6 @@ import { atomFamily } from 'jotai/utils';
  * __tests__/lesson-player-atoms.test.ts) without importing the hook-calling
  * container, which cannot load under Vitest.
  */
-export const videoReachedEndAtomFamily = atomFamily((_videoId: string) =>
+export const videoReachedEndAtomFamily = atomFamily((_lessonSlug: string) =>
   atom(false),
 );

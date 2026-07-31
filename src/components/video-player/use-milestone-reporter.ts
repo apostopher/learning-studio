@@ -15,9 +15,9 @@ import {
 } from './milestone-tick';
 import { reconcileCoverage } from './reconcile-coverage';
 
-async function fetchProgress(videoId: string) {
+async function fetchProgress(lessonSlug: string) {
   const res = await fetch(
-    `/api/user/video-progress?videoId=${encodeURIComponent(videoId)}`,
+    `/api/user/video-progress?lessonSlug=${encodeURIComponent(lessonSlug)}`,
   );
   if (!res.ok) throw new Error(`Failed to load video progress (${res.status})`);
   // Same endpoint and shape useVideoProgress reads — reuse its schema rather
@@ -48,7 +48,7 @@ async function fetchProgress(videoId: string) {
  * commit that can change any of its inputs (all four are in the dependency
  * array below, including `milestonesHit`). That is deliberate: an earlier
  * version split reset and seed across two separate effects with different
- * dependency arrays, and a same-commit videoId change + already-cached
+ * dependency arrays, and a same-commit lessonSlug change + already-cached
  * progress data raced them — see `computeMilestoneTick`'s doc comment for
  * the full failure mode. Not render-tested here: this repo's Vite pipeline
  * (react-compiler + TanStack Start under Vitest) nulls the hook dispatcher
@@ -60,7 +60,6 @@ async function fetchProgress(videoId: string) {
  */
 export function useMilestoneReporter(
   playerId: string,
-  videoId: string,
   lessonSlug: string,
 ): void {
   const { currentTime, duration } = useAtomValue(
@@ -68,41 +67,39 @@ export function useMilestoneReporter(
   );
   const report = useReportVideoProgress();
   const queryClient = useQueryClient();
-  const progress = useVideoProgress(videoId);
+  const progress = useVideoProgress(lessonSlug);
   const milestonesHit = progress.data?.milestonesHit;
 
   const reportRef = useRef(report);
   reportRef.current = report;
-  const lessonSlugRef = useRef(lessonSlug);
-  lessonSlugRef.current = lessonSlug;
 
   const stateRef = useRef(initialMilestoneReporterState);
 
   useEffect(() => {
     const { state, crossed, shouldReconcile } = computeMilestoneTick(
       stateRef.current,
-      { videoId, currentTime, duration, milestonesHit },
+      { lessonSlug, currentTime, duration, milestonesHit },
     );
     stateRef.current = state;
 
     for (const milestone of crossed) {
-      reportRef.current.mutate({ videoId, progress: milestone });
+      reportRef.current.mutate({ lessonSlug, progress: milestone });
     }
 
     if (!shouldReconcile) return;
 
     void reconcileCoverage({
-      videoId,
+      lessonSlug,
       reported: state.reported,
       report: (input) => reportRef.current.mutate(input),
       fetchProgress,
     }).then(() => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonMaterial(lessonSlugRef.current),
+        queryKey: queryKeys.lessonMaterial(lessonSlug),
       });
       queryClient.invalidateQueries({
-        queryKey: dataKeys.videoProgress(videoId),
+        queryKey: dataKeys.lessonProgress(lessonSlug),
       });
     });
-  }, [currentTime, duration, videoId, milestonesHit, queryClient]);
+  }, [currentTime, duration, lessonSlug, milestonesHit, queryClient]);
 }

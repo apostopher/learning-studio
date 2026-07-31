@@ -10,7 +10,7 @@ describe('reconcileCoverage', () => {
     });
 
     const resent = await reconcileCoverage({
-      videoId: 'v1',
+      lessonSlug: 'v1',
       reported: new Set([10, 15, 20]),
       report,
       fetchProgress,
@@ -19,7 +19,7 @@ describe('reconcileCoverage', () => {
     // Reports go by sendBeacon and are fire-and-forget; a dropped one would
     // otherwise strand the student behind a lock they legitimately cleared.
     expect(resent).toEqual([20]);
-    expect(report).toHaveBeenCalledWith({ videoId: 'v1', progress: 20 });
+    expect(report).toHaveBeenCalledWith({ lessonSlug: 'v1', progress: 20 });
   });
 
   it('sends nothing when the server already agrees', async () => {
@@ -30,7 +30,7 @@ describe('reconcileCoverage', () => {
     });
 
     const resent = await reconcileCoverage({
-      videoId: 'v1',
+      lessonSlug: 'v1',
       reported: new Set([10, 15, 20]),
       report,
       fetchProgress,
@@ -46,7 +46,7 @@ describe('reconcileCoverage', () => {
 
     await expect(
       reconcileCoverage({
-        videoId: 'v1',
+        lessonSlug: 'v1',
         reported: new Set([10]),
         report,
         fetchProgress,

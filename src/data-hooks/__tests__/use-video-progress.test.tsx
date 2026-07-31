@@ -24,13 +24,13 @@ describe('useVideoProgress', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { result } = renderHook(() => useVideoProgress('vid a/b'), {
+    const { result } = renderHook(() => useVideoProgress('lesson a/b'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/user/video-progress?videoId=vid%20a%2Fb',
+      '/api/user/video-progress?lessonSlug=lesson%20a%2Fb',
     );
     expect(result.current.data).toEqual({
       milestonesHit: [10, 15, 20],
@@ -38,7 +38,7 @@ describe('useVideoProgress', () => {
     });
   });
 
-  it('is disabled (no fetch) when videoId is empty', () => {
+  it('is disabled (no fetch) when lessonSlug is empty', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 

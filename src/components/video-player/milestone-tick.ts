@@ -11,7 +11,7 @@ import {
  * atop `use-milestone-reporter.ts` for why that matters in this repo.
  */
 export type MilestoneReporterState = {
-  videoId: string | null;
+  lessonSlug: string | null;
   reported: ReadonlySet<number>;
   seededFor: string | null;
   lastTime: number;
@@ -19,7 +19,7 @@ export type MilestoneReporterState = {
 };
 
 export const initialMilestoneReporterState: MilestoneReporterState = {
-  videoId: null,
+  lessonSlug: null,
   reported: new Set(),
   seededFor: null,
   lastTime: 0,
@@ -27,10 +27,10 @@ export const initialMilestoneReporterState: MilestoneReporterState = {
 };
 
 export type MilestoneTickInput = {
-  videoId: string;
+  lessonSlug: string;
   currentTime: number;
   duration: number;
-  /** `useVideoProgress(videoId).data?.milestonesHit` — undefined until the seed lands. */
+  /** `useVideoProgress(lessonSlug).data?.milestonesHit` — undefined until the seed lands. */
   milestonesHit: number[] | undefined;
 };
 
@@ -48,23 +48,23 @@ export type MilestoneTickResult = {
  * (if any) were newly crossed, and whether reconciliation should fire.
  *
  * Intended to be called on EVERY commit that could change any input —
- * currentTime, duration, videoId, or milestonesHit — i.e. all four belong in
- * the calling effect's dependency array. That is what makes this safe where
- * the two-effect version it replaced was not: a `useEffect` with deps
- * `[videoId, milestonesHit]` only re-runs when THOSE deps change, so if a
- * sibling effect's reset branch (keyed on `[videoId, ...]` without
+ * currentTime, duration, lessonSlug, or milestonesHit — i.e. all four belong
+ * in the calling effect's dependency array. That is what makes this safe
+ * where the two-effect version it replaced was not: a `useEffect` with deps
+ * `[lessonSlug, milestonesHit]` only re-runs when THOSE deps change, so if a
+ * sibling effect's reset branch (keyed on `[lessonSlug, ...]` without
  * `milestonesHit`) clobbered its seed in the same commit, the seed effect
- * had already "spent" its one trigger for this videoId and would never fire
- * again — permanently starving every later tick. A single function called
- * fresh every commit has no such per-branch memoization: reset and seed are
- * both re-evaluated from current inputs on every call, so there is no
- * "later" for the seed to be starved from.
+ * had already "spent" its one trigger for this lessonSlug and would never
+ * fire again — permanently starving every later tick. A single function
+ * called fresh every commit has no such per-branch memoization: reset and
+ * seed are both re-evaluated from current inputs on every call, so there is
+ * no "later" for the seed to be starved from.
  *
  * Order still matters WITHIN one call: reset must be applied before the seed
- * check runs, so a videoId change that lands in the same commit as
+ * check runs, so a lessonSlug change that lands in the same commit as
  * already-available `milestonesHit` (realistic — `useVideoProgress` has
  * `staleTime: 30_000`, so revisiting a lesson within 30s resolves
- * synchronously) is seeded for the NEW video in that same call, not the
+ * synchronously) is seeded for the NEW lesson in that same call, not the
  * stale previous one.
  */
 export function computeMilestoneTick(
@@ -73,14 +73,14 @@ export function computeMilestoneTick(
 ): MilestoneTickResult {
   let state = prev;
 
-  // Reset — a new video always starts from a clean slate. Must run BEFORE
-  // the seed check below: a videoId switch can land in the same call as
-  // already-available `milestonesHit` for the new video (see doc comment),
+  // Reset — a new lesson always starts from a clean slate. Must run BEFORE
+  // the seed check below: a lessonSlug switch can land in the same call as
+  // already-available `milestonesHit` for the new lesson (see doc comment),
   // and resetting first ensures the seed check that follows is evaluated
-  // against the NEW video's (just-cleared) state, not the old one's.
-  if (state.videoId !== input.videoId) {
+  // against the NEW lesson's (just-cleared) state, not the old one's.
+  if (state.lessonSlug !== input.lessonSlug) {
     state = {
-      videoId: input.videoId,
+      lessonSlug: input.lessonSlug,
       reported: new Set(),
       seededFor: null,
       lastTime: 0,
@@ -89,20 +89,20 @@ export function computeMilestoneTick(
   }
 
   // Seed — from the server's existing milestones, before any tick logic can
-  // run. `input.milestonesHit` must never reflect a *different* video's
+  // run. `input.milestonesHit` must never reflect a *different* lesson's
   // cache: useVideoProgress has no `placeholderData`/`keepPreviousData`, so
   // `data` is undefined across a query-key change until the NEW key
   // resolves. Do not add either option to that hook — it would make stale
   // seeding here possible.
   if (
-    input.videoId &&
+    input.lessonSlug &&
     input.milestonesHit &&
-    state.seededFor !== input.videoId
+    state.seededFor !== input.lessonSlug
   ) {
     state = {
       ...state,
       reported: new Set(input.milestonesHit),
-      seededFor: input.videoId,
+      seededFor: input.lessonSlug,
     };
   }
 
@@ -113,7 +113,7 @@ export function computeMilestoneTick(
   };
 
   if (
-    !input.videoId ||
+    !input.lessonSlug ||
     !Number.isFinite(input.duration) ||
     input.duration <= 0
   ) {
@@ -122,7 +122,7 @@ export function computeMilestoneTick(
     // worst one tick is treated as a spurious seek and deferred, not lost.
     return noop;
   }
-  if (state.seededFor !== input.videoId) return noop;
+  if (state.seededFor !== input.lessonSlug) return noop;
 
   const prevTime = state.lastTime;
   const advance = input.currentTime - prevTime;

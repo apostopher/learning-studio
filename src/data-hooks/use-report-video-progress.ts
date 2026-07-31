@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { saveJson } from './save-json';
 
 export interface ReportVideoProgressInput {
-  videoId: string;
+  lessonSlug: string;
   progress: number;
 }
 

@@ -28,7 +28,7 @@ describe('useReportVideoProgress', () => {
     const { result } = renderHook(() => useReportVideoProgress(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ videoId: 'v1', progress: 50 });
+    result.current.mutate({ lessonSlug: 'v1', progress: 50 });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(beacon).toHaveBeenCalledTimes(1);
@@ -49,13 +49,13 @@ describe('useReportVideoProgress', () => {
     const { result } = renderHook(() => useReportVideoProgress(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ videoId: 'v1', progress: 50 });
+    result.current.mutate({ lessonSlug: 'v1', progress: 50 });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(URL);
     expect(init.method).toBe('POST');
     expect(init.keepalive).toBe(true);
-    expect(JSON.parse(init.body)).toEqual({ videoId: 'v1', progress: 50 });
+    expect(JSON.parse(init.body)).toEqual({ lessonSlug: 'v1', progress: 50 });
   });
 });

@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import { atomFamily } from 'jotai/utils';
+import { atomFamily } from 'jotai-family';
 import type { VideoPlayerState } from './types';
 
 export const INITIAL_VIDEO_PLAYER_STATE: VideoPlayerState = {

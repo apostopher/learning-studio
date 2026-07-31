@@ -12,23 +12,23 @@ export const videoProgressSchema = z.object({
 export type VideoProgress = z.infer<typeof videoProgressSchema>;
 
 /**
- * The logged-in user's progress for a single video: the milestones they've hit
- * and whether it counts as watched. Backed by GET /api/user/video-progress.
- * Disabled until `videoId` is non-empty.
+ * The logged-in user's progress for a single lesson's video: the milestones
+ * they've hit and whether it counts as watched. Backed by
+ * GET /api/user/video-progress. Disabled until `lessonSlug` is non-empty.
  */
-export function useVideoProgress(videoId: string) {
+export function useVideoProgress(lessonSlug: string) {
   return useQuery({
-    queryKey: dataKeys.videoProgress(videoId),
+    queryKey: dataKeys.lessonProgress(lessonSlug),
     queryFn: async () => {
       const res = await fetch(
-        `/api/user/video-progress?videoId=${encodeURIComponent(videoId)}`,
+        `/api/user/video-progress?lessonSlug=${encodeURIComponent(lessonSlug)}`,
       );
       if (!res.ok) {
         throw new Error(`Failed to load video progress (${res.status})`);
       }
       return videoProgressSchema.parse(await res.json());
     },
-    enabled: videoId.length > 0,
+    enabled: lessonSlug.length > 0,
     staleTime: 30_000,
   });
 }
