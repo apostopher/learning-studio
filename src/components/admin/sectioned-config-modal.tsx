@@ -9,6 +9,12 @@ export interface ConfigModalSection {
   value: string;
   /** Sidebar label. */
   title: string;
+  /**
+   * Overrides the shell's `heading` while this section is active. For a
+   * section whose subject is not the entity itself — e.g. a course modal's
+   * dependency tab, which edits the course's *modules*.
+   */
+  heading?: ReactNode;
   /** Panel body, rendered in the main area when this section is active. */
   content: ReactNode;
 }
@@ -82,20 +88,27 @@ export const SectionedConfigModal = ({
               </Tabs.List>
 
               <ScrollArea className="min-h-0" viewportClassName="p-6">
-                <div className="flex flex-col gap-6">
-                  <h2 className="break-words font-semibold text-2xl text-primary">
-                    {heading}
-                  </h2>
-                  {sections.map((section) => (
-                    <Tabs.Panel
-                      key={section.value}
-                      value={section.value}
-                      className="flex-1"
-                    >
+                {sections.map((section) => (
+                  // The heading lives INSIDE each panel so a section can
+                  // override it; only the active panel renders, so exactly one
+                  // h2 is ever present. The flex column is an inner div rather
+                  // than the panel itself: Base UI hides inactive panels with
+                  // the `hidden` attribute, and a `display:flex` utility class
+                  // outranks the UA `[hidden]` rule, which would make every
+                  // hidden panel visible.
+                  <Tabs.Panel
+                    key={section.value}
+                    value={section.value}
+                    className="flex-1"
+                  >
+                    <div className="flex flex-col gap-6">
+                      <h2 className="break-words font-semibold text-2xl text-primary">
+                        {section.heading ?? heading}
+                      </h2>
                       {section.content}
-                    </Tabs.Panel>
-                  ))}
-                </div>
+                    </div>
+                  </Tabs.Panel>
+                ))}
               </ScrollArea>
             </Tabs.Root>
           )}

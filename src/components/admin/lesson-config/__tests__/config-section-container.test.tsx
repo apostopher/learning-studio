@@ -31,6 +31,7 @@ const lesson: BoardLesson = {
   needsVideoWatch: true,
   requiredSubscriptions: [],
   isConfigured: false,
+  hasVideoId: false,
   videoProvider: null,
   videoRef: null,
 };
@@ -61,6 +62,8 @@ const paidModule: BoardModule = {
   imageUrlWebp: null,
   rank: 1,
   requiredSubscriptions: ['associate'],
+  dependsOn: [],
+  learnerCount: 0,
   lessons: [lesson],
 };
 const freeModule: BoardModule = { ...paidModule, requiredSubscriptions: [] };

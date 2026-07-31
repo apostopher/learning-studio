@@ -14,6 +14,7 @@ import { CourseOnboardingContainer } from './course-onboarding-container';
 import { CourseVideoIntegrationsContainer } from './course-video-integrations-container';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
+import { ModuleDependenciesContainer } from './module-dependencies-container';
 import {
   type ConfigModalSection,
   SectionedConfigModal,
@@ -94,6 +95,14 @@ export const EditCourseDialogContainer = () => {
           submitLabel="Save changes"
         />
       ),
+    },
+    {
+      value: 'dependencies',
+      title: 'Module dependencies',
+      // This tab edits the course's modules, not the course, so it names them
+      // rather than inheriting the course-name heading the other tabs use.
+      heading: target ? `${target.name} modules` : '',
+      content: target && <ModuleDependenciesContainer courseId={target.id} />,
     },
     {
       value: 'video',
