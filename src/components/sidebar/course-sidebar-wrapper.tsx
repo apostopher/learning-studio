@@ -31,15 +31,22 @@ export const CourseSidebarWrapper = ({
   const isAdmin = useIsAdmin();
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
 
-  // Server-aggregated progress → the videoId-keyed / moduleId-keyed maps the
+  // Server-aggregated progress → the lessonId-keyed / moduleId-keyed maps the
   // sidebar renders. Replaces the old client-side jotai aggregation.
+  //
+  // NOTE: CourseProgress.lessons[] no longer carries videoId (progress is
+  // keyed purely by lessonId now), but the sidebar's LessonLike/lessonPercents
+  // plumbing below this hook still matches lessons by videoId sourced from
+  // course details. Keying this map on lessonId is a minimal stopgap to keep
+  // the build green — it does not fix the mismatch. Re-keying the whole chain
+  // onto lesson slugs is tracked separately.
   const { lessonPercents, modulePercents } = useMemo(() => {
     const lessonPercents: Record<string, number> = {};
     const modulePercents: Record<number, number> = {};
     const data = progressQuery.data;
     if (data) {
       for (const lesson of data.lessons) {
-        if (lesson.videoId) lessonPercents[lesson.videoId] = lesson.percent;
+        lessonPercents[lesson.lessonId] = lesson.percent;
       }
       for (const mod of data.modules)
         modulePercents[mod.moduleId] = mod.percent;

@@ -29,7 +29,7 @@ export function resolveCardResume({
   bypassLocks,
 }: CardResumeArgs): ResumeTarget {
   // A lesson counts as watched only when EVERY watched-milestone was hit — the
-  // same rule as hasWatchedVideo and isVideoWatched. A `> 0` test here would
+  // same rule as hasWatchedLesson and isVideoWatched. A `> 0` test here would
   // mark a lesson complete after seconds of playback and unlock everything
   // downstream of it.
   const watched = watchedLessonSlugs(details, {

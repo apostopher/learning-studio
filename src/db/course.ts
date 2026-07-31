@@ -201,7 +201,6 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       imageUrlWebp: coursesTable.imageUrlWebp,
       moduleId: modulesTable.id,
       lessonId: lessonsTable.id,
-      videoId: lessonsTable.videoId,
       watchedHits: countDistinct(videoProgressTable.progress),
     })
     .from(courseSubscriptionsTable)
@@ -230,7 +229,6 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       modulesTable.rank,
       lessonsTable.id,
       lessonsTable.rank,
-      lessonsTable.videoId,
     )
     // courseId as an explicit tiebreak keeps each course's rows contiguous
     // in the result, which the first-seen-wins loop below relies on.
@@ -246,7 +244,6 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       courseId: r.courseId,
       moduleId: r.moduleId,
       lessonId: r.lessonId,
-      videoId: r.videoId,
       watchedHits: Number(r.watchedHits),
     })),
   );

@@ -32,7 +32,6 @@ export async function getCourseProgress({
     .select({
       moduleId: modulesTable.id,
       lessonId: lessonsTable.id,
-      videoId: lessonsTable.videoId,
       watchedHits: countDistinct(videoProgressTable.progress),
     })
     .from(coursesTable)
@@ -52,7 +51,6 @@ export async function getCourseProgress({
       modulesTable.rank,
       lessonsTable.id,
       lessonsTable.rank,
-      lessonsTable.videoId,
     )
     .orderBy(asc(modulesTable.rank), asc(lessonsTable.rank));
 
@@ -61,7 +59,6 @@ export async function getCourseProgress({
     rows.map((r) => ({
       moduleId: r.moduleId,
       lessonId: r.lessonId,
-      videoId: r.videoId,
       watchedHits: Number(r.watchedHits),
     })),
   );
