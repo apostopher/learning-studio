@@ -21,7 +21,7 @@ import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.ind
 import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
 import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
 import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
-import { Route as ApiLessonVideoRouteImport } from './routes/api/lesson/video'
+import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
@@ -120,9 +120,9 @@ const ApiUserLastViewedRoute = ApiUserLastViewedRouteImport.update({
   path: '/api/user/last-viewed',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiLessonVideoRoute = ApiLessonVideoRouteImport.update({
-  id: '/api/lesson/video',
-  path: '/api/lesson/video',
+const ApiLessonPlaybackRoute = ApiLessonPlaybackRouteImport.update({
+  id: '/api/lesson/playback',
+  path: '/api/lesson/playback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLessonMaterialRoute = ApiLessonMaterialRouteImport.update({
@@ -349,7 +349,7 @@ export interface FileRoutesByFullPath {
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
-  '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
@@ -398,7 +398,7 @@ export interface FileRoutesByTo {
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
-  '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
@@ -451,7 +451,7 @@ export interface FileRoutesById {
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
-  '/api/lesson/video': typeof ApiLessonVideoRoute
+  '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
@@ -504,7 +504,7 @@ export interface FileRouteTypes {
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
-    | '/api/lesson/video'
+    | '/api/lesson/playback'
     | '/api/user/last-viewed'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
@@ -553,7 +553,7 @@ export interface FileRouteTypes {
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
-    | '/api/lesson/video'
+    | '/api/lesson/playback'
     | '/api/user/last-viewed'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
@@ -605,7 +605,7 @@ export interface FileRouteTypes {
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
     | '/api/lesson/material'
-    | '/api/lesson/video'
+    | '/api/lesson/playback'
     | '/api/user/last-viewed'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
@@ -653,7 +653,7 @@ export interface RootRouteChildren {
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
-  ApiLessonVideoRoute: typeof ApiLessonVideoRoute
+  ApiLessonPlaybackRoute: typeof ApiLessonPlaybackRoute
   ApiUserLastViewedRoute: typeof ApiUserLastViewedRoute
   ApiUserReportVideoProgressRoute: typeof ApiUserReportVideoProgressRoute
   ApiUserVideoProgressRoute: typeof ApiUserVideoProgressRoute
@@ -758,11 +758,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUserLastViewedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/lesson/video': {
-      id: '/api/lesson/video'
-      path: '/api/lesson/video'
-      fullPath: '/api/lesson/video'
-      preLoaderRoute: typeof ApiLessonVideoRouteImport
+    '/api/lesson/playback': {
+      id: '/api/lesson/playback'
+      path: '/api/lesson/playback'
+      fullPath: '/api/lesson/playback'
+      preLoaderRoute: typeof ApiLessonPlaybackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/material': {
@@ -1193,7 +1193,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
-  ApiLessonVideoRoute: ApiLessonVideoRoute,
+  ApiLessonPlaybackRoute: ApiLessonPlaybackRoute,
   ApiUserLastViewedRoute: ApiUserLastViewedRoute,
   ApiUserReportVideoProgressRoute: ApiUserReportVideoProgressRoute,
   ApiUserVideoProgressRoute: ApiUserVideoProgressRoute,
