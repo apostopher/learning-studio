@@ -29,9 +29,7 @@ export const LessonList = ({
           lesson={lesson}
           rank={index + 1}
           isActive={lesson.slug === activeLessonSlug}
-          progressPercent={
-            (lesson.videoId && lessonPercents[lesson.videoId]) || 0
-          }
+          progressPercent={lessonPercents[lesson.slug] ?? 0}
           lock={lessonLocks[lesson.slug]}
         />
       </li>

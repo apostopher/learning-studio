@@ -31,28 +31,38 @@ export const CourseSidebarWrapper = ({
   const isAdmin = useIsAdmin();
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
 
-  // Server-aggregated progress → the lessonId-keyed / moduleId-keyed maps the
+  // Server-aggregated progress → the slug-keyed / moduleId-keyed maps the
   // sidebar renders. Replaces the old client-side jotai aggregation.
   //
-  // NOTE: CourseProgress.lessons[] no longer carries videoId (progress is
-  // keyed purely by lessonId now), but the sidebar's LessonLike/lessonPercents
-  // plumbing below this hook still matches lessons by videoId sourced from
-  // course details. Keying this map on lessonId is a minimal stopgap to keep
-  // the build green — it does not fix the mismatch. Re-keying the whole chain
-  // onto lesson slugs is tracked separately.
+  // CourseProgress.lessons[] carries lessonId, not a slug or a videoId — it
+  // never has, and no longer even has a videoId to fall back on. This map is
+  // built by joining progress rows to course details' lessonId → slug, so the
+  // percent LessonList looks up under `lesson.slug` actually matches the
+  // lesson it's rendering, rather than colliding on an unrelated key space.
   const { lessonPercents, modulePercents } = useMemo(() => {
     const lessonPercents: Record<string, number> = {};
     const modulePercents: Record<number, number> = {};
-    const data = progressQuery.data;
-    if (data) {
-      for (const lesson of data.lessons) {
-        lessonPercents[lesson.lessonId] = lesson.percent;
-      }
-      for (const mod of data.modules)
+    const progress = progressQuery.data;
+    if (progress) {
+      for (const mod of progress.modules) {
         modulePercents[mod.moduleId] = mod.percent;
+      }
+    }
+    const details = detailsQuery.data;
+    if (progress && details) {
+      const slugByLessonId = new Map<number, string>();
+      for (const mod of details.modules) {
+        for (const lesson of mod.lessons) {
+          slugByLessonId.set(lesson.id, lesson.slug);
+        }
+      }
+      for (const lesson of progress.lessons) {
+        const slug = slugByLessonId.get(lesson.lessonId);
+        if (slug) lessonPercents[slug] = lesson.percent;
+      }
     }
     return { lessonPercents, modulePercents };
-  }, [progressQuery.data]);
+  }, [progressQuery.data, detailsQuery.data]);
 
   // Computed client-side from the two queries above — never written back to
   // getCourseDetailsWithCache, whose Redis entry is shared across every

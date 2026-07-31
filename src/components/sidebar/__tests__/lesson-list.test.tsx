@@ -75,6 +75,41 @@ describe('LessonList', () => {
     expect(links[2].getAttribute('aria-current')).toBeNull();
   });
 
+  it("reflects each lesson's real percent from a slug-keyed lessonPercents map", async () => {
+    await renderInRouter(
+      <LessonList
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lessons={lessons}
+        lessonPercents={{ a: 42, c: 100 }}
+        lessonLocks={{}}
+        activeLessonSlug={null}
+      />,
+    );
+    const rings = screen.getAllByRole('progressbar');
+    expect(rings[0].getAttribute('aria-valuenow')).toBe('42');
+    expect(rings[1].getAttribute('aria-valuenow')).toBe('0');
+    expect(rings[2].getAttribute('aria-valuenow')).toBe('100');
+  });
+
+  it('renders the honest no-data state (0%) for a lesson absent from lessonPercents', async () => {
+    await renderInRouter(
+      <LessonList
+        courseSlug="3d-airmanship"
+        moduleSlug="fundamentals"
+        lessons={lessons}
+        lessonPercents={{ a: 42 }}
+        lessonLocks={{}}
+        activeLessonSlug={null}
+      />,
+    );
+    const rings = screen.getAllByRole('progressbar');
+    // b and c have no entry in lessonPercents at all — must not be confused
+    // with a lesson that genuinely has 0 watched-milestones.
+    expect(rings[1].getAttribute('aria-valuenow')).toBe('0');
+    expect(rings[2].getAttribute('aria-valuenow')).toBe('0');
+  });
+
   it("passes each lesson's lock from lessonLocks down to its LessonLink", async () => {
     await renderInRouter(
       <LessonList
