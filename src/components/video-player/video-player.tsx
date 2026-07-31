@@ -14,6 +14,7 @@ import type { VideoPlayerProps } from './types';
 
 export const VideoPlayer = ({
   src,
+  kind = 'file',
   videoRef,
   rootRef,
   tracks,
@@ -35,6 +36,7 @@ export const VideoPlayer = ({
     playbackRate = 1,
     captionsEnabled = false,
     hasCaptions = (tracks?.length ?? 0) > 0,
+    captionsUnavailable = false,
     fullscreen = false,
     status = 'idle',
     error,
@@ -78,7 +80,20 @@ export const VideoPlayer = ({
         onMouseMove={a.onPointerActivity}
         onPointerDown={a.onPointerActivity}
       >
-        <video ref={videoRef} src={src} playsInline {...nativeRest}>
+        {/*
+          `src` is only set here as a native attribute for `kind === 'file'`.
+          An `'hls'` source is attached imperatively via `videoRef` (see
+          `attach-media.ts`'s `attachMedia`, called by whichever container
+          owns this ref) — setting the raw manifest URL as a plain `src`
+          first would make non-Safari browsers fire a transient media error
+          before hls.js has a chance to attach.
+        */}
+        <video
+          ref={videoRef}
+          src={kind === 'file' ? src : undefined}
+          playsInline
+          {...nativeRest}
+        >
           {tracks?.map((t) => (
             <track key={`${t.src}-${t.srcLang ?? ''}`} {...t} />
           ))}
@@ -174,6 +189,18 @@ export const VideoPlayer = ({
               onLabel={labels.captionsOn}
               offLabel={labels.captionsOff}
               onToggle={a.onCaptionsToggle}
+            />
+          ) : captionsUnavailable ? (
+            // Known to have no caption track (as opposed to `tracks` simply
+            // not having arrived yet) — shown disabled rather than omitted,
+            // so a captions-dependent viewer sees why, instead of a player
+            // that looks identical to one that was never asked to caption.
+            <CaptionsButton
+              enabled={false}
+              unavailable
+              onLabel={labels.captionsOn}
+              offLabel={labels.captionsOff}
+              unavailableLabel={labels.captionsUnavailable}
             />
           ) : null}
           {a.onFullscreenToggle ? (

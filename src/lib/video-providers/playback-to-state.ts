@@ -38,7 +38,10 @@ export const playbackToState = (
   return {
     status: 'ready',
     src: result.url,
+    kind: result.kind,
     poster: result.poster ?? undefined,
     tracks,
+    captionsUnavailable: result.captions === null,
+    onRetry,
   };
 };

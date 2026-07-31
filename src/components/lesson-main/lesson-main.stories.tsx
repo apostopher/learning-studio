@@ -129,7 +129,10 @@ export const ReadyPlaying: Story = {
       videoState: {
         status: 'ready',
         src: 'https://download.samplelib.com/mp4/sample-5s.mp4',
+        kind: 'file',
         tracks: [],
+        captionsUnavailable: false,
+        onRetry: noop,
       },
     },
   },

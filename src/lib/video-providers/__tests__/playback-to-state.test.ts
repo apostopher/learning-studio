@@ -15,10 +15,12 @@ describe('playbackToState', () => {
     expect(playbackToState(undefined, vi.fn()).status).toBe('fetching');
   });
 
-  it('carries the url, poster and a default English track', () => {
-    const state = playbackToState(ready, vi.fn());
+  it('carries the url, poster, kind and a default English track', () => {
+    const onRetry = vi.fn();
+    const state = playbackToState(ready, onRetry);
     if (state.status !== 'ready') throw new Error('expected ready');
     expect(state.src).toBe('https://cdn/v.mp4');
+    expect(state.kind).toBe('file');
     expect(state.poster).toBe('https://cdn/p.jpg');
     expect(state.tracks).toEqual([
       {
@@ -29,12 +31,27 @@ describe('playbackToState', () => {
         default: true,
       },
     ]);
+    expect(state.captionsUnavailable).toBe(false);
+    // The exact same callback the caller passed in — this is the seam
+    // `VideoPlayerContainer` calls on a mid-playback 401/403 to re-resolve
+    // playback, not a locally-fabricated no-op.
+    expect(state.onRetry).toBe(onRetry);
   });
 
-  it('emits no tracks when the provider has no captions', () => {
+  it('carries an hls kind through unchanged', () => {
+    const state = playbackToState({ ...ready, kind: 'hls' }, vi.fn());
+    if (state.status !== 'ready') throw new Error('expected ready');
+    expect(state.kind).toBe('hls');
+  });
+
+  it('emits no tracks and flags captions unavailable when the provider has no captions', () => {
     const state = playbackToState({ ...ready, captions: null }, vi.fn());
     if (state.status !== 'ready') throw new Error('expected ready');
     expect(state.tracks).toEqual([]);
+    // This is the fact a Mux-backed video always reports (Mux text tracks
+    // aren't configured on this account) — the player must be told, not left
+    // to infer "no captions needed" from an empty track list alone.
+    expect(state.captionsUnavailable).toBe(true);
   });
 
   it('maps a still-rendering video to the rendering state', () => {

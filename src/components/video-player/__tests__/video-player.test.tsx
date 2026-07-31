@@ -53,6 +53,64 @@ describe('VideoPlayer', () => {
     ).toBeTruthy();
   });
 
+  it('shows a disabled, explanatory captions indicator when captions are known to be unavailable', () => {
+    const ref = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        state={{ captionsUnavailable: true }}
+        actions={{ onCaptionsToggle: vi.fn() }}
+      />,
+    );
+    const button = screen.getByRole('button', {
+      name: 'Captions are not available for this video',
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+
+  it('does not show the unavailable indicator once real caption tracks are supplied, even if captionsUnavailable lingers true', () => {
+    const ref = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        tracks={[
+          {
+            src: 'cap.vtt',
+            srcLang: 'en',
+            label: 'English',
+            kind: 'subtitles',
+          },
+        ]}
+        state={{ captionsUnavailable: true }}
+        actions={{ onCaptionsToggle: vi.fn() }}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', {
+        name: 'Captions are not available for this video',
+      }),
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: /captions/i })).toBeTruthy();
+  });
+
+  it('omits the native src attribute for kind="hls" so a container-driven attachMedia effect owns it', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(
+      <VideoPlayer {...MIN_PROPS} kind="hls" videoRef={ref} />,
+    );
+    const video = container.querySelector('video');
+    expect(video?.getAttribute('src')).toBeNull();
+  });
+
+  it('sets the native src attribute for kind="file" (the default)', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(<VideoPlayer {...MIN_PROPS} videoRef={ref} />);
+    const video = container.querySelector('video');
+    expect(video?.getAttribute('src')).toBe(MIN_PROPS.src);
+  });
+
   it('hides fullscreen button when onFullscreenToggle is missing', () => {
     const ref = createRef<HTMLVideoElement>();
     render(<VideoPlayer {...MIN_PROPS} videoRef={ref} />);

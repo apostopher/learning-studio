@@ -123,6 +123,45 @@ describe('computeLessonMainState', () => {
       kind: 'ready',
       videoState: { status: 'ready', src: 'https://cdn/v.mp4' },
     });
+    // The exact `onRetryVideo` this test passed in — not a freshly-built
+    // no-op — since `VideoPlayerContainer` calls this on a mid-playback
+    // 401/403 to fetch a new signed URL. A wrong or missing hop here would
+    // leave that recovery path calling nothing.
+    if (result.kind !== 'ready' || result.videoState.status !== 'ready') {
+      throw new Error('expected ready videoState');
+    }
+    expect(result.videoState.onRetry).toBe(onRetryVideo);
+  });
+
+  it('forwards kind=hls and flags captions unavailable for a Mux-shaped playback (the seam LessonPlayerContainer reads to pick attachMedia and disclose no captions)', () => {
+    const result = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: {
+        data: {
+          status: 'ready',
+          url: 'https://stream.mux.com/x.m3u8',
+          kind: 'hls',
+          expiresInSeconds: 3600,
+          poster: null,
+          captions: null,
+        },
+        isError: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(result).toMatchObject({
+      kind: 'ready',
+      videoState: {
+        status: 'ready',
+        src: 'https://stream.mux.com/x.m3u8',
+        kind: 'hls',
+        captionsUnavailable: true,
+      },
+    });
   });
 
   it('returns ready with videoState=rendering when the provider is still rendering the video', () => {

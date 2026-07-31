@@ -12,6 +12,7 @@ export const INITIAL_VIDEO_PLAYER_STATE: VideoPlayerState = {
   playbackRate: 1,
   captionsEnabled: false,
   hasCaptions: false,
+  captionsUnavailable: false,
   fullscreen: false,
   status: 'idle',
   hasPlayedOnce: false,

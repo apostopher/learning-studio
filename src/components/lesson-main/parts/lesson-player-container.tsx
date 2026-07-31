@@ -100,8 +100,11 @@ export const LessonPlayerContainer = ({
     <VideoPlayerContainer
       playerId={playerId}
       src={videoState.src}
+      kind={videoState.kind}
       poster={videoState.poster}
       tracks={videoState.tracks}
+      captionsUnavailable={videoState.captionsUnavailable}
+      onSourceExpired={videoState.onRetry}
       onEnded={onEnded}
       overlay={
         <AnimatePresence>

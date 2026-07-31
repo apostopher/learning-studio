@@ -7,7 +7,30 @@ export type VideoFetchState =
   | { status: 'fetching' }
   | { status: 'rendering' }
   | { status: 'error'; message: string; onRetry: () => void }
-  | { status: 'ready'; src: string; poster?: string; tracks: TrackProps[] };
+  | {
+      status: 'ready';
+      src: string;
+      /** How `src` must be played — threaded through to `VideoPlayer`/`VideoPlayerContainer`'s `kind` prop. */
+      kind: 'hls' | 'file';
+      poster?: string;
+      tracks: TrackProps[];
+      /** True when the provider has no caption track at all for this video (e.g. Mux). */
+      captionsUnavailable: boolean;
+      /**
+       * Re-resolves this video's playback (fetches a fresh signed URL/token
+       * from the server). Both providers' URLs are signed and expire —
+       * Synthesia via an `Expires` query param, Mux via a 1-hour JWT — and
+       * hls.js only discovers that mid-playback, on the next segment fetch,
+       * not at load time. `VideoPlayerContainer` calls this the moment
+       * `attachMedia`'s HLS error handler reports a fatal 401/403 (see
+       * `attach-media.ts`), and offers it again from the error UI's manual
+       * Retry action. Never called from a timer or from `expiresInSeconds`:
+       * that number is relative to when the server resolved playback, not to
+       * now, and a cached response can under-report the remaining time — the
+       * only trustworthy trigger is the observed failure itself.
+       */
+      onRetry: () => void;
+    };
 
 export type LessonMainState =
   | { kind: 'course-loading' }

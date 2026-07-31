@@ -24,6 +24,7 @@ describe('videoResponseToState', () => {
     expect(result).toEqual({
       status: 'ready',
       src: 'https://cdn/v.mp4',
+      kind: 'file',
       poster: 'https://cdn/p.jpg',
       tracks: [
         {
@@ -34,6 +35,26 @@ describe('videoResponseToState', () => {
           default: true,
         },
       ],
+      captionsUnavailable: false,
+      onRetry,
+    });
+  });
+
+  it('marks captions unavailable and kind=hls for an .m3u8 download with no vtt', () => {
+    const result = videoResponseToState(
+      {
+        id: 'v1',
+        status: 'complete',
+        download: 'https://cdn/v.m3u8',
+        captions: { srt: null, vtt: null },
+        thumbnail: { gif: null, image: null },
+      },
+      onRetry,
+    );
+    expect(result).toMatchObject({
+      status: 'ready',
+      kind: 'hls',
+      captionsUnavailable: true,
     });
   });
 

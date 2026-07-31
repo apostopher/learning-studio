@@ -8,6 +8,7 @@ export const DEFAULT_LABELS: VideoPlayerLabels = {
   unmute: 'Unmute',
   captionsOn: 'Turn captions off',
   captionsOff: 'Turn captions on',
+  captionsUnavailable: 'Captions are not available for this video',
   fullscreenEnter: 'Enter fullscreen',
   fullscreenExit: 'Exit fullscreen',
   volume: 'Volume',

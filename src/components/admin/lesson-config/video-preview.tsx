@@ -1,5 +1,6 @@
 import { Video } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { attachMedia } from '#/components/video-player/attach-media';
 import type { LessonPlayback } from '#/lib/admin-schemas';
 
 interface VideoPreviewProps {
@@ -50,44 +51,11 @@ export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url || !kind) return;
-
-    if (kind === 'file') {
-      video.src = url;
-      return () => {
-        video.removeAttribute('src');
-        video.load();
-      };
-    }
-
-    // kind === 'hls'. Safari (and other WebKit-based browsers) can play HLS
-    // natively via the <video> element — no library needed there.
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      return () => {
-        video.removeAttribute('src');
-        video.load();
-      };
-    }
-
-    // Everywhere else: lazy-load hls.js so it never lands in the main bundle.
-    let destroyed = false;
-    let hls: import('hls.js').default | undefined;
-
-    import('hls.js').then(({ default: Hls }) => {
-      if (destroyed || !videoRef.current || !Hls.isSupported()) return;
-      hls = new Hls();
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        const status = data.response?.code;
-        if (status === 401 || status === 403) onForbiddenRef.current?.();
-      });
-      hls.loadSource(url);
-      hls.attachMedia(videoRef.current);
-    });
-
-    return () => {
-      destroyed = true;
-      hls?.destroy();
-    };
+    // `attachMedia`'s onError only ever fires for the 401/403 manifest
+    // rejection described above — see its own comment for why. The `fatal`
+    // flag hls.js reports isn't meaningful to this admin-only callback, which
+    // has always meant only "the stored key was refused."
+    return attachMedia(video, url, kind, () => onForbiddenRef.current?.());
   }, [url, kind]);
 
   if (!playback || playback.status !== 'ready') {

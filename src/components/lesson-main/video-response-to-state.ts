@@ -26,8 +26,13 @@ export const videoResponseToState = (
     return {
       status: 'ready',
       src: v.download,
+      // Mirrors resolve.server.ts's Synthesia branch: a Synthesia download
+      // is HLS only when it's a manifest URL, otherwise a plain file.
+      kind: v.download.endsWith('.m3u8') ? 'hls' : 'file',
       poster: v.thumbnail.image ?? undefined,
       tracks: vttToTracks(v.captions.vtt),
+      captionsUnavailable: !v.captions.vtt,
+      onRetry,
     };
   }
   if (isVideoNotReady(v)) {

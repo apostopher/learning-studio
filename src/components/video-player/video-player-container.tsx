@@ -1,6 +1,7 @@
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useId, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';
+import { attachMedia } from './attach-media';
 import { useVideoPlayer } from './hooks';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
 import { VideoPlayer } from './video-player';
@@ -12,12 +13,29 @@ type ContainerProps = Omit<
   playerId?: string;
   onEnded?: () => void;
   overlay?: React.ReactNode;
+  /**
+   * True when this specific video is known to carry no caption track at all.
+   * Threaded straight into `VideoPlayerState.captionsUnavailable` — see that
+   * field's comment — so `CaptionsButton` discloses the absence instead of
+   * silently rendering the same "no button" state as a video that just
+   * hasn't finished loading yet.
+   */
+  captionsUnavailable?: boolean;
+  /**
+   * Called to re-resolve this video's playback (fetch a fresh signed
+   * URL/token) after a mid-playback source failure. Wired to the ready
+   * state's `onRetry` from `#/components/lesson-main/types` — see that
+   * field's comment for why this exists and why it is never timer-driven.
+   */
+  onSourceExpired?: () => void;
 };
 
 export const VideoPlayerContainer = ({
   playerId: providedId,
   onEnded,
   overlay,
+  captionsUnavailable,
+  onSourceExpired,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -25,11 +43,60 @@ export const VideoPlayerContainer = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const state = useAtomValue(videoPlayerStateAtomFamily(playerId));
+  const setState = useSetAtom(videoPlayerStateAtomFamily(playerId));
   const { showControls, armHideTimer, hideAfterPointerLeave } = useVideoPlayer(
     playerId,
     videoRef,
     rootRef,
   );
+
+  // The atom family is keyed only on `playerId`, so it has no way to receive
+  // a per-video fact like "this one has no captions" at creation time — this
+  // is the only place that gap is bridged. Nothing else in this container
+  // (or `useVideoPlayer`) ever writes `captionsUnavailable`.
+  useEffect(() => {
+    if (captionsUnavailable === undefined) return;
+    setState((prev) => ({ ...prev, captionsUnavailable }));
+  }, [captionsUnavailable, setState]);
+
+  // Held in a ref, like `onForbiddenRef` in the admin preview this was
+  // extracted from: `onSourceExpired` traces back to an inline arrow
+  // (`onRetryVideo` in lesson-main-wrapper.tsx) that is a new function
+  // identity on every render of a component well above this one. Putting it
+  // directly in the effect below's dependency list would tear down and
+  // reattach hls.js — mid-playback — on every unrelated parent render.
+  const onSourceExpiredRef = useRef(onSourceExpired);
+  useEffect(() => {
+    onSourceExpiredRef.current = onSourceExpired;
+  }, [onSourceExpired]);
+
+  // Plain files are already handled by VideoPlayer's native `src` attribute
+  // and don't need this. HLS sources (Mux is HLS-only) need hls.js — or
+  // Safari's native support — attached imperatively via the ref; see
+  // `attach-media.ts` for the Safari/hls.js/Mux-auth-rejection details this
+  // preserves. A fatal auth rejection surfaces through the player's existing
+  // error UI AND calls `onSourceExpired`, which re-resolves playback to fetch
+  // a fresh signed URL/token — this is the "actual failure" trigger the
+  // no-expiry-timer constraint requires: never scheduled from
+  // `expiresInSeconds`, only from hls.js observing the real rejection.
+  // Once a fresh `src` prop arrives, this effect's own dependency on
+  // `rest.src` tears down the stale hls.js instance and reattaches, and the
+  // native `loadstart` handler in `useVideoPlayer` (below) clears `status:
+  // 'error'` the moment that reattachment begins.
+  useEffect(() => {
+    const video = videoRef.current;
+    const kind = rest.kind ?? 'file';
+    if (!video || !rest.src || kind !== 'hls') return;
+    return attachMedia(video, rest.src, kind, (fatal) => {
+      if (!fatal) return;
+      setState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: 'Your playback session expired. Reconnecting…',
+      }));
+      onSourceExpiredRef.current?.();
+    });
+  }, [rest.src, rest.kind, setState]);
 
   const seekTo = (time: number) => {
     const v = videoRef.current;
@@ -164,6 +231,13 @@ export const VideoPlayerContainer = ({
     },
     onFullscreenToggle: () => void toggleFullscreen(),
     onRetry: () => {
+      // Re-resolve playback (a fresh signed URL/token) in addition to
+      // reloading the element: a plain reload of the same, still-expired
+      // URL cannot recover either provider's signed-URL expiry on its own —
+      // see `onSourceExpired`'s doc comment. Harmless to call for a native
+      // media error that was never a signed-URL issue at all; it just
+      // re-fetches playback data that was going to stay cached otherwise.
+      onSourceExpired?.();
       videoRef.current?.load();
     },
     onPointerActivity: () => {
