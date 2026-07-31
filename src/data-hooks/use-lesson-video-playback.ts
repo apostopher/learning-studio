@@ -53,8 +53,15 @@ export function useLessonVideoPlayback(lessonId: number, enabled: boolean) {
     enabled,
     staleTime: 5 * 60_000,
     // Keeps a mounted preview's signed URL alive; see playbackRefetchDelayMs.
+    // A rendering/failed result carries no `expiresInSeconds` (there is no
+    // URL to keep alive) — `playbackRefetchDelayMs(undefined)` returns
+    // `false`, so polling simply stays off until the video is ready.
     refetchInterval: (query) =>
-      playbackRefetchDelayMs(query.state.data?.expiresInSeconds),
+      playbackRefetchDelayMs(
+        query.state.data?.status === 'ready'
+          ? query.state.data.expiresInSeconds
+          : undefined,
+      ),
     // A refused credential is not worth retrying — nothing changes until the
     // admin enters a new key, and each retry delays the prompt telling them to.
     retry: (failureCount, error) =>

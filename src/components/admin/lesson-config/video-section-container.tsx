@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
-import { Loader2, Pencil } from 'lucide-react';
+import { Loader2, Pencil, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import type { BoardLesson } from '#/lib/admin-schemas';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
-import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
+import { computeVideoPreviewState } from './compute-video-preview-state';
 import { CredentialFlowContainer } from './credential-flow-container';
 import { VideoPreview } from './video-preview';
 import { VideoUrlForm } from './video-url-form';
@@ -101,15 +101,7 @@ export const VideoSectionContainer = ({
 
   const playbackEnabled = hasVideo && isProviderConfigured;
   const playback = useLessonVideoPlayback(lesson.id, playbackEnabled);
-
-  // `VideoPreview` takes the same `PlaybackResult` shape the learner player
-  // will consume (see the lesson-keyed video runtime migration). The admin
-  // preview's wire contract (`lessonPlaybackSchema`) doesn't carry
-  // poster/captions/status yet, but a value it successfully parsed is by
-  // definition a resolved, playable URL, so it always maps to 'ready'.
-  const previewPlayback: PlaybackResult | null = playback.data
-    ? { ...playback.data, status: 'ready', poster: null, captions: null }
-    : null;
+  const previewState = computeVideoPreviewState(playback.data);
 
   const urlForm = useForm<VideoUrlFormValues>({
     resolver: zodResolver(videoUrlFormSchema),
@@ -185,7 +177,7 @@ export const VideoSectionContainer = ({
           {canPlay ? (
             <>
               <VideoPreview
-                playback={previewPlayback}
+                playback={playback.data ?? null}
                 onForbidden={() => setPlaybackForbidden(true)}
               />
               {playback.isLoading && (
@@ -201,6 +193,45 @@ export const VideoSectionContainer = ({
                 <p role="alert" className="text-error-text text-sm">
                   Couldn't resolve playback: {playback.error.message}
                 </p>
+              )}
+              {/*
+                Neither "rendering" nor "failed" is an error: the request
+                succeeded, the video just isn't playable yet (or ever, for
+                "failed"). VideoPreview already shows its blank placeholder
+                for both — this is the honest label plus a way to check
+                again without leaving the page. Branches on `previewState`
+                (computeVideoPreviewState), not on `playback.data` directly,
+                so the decision has one home a test can reach.
+              */}
+              {previewState.kind === 'rendering' && (
+                <div className="flex items-center justify-between gap-3">
+                  <output className="text-secondary text-sm">
+                    This video is still rendering and isn't playable yet.
+                  </output>
+                  <button
+                    type="button"
+                    onClick={() => playback.refetch()}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Check again
+                  </button>
+                </div>
+              )}
+              {previewState.kind === 'failed' && (
+                <div className="flex items-center justify-between gap-3">
+                  <p role="alert" className="text-error-text text-sm">
+                    This video failed to render at the provider.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => playback.refetch()}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Retry
+                  </button>
+                </div>
               )}
             </>
           ) : (

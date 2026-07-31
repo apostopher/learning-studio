@@ -231,13 +231,33 @@ export const setLessonVideoInputSchema = z.object({
 });
 export type SetLessonVideoInput = z.infer<typeof setLessonVideoInputSchema>;
 
-export const lessonPlaybackSchema = z.object({
+/** A resolved, playable video. Mirrors `Playback` in `#/lib/video-providers/resolve.server`. */
+export const lessonPlaybackReadySchema = z.object({
+  status: z.literal('ready'),
   url: z.string().url(),
   kind: z.enum(['hls', 'file']),
   /** Seconds the URL stays valid from when it was resolved — a TTL, not a timestamp. */
   expiresInSeconds: z.number().nonnegative().nullable(),
+  poster: z.string().nullable(),
+  captions: z.object({ vtt: z.string() }).nullable(),
 });
+
+/** A video the provider holds but cannot serve yet. Mirrors `PlaybackPending`. */
+export const lessonPlaybackPendingSchema = z.object({
+  status: z.enum(['rendering', 'failed']),
+});
+
+/**
+ * Discriminated on `status` so an unrecognized value fails loudly (parse
+ * error) instead of silently matching whichever branch happens to accept a
+ * partial shape — a plain `z.union` would do the latter.
+ */
+export const lessonPlaybackSchema = z.discriminatedUnion('status', [
+  lessonPlaybackReadySchema,
+  lessonPlaybackPendingSchema,
+]);
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
+export type LessonPlaybackReady = z.infer<typeof lessonPlaybackReadySchema>;
 
 /** Body of a 502 from the video-playback route — `code` is what the UI branches on. */
 export const playbackErrorSchema = z.object({
