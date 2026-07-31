@@ -26,15 +26,14 @@ const req = (query = '?slug=c1') =>
   new Request(`http://test/api/course/details${query}`);
 
 // A trimmed stand-in for the real payload. Every field named here is one this
-// route used to hand to anonymous callers. `videoId`/`videoProvider`/
-// `videoRef`/`otherVideoIds`/`videoDetails` sit alongside `hasVideo` here to
-// mirror the real `CourseDetails` shape (db/course.ts's `LessonDetails`
-// carries all of them) — the handler strips all five before the response
-// ships, which the assertions below prove. `videoProvider`/`videoRef`
-// matter as much as `videoId`: a bare Mux `videoRef` is directly streamable
-// unless every asset is signed-policy-only, an operator setting this code
-// cannot verify — shipping it would let a subscribed learner stream a video
-// before satisfying its prerequisites.
+// route used to hand to anonymous callers. `videoProvider`/`videoRef`/
+// `otherVideoIds`/`videoDetails` sit alongside `hasVideo` here to mirror the
+// real `CourseDetails` shape (db/course.ts's `LessonDetails` carries all of
+// them) — the handler strips all four before the response ships, which the
+// assertions below prove. `videoProvider`/`videoRef` matter most: a bare Mux
+// `videoRef` is directly streamable unless every asset is signed-policy-only,
+// an operator setting this code cannot verify — shipping it would let a
+// subscribed learner stream a video before satisfying its prerequisites.
 const course = {
   id: 1,
   slug: 'c1',
@@ -50,7 +49,6 @@ const course = {
           id: 10,
           slug: 'a',
           name: 'A',
-          videoId: 'vid-a',
           videoProvider: 'mux',
           videoRef: 'ref-secret',
           otherVideoIds: [],
@@ -73,7 +71,6 @@ const learnerCourse = {
     ...mod,
     lessons: mod.lessons.map(
       ({
-        videoId: _videoId,
         videoProvider: _videoProvider,
         videoRef: _videoRef,
         otherVideoIds: _otherVideoIds,
@@ -135,7 +132,6 @@ describe('getCourseDetailsHandler', () => {
     const body = await res.json();
     expect(body).toEqual(learnerCourse);
     const lesson = body.modules[0].lessons[0];
-    expect(lesson).not.toHaveProperty('videoId');
     expect(lesson).not.toHaveProperty('videoProvider');
     expect(lesson).not.toHaveProperty('videoRef');
     expect(lesson).not.toHaveProperty('otherVideoIds');

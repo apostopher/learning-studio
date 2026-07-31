@@ -133,8 +133,8 @@ export async function isSubscribedToCourseSlug(
  * Numeric id for a lesson slug, or null when no lesson has that slug.
  *
  * Bridges the client's `lessonSlug` to the `lesson_id` FK progress rows carry.
- * Callers must treat null as denied, not as open — mirrors
- * `getLessonByVideoId`'s contract.
+ * Callers must treat null as denied, not as open — the same contract every
+ * lesson lookup in this file follows.
  */
 export async function getLessonIdBySlug(slug: string): Promise<number | null> {
   const rows = await db
@@ -143,34 +143,4 @@ export async function getLessonIdBySlug(slug: string): Promise<number | null> {
     .where(eq(lessonsTable.slug, slug))
     .limit(1);
   return rows[0]?.id ?? null;
-}
-
-/**
- * The lesson a Synthesia video belonged to, consumed by the now-removed
- * `/api/lesson/video` to apply the same gates as the material route —
- * superseded by `/api/lesson/playback`, which resolves playback by
- * `lessonSlug` directly and has no remaining caller for this lookup.
- *
- * KNOWN LIMITATION: matches `lessons.video_id` only. A lesson's
- * `other_video_ids` are not resolved, so a request for one of those IDs finds
- * no lesson. Callers must treat "no lesson" as denied, not as open, or this
- * becomes the bypass it was written to close.
- */
-export async function getLessonByVideoId(videoId: string): Promise<{
-  lessonSlug: string;
-  courseSlug: string;
-  courseId: number;
-} | null> {
-  const rows = await db
-    .select({
-      lessonSlug: lessonsTable.slug,
-      courseSlug: coursesTable.slug,
-      courseId: coursesTable.id,
-    })
-    .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(lessonsTable.videoId, videoId))
-    .limit(1);
-  return rows[0] ?? null;
 }

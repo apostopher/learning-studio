@@ -46,8 +46,8 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
  * The lesson slugs whose video this user has watched.
  *
  * Progress is keyed by lessonId while the predicate is keyed by slug, so the
- * course payload supplies the id→slug mapping. Keying by videoId instead
- * would break the moment two lessons share a video.
+ * course payload supplies the id→slug mapping. Keying by the lesson's video
+ * reference instead would break the moment two lessons share a video.
  */
 export function watchedLessonSlugs(
   details: DetailsCourse,

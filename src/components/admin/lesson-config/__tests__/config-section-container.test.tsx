@@ -31,7 +31,6 @@ const lesson: BoardLesson = {
   needsVideoWatch: true,
   requiredSubscriptions: [],
   isConfigured: false,
-  hasVideoId: false,
   videoProvider: null,
   videoRef: null,
 };

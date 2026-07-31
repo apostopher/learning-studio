@@ -29,7 +29,6 @@ describe('boardLessonSchema', () => {
       needsVideoWatch: true,
       requiredSubscriptions: ['associate'],
       isConfigured: false,
-      hasVideoId: false,
       videoProvider: null,
       videoRef: null,
     });
@@ -49,7 +48,6 @@ describe('boardLessonSchema', () => {
         needsVideoWatch: true,
         requiredSubscriptions: ['gold'],
         isConfigured: false,
-        hasVideoId: false,
         videoProvider: null,
         videoRef: null,
       }),

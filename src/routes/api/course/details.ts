@@ -18,10 +18,10 @@ import { toLearnerCourseDetails } from '#/lib/course-details-shape';
  * could list them. It now requires a session (401) and a subscription to the
  * course (403), with admins bypassing, matching `/api/lesson/material` and
  * `/api/lesson/playback`. Every video-identifying field on each lesson —
- * `videoId`, `videoProvider`, `videoRef`, `otherVideoIds`, `videoDetails` —
+ * `videoProvider`, `videoRef`, `otherVideoIds`, `videoDetails` —
  * is additionally stripped (`toLearnerCourseDetails`, `#/lib/course-details-shape`)
- * before the response is built. `videoProvider`/`videoRef` matter as much as
- * `videoId` here: this route has no zod parse on the way out, only a cast, so
+ * before the response is built. `videoProvider`/`videoRef` matter most: this
+ * route has no zod parse on the way out, only a cast, so
  * whatever ships lands in the client object and the network tab both, and a
  * bare Mux `videoRef` is directly streamable
  * (`https://stream.mux.com/{ref}.m3u8`) unless every asset is

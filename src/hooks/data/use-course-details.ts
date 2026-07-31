@@ -7,7 +7,7 @@ import { queryKeys } from './keys';
 // Typed against `LearnerCourseDetails` (`#/lib/course-details-shape`) — the
 // shape the route actually serves (video-identity-free) — not `CourseDetails`
 // from `#/db/course`, which is the server's internal shape and still carries
-// `videoId`/`videoProvider`/`videoRef`. Casting to the wider internal type
+// `videoProvider`/`videoRef`. Casting to the wider internal type
 // here would silently reintroduce fields this fetch never gets back, exactly
 // the producer/consumer drift this migration keeps tripping over.
 // `course-details-shape.ts` is deliberately import-free of both `#/db/course`

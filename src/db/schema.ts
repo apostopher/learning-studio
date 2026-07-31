@@ -13,7 +13,6 @@ import {
   timestamp,
   unique,
   uniqueIndex,
-  uuid,
   varchar,
   vector,
 } from 'drizzle-orm/pg-core';
@@ -104,7 +103,6 @@ export const lessonsTable = pgTable('lessons', {
     .references(() => modulesTable.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
-  videoId: uuid('video_id'),
   otherVideoIds: jsonb('other_video_ids')
     .$type<z.infer<typeof OtherVideoIdsSchema>>()
     .default([]),

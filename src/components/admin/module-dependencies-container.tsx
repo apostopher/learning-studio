@@ -20,7 +20,7 @@ const toDepModule = (m: BoardModule): DepModule => ({
   lessons: m.lessons.map((l) => ({
     isAvailable: l.isAvailable,
     needsVideoWatch: l.needsVideoWatch,
-    hasVideoId: l.hasVideoId,
+    hasVideo: l.isConfigured,
   })),
 });
 

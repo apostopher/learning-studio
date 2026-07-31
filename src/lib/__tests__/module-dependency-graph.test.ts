@@ -10,7 +10,7 @@ import {
 const lesson = (over: Partial<DepLesson> = {}): DepLesson => ({
   isAvailable: true,
   needsVideoWatch: true,
-  hasVideoId: true,
+  hasVideo: true,
   ...over,
 });
 
@@ -124,12 +124,12 @@ describe('moduleGateWarning', () => {
     expect(warning).toContain('can never block');
   });
 
-  it('reports a module whose lessons have no video id', () => {
-    // The admin video flow writes video_ref but never video_id, so this is
-    // the common case, not an exotic one — isLessonSatisfied returns true for
-    // every such lesson and the prerequisite silently does nothing.
+  it('reports a module whose lessons have no video', () => {
+    // A lesson with no video assigned at all is the common case — gating
+    // (`isLessonSatisfied`) returns true for every such lesson, so the
+    // prerequisite silently does nothing.
     const warning = moduleGateWarning(
-      mod('a', [], [lesson({ hasVideoId: false })]),
+      mod('a', [], [lesson({ hasVideo: false })]),
     );
     expect(warning).toContain('can never block');
   });

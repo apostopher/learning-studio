@@ -15,7 +15,6 @@
  */
 
 type SecretLessonFields =
-  | 'videoId'
   | 'videoProvider'
   | 'videoRef'
   | 'otherVideoIds'
@@ -29,7 +28,6 @@ function omitLessonSecrets<
   T extends Partial<Record<SecretLessonFields, unknown>>,
 >(lesson: T): Omit<T, SecretLessonFields> {
   const {
-    videoId: _videoId,
     videoProvider: _videoProvider,
     videoRef: _videoRef,
     otherVideoIds: _otherVideoIds,
@@ -46,10 +44,10 @@ type CourseShape = {
 
 /**
  * Drops every video-identifying field from each lesson before the payload
- * leaves the server: `videoId`, plus `videoProvider`/`videoRef`/
- * `otherVideoIds`/`videoDetails`.
+ * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`,
+ * `videoDetails`.
  *
- * `videoProvider`/`videoRef` matter beyond `videoId`: this route has no zod
+ * `videoProvider`/`videoRef` matter most: this route has no zod
  * parse on the way out, only a cast, so whatever ships here lands in the
  * client object and the network tab both. A signed-but-publicly-policied Mux
  * asset is directly streamable from its bare `videoRef` alone

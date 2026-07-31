@@ -12,14 +12,13 @@ export type DepLesson = {
   isAvailable: boolean;
   needsVideoWatch: boolean;
   /**
-   * Whether the lesson has a `video_id`, NOT whether it has a video at all.
-   *
-   * `isLessonSatisfied` short-circuits to satisfied on a null `video_id`, and
-   * watch progress joins on that column — so a lesson configured through the
-   * admin video flow (which writes `video_ref` and `video_provider` only)
-   * cannot block, however configured it looks on the board.
+   * Whether the lesson has a video assigned. Gating now keys on
+   * `(videoProvider, videoRef)` (`isLessonSatisfied` short-circuits to
+   * satisfied when this is false), matching `isConfigured` on the board —
+   * a lesson configured through the admin video flow can block exactly when
+   * the board shows it as configured.
    */
-  hasVideoId: boolean;
+  hasVideo: boolean;
 };
 
 export type DepModule = {
@@ -88,7 +87,7 @@ export function createsCycle(
 
 /** Mirrors `isLessonSatisfied`: the conditions under which a lesson can block. */
 const canBlock = (lesson: DepLesson): boolean =>
-  lesson.isAvailable && lesson.needsVideoWatch && lesson.hasVideoId;
+  lesson.isAvailable && lesson.needsVideoWatch && lesson.hasVideo;
 
 /**
  * Why depending on `prereq` currently gates nothing, or null when it does.

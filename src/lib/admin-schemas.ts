@@ -93,14 +93,6 @@ export const boardLessonSchema = z.object({
   requiredSubscriptions: SubscriptionsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
-  /**
-   * Whether `lessons.video_id` is set — deliberately NOT the same question as
-   * `isConfigured`, which is also true for a lesson holding only a
-   * `video_ref`. Gating keys on `video_id` alone (`isLessonSatisfied` treats a
-   * null one as satisfied, and watch progress joins on that column), so this
-   * is the field that decides whether a lesson can gate anything.
-   */
-  hasVideoId: z.boolean(),
   videoProvider: providerIdSchema.nullable(),
   videoRef: z.string().nullable(),
 });

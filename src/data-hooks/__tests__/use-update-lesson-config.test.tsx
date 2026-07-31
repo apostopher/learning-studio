@@ -46,7 +46,6 @@ function makeHarness() {
             needsVideoWatch: true,
             requiredSubscriptions: [],
             isConfigured: false,
-            hasVideoId: false,
             videoProvider: null,
             videoRef: null,
           },

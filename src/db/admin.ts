@@ -270,8 +270,7 @@ export async function createLesson(input: {
     hasDebrief: created.hasDebrief,
     needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
-    isConfigured: created.videoId !== null,
-    hasVideoId: created.videoId !== null,
+    isConfigured: created.videoRef !== null,
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
   };
@@ -354,7 +353,6 @@ export async function getCourseBoard(
           hasDebrief: lessonsTable.hasDebrief,
           needsVideoWatch: lessonsTable.needsVideoWatch,
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
-          videoId: lessonsTable.videoId,
           videoProvider: lessonsTable.videoProvider,
           videoRef: lessonsTable.videoRef,
         })
@@ -408,8 +406,7 @@ export async function getCourseBoard(
         hasDebrief: l.hasDebrief,
         needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
-        isConfigured: l.videoRef !== null || l.videoId !== null,
-        hasVideoId: l.videoId !== null,
+        isConfigured: l.videoRef !== null,
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
       })),
