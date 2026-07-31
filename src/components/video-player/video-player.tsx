@@ -201,6 +201,7 @@ export const VideoPlayer = ({
               onLabel={labels.captionsOn}
               offLabel={labels.captionsOff}
               unavailableLabel={labels.captionsUnavailable}
+              unavailableText={labels.captionsUnavailableShort}
             />
           ) : null}
           {a.onFullscreenToggle ? (

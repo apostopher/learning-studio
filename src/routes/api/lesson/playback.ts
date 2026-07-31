@@ -17,9 +17,18 @@ export async function getLessonPlaybackHandler(
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return new Response('Unauthorized', { status: 401 });
 
-  const lessonSlug = new URL(request.url).searchParams.get('lessonSlug');
+  const url = new URL(request.url);
+  const lessonSlug = url.searchParams.get('lessonSlug');
   if (!lessonSlug)
     return new Response('lessonSlug is required', { status: 400 });
+  // Lets a caller that already observed a real playback failure (a
+  // mid-playback 401/403, or a plain retry click — see
+  // `VideoPlayerContainer`/`compute-recovery-action.ts`) skip the Redis
+  // cache read and get a URL the provider has not already refused. Gated
+  // behind the SAME session+lesson-gate checks as every other request here —
+  // this is never a way to reach `resolvePlayback` (and the provider APIs
+  // behind it) without authorization.
+  const fresh = url.searchParams.get('fresh') === '1';
 
   try {
     const gate = await evaluateLessonGate({
@@ -29,7 +38,9 @@ export async function getLessonPlaybackHandler(
     if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
       return new Response('Forbidden', { status: 403 });
     }
-    const playback = await getLessonPlayback(lessonSlug);
+    const playback = await getLessonPlayback(lessonSlug, {
+      skipCache: fresh,
+    });
     if (!playback) return new Response('Forbidden', { status: 403 });
     return Response.json(playback);
   } catch (error) {

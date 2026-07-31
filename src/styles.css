@@ -559,6 +559,21 @@
     cursor: not-allowed;
   }
 
+  /* `aria-disabled`, not `disabled` — see CaptionsButton's comment. The
+     button stays focusable (removing it from the tab order would hide the
+     one control that explains a missing caption track from keyboard/screen
+     reader users), so this is a visual-only echo of the disabled look; the
+     actual disclosure is the always-visible text label next to the icon,
+     never this alone. */
+  .video-player .vp-icon-button[aria-disabled='true'] {
+    opacity: 0.7;
+    cursor: default;
+  }
+
+  .video-player .vp-icon-button[aria-disabled='true']:hover {
+    background: transparent;
+  }
+
   .video-player .vp-icon-button:focus-visible,
   .video-player .vp-surface:focus-visible,
   .video-player [data-base-ui]:focus-visible {

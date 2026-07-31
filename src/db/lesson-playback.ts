@@ -68,14 +68,27 @@ async function resolveLessonPlaybackUncached(
  *    WITHOUT writing, for the same reason: there is no bounded lifetime to
  *    cache it under, and the old default-TTL behavior is exactly the bug
  *    this rewrite exists to remove.
+ *
+ * `options.skipCache` skips the cache READ only — a fresh result is still
+ * written under the normal rules above. Exists for recovery: a client that
+ * observed a genuine mid-playback rejection (see
+ * `VideoPlayerContainer`/`attach-media.ts`) needs a URL the provider has not
+ * already refused, and re-fetching through the normal path would just read
+ * back the SAME cached (and possibly still-bad) entry the cache TTL hasn't
+ * expired yet. Still goes through `evaluateLessonGate` upstream in the route
+ * handler — this never becomes an unauthenticated way to hammer the
+ * provider's API.
  */
 export async function getLessonPlayback(
   lessonSlug: string,
+  options?: { skipCache?: boolean },
 ): Promise<PlaybackResult | null> {
   const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
 
-  const cached = await redis.get<PlaybackResult>(key);
-  if (cached) return cached;
+  if (!options?.skipCache) {
+    const cached = await redis.get<PlaybackResult>(key);
+    if (cached) return cached;
+  }
 
   const result = await resolveLessonPlaybackUncached(lessonSlug);
 

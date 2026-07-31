@@ -2,6 +2,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useId, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';
 import { attachMedia } from './attach-media';
+import { computeRecoveryDecision } from './compute-recovery-action';
 import { useVideoPlayer } from './hooks';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
 import { VideoPlayer } from './video-player';
@@ -70,31 +71,86 @@ export const VideoPlayerContainer = ({
     onSourceExpiredRef.current = onSourceExpired;
   }, [onSourceExpired]);
 
+  // How many automatic recoveries this mount has already attempted for the
+  // CURRENT source — see `compute-recovery-action.ts` for why this is
+  // capped rather than unbounded. Reset to 0 the moment a reattachment
+  // actually reaches `loadedmetadata` (proof it worked), and by a manual
+  // Retry click, which always gets its own fresh budget.
+  const recoveryAttemptsRef = useRef(0);
+  // The playhead position to restore once a recovery reattachment lands.
+  // Captured right before teardown (in the fatal-error handler below, and in
+  // the manual retry action) — without this, re-running `attachMedia` drops
+  // the learner back to 0:00, which on a platform whose completion gating
+  // depends on watch coverage is worse than the error it was recovering
+  // from. `null` means "nothing pending".
+  const pendingRestoreTimeRef = useRef<number | null>(null);
+
+  // Registered once, independent of `rest.src`: the video element itself
+  // never unmounts across a reattachment (only its `src`/hls.js instance
+  // does), and `loadedmetadata` fires again for every new source regardless
+  // of when this listener was attached.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onLoadedMetadata = () => {
+      // A source that got far enough to report metadata is playable —
+      // proof the last recovery attempt (if any) worked. Reset the budget
+      // so a LATER, unrelated failure gets its own full retry allowance
+      // instead of inheriting whatever was left over from this one.
+      recoveryAttemptsRef.current = 0;
+      const target = pendingRestoreTimeRef.current;
+      if (target === null) return;
+      pendingRestoreTimeRef.current = null;
+      // Restored here, not immediately on attach: the seekable range isn't
+      // known until metadata has loaded, and assigning `currentTime` any
+      // earlier is silently discarded by the media element.
+      video.currentTime =
+        Number.isFinite(video.duration) && video.duration > 0
+          ? Math.min(target, video.duration)
+          : target;
+    };
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => video.removeEventListener('loadedmetadata', onLoadedMetadata);
+  }, []);
+
   // Plain files are already handled by VideoPlayer's native `src` attribute
   // and don't need this. HLS sources (Mux is HLS-only) need hls.js — or
   // Safari's native support — attached imperatively via the ref; see
   // `attach-media.ts` for the Safari/hls.js/Mux-auth-rejection details this
-  // preserves. A fatal auth rejection surfaces through the player's existing
-  // error UI AND calls `onSourceExpired`, which re-resolves playback to fetch
-  // a fresh signed URL/token — this is the "actual failure" trigger the
-  // no-expiry-timer constraint requires: never scheduled from
-  // `expiresInSeconds`, only from hls.js observing the real rejection.
-  // Once a fresh `src` prop arrives, this effect's own dependency on
-  // `rest.src` tears down the stale hls.js instance and reattaches, and the
-  // native `loadstart` handler in `useVideoPlayer` (below) clears `status:
-  // 'error'` the moment that reattachment begins.
+  // preserves.
+  //
+  // A fatal auth rejection asks `computeRecoveryDecision` whether to retry
+  // (re-resolve playback for a fresh signed URL/token — the "actual
+  // failure" trigger the no-expiry-timer constraint requires, never
+  // `expiresInSeconds`) or report a truthful terminal error: re-resolving
+  // can only fix an EXPIRED token by minting a new one, not a REVOKED
+  // signing key, which would reject again no matter how many times it's
+  // re-fetched — the client cannot tell those apart, so recovery gets a
+  // small fixed budget rather than spinning forever. Once a fresh `src` prop
+  // arrives (on retry), this effect's own dependency on `rest.src` tears
+  // down the stale hls.js instance and reattaches, and the native
+  // `loadstart` handler in `useVideoPlayer` (below) clears `status: 'error'`
+  // the moment that reattachment begins.
   useEffect(() => {
     const video = videoRef.current;
     const kind = rest.kind ?? 'file';
     if (!video || !rest.src || kind !== 'hls') return;
     return attachMedia(video, rest.src, kind, (fatal) => {
       if (!fatal) return;
+      const decision = computeRecoveryDecision(recoveryAttemptsRef.current);
       setState((prev) => ({
         ...prev,
         status: 'error',
-        error: 'Your playback session expired. Reconnecting…',
+        error: decision.message,
       }));
-      onSourceExpiredRef.current?.();
+      if (decision.kind === 'retry') {
+        recoveryAttemptsRef.current = decision.attempt;
+        pendingRestoreTimeRef.current = video.currentTime;
+        onSourceExpiredRef.current?.();
+      }
+      // Terminal: no further automatic attempt. The ErrorOverlay's Retry
+      // button (actions.onRetry below) is the only way forward from here,
+      // and it resets the budget for a genuinely new try.
     });
   }, [rest.src, rest.kind, setState]);
 
@@ -231,14 +287,26 @@ export const VideoPlayerContainer = ({
     },
     onFullscreenToggle: () => void toggleFullscreen(),
     onRetry: () => {
-      // Re-resolve playback (a fresh signed URL/token) in addition to
-      // reloading the element: a plain reload of the same, still-expired
-      // URL cannot recover either provider's signed-URL expiry on its own —
-      // see `onSourceExpired`'s doc comment. Harmless to call for a native
-      // media error that was never a signed-URL issue at all; it just
-      // re-fetches playback data that was going to stay cached otherwise.
+      // A fresh, user-initiated attempt always gets its own budget — this
+      // is not part of the bounded automatic loop above.
+      recoveryAttemptsRef.current = 0;
+      const v = videoRef.current;
+      if (v) pendingRestoreTimeRef.current = v.currentTime;
+      // Re-resolve playback (a fresh signed URL/token): a plain reload of
+      // the same, still-expired URL cannot recover either provider's
+      // signed-URL expiry on its own — see `onSourceExpired`'s doc comment.
+      // Harmless to call for a native media error that was never a
+      // signed-URL issue at all; it just re-fetches playback data that was
+      // going to stay cached otherwise.
       onSourceExpired?.();
-      videoRef.current?.load();
+      // `video.load()` only helps the 'file' path (a plain `src` reload).
+      // For 'hls', hls.js — not the native element — owns the media; the
+      // element has no `src` of its own to reload, and calling `load()`
+      // directly on it can tear down hls.js's MediaSource attachment
+      // instead of helping. The HLS path's recovery is entirely driven by
+      // `onSourceExpired` yielding a new `src` prop, which the attachMedia
+      // effect above reattaches on its own.
+      if ((rest.kind ?? 'file') !== 'hls') v?.load();
     },
     onPointerActivity: () => {
       showControls();

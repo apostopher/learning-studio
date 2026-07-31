@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { refetchLessonPlaybackFresh } from '#/atoms/lesson-video';
 import { useRecordLastViewedLesson } from '#/data-hooks/use-record-last-viewed';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
@@ -58,9 +59,13 @@ export const LessonMainWrapper = ({
     },
     onRetryVideo: () => {
       if (!lessonSlug) return;
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonPlayback(lessonSlug),
-      });
+      // Not `invalidateQueries`: that re-runs the default queryFn, which
+      // hits the SAME server route without `fresh=1` — and that route can
+      // serve a Redis-cached body. Every caller of `onRetryVideo` (a plain
+      // retry click on a failed video, or the mid-playback recovery path
+      // wired through `VideoFetchState.ready.onRetry`) already has evidence
+      // the cached value might be bad, not merely stale.
+      void refetchLessonPlaybackFresh(queryClient, lessonSlug);
     },
   });
 

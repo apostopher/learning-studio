@@ -58,6 +58,7 @@ export type VideoPlayerLabelKey =
   | 'captionsOn'
   | 'captionsOff'
   | 'captionsUnavailable'
+  | 'captionsUnavailableShort'
   | 'fullscreenEnter'
   | 'fullscreenExit'
   | 'volume'

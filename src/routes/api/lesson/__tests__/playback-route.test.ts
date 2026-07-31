@@ -63,14 +63,39 @@ describe('getLessonPlaybackHandler', () => {
     expect(m.getLessonPlayback).not.toHaveBeenCalled();
   });
 
-  it('returns the playback body for an open lesson', async () => {
+  it('returns the playback body for an open lesson, reading the cache by default', async () => {
     const res = await getLessonPlaybackHandler(req('l1'));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       status: 'ready',
       url: 'https://cdn/v.mp4',
     });
-    expect(m.getLessonPlayback).toHaveBeenCalledWith('l1');
+    expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      skipCache: false,
+    });
+  });
+
+  it('passes skipCache through only when the caller sends fresh=1, after the same gate checks', async () => {
+    const res = await getLessonPlaybackHandler(
+      new Request('http://t/api/lesson/playback?lessonSlug=l1&fresh=1'),
+    );
+    expect(res.status).toBe(200);
+    // Gate is still evaluated before this — mocked to succeed in beforeEach,
+    // so a fresh=1 request that were somehow unauthenticated/ungated would
+    // still 401/403 above, never reach this call at all.
+    expect(m.evaluateLessonGate).toHaveBeenCalledTimes(1);
+    expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      skipCache: true,
+    });
+  });
+
+  it('ignores a fresh value other than exactly "1"', async () => {
+    await getLessonPlaybackHandler(
+      new Request('http://t/api/lesson/playback?lessonSlug=l1&fresh=true'),
+    );
+    expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      skipCache: false,
+    });
   });
 
   it('403s a lesson with no video, never 404', async () => {

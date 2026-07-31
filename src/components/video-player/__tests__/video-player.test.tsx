@@ -53,7 +53,7 @@ describe('VideoPlayer', () => {
     ).toBeTruthy();
   });
 
-  it('shows a disabled, explanatory captions indicator when captions are known to be unavailable', () => {
+  it('shows an explanatory captions indicator — focusable and with visible text, not just an aria-label — when captions are known to be unavailable', () => {
     const ref = createRef<HTMLVideoElement>();
     render(
       <VideoPlayer
@@ -66,7 +66,15 @@ describe('VideoPlayer', () => {
     const button = screen.getByRole('button', {
       name: 'Captions are not available for this video',
     }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    // Native `disabled` would pull the control out of the tab order,
+    // hiding the one thing that explains a missing caption track from
+    // keyboard/screen-reader users — `aria-disabled` keeps it reachable.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    // The disclosure has to be visible text, not colour/opacity alone —
+    // this is the text a sighted mouse user sees without needing the
+    // accessible name at all.
+    expect(screen.getByText('No captions')).toBeTruthy();
   });
 
   it('does not show the unavailable indicator once real caption tracks are supplied, even if captionsUnavailable lingers true', () => {

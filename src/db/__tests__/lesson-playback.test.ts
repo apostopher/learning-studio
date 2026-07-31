@@ -179,4 +179,51 @@ describe('getLessonPlayback', () => {
     expect(result).toBeNull();
     expect(redisMock.set).not.toHaveBeenCalled();
   });
+
+  it('skipCache bypasses the read and re-resolves, even though a cache entry exists', async () => {
+    // The exact scenario the recovery path exists for: a still-live cache
+    // entry (e.g. the same stale URL a client just observed a 403 from)
+    // must not be handed back again. `redisMock.get` deliberately has no
+    // queued value here — asserting it is never even called (below) is a
+    // stronger guarantee than stubbing it and hoping it's ignored.
+    db.select.mockReturnValueOnce(makeChain([lessonRow]));
+    const fresh = {
+      status: 'ready' as const,
+      url: 'https://cdn/fresh.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+    };
+    providers.resolvePlayback.mockResolvedValueOnce(fresh);
+
+    const result = await getLessonPlayback('l1', { skipCache: true });
+
+    expect(result).toEqual(fresh);
+    expect(redisMock.get).not.toHaveBeenCalled();
+    // Still writes a fresh cache entry under the normal TTL rules.
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:l1',
+      JSON.stringify(fresh),
+      { ex: 3570 },
+    );
+  });
+
+  it('skipCache omitted (or false) still reads the cache as before', async () => {
+    const cached = {
+      status: 'ready' as const,
+      url: 'https://cdn/cached.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 60,
+      poster: null,
+      captions: null,
+    };
+    redisMock.get.mockResolvedValueOnce(cached);
+
+    const result = await getLessonPlayback('l1', { skipCache: false });
+
+    expect(result).toEqual(cached);
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:l1');
+    expect(db.select).not.toHaveBeenCalled();
+  });
 });
