@@ -78,6 +78,16 @@ describe('reportVideoProgressHandler', () => {
     });
   });
 
+  it('passes the session user id and the body slug to the gate — not a hardcoded or mismatched value', async () => {
+    await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', progress: 50 }),
+    );
+    expect(evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'user-1',
+      lessonSlug: 'l1',
+    });
+  });
+
   it('500 when the db write fails', async () => {
     recordLessonProgress.mockRejectedValueOnce(new Error('db down'));
     const res = await reportVideoProgressHandler(
@@ -86,7 +96,7 @@ describe('reportVideoProgressHandler', () => {
     expect(res.status).toBe(500);
   });
 
-  it('refuses to record progress for a lesson the caller cannot watch', async () => {
+  it('refuses to record progress for a lesson the caller cannot watch (unsubscribed)', async () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     evaluateLessonGate.mockResolvedValue({
       subscribed: false,
@@ -102,6 +112,27 @@ describe('reportVideoProgressHandler', () => {
     expect(res.status).toBe(403);
     // The point: nothing reached the database. Without this the caller can
     // self-report full coverage for any lesson and unlock the whole course.
+    expect(recordLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the gate resolves to null — no such lesson, or is_available=false', async () => {
+    evaluateLessonGate.mockResolvedValueOnce(null);
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'ghost', progress: 25 }),
+    );
+    expect(res.status).toBe(403);
+    expect(recordLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the lesson is locked, even for a subscribed caller', async () => {
+    evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      lessonLock: { kind: 'module-locked', moduleSlug: 'm', moduleName: 'M' },
+    });
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', progress: 25 }),
+    );
+    expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
   });
 

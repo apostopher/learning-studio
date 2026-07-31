@@ -59,12 +59,17 @@ describe('getVideoProgressHandler', () => {
     });
   });
 
-  it('403s when the lesson slug cannot be resolved, no gate check needed', async () => {
+  it('returns the same zero-progress body for an unknown slug as for a never-started lesson, no gate check needed', async () => {
     getLessonIdBySlug.mockResolvedValueOnce(null);
     const res = await getVideoProgressHandler(
       req('http://test/api/user/video-progress?lessonSlug=ghost'),
     );
-    expect(res.status).toBe(403);
+    // Not 403/404: a distinguishing status would let any signed-in caller
+    // enumerate lesson slugs (including is_available=false drafts) by
+    // probing this endpoint. The body must be indistinguishable from a real,
+    // never-started lesson's progress.
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ milestonesHit: [], watched: false });
     expect(getLessonProgress).not.toHaveBeenCalled();
   });
 

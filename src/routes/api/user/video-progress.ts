@@ -3,6 +3,9 @@ import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getLessonProgress } from '#/db/videos-progress';
 import { auth } from '#/lib/auth';
 
+/** The progress shape for a lesson nothing has ever been recorded against. */
+const ZERO_PROGRESS = { milestonesHit: [] as number[], watched: false };
+
 /**
  * Read the logged-in user's progress for a single lesson (`?lessonSlug=`) —
  * the milestones they've reached and whether it counts as watched. Any
@@ -12,6 +15,13 @@ import { auth } from '#/lib/auth';
  * zero (nothing can have been recorded against it — see the write path's
  * authorization in report-video-progress.ts), so reading it back leaks
  * nothing. Only the write path needs authorizing.
+ *
+ * A slug that resolves to nothing — no such lesson, or an is_available=false
+ * draft `getLessonIdBySlug` doesn't filter — gets the SAME zero-progress 200
+ * a real, never-started lesson would get, not a distinguishing status.
+ * Returning 403/404 here would let any signed-in caller enumerate lesson
+ * slugs by probing this endpoint; a caller must not be able to tell "no such
+ * lesson" from "lesson I haven't started".
  */
 export async function getVideoProgressHandler(
   request: Request,
@@ -29,7 +39,7 @@ export async function getVideoProgressHandler(
   try {
     const lessonId = await getLessonIdBySlug(lessonSlug);
     if (lessonId === null) {
-      return new Response('Forbidden', { status: 403 });
+      return Response.json(ZERO_PROGRESS);
     }
 
     const progress = await getLessonProgress({

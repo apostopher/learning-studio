@@ -15,10 +15,11 @@ import {
 /**
  * Efficient course-scoped progress for one user. A single grouped query counts
  * the distinct watched-milestones (10..95) hit per lesson video in Postgres —
- * the join runs off the (user_id, video_id) index and only watched-milestone
- * rows are joined, so it never pulls raw progress events to the app. The result
- * is one row per lesson (plus a lessonId:null row per empty module), which
- * aggregateCourseProgress rolls up to lesson / module / course.
+ * the join runs off the (user_id, lesson_id) index (videos_progress_user_lesson_idx)
+ * and only watched-milestone rows are joined, so it never pulls raw progress
+ * events to the app. The result is one row per lesson (plus a lessonId:null
+ * row per empty module), which aggregateCourseProgress rolls up to lesson /
+ * module / course.
  */
 export async function getCourseProgress({
   userId,
