@@ -65,7 +65,16 @@ export const LessonMainWrapper = ({
       // retry click on a failed video, or the mid-playback recovery path
       // wired through `VideoFetchState.ready.onRetry`) already has evidence
       // the cached value might be bad, not merely stale.
-      void refetchLessonPlaybackFresh(queryClient, lessonSlug);
+      //
+      // `.catch()` here is deliberate, not an oversight: `useLessonVideo`'s
+      // query observer already surfaces a failed refetch as `video.isError`,
+      // which `computeLessonMainState` turns into the user-facing error
+      // state — that is the ONE path the failure needs to reach. Without
+      // this, a failed recovery attempt (exactly the moment a student's
+      // video just broke) would additionally log an unhandled promise
+      // rejection on every failure, which is noise, not signal, on a path
+      // that already has a real error handler.
+      void refetchLessonPlaybackFresh(queryClient, lessonSlug).catch(() => {});
     },
   });
 

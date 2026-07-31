@@ -71,11 +71,20 @@ export const VideoPlayerContainer = ({
     onSourceExpiredRef.current = onSourceExpired;
   }, [onSourceExpired]);
 
-  // How many automatic recoveries this mount has already attempted for the
-  // CURRENT source — see `compute-recovery-action.ts` for why this is
-  // capped rather than unbounded. Reset to 0 the moment a reattachment
-  // actually reaches `loadedmetadata` (proof it worked), and by a manual
-  // Retry click, which always gets its own fresh budget.
+  // How many automatic recoveries this mount has already attempted — see
+  // `compute-recovery-action.ts` for why this is capped rather than
+  // unbounded. Deliberately NOT reset on a reattachment reaching
+  // `loadedmetadata`: that used to be the reset signal, on the theory that
+  // reaching metadata proves the last attempt worked, but Task 6 exists for
+  // tokens expiring MID-PLAYBACK — a fragment-level 403 (which hls.js
+  // reports through the exact same `fatal` + `response.code` shape as a
+  // manifest-level one) can arrive well AFTER metadata has already loaded.
+  // Resetting there let the cap re-arm indefinitely in precisely the case
+  // it exists to terminate: a revoked key that keeps passing manifest
+  // fetch/early buffering but keeps failing again on later fragments. Only
+  // a manual Retry click (below) resets this — an over-strict cap that
+  // eventually reaches an honest terminal state is preferable to one that
+  // can spin forever.
   const recoveryAttemptsRef = useRef(0);
   // The playhead position to restore once a recovery reattachment lands.
   // Captured right before teardown (in the fatal-error handler below, and in
@@ -93,11 +102,9 @@ export const VideoPlayerContainer = ({
     const video = videoRef.current;
     if (!video) return;
     const onLoadedMetadata = () => {
-      // A source that got far enough to report metadata is playable —
-      // proof the last recovery attempt (if any) worked. Reset the budget
-      // so a LATER, unrelated failure gets its own full retry allowance
-      // instead of inheriting whatever was left over from this one.
-      recoveryAttemptsRef.current = 0;
+      // Deliberately does NOT reset `recoveryAttemptsRef` here — see that
+      // ref's own comment for why reaching metadata is not sufficient proof
+      // that a mid-playback failure won't recur.
       const target = pendingRestoreTimeRef.current;
       if (target === null) return;
       pendingRestoreTimeRef.current = null;
