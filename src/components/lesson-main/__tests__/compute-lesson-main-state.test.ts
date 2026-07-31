@@ -107,11 +107,12 @@ describe('computeLessonMainState', () => {
       lessonSlug: 'l-1',
       video: {
         data: {
-          id: 'v1',
-          status: 'complete',
-          download: 'https://cdn/v.mp4',
-          captions: { srt: null, vtt: null },
-          thumbnail: { gif: null, image: null },
+          status: 'ready',
+          url: 'https://cdn/v.mp4',
+          kind: 'file',
+          expiresInSeconds: 600,
+          poster: null,
+          captions: null,
         },
         isError: false,
       },
@@ -121,6 +122,26 @@ describe('computeLessonMainState', () => {
     expect(result).toMatchObject({
       kind: 'ready',
       videoState: { status: 'ready', src: 'https://cdn/v.mp4' },
+    });
+  });
+
+  it('returns ready with videoState=rendering when the provider is still rendering the video', () => {
+    // Proves the seam actually forwards `video.data` into `playbackToState`
+    // rather than merely compiling against its type — a still-rendering
+    // PlaybackResult must reach videoState unchanged, not fall through to
+    // 'fetching' or 'error'.
+    const result = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: { status: 'rendering' }, isError: false },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(result).toMatchObject({
+      kind: 'ready',
+      videoState: { status: 'rendering' },
     });
   });
 

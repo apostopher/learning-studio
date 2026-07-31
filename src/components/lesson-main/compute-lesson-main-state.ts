@@ -1,8 +1,8 @@
 import type { LessonMaterialResponse } from '#/lib/lesson-gating';
-import type { VideoResponse } from '#/types';
+import { playbackToState } from '#/lib/video-providers/playback-to-state';
+import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 import { findLesson } from './find-lesson';
 import type { LessonMainState } from './types';
-import { videoResponseToState } from './video-response-to-state';
 
 type CourseLike = {
   modules: readonly {
@@ -19,7 +19,7 @@ type CourseQueryShape = {
 };
 
 type VideoQueryShape = {
-  data: VideoResponse | undefined;
+  data: PlaybackResult | undefined;
   isError: boolean;
   error?: unknown;
 };
@@ -138,7 +138,7 @@ export const computeLessonMainState = ({
   if (!lesson.videoId) {
     return { kind: 'no-video', lessonName: lesson.name };
   }
-  let videoState = videoResponseToState(video.data, onRetryVideo);
+  let videoState = playbackToState(video.data, onRetryVideo);
   if (video.isError) {
     videoState = {
       status: 'error',
