@@ -1,5 +1,5 @@
 import { useAtomValue } from 'jotai';
-import { lessonVideoAtomFamily } from '#/atoms/lesson-video';
+import { lessonPlaybackAtomFamily } from '#/atoms/lesson-video';
 
-export const useLessonVideo = (videoId?: string) =>
-  useAtomValue(lessonVideoAtomFamily(videoId ?? ''));
+export const useLessonVideo = (lessonSlug?: string) =>
+  useAtomValue(lessonPlaybackAtomFamily(lessonSlug ?? ''));

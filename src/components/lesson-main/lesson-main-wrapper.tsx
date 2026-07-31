@@ -5,7 +5,6 @@ import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useLessonVideo } from '#/hooks/data/use-lesson-video';
 import { computeLessonMainState } from './compute-lesson-main-state';
-import { findLesson } from './find-lesson';
 import { LessonMain } from './lesson-main';
 import { shouldRecordLastViewed } from './should-record-last-viewed';
 
@@ -23,9 +22,7 @@ export const LessonMainWrapper = ({
   const queryClient = useQueryClient();
   const course = useCourseDetails(courseSlug);
   const courseData = course.data ?? undefined;
-  const lesson = findLesson(courseData, moduleSlug, lessonSlug);
-  const videoId = lesson?.videoId ?? '';
-  const video = useLessonVideo(videoId);
+  const video = useLessonVideo(lessonSlug);
   const material = useLessonMaterial(lessonSlug);
 
   const state = computeLessonMainState({
@@ -60,9 +57,9 @@ export const LessonMainWrapper = ({
       });
     },
     onRetryVideo: () => {
-      if (!videoId) return;
+      if (!lessonSlug) return;
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonVideo(videoId),
+        queryKey: queryKeys.lessonPlayback(lessonSlug),
       });
     },
   });
