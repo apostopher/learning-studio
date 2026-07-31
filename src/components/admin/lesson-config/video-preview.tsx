@@ -1,9 +1,9 @@
 import { Video } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
+import type { LessonPlayback } from '#/lib/admin-schemas';
 
 interface VideoPreviewProps {
-  playback: PlaybackResult | null;
+  playback: LessonPlayback | null;
   /**
    * Called when the media request for an HLS manifest is refused with 401/403.
    *

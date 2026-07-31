@@ -74,13 +74,33 @@ export async function resolvePlayback(
         { cause: error },
       );
     }
+    // image.mux.com validates a `t` (thumbnail) audience claim, not the `v`
+    // (video) one the stream URL above carries — a video-audience token 403s
+    // there. Signed separately, and best-effort: the video token above
+    // already proved the key itself is usable, so if this second, independent
+    // signing call fails for some other reason, a missing poster shouldn't
+    // take playback down with it — `poster: null` is the honest fallback.
+    let posterToken: string | null = null;
+    try {
+      posterToken = await mux.jwt.signPlaybackId(ref, {
+        keyId,
+        keySecret: privateKey,
+        expiration: `${MUX_TTL_SECONDS}s`,
+        type: 'thumbnail',
+      });
+    } catch {
+      posterToken = null;
+    }
+
     return {
       status: 'ready',
       url: `https://stream.mux.com/${ref}.m3u8?token=${token}`,
       kind: 'hls',
       // The JWT we just minted is valid for exactly this long.
       expiresInSeconds: MUX_TTL_SECONDS,
-      poster: `https://image.mux.com/${ref}/thumbnail.jpg?token=${token}`,
+      poster: posterToken
+        ? `https://image.mux.com/${ref}/thumbnail.jpg?token=${posterToken}`
+        : null,
       // Mux text tracks are not configured on this account; null is honest.
       captions: null,
     };

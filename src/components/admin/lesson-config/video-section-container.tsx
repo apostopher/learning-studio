@@ -177,7 +177,9 @@ export const VideoSectionContainer = ({
           {canPlay ? (
             <>
               <VideoPreview
-                playback={playback.data ?? null}
+                playback={
+                  previewState.kind === 'ready' ? previewState.playback : null
+                }
                 onForbidden={() => setPlaybackForbidden(true)}
               />
               {playback.isLoading && (

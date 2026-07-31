@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 // Fully stub admin-functions.server (see mocking rules: no importOriginal on
 // internal alias-using modules). The route imports ForbiddenError from this same
@@ -15,7 +16,9 @@ const { requireAdmin, ForbiddenError, resolveLessonPlayback } = vi.hoisted(
     return {
       requireAdmin: vi.fn(),
       ForbiddenError,
-      resolveLessonPlayback: vi.fn(),
+      // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
+      // is a tsc error, not something only a runtime parse would catch.
+      resolveLessonPlayback: vi.fn<() => Promise<PlaybackResult | null>>(),
     };
   },
 );
@@ -25,6 +28,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 }));
 vi.mock('#/db/admin', () => ({ resolveLessonPlayback }));
 
+import { lessonPlaybackSchema } from '#/lib/admin-schemas';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { getVideoPlaybackHandler } from '../lessons.$lessonId.video-playback';
 
@@ -36,18 +40,35 @@ describe('getVideoPlaybackHandler', () => {
     requireAdmin.mockResolvedValue({ id: 'admin' });
   });
 
-  it('returns the resolved playback on success', async () => {
-    const playback = {
+  it('returns a resolved playback the client schema can actually parse', async () => {
+    const playback: PlaybackResult = {
+      status: 'ready',
       url: 'https://x/y.m3u8',
       kind: 'hls',
       expiresInSeconds: 3600,
+      poster: 'https://x/poster.jpg',
+      captions: { vtt: 'https://x/captions.vtt' },
     };
     resolveLessonPlayback.mockResolvedValue(playback);
 
     const res = await getVideoPlaybackHandler(req(), '1');
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(playback);
+    // Parsed with the real client-side schema — not compared against the
+    // same object reference the mock returned (that would pass even if the
+    // fixture were a shape the client could never actually read).
+    const parsed = lessonPlaybackSchema.parse(await res.json());
+    expect(parsed).toEqual(playback);
+  });
+
+  it('returns a rendering playback that survives route -> client schema parse', async () => {
+    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+
+    const res = await getVideoPlaybackHandler(req(), '1');
+
+    expect(res.status).toBe(200);
+    const parsed = lessonPlaybackSchema.parse(await res.json());
+    expect(parsed).toEqual({ status: 'rendering' });
   });
 
   it('403s a non-admin without touching the database', async () => {

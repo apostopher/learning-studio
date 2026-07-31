@@ -90,6 +90,56 @@ describe('resolvePlayback', () => {
     });
   });
 
+  it('signs the Mux poster with a separate thumbnail-audience token, not the video token', async () => {
+    // The two token "types" are distinct JWT audiences on Mux's end
+    // (image.mux.com only accepts a `t` claim, stream.mux.com a `v` claim) —
+    // distinguishing the mock by the `type` the implementation passed is
+    // what actually proves a second, correctly-audienced token was minted,
+    // rather than the stream token being reused for the poster.
+    signPlaybackId.mockImplementation(
+      async (_id: string, config?: { type?: string }) =>
+        config?.type === 'thumbnail' ? 'thumb-token' : 'video-token',
+    );
+
+    const result = await resolvePlayback('mux', 'playback123', muxCreds);
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    expect(result.url).toBe(
+      'https://stream.mux.com/playback123.m3u8?token=video-token',
+    );
+    expect(result.poster).toBe(
+      'https://image.mux.com/playback123/thumbnail.jpg?token=thumb-token',
+    );
+    expect(signPlaybackId).toHaveBeenCalledWith(
+      'playback123',
+      expect.objectContaining({
+        type: 'thumbnail',
+        keyId: 'key_123',
+        keySecret: 'priv_abc',
+        expiration: '3600s',
+      }),
+    );
+  });
+
+  it('serves the video even when only the poster token fails to sign', async () => {
+    signPlaybackId.mockImplementation(
+      async (_id: string, config?: { type?: string }) => {
+        if (config?.type === 'thumbnail') throw new Error('boom');
+        return 'video-token';
+      },
+    );
+
+    const result = await resolvePlayback('mux', 'playback123', muxCreds);
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    // A missing poster is an honest `null`, not a thrown PlaybackError that
+    // would take the whole (perfectly playable) video down with it.
+    expect(result.url).toBe(
+      'https://stream.mux.com/playback123.m3u8?token=video-token',
+    );
+    expect(result.poster).toBeNull();
+  });
+
   it('resolves an available Synthesia video to its download URL', async () => {
     getVideoDetails.mockResolvedValue(availableVideo);
     getVideoExpiry.mockReturnValue(3599);
@@ -109,6 +159,37 @@ describe('resolvePlayback', () => {
       expiresInSeconds: 3599,
       poster: null,
       captions: null,
+    });
+  });
+
+  it('carries a real poster and captions track through from Synthesia', async () => {
+    // The only test in this file where `poster`/`captions` are non-null —
+    // every other fixture leaves them null, which is the accessibility
+    // constraint's blind spot: null passes trivially whether or not the
+    // mapping is actually wired.
+    getVideoDetails.mockResolvedValue({
+      ...availableVideo,
+      thumbnail: {
+        ...availableVideo.thumbnail,
+        image: 'https://cdn.synthesia.io/thumb.jpg',
+      },
+      captions: {
+        ...availableVideo.captions,
+        vtt: 'https://cdn.synthesia.io/captions.vtt',
+      },
+    });
+    getVideoExpiry.mockReturnValue(600);
+
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    expect(result.poster).toBe('https://cdn.synthesia.io/thumb.jpg');
+    expect(result.captions).toEqual({
+      vtt: 'https://cdn.synthesia.io/captions.vtt',
     });
   });
 
