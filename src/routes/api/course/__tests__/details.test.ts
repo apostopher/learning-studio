@@ -26,10 +26,15 @@ const req = (query = '?slug=c1') =>
   new Request(`http://test/api/course/details${query}`);
 
 // A trimmed stand-in for the real payload. Every field named here is one this
-// route used to hand to anonymous callers. `videoId` sits alongside
-// `hasVideo` here to mirror the real `CourseDetails` shape (db/course.ts's
-// `LessonDetails` carries both) — the handler strips `videoId` before the
-// response ships, which the assertions below prove.
+// route used to hand to anonymous callers. `videoId`/`videoProvider`/
+// `videoRef`/`otherVideoIds`/`videoDetails` sit alongside `hasVideo` here to
+// mirror the real `CourseDetails` shape (db/course.ts's `LessonDetails`
+// carries all of them) — the handler strips all five before the response
+// ships, which the assertions below prove. `videoProvider`/`videoRef`
+// matter as much as `videoId`: a bare Mux `videoRef` is directly streamable
+// unless every asset is signed-policy-only, an operator setting this code
+// cannot verify — shipping it would let a subscribed learner stream a video
+// before satisfying its prerequisites.
 const course = {
   id: 1,
   slug: 'c1',
@@ -46,6 +51,10 @@ const course = {
           slug: 'a',
           name: 'A',
           videoId: 'vid-a',
+          videoProvider: 'mux',
+          videoRef: 'ref-secret',
+          otherVideoIds: [],
+          videoDetails: { id: 'vid-a', status: 'in_progress' as const },
           hasVideo: true,
           isAvailable: true,
           needsVideoWatch: true,
@@ -56,12 +65,22 @@ const course = {
   ],
 };
 
-// What the route actually serves: same as `course`, minus `videoId`.
+// What the route actually serves: same as `course`, minus every
+// video-identifying field.
 const learnerCourse = {
   ...course,
   modules: course.modules.map((mod) => ({
     ...mod,
-    lessons: mod.lessons.map(({ videoId: _videoId, ...rest }) => rest),
+    lessons: mod.lessons.map(
+      ({
+        videoId: _videoId,
+        videoProvider: _videoProvider,
+        videoRef: _videoRef,
+        otherVideoIds: _otherVideoIds,
+        videoDetails: _videoDetails,
+        ...rest
+      }) => rest,
+    ),
   })),
 };
 
@@ -106,14 +125,21 @@ describe('getCourseDetailsHandler', () => {
     expect(getCourseDetails).not.toHaveBeenCalled();
   });
 
-  it('serves a subscriber the videoId-free shape', async () => {
+  it('serves a subscriber the video-identity-free shape', async () => {
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(200);
-    // Not `course` — the handler must strip videoId before this reaches the
-    // client, since nothing outside the playback layer should learn a
-    // video's identity from this route.
-    expect(await res.json()).toEqual(learnerCourse);
+    // Not `course` — the handler must strip every video-identifying field
+    // before this reaches the client, since nothing outside the playback
+    // layer should learn a video's identity from this route.
+    const body = await res.json();
+    expect(body).toEqual(learnerCourse);
+    const lesson = body.modules[0].lessons[0];
+    expect(lesson).not.toHaveProperty('videoId');
+    expect(lesson).not.toHaveProperty('videoProvider');
+    expect(lesson).not.toHaveProperty('videoRef');
+    expect(lesson).not.toHaveProperty('otherVideoIds');
+    expect(lesson).not.toHaveProperty('videoDetails');
     expect(isSubscribedToCourseSlug).toHaveBeenCalledWith('u1', 'c1');
   });
 

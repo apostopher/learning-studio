@@ -177,10 +177,25 @@ export async function getCourseDetails(slug: string) {
 
 export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
 
+// Key prefix carries a version suffix — bump it (v2 -> v3 -> ...) every time
+// this function's RETURN SHAPE changes, not just its data. A cached entry is
+// raw `JSON.stringify` of whatever this function returned at write time, with
+// no schema tag of its own, so a shape change is invisible to `redis.get`: it
+// just hands back an object missing the new field(s). That is exactly what
+// happened when `hasVideo` was added — for up to the 6h TTL, every warm entry
+// would have deserialised WITHOUT `hasVideo`, and `isLessonSatisfied`'s
+// `if (!lesson.hasVideo) return true` would have silently opened every
+// prerequisite gate platform-wide (and simultaneously blanked every video,
+// via compute-lesson-main-state's `if (!lesson.hasVideo)` no-video branch)
+// until the cache aged out. Bumping the prefix here makes every pre-existing
+// entry unreachable under the new key, so the very first read after deploy is
+// a genuine cache miss that repopulates with the current shape — no manual
+// Redis flush required, and it cannot be forgotten the way an operator step
+// can.
 export const getCourseDetailsWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
->('course-details', getCourseDetails);
+>('course-details-v2', getCourseDetails);
 
 export type MyCourseSummary = {
   id: number;

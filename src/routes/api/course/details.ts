@@ -1,39 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getUserRoleNames } from '#/db/admin';
-import type { CourseDetails } from '#/db/course';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import { ADMIN_ROLE } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
-
-/**
- * Drop `videoId` from each lesson before the payload leaves the server.
- *
- * `hasVideo` already rides along on the cached `CourseDetails` object (see
- * `db/course.ts`'s `LessonDetails`), computed once from `videoProvider`/
- * `videoRef` — this only needs to omit the raw identifier, not recompute
- * anything. Nothing outside the playback layer should be able to read a
- * video's identity off this route, only whether one exists.
- */
-function omitVideoId<T extends { videoId: unknown }>(
-  lesson: T,
-): Omit<T, 'videoId'> {
-  const { videoId: _videoId, ...rest } = lesson;
-  return rest;
-}
-
-function toLearnerCourseDetails(course: NonNullable<CourseDetails>) {
-  return {
-    ...course,
-    modules: course.modules.map((mod) => ({
-      ...mod,
-      lessons: mod.lessons.map(omitVideoId),
-    })),
-  };
-}
-
-/** The shape `/api/course/details` actually serves — `videoId`-free. */
-export type LearnerCourseDetails = ReturnType<typeof toLearnerCourseDetails>;
+import type { LearnerCourseDetails } from '#/lib/course-details-shape';
+import { toLearnerCourseDetails } from '#/lib/course-details-shape';
 
 /**
  * The module/lesson tree the learner UI renders: the sidebar, the lesson page's
@@ -45,10 +17,18 @@ export type LearnerCourseDetails = ReturnType<typeof toLearnerCourseDetails>;
  * (née `/api/lesson/video`) was hardened against — anyone on the internet
  * could list them. It now requires a session (401) and a subscription to the
  * course (403), with admins bypassing, matching `/api/lesson/material` and
- * `/api/lesson/playback`. Each lesson's `videoId` is additionally stripped
- * (`toLearnerCourseDetails`, below) before the response is built — the
- * sidebar and lesson page only ever needed to know WHETHER a lesson has a
- * video, never which one.
+ * `/api/lesson/playback`. Every video-identifying field on each lesson —
+ * `videoId`, `videoProvider`, `videoRef`, `otherVideoIds`, `videoDetails` —
+ * is additionally stripped (`toLearnerCourseDetails`, `#/lib/course-details-shape`)
+ * before the response is built. `videoProvider`/`videoRef` matter as much as
+ * `videoId` here: this route has no zod parse on the way out, only a cast, so
+ * whatever ships lands in the client object and the network tab both, and a
+ * bare Mux `videoRef` is directly streamable
+ * (`https://stream.mux.com/{ref}.m3u8`) unless every asset is
+ * signed-policy-only — an operator setting in the Mux console this code
+ * cannot verify, not a guarantee. The sidebar and lesson page only ever
+ * needed to know WHETHER a lesson has a video, never which one or how to
+ * reach it directly.
  *
  * It reads `getCourseDetailsWithCache`, NOT the uncached `getCourseDetails`, so
  * the client explains the gate from the same payload the server enforces it
@@ -84,7 +64,16 @@ export async function getCourseDetailsHandler(
   }
 
   const course = await getCourseDetailsWithCache(slug);
-  return Response.json(course ? toLearnerCourseDetails(course) : course);
+  // Typed against the shared `LearnerCourseDetails` (nullable, mirroring
+  // `getCourseDetailsWithCache`'s own nullability for an unknown/uncached
+  // slug) rather than left inferred, so this assignment is a real
+  // compile-time cross-check: if `toLearnerCourseDetails`'s output ever stops
+  // satisfying what `LearnerCourseDetails` promises consumers, `tsc` catches
+  // it here, at the one place both types meet.
+  const payload: LearnerCourseDetails = course
+    ? toLearnerCourseDetails(course)
+    : null;
+  return Response.json(payload);
 }
 
 export const Route = createFileRoute('/api/course/details')({
