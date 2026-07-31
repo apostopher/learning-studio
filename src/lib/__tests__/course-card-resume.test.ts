@@ -11,7 +11,7 @@ const lesson = (
   slug,
   name: slug,
   isAvailable: true,
-  videoId: `video-${id}`,
+  hasVideo: true,
   needsVideoWatch: true,
   dependsOn,
 });

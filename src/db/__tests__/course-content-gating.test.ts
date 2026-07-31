@@ -81,7 +81,7 @@ const course = {
           slug: 'a',
           name: 'A',
           isAvailable: true,
-          videoId: 'v',
+          hasVideo: true,
           needsVideoWatch: true,
           dependsOn: [],
         },
@@ -89,7 +89,7 @@ const course = {
           slug: 'b',
           name: 'B',
           isAvailable: true,
-          videoId: 'v2',
+          hasVideo: true,
           needsVideoWatch: true,
           dependsOn: [],
         },
@@ -127,7 +127,7 @@ const detailsFor = (
     slug: string;
     name: string;
     isAvailable: boolean;
-    videoId: string | null;
+    hasVideo: boolean;
     needsVideoWatch: boolean;
     dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
   }[],
@@ -165,7 +165,7 @@ describe('getCourseContentForAgent subscription gate', () => {
           slug: 'b',
           name: 'B',
           isAvailable: true,
-          videoId: null,
+          hasVideo: false,
           needsVideoWatch: false,
           dependsOn: [],
         },
@@ -190,7 +190,7 @@ describe('getCourseContentForAgent subscription gate', () => {
           slug: 'b',
           name: 'B',
           isAvailable: true,
-          videoId: null,
+          hasVideo: false,
           needsVideoWatch: false,
           dependsOn: [],
         },
@@ -227,7 +227,7 @@ describe('getCourseContentForAgent subscription gate', () => {
           slug: 'a',
           name: 'A',
           isAvailable: true,
-          videoId: null,
+          hasVideo: false,
           needsVideoWatch: false,
           dependsOn: [],
         },
@@ -274,7 +274,7 @@ describe('getCourseContentForAgent subscription gate', () => {
           slug: 'a',
           name: 'A',
           isAvailable: true,
-          videoId: 'v',
+          hasVideo: true,
           needsVideoWatch: true,
           dependsOn: [],
         },
@@ -283,7 +283,7 @@ describe('getCourseContentForAgent subscription gate', () => {
           slug: 'b',
           name: 'B',
           isAvailable: true,
-          videoId: null,
+          hasVideo: false,
           needsVideoWatch: false,
           dependsOn: [],
         },

@@ -10,7 +10,7 @@ export type DetailsLesson = {
   slug: string;
   name: string;
   isAvailable: boolean;
-  videoId: string | null;
+  hasVideo: boolean;
   needsVideoWatch: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };
@@ -34,7 +34,7 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
         slug: l.slug,
         name: l.name,
         isAvailable: l.isAvailable,
-        videoId: l.videoId,
+        hasVideo: l.hasVideo,
         needsVideoWatch: l.needsVideoWatch,
         dependsOn: l.dependsOn,
       })),

@@ -6,7 +6,7 @@ import { ModuleAccordion } from './module-accordion';
 import { SidebarError } from './sidebar-error';
 import { SidebarSkeleton } from './sidebar-skeleton';
 
-type LessonLike = { slug: string; name: string; videoId: string | null };
+type LessonLike = { slug: string; name: string; hasVideo: boolean };
 type ModuleLike = {
   id: number;
   slug: string;

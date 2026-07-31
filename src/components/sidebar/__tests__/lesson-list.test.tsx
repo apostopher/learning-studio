@@ -34,9 +34,9 @@ async function renderInRouter(ui: React.ReactNode) {
 }
 
 const lessons = [
-  { slug: 'a', name: 'Lesson A', videoId: null },
-  { slug: 'b', name: 'Lesson B', videoId: null },
-  { slug: 'c', name: 'Lesson C', videoId: null },
+  { slug: 'a', name: 'Lesson A', hasVideo: false },
+  { slug: 'b', name: 'Lesson B', hasVideo: false },
+  { slug: 'c', name: 'Lesson C', hasVideo: false },
 ];
 
 describe('LessonList', () => {

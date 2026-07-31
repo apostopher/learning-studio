@@ -7,7 +7,7 @@ import type { LessonMainState } from './types';
 type CourseLike = {
   modules: readonly {
     slug: string;
-    lessons: readonly { slug: string; name: string; videoId: string | null }[];
+    lessons: readonly { slug: string; name: string; hasVideo: boolean }[];
   }[];
 };
 
@@ -135,7 +135,7 @@ export const computeLessonMainState = ({
     };
   }
 
-  if (!lesson.videoId) {
+  if (!lesson.hasVideo) {
     return { kind: 'no-video', lessonName: lesson.name };
   }
   let videoState = playbackToState(video.data, onRetryVideo);
@@ -151,7 +151,6 @@ export const computeLessonMainState = ({
     lessonName: lesson.name,
     lessonSlug: lesson.slug,
     courseSlug,
-    videoId: lesson.videoId,
     videoState,
   };
 };

@@ -17,8 +17,8 @@ const module = {
   name: 'Fundamentals',
   slug: 'fundamentals',
   lessons: [
-    { slug: 'pitch', name: 'Pitch', videoId: null },
-    { slug: 'roll', name: 'Roll', videoId: null },
+    { slug: 'pitch', name: 'Pitch', hasVideo: false },
+    { slug: 'roll', name: 'Roll', hasVideo: false },
   ],
 };
 

@@ -253,7 +253,7 @@ export const CourseLessonSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
-  videoId: z.string(),
+  hasVideo: z.boolean(),
   otherVideoIds: OtherVideoIdsSchema.nullable().default([]),
   videoDetails: VideoResponseSchema.optional(),
   requiredSubscriptions: z.array(SubscriptionSchema).optional(),

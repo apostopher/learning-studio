@@ -1,7 +1,7 @@
 import type { LessonLock } from '#/lib/lesson-gating';
 import { LessonLink } from './lesson-link';
 
-type LessonLike = { slug: string; name: string; videoId: string | null };
+type LessonLike = { slug: string; name: string; hasVideo: boolean };
 
 type LessonListProps = {
   courseSlug: string;

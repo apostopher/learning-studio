@@ -4,7 +4,7 @@ import { computeLessonMainState } from '../compute-lesson-main-state';
 const onRetryCourse = vi.fn();
 const onRetryVideo = vi.fn();
 
-const baseLesson = { slug: 'l-1', name: 'Lesson One', videoId: 'v1' };
+const baseLesson = { slug: 'l-1', name: 'Lesson One', hasVideo: true };
 const baseCourse = {
   modules: [{ slug: 'm-1', lessons: [baseLesson] }],
 };
@@ -56,14 +56,14 @@ describe('computeLessonMainState', () => {
     ).toEqual({ kind: 'not-found', lessonSlug: 'missing' });
   });
 
-  it('returns no-video when lesson has empty videoId', () => {
+  it('returns no-video when lesson has hasVideo=false', () => {
     const result = computeLessonMainState({
       course: {
         data: {
           modules: [
             {
               slug: 'm-1',
-              lessons: [{ slug: 'l-1', name: 'L', videoId: '' }],
+              lessons: [{ slug: 'l-1', name: 'L', hasVideo: false }],
             },
           ],
         },
@@ -80,6 +80,32 @@ describe('computeLessonMainState', () => {
     expect(result).toEqual({ kind: 'no-video', lessonName: 'L' });
   });
 
+  it('reports no-video from hasVideo, not from a missing videoId', () => {
+    const state = computeLessonMainState({
+      course: {
+        data: {
+          modules: [
+            { slug: 'm-1', lessons: [{ ...baseLesson, hasVideo: false }] },
+          ],
+        },
+        isLoading: false,
+        isError: false,
+      },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: {
+        data: { locked: false, adminBypass: false, material: {} },
+        isLoading: false,
+        isError: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(state).toEqual({ kind: 'no-video', lessonName: 'Lesson One' });
+  });
+
   it('returns ready with videoState=fetching when video data is undefined', () => {
     const result = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
@@ -94,9 +120,12 @@ describe('computeLessonMainState', () => {
       kind: 'ready',
       lessonName: 'Lesson One',
       courseSlug: 'course-1',
-      videoId: 'v1',
       videoState: { status: 'fetching' },
     });
+    // `LessonMainState.ready` has no videoId — nothing outside the playback
+    // layer reads the video's identity. Confirm the field is genuinely gone
+    // rather than merely unasserted.
+    expect(result).not.toHaveProperty('videoId');
   });
 
   it('returns ready with videoState=ready when video data has download', () => {

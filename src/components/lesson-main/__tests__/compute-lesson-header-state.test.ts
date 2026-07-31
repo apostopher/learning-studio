@@ -5,7 +5,7 @@ const baseCourse = {
   modules: [
     {
       slug: 'm-1',
-      lessons: [{ slug: 'l-1', name: 'Lesson One', videoId: 'v1' }],
+      lessons: [{ slug: 'l-1', name: 'Lesson One', hasVideo: true }],
     },
   ],
 };

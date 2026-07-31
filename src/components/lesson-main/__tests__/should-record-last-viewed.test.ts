@@ -25,7 +25,6 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lessonName: 'L1',
     lessonSlug: 'l1',
     courseSlug: 'c',
-    videoId: 'v1',
     videoState: { status: 'fetching' },
   },
 };

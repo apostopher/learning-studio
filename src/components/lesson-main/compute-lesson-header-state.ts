@@ -4,7 +4,7 @@ import type { LessonHeaderState } from './lesson-header';
 type CourseLike = {
   modules: readonly {
     slug: string;
-    lessons: readonly { slug: string; name: string; videoId: string | null }[];
+    lessons: readonly { slug: string; name: string; hasVideo: boolean }[];
   }[];
 };
 

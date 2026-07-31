@@ -12,7 +12,7 @@ const lesson = (over: Partial<GateLesson> = {}): GateLesson => ({
   slug: 'l1',
   name: 'Lesson One',
   isAvailable: true,
-  videoId: 'vid-1',
+  hasVideo: true,
   needsVideoWatch: true,
   dependsOn: [],
   ...over,
@@ -29,7 +29,9 @@ describe('isLessonSatisfied', () => {
   it('is satisfied when the lesson has no video', () => {
     // 20 lessons carry needsVideoWatch: true with no video, and the column
     // defaults to true — a hard block would strand them permanently.
-    expect(isLessonSatisfied(lesson({ videoId: null }), new Set())).toBe(true);
+    expect(isLessonSatisfied(lesson({ hasVideo: false }), new Set())).toBe(
+      true,
+    );
   });
 
   it('is satisfied when watching is not required', () => {

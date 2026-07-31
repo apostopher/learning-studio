@@ -6,13 +6,13 @@ const fixture = {
     {
       slug: 'mod-a',
       lessons: [
-        { slug: 'l-1', name: 'Lesson One', videoId: 'v1' },
-        { slug: 'l-2', name: 'Lesson Two', videoId: 'v2' },
+        { slug: 'l-1', name: 'Lesson One', hasVideo: true },
+        { slug: 'l-2', name: 'Lesson Two', hasVideo: false },
       ],
     },
     {
       slug: 'mod-b',
-      lessons: [{ slug: 'l-3', name: 'Lesson Three', videoId: 'v3' }],
+      lessons: [{ slug: 'l-3', name: 'Lesson Three', hasVideo: true }],
     },
   ],
 };
@@ -21,7 +21,7 @@ describe('findLesson', () => {
   it('returns the lesson when module and lesson slugs match', () => {
     const lesson = findLesson(fixture, 'mod-a', 'l-2');
     expect(lesson?.name).toBe('Lesson Two');
-    expect(lesson?.videoId).toBe('v2');
+    expect(lesson?.hasVideo).toBe(false);
   });
 
   it('returns undefined when the module slug does not exist', () => {

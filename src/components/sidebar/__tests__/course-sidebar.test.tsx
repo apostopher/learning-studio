@@ -16,7 +16,7 @@ const modules = [
     id: 1,
     name: 'Fundamentals',
     slug: 'fundamentals',
-    lessons: [{ slug: 'pitch', name: 'Pitch', videoId: null }],
+    lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false }],
   },
 ];
 

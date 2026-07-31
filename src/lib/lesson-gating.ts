@@ -20,7 +20,7 @@ export type GateLesson = {
   slug: string;
   name: string;
   isAvailable: boolean;
-  videoId: string | null;
+  hasVideo: boolean;
   needsVideoWatch: boolean;
   dependsOn: readonly GateLessonDependency[];
 };
@@ -86,7 +86,7 @@ export function isLessonSatisfied(
 ): boolean {
   if (!lesson.isAvailable) return true;
   if (!lesson.needsVideoWatch) return true;
-  if (!lesson.videoId) return true;
+  if (!lesson.hasVideo) return true;
   return watchedLessonSlugs.has(lesson.slug);
 }
 

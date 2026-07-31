@@ -57,6 +57,5 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
-      videoId: string;
       videoState: VideoFetchState;
     };

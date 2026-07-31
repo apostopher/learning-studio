@@ -130,7 +130,6 @@ describe('LessonMain', () => {
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
           courseSlug: 'course-one',
-          videoId: 'v1',
           videoState: { status: 'fetching' },
         }}
       />,

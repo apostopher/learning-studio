@@ -30,6 +30,15 @@ import { db } from '.';
 type LessonDetails = DBLesson & {
   dependsOn: CourseLessonDependencies;
   videoId: string;
+  /**
+   * Whether the lesson has a video assigned, derived from the same two
+   * columns the playback layer resolves from. This is the field every
+   * consumer outside the playback layer should read — the gating predicate
+   * (`#/lib/lesson-gating.ts`) and the learner-facing `/api/course/details`
+   * payload both key off this instead of `videoId`/`videoProvider`/`videoRef`,
+   * so nothing downstream needs to know which video, only whether one exists.
+   */
+  hasVideo: boolean;
   videoDetails?: VideoResponse;
   organizations: { id: number; name: string }[];
 };
@@ -110,6 +119,7 @@ export async function getCourseDetails(slug: string) {
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
         videoId: lesson.videoId || '',
+        hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
         otherVideoIds: lesson.otherVideoIds || [],
         videoDetails: undefined, // will be populated later
         dependsOn: [],

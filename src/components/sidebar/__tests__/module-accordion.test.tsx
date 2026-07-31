@@ -16,13 +16,13 @@ const modules = [
     id: 1,
     name: 'Fundamentals',
     slug: 'fundamentals',
-    lessons: [{ slug: 'pitch', name: 'Pitch', videoId: null }],
+    lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false }],
   },
   {
     id: 2,
     name: 'Intermediate',
     slug: 'intermediate',
-    lessons: [{ slug: 'yaw', name: 'Yaw', videoId: null }],
+    lessons: [{ slug: 'yaw', name: 'Yaw', hasVideo: false }],
   },
 ];
 

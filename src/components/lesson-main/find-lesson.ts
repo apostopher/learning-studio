@@ -1,4 +1,4 @@
-type LessonLike = { slug: string; name: string; videoId: string | null };
+type LessonLike = { slug: string; name: string; hasVideo: boolean };
 type ModuleLike = { slug: string; lessons: readonly LessonLike[] };
 type CourseLike = { modules: readonly ModuleLike[] };
 

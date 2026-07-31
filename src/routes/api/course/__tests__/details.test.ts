@@ -26,7 +26,10 @@ const req = (query = '?slug=c1') =>
   new Request(`http://test/api/course/details${query}`);
 
 // A trimmed stand-in for the real payload. Every field named here is one this
-// route used to hand to anonymous callers.
+// route used to hand to anonymous callers. `videoId` sits alongside
+// `hasVideo` here to mirror the real `CourseDetails` shape (db/course.ts's
+// `LessonDetails` carries both) — the handler strips `videoId` before the
+// response ships, which the assertions below prove.
 const course = {
   id: 1,
   slug: 'c1',
@@ -43,6 +46,7 @@ const course = {
           slug: 'a',
           name: 'A',
           videoId: 'vid-a',
+          hasVideo: true,
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [],
@@ -50,6 +54,15 @@ const course = {
       ],
     },
   ],
+};
+
+// What the route actually serves: same as `course`, minus `videoId`.
+const learnerCourse = {
+  ...course,
+  modules: course.modules.map((mod) => ({
+    ...mod,
+    lessons: mod.lessons.map(({ videoId: _videoId, ...rest }) => rest),
+  })),
 };
 
 describe('getCourseDetailsHandler', () => {
@@ -68,9 +81,9 @@ describe('getCourseDetailsHandler', () => {
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(401);
-    // The payload carries every lesson's videoId and the whole dependency
-    // graph — this is the enumeration source /api/lesson/video was hardened
-    // against, so an anonymous request must not reach the reader at all.
+    // The payload carries the whole dependency graph — which lesson blocks
+    // which — the enumeration source /api/lesson/video was hardened against,
+    // so an anonymous request must not reach the reader at all.
     expect(getCourseDetailsWithCache).not.toHaveBeenCalled();
     expect(getCourseDetails).not.toHaveBeenCalled();
   });
@@ -93,11 +106,14 @@ describe('getCourseDetailsHandler', () => {
     expect(getCourseDetails).not.toHaveBeenCalled();
   });
 
-  it('serves a subscriber', async () => {
+  it('serves a subscriber the videoId-free shape', async () => {
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(course);
+    // Not `course` — the handler must strip videoId before this reaches the
+    // client, since nothing outside the playback layer should learn a
+    // video's identity from this route.
+    expect(await res.json()).toEqual(learnerCourse);
     expect(isSubscribedToCourseSlug).toHaveBeenCalledWith('u1', 'c1');
   });
 
@@ -108,7 +124,7 @@ describe('getCourseDetailsHandler', () => {
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(course);
+    expect(await res.json()).toEqual(learnerCourse);
   });
 
   it('400s a signed-in request with no slug', async () => {

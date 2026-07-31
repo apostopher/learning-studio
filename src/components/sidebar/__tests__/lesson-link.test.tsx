@@ -41,7 +41,7 @@ async function renderInRouter(ui: React.ReactNode, initialPath = '/') {
 const lesson = {
   slug: 'pitch-and-roll',
   name: 'Pitch and roll',
-  videoId: null,
+  hasVideo: false,
 };
 
 // The lock glyph is the only `aria-hidden` span in the row that wraps an svg:
