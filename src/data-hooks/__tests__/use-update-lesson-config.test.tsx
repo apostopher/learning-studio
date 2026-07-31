@@ -33,6 +33,8 @@ function makeHarness() {
         imageUrlWebp: null,
         rank: 1,
         requiredSubscriptions: ['associate'],
+        dependsOn: [],
+        learnerCount: 0,
         lessons: [
           {
             id: 10,
@@ -44,6 +46,7 @@ function makeHarness() {
             needsVideoWatch: true,
             requiredSubscriptions: [],
             isConfigured: false,
+            hasVideoId: false,
             videoProvider: null,
             videoRef: null,
           },

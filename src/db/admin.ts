@@ -2,6 +2,7 @@ import { del, list } from '@vercel/blob';
 import {
   and,
   asc,
+  countDistinct,
   desc,
   eq,
   inArray,
@@ -21,10 +22,12 @@ import {
   coursesTable,
   courseVideoProvidersTable,
   lessonsTable,
+  moduleDependenciesTable,
   modulesTable,
   userProfileRolesTable,
   userProfileTable,
   userRolesTable,
+  videoProgressTable,
 } from '#/db/schema';
 import { env } from '#/env';
 import type {
@@ -37,11 +40,13 @@ import type {
   SaveCredentialInput,
   UpdateCourseInput,
 } from '#/lib/admin-schemas';
+import { watchedMilestones } from '#/lib/course-milestones';
 import {
   decryptJson,
   encryptJson,
   type SecretEnvelope,
 } from '#/lib/crypto.server';
+import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
 import { slugify } from '#/lib/slugify';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import {
@@ -213,6 +218,9 @@ export async function createModule(input: {
     imageUrlWebp: created.imageUrlWebp,
     rank: Number(created.rank),
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
+    // A module is created with no prerequisites and no learners by definition.
+    dependsOn: [],
+    learnerCount: 0,
     lessons: [],
   };
 }
@@ -263,9 +271,43 @@ export async function createLesson(input: {
     needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     isConfigured: created.videoId !== null,
+    hasVideoId: created.videoId !== null,
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
   };
+}
+
+/**
+ * Distinct learners with watch progress in each of `moduleIds`.
+ *
+ * Surfaced beside the dependency picker: adding a prerequisite locks these
+ * people out mid-module on their next page load, with no grandfathering, so
+ * the count has to be on screen while the decision is made.
+ *
+ * `lessons.video_id` is a uuid and `videos_progress.video_id` the same value
+ * as text — the cast mirrors getMyCourses. Only modules with progress appear
+ * in the result; callers default the rest to zero.
+ */
+async function countLearnersByModule(
+  moduleIds: number[],
+): Promise<Map<number, number>> {
+  const rows = await db
+    .select({
+      moduleId: lessonsTable.moduleId,
+      learners: countDistinct(videoProgressTable.userId),
+    })
+    .from(lessonsTable)
+    .innerJoin(
+      videoProgressTable,
+      and(
+        eq(videoProgressTable.videoId, sql`${lessonsTable.videoId}::text`),
+        inArray(videoProgressTable.progress, watchedMilestones),
+      ),
+    )
+    .where(inArray(lessonsTable.moduleId, moduleIds))
+    .groupBy(lessonsTable.moduleId);
+
+  return new Map(rows.map((r) => [r.moduleId, Number(r.learners)]));
 }
 
 export async function getCourseBoard(
@@ -327,6 +369,23 @@ export async function getCourseBoard(
     byModule.set(lesson.moduleId, list);
   }
 
+  const [dependencies, learnerCounts] = moduleIds.length
+    ? await Promise.all([
+        db
+          .select({
+            moduleId: moduleDependenciesTable.moduleId,
+            dependsOn: moduleDependenciesTable.dependsOn,
+          })
+          .from(moduleDependenciesTable)
+          .where(inArray(moduleDependenciesTable.moduleId, moduleIds)),
+        countLearnersByModule(moduleIds),
+      ])
+    : [[], new Map<number, number>()];
+
+  const dependsOnByModule = new Map(
+    dependencies.map((d) => [d.moduleId, d.dependsOn]),
+  );
+
   return {
     course,
     modules: modules.map((m) => ({
@@ -337,6 +396,8 @@ export async function getCourseBoard(
       imageUrlWebp: m.imageUrlWebp,
       rank: Number(m.rank),
       requiredSubscriptions: m.requiredSubscriptions as SubscriptionType[],
+      dependsOn: dependsOnByModule.get(m.id) ?? [],
+      learnerCount: learnerCounts.get(m.id) ?? 0,
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
         name: l.name,
@@ -347,6 +408,7 @@ export async function getCourseBoard(
         needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
         isConfigured: l.videoRef !== null || l.videoId !== null,
+        hasVideoId: l.videoId !== null,
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
       })),
@@ -755,9 +817,93 @@ export async function updateModule(
   return updated;
 }
 
+/**
+ * Why a dependency write was refused, so the route can pick a status code
+ * without re-deriving the reason.
+ */
+export type UpdateModuleDependenciesResult =
+  | { ok: true; dependsOn: string[] }
+  | { ok: false; reason: 'not-found' }
+  | { ok: false; reason: 'unknown-modules'; slugs: string[] }
+  | { ok: false; reason: 'cycle'; slugs: string[] };
+
+/**
+ * Replace a module's prerequisites, rejecting anything that would deadlock.
+ *
+ * Validation runs against live rows rather than trusting the request: the
+ * client disables cycle-forming options, but two admins in two tabs can each
+ * pick a legal edge that is jointly a cycle, and a cycle locks both modules
+ * permanently with no signal to anyone. Prerequisites are also confined to the
+ * same course — a foreign slug is silently inert under `evaluateLessonLock`,
+ * which searches only the current course's modules, so accepting one would
+ * persist a gate that can never fire.
+ */
+export async function updateModuleDependencies(
+  moduleId: number,
+  dependsOn: string[],
+): Promise<UpdateModuleDependenciesResult> {
+  const [target] = await db
+    .select({ slug: modulesTable.slug, courseId: modulesTable.courseId })
+    .from(modulesTable)
+    .where(eq(modulesTable.id, moduleId));
+  if (!target) return { ok: false, reason: 'not-found' };
+
+  const siblings = await db
+    .select({
+      slug: modulesTable.slug,
+      dependsOn: moduleDependenciesTable.dependsOn,
+    })
+    .from(modulesTable)
+    .leftJoin(
+      moduleDependenciesTable,
+      eq(moduleDependenciesTable.moduleId, modulesTable.id),
+    )
+    .where(eq(modulesTable.courseId, target.courseId));
+
+  // Order-preserving dedupe: a duplicated slug is a client bug, not a reason
+  // to fail the write, but it must not reach a column the UI renders as chips.
+  const next = [...new Set(dependsOn)];
+
+  const known = new Set(siblings.map((s) => s.slug));
+  const unknown = next.filter((slug) => !known.has(slug));
+  if (unknown.length > 0) {
+    return { ok: false, reason: 'unknown-modules', slugs: unknown };
+  }
+
+  const graph = siblings.map((s) => ({
+    slug: s.slug,
+    name: s.slug,
+    dependsOn: s.dependsOn ?? [],
+    lessons: [],
+  }));
+  const forbidden = cyclicPrerequisites(graph, target.slug);
+  const cyclic = next.filter((slug) => forbidden.has(slug));
+  if (cyclic.length > 0) return { ok: false, reason: 'cycle', slugs: cyclic };
+
+  // Clearing every prerequisite deletes the row rather than storing an empty
+  // array, so "no dependencies" has one representation instead of two.
+  if (next.length === 0) {
+    await db
+      .delete(moduleDependenciesTable)
+      .where(eq(moduleDependenciesTable.moduleId, moduleId));
+  } else {
+    await db
+      .insert(moduleDependenciesTable)
+      .values({ moduleId, dependsOn: next })
+      .onConflictDoUpdate({
+        target: moduleDependenciesTable.moduleId,
+        set: { dependsOn: next },
+      });
+  }
+
+  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  return { ok: true, dependsOn: next };
+}
+
 export async function deleteModule(moduleId: number): Promise<boolean> {
   const [existing] = await db
     .select({
+      slug: modulesTable.slug,
       imageUrlAvif: modulesTable.imageUrlAvif,
       imageUrlWebp: modulesTable.imageUrlWebp,
     })
@@ -773,6 +919,20 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
     .where(eq(modulesTable.id, moduleId))
     .returning({ id: modulesTable.id });
   if (!deleted) return false;
+
+  // The cascade drops this module's OWN dependency row, but `depends_on` is a
+  // plain text[] with no foreign key — every sibling that listed this slug
+  // would keep it forever. Gating tolerates such orphans, so nothing breaks;
+  // the admin would just see a chip for a prerequisite that no longer exists,
+  // implying a gate that is not there.
+  if (existing?.slug) {
+    await db
+      .update(moduleDependenciesTable)
+      .set({
+        dependsOn: sql`array_remove(${moduleDependenciesTable.dependsOn}, ${existing.slug})`,
+      })
+      .where(sql`${existing.slug} = ANY(${moduleDependenciesTable.dependsOn})`);
+  }
 
   await deleteBlobs([existing?.imageUrlAvif, existing?.imageUrlWebp]);
   await invalidateCourseDetailsCache(courseSlug);

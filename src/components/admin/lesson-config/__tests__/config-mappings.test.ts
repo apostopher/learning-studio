@@ -21,6 +21,7 @@ const lesson = (over: Partial<BoardLesson> = {}): BoardLesson => ({
   needsVideoWatch: true,
   requiredSubscriptions: [],
   isConfigured: false,
+  hasVideoId: false,
   videoProvider: null,
   videoRef: null,
   ...over,
@@ -34,6 +35,8 @@ const module = (over: Partial<BoardModule> = {}): BoardModule => ({
   imageUrlWebp: null,
   rank: 1,
   requiredSubscriptions: ['associate'],
+  dependsOn: [],
+  learnerCount: 0,
   lessons: [],
   ...over,
 });

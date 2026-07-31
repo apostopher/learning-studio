@@ -93,6 +93,14 @@ export const boardLessonSchema = z.object({
   requiredSubscriptions: SubscriptionsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
+  /**
+   * Whether `lessons.video_id` is set — deliberately NOT the same question as
+   * `isConfigured`, which is also true for a lesson holding only a
+   * `video_ref`. Gating keys on `video_id` alone (`isLessonSatisfied` treats a
+   * null one as satisfied, and watch progress joins on that column), so this
+   * is the field that decides whether a lesson can gate anything.
+   */
+  hasVideoId: z.boolean(),
   videoProvider: providerIdSchema.nullable(),
   videoRef: z.string().nullable(),
 });
@@ -106,6 +114,19 @@ export const boardModuleSchema = z.object({
   imageUrlWebp: z.string().nullable(),
   rank: z.coerce.number(),
   requiredSubscriptions: SubscriptionsSchema,
+  /**
+   * Slugs of modules that must be finished before this one opens. Unscoped
+   * text in the database, so it can hold slugs of deleted or other-course
+   * modules; gating and the picker both ignore anything that matches no
+   * module in this course.
+   */
+  dependsOn: z.array(z.string()),
+  /**
+   * Distinct learners with watch progress in this module. Shown beside the
+   * dependency picker so adding a prerequisite that locks people out mid-course
+   * is a visible decision rather than an accident.
+   */
+  learnerCount: z.number(),
   lessons: z.array(boardLessonSchema),
 });
 export type BoardModule = z.infer<typeof boardModuleSchema>;
@@ -136,6 +157,22 @@ export const reorderModuleInputSchema = z
     message: 'At least one neighbor is required',
   });
 export type ReorderModuleInput = z.infer<typeof reorderModuleInputSchema>;
+
+/**
+ * Replace a module's prerequisites wholesale. The full array is sent every
+ * time rather than an add/remove delta, so a request that arrives out of order
+ * cannot merge two states into one that the admin never chose.
+ *
+ * Slugs are validated for shape only — that they name real, same-course,
+ * non-cyclic modules is checked server-side against live rows, since a client
+ * holding a stale board cannot decide it.
+ */
+export const updateModuleDependenciesInputSchema = z.object({
+  dependsOn: z.array(z.string().min(1)).max(100),
+});
+export type UpdateModuleDependenciesInput = z.infer<
+  typeof updateModuleDependenciesInputSchema
+>;
 
 /**
  * Move a lesson to `targetModuleId` (possibly the same module) between the given

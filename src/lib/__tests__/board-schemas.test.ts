@@ -29,6 +29,7 @@ describe('boardLessonSchema', () => {
       needsVideoWatch: true,
       requiredSubscriptions: ['associate'],
       isConfigured: false,
+      hasVideoId: false,
       videoProvider: null,
       videoRef: null,
     });
@@ -48,6 +49,7 @@ describe('boardLessonSchema', () => {
         needsVideoWatch: true,
         requiredSubscriptions: ['gold'],
         isConfigured: false,
+        hasVideoId: false,
         videoProvider: null,
         videoRef: null,
       }),
@@ -65,8 +67,27 @@ describe('boardModuleSchema', () => {
       imageUrlWebp: null,
       rank: 1,
       requiredSubscriptions: ['candidate'],
+      dependsOn: [],
+      learnerCount: 0,
       lessons: [],
     });
     expect(parsed.requiredSubscriptions).toEqual(['candidate']);
+  });
+
+  it('parses prerequisite slugs and a learner count', () => {
+    const parsed = boardModuleSchema.parse({
+      id: 2,
+      name: 'M2',
+      slug: 'm2',
+      imageUrlAvif: null,
+      imageUrlWebp: null,
+      rank: 2,
+      requiredSubscriptions: [],
+      dependsOn: ['m'],
+      learnerCount: 12,
+      lessons: [],
+    });
+    expect(parsed.dependsOn).toEqual(['m']);
+    expect(parsed.learnerCount).toBe(12);
   });
 });

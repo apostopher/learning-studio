@@ -11,6 +11,12 @@ interface ConfigSettingRowProps {
    * disabled control.
    */
   warning?: string;
+  /**
+   * `inline` (default) puts a fixed-size control at the inline-end — right for
+   * a BinaryToggle. `stacked` drops a full-width control below the text, for
+   * one that grows with its content, like a chip picker.
+   */
+  layout?: 'inline' | 'stacked';
   /** The control (a BinaryToggle), rendered at the inline-end. */
   children: ReactNode;
 }
@@ -20,10 +26,18 @@ export const ConfigSettingRow = ({
   title,
   description,
   warning,
+  layout = 'inline',
   children,
 }: ConfigSettingRowProps) => {
+  const stacked = layout === 'stacked';
   return (
-    <div className="flex items-center justify-between gap-6 border-gray-6 border-b py-4 last:border-b-0">
+    <div
+      className={
+        stacked
+          ? 'flex flex-col gap-3 border-gray-6 border-b py-4 last:border-b-0'
+          : 'flex items-center justify-between gap-6 border-gray-6 border-b py-4 last:border-b-0'
+      }
+    >
       <div className="flex min-w-0 flex-col gap-1">
         <h3 className="font-medium text-primary text-sm">{title}</h3>
         <p className="text-secondary text-sm">{description}</p>
@@ -44,7 +58,7 @@ export const ConfigSettingRow = ({
           </output>
         )}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className={stacked ? 'min-w-0' : 'shrink-0'}>{children}</div>
     </div>
   );
 };
