@@ -59,6 +59,8 @@ describe('getLessonPlaybackHandler', () => {
       lessonLock: { kind: 'open' },
     });
     expect((await getLessonPlaybackHandler(req('l1'))).status).toBe(403);
+    // Resolving would mint a playable URL for content the caller cannot reach.
+    expect(m.getLessonPlayback).not.toHaveBeenCalled();
   });
 
   it('returns the playback body for an open lesson', async () => {
@@ -74,5 +76,25 @@ describe('getLessonPlaybackHandler', () => {
   it('403s a lesson with no video, never 404', async () => {
     m.getLessonPlayback.mockResolvedValueOnce(null);
     expect((await getLessonPlaybackHandler(req('nope'))).status).toBe(403);
+  });
+
+  it('produces byte-identical bodies for different refusal reasons', async () => {
+    // Restored after being lost when the old video.test.ts's equivalent
+    // ("reports every lookup failure identically") was deleted alongside
+    // video.ts — a status-only check would pass even if the two refusal
+    // paths ever diverged in body, which is exactly the enumeration oracle
+    // the uniform 403 exists to close.
+    m.evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      lessonLock: { kind: 'module-locked', moduleSlug: 'm', moduleName: 'M' },
+    });
+    const locked = await getLessonPlaybackHandler(req('l1'));
+
+    m.getLessonPlayback.mockResolvedValueOnce(null);
+    const noVideo = await getLessonPlaybackHandler(req('l2'));
+
+    expect(locked.status).toBe(403);
+    expect(noVideo.status).toBe(403);
+    expect(await locked.text()).toBe(await noVideo.text());
   });
 });

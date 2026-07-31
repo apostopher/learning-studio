@@ -50,7 +50,7 @@ export async function evaluateLessonGate({
   // unavailable lessons, so `evaluateLessonLock` cannot locate them and
   // answers "open" by contract (see lesson-gating.ts) — which means every
   // gate passes and a subscriber who knows a draft slug gets its full
-  // material, and /api/lesson/video hands out its pre-signed download URL.
+  // material, and /api/lesson/playback hands out its signed, directly-playable URL.
   // Admins are not exempted because the same stripped payload already makes
   // the lesson page render not-found for them; a servable material endpoint
   // behind a not-found page would just be an inconsistency.

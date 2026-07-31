@@ -146,8 +146,10 @@ export async function getLessonIdBySlug(slug: string): Promise<number | null> {
 }
 
 /**
- * The lesson a Synthesia video belongs to, so /api/lesson/video can apply the
- * same gates as the material route.
+ * The lesson a Synthesia video belonged to, consumed by the now-removed
+ * `/api/lesson/video` to apply the same gates as the material route —
+ * superseded by `/api/lesson/playback`, which resolves playback by
+ * `lessonSlug` directly and has no remaining caller for this lookup.
  *
  * KNOWN LIMITATION: matches `lessons.video_id` only. A lesson's
  * `other_video_ids` are not resolved, so a request for one of those IDs finds

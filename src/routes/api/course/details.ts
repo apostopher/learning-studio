@@ -11,10 +11,11 @@ import { auth } from '#/lib/auth';
  *
  * Authorization is not optional here. The payload carries every lesson's
  * `videoId` and the whole dependency graph, so before this check existed it was
- * a free enumeration source for exactly the IDs `/api/lesson/video` was
- * hardened against — anyone on the internet could list them. It now requires a
- * session (401) and a subscription to the course (403), with admins bypassing,
- * matching `/api/lesson/material` and `/api/lesson/video`.
+ * a free enumeration source for exactly the slugs `/api/lesson/playback` (née
+ * `/api/lesson/video`) was hardened against — anyone on the internet could
+ * list them. It now requires a session (401) and a subscription to the
+ * course (403), with admins bypassing, matching `/api/lesson/material` and
+ * `/api/lesson/playback`.
  *
  * It reads `getCourseDetailsWithCache`, NOT the uncached `getCourseDetails`, so
  * the client explains the gate from the same payload the server enforces it
