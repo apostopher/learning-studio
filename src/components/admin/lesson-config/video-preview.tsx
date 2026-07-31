@@ -1,9 +1,9 @@
 import { Video } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import type { LessonPlayback } from '#/lib/admin-schemas';
+import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 interface VideoPreviewProps {
-  playback: LessonPlayback | null;
+  playback: PlaybackResult | null;
   /**
    * Called when the media request for an HLS manifest is refused with 401/403.
    *
@@ -41,8 +41,11 @@ export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
   // identity: playback is re-resolved on a timer to keep the signed URL alive,
   // and remounting the player on a refetch that returned the same URL would
   // reset the viewer's position for nothing.
-  const url = playback?.url ?? null;
-  const kind = playback?.kind ?? null;
+  //
+  // A `playback` that is still rendering or failed carries no `url`/`kind` —
+  // treated the same as "nothing to play yet" here.
+  const url = playback?.status === 'ready' ? playback.url : null;
+  const kind = playback?.status === 'ready' ? playback.kind : null;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -87,7 +90,7 @@ export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
     };
   }, [url, kind]);
 
-  if (!playback) {
+  if (!playback || playback.status !== 'ready') {
     return (
       <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-gray-3">
         <Video className="h-10 w-10 text-gray-8" aria-hidden="true" />

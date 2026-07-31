@@ -69,6 +69,7 @@ describe('resolvePlayback', () => {
     signPlaybackId.mockResolvedValue('signed-jwt-token');
 
     const result = await resolvePlayback('mux', 'playback123', muxCreds);
+    if (result.status !== 'ready') throw new Error('expected ready');
 
     // Real behavior: the returned URL embeds the ref and the signed token.
     expect(result.kind).toBe('hls');
@@ -98,12 +99,16 @@ describe('resolvePlayback', () => {
       'video-ref-1',
       synthesiaCreds,
     );
+    if (result.status !== 'ready') throw new Error('expected ready');
 
     expect(getVideoDetails).toHaveBeenCalledWith('video-ref-1', 'sk_test_123');
     expect(result).toEqual({
+      status: 'ready',
       url: availableVideo.download,
       kind: 'file',
       expiresInSeconds: 3599,
+      poster: null,
+      captions: null,
     });
   });
 
@@ -119,6 +124,7 @@ describe('resolvePlayback', () => {
       'video-ref-1',
       synthesiaCreds,
     );
+    if (result.status !== 'ready') throw new Error('expected ready');
 
     expect(result.kind).toBe('hls');
   });
@@ -132,6 +138,7 @@ describe('resolvePlayback', () => {
       'video-ref-1',
       synthesiaCreds,
     );
+    if (result.status !== 'ready') throw new Error('expected ready');
 
     // The field promises "seconds remaining"; a negative would make every
     // consumer's arithmetic wrong rather than merely stale.
@@ -147,16 +154,40 @@ describe('resolvePlayback', () => {
       'video-ref-1',
       synthesiaCreds,
     );
+    if (result.status !== 'ready') throw new Error('expected ready');
 
     expect(result.expiresInSeconds).toBeNull();
   });
 
-  it('throws VIDEO_NOT_AVAILABLE when the Synthesia video is not ready', async () => {
+  it('reports a still-rendering Synthesia video as rendering, not an error', async () => {
     getVideoDetails.mockResolvedValue({ id: 'vid_1', status: 'in_progress' });
 
-    await expect(
-      resolvePlayback('synthesia', 'video-ref-1', synthesiaCreds),
-    ).rejects.toThrow('VIDEO_NOT_AVAILABLE');
+    // A video mid-render is not a failure — the previous behavior of
+    // throwing VIDEO_NOT_AVAILABLE here made the admin preview show an error
+    // for a perfectly normal, temporary state.
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+
+    expect(result).toEqual({ status: 'rendering' });
+  });
+
+  it.each([
+    ['error' as const],
+    ['rejected' as const],
+    [null],
+  ])('reports a Synthesia video with status %s as failed', async (status) => {
+    getVideoDetails.mockResolvedValue({ id: 'vid_1', status });
+
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+
+    expect(result).toEqual({ status: 'failed' });
   });
 
   describe('failure classification', () => {

@@ -17,6 +17,7 @@ import type { BoardLesson } from '#/lib/admin-schemas';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
+import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 import { CredentialFlowContainer } from './credential-flow-container';
 import { VideoPreview } from './video-preview';
 import { VideoUrlForm } from './video-url-form';
@@ -101,6 +102,15 @@ export const VideoSectionContainer = ({
   const playbackEnabled = hasVideo && isProviderConfigured;
   const playback = useLessonVideoPlayback(lesson.id, playbackEnabled);
 
+  // `VideoPreview` takes the same `PlaybackResult` shape the learner player
+  // will consume (see the lesson-keyed video runtime migration). The admin
+  // preview's wire contract (`lessonPlaybackSchema`) doesn't carry
+  // poster/captions/status yet, but a value it successfully parsed is by
+  // definition a resolved, playable URL, so it always maps to 'ready'.
+  const previewPlayback: PlaybackResult | null = playback.data
+    ? { ...playback.data, status: 'ready', poster: null, captions: null }
+    : null;
+
   const urlForm = useForm<VideoUrlFormValues>({
     resolver: zodResolver(videoUrlFormSchema),
     mode: 'onSubmit',
@@ -175,7 +185,7 @@ export const VideoSectionContainer = ({
           {canPlay ? (
             <>
               <VideoPreview
-                playback={playback.data ?? null}
+                playback={previewPlayback}
                 onForbidden={() => setPlaybackForbidden(true)}
               />
               {playback.isLoading && (

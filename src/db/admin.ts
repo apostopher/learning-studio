@@ -50,7 +50,7 @@ import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
 import { slugify } from '#/lib/slugify';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import {
-  type Playback,
+  type PlaybackResult,
   resolvePlayback,
   validateCredentials,
 } from '#/lib/video-providers/resolve.server';
@@ -514,7 +514,7 @@ export async function setLessonVideo(
 
 export async function resolveLessonPlayback(
   lessonId: number,
-): Promise<Playback | null> {
+): Promise<PlaybackResult | null> {
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,

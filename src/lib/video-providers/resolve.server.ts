@@ -4,13 +4,14 @@ import {
   getVideoExpiry,
   SynthesiaRequestError,
 } from '../../integrations/synthesia/videos';
-import { isVideoAvailable } from '../../types';
+import { isVideoAvailable, isVideoNotReady } from '../../types';
 import { isAuthRejectionStatus, PlaybackError } from './errors';
 import { muxCredentialSchema } from './mux';
 import { synthesiaCredentialSchema } from './synthesia';
 import type { ProviderId } from './types';
 
 export interface Playback {
+  status: 'ready';
   url: string;
   kind: 'hls' | 'file';
   /**
@@ -23,7 +24,23 @@ export interface Playback {
    * with the time it received the response).
    */
   expiresInSeconds: number | null;
+  /** Poster frame, or null when the provider has none. */
+  poster: string | null;
+  /**
+   * Subtitle track, or null when the provider has none configured.
+   *
+   * Null is a real answer, not a placeholder: the caller must surface the
+   * absence rather than render an uncaptioned player as if it were complete.
+   */
+  captions: { vtt: string } | null;
 }
+
+/** A video the provider holds but cannot serve yet. */
+export interface PlaybackPending {
+  status: 'rendering' | 'failed';
+}
+
+export type PlaybackResult = Playback | PlaybackPending;
 
 const MUX_TTL_SECONDS = 60 * 60; // 1h signed playback token
 
@@ -33,7 +50,7 @@ export async function resolvePlayback(
   provider: ProviderId,
   ref: string,
   creds: unknown,
-): Promise<Playback> {
+): Promise<PlaybackResult> {
   if (provider === 'mux') {
     const { keyId, privateKey } = muxCredentialSchema.parse(creds);
     let token: string;
@@ -58,10 +75,14 @@ export async function resolvePlayback(
       );
     }
     return {
+      status: 'ready',
       url: `https://stream.mux.com/${ref}.m3u8?token=${token}`,
       kind: 'hls',
       // The JWT we just minted is valid for exactly this long.
       expiresInSeconds: MUX_TTL_SECONDS,
+      poster: `https://image.mux.com/${ref}/thumbnail.jpg?token=${token}`,
+      // Mux text tracks are not configured on this account; null is honest.
+      captions: null,
     };
   }
 
@@ -73,6 +94,11 @@ export async function resolvePlayback(
   } catch (error) {
     throw classifySynthesiaFailure(error);
   }
+  if (isVideoNotReady(details)) {
+    return {
+      status: details.status === 'in_progress' ? 'rendering' : 'failed',
+    };
+  }
   if (!isVideoAvailable(details) || !details.download) {
     throw new PlaybackError('VIDEO_NOT_AVAILABLE', 'VIDEO_NOT_AVAILABLE');
   }
@@ -81,9 +107,12 @@ export async function resolvePlayback(
   // which the field's name promises it never is.
   const remaining = getVideoExpiry(details.download);
   return {
+    status: 'ready',
     url: details.download,
     kind: details.download.endsWith('.m3u8') ? 'hls' : 'file',
     expiresInSeconds: remaining === null ? null : Math.max(0, remaining),
+    poster: details.thumbnail.image ?? null,
+    captions: details.captions.vtt ? { vtt: details.captions.vtt } : null,
   };
 }
 
