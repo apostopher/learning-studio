@@ -10,13 +10,20 @@ vi.mock('#/db/course-progress', () => ({ getCourseProgress }));
 
 import { getCourseProgressHandler } from '../progress-summary';
 
+// Non-empty lessons/modules, deliberately shaped like the real
+// aggregateCourseProgress output (LessonProgress has no videoId field) —
+// an empty array here would never exercise the lesson/module shape and
+// would let a producer/consumer field mismatch go undetected.
 const summary = {
   slug: 'ppl',
   percent: 42,
   watchedLessons: 3,
   totalLessons: 8,
-  modules: [],
-  lessons: [],
+  modules: [{ moduleId: 1, percent: 50, watchedLessons: 1, totalLessons: 2 }],
+  lessons: [
+    { lessonId: 10, moduleId: 1, percent: 100, watched: true },
+    { lessonId: 11, moduleId: 1, percent: 0, watched: false },
+  ],
 };
 
 beforeEach(() => {

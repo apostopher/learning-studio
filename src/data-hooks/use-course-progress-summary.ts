@@ -5,7 +5,6 @@ import { dataKeys } from './keys';
 const lessonProgressSchema = z.object({
   lessonId: z.number(),
   moduleId: z.number(),
-  videoId: z.string().nullable(),
   percent: z.number(),
   watched: z.boolean(),
 });
@@ -17,7 +16,7 @@ const moduleProgressSchema = z.object({
   totalLessons: z.number(),
 });
 
-const courseProgressSummarySchema = z.object({
+export const courseProgressSummarySchema = z.object({
   slug: z.string(),
   percent: z.number(),
   watchedLessons: z.number(),
