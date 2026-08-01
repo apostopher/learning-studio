@@ -19,6 +19,9 @@ interface BinaryToggleProps<V extends string> {
    * Accessible name for the group (the setting name). Also seeds the pill's
    * `layoutId`, so it must be unique among the BinaryToggles mounted together —
    * two controls sharing a label would slide their pills into each other.
+   *
+   * When rendering one per row, include the row's identity (e.g. the module
+   * name), not just the setting's.
    */
   label: string;
 }
@@ -99,6 +102,19 @@ export const BinaryToggle = <V extends string>({
               {isActive && (
                 <motion.span
                   layoutId={`binary-toggle-pill-${label}`}
+                  // `layoutId` implies `layout`, so without this the pill
+                  // re-measures on EVERY re-render of its parent and springs to
+                  // wherever it landed. That is invisible in a static form, but
+                  // in a list whose rows can collapse it means every pill on
+                  // screen flies across the page when an unrelated section is
+                  // folded — the control's own value never changed.
+                  //
+                  // Gating on `value` limits the layout animation to the one
+                  // change that should move the pill: this toggle being
+                  // switched. Reflows caused by anything else just render it in
+                  // place, which is already correct, since it is `inset-0` of
+                  // whichever segment is active.
+                  layoutDependency={value}
                   aria-hidden="true"
                   className="absolute inset-0 bg-apple-9 shadow-low"
                   // Inline pixel radius: Motion only corrects corner distortion
