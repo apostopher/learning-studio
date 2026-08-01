@@ -37,6 +37,7 @@ vi.mock('@/db/schema', () => ({
   orgsTable: {},
   videoProgressTable: {},
   courseLastViewedTable: {},
+  lessonMaterialProgressTable: {},
 }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames: vi.fn() }));
 vi.mock('#/db/course-last-viewed-batch', () => ({

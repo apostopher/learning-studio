@@ -4,7 +4,7 @@ import { LessonMaterialWrapper } from '#/components/lesson-material';
 import { VideoPlayer } from '#/components/video-player';
 import { LessonError } from './parts/lesson-error';
 import { LessonLocked } from './parts/lesson-locked';
-import { LessonNoVideo } from './parts/lesson-no-video';
+import { LessonNoVideoContainer } from './parts/lesson-no-video-container';
 import { LessonNotFound } from './parts/lesson-not-found';
 import { LessonPlayerContainer } from './parts/lesson-player-container';
 import { LessonSkeleton } from './parts/lesson-skeleton';
@@ -16,10 +16,18 @@ type LessonMainProps = {
   state: LessonMainState;
 };
 
-const renderPlayerSlot = (videoState: VideoFetchState, lessonSlug: string) => {
+const renderPlayerSlot = (
+  videoState: VideoFetchState,
+  lessonSlug: string,
+  hasDebrief: boolean,
+) => {
   if (videoState.status === 'ready') {
     return (
-      <LessonPlayerContainer videoState={videoState} lessonSlug={lessonSlug} />
+      <LessonPlayerContainer
+        videoState={videoState}
+        lessonSlug={lessonSlug}
+        hasDebrief={hasDebrief}
+      />
     );
   }
   if (videoState.status === 'fetching' || videoState.status === 'rendering') {
@@ -73,8 +81,23 @@ const renderArticleBody = (state: LessonMainState) => {
       );
     case 'not-found':
       return <LessonNotFound lessonSlug={state.lessonSlug} />;
+    // The card AND the material panel. This branch used to render only the
+    // card, so a lesson without a video had no tabs, no key points and no
+    // debrief — its entire content was unreachable.
     case 'no-video':
-      return <LessonNoVideo lessonName={state.lessonName} />;
+      return (
+        <>
+          <div className="lesson-player">
+            <LessonNoVideoContainer
+              lessonName={state.lessonName}
+              lessonSlug={state.lessonSlug}
+              hasDebrief={state.hasDebrief}
+              videoExpected={state.videoExpected}
+            />
+          </div>
+          {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
+        </>
+      );
     case 'locked':
       return (
         <LessonLocked
@@ -87,7 +110,11 @@ const renderArticleBody = (state: LessonMainState) => {
       return (
         <>
           <div className="lesson-player">
-            {renderPlayerSlot(state.videoState, state.lessonSlug)}
+            {renderPlayerSlot(
+              state.videoState,
+              state.lessonSlug,
+              state.hasDebrief,
+            )}
           </div>
           {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
         </>

@@ -20,6 +20,7 @@ import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.index'
 import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
 import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
+import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/lesson-section'
 import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
 import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
@@ -115,6 +116,11 @@ const ApiUserReportVideoProgressRoute =
     path: '/api/user/report-video-progress',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiUserLessonSectionRoute = ApiUserLessonSectionRouteImport.update({
+  id: '/api/user/lesson-section',
+  path: '/api/user/lesson-section',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiUserLastViewedRoute = ApiUserLastViewedRouteImport.update({
   id: '/api/user/last-viewed',
   path: '/api/user/last-viewed',
@@ -351,6 +357,7 @@ export interface FileRoutesByFullPath {
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
+  '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/admin/': typeof AuthedAdminIndexRoute
@@ -400,6 +407,7 @@ export interface FileRoutesByTo {
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
+  '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -453,6 +461,7 @@ export interface FileRoutesById {
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
+  '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -506,6 +515,7 @@ export interface FileRouteTypes {
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
+    | '/api/user/lesson-section'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
     | '/admin/'
@@ -555,6 +565,7 @@ export interface FileRouteTypes {
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
+    | '/api/user/lesson-section'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
     | '/admin'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
+    | '/api/user/lesson-section'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
     | '/_authed/admin/'
@@ -655,6 +667,7 @@ export interface RootRouteChildren {
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonPlaybackRoute: typeof ApiLessonPlaybackRoute
   ApiUserLastViewedRoute: typeof ApiUserLastViewedRoute
+  ApiUserLessonSectionRoute: typeof ApiUserLessonSectionRoute
   ApiUserReportVideoProgressRoute: typeof ApiUserReportVideoProgressRoute
   ApiUserVideoProgressRoute: typeof ApiUserVideoProgressRoute
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
@@ -749,6 +762,13 @@ declare module '@tanstack/react-router' {
       path: '/api/user/report-video-progress'
       fullPath: '/api/user/report-video-progress'
       preLoaderRoute: typeof ApiUserReportVideoProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/lesson-section': {
+      id: '/api/user/lesson-section'
+      path: '/api/user/lesson-section'
+      fullPath: '/api/user/lesson-section'
+      preLoaderRoute: typeof ApiUserLessonSectionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/user/last-viewed': {
@@ -1195,6 +1215,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonPlaybackRoute: ApiLessonPlaybackRoute,
   ApiUserLastViewedRoute: ApiUserLastViewedRoute,
+  ApiUserLessonSectionRoute: ApiUserLessonSectionRoute,
   ApiUserReportVideoProgressRoute: ApiUserReportVideoProgressRoute,
   ApiUserVideoProgressRoute: ApiUserVideoProgressRoute,
   ApiAdminLessonMaterialParseRoute: ApiAdminLessonMaterialParseRoute,

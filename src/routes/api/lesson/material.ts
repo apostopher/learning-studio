@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonMaterial, type LessonMaterial } from '#/db/lesson';
+import { recordLessonVisit } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
 import {
   type LessonMaterialResponse,
@@ -90,6 +91,29 @@ export async function getLessonMaterialHandler(
       gate.materialLock,
     );
     if (locked) return Response.json(locked);
+
+    // Record the visit HERE — past the gate, before the material lookup.
+    //
+    // Past the gate, because reaching this line is server-verified proof the
+    // learner was let in and is being served content; a lock screen is a door
+    // they bounced off. Before the lookup, because the next block 404s when a
+    // lesson has no material row, and a published lesson with no video and no
+    // material would otherwise never record a visit — leaving it stuck below
+    // 100% forever, which is exactly the case the visit rule exists to score.
+    //
+    // Recorded on the admin-bypass path too. Admins bypass every gate, so
+    // their progress numbers carry no meaning worth protecting with a branch.
+    //
+    // Swallowed on failure, never allowed to fail the response: the learner
+    // came here for the material. A dropped write self-corrects, because this
+    // request repeats on the next visit once the client cache expires — which
+    // is why this lives here rather than on the fire-and-forget beacon, whose
+    // failures are invisible and unretryable.
+    try {
+      await recordLessonVisit({ userId: session.user.id, lessonSlug });
+    } catch (error) {
+      console.error('Failed to record lesson visit:', error);
+    }
 
     const material = await getLessonMaterial(lessonSlug);
     if (!material) {

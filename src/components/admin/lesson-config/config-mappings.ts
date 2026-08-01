@@ -41,6 +41,28 @@ export const videoWatchWarning = (lesson: BoardLesson): string | null => {
     : 'This lesson has no video yet — add one before a watch can be required.';
 };
 
+/**
+ * What turning Debrief on costs this lesson, or null when it costs nothing.
+ *
+ * `has_debrief` suppresses the Quiz tab outright — the learner is never shown
+ * the authored quiz while it is on, whether or not a debrief can actually be
+ * generated. That is deliberate (the flag stays authoritative so its meaning
+ * does not depend on how complete the material happens to be), which makes
+ * saying so here the only thing standing between an admin and silently hiding
+ * content they wrote.
+ *
+ * Named with the count rather than a vague "this may hide the quiz": the
+ * number is what makes it worth reading.
+ */
+export const debriefWarning = (lesson: BoardLesson): string | null => {
+  if (!lesson.hasDebrief) return null;
+  if (lesson.quizQuestionCount === 0) return null;
+  const q = lesson.quizQuestionCount;
+  return `Debrief replaces the lesson quiz. This lesson's ${q} quiz ${
+    q === 1 ? 'question is' : 'questions are'
+  } hidden from learners while this is on.`;
+};
+
 export const accessValue = (lesson: BoardLesson): AccessValue =>
   lesson.requiredSubscriptions.length > 0 ? 'subscription' : 'free';
 

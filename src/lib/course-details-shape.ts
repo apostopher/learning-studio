@@ -104,5 +104,12 @@ export type LearnerCourseLesson = {
   hasVideo: boolean;
   isAvailable: boolean;
   needsVideoWatch: boolean;
+  /**
+   * Whether tab 2 of the material panel is the Debrief rather than the
+   * authored Quiz. Already carried by the payload (it is a `lessons` column,
+   * and only video fields are stripped) — declared here now that the material
+   * panel reads it, so no cache-key bump is involved.
+   */
+  hasDebrief: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };

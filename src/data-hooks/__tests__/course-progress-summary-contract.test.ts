@@ -14,10 +14,38 @@ import { aggregateCourseProgress } from '#/lib/course-progress-agg';
  */
 describe('courseProgressSummarySchema accepts real aggregateCourseProgress output', () => {
   it('parses a non-empty, multi-module course summary without throwing', () => {
+    const base = {
+      watchedHits: 0,
+      hasVideo: false,
+      needsVideoWatch: false,
+      applicableSections: 0,
+      tappedSections: 0,
+      hasDebrief: false,
+      hasQuiz: false,
+      canDebrief: false,
+      quizPlayed: false,
+      debriefAnswered: false,
+      visited: false,
+    };
     const real = aggregateCourseProgress('ppl', [
-      { moduleId: 1, lessonId: 10, watchedHits: 18 },
-      { moduleId: 1, lessonId: 11, watchedHits: 9 },
-      { moduleId: 2, lessonId: null, watchedHits: 0 }, // empty-module placeholder
+      // one of each regime, so the parsed summary exercises them all
+      {
+        ...base,
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: 18,
+      },
+      {
+        ...base,
+        moduleId: 1,
+        lessonId: 11,
+        applicableSections: 2,
+        tappedSections: 1,
+      },
+      { ...base, moduleId: 1, lessonId: 12, visited: true },
+      { ...base, moduleId: 2, lessonId: null }, // empty-module placeholder
     ]);
 
     expect(() => courseProgressSummarySchema.parse(real)).not.toThrow();

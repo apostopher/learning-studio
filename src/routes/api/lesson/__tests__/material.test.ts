@@ -1,17 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSession, evaluateLessonGate, getLessonMaterial } = vi.hoisted(
-  () => ({
+const { getSession, evaluateLessonGate, getLessonMaterial, recordLessonVisit } =
+  vi.hoisted(() => ({
     getSession: vi.fn(),
     evaluateLessonGate: vi.fn(),
     getLessonMaterial: vi.fn(),
-  }),
-);
+    recordLessonVisit: vi.fn(),
+  }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/lib/lesson-gating.server', () => ({ evaluateLessonGate }));
 vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
+vi.mock('#/db/lesson-visit', () => ({ recordLessonVisit }));
 
 import { getLessonMaterialHandler } from '../material';
 
@@ -140,5 +141,65 @@ describe('getLessonMaterialHandler', () => {
     expect((await getLessonMaterialHandler(req(''))).status).toBe(401);
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     expect((await getLessonMaterialHandler(req(''))).status).toBe(400);
+  });
+});
+
+/**
+ * The visit record is the only completion signal a lesson with nothing to
+ * watch ever gets, so these assert on what `recordLessonVisit` was CALLED
+ * with, not on the response. A response can stay correct while the write
+ * silently stops happening.
+ */
+describe('recording the visit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    evaluateLessonGate.mockResolvedValue(openGate);
+    getLessonMaterial.mockResolvedValue(material);
+  });
+
+  it('records the session user and the requested lesson when unlocked', async () => {
+    await getLessonMaterialHandler(req('?lessonSlug=b'));
+    expect(recordLessonVisit).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'b',
+    });
+  });
+
+  it('records before the material lookup, so a lesson with no material still counts', async () => {
+    // A published lesson with no video and no material row 404s below. If the
+    // write sat after that lookup it would never fire, leaving exactly the
+    // lesson the visit rule exists to score stuck below 100% forever.
+    getLessonMaterial.mockResolvedValue(null);
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(404);
+    expect(recordLessonVisit).toHaveBeenCalledOnce();
+  });
+
+  it('does not record a locked lesson — a lock screen is a door you bounced off', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      materialLock: { kind: 'video-locked' },
+    });
+    await getLessonMaterialHandler(req());
+    expect(recordLessonVisit).not.toHaveBeenCalled();
+  });
+
+  it('does not record for an anonymous or unsubscribed caller', async () => {
+    getSession.mockResolvedValue(null);
+    await getLessonMaterialHandler(req());
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    evaluateLessonGate.mockResolvedValue({ ...openGate, subscribed: false });
+    await getLessonMaterialHandler(req());
+    expect(recordLessonVisit).not.toHaveBeenCalled();
+  });
+
+  it('still serves the material when the write fails', async () => {
+    // The learner came here for the content. A dropped write self-corrects on
+    // the next visit; a 500 here would cost them the lesson.
+    recordLessonVisit.mockRejectedValue(new Error('db down'));
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ locked: false });
   });
 });

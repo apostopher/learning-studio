@@ -93,6 +93,13 @@ export const boardLessonSchema = z.object({
   requiredSubscriptions: SubscriptionsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
+  /**
+   * How many questions the authored quiz holds. Needed so the Debrief toggle
+   * can say what turning it on actually costs — `has_debrief` suppresses the
+   * Quiz tab outright, and "this may hide something" without a number is
+   * barely better than saying nothing.
+   */
+  quizQuestionCount: z.number(),
   videoProvider: providerIdSchema.nullable(),
   videoRef: z.string().nullable(),
 });

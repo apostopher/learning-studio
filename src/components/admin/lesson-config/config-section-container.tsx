@@ -9,6 +9,7 @@ import {
   availabilityValue,
   type DebriefValue,
   debriefValue,
+  debriefWarning,
   isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   type VideoWatchValue,
@@ -112,6 +113,7 @@ export const ConfigSectionContainer = ({
       <ConfigSettingRow
         title="Debrief"
         description="Show the post-lesson debrief for this lesson."
+        warning={debriefWarning(lesson) ?? undefined}
       >
         <BinaryToggle<DebriefValue>
           label="Debrief"

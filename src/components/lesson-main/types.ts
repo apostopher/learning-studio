@@ -45,7 +45,25 @@ export type LessonMainState =
    */
   | { kind: 'material-error'; message: string; onRetry: () => void }
   | { kind: 'not-found'; lessonSlug: string }
-  | { kind: 'no-video'; lessonName: string }
+  /**
+   * Carries the slugs and `hasDebrief` because this branch now renders the
+   * material panel too. It used to render nothing but a card, which meant a
+   * lesson without a video had no tabs, no key points and no way to reach a
+   * debrief — the lesson was literally unreadable.
+   */
+  | {
+      kind: 'no-video';
+      lessonName: string;
+      lessonSlug: string;
+      courseSlug: string;
+      hasDebrief: boolean;
+      /**
+       * `needsVideoWatch` — the admin's own statement that a video belongs
+       * here, and so the only honest way to tell "still being built" apart
+       * from "reading-only by design".
+       */
+      videoExpected: boolean;
+    }
   | {
       kind: 'locked';
       lessonName: string;
@@ -57,5 +75,7 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
+      /** Gates the post-video debrief overlay — see computePlayerOverlay. */
+      hasDebrief: boolean;
       videoState: VideoFetchState;
     };

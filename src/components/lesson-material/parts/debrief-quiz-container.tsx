@@ -1,23 +1,28 @@
-import { useEffect, useRef } from "react";
-import { useSetAtom } from "jotai";
-import type { LessonMaterial } from "#/db/lesson";
+import { useSetAtom } from 'jotai';
+import { useEffect, useRef } from 'react';
+import type { LessonMaterial } from '#/db/lesson';
 import {
-  useCurrentTest,
+  useAdvanceQuestion,
   useCurrentQuestion,
   useCurrentQuestionIndex,
-  useEvaluations,
-  useIsEvaluating,
-  useTotalScore,
+  useCurrentTest,
   useEvaluateAnswer,
-  useAdvanceQuestion,
-  useSaveResults,
-  useResetTest,
+  useEvaluations,
   useGenerateTest,
-} from "#/hooks/data/use-lesson-ai-test";
-import { selectedOptionAtom, freeTextAnswerAtom } from "./question-card";
-import { QuestionCard } from "./question-card";
-import { EvaluationCard } from "./evaluation-card";
-import { ScoreReport } from "./score-report";
+  useIsEvaluating,
+  useIsGenerating,
+  useResetTest,
+  useSaveResults,
+  useTotalScore,
+} from '#/hooks/data/use-lesson-ai-test';
+import { DebriefIntro } from './debrief-intro';
+import { EvaluationCard } from './evaluation-card';
+import {
+  freeTextAnswerAtom,
+  QuestionCard,
+  selectedOptionAtom,
+} from './question-card';
+import { ScoreReport } from './score-report';
 
 type DebriefQuizContainerProps = {
   lessonSlug: string;
@@ -39,6 +44,7 @@ export const DebriefQuizContainer = ({
   const saveResults = useSaveResults();
   const resetTest = useResetTest();
   const generateTest = useGenerateTest();
+  const isGenerating = useIsGenerating();
   const setSelectedOption = useSetAtom(selectedOptionAtom);
   const setFreeTextAnswer = useSetAtom(freeTextAnswerAtom);
   const savedRef = useRef(false);
@@ -56,7 +62,20 @@ export const DebriefQuizContainer = ({
     }
   }, [isComplete, saveResults]);
 
-  if (!test) return null;
+  // Not `return null`: this tab is now the primary way into the debrief — the
+  // only way, on a lesson with no video — so an empty panel here would be a
+  // tab that appears to do nothing.
+  if (!test) {
+    return (
+      <DebriefIntro
+        loading={isGenerating}
+        onStart={() => {
+          if (!material.keyPoints?.length || !material.text) return;
+          void generateTest(lessonSlug, material.keyPoints, material.text);
+        }}
+      />
+    );
+  }
 
   if (isComplete) {
     return (
@@ -68,11 +87,7 @@ export const DebriefQuizContainer = ({
           savedRef.current = false;
           resetTest();
           if (material.keyPoints?.length && material.text) {
-            await generateTest(
-              lessonSlug,
-              material.keyPoints,
-              material.text,
-            );
+            await generateTest(lessonSlug, material.keyPoints, material.text);
           }
         }}
       />
@@ -92,8 +107,8 @@ export const DebriefQuizContainer = ({
   };
 
   const handleNext = () => {
-    setSelectedOption("");
-    setFreeTextAnswer("");
+    setSelectedOption('');
+    setFreeTextAnswer('');
     advanceQuestion((prev) => prev + 1);
   };
 

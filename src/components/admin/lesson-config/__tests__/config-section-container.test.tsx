@@ -31,6 +31,7 @@ const lesson: BoardLesson = {
   needsVideoWatch: true,
   requiredSubscriptions: [],
   isConfigured: false,
+  quizQuestionCount: 0,
   videoProvider: null,
   videoRef: null,
 };
@@ -40,6 +41,7 @@ const debriefOffLesson: BoardLesson = { ...lesson, hasDebrief: false };
 const videoLesson: BoardLesson = {
   ...lesson,
   isConfigured: true,
+  quizQuestionCount: 0,
   videoProvider: 'synthesia',
   videoRef: 'ref',
 };
@@ -47,6 +49,7 @@ const videoLesson: BoardLesson = {
 const noVideoOptionalLesson: BoardLesson = {
   ...lesson,
   isConfigured: false,
+  quizQuestionCount: 0,
   needsVideoWatch: false,
 };
 const subscriptionLesson: BoardLesson = {

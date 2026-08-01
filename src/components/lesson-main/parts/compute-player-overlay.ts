@@ -28,6 +28,19 @@ export type ComputePlayerOverlayArgs = {
   /** Already narrowed to the 'video' lock reason — see lesson-player-container.tsx. */
   materialLocked: boolean;
   hasCurrentTest: boolean;
+  /**
+   * `lessons.has_debrief`. Previously ignored entirely, so the overlay
+   * appeared on every lesson regardless — a regression against the old
+   * platform, which gated the button on this flag. It is authoritative now:
+   * with it off, tab 2 is the authored quiz and there is no debrief to offer.
+   */
+  hasDebrief: boolean;
+  /**
+   * Whether a debrief could actually be generated (key points and body text
+   * present). `onDebrief` bails without them, so offering the button would
+   * produce a press that silently does nothing.
+   */
+  canDebrief: boolean;
 };
 
 /**
@@ -65,10 +78,13 @@ export function computePlayerOverlay({
   playback,
   materialLocked,
   hasCurrentTest,
+  hasDebrief,
+  canDebrief,
 }: ComputePlayerOverlayArgs): PlayerOverlayKind {
   if (!reachedEnd) return 'none';
   if (!isRestingAtEnd(playback)) return 'none';
   if (materialLocked) return 'coverage';
   if (hasCurrentTest) return 'none';
+  if (!hasDebrief || !canDebrief) return 'none';
   return 'debrief';
 }

@@ -94,6 +94,7 @@ vi.mock('@/db/schema', () => ({
   orgsTable,
   courseSubscriptionsTable: {},
   videoProgressTable: {},
+  lessonMaterialProgressTable: {},
 }));
 vi.mock('@/integrations/upstash/redis', () => ({
   cacheWithRedis: (_prefix: string, fn: unknown) => fn,

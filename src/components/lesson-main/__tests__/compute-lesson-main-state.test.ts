@@ -4,7 +4,13 @@ import { computeLessonMainState } from '../compute-lesson-main-state';
 const onRetryCourse = vi.fn();
 const onRetryVideo = vi.fn();
 
-const baseLesson = { slug: 'l-1', name: 'Lesson One', hasVideo: true };
+const baseLesson = {
+  slug: 'l-1',
+  name: 'Lesson One',
+  hasVideo: true,
+  hasDebrief: false,
+  needsVideoWatch: true,
+};
 const baseCourse = {
   modules: [{ slug: 'm-1', lessons: [baseLesson] }],
 };
@@ -63,7 +69,7 @@ describe('computeLessonMainState', () => {
           modules: [
             {
               slug: 'm-1',
-              lessons: [{ slug: 'l-1', name: 'L', hasVideo: false }],
+              lessons: [{ ...baseLesson, name: 'L', hasVideo: false }],
             },
           ],
         },
@@ -77,7 +83,17 @@ describe('computeLessonMainState', () => {
       onRetryCourse,
       onRetryVideo,
     });
-    expect(result).toEqual({ kind: 'no-video', lessonName: 'L' });
+    // Carries the slugs now, because this branch renders the material
+    // panel beneath the card — a lesson without a video used to show a
+    // bare notice and nothing else.
+    expect(result).toEqual({
+      kind: 'no-video',
+      lessonName: 'L',
+      lessonSlug: 'l-1',
+      courseSlug: 'course-1',
+      hasDebrief: false,
+      videoExpected: true,
+    });
   });
 
   it('reports no-video from hasVideo, not from a missing videoId', () => {
@@ -103,7 +119,14 @@ describe('computeLessonMainState', () => {
       onRetryCourse,
       onRetryVideo,
     });
-    expect(state).toEqual({ kind: 'no-video', lessonName: 'Lesson One' });
+    expect(state).toEqual({
+      kind: 'no-video',
+      lessonName: 'Lesson One',
+      lessonSlug: 'l-1',
+      courseSlug: 'course-1',
+      hasDebrief: false,
+      videoExpected: true,
+    });
   });
 
   it('returns ready with videoState=fetching when video data is undefined', () => {

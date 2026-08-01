@@ -46,6 +46,7 @@ function makeHarness() {
             needsVideoWatch: true,
             requiredSubscriptions: [],
             isConfigured: false,
+            quizQuestionCount: 0,
             videoProvider: null,
             videoRef: null,
           },

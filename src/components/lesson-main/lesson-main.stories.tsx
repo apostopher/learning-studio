@@ -34,7 +34,14 @@ export const NotFound: Story = {
 
 export const NoVideo: Story = {
   args: {
-    state: { kind: 'no-video', lessonName: 'Crosswind landings' },
+    state: {
+      kind: 'no-video',
+      lessonName: 'Crosswind landings',
+      lessonSlug: 'crosswind-landings',
+      courseSlug: 'ppl',
+      hasDebrief: true,
+      videoExpected: false,
+    },
   },
 };
 
@@ -82,6 +89,7 @@ export const ReadyFetching: Story = {
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
       courseSlug: 'itps-uas-remote',
+      hasDebrief: true,
       videoState: { status: 'fetching' },
     },
   },
@@ -94,6 +102,7 @@ export const ReadyRendering: Story = {
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
       courseSlug: 'itps-uas-remote',
+      hasDebrief: true,
       videoState: { status: 'rendering' },
     },
   },
@@ -106,6 +115,7 @@ export const ReadyError: Story = {
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
       courseSlug: 'itps-uas-remote',
+      hasDebrief: true,
       videoState: {
         status: 'error',
         message: 'Video lookup failed',
@@ -122,6 +132,7 @@ export const ReadyPlaying: Story = {
       lessonName: 'Crosswind landings',
       lessonSlug: 'crosswind-landings',
       courseSlug: 'itps-uas-remote',
+      hasDebrief: true,
       videoState: {
         status: 'ready',
         src: 'https://download.samplelib.com/mp4/sample-5s.mp4',

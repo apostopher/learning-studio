@@ -29,6 +29,7 @@ describe('boardLessonSchema', () => {
       needsVideoWatch: true,
       requiredSubscriptions: ['associate'],
       isConfigured: false,
+      quizQuestionCount: 0,
       videoProvider: null,
       videoRef: null,
     });

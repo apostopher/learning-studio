@@ -1,6 +1,11 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
+import {
+  progressComponentColumns,
+  progressComponentGroupBy,
+  toComponentFields,
+} from '#/db/progress-components';
 import { ADMIN_ROLE } from '#/lib/admin-schemas';
 import { resolveCardResume } from '#/lib/course-card-resume';
 import { watchedMilestones } from '#/lib/course-milestones';
@@ -12,6 +17,7 @@ import {
   courseSubscriptionsTable,
   coursesTable,
   lessonDependenciesTable,
+  lessonMaterialProgressTable,
   lessonsTable,
   moduleDependenciesTable,
   modulesTable,
@@ -219,6 +225,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       moduleId: modulesTable.id,
       lessonId: lessonsTable.id,
       watchedHits: countDistinct(videoProgressTable.progress),
+      ...progressComponentColumns(userId),
     })
     .from(courseSubscriptionsTable)
     .innerJoin(
@@ -226,13 +233,31 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       eq(coursesTable.id, courseSubscriptionsTable.courseId),
     )
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
+    // WIP lessons excluded in the JOIN, never the WHERE — in the WHERE, a
+    // course whose lessons are all unavailable would drop out of this result
+    // entirely and its card would vanish from /app rather than read 0%.
+    .leftJoin(
+      lessonsTable,
+      and(
+        eq(lessonsTable.moduleId, modulesTable.id),
+        eq(lessonsTable.isAvailable, true),
+      ),
+    )
     .leftJoin(
       videoProgressTable,
       and(
         eq(videoProgressTable.userId, userId),
         eq(videoProgressTable.lessonId, lessonsTable.id),
         inArray(videoProgressTable.progress, watchedMilestones),
+      ),
+    )
+    // Carries both the 'page' visit row and the section-tap rows; see
+    // getCourseProgress and progress-components.ts.
+    .leftJoin(
+      lessonMaterialProgressTable,
+      and(
+        eq(lessonMaterialProgressTable.userId, userId),
+        eq(lessonMaterialProgressTable.lessonSlug, lessonsTable.slug),
       ),
     )
     .where(eq(courseSubscriptionsTable.userId, userId))
@@ -246,6 +271,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       modulesTable.rank,
       lessonsTable.id,
       lessonsTable.rank,
+      ...progressComponentGroupBy,
     )
     // courseId as an explicit tiebreak keeps each course's rows contiguous
     // in the result, which the first-seen-wins loop below relies on.
@@ -262,6 +288,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       moduleId: r.moduleId,
       lessonId: r.lessonId,
       watchedHits: Number(r.watchedHits),
+      ...toComponentFields(r),
     })),
   );
 

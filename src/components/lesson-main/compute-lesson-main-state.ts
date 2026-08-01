@@ -7,7 +7,13 @@ import type { LessonMainState } from './types';
 type CourseLike = {
   modules: readonly {
     slug: string;
-    lessons: readonly { slug: string; name: string; hasVideo: boolean }[];
+    lessons: readonly {
+      slug: string;
+      name: string;
+      hasVideo: boolean;
+      hasDebrief: boolean;
+      needsVideoWatch: boolean;
+    }[];
   }[];
 };
 
@@ -136,7 +142,17 @@ export const computeLessonMainState = ({
   }
 
   if (!lesson.hasVideo) {
-    return { kind: 'no-video', lessonName: lesson.name };
+    // Carries the slugs so the caller can render the material panel beneath
+    // the card. Without them this branch showed a bare "no video" notice and
+    // nothing else — the lesson's own content was unreachable.
+    return {
+      kind: 'no-video',
+      lessonName: lesson.name,
+      lessonSlug,
+      courseSlug,
+      hasDebrief: lesson.hasDebrief,
+      videoExpected: lesson.needsVideoWatch,
+    };
   }
   let videoState = playbackToState(video.data, onRetryVideo);
   if (video.isError) {
@@ -151,6 +167,7 @@ export const computeLessonMainState = ({
     lessonName: lesson.name,
     lessonSlug: lesson.slug,
     courseSlug,
+    hasDebrief: lesson.hasDebrief,
     videoState,
   };
 };

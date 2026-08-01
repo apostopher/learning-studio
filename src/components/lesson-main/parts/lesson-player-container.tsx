@@ -22,11 +22,14 @@ import { videoReachedEndAtomFamily } from './lesson-player-atoms';
 type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
   lessonSlug: string;
+  /** `lessons.has_debrief` — with it off, tab 2 is the authored quiz. */
+  hasDebrief: boolean;
 };
 
 export const LessonPlayerContainer = ({
   videoState,
   lessonSlug,
+  hasDebrief,
 }: LessonPlayerContainerProps) => {
   const playerId = useId();
   useMilestoneReporter(playerId, lessonSlug);
@@ -92,6 +95,10 @@ export const LessonPlayerContainer = ({
     },
     materialLocked,
     hasCurrentTest: Boolean(currentTest),
+    hasDebrief,
+    // Mirrors onDebrief's own guard below — without these the button generates
+    // nothing, so it must not be offered in the first place.
+    canDebrief: Boolean(material?.keyPoints?.length && material?.text),
   });
 
   return (

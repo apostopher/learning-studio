@@ -20,6 +20,8 @@ describe('computePlayerOverlay', () => {
         playback: atEnd,
         materialLocked: false,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('debrief');
   });
@@ -31,6 +33,8 @@ describe('computePlayerOverlay', () => {
         playback: atEnd,
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('coverage');
   });
@@ -42,6 +46,8 @@ describe('computePlayerOverlay', () => {
         playback: atEnd,
         materialLocked: false,
         hasCurrentTest: true,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('none');
   });
@@ -55,6 +61,8 @@ describe('computePlayerOverlay', () => {
             playback: playing,
             materialLocked,
             hasCurrentTest,
+            hasDebrief: true,
+            canDebrief: true,
           }),
         ).toBe('none');
       }
@@ -71,6 +79,8 @@ describe('computePlayerOverlay', () => {
         playback: atEnd,
         materialLocked: true,
         hasCurrentTest: true,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('coverage');
   });
@@ -87,6 +97,8 @@ describe('computePlayerOverlay', () => {
         playback: playing,
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('none');
   });
@@ -100,6 +112,8 @@ describe('computePlayerOverlay', () => {
         playback: seekedBack,
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('none');
   });
@@ -111,6 +125,8 @@ describe('computePlayerOverlay', () => {
         playback: playing,
         materialLocked: false,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('none');
   });
@@ -122,6 +138,8 @@ describe('computePlayerOverlay', () => {
         playback: { paused: true, currentTime: 119.4, duration: 120 },
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('coverage');
   });
@@ -137,6 +155,8 @@ describe('computePlayerOverlay', () => {
         playback: { paused: true, currentTime: 0, duration: 0 },
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
       }),
     ).toBe('coverage');
     expect(
@@ -145,6 +165,54 @@ describe('computePlayerOverlay', () => {
         playback: { paused: true, currentTime: 0, duration: Number.NaN },
         materialLocked: true,
         hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: true,
+      }),
+    ).toBe('coverage');
+  });
+
+  it('shows no overlay when the lesson has no debrief', () => {
+    // has_debrief off means tab 2 is the authored quiz — there is no debrief
+    // to offer, and offering one anyway was the regression against the old
+    // platform that this flag now closes.
+    expect(
+      computePlayerOverlay({
+        reachedEnd: true,
+        playback: atEnd,
+        materialLocked: false,
+        hasCurrentTest: false,
+        hasDebrief: false,
+        canDebrief: true,
+      }),
+    ).toBe('none');
+  });
+
+  it('shows no overlay when no debrief can be generated', () => {
+    // onDebrief bails without key points and text, so the button would be a
+    // press that silently does nothing.
+    expect(
+      computePlayerOverlay({
+        reachedEnd: true,
+        playback: atEnd,
+        materialLocked: false,
+        hasCurrentTest: false,
+        hasDebrief: true,
+        canDebrief: false,
+      }),
+    ).toBe('none');
+  });
+
+  it('still prefers the coverage notice over a suppressed debrief', () => {
+    // The locked-material remedy has to win regardless: it is the only thing
+    // telling the student what to do next.
+    expect(
+      computePlayerOverlay({
+        reachedEnd: true,
+        playback: atEnd,
+        materialLocked: true,
+        hasCurrentTest: false,
+        hasDebrief: false,
+        canDebrief: false,
       }),
     ).toBe('coverage');
   });

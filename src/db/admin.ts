@@ -294,6 +294,8 @@ export async function createLesson(input: {
     needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     isConfigured: created.videoRef !== null,
+    // A lesson is created before any material exists, so it has no quiz yet.
+    quizQuestionCount: 0,
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
   };
@@ -378,6 +380,13 @@ export async function getCourseBoard(
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
           videoProvider: lessonsTable.videoProvider,
           videoRef: lessonsTable.videoRef,
+          // Scalar subquery, not a join: `lesson_material.lesson_slug` carries
+          // only a plain index, so a duplicate row there would multiply this
+          // ungrouped query and show the same lesson twice on the board.
+          quizQuestionCount: sql<number>`coalesce((
+            select json_array_length(m.quiz) from lesson_material m
+            where m.lesson_slug = ${lessonsTable.slug} limit 1
+          ), 0)`,
         })
         .from(lessonsTable)
         .where(inArray(lessonsTable.moduleId, moduleIds))
@@ -430,6 +439,7 @@ export async function getCourseBoard(
         needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
         isConfigured: l.videoRef !== null,
+        quizQuestionCount: Number(l.quizQuestionCount),
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
       })),

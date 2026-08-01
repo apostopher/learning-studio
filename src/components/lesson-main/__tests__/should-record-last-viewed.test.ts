@@ -9,7 +9,14 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
   'course-error': { kind: 'course-error', message: 'x', onRetry: noop },
   'material-error': { kind: 'material-error', message: 'x', onRetry: noop },
   'not-found': { kind: 'not-found', lessonSlug: 'l1' },
-  'no-video': { kind: 'no-video', lessonName: 'L1' },
+  'no-video': {
+    kind: 'no-video',
+    lessonName: 'L1',
+    lessonSlug: 'l-1',
+    courseSlug: 'c-1',
+    hasDebrief: false,
+    videoExpected: false,
+  },
   locked: {
     kind: 'locked',
     lessonName: 'L1',
@@ -25,6 +32,7 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lessonName: 'L1',
     lessonSlug: 'l1',
     courseSlug: 'c',
+    hasDebrief: false,
     videoState: { status: 'fetching' },
   },
 };

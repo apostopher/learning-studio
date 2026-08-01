@@ -2,7 +2,8 @@ import { Tabs } from '@base-ui/react/tabs';
 import type { RefObject } from 'react';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LessonMaterial } from '#/db/lesson';
-import { useActiveTab, useCurrentTest } from '#/hooks/data/use-lesson-ai-test';
+import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
+import { computeMaterialTabs, resolveActiveTab } from './compute-material-tabs';
 import { Assignments } from './parts/assignments';
 import { DebriefQuizContainer } from './parts/debrief-quiz-container';
 import { JobOfTheDay } from './parts/job-of-the-day';
@@ -11,45 +12,35 @@ import { Links } from './parts/links';
 import { ProTips } from './parts/pro-tips';
 import { LessonQuizContainer } from './parts/quiz/lesson-quiz-container';
 
-type LessonMaterialTab =
-  | 'keyPoints'
-  | 'quiz'
-  | 'proTips'
-  | 'links'
-  | 'assignments'
-  | 'jobOfTheDay';
-
-type TabConfig = {
-  value: LessonMaterialTab;
-  label: string;
-};
-
-const TABS: readonly TabConfig[] = [
-  { value: 'keyPoints', label: 'Key Points' },
-  { value: 'quiz', label: 'Quiz' },
-  { value: 'proTips', label: 'Pro Tips' },
-  { value: 'links', label: 'Links' },
-  { value: 'assignments', label: 'Assignments' },
-  { value: 'jobOfTheDay', label: 'Job of the Day' },
-] as const;
-
 type LessonMaterialProps = {
   material: NonNullable<LessonMaterial>;
   tabsRef?: RefObject<HTMLDivElement | null>;
+  /** Whether tab 2 is the Debrief rather than the authored quiz. */
+  hasDebrief: boolean;
+  /** Called with each newly selected tab, so the container can record it. */
+  onTabSelected?: (tab: string) => void;
 };
 
 export const LessonMaterialView = ({
   material,
   tabsRef,
+  hasDebrief,
+  onTabSelected,
 }: LessonMaterialProps) => {
   const [activeTab, setActiveTab] = useActiveTab();
-  const currentTest = useCurrentTest();
+
+  const canDebrief = Boolean(material.keyPoints?.length && material.text);
+  const tabs = computeMaterialTabs({ hasDebrief, canDebrief });
+  const selected = resolveActiveTab(tabs, activeTab);
 
   return (
     <Tabs.Root
       ref={tabsRef}
-      value={activeTab}
-      onValueChange={(val) => setActiveTab(val as string)}
+      value={selected}
+      onValueChange={(val) => {
+        setActiveTab(val as string);
+        onTabSelected?.(val as string);
+      }}
       className="flex flex-col gap-4"
     >
       <ScrollArea
@@ -57,7 +48,7 @@ export const LessonMaterialView = ({
         className="lesson-material-tabs-scroll w-full border-b border-gray-6"
       >
         <Tabs.List className="relative z-0 flex w-max gap-1 px-1">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <Tabs.Tab
               key={tab.value}
               value={tab.value}
@@ -74,19 +65,28 @@ export const LessonMaterialView = ({
         <KeyPoints points={material.keyPoints} />
       </Tabs.Panel>
 
-      <Tabs.Panel value="quiz" className="outline-hidden">
-        {currentTest ? (
-          <DebriefQuizContainer
-            lessonSlug={material.lessonSlug}
-            material={material}
-          />
-        ) : (
-          <LessonQuizContainer
-            lessonSlug={material.lessonSlug}
-            quiz={material.quiz}
-          />
-        )}
-      </Tabs.Panel>
+      {/*
+        Which container owns this panel is decided by `hasDebrief`, not by
+        whether a test happens to be in memory. Keying off `currentTest` meant
+        the panel fell back to the authored quiz the moment the learner
+        refreshed — the debrief was only ever reachable through the post-video
+        overlay, and unrecoverable once dismissed.
+      */}
+      {tabs.some((tab) => tab.value === 'quiz') ? (
+        <Tabs.Panel value="quiz" className="outline-hidden">
+          {hasDebrief ? (
+            <DebriefQuizContainer
+              lessonSlug={material.lessonSlug}
+              material={material}
+            />
+          ) : (
+            <LessonQuizContainer
+              lessonSlug={material.lessonSlug}
+              quiz={material.quiz}
+            />
+          )}
+        </Tabs.Panel>
+      ) : null}
 
       <Tabs.Panel value="proTips" className="outline-hidden">
         <ProTips proTips={material.proTips} />

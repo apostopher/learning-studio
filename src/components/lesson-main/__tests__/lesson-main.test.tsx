@@ -82,7 +82,16 @@ describe('LessonMain', () => {
 
   it('renders no-video status with the lesson name (title now lives in header)', () => {
     render(
-      <LessonMain state={{ kind: 'no-video', lessonName: 'Lesson Two' }} />,
+      <LessonMain
+        state={{
+          kind: 'no-video',
+          lessonName: 'Lesson Two',
+          lessonSlug: 'l-1',
+          courseSlug: 'c-1',
+          hasDebrief: false,
+          videoExpected: false,
+        }}
+      />,
     );
     // h1 is rendered by LessonHeader in the AppShell header, not here.
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
@@ -130,6 +139,7 @@ describe('LessonMain', () => {
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
           courseSlug: 'course-one',
+          hasDebrief: false,
           videoState: { status: 'fetching' },
         }}
       />,
