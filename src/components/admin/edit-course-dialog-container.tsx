@@ -14,6 +14,7 @@ import { CourseOnboardingContainer } from './course-onboarding-container';
 import { CourseVideoIntegrationsContainer } from './course-video-integrations-container';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
+import { LessonSequencingContainer } from './lesson-sequencing-container';
 import { ModuleDependenciesContainer } from './module-dependencies-container';
 import {
   type ConfigModalSection,
@@ -103,6 +104,15 @@ export const EditCourseDialogContainer = () => {
       // rather than inheriting the course-name heading the other tabs use.
       heading: target ? `${target.name} modules` : '',
       content: target && <ModuleDependenciesContainer courseId={target.id} />,
+    },
+    {
+      value: 'lesson-sequencing',
+      title: 'Lesson sequencing',
+      // Separate from module dependencies on purpose: that tab sequences
+      // modules, this one sequences lessons WITHIN a module. Folding them
+      // together would put two different graphs on one surface.
+      heading: target ? `${target.name} lessons` : '',
+      content: target && <LessonSequencingContainer courseId={target.id} />,
     },
     {
       value: 'video',

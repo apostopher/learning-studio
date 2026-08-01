@@ -40,6 +40,14 @@ const modulesTable = pgTable('modules', {
   requiredSubscriptions: jsonb('required_subscriptions'),
   updatedAt: timestamp('updated_at'),
 });
+// deleteLesson strips the dead slug from every dependent's depends_on, so
+// this needs to be a real pgTable for the jsonb update to build.
+const lessonDependenciesTable = pgTable('lesson_dependencies', {
+  id: integer('id').primaryKey(),
+  lessonId: integer('lesson_id'),
+  dependsOn: jsonb('depends_on'),
+});
+
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -130,6 +138,7 @@ vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   coursesTable,
   modulesTable,
+  lessonDependenciesTable,
   lessonsTable,
   courseVideoProvidersTable,
   userProfileRolesTable,
@@ -395,12 +404,27 @@ describe('course-details cache invalidation', () => {
 
   it('deleteLesson invalidates the owning course, resolved before the row is gone', async () => {
     lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
-    db.delete.mockReturnValueOnce(makeChain([{ id: 9 }]));
+    db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
+    db.update.mockReturnValueOnce(makeChain([]));
 
     const result = await deleteLesson(9);
 
     expect(result).toBe(true);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+  });
+
+  it('deleteLesson strips the dead slug from every dependent', async () => {
+    // Asserts the UPDATE was issued, not that a row changed: without it,
+    // dependents keep an edge to a lesson that no longer exists and the admin
+    // UI renders a chip for a prerequisite that is not there. deleteModule has
+    // done this since it shipped; lessons never did.
+    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
+    db.update.mockReturnValueOnce(makeChain([]));
+
+    await deleteLesson(9);
+
+    expect(db.update).toHaveBeenCalledWith(lessonDependenciesTable);
   });
 
   it('deleteLesson skips invalidation when nothing was deleted', async () => {

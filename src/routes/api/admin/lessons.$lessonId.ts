@@ -3,6 +3,7 @@ import {
   deleteLesson,
   moveLesson,
   updateLessonConfig,
+  updateLessonDependencies,
   updateLessonName,
 } from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
@@ -10,6 +11,7 @@ import {
   moveLessonInputSchema,
   renameLessonInputSchema,
   updateLessonConfigInputSchema,
+  updateLessonDependenciesInputSchema,
 } from '@/lib/admin-schemas';
 
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
@@ -45,6 +47,26 @@ export const Route = createFileRoute('/api/admin/lessons/$lessonId')({
           body = await request.json();
         } catch {
           return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+        }
+
+        // Checked before the rest: this body carries only `dependsOn`, and a
+        // future optional field on another (non-strict) schema could otherwise
+        // swallow a dependency write and silently drop it.
+        const dependencies =
+          updateLessonDependenciesInputSchema.safeParse(body);
+        if (dependencies.success) {
+          const result = await updateLessonDependencies(
+            lessonId,
+            dependencies.data.dependsOn,
+          );
+          if (result.ok) return Response.json(result);
+          if (result.reason === 'not-found') {
+            return new Response('Not found', { status: 404 });
+          }
+          return Response.json(
+            { error: 'unknown-lessons', slugs: result.slugs },
+            { status: 400 },
+          );
         }
 
         const rename = renameLessonInputSchema.safeParse(body);

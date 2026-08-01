@@ -6,12 +6,14 @@ import {
   reorderModule,
   updateModule,
   updateModuleDependencies,
+  updateModuleSequential,
 } from '#/db/admin';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import {
   reorderModuleInputSchema,
   updateModuleDependenciesInputSchema,
   updateModuleInputSchema,
+  updateModuleSequentialInputSchema,
 } from '#/lib/admin-schemas';
 
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
@@ -47,6 +49,16 @@ export async function patchModuleHandler(
     body = await request.json();
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const sequential = updateModuleSequentialInputSchema.safeParse(body);
+  if (sequential.success) {
+    const updated = await updateModuleSequential(
+      moduleId,
+      sequential.data.sequentialLessons,
+    );
+    if (!updated) return new Response('Not found', { status: 404 });
+    return Response.json({ ok: true, ...sequential.data });
   }
 
   // Checked before the others: this body carries only `dependsOn`, and

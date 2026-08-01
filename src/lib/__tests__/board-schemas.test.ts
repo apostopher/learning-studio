@@ -30,6 +30,7 @@ describe('boardLessonSchema', () => {
       requiredSubscriptions: ['associate'],
       isConfigured: false,
       quizQuestionCount: 0,
+      dependsOn: [],
       videoProvider: null,
       videoRef: null,
     });
@@ -67,6 +68,7 @@ describe('boardModuleSchema', () => {
       rank: 1,
       requiredSubscriptions: ['candidate'],
       dependsOn: [],
+      sequentialLessons: true,
       learnerCount: 0,
       lessons: [],
     });
@@ -83,6 +85,7 @@ describe('boardModuleSchema', () => {
       rank: 2,
       requiredSubscriptions: [],
       dependsOn: ['m'],
+      sequentialLessons: true,
       learnerCount: 12,
       lessons: [],
     });

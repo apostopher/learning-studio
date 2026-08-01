@@ -24,6 +24,7 @@ const details = {
       slug: 'navigation',
       name: 'Navigation',
       dependsOn: [],
+      sequentialLessons: false,
       lessons: [
         lesson(1, 'pilotage'),
         lesson(2, 'dead-reckoning', [{ lessonSlug: 'pilotage' }]),

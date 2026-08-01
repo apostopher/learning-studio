@@ -72,7 +72,7 @@ describe('getCourseDetailsWithCache cache key', () => {
     await getCourseDetailsWithCache('flight-basics');
 
     expect(redisClient.get).toHaveBeenCalledWith(
-      'course-details-v2:"flight-basics"',
+      'course-details-v3:"flight-basics"',
     );
     // The pre-`hasVideo` key. If this were ever called, a same-named entry
     // written before this migration (missing `hasVideo`) would be served as

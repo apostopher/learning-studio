@@ -76,6 +76,7 @@ const course = {
       slug: 'm1',
       name: 'M',
       dependsOn: [],
+      sequentialLessons: false,
       lessons: [
         {
           slug: 'a',
@@ -132,7 +133,19 @@ const detailsFor = (
     dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
   }[],
 ) => ({
-  modules: [{ id: 1, slug: 'm1', name: 'M', dependsOn: [], lessons }],
+  // Chain off: these fixtures state their prerequisites explicitly and are
+  // about the subscription and material gates. Leaving it on (the column
+  // default) would add a prerequisite none of the assertions describe.
+  modules: [
+    {
+      id: 1,
+      slug: 'm1',
+      name: 'M',
+      dependsOn: [],
+      sequentialLessons: false,
+      lessons,
+    },
+  ],
 });
 
 describe('getCourseContentForAgent subscription gate', () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
-import { SubscriptionsSchema } from '#/types';
+import { CourseLessonDependencySchema, SubscriptionsSchema } from '#/types';
 
 export const ADMIN_ROLE = 'admin';
 
@@ -100,6 +100,12 @@ export const boardLessonSchema = z.object({
    * barely better than saying nothing.
    */
   quizQuestionCount: z.number(),
+  /**
+   * Explicit prerequisites for this lesson. A non-empty array takes this
+   * lesson OFF its module's derived chain entirely — see
+   * `effectivePrerequisites`.
+   */
+  dependsOn: z.array(CourseLessonDependencySchema),
   videoProvider: providerIdSchema.nullable(),
   videoRef: z.string().nullable(),
 });
@@ -120,6 +126,12 @@ export const boardModuleSchema = z.object({
    * module in this course.
    */
   dependsOn: z.array(z.string()),
+  /**
+   * Whether this module's lessons must be taken in rank order. Expanded into
+   * prerequisites at gate time rather than stored per lesson — see
+   * `modules.sequential_lessons`.
+   */
+  sequentialLessons: z.boolean(),
   /**
    * Distinct learners with watch progress in this module. Shown beside the
    * dependency picker so adding a prerequisite that locks people out mid-course
@@ -171,6 +183,26 @@ export const updateModuleDependenciesInputSchema = z.object({
 });
 export type UpdateModuleDependenciesInput = z.infer<
   typeof updateModuleDependenciesInputSchema
+>;
+
+/** Turn a module's derived lesson chain on or off. */
+export const updateModuleSequentialInputSchema = z
+  .object({ sequentialLessons: z.boolean() })
+  .strict();
+export type UpdateModuleSequentialInput = z.infer<
+  typeof updateModuleSequentialInputSchema
+>;
+
+/**
+ * Replace a lesson's explicit prerequisites. Slugs only — `moduleSlug` is not
+ * accepted or stored, because lesson slugs are globally unique and a stored
+ * module goes stale the moment the lesson moves.
+ */
+export const updateLessonDependenciesInputSchema = z
+  .object({ dependsOn: z.array(z.string().min(1)).max(100) })
+  .strict();
+export type UpdateLessonDependenciesInput = z.infer<
+  typeof updateLessonDependenciesInputSchema
 >;
 
 /**

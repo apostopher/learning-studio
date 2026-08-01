@@ -193,7 +193,11 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
 export const getCourseDetailsWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
->('course-details-v2', getCourseDetails);
+  // v2 -> v3: `modules.sequential_lessons` added. Entries written before the
+  // column existed deserialise without it, so `sequentialLessons` would read as
+  // undefined — falsy — and every module's lesson chain would be silently off
+  // for up to the 6h TTL, on a payload that looks otherwise complete.
+>('course-details-v3', getCourseDetails);
 
 export type MyCourseSummary = {
   id: number;

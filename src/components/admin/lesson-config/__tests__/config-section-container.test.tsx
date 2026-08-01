@@ -32,6 +32,7 @@ const lesson: BoardLesson = {
   requiredSubscriptions: [],
   isConfigured: false,
   quizQuestionCount: 0,
+  dependsOn: [],
   videoProvider: null,
   videoRef: null,
 };
@@ -42,6 +43,7 @@ const videoLesson: BoardLesson = {
   ...lesson,
   isConfigured: true,
   quizQuestionCount: 0,
+  dependsOn: [],
   videoProvider: 'synthesia',
   videoRef: 'ref',
 };
@@ -50,6 +52,7 @@ const noVideoOptionalLesson: BoardLesson = {
   ...lesson,
   isConfigured: false,
   quizQuestionCount: 0,
+  dependsOn: [],
   needsVideoWatch: false,
 };
 const subscriptionLesson: BoardLesson = {
@@ -65,6 +68,7 @@ const paidModule: BoardModule = {
   rank: 1,
   requiredSubscriptions: ['associate'],
   dependsOn: [],
+  sequentialLessons: true,
   learnerCount: 0,
   lessons: [lesson],
 };

@@ -21,6 +21,7 @@ const boardModule = (id: number, slug: string, dependsOn: string[] = []) => ({
   rank: id,
   requiredSubscriptions: [],
   dependsOn,
+  sequentialLessons: true,
   learnerCount: 0,
   lessons: [],
 });

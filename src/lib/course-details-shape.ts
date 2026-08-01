@@ -94,6 +94,8 @@ export type LearnerCourseModule = {
   slug: string;
   name: string;
   dependsOn: readonly string[];
+  /** Whether this module's lessons must be taken in rank order. */
+  sequentialLessons: boolean;
   lessons: LearnerCourseLesson[];
 };
 

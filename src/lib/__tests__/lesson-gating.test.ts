@@ -53,12 +53,14 @@ describe('evaluateLessonLock', () => {
       slug: 'm1',
       name: 'Module One',
       dependsOn: [],
+      sequentialLessons: false,
       lessons: [lesson({ slug: 'a', name: 'A' })],
     },
     {
       slug: 'm2',
       name: 'Module Two',
       dependsOn: ['m1'],
+      sequentialLessons: false,
       lessons: [
         lesson({
           slug: 'b',
@@ -89,6 +91,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm1',
         name: 'Module One',
         dependsOn: [],
+        sequentialLessons: false,
         lessons: [
           lesson({ slug: 'a', name: 'A' }),
           lesson({ slug: 'b', name: 'B', dependsOn: [{ lessonSlug: 'a' }] }),
@@ -111,6 +114,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm1',
         name: 'Module One',
         dependsOn: [],
+        sequentialLessons: false,
         lessons: [
           lesson({ slug: 'a', name: 'A', isAvailable: false }),
           lesson({ slug: 'b', name: 'B', dependsOn: [{ lessonSlug: 'a' }] }),
@@ -126,6 +130,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm1',
         name: 'Module One',
         dependsOn: ['gone'],
+        sequentialLessons: false,
         lessons: [
           lesson({
             slug: 'b',
@@ -144,6 +149,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm1',
         name: 'Module One',
         dependsOn: [],
+        sequentialLessons: false,
         lessons: [
           lesson({ slug: 'a', name: 'A' }),
           lesson({ slug: 'b', name: 'B', dependsOn: [{ lessonSlug: 'a' }] }),
@@ -161,6 +167,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm1',
         name: 'Module One',
         dependsOn: [],
+        sequentialLessons: false,
         lessons: [
           lesson({ slug: 'a', name: 'A' }),
           lesson({ slug: 'wip', name: 'WIP', isAvailable: false }),
@@ -170,6 +177,7 @@ describe('evaluateLessonLock', () => {
         slug: 'm2',
         name: 'Module Two',
         dependsOn: ['m1'],
+        sequentialLessons: false,
         lessons: [lesson({ slug: 'b', name: 'B' })],
       },
     ]);
@@ -185,6 +193,7 @@ describe('evaluateMaterialLock', () => {
       slug: 'm1',
       name: 'Module One',
       dependsOn: [],
+      sequentialLessons: false,
       lessons: [lesson({ slug: 'a', name: 'A' })],
     },
   ]);

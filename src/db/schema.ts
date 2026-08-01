@@ -72,6 +72,21 @@ export const modulesTable = pgTable('modules', {
   imageUrlWebp: text('image_url_webp'),
   requiredSubscriptions: text('required_subscriptions').array().notNull(),
   rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+  /**
+   * Whether this module's lessons must be taken in rank order.
+   *
+   * Expanded into prerequisites at gate time (`effectivePrerequisites`) rather
+   * than written as per-lesson edges: lessons can be both reordered and moved
+   * between modules, and stored edges would keep enforcing whatever order was
+   * current when they were written. Each lesson chains to the nearest
+   * PRECEDING lesson that can actually block, skipping any that cannot — see
+   * `lesson-gating.ts` for why skipping is load-bearing rather than cosmetic.
+   *
+   * Defaults true: sequential is the overwhelmingly common intent, and the
+   * alternative ships a feature that does nothing until toggled once per
+   * module, with the forgotten module silently unsequenced.
+   */
+  sequentialLessons: boolean('sequential_lessons').notNull().default(true),
   createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });

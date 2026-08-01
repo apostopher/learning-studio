@@ -34,6 +34,7 @@ function makeHarness() {
         rank: 1,
         requiredSubscriptions: ['associate'],
         dependsOn: [],
+        sequentialLessons: true,
         learnerCount: 0,
         lessons: [
           {
@@ -47,6 +48,7 @@ function makeHarness() {
             requiredSubscriptions: [],
             isConfigured: false,
             quizQuestionCount: 0,
+            dependsOn: [],
             videoProvider: null,
             videoRef: null,
           },

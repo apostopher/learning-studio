@@ -19,6 +19,8 @@ export type DetailsModule = {
   slug: string;
   name: string;
   dependsOn: readonly string[];
+  /** Whether this module's lessons must be taken in rank order. */
+  sequentialLessons: boolean;
   lessons: readonly DetailsLesson[];
 };
 export type DetailsCourse = { modules: readonly DetailsModule[] };
@@ -30,6 +32,11 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
       slug: m.slug,
       name: m.name,
       dependsOn: m.dependsOn,
+      // Defaults to chained when a cached payload predates the column. The
+      // cache key bump (course-details-v3) is what actually prevents that;
+      // this only decides which way a stale entry would fail, and failing
+      // toward "sequenced" matches the column default.
+      sequentialLessons: m.sequentialLessons ?? true,
       lessons: m.lessons.map((l) => ({
         slug: l.slug,
         name: l.name,

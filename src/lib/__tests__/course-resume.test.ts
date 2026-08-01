@@ -24,6 +24,7 @@ const course = (
   ...modules: {
     slug: string;
     dependsOn?: string[];
+    sequentialLessons?: boolean;
     lessons: ReturnType<typeof lesson>[];
   }[]
 ): GateCourse => ({
@@ -31,6 +32,10 @@ const course = (
     slug: m.slug,
     name: m.slug,
     dependsOn: m.dependsOn ?? [],
+    // These fixtures predate the derived chain and state their edges
+    // explicitly, so default it off: switching it on here would add
+    // prerequisites the assertions never described.
+    sequentialLessons: m.sequentialLessons ?? false,
     lessons: m.lessons,
   })),
 });
@@ -71,15 +76,15 @@ describe('resolveResumeTarget', () => {
     });
 
     it('skips a leading lesson that is locked', () => {
-      // m1's only lesson depends on m2's, so lesson order and unlocked order
-      // disagree — first-by-rank would land on a lock screen.
+      // m1 requires m2, so lesson order and unlocked order disagree —
+      // first-by-rank would land on a lock screen.
+      //
+      // Expressed with a MODULE prerequisite rather than a lesson one: a
+      // lesson can only ever be gated by an earlier lesson now (forward edges
+      // are dropped at expansion), so a leading LESSON cannot be lesson-locked
+      // by a later one. Module edges carry no such restriction.
       const c = course(
-        {
-          slug: 'm1',
-          lessons: [
-            lesson('gated', [{ lessonSlug: 'open', moduleSlug: 'm2' }]),
-          ],
-        },
+        { slug: 'm1', dependsOn: ['m2'], lessons: [lesson('gated')] },
         { slug: 'm2', lessons: [lesson('open')] },
       );
       expect(
@@ -250,17 +255,16 @@ describe('resolveResumeTarget', () => {
     });
 
     it('reports all-locked, carrying the blocker, when lessons exist but none open', () => {
-      // Both lessons in m1 depend on m2's lesson, which depends back on m1's
-      // — a cycle an admin can create. Nothing is reachable.
+      // A MODULE cycle: m1 requires m2 and m2 requires m1, so nothing is
+      // reachable. `updateModuleDependencies` rejects new cycles, but
+      // `cyclicPrerequisites` documents that rows predating that validation
+      // can already be cyclic, so this state is still reachable in data.
+      //
+      // Deliberately not a LESSON cycle: those are now impossible by
+      // construction, since every surviving lesson edge points backwards.
       const c = course(
-        {
-          slug: 'm1',
-          lessons: [lesson('x', [{ lessonSlug: 'y', moduleSlug: 'm2' }])],
-        },
-        {
-          slug: 'm2',
-          lessons: [lesson('y', [{ lessonSlug: 'x', moduleSlug: 'm1' }])],
-        },
+        { slug: 'm1', dependsOn: ['m2'], lessons: [lesson('x')] },
+        { slug: 'm2', dependsOn: ['m1'], lessons: [lesson('y')] },
       );
       expect(
         resolveResumeTarget({
@@ -271,12 +275,7 @@ describe('resolveResumeTarget', () => {
       ).toEqual({
         kind: 'none',
         reason: 'all-locked',
-        lock: {
-          kind: 'lesson-locked',
-          lessonSlug: 'y',
-          moduleSlug: 'm2',
-          lessonName: 'y',
-        },
+        lock: { kind: 'module-locked', moduleSlug: 'm2', moduleName: 'm2' },
       });
     });
   });

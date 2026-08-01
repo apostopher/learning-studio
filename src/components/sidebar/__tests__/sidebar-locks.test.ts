@@ -8,6 +8,7 @@ const details = {
       slug: 'm1',
       name: 'M1',
       dependsOn: [],
+      sequentialLessons: false,
       lessons: [
         {
           id: 10,

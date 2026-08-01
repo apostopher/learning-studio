@@ -22,6 +22,7 @@ import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
   courseVideoProvidersTable,
+  lessonDependenciesTable,
   lessonsTable,
   moduleDependenciesTable,
   modulesTable,
@@ -241,6 +242,7 @@ export async function createModule(input: {
     imageUrlWebp: created.imageUrlWebp,
     rank: Number(created.rank),
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
+    sequentialLessons: created.sequentialLessons,
     // A module is created with no prerequisites and no learners by definition.
     dependsOn: [],
     learnerCount: 0,
@@ -296,6 +298,8 @@ export async function createLesson(input: {
     isConfigured: created.videoRef !== null,
     // A lesson is created before any material exists, so it has no quiz yet.
     quizQuestionCount: 0,
+    // No explicit prerequisites, so it joins its module's chain (if any).
+    dependsOn: [],
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
   };
@@ -360,6 +364,7 @@ export async function getCourseBoard(
       imageUrlWebp: modulesTable.imageUrlWebp,
       rank: modulesTable.rank,
       requiredSubscriptions: modulesTable.requiredSubscriptions,
+      sequentialLessons: modulesTable.sequentialLessons,
     })
     .from(modulesTable)
     .where(eq(modulesTable.courseId, courseId))
@@ -400,7 +405,8 @@ export async function getCourseBoard(
     byModule.set(lesson.moduleId, list);
   }
 
-  const [dependencies, learnerCounts] = moduleIds.length
+  const lessonIds = lessons.map((l) => l.id);
+  const [dependencies, learnerCounts, lessonDependencies] = moduleIds.length
     ? await Promise.all([
         db
           .select({
@@ -410,11 +416,23 @@ export async function getCourseBoard(
           .from(moduleDependenciesTable)
           .where(inArray(moduleDependenciesTable.moduleId, moduleIds)),
         countLearnersByModule(moduleIds),
+        lessonIds.length
+          ? db
+              .select({
+                lessonId: lessonDependenciesTable.lessonId,
+                dependsOn: lessonDependenciesTable.dependsOn,
+              })
+              .from(lessonDependenciesTable)
+              .where(inArray(lessonDependenciesTable.lessonId, lessonIds))
+          : Promise.resolve([]),
       ])
-    : [[], new Map<number, number>()];
+    : [[], new Map<number, number>(), []];
 
   const dependsOnByModule = new Map(
     dependencies.map((d) => [d.moduleId, d.dependsOn]),
+  );
+  const dependsOnByLesson = new Map(
+    lessonDependencies.map((d) => [d.lessonId, d.dependsOn]),
   );
 
   return {
@@ -428,6 +446,7 @@ export async function getCourseBoard(
       rank: Number(m.rank),
       requiredSubscriptions: m.requiredSubscriptions as SubscriptionType[],
       dependsOn: dependsOnByModule.get(m.id) ?? [],
+      sequentialLessons: m.sequentialLessons,
       learnerCount: learnerCounts.get(m.id) ?? 0,
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
@@ -440,6 +459,7 @@ export async function getCourseBoard(
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
         isConfigured: l.videoRef !== null,
         quizQuestionCount: Number(l.quizQuestionCount),
+        dependsOn: dependsOnByLesson.get(l.id) ?? [],
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
       })),
@@ -716,10 +736,117 @@ export async function deleteLesson(lessonId: number): Promise<boolean> {
   const [deleted] = await db
     .delete(lessonsTable)
     .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id });
+    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
   if (!deleted) return false;
 
+  // Strip the dead slug from every dependent, exactly as deleteModule does
+  // with array_remove. depends_on is JSONB objects rather than a text array,
+  // so the equivalent is a filtered re-aggregation. Without this, dependents
+  // keep an edge to a lesson that no longer exists: the gate tolerates it
+  // (unresolvable edges are skipped) but the admin UI would render a chip for
+  // a prerequisite that isn't there, and it accumulates forever.
+  await db
+    .update(lessonDependenciesTable)
+    .set({
+      dependsOn: sql`coalesce((
+        select jsonb_agg(entry)
+        from jsonb_array_elements(${lessonDependenciesTable.dependsOn}) entry
+        where entry->>'lessonSlug' <> ${deleted.slug}
+      ), '[]'::jsonb)`,
+    })
+    .where(
+      sql`${lessonDependenciesTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: deleted.slug }])}::jsonb`,
+    );
+
   await invalidateCourseDetailsCache(courseSlug);
+  return true;
+}
+
+export type UpdateLessonDependenciesResult =
+  | { ok: true; dependsOn: { lessonSlug: string }[] }
+  | { ok: false; reason: 'not-found' }
+  | { ok: false; reason: 'unknown-lessons'; slugs: string[] };
+
+/**
+ * Replace one lesson's explicit prerequisites.
+ *
+ * Prerequisites are confined to the same course: a foreign slug resolves to
+ * nothing under `evaluateLessonLock`, which only ever searches the course it
+ * was handed, so accepting one would persist a gate that can never fire.
+ *
+ * Deliberately NO cycle check, unlike `updateModuleDependencies`. Cycles are
+ * impossible here by construction rather than by validation: expansion drops
+ * every edge pointing at a later lesson, so each surviving edge runs strictly
+ * backwards and no set of them can close a loop. Validating at write time
+ * would also be insufficient on its own — a drag re-ranks lessons and could
+ * create a cycle with nobody editing a dependency at all.
+ */
+export async function updateLessonDependencies(
+  lessonId: number,
+  dependsOn: string[],
+): Promise<UpdateLessonDependenciesResult> {
+  const [target] = await db
+    .select({ courseId: modulesTable.courseId })
+    .from(lessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .where(eq(lessonsTable.id, lessonId));
+  if (!target) return { ok: false, reason: 'not-found' };
+
+  // Order-preserving dedupe: a duplicated slug is a client bug, not a reason
+  // to fail the write, but it must not reach a column the UI renders as chips.
+  const next = [...new Set(dependsOn)];
+
+  const siblings = await db
+    .select({ slug: lessonsTable.slug })
+    .from(lessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .where(eq(modulesTable.courseId, target.courseId));
+  const known = new Set(siblings.map((s) => s.slug));
+  const unknown = next.filter((slug) => !known.has(slug));
+  if (unknown.length > 0) {
+    return { ok: false, reason: 'unknown-lessons', slugs: unknown };
+  }
+
+  // moduleSlug is deliberately not stored. Lesson slugs are globally unique,
+  // so it is redundant for lookup, and a stored one goes stale the moment a
+  // lesson moves module — which is exactly how gates used to vanish silently.
+  const rows = next.map((lessonSlug) => ({ lessonSlug }));
+
+  // Clearing every prerequisite deletes the row rather than storing an empty
+  // array, so "no explicit prerequisites" has one representation instead of
+  // two — and an empty array would otherwise read as "off the chain", which
+  // is the opposite of what clearing means.
+  if (rows.length === 0) {
+    await db
+      .delete(lessonDependenciesTable)
+      .where(eq(lessonDependenciesTable.lessonId, lessonId));
+  } else {
+    await db
+      .insert(lessonDependenciesTable)
+      .values({ lessonId, dependsOn: rows })
+      .onConflictDoUpdate({
+        target: lessonDependenciesTable.lessonId,
+        set: { dependsOn: rows },
+      });
+  }
+
+  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+  return { ok: true, dependsOn: rows };
+}
+
+/** Turn a module's derived lesson chain on or off. */
+export async function updateModuleSequential(
+  moduleId: number,
+  sequentialLessons: boolean,
+): Promise<boolean> {
+  const [updated] = await db
+    .update(modulesTable)
+    .set({ sequentialLessons, updatedAt: sql`now()` })
+    .where(eq(modulesTable.id, moduleId))
+    .returning({ id: modulesTable.id });
+  if (!updated) return false;
+
+  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
   return true;
 }
 
