@@ -3,20 +3,21 @@ import {
   Outlet,
   redirect,
   useParams,
-} from '@tanstack/react-router';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useRef } from 'react';
-import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
-import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
-import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
-import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
-import { AppShell } from '../../components/app-shell';
-import { AppShellFooter } from '../../components/app-shell-footer';
-import { AppShellSkeleton } from '../../components/app-shell-skeleton';
-import { LessonHeaderWrapper } from '../../components/lesson-main';
-import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
+} from "@tanstack/react-router";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useRef } from "react";
+import { chatWidgetModeAtom, chatWidgetOpenAtom } from "#/atoms/chat-widget";
+import { subscribedSlugsQueryOptions } from "#/data-hooks/course-access-queries";
+import { useOnboardingStatus } from "#/data-hooks/use-onboarding-status";
+import { shouldAutoOpenOnboarding } from "#/lib/onboarding-auto-open";
+import { AppShell } from "../../components/app-shell";
+import { AppShellFooter } from "../../components/app-shell-footer";
+import { AppShellSkeleton } from "../../components/app-shell-skeleton";
+import { CourseHeaderNav } from "../../components/course-header-nav";
+import { LessonHeaderWrapper } from "../../components/lesson-main";
+import { CourseSidebarWrapper } from "../../components/sidebar/course-sidebar-wrapper";
 
-export const Route = createFileRoute('/_authed/course/$courseSlug')({
+export const Route = createFileRoute("/_authed/course/$courseSlug")({
   beforeLoad: async ({ context, params }) => {
     const slugs = await context.queryClient.ensureQueryData(
       subscribedSlugsQueryOptions(),
@@ -31,7 +32,7 @@ export const Route = createFileRoute('/_authed/course/$courseSlug')({
       // 3. Redirecting *both* the bogus-slug and the not-enrolled case to
       //    the same place avoids leaking which slugs are real courses.
       //    Distinguishing them would let someone enumerate the catalogue.
-      throw redirect({ to: '/app' });
+      throw redirect({ to: "/app" });
     }
   },
   component: CourseLayout,
@@ -107,7 +108,7 @@ function useAutoOpenOnboarding(courseSlug: string) {
         widgetMode,
       })
     ) {
-      setMode({ kind: 'onboarding', courseSlug });
+      setMode({ kind: "onboarding", courseSlug });
       setOpen(true);
     }
   }, [
@@ -128,9 +129,7 @@ function CourseLayout() {
   // Loose read: these two params belong to the deeper lesson route, not this
   // layout's own path. Their presence is how the layout knows which leaf is
   // active — the same idiom CourseSidebarWrapper already uses for the same
-  // two params. This only needs to distinguish two leaf shapes (course home
-  // vs. a lesson); if a third leaf ever needs its own headerMain content,
-  // revisit this rather than extending the presence check further.
+  // two params.
   //
   // headerMain is rendered here (rather than by the lesson leaf itself)
   // because AppShell places it in a fixed grid row while `main` sits inside
@@ -143,14 +142,24 @@ function CourseLayout() {
 
   return (
     <AppShell
+      // Always rendered now, because the nav sits at the trailing end on EVERY
+      // leaf — including course home and the library, neither of which puts a
+      // title here. The leaf's title stays in its own cell rather than beside
+      // the nav, so LessonHeader's role="status" live region never wraps the
+      // links and a loading announcement cannot swallow them.
       headerMain={
-        moduleSlug != null && lessonSlug != null ? (
-          <LessonHeaderWrapper
-            courseSlug={courseSlug}
-            moduleSlug={moduleSlug}
-            lessonSlug={lessonSlug}
-          />
-        ) : undefined
+        <div className="flex h-full w-full items-center justify-between gap-4 pe-4">
+          <div className="flex min-w-0 flex-1 items-center">
+            {moduleSlug != null && lessonSlug != null ? (
+              <LessonHeaderWrapper
+                courseSlug={courseSlug}
+                moduleSlug={moduleSlug}
+                lessonSlug={lessonSlug}
+              />
+            ) : null}
+          </div>
+          <CourseHeaderNav courseSlug={courseSlug} />
+        </div>
       }
       aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
       main={<Outlet />}

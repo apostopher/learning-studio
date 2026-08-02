@@ -565,12 +565,12 @@
      reader users), so this is a visual-only echo of the disabled look; the
      actual disclosure is the always-visible text label next to the icon,
      never this alone. */
-  .video-player .vp-icon-button[aria-disabled='true'] {
+  .video-player .vp-icon-button[aria-disabled="true"] {
     opacity: 0.7;
     cursor: default;
   }
 
-  .video-player .vp-icon-button[aria-disabled='true']:hover {
+  .video-player .vp-icon-button[aria-disabled="true"]:hover {
     background: transparent;
   }
 
@@ -1127,4 +1127,188 @@
   .course-card__spinner {
     animation-duration: 2s;
   }
+}
+
+/* ---------------------------------------------------------------- library */
+
+.library-grid {
+  /* Narrower than the course grid's 30ch default: a file tile is an icon, a
+     two-line name and a button, so 30ch would strand three columns of empty
+     space on a wide screen. 17rem fits four columns in a typical main area
+     while leaving the name room to wrap rather than truncate. */
+  --grid-auto-fit-min-width: 17rem;
+  --grid-auto-fit-gap: 1rem;
+}
+
+/* Entrance stagger, in CSS rather than Motion for React.
+   A one-shot mount animation needs no springs, no layout morph and no exit,
+   so mounting ~92 subscribed motion components to play it would buy nothing.
+
+   `min(var(--i), 11)` is the cap that matters: the old platform used a raw
+   `index * 0.05s`, which at 92 files put the last tile 4.6s after the first.
+   Capping at the twelfth tile keeps the whole sequence at ~330ms no matter how
+   many files a course accumulates — the effect only ever needed to cover the
+   tiles visible at mount.
+
+   `backwards` fill is load-bearing: without it every tile paints at full
+   opacity first and only then jumps back to hidden to wait out its delay. */
+@media (prefers-reduced-motion: no-preference) {
+  .library-tile {
+    animation: library-tile-in var(--duration-medium-min) var(--ease-sidebar)
+      backwards;
+    animation-delay: calc(min(var(--i, 0), 11) * 30ms);
+  }
+}
+
+@keyframes library-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* The download button is the tile's only affordance, so its press needs to be
+   unmistakable. Unlayered for the same reason .course-grid a is: Tailwind's
+   transition-colors utility would otherwise own transition-property. */
+.library-tile__download {
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.library-tile__download:active {
+  transform: scale(0.94);
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion means gentler, not none — the tiles still fade in, they
+     just do not move and do not wait their turn. */
+  .library-tile__download:active {
+    transform: none;
+    opacity: 0.85;
+    transition-duration: 0s;
+  }
+}
+
+/* ------------------------------------------------------- site navigation */
+
+.course-nav {
+  display: flex;
+  align-items: center;
+  /* The old platform's bar spaced items generously rather than packing them.
+     Gap rather than padding on the links, so the hover/active block stays
+     tight to its label instead of bleeding into its neighbours. */
+  gap: 0.75rem;
+}
+
+/* Unlayered, like `.course-grid a` above: Tailwind's utilities layer would
+   otherwise own `transition-property` and drop background-color from the list,
+   making the hover tint snap rather than settle. */
+.course-nav__link {
+  position: relative;
+  /* Local stacking context, so the pill's z-index is scoped to this link and
+     cannot end up above the app header's own layered content. */
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 1rem;
+  padding-block: 0.5rem;
+  border-radius: var(--radius-inner);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  /* Uppercase in CSS, not in the DOM — the accessible name stays "Library". */
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--color-secondary);
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+/* The link's own background sits below its children, so the hover tint lands
+   under the pill rather than washing it out. */
+.course-nav__link:hover {
+  color: var(--color-primary);
+  background-color: var(--color-overlay-hover);
+}
+
+/* `data-current` is set by CourseHeaderNav, NOT TanStack's own `data-status`.
+   `data-status` reflects the COMMITTED location, so on a slow navigation the
+   label would invert a beat after the pill had already arrived. `data-current`
+   follows the pending destination, so pill and label move together.
+
+   The BACKGROUND is not here: it moved to .course-nav__pill, one shared
+   element that morphs between links rather than a box per link. */
+.course-nav__link[data-current] {
+  color: var(--color-on-accent);
+}
+
+.course-nav__link[data-current]:hover {
+  /* The current item is already the destination — a hover tint on top would
+     read as a second, competing state. */
+  background-color: transparent;
+  color: var(--color-on-accent);
+}
+
+/* Press feedback, at pointer-down — before the router has done anything.
+   `transition-duration: 0s` lands it on the same frame as the press: easing
+   INTO a press makes the feedback lag the finger, the one thing press feedback
+   must never do. It eases back out, because that direction is a settle.
+
+   Opacity rather than the `scale()` used on course cards, deliberately: this
+   link CONTAINS the layoutId pill, and Motion measures the pill's target box
+   with getBoundingClientRect. A scaled ancestor would make it measure a
+   shrunken destination and land small before popping to size. Opacity does not
+   touch layout, so the morph stays exact. */
+.course-nav__link:active {
+  opacity: 0.7;
+  transition-duration: 0s;
+}
+
+/* Held for as long as this link's navigation is genuinely in flight. TanStack's
+   <Link> sets data-transitioning="transitioning" on itself and clears it on
+   resolve — including on a cancelled or redirected navigation, so it cannot get
+   stuck. Recede the items NOT chosen so the destination stands out; the chosen
+   one already carries the pill. */
+.course-nav:has([data-transitioning]) .course-nav__link:not([data-transitioning]) {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep every signal, drop only movement. Opacity IS the signal here, so
+     press and in-flight feedback survive intact. */
+  .course-nav__link:active {
+    opacity: 0.7;
+  }
+}
+
+/* The travelling gold block. Positioned rather than backgrounded so Motion has
+   a box to morph; `inset: 0` makes it exactly the link's padding box, so the
+   shape it lands in is the shape the link would have had.
+
+   No border-radius here — it is set inline in px by ActiveIndicator, because
+   layout animations scale the element and Motion only corrects corner
+   distortion for pixel radii, never for a class or a rem value. */
+.course-nav__pill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* accent-9 → accent-10 are the solid and hovered-solid steps, so the ramp
+     stays inside the generated scale in both themes rather than being a
+     hand-picked pair. Contrast against --color-on-accent is 9.56:1 light and
+     11.89:1 dark — both clear AA. */
+  background-image: linear-gradient(
+    160deg,
+    var(--color-accent-9),
+    var(--color-accent-10)
+  );
+  box-shadow: 0 1px 2px var(--color-shadow);
+}
+
+/* Above the pill, or the active label would be painted over by it. */
+.course-nav__label {
+  position: relative;
+  z-index: 1;
 }

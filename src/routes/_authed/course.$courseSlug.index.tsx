@@ -1,5 +1,5 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
-import { courseResumeQueryOptions } from '#/data-hooks/course-access-queries';
+import { createFileRoute } from '@tanstack/react-router';
+import { resumeCourseOrExplain } from '#/lib/course-resume-redirect';
 import { LessonEmpty, LessonSkeleton } from '../../components/lesson-main';
 
 /**
@@ -21,25 +21,13 @@ import { LessonEmpty, LessonSkeleton } from '../../components/lesson-main';
  * the learner. See docs/superpowers/specs/2026-07-30-course-resume-redirect-ledger.md.
  */
 export const Route = createFileRoute('/_authed/course/$courseSlug/')({
-  beforeLoad: async ({ context, params }) => {
-    const resume = await context.queryClient.ensureQueryData(
-      courseResumeQueryOptions(params.courseSlug),
-    );
-
-    if (resume.kind === 'lesson') {
-      throw redirect({
-        to: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
-        params: {
-          courseSlug: params.courseSlug,
-          moduleSlug: resume.moduleSlug,
-          lessonSlug: resume.lessonSlug,
-        },
-        replace: true,
-      });
-    }
-
-    return { resume };
-  },
+  // Shared with `/course/$courseSlug/modules`, the header nav's Modules item —
+  // both doors must land the learner in the same place.
+  beforeLoad: ({ context, params }) =>
+    resumeCourseOrExplain({
+      queryClient: context.queryClient,
+      courseSlug: params.courseSlug,
+    }),
   component: CourseIndexContainer,
   // LessonSkeleton alone, with no AppShell wrapper: by the time this route is
   // pending its parent layout has committed and is already supplying the
