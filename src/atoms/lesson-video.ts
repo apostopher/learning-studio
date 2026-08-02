@@ -2,7 +2,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import { atomFamily } from 'jotai-family';
 import { atomWithQuery } from 'jotai-tanstack-query';
 import { queryKeys } from '#/hooks/data/keys';
-import { lessonPlaybackSchema } from '#/lib/admin-schemas';
+import { lessonPlaybackSchema, playbackErrorSchema } from '#/lib/admin-schemas';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 /**
@@ -23,7 +24,19 @@ export const fetchLessonPlayback = async (
   const params = new URLSearchParams({ lessonSlug });
   if (opts?.fresh) params.set('fresh', '1');
   const r = await fetch(`/api/lesson/playback?${params.toString()}`);
-  if (!r.ok) throw new Error('Failed to fetch playback');
+  if (!r.ok) {
+    // A coded body means the server knows exactly what went wrong. Throwing a
+    // generic Error here discarded that, so a course with no provider
+    // credentials showed the learner "Failed to fetch playback" and a Retry
+    // that could never succeed.
+    const coded = playbackErrorSchema.safeParse(
+      await r.json().catch(() => null),
+    );
+    if (coded.success) {
+      throw new PlaybackError(coded.data.code, coded.data.error);
+    }
+    throw new Error('Failed to fetch playback');
+  }
   return lessonPlaybackSchema.parse(await r.json());
 };
 

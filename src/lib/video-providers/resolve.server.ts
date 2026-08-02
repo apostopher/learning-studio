@@ -139,11 +139,25 @@ export async function resolvePlayback(
 /** Turns a Synthesia API failure into the coded error the admin UI branches on. */
 function classifySynthesiaFailure(error: unknown): PlaybackError {
   if (!(error instanceof SynthesiaRequestError)) {
-    return new PlaybackError(
-      'PROVIDER_UNAVAILABLE',
-      'Could not reach Synthesia.',
-      { cause: error },
+    // A response we could not parse is NOT an outage. `getVideoDetails` only
+    // throws SynthesiaRequestError for a non-OK status, so everything else
+    // reaching here — a ZodError above all — means Synthesia answered and we
+    // failed to understand it. Calling that "could not reach" sends whoever
+    // is debugging to check the network instead of the schema.
+    const reachedButUnreadable = !(
+      error instanceof TypeError || error instanceof DOMException
     );
+    return reachedButUnreadable
+      ? new PlaybackError(
+          'PROVIDER_RESPONSE_UNRECOGNISED',
+          'Synthesia responded in a format this app does not recognise.',
+          { cause: error },
+        )
+      : new PlaybackError(
+          'PROVIDER_UNAVAILABLE',
+          'Could not reach Synthesia.',
+          { cause: error },
+        );
   }
   if (isAuthRejectionStatus(error.status)) {
     return new PlaybackError(

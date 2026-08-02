@@ -2,6 +2,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '#/hooks/data/keys';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import {
   fetchLessonPlayback,
   refetchLessonPlaybackFresh,
@@ -86,5 +87,55 @@ describe('fetchLessonPlayback', () => {
 
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toContain('fresh=1');
+  });
+});
+
+describe('fetchLessonPlayback failures', () => {
+  it('surfaces the server code and message instead of one generic error', async () => {
+    // A course with no provider credentials showed the learner "Failed to
+    // fetch playback" and a Retry that could never succeed — 83 lessons were
+    // dead this way with nothing anywhere naming the cause.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: 'This course has no synthesia credentials configured.',
+          code: 'PROVIDER_NOT_CONFIGURED',
+        }),
+      }),
+    );
+
+    const error = await fetchLessonPlayback('l-1').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PlaybackError);
+    expect((error as PlaybackError).code).toBe('PROVIDER_NOT_CONFIGURED');
+    expect((error as PlaybackError).message).toMatch(/credentials/i);
+  });
+
+  it('still fails clearly when the body carries no code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: async () => 'nope' }),
+    );
+
+    const error = await fetchLessonPlayback('l-1').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/failed to fetch playback/i);
+  });
+
+  it('does not choke when the error body is not JSON at all', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => {
+          throw new Error('not json');
+        },
+      }),
+    );
+
+    await expect(fetchLessonPlayback('l-1')).rejects.toThrow();
   });
 });

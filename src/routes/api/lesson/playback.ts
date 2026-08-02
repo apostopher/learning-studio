@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonPlayback } from '#/db/lesson-playback';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
@@ -45,6 +46,15 @@ export async function getLessonPlaybackHandler(
     return Response.json(playback);
   } catch (error) {
     console.error('Failed to resolve lesson playback:', error);
+    // Carry the code, as the admin route already does. Without it every
+    // failure reaches the learner as one opaque message with a Retry button,
+    // including the ones retrying can never fix.
+    if (error instanceof PlaybackError) {
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: 502 },
+      );
+    }
     return new Response('Playback lookup failed', { status: 502 });
   }
 }

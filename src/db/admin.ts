@@ -49,6 +49,7 @@ import {
   type SecretEnvelope,
 } from '#/lib/crypto.server';
 import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import { slugify } from '#/lib/slugify';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import {
@@ -583,7 +584,15 @@ export async function resolveLessonPlayback(
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
   const provider = lesson.videoProvider as ProviderId;
   const creds = await resolveCourseProvider(lesson.courseId, provider);
-  if (!creds) return null;
+  // See resolveLessonPlaybackUncached: a missing credential is an admin
+  // misconfiguration, not "no video", and must not collapse into the same
+  // 404 the board reads as "nothing assigned".
+  if (!creds) {
+    throw new PlaybackError(
+      'PROVIDER_NOT_CONFIGURED',
+      `This course has no ${provider} credentials configured.`,
+    );
+  }
   return resolvePlayback(provider, lesson.videoRef, creds);
 }
 

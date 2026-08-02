@@ -3,6 +3,7 @@ import { db } from '#/db';
 import { resolveCourseProvider } from '#/db/admin';
 import { lessonsTable, modulesTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import {
   type PlaybackResult,
   resolvePlayback,
@@ -35,7 +36,20 @@ async function resolveLessonPlaybackUncached(
 
   const provider = lesson.videoProvider as ProviderId;
   const creds = await resolveCourseProvider(lesson.courseId, provider);
-  if (!creds) return null;
+  // Throws rather than returning null: null here is indistinguishable from
+  // "no such lesson" and "no video assigned", which the route deliberately
+  // renders as an opaque 403. A missing course credential is neither — it is
+  // an admin misconfiguration the learner can do nothing about, and
+  // flattening it into the same refusal is how a whole course of lessons can
+  // be dead with nothing anywhere saying why. Safe to distinguish: the gate
+  // and subscription checks have already passed by the time this runs, so it
+  // reveals nothing about which slugs exist.
+  if (!creds) {
+    throw new PlaybackError(
+      'PROVIDER_NOT_CONFIGURED',
+      `This course has no ${provider} credentials configured.`,
+    );
+  }
   return resolvePlayback(provider, lesson.videoRef, creds);
 }
 

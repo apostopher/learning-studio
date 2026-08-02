@@ -387,3 +387,56 @@ describe('validateCredentials', () => {
     expect(result).toEqual({ ok: false, error: 'Synthesia returned 401' });
   });
 });
+
+describe('classifying a Synthesia failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not claim unreachability when Synthesia answered unreadably', async () => {
+    // getVideoDetails only throws SynthesiaRequestError for a non-OK status,
+    // so anything else — a ZodError above all — means the API responded and
+    // we could not parse it. Reporting that as "could not reach" sends whoever
+    // is debugging to the network instead of the schema, which is exactly the
+    // wrong direction and nearly cost a day.
+    getVideoDetails.mockRejectedValue(new Error('invalid_type at download'));
+
+    const error = await resolvePlayback(
+      'synthesia',
+      'video-1',
+      synthesiaCreds,
+    ).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PlaybackError);
+    expect((error as PlaybackError).code).toBe(
+      'PROVIDER_RESPONSE_UNRECOGNISED',
+    );
+    expect((error as PlaybackError).message).not.toMatch(/could not reach/i);
+  });
+
+  it('still reports a genuine network failure as unreachable', async () => {
+    // A fetch that never landed throws TypeError; that one IS transient and
+    // retrying is the right response.
+    getVideoDetails.mockRejectedValue(new TypeError('fetch failed'));
+
+    const error = await resolvePlayback(
+      'synthesia',
+      'video-1',
+      synthesiaCreds,
+    ).catch((e: unknown) => e);
+
+    expect((error as PlaybackError).code).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it('keeps a refused credential distinct from both', async () => {
+    getVideoDetails.mockRejectedValue(new SynthesiaRequestError(401));
+
+    const error = await resolvePlayback(
+      'synthesia',
+      'video-1',
+      synthesiaCreds,
+    ).catch((e: unknown) => e);
+
+    expect((error as PlaybackError).code).toBe('PROVIDER_AUTH_REJECTED');
+  });
+});

@@ -7,6 +7,13 @@
  *   (still rendering, or deleted at the provider). A new key would not help.
  * - `PROVIDER_UNAVAILABLE` — the provider errored or was unreachable. Transient;
  *   retrying is the right response.
+ * - `PROVIDER_NOT_CONFIGURED` — this course has no stored credential for the
+ *   provider its lesson uses. An admin has to add one; retrying never helps.
+ *   Previously indistinguishable from "no video assigned" (both became a bare
+ *   403), which is how 83 lessons could be dead with nothing saying why.
+ * - `PROVIDER_RESPONSE_UNRECOGNISED` — the provider answered, but not in a
+ *   shape we can read. NOT an outage: reporting it as one sends whoever is
+ *   debugging it to check the network instead of the schema.
  *
  * The distinction is the whole point: before this existed, all three arrived as
  * an identical 500 and a revoked key looked exactly like a deleted video.
@@ -15,6 +22,8 @@ export const PLAYBACK_FAILURE_CODES = [
   'PROVIDER_AUTH_REJECTED',
   'VIDEO_NOT_AVAILABLE',
   'PROVIDER_UNAVAILABLE',
+  'PROVIDER_NOT_CONFIGURED',
+  'PROVIDER_RESPONSE_UNRECOGNISED',
 ] as const;
 
 export type PlaybackFailureCode = (typeof PLAYBACK_FAILURE_CODES)[number];

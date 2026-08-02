@@ -34,8 +34,10 @@ export async function getVideoPlaybackHandler(
 
   try {
     const playback = await resolveLessonPlayback(lessonId);
-    // 404 means "no video (or no credential) configured" — the client maps it
-    // to null, not to an error. Provider failures are 502s below.
+    // 404 now means "no video assigned" only. A missing course credential
+    // used to land here too, which made an admin misconfiguration
+    // indistinguishable from an empty lesson; it throws
+    // PROVIDER_NOT_CONFIGURED instead and is reported as a 502 below.
     if (!playback) return new Response('Not found', { status: 404 });
     return Response.json(playback);
   } catch (error) {
