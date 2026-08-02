@@ -19,6 +19,17 @@ export const deleteLessonAtom = atom<{ id: number; name: string } | null>(null);
 /** Id of the lesson whose configure modal is open, or null when closed. */
 export const configureLessonIdAtom = atom<number | null>(null);
 
+/**
+ * Id of the lesson whose video preview is open, or null when closed.
+ *
+ * Held here rather than in the card because `LessonCard` is presentational and
+ * renders once per lesson plus once more in the drag overlay — a modal owned
+ * by the card would exist N times over. It is also what keeps playback
+ * resolution lazy: the provider is only called while this is non-null, so
+ * loading the board costs no provider calls at all.
+ */
+export const playLessonIdAtom = atom<number | null>(null);
+
 /** Module id whose create-lesson dialog is open, or null when closed. */
 export const createLessonModuleIdAtom = atom<number | null>(null);
 

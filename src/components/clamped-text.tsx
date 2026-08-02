@@ -1,6 +1,6 @@
 import { Tooltip } from '@base-ui/react/tooltip';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 
 /**
  * Why this component exists:

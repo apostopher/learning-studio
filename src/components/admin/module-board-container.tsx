@@ -38,6 +38,7 @@ import { DeleteModuleDialogContainer } from './delete-module-dialog-container';
 import { EditModuleDialogContainer } from './edit-module-dialog-container';
 import { LessonCard } from './lesson-card';
 import { LessonConfigDialogContainer } from './lesson-config-dialog-container';
+import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { ModuleColumn } from './module-column';
 import { SortableModuleColumn } from './sortable-module-column';
 
@@ -304,6 +305,7 @@ export const ModuleBoardContainer = ({
       <DeleteModuleDialogContainer courseId={courseId} />
       <DeleteLessonDialogContainer courseId={courseId} />
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
+      <LessonVideoModalContainer modules={modules} />
     </DndContext>
   );
 };

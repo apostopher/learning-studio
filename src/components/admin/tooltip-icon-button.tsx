@@ -1,6 +1,6 @@
 import { Tooltip } from '@base-ui/react/tooltip';
 import type { ReactNode } from 'react';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 
 type IconButtonVariant = 'default' | 'danger';
 

@@ -1,7 +1,11 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import { configureLessonIdAtom, deleteLessonAtom } from '@/atoms/admin';
+import {
+  configureLessonIdAtom,
+  deleteLessonAtom,
+  playLessonIdAtom,
+} from '@/atoms/admin';
 import type { BoardLesson } from '@/lib/admin-schemas';
 import { cn } from '@/lib/cn';
 import { lessonDndId } from '@/lib/dnd-ids';
@@ -28,6 +32,7 @@ export const SortableLessonCard = ({
   });
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
   const setDeleteLesson = useSetAtom(deleteLessonAtom);
+  const setPlayLessonId = useSetAtom(playLessonIdAtom);
 
   return (
     <div
@@ -46,6 +51,9 @@ export const SortableLessonCard = ({
         dragHandleProps={{ ...attributes, ...listeners }}
         onEdit={() => setConfigureLessonId(lesson.id)}
         onDelete={() => setDeleteLesson({ id: lesson.id, name: lesson.name })}
+        onPlay={
+          lesson.isConfigured ? () => setPlayLessonId(lesson.id) : undefined
+        }
       />
     </div>
   );
