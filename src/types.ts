@@ -294,6 +294,23 @@ export type LatestNews = z.infer<typeof LatestNewsSchema>;
 
 export const AllLatestNewsSchema = z.array(LatestNewsSchema);
 
+/**
+ * Outcome of one source's turn in the scrape cron.
+ *
+ * Every value except `ok` produces an empty or short feed for that source, and
+ * they are indistinguishable to a reader — which is exactly why the reason is
+ * stored rather than only logged.
+ */
+export const NEWS_SCRAPE_STATUSES = [
+  'ok',
+  'blocked_by_robots',
+  'fetch_failed',
+  'no_links_found',
+  'no_dated_articles',
+] as const;
+export const NewsScrapeStatusSchema = z.enum(NEWS_SCRAPE_STATUSES);
+export type NewsScrapeStatus = z.infer<typeof NewsScrapeStatusSchema>;
+
 export const AddressSchema = z.object({
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),

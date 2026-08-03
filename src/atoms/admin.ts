@@ -55,6 +55,21 @@ export const editCourseAtom = atom<{
 export const deleteCourseAtom = atom<{ id: number; name: string } | null>(null);
 
 /**
+ * What the course modal's News sources panel is showing.
+ *
+ * Carries the `courseId` it belongs to so a value left behind by a previously
+ * edited course reads as stale and falls back to the list, rather than opening
+ * the next course's panel onto a form for a source it does not own. Null means
+ * the list.
+ */
+export const newsSourcePanelAtom = atom<{
+  courseId: number;
+  mode: 'create' | 'edit' | 'delete';
+  /** The source being edited or deleted; absent for `create`. */
+  sourceId?: number;
+} | null>(null);
+
+/**
  * Provider/ref detected from a video URL the admin just typed into the Video
  * tab but hasn't been confirmed by the board yet (the source of truth is the
  * lesson record once `useSetLessonVideo` succeeds and the board refetches).

@@ -24,6 +24,7 @@ import {
   CourseLessonQuizAnswerSchema,
   CourseLessonQuizAnswersSchema,
   CourseLessonQuizSchema,
+  type NewsScrapeStatus,
   OnboardingAnswersSchema,
   type OnboardingQuestionsSchema,
   type OtherVideoIdsSchema,
@@ -59,6 +60,7 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   docs: many(docs),
   fileAssignments: many(blobFileAssignmentsTable),
   onboarding: many(courseOnboardingTable),
+  newsSources: many(newsSourcesTable),
 }));
 
 export const modulesTable = pgTable('modules', {
@@ -663,18 +665,76 @@ export const userProfileRolesRelations = relations(
   }),
 );
 
-export const newsSourcesTable = pgTable('news_sources', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text('name').notNull(),
-  url: text('url').notNull().unique(),
-  selectors: text('selectors').array().default([]),
-  imageURL: text('image_url').notNull(),
-  tintColor: text('tint_color'),
-  active: boolean('active').notNull().default(true),
-  rank: numeric('rank', { precision: 10, scale: 5 }).notNull(),
-  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-});
+/**
+ * News sources are sandboxed per course: a row belongs to exactly one course,
+ * and the same outlet tracked by two courses is two independent rows. There is
+ * deliberately no "global" source — `course_id` is NOT NULL, so every row is
+ * reachable from exactly one course's admin section and one course's feed.
+ */
+export const newsSourcesTable = pgTable(
+  'news_sources',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    url: text('url').notNull(),
+    /**
+     * CSS selectors the scraper narrows a page with before LLM extraction.
+     * No admin UI yet — the scraper is not ported into this repo, and a
+     * selector cannot be validated without one. Empty means "scrape the whole
+     * page", which is the scraper's own fallback, so null degrades safely.
+     */
+    selectors: text('selectors').array().default([]),
+    imageUrlAvif: text('image_url_avif'),
+    imageUrlWebp: text('image_url_webp'),
+    /**
+     * A ready-made logo used as-is, with no format negotiation — in practice
+     * an SVG.
+     *
+     * Exists because a publication's mark is usually vector, and the AVIF/WebP
+     * pair above cannot represent one: `optimizeImage` runs raster codecs, and
+     * declaring an SVG as `type="image/webp"` makes the browser pick that
+     * `<source>` and then fail to decode it. For a wordmark, vector is also
+     * simply better — smaller and resolution-independent.
+     *
+     * Lowest precedence: AVIF, then WebP, then this. An admin uploading a new
+     * logo therefore overrides a migrated one without destroying it.
+     *
+     * Counted by `sweepOrphanBlobs` — a blob under `news-sources/` that no
+     * column references is deleted, and this column holds such references.
+     */
+    imageUrl: text('image_url'),
+    tintColor: text('tint_color'),
+    active: boolean('active').notNull().default(true),
+    /**
+     * When the scrape cron last finished with this source, successfully or not.
+     * Drives stalest-first ordering, so a run that exhausts its time budget
+     * delays a source by a day rather than starving the same tail forever.
+     */
+    lastScrapedAt: timestamp('last_scraped_at', { mode: 'date' }),
+    /**
+     * Why the last run produced what it produced. Without this every distinct
+     * failure — robots block, 403, dead domain, JS-rendered index — presents
+     * identically as an empty feed and the admin can only guess.
+     */
+    lastScrapeStatus: text('last_scrape_status').$type<NewsScrapeStatus>(),
+    lastScrapeMessage: text('last_scrape_message'),
+    // Precision matches modules/lessons: reordering splits the midpoint between
+    // neighbours, and scale 5 exhausts after ~17 splits between the same pair.
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Scoped, not global: the same feed may legitimately appear in two courses,
+    // but twice in one course is always a mistake, and this is the only thing
+    // that catches two admins submitting it at once.
+    uniqueIndex('news_sources_course_url_idx').on(table.courseId, table.url),
+    index('news_sources_course_id_idx').on(table.courseId),
+  ],
+);
 
 export const newsSourcesInsertSchema = createInsertSchema(newsSourcesTable);
 export type NewsSourcesInsert = z.infer<typeof newsSourcesInsertSchema>;
@@ -684,11 +744,114 @@ export type NewsSourcesSelect = z.infer<typeof newsSourcesSelectSchema>;
 
 export const newsSourcesTableRelations = relations(
   newsSourcesTable,
-  ({ many }) => ({
+  ({ one, many }) => ({
+    course: one(coursesTable, {
+      fields: [newsSourcesTable.courseId],
+      references: [coursesTable.id],
+    }),
     userNewsSources: many(userNewsSourcesTable),
+    articles: many(newsArticlesTable),
   }),
 );
 
+/**
+ * Articles harvested by the scrape cron, scoped to the course whose source
+ * yielded them.
+ *
+ * Rows are transient: the cron deletes anything whose `firstSeenAt` is older
+ * than a week. That window is also the dedup window — a story re-linked after
+ * seven days resurfaces as new, which is accepted.
+ */
+export const newsArticlesTable = pgTable(
+  'news_articles',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    newsSourceId: integer('news_source_id')
+      .notNull()
+      .references(() => newsSourcesTable.id, { onDelete: 'cascade' }),
+    /** Normalized: tracking params stripped, `<link rel="canonical">` honoured. */
+    canonicalUrl: text('canonical_url').notNull(),
+    /** As extracted, before normalization — kept so a bad canonical is debuggable. */
+    originalUrl: text('original_url').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    /** Publisher's og:image, hotlinked. Null when the page carried none. */
+    imageUrl: text('image_url'),
+    /** From the page's meta tags. Null when it published none we could parse. */
+    publishedAt: timestamp('published_at', { mode: 'date' }),
+    /**
+     * True when `publishedAt` was filled from `firstSeenAt` because the page
+     * carried no usable date. The UI must not render an estimated value as a
+     * precise publication time.
+     */
+    publishedAtEstimated: boolean('published_at_estimated')
+      .notNull()
+      .default(false),
+    /** When the cron first saw this article. Always set; drives retention. */
+    firstSeenAt: timestamp('first_seen_at', { mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    /** title + description, for near-duplicate detection across sources. */
+    embedding: vector('embedding', { dimensions: 3072 }),
+    /**
+     * Set when this article was judged a duplicate of another in the same
+     * course. The row is kept rather than deleted so a wrong merge is
+     * diagnosable, and so the UI can later say "also covered by …".
+     */
+    dedupeOfId: integer('dedupe_of_id'),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Makes the run idempotent: a retried or overlapping cron upserts rather
+    // than inserting the same article twice.
+    uniqueIndex('news_articles_course_url_idx').on(
+      table.courseId,
+      table.canonicalUrl,
+    ),
+    index('news_articles_course_published_idx').on(
+      table.courseId,
+      table.publishedAt.desc(),
+    ),
+    // The retention sweep's predicate.
+    index('news_articles_first_seen_idx').on(table.firstSeenAt),
+  ],
+);
+
+export const newsArticlesSelectSchema = createSelectSchema(newsArticlesTable);
+export type NewsArticlesSelect = z.infer<typeof newsArticlesSelectSchema>;
+
+export const newsArticlesTableRelations = relations(
+  newsArticlesTable,
+  ({ one }) => ({
+    course: one(coursesTable, {
+      fields: [newsArticlesTable.courseId],
+      references: [coursesTable.id],
+    }),
+    source: one(newsSourcesTable, {
+      fields: [newsArticlesTable.newsSourceId],
+      references: [newsSourcesTable.id],
+    }),
+  }),
+);
+
+/**
+ * Per-user source preferences, as EXCLUSIONS: a row means this student muted
+ * that source. No rows means the full feed.
+ *
+ * Exclusion, not the inclusion model inherited from `airmanship-web`, because
+ * inclusion cannot express "show me nothing" — its rule was "no rows means
+ * all", so unticking every source left zero rows and the feed silently
+ * reappeared in full. Exclusion has no ambiguous state and needs no
+ * "has this user customized?" flag.
+ *
+ * Keyed `(userId, newsSourceId)` with no `courseId`: `news_sources.course_id`
+ * is NOT NULL and a source belongs to exactly one course, so the source id
+ * already determines the course. Carrying one here would be denormalization.
+ * (This resolves the OPEN item this comment used to carry.)
+ */
 export const userNewsSourcesTable = pgTable(
   'user_news_sources',
   {

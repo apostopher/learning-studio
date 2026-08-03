@@ -9,12 +9,15 @@ import Cropper, { type Area, type Point } from 'react-easy-crop';
  *   local crop/zoom state is the widget's own interactive state, like a form
  *   field.
  *
- * Pan-and-zoom cropper with a fixed 16:9 frame: the user drags and zooms the
- * image behind the frame, then the framed region is emitted as a Blob for the
- * optimize + upload pipeline.
+ * Pan-and-zoom cropper: the user drags and zooms the image behind the frame,
+ * then the framed region is emitted as a Blob for the optimize + upload
+ * pipeline. The frame is 16:9 by default (course and module covers) and square
+ * for subjects that are not covers — a publication wordmark cropped to 16:9 is
+ * either letterboxed or clipped, neither of which the admin intended.
  */
 
-const ASPECT = 16 / 9;
+export const COVER_ASPECT = 16 / 9;
+export const SQUARE_ASPECT = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 
@@ -22,6 +25,8 @@ interface ImageCropperProps {
   file: File;
   onCancel: () => void;
   onCropped: (blob: Blob) => void;
+  /** Frame ratio (width / height). Defaults to 16:9. */
+  aspect?: number;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -63,6 +68,7 @@ export const ImageCropper = ({
   file,
   onCancel,
   onCropped,
+  aspect = COVER_ASPECT,
 }: ImageCropperProps) => {
   // Create AND revoke the object URL in the same effect so a re-run (e.g. dev
   // double-invoke) makes a fresh URL rather than leaving a revoked one.
@@ -95,13 +101,16 @@ export const ImageCropper = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-1">
+      <div
+        className="relative w-full overflow-hidden rounded-lg bg-gray-1"
+        style={{ aspectRatio: aspect }}
+      >
         {objectUrl && (
           <Cropper
             image={objectUrl}
             crop={crop}
             zoom={zoom}
-            aspect={ASPECT}
+            aspect={aspect}
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
             objectFit="cover"

@@ -289,6 +289,125 @@ export const lessonPlaybackSchema = z.discriminatedUnion('status', [
 ]);
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
 
+/**
+ * Hostnames a news source URL may not point at.
+ *
+ * The scraper will fetch this URL server-side, months from now, with no code
+ * review sitting between the admin's write and that request. Rejecting
+ * loopback / private / link-local targets at write time keeps a stored SSRF
+ * payload from waiting in the table for a fetcher that does not exist yet.
+ * The scraper should still defend itself when it lands; this is the cheap half.
+ */
+const isBlockedNewsHost = (hostname: string): boolean => {
+  const host = hostname.toLowerCase().replace(/^\[|]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::1' || host === '0.0.0.0') return true;
+  // IPv4 literals only — a DNS name that resolves to a private address is not
+  // catchable here, and belongs to the fetcher's own guard.
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!v4) return false;
+  const [a, b] = [Number(v4[1]), Number(v4[2])];
+  if (a === 10 || a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+};
+
+export const newsSourceUrlSchema = z
+  .string()
+  .trim()
+  .min(1, 'URL is required')
+  .max(2048)
+  .superRefine((value, ctx) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'Enter a valid URL' });
+      return;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'URL must start with http or https',
+      });
+      return;
+    }
+    if (isBlockedNewsHost(parsed.hostname)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'That address is not reachable from the server',
+      });
+    }
+  });
+
+/** A news source row as delivered over JSON, scoped to one course. */
+export const newsSourceSchema = z.object({
+  id: z.number(),
+  courseId: z.number(),
+  name: z.string(),
+  url: z.string(),
+  imageUrlAvif: z.string().nullable(),
+  imageUrlWebp: z.string().nullable(),
+  /**
+   * A ready-made logo (usually SVG), used only when no AVIF/WebP pair exists.
+   * Set by the migration from `airmanship-web`, never by the admin form — an
+   * uploaded logo takes precedence rather than replacing this.
+   */
+  imageUrl: z.string().nullable(),
+  tintColor: z.string().nullable(),
+  active: z.boolean(),
+  rank: z.coerce.number(),
+});
+export type NewsSource = z.infer<typeof newsSourceSchema>;
+
+/** Hex color, 3 or 6 digits. Free-form beyond that — see the ledger's risks. */
+const tintColorSchema = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z
+    .string()
+    .trim()
+    .regex(
+      /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
+      'Use a hex color like #1B4D3E',
+    )
+    .optional(),
+);
+
+/** POST body for creating a news source inside a course. */
+export const createNewsSourceInputSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  url: newsSourceUrlSchema,
+  // Set programmatically by the image upload flow (never user-typed).
+  imageUrlAvif: z.string().url().optional(),
+  imageUrlWebp: z.string().url().optional(),
+  tintColor: tintColorSchema,
+});
+export type CreateNewsSourceInput = z.infer<typeof createNewsSourceInputSchema>;
+
+/** PATCH body for a news source. Same fields as create, plus the active flag. */
+export const updateNewsSourceInputSchema = createNewsSourceInputSchema.extend({
+  active: z.boolean().optional(),
+});
+export type UpdateNewsSourceInput = z.infer<typeof updateNewsSourceInputSchema>;
+
+/**
+ * Move a source between two neighbours in its course's ordering. Both null is
+ * rejected: the target position would be undefined.
+ */
+export const reorderNewsSourceInputSchema = z
+  .object({
+    prevSourceId: z.number().int().positive().nullable(),
+    nextSourceId: z.number().int().positive().nullable(),
+  })
+  .refine((v) => v.prevSourceId !== null || v.nextSourceId !== null, {
+    message: 'At least one neighbor is required',
+  });
+export type ReorderNewsSourceInput = z.infer<
+  typeof reorderNewsSourceInputSchema
+>;
+
 /** Body of a 502 from the video-playback route — `code` is what the UI branches on. */
 export const playbackErrorSchema = z.object({
   error: z.string(),

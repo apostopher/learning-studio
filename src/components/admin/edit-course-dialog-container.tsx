@@ -16,6 +16,7 @@ import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
 import { LessonSequencingContainer } from './lesson-sequencing-container';
 import { ModuleDependenciesContainer } from './module-dependencies-container';
+import { NewsSourcesContainer } from './news-sources-container';
 import {
   type ConfigModalSection,
   SectionedConfigModal,
@@ -125,6 +126,14 @@ export const EditCourseDialogContainer = () => {
       value: 'onboarding',
       title: 'Onboarding',
       content: target && <CourseOnboardingContainer courseId={target.id} />,
+    },
+    {
+      value: 'news-sources',
+      title: 'News sources',
+      // Names the course's sources rather than the course: this tab's subject
+      // is the feed, and sources belong to this course alone.
+      heading: target ? `${target.name} news sources` : '',
+      content: target && <NewsSourcesContainer courseId={target.id} />,
     },
   ];
 

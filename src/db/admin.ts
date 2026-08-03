@@ -26,6 +26,7 @@ import {
   lessonsTable,
   moduleDependenciesTable,
   modulesTable,
+  newsSourcesTable,
   userProfileRolesTable,
   userProfileTable,
   userRolesTable,
@@ -49,9 +50,9 @@ import {
   type SecretEnvelope,
 } from '#/lib/crypto.server';
 import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
-import { PlaybackError } from '#/lib/video-providers/errors';
 import { slugify } from '#/lib/slugify';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
+import { PlaybackError } from '#/lib/video-providers/errors';
 import {
   type PlaybackResult,
   resolvePlayback,
@@ -866,7 +867,7 @@ const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 // collection in sweepOrphanBlobs — only sweep a prefix whose references we
 // gather, else live blobs get deleted. When lessons gain 16:9 covers, add
 // 'lessons/' here AND collect lesson image URLs below.
-const SWEPT_PREFIXES = ['courses/', 'modules/'];
+const SWEPT_PREFIXES = ['courses/', 'modules/', 'news-sources/'];
 
 /**
  * Periodic orphan sweep (Vercel Cron): delete cover blobs under our prefixes
@@ -877,7 +878,9 @@ export async function sweepOrphanBlobs(): Promise<{
   scanned: number;
   deleted: number;
 }> {
-  const [courseRows, moduleRows] = await Promise.all([
+  // One select per swept prefix. Adding a prefix above WITHOUT adding its
+  // reference query here deletes every live image under it on the next run.
+  const [courseRows, moduleRows, newsSourceRows] = await Promise.all([
     db
       .select({
         avif: coursesTable.imageUrlAvif,
@@ -890,11 +893,26 @@ export async function sweepOrphanBlobs(): Promise<{
         webp: modulesTable.imageUrlWebp,
       })
       .from(modulesTable),
+    db
+      .select({
+        avif: newsSourcesTable.imageUrlAvif,
+        webp: newsSourcesTable.imageUrlWebp,
+        // Third reference column, not a third format: `image_url` holds a
+        // ready-made logo (usually SVG). Omitting it here would let the sweep
+        // delete every migrated logo, since they live under `news-sources/`.
+        plain: newsSourcesTable.imageUrl,
+      })
+      .from(newsSourcesTable),
   ]);
   const referenced = new Set<string>();
-  for (const row of [...courseRows, ...moduleRows]) {
+  for (const row of [...courseRows, ...moduleRows, ...newsSourceRows]) {
     if (row.avif) referenced.add(row.avif);
     if (row.webp) referenced.add(row.webp);
+  }
+  // Separate pass: only news sources carry a third reference column, and
+  // widening the shared loop to reach it would silently type as `{}`.
+  for (const row of newsSourceRows) {
+    if (row.plain) referenced.add(row.plain);
   }
 
   const now = Date.now();
