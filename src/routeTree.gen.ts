@@ -24,8 +24,10 @@ import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/less
 import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
 import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
+import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
+import { Route as ApiCourseNewsRouteImport } from './routes/api/course/news'
 import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
 import { Route as ApiCourseLibraryRouteImport } from './routes/api/course/library'
 import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
@@ -47,6 +49,7 @@ import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/cour
 import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/course/onboarding/start'
 import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
 import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
+import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
 import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
 import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
 import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
@@ -61,9 +64,11 @@ import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './rout
 import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
 import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
 import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
+import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
 import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
 import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes/api/admin/courses.$courseId.credentials'
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
+import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
 import { Route as AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/course.$courseSlug.modules.$moduleSlug.lessons.$lessonSlug'
 
@@ -142,6 +147,11 @@ const ApiLessonMaterialRoute = ApiLessonMaterialRouteImport.update({
   path: '/api/lesson/material',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
+  id: '/api/cron/news-scrape',
+  path: '/api/cron/news-scrape',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
   id: '/api/cron/blob-sweep',
   path: '/api/cron/blob-sweep',
@@ -153,6 +163,11 @@ const ApiCourseProgressSummaryRoute =
     path: '/api/course/progress-summary',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCourseNewsRoute = ApiCourseNewsRouteImport.update({
+  id: '/api/course/news',
+  path: '/api/course/news',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCourseMyCoursesRoute = ApiCourseMyCoursesRouteImport.update({
   id: '/api/course/my-courses',
   path: '/api/course/my-courses',
@@ -265,6 +280,11 @@ const ApiCourseOnboardingDeleteRoute =
     path: '/api/course/onboarding/delete',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
+  id: '/mute',
+  path: '/mute',
+  getParentRoute: () => ApiCourseNewsRoute,
+} as any)
 const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
   id: '/api/admin/modules/$moduleId',
   path: '/api/admin/modules/$moduleId',
@@ -346,6 +366,12 @@ const ApiAdminCoursesCourseIdOnboardingRoute =
     path: '/onboarding',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
+const ApiAdminCoursesCourseIdNewsSourcesRoute =
+  ApiAdminCoursesCourseIdNewsSourcesRouteImport.update({
+    id: '/news-sources',
+    path: '/news-sources',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdModulesRoute =
   ApiAdminCoursesCourseIdModulesRouteImport.update({
     id: '/modules',
@@ -363,6 +389,12 @@ const ApiAdminCoursesCourseIdBoardRoute =
     id: '/board',
     path: '/board',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
+const ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute =
+  ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport.update({
+    id: '/$sourceId',
+    path: '/$sourceId',
+    getParentRoute: () => ApiAdminCoursesCourseIdNewsSourcesRoute,
   } as any)
 const ApiAdminCoursesCourseIdCredentialsProviderRoute =
   ApiAdminCoursesCourseIdCredentialsProviderRouteImport.update({
@@ -394,8 +426,10 @@ export interface FileRoutesByFullPath {
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/library': typeof ApiCourseLibraryRoute
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
+  '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
+  '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
@@ -411,6 +445,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
@@ -426,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
+  '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -433,6 +469,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
@@ -450,8 +487,10 @@ export interface FileRoutesByTo {
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/library': typeof ApiCourseLibraryRoute
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
+  '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
+  '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
@@ -467,6 +506,7 @@ export interface FileRoutesByTo {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
@@ -482,6 +522,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
+  '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -489,6 +530,7 @@ export interface FileRoutesByTo {
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
@@ -510,8 +552,10 @@ export interface FileRoutesById {
   '/api/course/details': typeof ApiCourseDetailsRoute
   '/api/course/library': typeof ApiCourseLibraryRoute
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
+  '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
+  '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
@@ -527,6 +571,7 @@ export interface FileRoutesById {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
@@ -542,6 +587,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
+  '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -549,6 +595,7 @@ export interface FileRoutesById {
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
@@ -570,8 +617,10 @@ export interface FileRouteTypes {
     | '/api/course/details'
     | '/api/course/library'
     | '/api/course/my-courses'
+    | '/api/course/news'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
+    | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
@@ -587,6 +636,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
@@ -602,6 +652,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
+    | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -609,6 +660,7 @@ export interface FileRouteTypes {
     | '/api/admin/modules/$moduleId/lessons'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -626,8 +678,10 @@ export interface FileRouteTypes {
     | '/api/course/details'
     | '/api/course/library'
     | '/api/course/my-courses'
+    | '/api/course/news'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
+    | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
@@ -643,6 +697,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
@@ -658,6 +713,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
+    | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -665,6 +721,7 @@ export interface FileRouteTypes {
     | '/api/admin/modules/$moduleId/lessons'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   id:
     | '__root__'
@@ -685,8 +742,10 @@ export interface FileRouteTypes {
     | '/api/course/details'
     | '/api/course/library'
     | '/api/course/my-courses'
+    | '/api/course/news'
     | '/api/course/progress-summary'
     | '/api/cron/blob-sweep'
+    | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/user/last-viewed'
@@ -702,6 +761,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
@@ -717,6 +777,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
     | '/api/admin/courses/$courseId/modules'
+    | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -724,6 +785,7 @@ export interface FileRouteTypes {
     | '/api/admin/modules/$moduleId/lessons'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
@@ -740,8 +802,10 @@ export interface RootRouteChildren {
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
   ApiCourseLibraryRoute: typeof ApiCourseLibraryRoute
   ApiCourseMyCoursesRoute: typeof ApiCourseMyCoursesRoute
+  ApiCourseNewsRoute: typeof ApiCourseNewsRouteWithChildren
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
+  ApiCronNewsScrapeRoute: typeof ApiCronNewsScrapeRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonPlaybackRoute: typeof ApiLessonPlaybackRoute
   ApiUserLastViewedRoute: typeof ApiUserLastViewedRoute
@@ -871,6 +935,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLessonMaterialRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/news-scrape': {
+      id: '/api/cron/news-scrape'
+      path: '/api/cron/news-scrape'
+      fullPath: '/api/cron/news-scrape'
+      preLoaderRoute: typeof ApiCronNewsScrapeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/blob-sweep': {
       id: '/api/cron/blob-sweep'
       path: '/api/cron/blob-sweep'
@@ -883,6 +954,13 @@ declare module '@tanstack/react-router' {
       path: '/api/course/progress-summary'
       fullPath: '/api/course/progress-summary'
       preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/news': {
+      id: '/api/course/news'
+      path: '/api/course/news'
+      fullPath: '/api/course/news'
+      preLoaderRoute: typeof ApiCourseNewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/course/my-courses': {
@@ -1032,6 +1110,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCourseOnboardingDeleteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/course/news/mute': {
+      id: '/api/course/news/mute'
+      path: '/mute'
+      fullPath: '/api/course/news/mute'
+      preLoaderRoute: typeof ApiCourseNewsMuteRouteImport
+      parentRoute: typeof ApiCourseNewsRoute
+    }
     '/api/admin/modules/$moduleId': {
       id: '/api/admin/modules/$moduleId'
       path: '/api/admin/modules/$moduleId'
@@ -1130,6 +1215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdOnboardingRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
+    '/api/admin/courses/$courseId/news-sources': {
+      id: '/api/admin/courses/$courseId/news-sources'
+      path: '/news-sources'
+      fullPath: '/api/admin/courses/$courseId/news-sources'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
     '/api/admin/courses/$courseId/modules': {
       id: '/api/admin/courses/$courseId/modules'
       path: '/modules'
@@ -1150,6 +1242,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/courses/$courseId/board'
       preLoaderRoute: typeof ApiAdminCoursesCourseIdBoardRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
+    '/api/admin/courses/$courseId/news-sources/$sourceId': {
+      id: '/api/admin/courses/$courseId/news-sources/$sourceId'
+      path: '/$sourceId'
+      fullPath: '/api/admin/courses/$courseId/news-sources/$sourceId'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRoute
     }
     '/api/admin/courses/$courseId/credentials/$provider': {
       id: '/api/admin/courses/$courseId/credentials/$provider'
@@ -1261,10 +1360,26 @@ const ApiAdminCoursesCourseIdCredentialsRouteWithChildren =
     ApiAdminCoursesCourseIdCredentialsRouteChildren,
   )
 
+interface ApiAdminCoursesCourseIdNewsSourcesRouteChildren {
+  ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute: typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
+}
+
+const ApiAdminCoursesCourseIdNewsSourcesRouteChildren: ApiAdminCoursesCourseIdNewsSourcesRouteChildren =
+  {
+    ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute:
+      ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute,
+  }
+
+const ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren =
+  ApiAdminCoursesCourseIdNewsSourcesRoute._addFileChildren(
+    ApiAdminCoursesCourseIdNewsSourcesRouteChildren,
+  )
+
 interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdBoardRoute: typeof ApiAdminCoursesCourseIdBoardRoute
   ApiAdminCoursesCourseIdCredentialsRoute: typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
   ApiAdminCoursesCourseIdModulesRoute: typeof ApiAdminCoursesCourseIdModulesRoute
+  ApiAdminCoursesCourseIdNewsSourcesRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   ApiAdminCoursesCourseIdOnboardingRoute: typeof ApiAdminCoursesCourseIdOnboardingRoute
 }
 
@@ -1274,6 +1389,8 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
     ApiAdminCoursesCourseIdCredentialsRoute:
       ApiAdminCoursesCourseIdCredentialsRouteWithChildren,
     ApiAdminCoursesCourseIdModulesRoute: ApiAdminCoursesCourseIdModulesRoute,
+    ApiAdminCoursesCourseIdNewsSourcesRoute:
+      ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren,
     ApiAdminCoursesCourseIdOnboardingRoute:
       ApiAdminCoursesCourseIdOnboardingRoute,
   }
@@ -1293,6 +1410,18 @@ const ApiAdminCoursesRouteChildren: ApiAdminCoursesRouteChildren = {
 
 const ApiAdminCoursesRouteWithChildren = ApiAdminCoursesRoute._addFileChildren(
   ApiAdminCoursesRouteChildren,
+)
+
+interface ApiCourseNewsRouteChildren {
+  ApiCourseNewsMuteRoute: typeof ApiCourseNewsMuteRoute
+}
+
+const ApiCourseNewsRouteChildren: ApiCourseNewsRouteChildren = {
+  ApiCourseNewsMuteRoute: ApiCourseNewsMuteRoute,
+}
+
+const ApiCourseNewsRouteWithChildren = ApiCourseNewsRoute._addFileChildren(
+  ApiCourseNewsRouteChildren,
 )
 
 interface ApiAdminLessonsLessonIdRouteChildren {
@@ -1341,8 +1470,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
   ApiCourseLibraryRoute: ApiCourseLibraryRoute,
   ApiCourseMyCoursesRoute: ApiCourseMyCoursesRoute,
+  ApiCourseNewsRoute: ApiCourseNewsRouteWithChildren,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
+  ApiCronNewsScrapeRoute: ApiCronNewsScrapeRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonPlaybackRoute: ApiLessonPlaybackRoute,
   ApiUserLastViewedRoute: ApiUserLastViewedRoute,
