@@ -12,8 +12,8 @@ import {
   recordScrapeOutcome,
   upsertArticle,
 } from '#/db/news-articles';
-import { redis } from '#/integrations/upstash/redis';
 import type { NewsScrapeStatus } from '#/types';
+import { cacheGet, cacheSet } from './cache';
 import { canonicalizeUrl, isSameSite } from './canonical-url';
 import { fetchPage } from './fetch-page';
 import { isCrawlAllowed } from './robots';
@@ -64,7 +64,7 @@ async function loadIndexHtml(
   url: string,
 ): Promise<{ ok: true; html: string } | { ok: false; reason: string }> {
   const key = `news:index:${url}`;
-  const cached = await redis.get<string>(key);
+  const cached = await cacheGet<string>(key);
   if (typeof cached === 'string' && cached.length > 0) {
     return { ok: true, html: cached };
   }
@@ -75,7 +75,7 @@ async function loadIndexHtml(
   // Cache the stripped HTML, not the raw page — it is what the model sees, and
   // it is far smaller.
   const stripped = stripIndexHtml(result.html, null);
-  await redis.set(key, stripped, { ex: INDEX_CACHE_TTL_SECONDS });
+  await cacheSet(key, stripped, INDEX_CACHE_TTL_SECONDS);
   return { ok: true, html: stripped };
 }
 

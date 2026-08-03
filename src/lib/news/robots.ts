@@ -1,5 +1,5 @@
 import robotsParser from 'robots-parser';
-import { redis } from '#/integrations/upstash/redis';
+import { cacheGet, cacheSet } from './cache';
 
 /** Matches the `user-agent` sent by `fetchPage`. */
 export const ROBOTS_USER_AGENT = 'RMTPStudioNewsBot';
@@ -12,7 +12,7 @@ const ROBOTS_TIMEOUT_MS = 8_000;
 const cacheKey = (origin: string) => `${CACHE_PREFIX}:${origin}`;
 
 async function loadRobotsTxt(origin: string): Promise<string | null> {
-  const cached = await redis.get<string>(cacheKey(origin));
+  const cached = await cacheGet<string>(cacheKey(origin));
   if (typeof cached === 'string') return cached === '' ? null : cached;
 
   let body = '';
@@ -29,7 +29,7 @@ async function loadRobotsTxt(origin: string): Promise<string | null> {
     body = '';
   }
 
-  await redis.set(cacheKey(origin), body, { ex: CACHE_TTL_SECONDS });
+  await cacheSet(cacheKey(origin), body, CACHE_TTL_SECONDS);
   return body === '' ? null : body;
 }
 

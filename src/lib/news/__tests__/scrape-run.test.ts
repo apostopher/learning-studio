@@ -351,3 +351,61 @@ describe('runNewsScrape — retention', () => {
     expect(firstDelete).toBeGreaterThan(lastUpsert);
   });
 });
+
+describe('runNewsScrape — cache outage', () => {
+  /**
+   * The production failure this guards. An unreachable Redis threw on the very
+   * first `get` inside `isCrawlAllowed`, before a single page was fetched, and
+   * all 14 sources came back `fetch_failed` citing a URL nobody here builds
+   * ("Failed to parse URL from /pipeline" — @upstash/redis with no base URL).
+   * A cache is an optimization; losing it must cost speed, not the whole run.
+   */
+  it('still scrapes when the cache is completely unavailable', async () => {
+    m.redisGet.mockRejectedValue(
+      new Error('Failed to parse URL from /pipeline'),
+    );
+    m.redisSet.mockRejectedValue(
+      new Error('Failed to parse URL from /pipeline'),
+    );
+    m.listScrapeTargets.mockResolvedValue([source({})]);
+    m.extractNewsLinks.mockResolvedValue({
+      ok: true,
+      links: ['https://www.avweb.com/a'],
+    });
+    m.fetchPage.mockImplementation(async (url: string) =>
+      url === 'https://www.avweb.com/'
+        ? indexPage([])
+        : articlePage({
+            url,
+            title: 'Still scraped',
+            published: '2026-08-02T00:00:00Z',
+          }),
+    );
+
+    const result = await runNewsScrape({ budgetMs: 60_000, now: NOW });
+
+    expect(result.articlesWritten).toBe(1);
+    expect(m.upsertArticle).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Still scraped' }),
+    );
+    expect(m.recordScrapeOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'ok' }),
+    );
+  });
+
+  it('reports the cache outage once rather than per source', async () => {
+    m.redisGet.mockRejectedValue(new Error('boom'));
+    m.listScrapeTargets.mockResolvedValue([
+      source({ id: 1, url: 'https://www.avweb.com/' }),
+      source({ id: 2, url: 'https://www.flyingmag.com/' }),
+    ]);
+    m.fetchPage.mockResolvedValue(indexPage([]));
+
+    await runNewsScrape({ budgetMs: 60_000, now: NOW });
+
+    const cacheWarnings = (
+      console.warn as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls.filter((c) => String(c[0]).includes('cache unavailable'));
+    expect(cacheWarnings.length).toBeLessThanOrEqual(1);
+  });
+});
