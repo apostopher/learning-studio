@@ -8,10 +8,11 @@ describe('parseFontSpecs', () => {
       sans: 'Inter:wght@400..700',
       mono: 'IBM Plex Mono:wght@400;600',
       display: 'Bebas Neue',
+      serif: 'Newsreader:opsz@6..72',
     })
 
     expect(result.googleHref).toBe(
-      'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=IBM+Plex+Mono:wght@400;600&family=Bebas+Neue&display=swap',
+      'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=IBM+Plex+Mono:wght@400;600&family=Bebas+Neue&family=Newsreader:opsz@6..72&display=swap',
     )
     expect(result.extraHrefs).toEqual([])
     expect(result.families.sans).toBe('Inter')
@@ -24,6 +25,7 @@ describe('parseFontSpecs', () => {
       sans: 'https://cdn.example.com/inter.css',
       mono: 'https://cdn.example.com/mono.css',
       display: 'https://cdn.example.com/display.css',
+      serif: 'https://cdn.example.com/serif.css',
     })
 
     expect(result.googleHref).toBeNull()
@@ -31,10 +33,13 @@ describe('parseFontSpecs', () => {
       'https://cdn.example.com/inter.css',
       'https://cdn.example.com/mono.css',
       'https://cdn.example.com/display.css',
+      'https://cdn.example.com/serif.css',
     ])
     expect(result.families.sans).toBe('sans-serif')
     expect(result.families.mono).toBe('monospace')
     expect(result.families.display).toBe('sans-serif')
+    // Falls back to the generic family, so the News page still gets A serif.
+    expect(result.families.serif).toBe('serif')
   })
 
   it('mixes URL and Google spec slots', () => {
@@ -42,10 +47,11 @@ describe('parseFontSpecs', () => {
       sans: 'Inter',
       mono: 'https://cdn.example.com/mono.css',
       display: 'Bebas Neue',
+      serif: 'Newsreader',
     })
 
     expect(result.googleHref).toBe(
-      'https://fonts.googleapis.com/css2?family=Inter&family=Bebas+Neue&display=swap',
+      'https://fonts.googleapis.com/css2?family=Inter&family=Bebas+Neue&family=Newsreader&display=swap',
     )
     expect(result.extraHrefs).toEqual(['https://cdn.example.com/mono.css'])
     expect(result.families.sans).toBe('Inter')
@@ -111,6 +117,7 @@ describe('buildThemeCss', () => {
       sans: 'Inter',
       mono: 'IBM Plex Mono',
       display: 'Bebas Neue',
+      serif: 'Newsreader',
     },
   } as const
 
@@ -407,7 +414,12 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     bg: { light: '#ffffff', dark: '#111111' },
     panelBg: { light: '#fafafa', dark: '#1a1a1a' },
     shellBg: { light: '#ffffff', dark: '#111111' },
-    fontFamilies: { sans: 'Inter', mono: 'IBM Plex Mono', display: 'Inter' },
+    fontFamilies: {
+    sans: 'Inter',
+    mono: 'IBM Plex Mono',
+    display: 'Inter',
+    serif: 'Newsreader',
+  },
     brandColors: mergeStatusDefaults(userBrands),
   })
 

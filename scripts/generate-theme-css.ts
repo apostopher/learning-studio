@@ -4,7 +4,7 @@ import type { BrandEntry } from '../src/utils/brand-colors'
 import { mergeStatusDefaults } from '../src/utils/brand-colors'
 import { checkContrast, generateRadixColors } from '../src/utils/colors'
 
-export type FontSlotKey = 'sans' | 'mono' | 'display'
+export type FontSlotKey = 'sans' | 'mono' | 'display' | 'serif'
 export type FontSpecs = Record<FontSlotKey, string>
 
 export type FontParseResult = {
@@ -17,6 +17,7 @@ const FALLBACK_FAMILY: Record<FontSlotKey, string> = {
   sans: 'sans-serif',
   mono: 'monospace',
   display: 'sans-serif',
+  serif: 'serif',
 }
 
 const isUrl = (v: string) => /^https?:\/\//.test(v)
@@ -29,7 +30,7 @@ export function parseFontSpecs(specs: FontSpecs): FontParseResult {
   const extraHrefs: string[] = []
   const families: Record<FontSlotKey, string> = { ...FALLBACK_FAMILY }
 
-  for (const key of ['sans', 'mono', 'display'] as const) {
+  for (const key of ['sans', 'mono', 'display', 'serif'] as const) {
     const value = specs[key]
     if (isUrl(value)) {
       extraHrefs.push(value)
@@ -273,6 +274,9 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     `  --font-sans: ${inputs.fontFamilies.sans}, ui-sans-serif, system-ui, sans-serif;`,
     `  --font-mono: ${inputs.fontFamilies.mono}, ui-monospace, monospace;`,
     `  --font-display: ${inputs.fontFamilies.display}, ui-sans-serif, sans-serif;`,
+    // Editorial serif. Used by the News page for headlines and standfirsts;
+    // the ui-serif fallback keeps that page readable if the webfont fails.
+    `  --font-serif: ${inputs.fontFamilies.serif}, ui-serif, Georgia, serif;`,
   ].join('\n')
 
   const header =
@@ -386,6 +390,7 @@ export function generateTheme(): void {
     sans: env.VITE_FONT_SANS,
     mono: env.VITE_FONT_MONO,
     display: env.VITE_FONT_DISPLAY,
+    serif: env.VITE_FONT_SERIF,
   })
 
   const css = buildThemeCss({

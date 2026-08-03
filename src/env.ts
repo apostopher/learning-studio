@@ -120,6 +120,7 @@ export const env = createEnv({
     VITE_FONT_SANS: fontStr,
     VITE_FONT_MONO: fontStr,
     VITE_FONT_DISPLAY: fontStr,
+    VITE_FONT_SERIF: fontStr,
 
     VITE_LOGO_LIGHT: logoStr,
     VITE_LOGO_DARK: logoStr,
