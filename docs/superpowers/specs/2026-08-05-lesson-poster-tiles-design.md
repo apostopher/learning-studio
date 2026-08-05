@@ -163,10 +163,12 @@ fallback beneath it.
 
 **No `onError` handler.** If a token expires and the image 403s, the `<img>`
 simply fails to paint and the `bg-gray-3` beneath it shows through — a tile
-that looks like today's. This is deliberate: presentational components in this
-codebase must stay hookless (react-compiler nulls the dispatcher under vitest),
-so a stateful fallback is not available. Building the fallback out of stacking
-order instead of state costs nothing and cannot break.
+that looks like today's. This needs no handler: per the HTML spec, an
+`<img alt="">` whose resource fails to load represents nothing and is not
+rendered, so the parent's `bg-gray-3` shows through on its own. An `onError`
+handler would be redundant, not forbidden — it is a plain DOM event prop, not
+a hook, so it wouldn't have conflicted with keeping this component hookless
+either way.
 
 `alt=""` because the poster is decorative — the button already carries
 `Play {lessonName} video`.

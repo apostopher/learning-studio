@@ -22,10 +22,12 @@ const TILE =
  * There is no `onError` handler and no loading state. If the provider token
  * has expired the request 403s, the image never paints, and the tile's own
  * `bg-gray-3` shows through — which is exactly the tile the board drew before
- * posters existed. Building the fallback out of stacking order rather than
- * state is not a shortcut: presentational components here must stay hookless
- * (react-compiler nulls the dispatcher under vitest), and a fallback that
- * cannot run is a fallback that cannot break.
+ * posters existed. That fallback needs no handler to make it happen: an
+ * `<img>` with `alt=""` whose resource fails to load represents nothing per
+ * the HTML spec, so nothing renders in its place and the parent's
+ * `bg-gray-3` is simply what was there underneath all along. Building the
+ * fallback out of stacking order rather than state is not a shortcut — an
+ * `onError` handler here would be redundant, not forbidden.
  */
 const PosterFrame = ({ src }: { src: string }) => (
   <img
