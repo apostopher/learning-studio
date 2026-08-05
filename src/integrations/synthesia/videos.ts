@@ -47,21 +47,30 @@ export async function getVideoDetails(
   return VideoResponseSchema.parse(data);
 }
 
+/** Synthesia's list page size. Exported so callers can tell a full page (more
+ *  may follow) from a short one (the sweep is done) without duplicating 100. */
+export const SYNTHESIA_PAGE_SIZE = 100;
+
 /**
  * Fetches a page of videos from the Synthesia API.
  * @param page 1-based page number
+ * @param apiKey Per-course credential. Defaults to the env key for the legacy
+ *   single-account callers (`getAllVideos`); the admin board always passes the
+ *   course's own key, because credentials are per-course everywhere else.
  * @returns VideosPage object
  */
-export async function getVideosByPage(page: number): Promise<VideosPage> {
-  const limit = 100;
-  const offset = (page - 1) * limit;
+export async function getVideosByPage(
+  page: number,
+  apiKey: string = env.SYNTHESIA_API_KEY,
+): Promise<VideosPage> {
+  const offset = (page - 1) * SYNTHESIA_PAGE_SIZE;
   const response = await fetch(
-    `https://api.synthesia.io/v2/videos?limit=${limit}&offset=${offset}`,
+    `https://api.synthesia.io/v2/videos?limit=${SYNTHESIA_PAGE_SIZE}&offset=${offset}`,
     {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        Authorization: env.SYNTHESIA_API_KEY,
+        Authorization: apiKey,
       },
       cache: 'no-store',
     },
