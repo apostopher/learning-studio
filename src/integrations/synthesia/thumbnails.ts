@@ -50,6 +50,29 @@ export async function getVideoThumbnails(
 }
 
 /**
+ * Computes the Redis cache TTL for a thumbnail map, following the URLs'
+ * pre-signed `Expires` timestamps.
+ *
+ * Clamped at both ends: Redis rejects a non-positive TTL, and an
+ * already-expired URL would otherwise compute one.
+ *
+ * @param thumbnails Video ID → thumbnail URL mapping
+ * @returns Seconds to cache (clamped to [MIN_TTL_SECONDS, MAX_TTL_SECONDS])
+ */
+export function computeThumbnailCacheTTL(
+  thumbnails: Record<string, string>,
+): number {
+  const expiries = Object.values(thumbnails)
+    .map((url) => getVideoExpiry(url))
+    .filter((seconds): seconds is number => seconds !== null);
+  if (expiries.length === 0) return MAX_TTL_SECONDS;
+  return Math.min(
+    MAX_TTL_SECONDS,
+    Math.max(MIN_TTL_SECONDS, Math.min(...expiries)),
+  );
+}
+
+/**
  * Cached per course, so a board reload does not re-sweep Synthesia.
  *
  * The TTL follows the thumbnails themselves: their URLs are pre-signed and
@@ -63,16 +86,7 @@ export const getVideoThumbnailsWithCache = cacheWithRedis<
 >(
   'synthesia-thumbnails',
   ({ apiKey }) => getVideoThumbnails(apiKey),
-  (thumbnails) => {
-    const expiries = Object.values(thumbnails)
-      .map((url) => getVideoExpiry(url))
-      .filter((seconds): seconds is number => seconds !== null);
-    if (expiries.length === 0) return MAX_TTL_SECONDS;
-    return Math.min(
-      MAX_TTL_SECONDS,
-      Math.max(MIN_TTL_SECONDS, Math.min(...expiries)),
-    );
-  },
+  computeThumbnailCacheTTL,
   // Keyed on the course alone. The API key must never reach a Redis key.
   ({ courseId }) => String(courseId),
 );
