@@ -1,10 +1,6 @@
 import { isVideoAvailable } from '../../types';
 import { cacheWithRedis } from '../upstash/redis';
-import {
-  getVideoExpiry,
-  getVideosByPage,
-  SYNTHESIA_PAGE_SIZE,
-} from './videos';
+import { getVideoExpiry, getVideosByPage, SYNTHESIA_PAGE_SIZE } from './videos';
 
 /**
  * Bounds the sweep at 1000 videos. A Synthesia account can hold far more than

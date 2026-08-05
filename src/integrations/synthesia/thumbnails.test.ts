@@ -18,13 +18,11 @@ vi.mock('./videos', () => ({
 // redis.ts calls Redis.fromEnv() at import time. The cache wrapper is a
 // pass-through here; the sweep is what these tests are about.
 vi.mock('../upstash/redis', () => ({
-  cacheWithRedis: (
-    _prefix: string,
-    fn: (args: unknown) => unknown,
-  ) => Object.assign(fn, { invalidate: vi.fn() }),
+  cacheWithRedis: (_prefix: string, fn: (args: unknown) => unknown) =>
+    Object.assign(fn, { invalidate: vi.fn() }),
 }));
 
-import { getVideoThumbnails, computeThumbnailCacheTTL } from './thumbnails';
+import { computeThumbnailCacheTTL, getVideoThumbnails } from './thumbnails';
 
 const available = (id: string, image: string | null) => ({
   id,
@@ -136,21 +134,25 @@ describe('computeThumbnailCacheTTL', () => {
   it('clamps already-expired URLs to MIN_TTL_SECONDS, never negative', () => {
     getVideoExpiry.mockReturnValue(-5);
 
-    expect(computeThumbnailCacheTTL({
-      vid_1: 'https://cdn.synthesia.io/1.jpg',
-    })).toBe(300); // 5 minutes
+    expect(
+      computeThumbnailCacheTTL({
+        vid_1: 'https://cdn.synthesia.io/1.jpg',
+      }),
+    ).toBe(300); // 5 minutes
   });
 
   it('uses the soonest expiry from a mix of valid and null values', () => {
     getVideoExpiry
       .mockReturnValueOnce(null) // first URL has no expiry
-      .mockReturnValueOnce(500)  // second URL expires in 500s
+      .mockReturnValueOnce(500) // second URL expires in 500s
       .mockReturnValueOnce(null); // third URL has no expiry
 
-    expect(computeThumbnailCacheTTL({
-      vid_1: 'https://cdn.synthesia.io/1.jpg',
-      vid_2: 'https://cdn.synthesia.io/2.jpg',
-      vid_3: 'https://cdn.synthesia.io/3.jpg',
-    })).toBe(500);
+    expect(
+      computeThumbnailCacheTTL({
+        vid_1: 'https://cdn.synthesia.io/1.jpg',
+        vid_2: 'https://cdn.synthesia.io/2.jpg',
+        vid_3: 'https://cdn.synthesia.io/3.jpg',
+      }),
+    ).toBe(500);
   });
 });

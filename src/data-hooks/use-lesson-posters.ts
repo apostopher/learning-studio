@@ -17,9 +17,7 @@ export function useLessonPosters(courseId: number) {
   return useQuery({
     queryKey: dataKeys.lessonPosters(courseId),
     queryFn: async () => {
-      const res = await fetch(
-        `/api/admin/courses/${courseId}/lesson-posters`,
-      );
+      const res = await fetch(`/api/admin/courses/${courseId}/lesson-posters`);
       if (!res.ok) throw new Error(`Failed to load posters (${res.status})`);
       return lessonPostersSchema.parse(await res.json());
     },
