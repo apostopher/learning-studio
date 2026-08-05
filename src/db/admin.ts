@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   like,
   or,
   type SQL,
@@ -53,6 +54,7 @@ import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
 import { slugify } from '#/lib/slugify';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { PlaybackError } from '#/lib/video-providers/errors';
+import { buildLessonPosters } from '#/lib/video-providers/posters.server';
 import {
   type PlaybackResult,
   resolvePlayback,
@@ -595,6 +597,46 @@ export async function resolveLessonPlayback(
     );
   }
   return resolvePlayback(provider, lesson.videoRef, creds);
+}
+
+/**
+ * Poster frames for every lesson in a course that has a video, as
+ * `lessonId → url`. Lessons with no poster are absent — see
+ * `buildLessonPosters`.
+ */
+export async function getCourseLessonPosters(
+  courseId: number,
+): Promise<Record<number, string>> {
+  const rows = await db
+    .select({
+      id: lessonsTable.id,
+      provider: lessonsTable.videoProvider,
+      ref: lessonsTable.videoRef,
+    })
+    .from(lessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .where(
+      and(
+        eq(modulesTable.courseId, courseId),
+        isNotNull(lessonsTable.videoProvider),
+        isNotNull(lessonsTable.videoRef),
+      ),
+    );
+
+  // The SQL guards both columns, but the column types stay nullable, so this
+  // narrows rather than asserting.
+  const lessons = rows.flatMap((row) =>
+    row.provider && row.ref
+      ? [{ id: row.id, provider: row.provider as ProviderId, ref: row.ref }]
+      : [],
+  );
+  if (lessons.length === 0) return {};
+
+  return buildLessonPosters({
+    courseId,
+    lessons,
+    loadCredentials: (provider) => resolveCourseProvider(courseId, provider),
+  });
 }
 
 export async function reorderModule(input: {

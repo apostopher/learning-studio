@@ -26,6 +26,7 @@ import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playb
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
+import { Route as ApiCourseSkaProfileRouteImport } from './routes/api/course/ska-profile'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
 import { Route as ApiCourseNewsRouteImport } from './routes/api/course/news'
 import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
@@ -66,6 +67,7 @@ import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/ap
 import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
 import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
+import { Route as ApiAdminCoursesCourseIdLessonPostersRouteImport } from './routes/api/admin/courses.$courseId.lesson-posters'
 import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes/api/admin/courses.$courseId.credentials'
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
@@ -155,6 +157,11 @@ const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
 const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
   id: '/api/cron/blob-sweep',
   path: '/api/cron/blob-sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCourseSkaProfileRoute = ApiCourseSkaProfileRouteImport.update({
+  id: '/api/course/ska-profile',
+  path: '/api/course/ska-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCourseProgressSummaryRoute =
@@ -378,6 +385,12 @@ const ApiAdminCoursesCourseIdModulesRoute =
     path: '/modules',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
+const ApiAdminCoursesCourseIdLessonPostersRoute =
+  ApiAdminCoursesCourseIdLessonPostersRouteImport.update({
+    id: '/lesson-posters',
+    path: '/lesson-posters',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdCredentialsRoute =
   ApiAdminCoursesCourseIdCredentialsRouteImport.update({
     id: '/credentials',
@@ -428,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
+  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -460,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
+  '/api/admin/courses/$courseId/lesson-posters': typeof ApiAdminCoursesCourseIdLessonPostersRoute
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
@@ -489,6 +504,7 @@ export interface FileRoutesByTo {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
+  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -521,6 +537,7 @@ export interface FileRoutesByTo {
   '/course/$courseSlug': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
+  '/api/admin/courses/$courseId/lesson-posters': typeof ApiAdminCoursesCourseIdLessonPostersRoute
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
@@ -554,6 +571,7 @@ export interface FileRoutesById {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
+  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -586,6 +604,7 @@ export interface FileRoutesById {
   '/_authed/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
+  '/api/admin/courses/$courseId/lesson-posters': typeof ApiAdminCoursesCourseIdLessonPostersRoute
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
@@ -619,6 +638,7 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
+    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -651,6 +671,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
+    | '/api/admin/courses/$courseId/lesson-posters'
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
@@ -680,6 +701,7 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
+    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -712,6 +734,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
+    | '/api/admin/courses/$courseId/lesson-posters'
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
@@ -744,6 +767,7 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
+    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -776,6 +800,7 @@ export interface FileRouteTypes {
     | '/_authed/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
+    | '/api/admin/courses/$courseId/lesson-posters'
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
@@ -804,6 +829,7 @@ export interface RootRouteChildren {
   ApiCourseMyCoursesRoute: typeof ApiCourseMyCoursesRoute
   ApiCourseNewsRoute: typeof ApiCourseNewsRouteWithChildren
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
+  ApiCourseSkaProfileRoute: typeof ApiCourseSkaProfileRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiCronNewsScrapeRoute: typeof ApiCronNewsScrapeRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
@@ -947,6 +973,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/blob-sweep'
       fullPath: '/api/cron/blob-sweep'
       preLoaderRoute: typeof ApiCronBlobSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/ska-profile': {
+      id: '/api/course/ska-profile'
+      path: '/api/course/ska-profile'
+      fullPath: '/api/course/ska-profile'
+      preLoaderRoute: typeof ApiCourseSkaProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/course/progress-summary': {
@@ -1229,6 +1262,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdModulesRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
+    '/api/admin/courses/$courseId/lesson-posters': {
+      id: '/api/admin/courses/$courseId/lesson-posters'
+      path: '/lesson-posters'
+      fullPath: '/api/admin/courses/$courseId/lesson-posters'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdLessonPostersRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
     '/api/admin/courses/$courseId/credentials': {
       id: '/api/admin/courses/$courseId/credentials'
       path: '/credentials'
@@ -1378,6 +1418,7 @@ const ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren =
 interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdBoardRoute: typeof ApiAdminCoursesCourseIdBoardRoute
   ApiAdminCoursesCourseIdCredentialsRoute: typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
+  ApiAdminCoursesCourseIdLessonPostersRoute: typeof ApiAdminCoursesCourseIdLessonPostersRoute
   ApiAdminCoursesCourseIdModulesRoute: typeof ApiAdminCoursesCourseIdModulesRoute
   ApiAdminCoursesCourseIdNewsSourcesRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   ApiAdminCoursesCourseIdOnboardingRoute: typeof ApiAdminCoursesCourseIdOnboardingRoute
@@ -1388,6 +1429,8 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
     ApiAdminCoursesCourseIdBoardRoute: ApiAdminCoursesCourseIdBoardRoute,
     ApiAdminCoursesCourseIdCredentialsRoute:
       ApiAdminCoursesCourseIdCredentialsRouteWithChildren,
+    ApiAdminCoursesCourseIdLessonPostersRoute:
+      ApiAdminCoursesCourseIdLessonPostersRoute,
     ApiAdminCoursesCourseIdModulesRoute: ApiAdminCoursesCourseIdModulesRoute,
     ApiAdminCoursesCourseIdNewsSourcesRoute:
       ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren,
@@ -1472,6 +1515,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseMyCoursesRoute: ApiCourseMyCoursesRoute,
   ApiCourseNewsRoute: ApiCourseNewsRouteWithChildren,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
+  ApiCourseSkaProfileRoute: ApiCourseSkaProfileRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiCronNewsScrapeRoute: ApiCronNewsScrapeRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
