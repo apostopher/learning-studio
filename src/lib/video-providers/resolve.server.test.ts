@@ -193,6 +193,25 @@ describe('resolvePlayback', () => {
     });
   });
 
+  it('plays a Synthesia video that has no captions field at all', async () => {
+    // Synthesia omits `captions` outright for some finished videos. Requiring
+    // the field made such a video fail `isVideoAvailable`, so it surfaced as
+    // VIDEO_NOT_AVAILABLE — unplayable, rather than merely uncaptioned.
+    const { captions: _absent, ...noCaptionsField } = availableVideo;
+    getVideoDetails.mockResolvedValue(noCaptionsField);
+    getVideoExpiry.mockReturnValue(600);
+
+    const result = await resolvePlayback(
+      'synthesia',
+      'video-ref-1',
+      synthesiaCreds,
+    );
+
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(result.url).toBe(availableVideo.download);
+    expect(result.captions).toBeNull();
+  });
+
   it('classifies an .m3u8 download URL as hls', async () => {
     getVideoDetails.mockResolvedValue({
       ...availableVideo,

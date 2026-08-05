@@ -132,7 +132,9 @@ export async function resolvePlayback(
     kind: details.download.endsWith('.m3u8') ? 'hls' : 'file',
     expiresInSeconds: remaining === null ? null : Math.max(0, remaining),
     poster: details.thumbnail.image ?? null,
-    captions: details.captions.vtt ? { vtt: details.captions.vtt } : null,
+    // `captions` may be absent outright, not just null-valued — see the field's
+    // note in types.ts. Absent means no subtitles, which is what null encodes.
+    captions: details.captions?.vtt ? { vtt: details.captions.vtt } : null,
   };
 }
 

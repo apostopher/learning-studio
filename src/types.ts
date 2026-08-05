@@ -10,10 +10,23 @@ export const VideoAvailableSchema = z.object({
   id: z.string(),
   status: z.literal('complete'),
   download: z.url().nullable(),
-  captions: z.object({
-    srt: z.string().url().nullable(),
-    vtt: z.string().url().nullable(),
-  }),
+  /**
+   * Absent entirely for some finished videos — Synthesia omits the key rather
+   * than sending nulls, on both the list and the detail endpoint.
+   *
+   * Optional, not required-with-nulls, because requiring it made such a video
+   * fail the `VideoAvailable | VideoNotReady` union: unparseable rather than
+   * uncaptioned. On the detail endpoint that surfaced as VIDEO_NOT_AVAILABLE
+   * (the video simply would not play); on the list endpoint one such entry
+   * rejected the entire page of 100, costing every lesson in the course its
+   * poster. Readers must treat absence as "no subtitles".
+   */
+  captions: z
+    .object({
+      srt: z.string().url().nullable(),
+      vtt: z.string().url().nullable(),
+    })
+    .optional(),
   thumbnail: z.object({
     gif: z.string().url().nullable(),
     image: z.url().nullable(),
