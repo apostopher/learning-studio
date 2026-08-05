@@ -87,8 +87,18 @@ async function signMuxPosters(
             lesson.id,
             `https://image.mux.com/${lesson.ref}/thumbnail.jpg?width=${POSTER_WIDTH}&token=${token}`,
           ] as const;
-        } catch {
-          // One unusable ref must not cost the rest of the board its posters.
+        } catch (error) {
+          // One unusable ref must not cost the rest of the board its
+          // posters. But the likelier cause isn't an isolated bad ref — it's
+          // a schema-valid, cryptographically unusable stored key, which
+          // throws for EVERY ref. That makes this catch fire N times with
+          // nothing surfaced anywhere: the provider-level catch below never
+          // runs because signing itself doesn't throw, just each per-ref
+          // sign call. Logging the ref (a Mux playback ID, not a secret —
+          // never log the credential or anything derived from it) gives a
+          // debugging admin the one thing they'd need to tell "one bad
+          // lesson" apart from "the whole course's key is broken".
+          console.error('Mux poster signing failed for ref', lesson.ref, error);
           return null;
         }
       }),
