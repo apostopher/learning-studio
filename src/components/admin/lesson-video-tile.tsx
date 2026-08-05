@@ -5,46 +5,96 @@ type LessonVideoTileProps = {
   hasVideo: boolean;
   /** Lesson name, for the play control's accessible name. */
   lessonName: string;
+  /** Poster frame from the video provider. Absent for a lesson whose provider
+   *  exposes none, or before the posters query resolves. */
+  posterUrl?: string | null;
   /** Omitted when the board has no way to play (e.g. the drag overlay). */
   onPlay?: () => void;
 };
 
+const TILE =
+  'relative flex aspect-video w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-gray-3';
+
 /**
- * 16:9 video marker on a lesson card, 32px tall.
+ * The frame itself. Decorative — the play button already carries the lesson
+ * name, and alt text here would announce it twice.
  *
- * Deliberately NOT a poster frame. At this size the tile is ~57×32, where a
- * real video still is an unreadable smudge that communicates nothing beyond
- * "there is a video" — which the board already knows from `isConfigured`.
- * Fetching real posters would also mean a provider resolution per lesson (an
- * HTTP round trip each, for Synthesia) on an unvirtualized board, refreshing
- * hourly as Mux's poster tokens expire.
+ * There is no `onError` handler and no loading state. If the provider token
+ * has expired the request 403s, the image never paints, and the tile's own
+ * `bg-gray-3` shows through — which is exactly the tile the board drew before
+ * posters existed. Building the fallback out of stacking order rather than
+ * state is not a shortcut: presentational components here must stay hookless
+ * (react-compiler nulls the dispatcher under vitest), and a fallback that
+ * cannot run is a fallback that cannot break.
+ */
+const PosterFrame = ({ src }: { src: string }) => (
+  <img
+    src={src}
+    alt=""
+    className="absolute inset-0 h-full w-full object-cover"
+  />
+);
+
+/**
+ * The glyph, on a disc when it sits over a frame.
+ *
+ * A translucent scrim cannot guarantee contrast over an arbitrary photograph —
+ * the maths depends on the frame. A near-opaque disc holds white at ≥4.5:1
+ * against any frame AND against the grey tile beneath it, which is what makes
+ * the silent image failure above safe. This is the one place the themed Radix
+ * scale can't be used: no scale step is defined against unknown imagery.
+ */
+const PlayGlyph = ({ onPoster }: { onPoster: boolean }) =>
+  onPoster ? (
+    <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors group-hover:bg-black/75">
+      <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+    </span>
+  ) : (
+    <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+  );
+
+/**
+ * 16:9 video tile on a lesson card, 80×45.
+ *
+ * It used to be a deliberately blank 56×32 marker, on the grounds that a frame
+ * that small is an unreadable smudge and that posters would cost a provider
+ * round trip per lesson. Both held. Both were addressed rather than overruled:
+ * 80×45 is legible, Mux thumbnails are signed locally, and Synthesia exposes
+ * thumbnails through its list endpoint (100 videos a call), so a course costs
+ * one or two requests rather than one per lesson.
  *
  * With no video this is a plain element rather than a disabled button: there
  * is nothing to play, so a control that looks pressable and opens an empty
  * modal would be an affordance that lies.
  *
- * The drawn size stays 32px while padding takes the hit area past 44px — the
- * bar the rest of the app holds (see binary-toggle.tsx). Padding does not
- * change the rendered tile, so the layout is unaffected.
+ * At 45px tall the tile clears the 44px hit target on its own, so the
+ * `-m-1.5 p-1.5` trick that used to grow it is gone.
  */
 export const LessonVideoTile = ({
   hasVideo,
   lessonName,
+  posterUrl,
   onPlay,
 }: LessonVideoTileProps) => {
-  const tile =
-    'flex h-8 w-[3.5rem] shrink-0 items-center justify-center rounded bg-gray-3';
+  const poster = hasVideo && posterUrl ? posterUrl : null;
 
   if (!hasVideo || !onPlay) {
     return (
       <span
-        className={`${tile} text-gray-8`}
+        className={`${TILE} text-gray-8`}
         // Not `aria-hidden`: "no video" is real information about the lesson,
         // and the dot this replaced was invisible to screen readers entirely.
         role="img"
         aria-label={hasVideo ? 'Has a video' : 'No video'}
       >
-        <Video className="h-3.5 w-3.5" aria-hidden="true" />
+        {poster && <PosterFrame src={poster} />}
+        {/* `alt=""` makes the frame presentational, so this stays the only
+            element with an img role and the label above still resolves. */}
+        {hasVideo ? (
+          <PlayGlyph onPoster={Boolean(poster)} />
+        ) : (
+          <Video className="h-4 w-4" aria-hidden="true" />
+        )}
       </span>
     );
   }
@@ -54,14 +104,13 @@ export const LessonVideoTile = ({
       type="button"
       onClick={onPlay}
       aria-label={`Play ${lessonName} video`}
-      // -m-1.5 + p-1.5 grows the hit area to 44px without moving anything: the
-      // negative margin absorbs the padding the tile would otherwise add.
-      className="-m-1.5 shrink-0 rounded p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+      className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
     >
       <span
-        className={`${tile} group relative text-gray-11 transition-colors hover:bg-gray-4 hover:text-primary`}
+        className={`${TILE} group text-gray-11 transition-colors hover:bg-gray-4 hover:text-primary`}
       >
-        <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+        {poster && <PosterFrame src={poster} />}
+        <PlayGlyph onPoster={Boolean(poster)} />
       </span>
     </button>
   );

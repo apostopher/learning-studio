@@ -67,4 +67,71 @@ describe('LessonVideoTile', () => {
     render(<LessonVideoTile hasVideo lessonName="Crosswind landings" />);
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('draws the poster frame it was given', () => {
+    const { container } = render(
+      <LessonVideoTile
+        hasVideo
+        lessonName="Crosswind landings"
+        posterUrl="https://image.mux.com/abc/thumbnail.jpg?token=t"
+        onPlay={vi.fn()}
+      />,
+    );
+
+    const poster = container.querySelector('img');
+    expect(poster?.getAttribute('src')).toBe(
+      'https://image.mux.com/abc/thumbnail.jpg?token=t',
+    );
+  });
+
+  it('leaves the poster decorative, so the button keeps the only name', () => {
+    // The button already announces "Play {lesson} video". An alt text here
+    // would make a screen reader read the lesson twice.
+    const { container } = render(
+      <LessonVideoTile
+        hasVideo
+        lessonName="Crosswind landings"
+        posterUrl="https://image.mux.com/abc/thumbnail.jpg"
+        onPlay={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img')?.getAttribute('alt')).toBe('');
+    expect(
+      screen.getByRole('button', { name: /play crosswind landings video/i }),
+    ).toBeTruthy();
+  });
+
+  it('draws no image at all when there is no poster', () => {
+    const { container } = render(
+      <LessonVideoTile hasVideo lessonName="A" onPlay={vi.fn()} />,
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('keeps the poster on the drag overlay, where there is no play handler', () => {
+    // Without this the tile greys out the instant a card is picked up.
+    const { container } = render(
+      <LessonVideoTile
+        hasVideo
+        lessonName="A"
+        posterUrl="https://image.mux.com/abc/thumbnail.jpg"
+      />,
+    );
+
+    expect(container.querySelector('img')).toBeTruthy();
+  });
+
+  it('shows no poster for a lesson with no video', () => {
+    const { container } = render(
+      <LessonVideoTile
+        hasVideo={false}
+        lessonName="A"
+        posterUrl="https://image.mux.com/abc/thumbnail.jpg"
+      />,
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+  });
 });
