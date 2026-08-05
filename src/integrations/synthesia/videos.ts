@@ -1,12 +1,12 @@
-import { env } from '@/env';
-import { cacheWithRedis } from '@/integrations/upstash/redis';
+import { env } from '#/env';
+import { cacheWithRedis } from '#/integrations/upstash/redis';
 import {
   isVideoAvailable,
   type VideoResponse,
   VideoResponseSchema,
   type VideosPage,
   VideosPageSchema,
-} from '@/types';
+} from '#/types';
 
 /**
  * A non-OK response from the Synthesia API, carrying the status so callers can
