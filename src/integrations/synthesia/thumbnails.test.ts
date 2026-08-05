@@ -6,13 +6,13 @@ const { getVideosByPage, getVideoExpiry } = vi.hoisted(() => ({
   getVideoExpiry: vi.fn(),
 }));
 
-// Relative specifier, matching the module under test — and mocked wholesale so
-// videos.ts (which imports `@/env`, unresolvable under this repo's vitest)
-// never loads. Same reason resolve.server.test.ts stubs it.
+// Relative specifier, matching the module under test. Mocked wholesale, which
+// is exactly why videos.test.ts exists alongside this file: a mocked
+// getVideosByPage cannot catch a change in what Synthesia actually returns,
+// and that blind spot is how a real page shape took the feature down.
 vi.mock('./videos', () => ({
   getVideosByPage,
   getVideoExpiry,
-  SYNTHESIA_PAGE_SIZE: 100,
 }));
 
 // redis.ts calls Redis.fromEnv() at import time. The cache wrapper is a
@@ -32,15 +32,15 @@ const available = (id: string, image: string | null) => ({
   thumbnail: { gif: null, image },
 });
 
-/** A full page, so the sweep believes more may follow. */
-const fullPage = (videos: unknown[]) => ({
-  videos: [
-    ...videos,
-    ...Array.from({ length: 100 - videos.length }, (_, i) =>
-      available(`filler-${i}`, null),
-    ),
-  ],
-});
+/**
+ * A full page — Synthesia has more. `hasMore` comes from the RAW entry count
+ * inside getVideosByPage, so it stays true even when parsing dropped records
+ * and left the array short.
+ */
+const fullPage = (videos: unknown[]) => ({ videos, hasMore: true });
+
+/** A short page — the end of the account. */
+const lastPage = (videos: unknown[]) => ({ videos, hasMore: false });
 
 describe('getVideoThumbnails', () => {
   beforeEach(() => {
@@ -48,12 +48,12 @@ describe('getVideoThumbnails', () => {
   });
 
   it('maps each available video id to its thumbnail image', async () => {
-    getVideosByPage.mockResolvedValue({
-      videos: [
+    getVideosByPage.mockResolvedValue(
+      lastPage([
         available('vid_1', 'https://cdn.synthesia.io/1.jpg'),
         available('vid_2', 'https://cdn.synthesia.io/2.jpg'),
-      ],
-    });
+      ]),
+    );
 
     expect(await getVideoThumbnails('sk_course')).toEqual({
       vid_1: 'https://cdn.synthesia.io/1.jpg',
@@ -62,13 +62,13 @@ describe('getVideoThumbnails', () => {
   });
 
   it('skips videos that are not ready and videos with no thumbnail', async () => {
-    getVideosByPage.mockResolvedValue({
-      videos: [
+    getVideosByPage.mockResolvedValue(
+      lastPage([
         available('vid_1', 'https://cdn.synthesia.io/1.jpg'),
         available('vid_2', null),
         { id: 'vid_3', status: 'in_progress' as const },
-      ],
-    });
+      ]),
+    );
 
     expect(await getVideoThumbnails('sk_course')).toEqual({
       vid_1: 'https://cdn.synthesia.io/1.jpg',
@@ -76,7 +76,7 @@ describe('getVideoThumbnails', () => {
   });
 
   it('uses the supplied key, never the env key', async () => {
-    getVideosByPage.mockResolvedValue({ videos: [] });
+    getVideosByPage.mockResolvedValue(lastPage([]));
 
     await getVideoThumbnails('sk_course');
 
@@ -86,9 +86,9 @@ describe('getVideoThumbnails', () => {
   it('stops as soon as a page comes back short', async () => {
     // A short page means Synthesia has nothing more. Asking for page 2 would
     // be a wasted round trip on every board load.
-    getVideosByPage.mockResolvedValue({
-      videos: [available('vid_1', 'https://cdn.synthesia.io/1.jpg')],
-    });
+    getVideosByPage.mockResolvedValue(
+      lastPage([available('vid_1', 'https://cdn.synthesia.io/1.jpg')]),
+    );
 
     await getVideoThumbnails('sk_course');
 
@@ -100,14 +100,32 @@ describe('getVideoThumbnails', () => {
       .mockResolvedValueOnce(
         fullPage([available('vid_1', 'https://cdn.synthesia.io/1.jpg')]),
       )
-      .mockResolvedValueOnce({
-        videos: [available('vid_2', 'https://cdn.synthesia.io/2.jpg')],
-      });
+      .mockResolvedValueOnce(
+        lastPage([available('vid_2', 'https://cdn.synthesia.io/2.jpg')]),
+      );
 
     const thumbnails = await getVideoThumbnails('sk_course');
 
     expect(getVideosByPage).toHaveBeenCalledTimes(2);
     expect(getVideosByPage).toHaveBeenNthCalledWith(2, 2, 'sk_course');
+    expect(thumbnails.vid_2).toBe('https://cdn.synthesia.io/2.jpg');
+  });
+
+  it('keeps paging when a full page arrived short because records were dropped', async () => {
+    // THE TRAP this fix exists for. Parsing drops unrecognised records, so a
+    // full page can hand back one video. Inferring "last page" from that
+    // length would abandon the sweep and lose every later page's thumbnails.
+    getVideosByPage
+      .mockResolvedValueOnce(
+        fullPage([available('vid_1', 'https://cdn.synthesia.io/1.jpg')]),
+      )
+      .mockResolvedValueOnce(
+        lastPage([available('vid_2', 'https://cdn.synthesia.io/2.jpg')]),
+      );
+
+    const thumbnails = await getVideoThumbnails('sk_course');
+
+    expect(getVideosByPage).toHaveBeenCalledTimes(2);
     expect(thumbnails.vid_2).toBe('https://cdn.synthesia.io/2.jpg');
   });
 

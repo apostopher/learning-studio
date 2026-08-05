@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { isVideoAvailable, VideosPageSchema } from '../../types';
+import { isVideoAvailable, VideoResponseSchema } from '../../types';
 
 /**
  * Shape tests against what Synthesia actually returns.
@@ -41,13 +41,18 @@ describe('Synthesia video response schemas', () => {
     expect(isVideoAvailable(captionlessVideo)).toBe(true);
   });
 
-  it('keeps a whole page parseable when one entry has no captions', () => {
-    const page = { videos: [completeVideo, captionlessVideo] };
-
-    const parsed = VideosPageSchema.safeParse(page);
+  it('places a captionless finished video in the union, not outside it', () => {
+    // The union is what page parsing runs per record. Matching NEITHER arm is
+    // what made one video reject its whole page — and, on the detail endpoint,
+    // made it unplayable rather than merely uncaptioned.
+    const parsed = VideoResponseSchema.safeParse(captionlessVideo);
 
     expect(parsed.success).toBe(true);
-    expect(parsed.success && parsed.data.videos).toHaveLength(2);
+    expect(parsed.success && parsed.data.id).toBe('vid_2');
+  });
+
+  it('accepts an ordinary finished video unchanged', () => {
+    expect(VideoResponseSchema.safeParse(completeVideo).success).toBe(true);
   });
 
   it('still rejects a video missing the fields the app actually needs', () => {

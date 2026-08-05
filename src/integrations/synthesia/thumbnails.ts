@@ -1,6 +1,6 @@
 import { isVideoAvailable } from '../../types';
 import { cacheWithRedis } from '../upstash/redis';
-import { getVideoExpiry, getVideosByPage, SYNTHESIA_PAGE_SIZE } from './videos';
+import { getVideoExpiry, getVideosByPage } from './videos';
 
 /**
  * Bounds the sweep at 1000 videos. A Synthesia account can hold far more than
@@ -29,14 +29,15 @@ export async function getVideoThumbnails(
   const thumbnails: Record<string, string> = {};
 
   for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const { videos } = await getVideosByPage(page, apiKey);
+    const { videos, hasMore } = await getVideosByPage(page, apiKey);
     for (const video of videos) {
       if (!isVideoAvailable(video)) continue;
       if (video.thumbnail.image) thumbnails[video.id] = video.thumbnail.image;
     }
-    // A short page is the last page. Checking length beats fetching one more
-    // page to discover it is empty.
-    if (videos.length < SYNTHESIA_PAGE_SIZE) return thumbnails;
+    // `hasMore`, not `videos.length`: unrecognised records are dropped during
+    // parsing, so a full page can arrive short. Treating that as the last page
+    // would skip every page after it.
+    if (!hasMore) return thumbnails;
   }
 
   console.warn(

@@ -57,11 +57,11 @@ export function isVideoNotReady(obj: unknown): obj is VideoNotReady {
   return VideoNotReadySchema.safeParse(obj).success;
 }
 
-export const VideosPageSchema = z.object({
-  nextOffset: z.number().optional(),
-  videos: z.array(VideoResponseSchema),
-});
-export type VideosPage = z.infer<typeof VideosPageSchema>;
+// A page schema lived here, typing `videos` as an array of VideoResponse. It
+// is gone deliberately: an all-or-nothing array meant one unrecognised record
+// rejected the whole page of a hundred. Page parsing now belongs to
+// `parseVideosPage` in integrations/synthesia/videos.ts, which validates the
+// envelope strictly and each record individually.
 
 export const OtherVideoIdSchema = z.object({
   lang: z.enum(['FR', 'JP']),

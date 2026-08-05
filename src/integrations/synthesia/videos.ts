@@ -1,11 +1,10 @@
+import { z } from 'zod';
 import { env } from '#/env';
 import { cacheWithRedis } from '#/integrations/upstash/redis';
 import {
   isVideoAvailable,
   type VideoResponse,
   VideoResponseSchema,
-  type VideosPage,
-  VideosPageSchema,
 } from '#/types';
 
 /**
@@ -52,17 +51,73 @@ export async function getVideoDetails(
 export const SYNTHESIA_PAGE_SIZE = 100;
 
 /**
+ * The page envelope only. Videos stay `unknown` here so a single unrecognised
+ * record cannot reject the other ninety-nine — see `parseVideosPage`.
+ */
+const videosPageEnvelopeSchema = z.object({
+  nextOffset: z.number().optional(),
+  videos: z.array(z.unknown()),
+});
+
+export interface SynthesiaVideosPage {
+  /** The videos on this page that this app recognises. */
+  videos: VideoResponse[];
+  /**
+   * Whether Synthesia returned a FULL page, so another may follow.
+   *
+   * Derived from the RAW entry count, before unrecognised records are
+   * dropped. This is the whole reason it exists: a caller comparing
+   * `videos.length` against the page size would read a full page with one
+   * dropped record as a short page, decide the sweep was finished, and
+   * silently skip every page after it.
+   */
+  hasMore: boolean;
+}
+
+/**
+ * Parses a page, dropping records the schema cannot place rather than
+ * rejecting the page.
+ *
+ * A page holds a hundred videos. Failing all of them because one has an
+ * unexpected shape is not a hypothetical: Synthesia omits `captions` for some
+ * finished videos, the union rejected them, and one such record cost an
+ * entire course every one of its 83 lesson posters.
+ *
+ * The envelope itself is still strict — tolerance is for individual records,
+ * not for "any JSON at all".
+ */
+function parseVideosPage(data: unknown): SynthesiaVideosPage {
+  const envelope = videosPageEnvelopeSchema.parse(data);
+
+  const videos: VideoResponse[] = [];
+  for (const record of envelope.videos) {
+    const parsed = VideoResponseSchema.safeParse(record);
+    if (parsed.success) videos.push(parsed.data);
+  }
+
+  const dropped = envelope.videos.length - videos.length;
+  if (dropped > 0) {
+    // Loud, because a silent drop is how a shape change becomes a slow leak
+    // of missing posters that nobody attributes to anything.
+    console.warn(
+      `Synthesia: dropped ${dropped} of ${envelope.videos.length} unrecognised video records`,
+    );
+  }
+
+  return { videos, hasMore: envelope.videos.length >= SYNTHESIA_PAGE_SIZE };
+}
+
+/**
  * Fetches a page of videos from the Synthesia API.
  * @param page 1-based page number
  * @param apiKey Per-course credential. Defaults to the env key for the legacy
  *   single-account callers (`getAllVideos`); the admin board always passes the
  *   course's own key, because credentials are per-course everywhere else.
- * @returns VideosPage object
  */
 export async function getVideosByPage(
   page: number,
   apiKey: string = env.SYNTHESIA_API_KEY,
-): Promise<VideosPage> {
+): Promise<SynthesiaVideosPage> {
   const offset = (page - 1) * SYNTHESIA_PAGE_SIZE;
   const response = await fetch(
     `https://api.synthesia.io/v2/videos?limit=${SYNTHESIA_PAGE_SIZE}&offset=${offset}`,
@@ -79,7 +134,7 @@ export async function getVideosByPage(
     throw new Error('GET_VIDEOS_PAGE_ERROR');
   }
   const data = await response.json();
-  return VideosPageSchema.parse(data);
+  return parseVideosPage(data);
 }
 /**
  * Returns an iterator that fetches videos by page.
@@ -92,7 +147,10 @@ function getVideosByPageIterator() {
       next: async () => {
         try {
           const resp = await getVideosByPage(pageId);
-          if (resp.videos.length === 0) {
+          // `hasMore` rather than `videos.length`: a full page whose records
+          // were all unrecognised yields no videos but is NOT the end of the
+          // account, and stopping there would truncate the sweep silently.
+          if (resp.videos.length === 0 && !resp.hasMore) {
             return {
               done: true,
               value: null,
