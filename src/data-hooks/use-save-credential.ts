@@ -22,6 +22,12 @@ export function useSaveCredential(courseId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.courseCredentials(courseId),
       });
+      // Fixing a wrong provider credential should re-fetch posters too — the
+      // old credential likely produced no posters (or wrong ones) for the
+      // board's tiles.
+      queryClient.invalidateQueries({
+        queryKey: dataKeys.lessonPosters(courseId),
+      });
     },
   });
 }

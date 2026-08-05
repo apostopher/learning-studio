@@ -102,6 +102,7 @@ function makeChain(result: unknown) {
     orderBy: () => chain,
     groupBy: () => chain,
     limit: () => chain,
+    onConflictDoUpdate: () => chain,
     returning: () => Promise.resolve(result),
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders (awaitable without a terminal `.returning()`/`.orderBy()`)
     then: (
@@ -128,6 +129,13 @@ const courseCache = vi.hoisted(() => ({
 }));
 const lessonPlaybackCache = vi.hoisted(() => ({
   invalidate: vi.fn().mockResolvedValue(undefined),
+}));
+const synthesiaThumbnailsCache = vi.hoisted(() => ({
+  invalidate: vi.fn().mockResolvedValue(undefined),
+}));
+const resolveServer = vi.hoisted(() => ({
+  resolvePlayback: vi.fn(),
+  validateCredentials: vi.fn(),
 }));
 const blob = vi.hoisted(() => ({
   del: vi.fn().mockResolvedValue(undefined),
@@ -161,13 +169,19 @@ vi.mock('#/db/lesson-playback', () => ({
 }));
 vi.mock('@vercel/blob', () => blob);
 // admin.ts also imports #/lib/video-providers/resolve.server for the
-// (untouched-by-this-task) credential-save/playback-resolve paths. That
-// module transitively pulls in #/integrations/synthesia/videos, which has a
-// pre-existing `@/env` import unrelated to this change and unresolvable
-// under vitest — stub it out rather than let it drag the whole chain in.
-vi.mock('#/lib/video-providers/resolve.server', () => ({
-  resolvePlayback: vi.fn(),
-  validateCredentials: vi.fn(),
+// credential-save/playback-resolve paths. That module transitively pulls in
+// #/integrations/synthesia/videos, which has a pre-existing `@/env` import
+// unrelated to this change and unresolvable under vitest — stub it out
+// rather than let it drag the whole chain in.
+vi.mock('#/lib/video-providers/resolve.server', () => resolveServer);
+// admin.ts calls `getVideoThumbnailsWithCache.invalidate(args)` from
+// saveCourseProvider — it never calls the reader itself, so the callable
+// half is untested filler. Without this mock, importing admin.ts would drag
+// in the REAL thumbnails.ts (via posters.server.ts too), which constructs a
+// real `Redis.fromEnv()` client — importing it is harmless, but calling the
+// REAL `.invalidate()` in a test would issue a real Redis DEL.
+vi.mock('#/integrations/synthesia/thumbnails', () => ({
+  getVideoThumbnailsWithCache: Object.assign(vi.fn(), synthesiaThumbnailsCache),
 }));
 
 const {
@@ -179,6 +193,7 @@ const {
   deleteModule,
   moveLesson,
   reorderModule,
+  saveCourseProvider,
   setLessonVideo,
   updateCourse,
   updateCourseOnboarding,
@@ -191,6 +206,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   courseCache.invalidate.mockResolvedValue(undefined);
   lessonPlaybackCache.invalidate.mockResolvedValue(undefined);
+  synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
   blob.del.mockResolvedValue(undefined);
 });
 
@@ -540,6 +556,80 @@ describe('course-details cache invalidation', () => {
     await expect(setLessonVideo(9, 'mux', 'ref-123')).resolves.toEqual({
       id: 9,
     });
+    expect(consoleError).toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+});
+
+describe('saveCourseProvider Synthesia thumbnail cache invalidation', () => {
+  // A rotated/corrected Synthesia key used to leave the Redis-cached
+  // thumbnail sweep untouched, so posters could stay wrong or missing for up
+  // to `MAX_TTL_SECONDS` (6h — see computeThumbnailCacheTTL's fallback for
+  // URLs with no `Expires`) with no admin recourse. Asserted on the actual
+  // args `.invalidate` received, not merely that it was called: a call with a
+  // dummy/wrong apiKey would leave the real cache entry untouched if the
+  // cache's keyGenerator ever starts keying on it.
+  it('invalidates the Synthesia thumbnail cache with the real API key being saved', async () => {
+    resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.insert.mockReturnValueOnce(makeChain(undefined));
+
+    await saveCourseProvider(42, {
+      provider: 'synthesia',
+      apiKey: 'sk-corrected-key',
+    });
+
+    expect(synthesiaThumbnailsCache.invalidate).toHaveBeenCalledWith({
+      courseId: 42,
+      apiKey: 'sk-corrected-key',
+    });
+  });
+
+  it('does not touch the Synthesia thumbnail cache when saving a Mux credential', async () => {
+    resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.insert.mockReturnValueOnce(makeChain(undefined));
+
+    await saveCourseProvider(42, {
+      provider: 'mux',
+      keyId: 'key-id',
+      privateKey: 'private-key',
+    });
+
+    expect(synthesiaThumbnailsCache.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate when credential validation fails', async () => {
+    resolveServer.validateCredentials.mockResolvedValue({
+      ok: false,
+      error: 'bad key',
+    });
+
+    const result = await saveCourseProvider(42, {
+      provider: 'synthesia',
+      apiKey: 'bad-key',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(synthesiaThumbnailsCache.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('a Redis failure during Synthesia cache invalidation is swallowed, not thrown, and is logged', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.insert.mockReturnValueOnce(makeChain(undefined));
+    synthesiaThumbnailsCache.invalidate.mockRejectedValueOnce(
+      new Error('redis down'),
+    );
+
+    await expect(
+      saveCourseProvider(42, {
+        provider: 'synthesia',
+        apiKey: 'sk-corrected-key',
+      }),
+    ).resolves.toEqual({ ok: true });
     expect(consoleError).toHaveBeenCalled();
 
     consoleError.mockRestore();

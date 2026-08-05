@@ -34,6 +34,7 @@ import {
   videoProgressTable,
 } from '#/db/schema';
 import { env } from '#/env';
+import { getVideoThumbnailsWithCache } from '#/integrations/synthesia/thumbnails';
 import type {
   AdminCourseSummary,
   BoardLesson,
@@ -106,6 +107,37 @@ async function invalidateLessonPlaybackCache(
     await getLessonPlayback.invalidate(lessonSlug);
   } catch (error) {
     console.error('Failed to invalidate lesson-playback cache:', error);
+  }
+}
+
+/**
+ * Evict the Redis-cached Synthesia thumbnail sweep for a course when its
+ * credential is saved, so a corrected API key's posters appear on the next
+ * board load instead of after up to 6h. That long a wait is real, not
+ * theoretical: `getVideoExpiry` returns `null` for a thumbnail URL with no
+ * `Expires` param, and `computeThumbnailCacheTTL` then falls back to its
+ * `MAX_TTL_SECONDS` — so a video rendered after the last sweep can sit
+ * posterless for hours with no admin recourse until this fires.
+ *
+ * Keyed on the credential actually being saved (not a placeholder) even
+ * though `getVideoThumbnailsWithCache`'s keyGenerator only uses `courseId`
+ * today — if that generator ever starts keying on the API key too, a
+ * placeholder here would silently stop invalidating anything.
+ *
+ * Only Synthesia sweeps through this cache; Mux posters are signed locally
+ * per request and have nothing to invalidate.
+ *
+ * Best-effort, same pattern as `invalidateCourseDetailsCache`: a Redis
+ * outage must not turn a successful credential save into a failed response.
+ */
+async function invalidateSynthesiaThumbnailsCache(
+  courseId: number,
+  apiKey: string,
+): Promise<void> {
+  try {
+    await getVideoThumbnailsWithCache.invalidate({ courseId, apiKey });
+  } catch (error) {
+    console.error('Failed to invalidate Synthesia thumbnail cache:', error);
   }
 }
 
@@ -514,6 +546,9 @@ export async function saveCourseProvider(
       ],
       set: { secrets, lastValidatedAt: new Date(), updatedAt: sql`now()` },
     });
+  if (input.provider === 'synthesia') {
+    await invalidateSynthesiaThumbnailsCache(courseId, input.apiKey);
+  }
   return { ok: true };
 }
 
