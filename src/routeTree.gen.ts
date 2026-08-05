@@ -26,7 +26,6 @@ import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playb
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
-import { Route as ApiCourseSkaProfileRouteImport } from './routes/api/course/ska-profile'
 import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
 import { Route as ApiCourseNewsRouteImport } from './routes/api/course/news'
 import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
@@ -157,11 +156,6 @@ const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
 const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
   id: '/api/cron/blob-sweep',
   path: '/api/cron/blob-sweep',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseSkaProfileRoute = ApiCourseSkaProfileRouteImport.update({
-  id: '/api/course/ska-profile',
-  path: '/api/course/ska-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCourseProgressSummaryRoute =
@@ -441,7 +435,6 @@ export interface FileRoutesByFullPath {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
-  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -504,7 +497,6 @@ export interface FileRoutesByTo {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
-  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -571,7 +563,6 @@ export interface FileRoutesById {
   '/api/course/my-courses': typeof ApiCourseMyCoursesRoute
   '/api/course/news': typeof ApiCourseNewsRouteWithChildren
   '/api/course/progress-summary': typeof ApiCourseProgressSummaryRoute
-  '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
@@ -638,7 +629,6 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
-    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -701,7 +691,6 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
-    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -767,7 +756,6 @@ export interface FileRouteTypes {
     | '/api/course/my-courses'
     | '/api/course/news'
     | '/api/course/progress-summary'
-    | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
@@ -829,7 +817,6 @@ export interface RootRouteChildren {
   ApiCourseMyCoursesRoute: typeof ApiCourseMyCoursesRoute
   ApiCourseNewsRoute: typeof ApiCourseNewsRouteWithChildren
   ApiCourseProgressSummaryRoute: typeof ApiCourseProgressSummaryRoute
-  ApiCourseSkaProfileRoute: typeof ApiCourseSkaProfileRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiCronNewsScrapeRoute: typeof ApiCronNewsScrapeRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
@@ -973,13 +960,6 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/blob-sweep'
       fullPath: '/api/cron/blob-sweep'
       preLoaderRoute: typeof ApiCronBlobSweepRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/ska-profile': {
-      id: '/api/course/ska-profile'
-      path: '/api/course/ska-profile'
-      fullPath: '/api/course/ska-profile'
-      preLoaderRoute: typeof ApiCourseSkaProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/course/progress-summary': {
@@ -1515,7 +1495,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseMyCoursesRoute: ApiCourseMyCoursesRoute,
   ApiCourseNewsRoute: ApiCourseNewsRouteWithChildren,
   ApiCourseProgressSummaryRoute: ApiCourseProgressSummaryRoute,
-  ApiCourseSkaProfileRoute: ApiCourseSkaProfileRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiCronNewsScrapeRoute: ApiCronNewsScrapeRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
