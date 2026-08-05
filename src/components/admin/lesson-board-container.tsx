@@ -16,9 +16,13 @@ import { SortableLessonCard } from './sortable-lesson-card';
 export const LessonBoardContainer = ({
   moduleId,
   lessons,
+  posters,
 }: {
   moduleId: number;
   lessons: BoardLesson[];
+  /** lessonId → poster url, from `useLessonPosters`. Missing ids draw the
+   *  grey tile. */
+  posters: Record<string, string>;
 }) => {
   const { setNodeRef } = useDroppable({
     id: containerDndId(moduleId),
@@ -39,6 +43,7 @@ export const LessonBoardContainer = ({
               key={lesson.id}
               lesson={lesson}
               moduleId={moduleId}
+              posterUrl={posters[lesson.id]}
             />
           ))
         )}

@@ -14,8 +14,10 @@ import { ModuleColumn } from './module-column';
 
 export const SortableModuleColumn = ({
   module: mod,
+  posters,
 }: {
   module: BoardModule;
+  posters: Record<string, string>;
 }) => {
   const {
     attributes,
@@ -59,7 +61,11 @@ export const SortableModuleColumn = ({
         }
         onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
         lessonsSlot={
-          <LessonBoardContainer moduleId={mod.id} lessons={mod.lessons} />
+          <LessonBoardContainer
+            moduleId={mod.id}
+            lessons={mod.lessons}
+            posters={posters}
+          />
         }
       />
     </div>

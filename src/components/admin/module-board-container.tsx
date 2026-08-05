@@ -24,6 +24,7 @@ import { useRef } from 'react';
 
 import { activeDragLessonIdAtom, activeDragModuleIdAtom } from '@/atoms/admin';
 import { dataKeys } from '@/data-hooks/keys';
+import { useLessonPosters } from '@/data-hooks/use-lesson-posters';
 import { useMoveLesson } from '@/data-hooks/use-move-lesson';
 import { useReorderModule } from '@/data-hooks/use-reorder-module';
 import type {
@@ -125,6 +126,11 @@ export const ModuleBoardContainer = ({
   const [activeLessonId, setActiveLessonId] = useAtom(activeDragLessonIdAtom);
   const reorderModule = useReorderModule(courseId);
   const moveLesson = useMoveLesson(courseId);
+  // One fetch for the whole board. Every tile reads from this map, including
+  // both drag overlays below — otherwise a tile greys out the moment it is
+  // picked up.
+  const { data: posters } = useLessonPosters(courseId);
+  const postersById = posters ?? {};
   // Snapshot the board at lesson-drag start so a cancel/error can roll back the
   // optimistic cross-module moves applied during the drag.
   const snapshotRef = useRef<CourseBoard | null>(null);
@@ -286,7 +292,11 @@ export const ModuleBoardContainer = ({
             strategy={horizontalListSortingStrategy}
           >
             {modules.map((mod) => (
-              <SortableModuleColumn key={mod.id} module={mod} />
+              <SortableModuleColumn
+                key={mod.id}
+                module={mod}
+                posters={postersById}
+              />
             ))}
           </SortableContext>
         </div>
@@ -295,9 +305,12 @@ export const ModuleBoardContainer = ({
           its final slot, so skip the overlay fly-back. */}
       <DragOverlay dropAnimation={null}>
         {activeModule ? (
-          <ModuleColumn module={activeModule} />
+          <ModuleColumn module={activeModule} posters={postersById} />
         ) : activeLesson ? (
-          <LessonCard lesson={activeLesson} />
+          <LessonCard
+            lesson={activeLesson}
+            posterUrl={postersById[activeLesson.id]}
+          />
         ) : null}
       </DragOverlay>
       <CreateLessonDialogContainer courseId={courseId} />

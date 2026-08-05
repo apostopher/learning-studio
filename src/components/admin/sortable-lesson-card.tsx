@@ -14,9 +14,11 @@ import { LessonCard } from './lesson-card';
 export const SortableLessonCard = ({
   lesson,
   moduleId,
+  posterUrl,
 }: {
   lesson: BoardLesson;
   moduleId: number;
+  posterUrl?: string | null;
 }) => {
   const {
     attributes,
@@ -48,6 +50,7 @@ export const SortableLessonCard = ({
     >
       <LessonCard
         lesson={lesson}
+        posterUrl={posterUrl}
         dragHandleProps={{ ...attributes, ...listeners }}
         onEdit={() => setConfigureLessonId(lesson.id)}
         onDelete={() => setDeleteLesson({ id: lesson.id, name: lesson.name })}

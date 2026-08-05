@@ -13,6 +13,7 @@ export const ModuleColumn = ({
   onEditModule,
   onDeleteModule,
   lessonsSlot,
+  posters,
 }: {
   module: BoardModule;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
@@ -21,6 +22,9 @@ export const ModuleColumn = ({
   onDeleteModule?: () => void;
   /** DnD-enabled lessons list; falls back to a static list (e.g. drag overlay). */
   lessonsSlot?: ReactNode;
+  /** Only used by the static fallback list below, i.e. the module drag
+   *  overlay — when `lessonsSlot` is supplied it carries its own posters. */
+  posters?: Record<string, string>;
 }) => {
   const hasCover = Boolean(mod.imageUrlWebp ?? mod.imageUrlAvif);
 
@@ -87,7 +91,11 @@ export const ModuleColumn = ({
             </p>
           ) : (
             mod.lessons.map((lesson) => (
-              <LessonCard key={lesson.id} lesson={lesson} />
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                posterUrl={posters?.[lesson.id]}
+              />
             ))
           ))}
       </div>

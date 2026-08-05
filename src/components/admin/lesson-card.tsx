@@ -7,12 +7,15 @@ import { TooltipIconButton } from './tooltip-icon-button';
 
 export const LessonCard = ({
   lesson,
+  posterUrl,
   dragHandleProps,
   onEdit,
   onDelete,
   onPlay,
 }: {
   lesson: BoardLesson;
+  /** Poster frame for this lesson's video, when its provider exposes one. */
+  posterUrl?: string | null;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -24,6 +27,7 @@ export const LessonCard = ({
       <LessonVideoTile
         hasVideo={lesson.isConfigured}
         lessonName={lesson.name}
+        posterUrl={posterUrl}
         onPlay={onPlay}
       />
       <ClampedText text={lesson.name} className="min-w-0 flex-1" />

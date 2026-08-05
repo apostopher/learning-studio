@@ -68,4 +68,21 @@ describe('LessonCard', () => {
     expect(screen.getByText('Draft')).toBeTruthy();
     expect(screen.getByRole('img', { name: /no video/i })).toBeTruthy();
   });
+
+  it('hands the poster it was given to the video tile', () => {
+    // The wiring test. A prop-existence check would pass while the card
+    // quietly dropped the url on the floor; this fails the moment the tile
+    // stops receiving it.
+    const { container } = render(
+      <LessonCard
+        lesson={lesson({ isConfigured: true })}
+        posterUrl="https://image.mux.com/abc/thumbnail.jpg"
+        onPlay={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'https://image.mux.com/abc/thumbnail.jpg',
+    );
+  });
 });
