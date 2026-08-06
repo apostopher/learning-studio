@@ -11,16 +11,8 @@ vi.mock('#/db/user-profile', () => ({
   ensureUserProfile: m.ensureUserProfile,
 }));
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
-// Pulls in the TanStack server runtime otherwise; the exported plain function
-// under test doesn't touch it.
-vi.mock('@tanstack/react-start', () => ({
-  createServerFn: () => ({ handler: (fn: unknown) => fn }),
-}));
-vi.mock('@tanstack/react-start/server', () => ({
-  getRequestHeaders: () => new Headers(),
-}));
 
-import { resolveAuthContext } from '#/lib/auth-functions';
+import { resolveAuthContext } from '#/lib/auth-context.server';
 
 const HEADERS = new Headers();
 
