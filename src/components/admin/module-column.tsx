@@ -29,7 +29,7 @@ export const ModuleColumn = ({
   const hasCover = Boolean(mod.imageUrlWebp ?? mod.imageUrlAvif);
 
   return (
-    <section className="course-board__column flex w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
+    <section className="course-board__column flex w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
       <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
         <ClampedText
           text={mod.name}
