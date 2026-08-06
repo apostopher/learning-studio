@@ -123,11 +123,22 @@ export const openUserRowAtom = atom<{
   name: string;
   roles: string[];
   courses: { id: number; name: string }[];
+  joinedAt: string | null;
   firstName: string | null;
   lastName: string | null;
   callSign: string | null;
   phoneNumber: string | null;
 } | null>(null);
 
-/** Draft email in the "add by email" field. Cleared after a successful add. */
+/** Whether the "add person" dialog is open. */
+export const addPersonOpenAtom = atom(false);
+
+/** Draft email in the add-person dialog. Cleared after a successful add. */
 export const addUserEmailAtom = atom('');
+
+/**
+ * Courses selected in the add-person dialog. A pending row is an
+ * (email, course) pair, so at least one is required for there to be anything
+ * to store.
+ */
+export const addPersonCourseIdsAtom = atom<number[]>([]);

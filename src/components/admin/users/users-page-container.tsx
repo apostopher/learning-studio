@@ -1,8 +1,13 @@
+import { Tabs } from '@base-ui/react/tabs';
 import { useAtom } from 'jotai';
-import { Plus } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import { useForm } from 'react-hook-form';
-import { addUserEmailAtom, openUserRowAtom } from '#/atoms/admin';
+import {
+  addPersonCourseIdsAtom,
+  addPersonOpenAtom,
+  addUserEmailAtom,
+  openUserRowAtom,
+} from '#/atoms/admin';
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import {
   AdminUsersError,
@@ -14,12 +19,8 @@ import {
   useSetUserRole,
   useUpdateUserProfile,
 } from '#/data-hooks/use-admin-users';
-import {
-  hasPermissionKey,
-  OWNER_ROLE,
-  type PermissionAction,
-  type PermissionEntity,
-} from '#/lib/admin-schemas';
+import { hasPermissionKey, OWNER_ROLE } from '#/lib/admin-schemas';
+import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
 import { UserDetailModal } from './user-detail-modal';
 import { type UserRow, UsersTable } from './users-table';
@@ -45,8 +46,13 @@ export const UsersPageContainer = ({
   permissions: string[];
 }) => {
   const [search, setSearch] = useQueryState('q', { defaultValue: '' });
+  // The tab lives in the URL so a permissions link is shareable and survives
+  // a reload, same as the search term.
+  const [tab, setTab] = useQueryState('tab', { defaultValue: 'people' });
   const [openRow, setOpenRow] = useAtom(openUserRowAtom);
+  const [addOpen, setAddOpen] = useAtom(addPersonOpenAtom);
   const [newEmail, setNewEmail] = useAtom(addUserEmailAtom);
+  const [newCourseIds, setNewCourseIds] = useAtom(addPersonCourseIdsAtom);
 
   const isOwner = roles.includes(OWNER_ROLE);
   const canAdd = hasPermissionKey(permissions, 'user', 'create');
@@ -82,6 +88,7 @@ export const UsersPageContainer = ({
       name: [u.firstName, u.lastName].filter(Boolean).join(' '),
       roles: u.roles,
       courses: u.courses,
+      joinedAt: u.createdAt,
       firstName: u.firstName,
       lastName: u.lastName,
       callSign: u.callSign,
@@ -94,6 +101,9 @@ export const UsersPageContainer = ({
       name: '',
       roles: [],
       courses: p.courses,
+      // Pending people haven't joined — the column reads "–" rather than
+      // showing the date an admin typed their address.
+      joinedAt: null,
       firstName: null,
       lastName: null,
       callSign: null,
@@ -111,92 +121,110 @@ export const UsersPageContainer = ({
 
   const handleAdd = () => {
     const email = newEmail.trim();
-    if (!email || courseOptions.length === 0) return;
-    // Pre-assign every course selected in the modal is a later refinement;
-    // adding someone to the first course is the common case and keeps this
-    // form to a single field.
+    if (!email || newCourseIds.length === 0) return;
     addPending.mutate(
-      { email, courseIds: [courseOptions[0].id] },
-      { onSuccess: () => setNewEmail('') },
+      { email, courseIds: newCourseIds },
+      {
+        onSuccess: () => {
+          setNewEmail('');
+          setNewCourseIds([]);
+          setAddOpen(false);
+        },
+      },
     );
   };
 
   return (
     <div className="content-grid py-10">
-      <div className="content flex flex-col gap-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="font-semibold text-2xl text-primary">People</h1>
-            <p className="text-secondary text-sm">
-              Everyone with access, and anyone waiting for their first sign-in.
-            </p>
-          </div>
+      <div className="content flex flex-col gap-6">
+        <h1 className="font-semibold text-2xl text-primary">People</h1>
 
-          {canAdd && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                handleAdd();
-              }}
-              className="flex items-end gap-2"
+        <Tabs.Root value={tab} onValueChange={(next) => setTab(String(next))}>
+          <Tabs.List className="flex gap-6 border-gray-6 border-b">
+            <Tabs.Tab
+              value="people"
+              className="-mb-px border-transparent border-b-2 pb-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 aria-selected:border-apple-9 aria-selected:text-primary"
             >
-              <label className="flex flex-col gap-1.5">
-                <span className="font-medium text-primary text-sm">
-                  Add by email
-                </span>
-                <input
-                  value={newEmail}
-                  onChange={(event) => setNewEmail(event.target.value)}
-                  placeholder="pilot@example.com"
-                  type="email"
-                  className="w-64 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={addPending.isPending || newEmail.trim() === ''}
-                className="inline-flex items-center gap-2 rounded-lg bg-apple-9 px-3 py-2 font-medium text-apple-contrast text-sm transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+              All
+            </Tabs.Tab>
+            {/*
+              Owner-only, and absent rather than disabled: a tab that can never
+              be opened is absence, not a locked state.
+            */}
+            {isOwner && (
+              <Tabs.Tab
+                value="permissions"
+                className="-mb-px border-transparent border-b-2 pb-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 aria-selected:border-apple-9 aria-selected:text-primary"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add
-              </button>
-            </form>
+                Permissions
+              </Tabs.Tab>
+            )}
+          </Tabs.List>
+
+          <Tabs.Panel value="people" className="pt-6">
+            <UsersTable
+              rows={rows}
+              search={search}
+              onSearchChange={setSearch}
+              onOpenRow={setOpenRow}
+              isLoading={users.isLoading}
+              error={
+                users.error
+                  ? 'Could not load people. Reload to try again.'
+                  : errorOf(setEnrolment.error)
+              }
+              onAddPerson={canAdd ? () => setAddOpen(true) : undefined}
+            />
+          </Tabs.Panel>
+
+          {isOwner && (
+            <Tabs.Panel value="permissions" className="pt-6">
+              <RolePermissionsPanel
+                // Owner bypasses permission checks, so it is never listed —
+                // configuring it would be a control that changes nothing.
+                roles={(rolePermissions.data?.roles ?? [])
+                  .map((r) => r.name)
+                  .filter((name) => name !== OWNER_ROLE)}
+                granted={rolePermissions.data?.permissions ?? {}}
+                onToggle={(role, entity, action, granted) =>
+                  setRolePermission.mutate({ role, entity, action, granted })
+                }
+                isSaving={setRolePermission.isPending}
+                isLoading={rolePermissions.isLoading}
+                error={
+                  errorOf(rolePermissions.error) ??
+                  errorOf(setRolePermission.error)
+                }
+              />
+            </Tabs.Panel>
           )}
-        </header>
-
-        {addPending.error && (
-          <p className="rounded-lg border border-error-muted bg-error-subtle px-3 py-2 text-error-text text-sm">
-            {errorOf(addPending.error)}
-          </p>
-        )}
-
-        <UsersTable
-          rows={rows}
-          search={search}
-          onSearchChange={setSearch}
-          onOpenRow={setOpenRow}
-          isLoading={users.isLoading}
-          error={users.error ? errorOf(users.error) : undefined}
-        />
-
-        {isOwner && (
-          <RolePermissionsPanel
-            // Owner bypasses checks, so it is never configurable here.
-            roles={(rolePermissions.data?.roles ?? [])
-              .map((r) => r.name)
-              .filter((name) => name !== OWNER_ROLE)}
-            granted={rolePermissions.data?.permissions ?? {}}
-            onToggle={(role, entity, action, granted) =>
-              setRolePermission.mutate({ role, entity, action, granted })
-            }
-            isSaving={setRolePermission.isPending}
-            isLoading={rolePermissions.isLoading}
-            error={
-              errorOf(rolePermissions.error) ?? errorOf(setRolePermission.error)
-            }
-          />
-        )}
+        </Tabs.Root>
       </div>
+
+      <AddPersonDialog
+        open={addOpen}
+        onOpenChange={(next) => {
+          setAddOpen(next);
+          if (!next) {
+            setNewEmail('');
+            setNewCourseIds([]);
+          }
+        }}
+        email={newEmail}
+        onEmailChange={setNewEmail}
+        courses={courseOptions}
+        selectedCourseIds={newCourseIds}
+        onToggleCourse={(courseId, selected) =>
+          setNewCourseIds(
+            selected
+              ? [...newCourseIds, courseId]
+              : newCourseIds.filter((id) => id !== courseId),
+          )
+        }
+        onSubmit={handleAdd}
+        isPending={addPending.isPending}
+        error={errorOf(addPending.error)}
+      />
 
       <UserDetailModal
         row={openRow}
@@ -273,5 +301,3 @@ export const UsersPageContainer = ({
     </div>
   );
 };
-
-export type { PermissionAction, PermissionEntity };
