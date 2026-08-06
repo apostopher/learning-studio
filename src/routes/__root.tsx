@@ -8,6 +8,7 @@ import {
   useRouter,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
+import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Toaster } from 'sonner';
 import { ChatWidget } from '../components/chat-widget/chat-widget';
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
@@ -82,31 +83,39 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="font-sans antialiased wrap-anywhere">
-        <TanstackQueryProvider client={queryClient}>
-          <Tooltip.Provider delay={0}>
-            {children}
-            <ChatWidget />
-          </Tooltip.Provider>
+        {/*
+          nuqs needs a per-framework adapter to read and write search params;
+          without it any `useQueryState` throws NUQS-404 at render. Mounted at
+          the root so it covers every route rather than being remembered
+          per-page.
+        */}
+        <NuqsAdapter>
+          <TanstackQueryProvider client={queryClient}>
+            <Tooltip.Provider delay={0}>
+              {children}
+              <ChatWidget />
+            </Tooltip.Provider>
 
-          <TanStackDevtools
-            config={{
-              position: 'bottom-right',
-            }}
-            plugins={[
-              {
-                name: 'Tanstack Router',
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-              TanStackQueryDevtools,
-            ]}
-          />
-          <Toaster
-            position="bottom-right"
-            theme="system"
-            richColors
-            closeButton
-          />
-        </TanstackQueryProvider>
+            <TanStackDevtools
+              config={{
+                position: 'bottom-right',
+              }}
+              plugins={[
+                {
+                  name: 'Tanstack Router',
+                  render: <TanStackRouterDevtoolsPanel />,
+                },
+                TanStackQueryDevtools,
+              ]}
+            />
+            <Toaster
+              position="bottom-right"
+              theme="system"
+              richColors
+              closeButton
+            />
+          </TanstackQueryProvider>
+        </NuqsAdapter>
         <Scripts />
       </body>
     </html>
