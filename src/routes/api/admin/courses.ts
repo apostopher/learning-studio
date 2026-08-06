@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { getActiveOrgId } from '#/lib/active-org.server';
 import { createCourse, listAdminCourses } from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
 import { createCourseInputSchema } from '@/lib/admin-schemas';
@@ -39,7 +40,7 @@ export const Route = createFileRoute('/api/admin/courses')({
             { status: 400 },
           );
         }
-        return Response.json(await createCourse(parsed.data));
+        return Response.json(await createCourse(parsed.data, getActiveOrgId()));
       },
     },
   },

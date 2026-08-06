@@ -29,9 +29,6 @@ import {
   moduleDependenciesTable,
   modulesTable,
   newsSourcesTable,
-  userProfileRolesTable,
-  userProfileTable,
-  userRolesTable,
   videoProgressTable,
 } from '#/db/schema';
 import { env } from '#/env';
@@ -46,7 +43,6 @@ import type {
   SaveCredentialInput,
   UpdateCourseInput,
 } from '#/lib/admin-schemas';
-import { getActiveOrgId } from '#/lib/active-org.server';
 import { watchedMilestones } from '#/lib/course-milestones';
 import {
   decryptJson,
@@ -175,26 +171,21 @@ export async function listAdminCourses(): Promise<AdminCourseSummary[]> {
   }));
 }
 
-/** Role names assigned to the auth user (empty if no profile or no roles). */
-export async function getUserRoleNames(userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ name: userRolesTable.name })
-    .from(userProfileTable)
-    .innerJoin(
-      userProfileRolesTable,
-      eq(userProfileRolesTable.userProfileId, userProfileTable.id),
-    )
-    .innerJoin(
-      userRolesTable,
-      eq(userRolesTable.id, userProfileRolesTable.roleId),
-    )
-    .where(eq(userProfileTable.userId, userId));
+// Moved to `#/db/user-roles` so the client graph can reach it without pulling
+// this module's server-only imports (crypto.server, resolve.server,
+// posters.server) into the browser bundle. Re-exported for existing callers.
+export { getUserRoleNames } from '#/db/user-roles';
 
-  return rows.map((r) => r.name);
-}
-
+/**
+ * `orgId` is passed in rather than read from `getActiveOrgId()` here: this
+ * module is reachable from the client graph (`__root.tsx` →
+ * `auth-functions.ts` → `getUserRoleNames`), so importing a `.server.ts`
+ * module fails the client build's import-protection. Reading deployment
+ * configuration is the route layer's job anyway.
+ */
 export async function createCourse(
   input: CreateCourseInput,
+  orgId: number,
 ): Promise<DBCourse> {
   const base = slugify(input.name) || 'course';
 
@@ -232,7 +223,7 @@ export async function createCourse(
   // Whatever this deployment administers, it owns what it creates. Without
   // this the course has no `course_orgs` row, so the AI-training modal would
   // open its Persona tab with nowhere to store a selection.
-  await linkCourseToOrg(created.id, getActiveOrgId());
+  await linkCourseToOrg(created.id, orgId);
 
   return created;
 }

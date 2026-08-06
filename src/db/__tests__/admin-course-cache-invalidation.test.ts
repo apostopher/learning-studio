@@ -219,9 +219,6 @@ const {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // createCourse links the new course to the active org, which is read from
-  // the environment rather than the session (a user can belong to several).
-  vi.stubEnv('ACTIVE_ORG_ID', '1');
   courseCache.invalidate.mockResolvedValue(undefined);
   lessonPlaybackCache.invalidate.mockResolvedValue(undefined);
   synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
@@ -253,7 +250,7 @@ describe('course-details cache invalidation', () => {
       )
       .mockReturnValueOnce(makeChain(undefined)); // course_orgs link
 
-    await createCourse({ name: 'Flight Basics' });
+    await createCourse({ name: 'Flight Basics' }, 1);
 
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
@@ -280,7 +277,7 @@ describe('course-details cache invalidation', () => {
       )
       .mockReturnValueOnce(linkChain);
 
-    await createCourse({ name: 'Flight Basics' });
+    await createCourse({ name: 'Flight Basics' }, 1);
 
     expect(db.insert).toHaveBeenNthCalledWith(2, courseOrgsTable);
     expect(linkChain.valuesArg).toEqual({ courseId: 5, orgId: 1 });
