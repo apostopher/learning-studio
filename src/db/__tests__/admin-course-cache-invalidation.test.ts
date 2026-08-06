@@ -29,6 +29,15 @@ const coursesTable = pgTable('courses', {
   updatedAt: timestamp('updated_at'),
   onboardingQuestions: jsonb('onboarding_questions'),
 });
+// createCourse joins the new course to the active org, so that insert has to
+// have a real table to build against too.
+const courseOrgsTable = pgTable('course_orgs', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  orgId: integer('org_id'),
+  personaId: integer('persona_id'),
+  updatedAt: timestamp('updated_at'),
+});
 const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
@@ -97,12 +106,17 @@ function makeChain(result: unknown) {
     innerJoin: () => chain,
     leftJoin: () => chain,
     where: () => chain,
-    values: () => chain,
+    values: (v: unknown) => {
+      chain.valuesArg = v;
+      return chain;
+    },
+    valuesArg: undefined as unknown,
     set: () => chain,
     orderBy: () => chain,
     groupBy: () => chain,
     limit: () => chain,
     onConflictDoUpdate: () => chain,
+    onConflictDoNothing: () => chain,
     returning: () => Promise.resolve(result),
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders (awaitable without a terminal `.returning()`/`.orderBy()`)
     then: (
@@ -144,6 +158,7 @@ const blob = vi.hoisted(() => ({
 
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
+  courseOrgsTable,
   coursesTable,
   modulesTable,
   lessonDependenciesTable,
@@ -204,6 +219,9 @@ const {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // createCourse links the new course to the active org, which is read from
+  // the environment rather than the session (a user can belong to several).
+  vi.stubEnv('ACTIVE_ORG_ID', '1');
   courseCache.invalidate.mockResolvedValue(undefined);
   lessonPlaybackCache.invalidate.mockResolvedValue(undefined);
   synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
@@ -220,22 +238,52 @@ describe('course-details cache invalidation', () => {
   // reason about whether a stale entry actually exists.
   it('createCourse invalidates the newly assigned slug (closes the delete-then-recreate gap)', async () => {
     db.select.mockReturnValueOnce(makeChain([])); // taken slugs
-    db.insert.mockReturnValueOnce(
-      makeChain([
-        {
-          id: 5,
-          name: 'Flight Basics',
-          slug: 'flight-basics',
-          description: null,
-          imageUrlAvif: null,
-          imageUrlWebp: null,
-        },
-      ]),
-    );
+    db.insert
+      .mockReturnValueOnce(
+        makeChain([
+          {
+            id: 5,
+            name: 'Flight Basics',
+            slug: 'flight-basics',
+            description: null,
+            imageUrlAvif: null,
+            imageUrlWebp: null,
+          },
+        ]),
+      )
+      .mockReturnValueOnce(makeChain(undefined)); // course_orgs link
 
     await createCourse({ name: 'Flight Basics' });
 
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+  });
+
+  // Without this link the course has no `course_orgs` row, so the AI-training
+  // modal's persona tab has nowhere to store a selection. Asserted on the
+  // insert's arguments rather than on "it didn't throw": the point is that the
+  // new course id actually reaches the join table, paired with the active org.
+  it('createCourse joins the new course to the active org', async () => {
+    db.select.mockReturnValueOnce(makeChain([])); // taken slugs
+    const linkChain = makeChain(undefined);
+    db.insert
+      .mockReturnValueOnce(
+        makeChain([
+          {
+            id: 5,
+            name: 'Flight Basics',
+            slug: 'flight-basics',
+            description: null,
+            imageUrlAvif: null,
+            imageUrlWebp: null,
+          },
+        ]),
+      )
+      .mockReturnValueOnce(linkChain);
+
+    await createCourse({ name: 'Flight Basics' });
+
+    expect(db.insert).toHaveBeenNthCalledWith(2, courseOrgsTable);
+    expect(linkChain.valuesArg).toEqual({ courseId: 5, orgId: 1 });
   });
 
   it('createModule invalidates the owning course, resolved from courseId', async () => {

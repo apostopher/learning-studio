@@ -11,6 +11,7 @@ import {
 import { ChatWindow } from '#/components/chat-widget/chat-window';
 import { MessageCircle } from '#/components/chat-widget/message-circle';
 import { useChatWidget } from '#/components/chat-widget/use-chat-widget';
+import { SkaProfileCardContainer } from '#/components/ska-profile/ska-profile-card-container';
 import { useOnboardingChat } from '#/data-hooks/use-onboarding-chat';
 import { authClient } from '#/lib/auth-client';
 import { cn } from '#/lib/cn';
@@ -96,8 +97,15 @@ function OnboardingChat({
   onClose,
   onSettled,
 }: ChatWindowChromeProps & { courseSlug: string; onSettled: () => void }) {
-  const { messages, sendMessage, isLoading, status, confirm, error } =
-    useOnboardingChat(courseSlug);
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    status,
+    confirm,
+    error,
+    skaProfile,
+  } = useOnboardingChat(courseSlug);
 
   // The spec commits to surfacing a stale-turn 409 as "this conversation
   // continued elsewhere" — otherwise the failure is invisible, and on a 409
@@ -145,6 +153,18 @@ function OnboardingChat({
           isLoading={isLoading}
           status={status}
           onConfirm={confirm}
+          // Only once the interview is complete, and only when a profile was
+          // actually generated — a completed onboarding with no profile is an
+          // ordinary ending (generation is best-effort), so it simply renders
+          // nothing extra rather than an error or an empty form.
+          afterMessages={
+            status === 'complete' && skaProfile ? (
+              <SkaProfileCardContainer
+                courseSlug={courseSlug}
+                profile={skaProfile}
+              />
+            ) : undefined
+          }
         />
       )}
     </AnimatePresence>

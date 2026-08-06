@@ -55,6 +55,7 @@ export const dbCourseSchema = createSelectSchema(coursesTable);
 export type DBCourse = z.infer<typeof dbCourseSchema>;
 
 export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
+  courseOrgs: many(courseOrgsTable),
   modules: many(modulesTable),
   subscriptions: many(courseSubscriptionsTable),
   docs: many(docs),
@@ -1172,6 +1173,93 @@ export const courseOnboardingMessagesTableRelations = relations(
   }),
 );
 
+/**
+ * A user's Skills / Knowledge / Attitude profile for one course, distilled
+ * from their completed onboarding and then owned by them.
+ *
+ * THREE COLUMNS rather than one markdown blob — see `SkaProfileSchema` for
+ * why the structure is a contract and not a formatting preference.
+ *
+ * All three are nullable and that is normal, not degenerate: the generator
+ * leaves a section null rather than inferring one it cannot support, and the
+ * user may clear one they disagree with.
+ *
+ * No `onboarding_id` FK, deliberately. The profile is keyed on the same
+ * (user, course) pair as `course_onboarding` and outlives any particular
+ * session row; pointing at the session would tie the user's own edited
+ * content to a row whose whole purpose is to be tombstoned.
+ */
+export const userSkaProfileTable = pgTable(
+  'user_ska_profile',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    skills: text('skills'),
+    knowledge: text('knowledge'),
+    attitude: text('attitude'),
+    /**
+     * When the user affirmed the profile, via the one button on the review
+     * card or on the course page. Null until then.
+     *
+     * This column gates USE, not storage: the row is written the moment it is
+     * generated (so an abandoned card loses nothing and the profile stays
+     * editable), but nothing reads it into viper7's prompt until this is set.
+     * An AI's inference about someone's character steers no conversation
+     * before that person has seen it and said yes.
+     *
+     * It is set by the button press whether or not anything was edited.
+     * Requiring an edit would permanently unpersonalise the user who reads
+     * their profile, agrees with all of it, and closes the card — and
+     * agreement is the success case, so it must not be the failing one.
+     */
+    reviewedAt: timestamp('reviewed_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One profile per user per course. Also what makes generation idempotent
+    // against a retried turn — see `createSkaProfile`'s onConflictDoNothing.
+    uniqueIndex('user_ska_profile_user_course_idx').on(
+      table.userId,
+      table.courseId,
+    ),
+    // Serves the no-course-in-context read, which scans this user's reviewed
+    // profiles for the most recently updated one. The unique index above is
+    // (user, course) so it cannot order by updated_at for a bare user lookup.
+    index('user_ska_profile_user_updated_idx').on(
+      table.userId,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export const userSkaProfileInsertSchema =
+  createInsertSchema(userSkaProfileTable);
+export type UserSkaProfileInsert = z.infer<typeof userSkaProfileInsertSchema>;
+
+export const userSkaProfileSelectSchema =
+  createSelectSchema(userSkaProfileTable);
+export type UserSkaProfileSelect = z.infer<typeof userSkaProfileSelectSchema>;
+
+export const userSkaProfileTableRelations = relations(
+  userSkaProfileTable,
+  ({ one }) => ({
+    user: one(userProfileTable, {
+      fields: [userSkaProfileTable.userId],
+      references: [userProfileTable.userId],
+    }),
+    course: one(coursesTable, {
+      fields: [userSkaProfileTable.courseId],
+      references: [coursesTable.id],
+    }),
+  }),
+);
+
 export const docs = pgTable(
   'docs',
   {
@@ -1312,13 +1400,63 @@ export const aiMessagesRelations = relations(aiMessages, ({ one }) => ({
   }),
 }));
 
-export const personaTable = pgTable('personas', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text('name').notNull().unique(),
-  content: jsonb('content').notNull().$type<z.infer<typeof PersonaSchema>>(),
-  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-});
+export const personaTable = pgTable(
+  'personas',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    /**
+     * Personas are org-level: any course in the org may author one and every
+     * course in that org can select it. Which persona a given course actually
+     * uses is stored one table over, on `course_orgs.personaId` — never here.
+     */
+    orgId: integer('org_id')
+      .notNull()
+      .references(() => orgsTable.id, { onDelete: 'cascade' }),
+    /** A label, not prompt content — the system prompt never reads it. */
+    name: text('name').notNull(),
+    /** Published content. This — and only this — is what the chat reads. */
+    content: jsonb('content').notNull().$type<z.infer<typeof PersonaSchema>>(),
+    /**
+     * Staged edits. The editor autosaves here (debounced, and via sendBeacon
+     * on tab close) so a half-typed field can never reach a live system
+     * prompt; `Publish` copies it into `content` and sets this back to null.
+     * NULL therefore means "no unpublished changes" — the single predicate
+     * behind the list's Draft badge and the Publish button's enabled state.
+     */
+    draftContent: jsonb('draft_content').$type<z.infer<typeof PersonaSchema>>(),
+    /**
+     * The org's fallback persona: used by any chat in this org with no
+     * course-level override — including chats with no course in context at
+     * all, which have no `course_orgs` row to read a selection from.
+     *
+     * A flag here rather than `organizations.default_persona_id` because that
+     * would make the two tables mutually referential, which TypeScript can't
+     * infer through. The partial unique index below enforces the same "at most
+     * one per org" that a single FK column would.
+     */
+    isOrgDefault: boolean('is_org_default').notNull().default(false),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Scoped rather than global: two orgs must each be able to have a
+    // persona called "Viper7".
+    uniqueIndex('personas_org_name_idx').on(table.orgId, table.name),
+    index('personas_org_id_idx').on(table.orgId),
+    // At most one default per org, enforced by the database rather than by
+    // remembering to clear the old one.
+    uniqueIndex('personas_org_default_idx')
+      .on(table.orgId)
+      .where(sql`${table.isOrgDefault}`),
+  ],
+);
+
+export const personaTableRelations = relations(personaTable, ({ one }) => ({
+  org: one(orgsTable, {
+    fields: [personaTable.orgId],
+    references: [orgsTable.id],
+  }),
+}));
 
 export const personaInsertSchema = createInsertSchema(personaTable, {
   content: PersonaSchema,
@@ -1338,6 +1476,11 @@ export const orgsTable = pgTable('organizations', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text('name').notNull(),
   logoURL: text('logo_url'),
+  // The org's fallback persona is `personas.is_org_default`, not a column
+  // here. A `default_persona_id` FK would make organizations ⇄ personas
+  // mutually referential, which TypeScript cannot infer through (TS7022) —
+  // and it would also allow a dangling id. As a flag on the persona, deleting
+  // the persona removes the default with it.
   createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 });
@@ -1354,6 +1497,12 @@ export type OrgsSelect = z.infer<typeof orgsSelectSchema>;
 export const orgsTableRelations = relations(orgsTable, ({ many }) => ({
   userOrganizations: many(userOrgTable),
   orgLessons: many(orgLessonsTable),
+  personas: many(personaTable),
+  courseOrgs: many(courseOrgsTable),
+  // `defaultPersonaId` is deliberately not declared as a relation: it would be
+  // a second, one-directional orgs→personas edge alongside `personas`, which
+  // Drizzle can't disambiguate without naming both sides. Every reader joins
+  // it explicitly instead.
 }));
 
 export const userOrgTable = pgTable(
@@ -1415,6 +1564,61 @@ export const orgLessonsTableRelations = relations(
     lesson: one(lessonsTable, {
       fields: [orgLessonsTable.lessonId],
       references: [lessonsTable.id],
+    }),
+  }),
+);
+
+/**
+ * Course ↔ org membership, and the persona that course runs *for that org*.
+ *
+ * Both sides are many-to-many: an org has many courses, and a course can be
+ * shared with many orgs (which is what `organization_lessons` already assumes
+ * — it layers org-specific lessons onto a shared course). So "which persona
+ * does this course use" has no single answer at the course level, and
+ * `personaId` lives here rather than on `courses`. Keeping it on the join row
+ * also means a selection can never point at another org's persona: the org is
+ * part of the same row.
+ *
+ * NULL `personaId` means "no course-level override" — the chat falls through
+ * to `orgs.defaultPersonaId`.
+ */
+export const courseOrgsTable = pgTable(
+  'course_orgs',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    orgId: integer('org_id')
+      .notNull()
+      .references(() => orgsTable.id, { onDelete: 'cascade' }),
+    personaId: integer('persona_id').references(() => personaTable.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('course_orgs_course_org_idx').on(table.courseId, table.orgId),
+    index('course_orgs_org_id_idx').on(table.orgId),
+    index('course_orgs_persona_id_idx').on(table.personaId),
+  ],
+);
+
+export const courseOrgsTableRelations = relations(
+  courseOrgsTable,
+  ({ one }) => ({
+    course: one(coursesTable, {
+      fields: [courseOrgsTable.courseId],
+      references: [coursesTable.id],
+    }),
+    org: one(orgsTable, {
+      fields: [courseOrgsTable.orgId],
+      references: [orgsTable.id],
+    }),
+    persona: one(personaTable, {
+      fields: [courseOrgsTable.personaId],
+      references: [personaTable.id],
     }),
   }),
 );

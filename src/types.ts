@@ -180,6 +180,40 @@ export type OnboardingReplyEvaluation = z.infer<
   typeof OnboardingReplyEvaluationSchema
 >;
 
+/**
+ * The per-section cap on an SKA profile.
+ *
+ * Not cosmetic: a reviewed profile ships inside viper7's system prompt on
+ * EVERY chat turn, for as long as the user has the course. Uncapped, one
+ * paste into the edit form is a permanent per-request cost with no ceiling
+ * and no one watching it. Three sections at this cap is roughly 1500 tokens,
+ * which is the budget this feature is worth.
+ */
+export const SKA_SECTION_MAX_CHARS = 2000;
+
+/**
+ * A user's Skills / Knowledge / Attitude profile for one course.
+ *
+ * THREE FIELDS, NOT ONE MARKDOWN BLOB, deliberately. The three-heading
+ * structure is a contract the prompt injection point depends on; as free text
+ * a user who deletes a heading (or a model that emits `#` instead of `##`)
+ * breaks it silently and every reader needs a parser to recover. As separate
+ * fields a missing section is unrepresentable. `toSkaMarkdown` derives the
+ * markdown when something actually needs markdown.
+ *
+ * Every section is nullable, and that is a first-class state rather than a
+ * degenerate one: the generator is instructed to leave a section null rather
+ * than infer one it cannot support (see `generateSkaProfile`), a thin or
+ * heavily-declined interview legitimately produces one, and the user is free
+ * to clear a section they disagree with.
+ */
+export const SkaProfileSchema = z.object({
+  skills: z.string().max(SKA_SECTION_MAX_CHARS).nullable(),
+  knowledge: z.string().max(SKA_SECTION_MAX_CHARS).nullable(),
+  attitude: z.string().max(SKA_SECTION_MAX_CHARS).nullable(),
+});
+export type SkaProfile = z.infer<typeof SkaProfileSchema>;
+
 export const CourseLessonQuizOptionSchema = z.object({
   id: z.string(),
   value: z.string().describe('The value of the option in markdown format'),
@@ -370,15 +404,20 @@ export const ProfileVisibilitySchema = z
   .default([]);
 export type ProfileVisibility = z.infer<typeof ProfileVisibilitySchema>;
 
+/**
+ * Editable persona content. Every field is optional and may be blank: the
+ * prompt falls back per-field to its built-in default (`persona?.x || '...'`),
+ * so a half-written persona degrades gracefully instead of breaking. Only
+ * `name` — a column, not part of this content — is required to exist.
+ */
 export const PersonaSchema = z.object({
-  basicInfo: z.string(),
-  mission: z.string(),
-  goal: z.string(),
-  communicationStyle: z.string(),
-  quotes: z.array(z.string()),
-  coreDirective: z.string(),
-  howToAnswer: z.string(),
-  noAnswerTemplate: z.string(),
+  basicInfo: z.string().default(''),
+  mission: z.string().default(''),
+  goal: z.string().default(''),
+  communicationStyle: z.string().default(''),
+  quotes: z.array(z.string()).default([]),
+  coreDirective: z.string().default(''),
+  howToAnswer: z.string().default(''),
 });
 export type Persona = z.infer<typeof PersonaSchema>;
 

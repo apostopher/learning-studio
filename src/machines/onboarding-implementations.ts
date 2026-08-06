@@ -2,9 +2,12 @@ import { fromPromise } from 'xstate';
 import { askQuestion } from '#/ai/onboarding/ask-question';
 import { evaluateConsent } from '#/ai/onboarding/evaluate-consent';
 import { evaluateReply } from '#/ai/onboarding/evaluate-reply';
+import { generateSkaProfileWithRetry } from '#/ai/onboarding/generate-ska-profile';
 import { greet } from '#/ai/onboarding/greet';
 import { signOff } from '#/ai/onboarding/sign-off';
 import { summarise } from '#/ai/onboarding/summarise';
+import { messageRowsToTranscript } from '#/lib/onboarding-transport';
+import { hasAnySkaSection } from '#/lib/ska-profile';
 import type { OnboardingContext } from '#/machines/onboarding-machine';
 import type {
   OnboardingConsentEvaluation,
@@ -16,8 +19,10 @@ import {
   completeOnboarding,
   declineConsent,
   deleteOnboarding,
+  loadFullTranscript,
   saveAnswer,
 } from '@/db/course-onboarding';
+import { createSkaProfile } from '@/db/ska-profile';
 
 export type OnboardingDeps = {
   /**
@@ -26,6 +31,20 @@ export type OnboardingDeps = {
    * for prompts is supplied here instead.
    */
   courseName: string;
+  /**
+   * The owner of this session, for the one actor that writes outside
+   * `course_onboarding`: `generateSkaProfile` writes `user_ska_profile`,
+   * which is keyed on (user, course) rather than on `onboardingId`.
+   *
+   * Supplied HERE rather than added to the machine's context, for the reason
+   * the SECURITY note below gives: keeping user and course ids out of the
+   * context is what stops a restored snapshot — jsonb the machine trusts —
+   * from being able to name whose profile gets written. These must come from
+   * the same `loadOnboardingSession({ userId, courseId })` call that produced
+   * `onboardingId`, and from nowhere else.
+   */
+  userId: string;
+  courseId: number;
   /** Turns already persisted for this session; seeds the next turn's order. */
   initialMessageCount: number;
   /**
@@ -176,6 +195,53 @@ export const createOnboardingImplementations = (deps: OnboardingDeps) => {
       completeOnboarding: fromPromise<void, { onboardingId: number }>(
         async ({ input }) => {
           await completeOnboarding({ onboardingId: input.onboardingId });
+        },
+      ),
+
+      /**
+       * Generates and stores the trainee's SKA profile, unreviewed.
+       *
+       * Re-reads the transcript from the DB instead of using
+       * `input.context.transcript`. The context copy is capped at
+       * `TRANSCRIPT_TURN_LIMIT` (20) turns and drops the OLDEST first — which
+       * in an intake interview is where background, qualifications and
+       * motivation were discussed. Summarising a 15-minute conversation from
+       * its last 20 turns would systematically lose the Skills and Knowledge
+       * material and keep only the tail.
+       *
+       * Writes unreviewed on purpose: `createSkaProfile` leaves `reviewedAt`
+       * null, so this row exists and is editable but is injected into nothing
+       * until the trainee presses the button on the card. Persisting it now
+       * rather than on that press means closing the card loses the artifact
+       * from use, not from existence — they can still activate it later from
+       * the course page.
+       *
+       * Never throws for a generation failure — `generateSkaProfileWithRetry`
+       * resolves to null after its one retry, and a null profile is simply not
+       * written. See the `profiling` state for why this must not fail the turn.
+       */
+      generateSkaProfile: fromPromise<void, { context: OnboardingContext }>(
+        async ({ input }) => {
+          const transcript = messageRowsToTranscript(
+            await loadFullTranscript({
+              onboardingId: input.context.onboardingId,
+            }),
+          );
+
+          const profile = await generateSkaProfileWithRetry({
+            courseName: deps.courseName,
+            questions: input.context.questions,
+            answers: input.context.answers,
+            transcript,
+          });
+
+          if (!profile || !hasAnySkaSection(profile)) return;
+
+          await createSkaProfile({
+            userId: deps.userId,
+            courseId: deps.courseId,
+            profile,
+          });
         },
       ),
 

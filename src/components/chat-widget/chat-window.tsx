@@ -2,6 +2,7 @@ import { Button } from '@base-ui/react/button';
 import type { UIMessage } from 'ai';
 import type { MotionStyle } from 'motion/react';
 import { motion } from 'motion/react';
+import type { ReactNode } from 'react';
 import { ChatWidgetHeader } from '#/components/chat-widget/chat-widget-header';
 import { ChatWidgetInput } from '#/components/chat-widget/chat-widget-input';
 import { ChatWidgetMessages } from '#/components/chat-widget/chat-widget-messages';
@@ -35,6 +36,12 @@ interface ChatWindowProps {
    * caller's status can reach `'confirming'`.
    */
   onConfirm?: () => void;
+  /**
+   * Onboarding-only. Rendered after the last message, inside the scroll flow —
+   * today the SKA profile card that closes the interview. Optional and unused
+   * by the Viper7 container, so the shared path is unchanged.
+   */
+  afterMessages?: ReactNode;
 }
 
 /**
@@ -72,6 +79,7 @@ export function ChatWindow({
   isLoading,
   status,
   onConfirm,
+  afterMessages,
 }: ChatWindowProps) {
   const {
     left,
@@ -113,7 +121,11 @@ export function ChatWindow({
         onClose={onClose}
         dragBindings={dragBindings}
       />
-      <ChatWidgetMessages messages={messages} isLoading={isLoading} />
+      <ChatWidgetMessages
+        messages={messages}
+        isLoading={isLoading}
+        trailing={afterMessages}
+      />
       {status === 'confirming' && onConfirm && (
         <div className="border-gray-6 border-t px-4 py-3">
           <Button

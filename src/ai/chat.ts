@@ -6,7 +6,10 @@ import {
   streamText,
 } from 'ai';
 import { geminiFlash } from '#/ai/ai-provider';
-import { viper7SystemPrompt } from '#/ai/prompts/viper7';
+import {
+  type SkaProfileForPrompt,
+  viper7SystemPrompt,
+} from '#/ai/prompts/viper7';
 import { makeCheckFlyabilityTool } from '#/ai/tools/check-flyability';
 import { makeSearchKBTool } from '#/ai/tools/search-kb';
 import { isAssociateFrom } from '#/lib/is-associate';
@@ -36,6 +39,14 @@ export type BuildChatStreamOptions = {
    * subscription-derived fallback is used when this is absent. */
   courseSlug?: string;
   userId: string;
+  /**
+   * The learner's reviewed SKA profile, already narrowed to the sections that
+   * apply in this context by the caller (all three with a course in context,
+   * Attitude alone without one). Absent when they have none, which is an
+   * ordinary state — viper7 then behaves exactly as it did before profiles
+   * existed.
+   */
+  skaProfile?: SkaProfileForPrompt;
 };
 
 /**
@@ -63,6 +74,7 @@ export async function buildChatStream({
   writer,
   courseSlug,
   userId,
+  skaProfile,
 }: BuildChatStreamOptions) {
   const modelMessages = await convertToModelMessages(messages);
 
@@ -72,6 +84,7 @@ export async function buildChatStream({
       isAssociate: isAssociateFrom(subscriptions),
       persona,
       userInfo,
+      skaProfile,
     }),
     messages: modelMessages,
     tools: {

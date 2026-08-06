@@ -682,3 +682,48 @@ export const checkContrast = (foreground: string, background: string) => {
 - ❌ Arbitrary hex/rgb colors
 - ❌ Poor contrast combinations
 - ❌ Mixed color systems
+
+## Testing: Assert on What the Consumer Received
+
+**Never assert that a value exists in state. Assert that the thing which needed it got it.**
+
+The most common bug this codebase produces is a value that is computed and then discarded — written to context, returned from a function, or set on an object, and never actually read by anything. These bugs type-check perfectly. They also pass any test that checks the value is present rather than checking it was consumed.
+
+Building the onboarding agent, ten separate defects had exactly this shape: a clarification reply that was generated and never delivered, a follow-up question the agent composed and never spoke, a correction that reached the summariser's prompt but never the database, a hesitancy flag that was stored and then cleared before any reader could see it. Every one passed `tsc`. Several passed tests.
+
+### The rule
+
+```ts
+// ❌ Passes even when nothing reads the value
+await waitFor(actor, (s) => s.matches('asking'));
+expect(actor.getSnapshot().context.hesitancyFlagged).toBe(true);
+
+// ✅ Fails the moment the consumer stops receiving it
+expect(askQuestion.mock.calls[1][0].input.context.hesitancyFlagged).toBe(true);
+```
+
+Capture the collaborator — a `vi.fn()` stub, an injected actor, a spy — and assert on the arguments it was called with. If the wiring breaks, the test breaks.
+
+This applies to any producer/consumer seam: XState actors, injected dependencies, React props, callbacks, prompt builders, persistence adapters.
+
+### Corollaries
+
+- **A comment describing behaviour is a specification.** If a branch is commented "answer the question they raised, then re-ask" and the code cannot do that, the comment is not aspirational — it is a bug report. Fix the code or delete the claim.
+- **Fixing the producer is half the fix.** After wiring a value in, follow it to its consumer and confirm something reads it. Several of the ten defects were introduced *by the fix for the previous one*.
+- **A field with zero read-sites is dead until proven otherwise.** Grep before assuming. If it is a deliberate forward hook for later work, say so in a comment naming what will consume it; otherwise delete it (YAGNI).
+- **Watch for clearing a value before its reader runs.** In XState specifically, an `entry` action runs *before* that state's `invoke` — clearing a flag there means the invoked actor never sees it.
+
+### XState test gotcha
+
+`waitFor` resolves **with** the snapshot that satisfied its predicate. Re-querying `actor.getSnapshot()` on the next line races any state that invokes an actor, because the actor's resolution microtask is queued before the one resuming your `await`. Use the returned snapshot:
+
+```ts
+const snapshot = await waitFor(actor, (s) => s.matches('asking'));
+expect(snapshot.matches('asking')).toBe(true);
+```
+
+For transient states, subscribe and record every transition rather than sampling after an `await`.
+
+### Before finalising a test
+
+Verify it fails against the unfixed code. `git stash` the fix, run the test, confirm red, `git stash pop`. A regression test that never went red is not a regression test.

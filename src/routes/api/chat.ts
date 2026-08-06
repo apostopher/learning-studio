@@ -8,8 +8,10 @@ import { z } from 'zod';
 import { buildChatStream } from '#/ai/chat';
 import { getUserRoleNames } from '#/db/admin';
 import { appendMessages, ensureChat } from '#/db/chat';
-import { getPersona } from '#/db/persona';
+import { resolvePersonaForChat } from '#/db/course-orgs';
+import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
+import { resolveChatSkaProfile } from '#/lib/ska-profile.server';
 
 const chatRequestSchema = z.object({
   chatId: z.string().optional(),
@@ -65,9 +67,17 @@ export async function chatHandler(request: Request): Promise<Response> {
     courseSlug?: string;
   };
 
-  const [persona, userRoles] = await Promise.all([
-    getPersona('viper7'),
+  const [persona, userRoles, skaProfile] = await Promise.all([
+    // Personas are org-level and a course may pin its own: this resolves
+    // `course_orgs.personaId` → the org default → null (prompt defaults).
+    // It reads published `content` only — a persona's unpublished
+    // `draftContent` must never reach a live system prompt.
+    resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
     getUserRoleNames(session.user.id),
+    // Reviewed profiles only, and section-narrowed by whether a course is in
+    // context — see resolveChatSkaProfile. Joins the existing parallel read
+    // rather than adding a round trip of its own.
+    resolveChatSkaProfile({ userId: session.user.id, courseSlug }),
   ]);
 
   const userInfo = {
@@ -102,10 +112,12 @@ export async function chatHandler(request: Request): Promise<Response> {
         messages,
         uiMessages: messages,
         persona: persona?.content,
+        // (`persona` is the resolved published content, never a draft.)
         userInfo,
         subscriptions,
         courseSlug,
         userId: session.user.id,
+        skaProfile,
         // `BuildChatStreamOptions.writer` is typed as `{ write: (p: unknown) => void }`
         // (loosened so #/ai/chat doesn't need to import ai@6's UIMessageStreamWriter
         // type directly) which is contravariantly narrower than the real ai@6

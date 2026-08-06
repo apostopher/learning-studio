@@ -13,6 +13,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { getCourseDetailsWithCache } from '#/db/course';
+import { linkCourseToOrg } from '#/db/course-orgs';
 import {
   getCourseSlugForCourseId,
   getCourseSlugForLessonId,
@@ -45,6 +46,7 @@ import type {
   SaveCredentialInput,
   UpdateCourseInput,
 } from '#/lib/admin-schemas';
+import { getActiveOrgId } from '#/lib/active-org.server';
 import { watchedMilestones } from '#/lib/course-milestones';
 import {
   decryptJson,
@@ -226,6 +228,11 @@ export async function createCourse(
   // then hands the freed slug straight back here, and without this call the
   // new course would be invisible behind that cached null for up to 6h.
   await invalidateCourseDetailsCache(created.slug);
+
+  // Whatever this deployment administers, it owns what it creates. Without
+  // this the course has no `course_orgs` row, so the AI-training modal would
+  // open its Persona tab with nowhere to store a selection.
+  await linkCourseToOrg(created.id, getActiveOrgId());
 
   return created;
 }

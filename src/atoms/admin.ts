@@ -98,3 +98,19 @@ export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);
 
 /** Client-side search filter for the training-documents list. Reset on close. */
 export const embeddingsSearchAtom = atom('');
+
+/**
+ * Which pane of the persona section's two-screen carousel is showing. Both
+ * panes stay mounted — this only drives the track's horizontal offset — so the
+ * editor's form state survives the slide without being lifted anywhere.
+ */
+export const personaPaneAtom = atom<'list' | 'editor'>('list');
+
+/** Persona open in the editor pane. Null while the list pane is showing. */
+export const editingPersonaIdAtom = atom<number | null>(null);
+
+/** Persona whose delete confirmation is expanded in the list. */
+export const pendingDeletePersonaIdAtom = atom<number | null>(null);
+
+/** Draft name in the "New persona" inline field. Reset after a create. */
+export const newPersonaNameAtom = atom('');

@@ -1,14 +1,19 @@
-import { viper7Quotes } from "@/ai/prompts/viper7";
-import { db } from "@/db";
-import { personaTable } from "@/db/schema";
-import { PersonaSchema } from "@/types";
+import { viper7Quotes } from '@/ai/prompts/viper7';
+import { db } from '@/db';
+import { personaTable } from '@/db/schema';
+import { getActiveOrgId } from '@/lib/active-org.server';
+import { PersonaSchema } from '@/types';
 
 /**
  * Seed content for the "viper7" persona, ported from the default fallback
  * strings in `src/ai/prompts/viper7.ts` (the `persona?.<field> || <fallback>`
  * text baked into that prompt) plus the exported `viper7Quotes`. Keeping this
- * seed idempotent (onConflictDoNothing on `name`) lets it run safely in any
- * environment.
+ * seed idempotent (onConflictDoNothing on the org+name index) lets it run
+ * safely in any environment.
+ *
+ * Seeds into `content` directly rather than `draftContent`: this is published
+ * material by definition — it is what the prompt used before personas were
+ * editable.
  */
 const viper7Persona = PersonaSchema.parse({
   basicInfo: `Your CallSign is Viper7.
@@ -64,20 +69,21 @@ bullet points (max 6, ~10 words each) for no more than 10 bullets.`,
 Start with a short summary, then provide numbered steps for sequential procedures. Add a short "Why it matters" note only if the knowledge base provides rationale. Structure longer responses with clear headings when appropriate.
 
 Always process retrieved knowledge-base content into your own concise, structured response rather than quoting it verbatim. Synthesize multiple chunks into a coherent answer, extract only the most relevant information, and answer in first person — never say "the provided text..." or "the information from the knowledge base...".`,
-
-  // Candidate-facing refusal template from viper7.ts's candidateRefusalPrompt().
-  // (The associate variant is brand/role-specific and interpolates runtime
-  // links, so it doesn't fit as a single static template string.)
-  noAnswerTemplate: `Use your general aviation knowledge to provide helpful guidance when specific program information isn't available. Only say you can't help if the question is completely unrelated to aviation or drone operations.`,
 });
 
 async function main() {
+  const orgId = getActiveOrgId();
+
   await db
     .insert(personaTable)
-    .values({ name: "viper7", content: viper7Persona })
-    .onConflictDoNothing({ target: personaTable.name });
+    .values({ orgId, name: 'viper7', content: viper7Persona })
+    .onConflictDoNothing({
+      target: [personaTable.orgId, personaTable.name],
+    });
 
-  console.log(`Seeded persona "viper7" (idempotent; no-op if already present).`);
+  console.log(
+    `Seeded persona "viper7" into org ${orgId} (idempotent; no-op if already present).`,
+  );
   process.exit(0);
 }
 

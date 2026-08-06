@@ -373,6 +373,19 @@
 }
 
 @layer components {
+  /*
+   * SectionedConfigModal stacks two panel groups in one grid cell: the shared
+   * scrolling group, and any `fill` sections that manage their own height and
+   * scrolling. Base UI marks inactive tab panels with `hidden`, so when a fill
+   * section is active the scrolling group holds nothing visible — but it would
+   * still occupy the cell and sit over the fill panel, swallowing pointer
+   * events. Yielding the cell when it has no visible panel keeps exactly one
+   * group live at a time, with no tab state to track in React.
+   */
+  .config-scroll-group:not(:has([role="tabpanel"]:not([hidden]))) {
+    display: none;
+  }
+
   .scroll-area-root {
     position: relative;
     inline-size: 100%;

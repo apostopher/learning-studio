@@ -249,8 +249,14 @@ describe('onboardingMachine — consent gate', () => {
 function makeAnsweringActor(
   replyVerdicts: OnboardingReplyEvaluation[],
   questions: FlatOnboardingQuestion[] = INPUT.questions,
+  { profileFails = false }: { profileFails?: boolean } = {},
 ) {
   const queue = [...replyVerdicts];
+  const generateSkaProfile = vi.fn(
+    async (_args: { input: { context: OnboardingContext } }) => {
+      if (profileFails) throw new Error('model unavailable');
+    },
+  );
   const saveAnswer = vi.fn(
     async (_args: {
       input: { onboardingId: number; questionId: string; answer: string };
@@ -285,13 +291,21 @@ function makeAnsweringActor(
         saveAnswer: fromPromise(saveAnswer),
         summarise: fromPromise(summarise),
         completeOnboarding: fromPromise(completeOnboarding),
+        generateSkaProfile: fromPromise(generateSkaProfile),
         deleteOnboarding: fromPromise(deleteOnboarding),
       },
     }),
     { input: { ...INPUT, questions } },
   );
 
-  return { actor, saveAnswer, completeOnboarding, deleteOnboarding, summarise };
+  return {
+    actor,
+    saveAnswer,
+    completeOnboarding,
+    deleteOnboarding,
+    summarise,
+    generateSkaProfile,
+  };
 }
 
 const answered = (answer: string): OnboardingReplyEvaluation => ({
@@ -901,5 +915,102 @@ describe('onboardingMachine — question loop', () => {
     // must bypass askQuestion entirely via its `always` transition — no
     // question should ever be asked on resume.
     expect(askQuestion).not.toHaveBeenCalled();
+  });
+});
+
+describe('onboardingMachine — SKA profiling', () => {
+  const ONE = flattenQuestions([
+    {
+      id: 'c1',
+      name: 'Only category',
+      questions: [{ id: 'q1', text: 'Only question?' }],
+    },
+  ]);
+
+  /** Answers the single question and accepts the closing summary. */
+  async function runToConfirm(
+    actor: ReturnType<typeof makeAnsweringActor>['actor'],
+  ) {
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years, mostly FPV' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'CONFIRM' });
+    await waitFor(actor, (s) => s.status === 'done');
+  }
+
+  it('generates the profile on CONFIRM, before completion is stamped', async () => {
+    const { actor, generateSkaProfile, completeOnboarding } =
+      makeAnsweringActor([answered('Two years, mostly FPV.')], ONE);
+
+    await runToConfirm(actor);
+
+    // The consumer received it: the actor was actually invoked, and it was
+    // handed the machine's context (which carries the answers the generator
+    // summarises). Asserting only that the machine reached `complete` would
+    // pass even if `profiling` never invoked anything.
+    expect(generateSkaProfile).toHaveBeenCalledTimes(1);
+    expect(generateSkaProfile.mock.calls[0][0].input.context.answers).toEqual({
+      q1: 'Two years, mostly FPV.',
+    });
+
+    // Ordering matters: the profile is derived from a finished interview, so
+    // it must run before `completing`, not after. `mock.invocationCallOrder`
+    // is the only way to assert relative ordering across two separate spies.
+    expect(generateSkaProfile.mock.invocationCallOrder[0]).toBeLessThan(
+      completeOnboarding.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('completes onboarding even when profile generation throws', async () => {
+    const { actor, generateSkaProfile, completeOnboarding } =
+      makeAnsweringActor([answered('Two years, mostly FPV.')], ONE, {
+        profileFails: true,
+      });
+
+    await runToConfirm(actor);
+
+    // The whole point of `profiling`'s onError going to `completing` rather
+    // than `failed`: a provider outage must not cost the learner a finished
+    // 15-minute interview. Every other invoke in this machine routes onError
+    // to `failed`, so this asymmetry is exactly the thing worth pinning down.
+    expect(generateSkaProfile).toHaveBeenCalledTimes(1);
+    expect(actor.getSnapshot().matches('complete')).toBe(true);
+    expect(completeOnboarding).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not generate a profile for a withdrawn session', async () => {
+    const { actor, generateSkaProfile, deleteOnboarding } = makeAnsweringActor(
+      [answered('Two years, mostly FPV.')],
+      ONE,
+    );
+
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years, mostly FPV' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'DELETE' });
+    await waitFor(actor, (s) => s.status === 'done');
+
+    expect(actor.getSnapshot().matches('deleted')).toBe(true);
+    expect(deleteOnboarding).toHaveBeenCalledTimes(1);
+    // Withdrawal from `confirming` must not pass through `profiling` — a
+    // profile written on the way out is a fresh copy of everything the
+    // learner just asked to erase.
+    expect(generateSkaProfile).not.toHaveBeenCalled();
+  });
+
+  it('does not generate a profile when the session is paused', async () => {
+    const { actor, generateSkaProfile } = makeAnsweringActor(
+      [answered('Two years, mostly FPV.')],
+      ONE,
+    );
+
+    await reachAsking(actor);
+    actor.send({ type: 'REPLY', text: 'two years, mostly FPV' });
+    await waitFor(actor, (s) => s.matches('confirming'));
+    actor.send({ type: 'PAUSE' });
+    await waitFor(actor, (s) => s.status === 'done');
+
+    expect(actor.getSnapshot().matches('paused')).toBe(true);
+    expect(generateSkaProfile).not.toHaveBeenCalled();
   });
 });

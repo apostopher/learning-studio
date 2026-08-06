@@ -37,6 +37,19 @@ const onboardingTurnSchema = z.object({
     }),
   ),
   updatedAt: z.string(),
+  /**
+   * Present only on a `complete` turn, and null when no profile was generated
+   * — an ordinary outcome, since generation is best-effort. `.nullish()`
+   * rather than required so the other seven statuses can omit it entirely.
+   */
+  skaProfile: z
+    .object({
+      skills: z.string().nullable(),
+      knowledge: z.string().nullable(),
+      attitude: z.string().nullable(),
+      reviewedAt: z.string().nullable(),
+    })
+    .nullish(),
 });
 
 type OnboardingTurn = z.infer<typeof onboardingTurnSchema>;
@@ -308,7 +321,14 @@ export function useOnboardingChat(courseSlug: string) {
         status: 'deleted',
         messages: [],
         updatedAt: new Date().toISOString(),
+        // Withdrawal deletes the SKA profile row too (see `deleteOnboarding`),
+        // so the cached copy has to go with it. Leaving it would keep the card
+        // — the AI's inference about this person — on screen after they asked
+        // for everything to be erased, and let them "save" it back into
+        // existence.
+        skaProfile: null,
       });
+      queryClient.setQueryData(dataKeys.skaProfile(courseSlug), null);
     },
   });
 
@@ -331,6 +351,12 @@ export function useOnboardingChat(courseSlug: string) {
   return {
     messages,
     status: turn?.status,
+    /**
+     * The learner's SKA profile once the interview is complete, or null when
+     * there is none. Null is normal, not an error — the widget renders a
+     * completed onboarding with no profile as an ordinary ending.
+     */
+    skaProfile: turn?.skaProfile ?? null,
     isLoading:
       query.isFetching ||
       replyMutation.isPending ||

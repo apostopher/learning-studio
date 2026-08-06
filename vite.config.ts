@@ -2,9 +2,9 @@
 // Side-effect import, kept FIRST: env.ts validates env vars at config-load time
 // (via ./plugins/vite-theme below), and `vitest`/`build` don't go through the
 // dotenv-cli wrapper the `dev` script uses. ESM evaluates this import's body
-// before later imports, so .env is loaded before env.ts runs. dotenv does not
-// override vars already in process.env, so platform-provided envs (Vercel) win.
-import 'dotenv/config';
+// before later imports, so .env.local is loaded before env.ts runs. dotenv does
+// not override vars already in process.env, so platform envs (Vercel) win.
+import './load-env';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';

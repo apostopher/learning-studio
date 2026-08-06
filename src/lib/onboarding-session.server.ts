@@ -7,6 +7,7 @@ import {
   loadOnboardingSession,
   saveMachineSnapshot,
 } from '#/db/course-onboarding';
+import { findSkaProfile } from '#/db/ska-profile';
 import { elapsedMinutesSince, flattenQuestions } from '#/lib/course-onboarding';
 import { runOnboardingTurn } from '#/lib/onboarding-runner';
 import {
@@ -15,6 +16,7 @@ import {
   transcriptToUIMessages,
   type UIMessageLike,
 } from '#/lib/onboarding-transport';
+import { type SkaProfileView, toSkaProfileView } from '#/lib/ska-profile';
 import { createOnboardingImplementations } from '#/machines/onboarding-implementations';
 import {
   ONBOARDING_MACHINE_VERSION,
@@ -34,6 +36,21 @@ export type OnboardingTurnResponse = {
    * as `expectedUpdatedAt` on its next reply; see `advanceOnboarding`.
    */
   updatedAt: string;
+  /**
+   * The learner's SKA profile, present only on a `complete` turn and only if
+   * one was generated — the card renders from this.
+   *
+   * Null is an ordinary outcome, not an error: generation is best-effort (see
+   * the machine's `profiling` state), and a thin interview can legitimately
+   * produce nothing worth storing. The client must render a completed
+   * onboarding with no profile as a perfectly normal ending.
+   *
+   * Sent on the replayed `complete` turn too, not only on the turn that
+   * generated it. That replay is the recovery path for the learner who closed
+   * the tab before pressing the button: reopening the widget puts the
+   * unreviewed card back in front of them.
+   */
+  skaProfile: SkaProfileView | null;
 };
 
 export type AdvanceOnboardingResult =
@@ -220,6 +237,11 @@ export const advanceOnboarding = async ({
         status: closed,
         messages: transcriptToUIMessages(messageRowsToTranscript(messages)),
         updatedAt: serialiseUpdatedAt(row.updatedAt),
+        skaProfile: await loadTurnSkaProfile({
+          status: closed,
+          userId,
+          courseId: course.id,
+        }),
       },
     };
   }
@@ -251,6 +273,10 @@ export const advanceOnboarding = async ({
       courseName: course.name,
       initialMessageCount: messages.length,
       questions,
+      // From the same ownership-checked pair the onboardingId came from —
+      // see the SECURITY note above and on OnboardingDeps.
+      userId,
+      courseId: course.id,
     }),
     event,
   });
@@ -300,8 +326,40 @@ export const advanceOnboarding = async ({
       // deliberately unused here — it exists for callers that want a delta.
       messages: transcriptToUIMessages(result.transcript),
       updatedAt: serialiseUpdatedAt(updatedAt ?? row.updatedAt),
+      skaProfile: await loadTurnSkaProfile({
+        status: result.status,
+        userId,
+        courseId: course.id,
+      }),
     },
   };
+};
+
+/**
+ * The profile to attach to a turn response — only ever on `complete`.
+ *
+ * Gated on the status rather than read unconditionally so the common case (an
+ * ordinary mid-interview turn) pays nothing for a row that could not be
+ * rendered anyway: the card belongs to the end of the conversation, and there
+ * is no profile before it.
+ *
+ * Reads REVIEWED-OR-NOT, unlike the chat route's read. The card's entire job
+ * is to show an unreviewed profile and let the learner affirm it, so filtering
+ * to reviewed here would hide exactly the profiles that need showing.
+ */
+const loadTurnSkaProfile = async ({
+  status,
+  userId,
+  courseId,
+}: {
+  status: OnboardingStatus;
+  userId: string;
+  courseId: number;
+}): Promise<SkaProfileView | null> => {
+  if (status !== 'complete') return null;
+
+  const row = await findSkaProfile({ userId, courseId });
+  return row ? toSkaProfileView(row) : null;
 };
 
 /**

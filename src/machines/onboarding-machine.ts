@@ -71,7 +71,12 @@ export const TRANSCRIPT_TURN_LIMIT = 20;
 // controls reminder was changed from a permanent latch to a cooled-down
 // re-offer. A v1 snapshot has neither field, so restoring one would leave
 // `lastRemindedTurn` undefined and reinstate the latch for that session.
-export const ONBOARDING_MACHINE_VERSION = '2';
+// '3': `profiling` inserted between `confirming` and `completing`. A v2
+// snapshot is in practice still restorable (the new state sits past the point
+// any waiting snapshot can be parked at), but the guard is deliberately
+// biased toward discarding, and the cost of discarding is one session
+// resuming from its durable answers.
+export const ONBOARDING_MACHINE_VERSION = '3';
 
 export type OnboardingMessage = { role: 'assistant' | 'user'; text: string };
 
@@ -263,6 +268,9 @@ export const onboardingMachine = setup({
       async () => '',
     ),
     completeOnboarding: fromPromise<void, { onboardingId: number }>(
+      async () => {},
+    ),
+    generateSkaProfile: fromPromise<void, { context: OnboardingContext }>(
       async () => {},
     ),
     deleteOnboarding: fromPromise<void, { onboardingId: number }>(
@@ -617,9 +625,39 @@ export const onboardingMachine = setup({
               }),
           }),
         },
-        CONFIRM: { target: 'completing' },
+        CONFIRM: { target: 'profiling' },
         PAUSE: { target: 'paused' },
         DELETE: { target: 'deleting' },
+      },
+    },
+
+    /**
+     * Distils the interview into the trainee's SKA profile, between accepting
+     * the summary and stamping completion.
+     *
+     * BEST-EFFORT, and uniquely so: both `onDone` and `onError` go to
+     * `completing`, where every other invoke in this machine routes its error
+     * to `failed`. That asymmetry is deliberate. By the time this runs, the
+     * answers and the transcript — the expensive, irreplaceable things the
+     * trainee just spent fifteen minutes producing — are already durable. The
+     * profile is derived from them and can be produced again at any time.
+     * Routing to `failed` here would discard a finished interview to protect a
+     * reproducible artifact, and would strand the trainee: they cannot fix a
+     * provider outage by re-answering questions, and `failed` offers them no
+     * action at all.
+     *
+     * So a profile-less completed onboarding is a legitimate permanent state,
+     * and every reader downstream treats "no profile" as normal rather than as
+     * an error. The actor itself already swallows generation failure (see
+     * `generateSkaProfileWithRetry`); `onError` catches the rest — a DB write
+     * failing, most plausibly.
+     */
+    profiling: {
+      invoke: {
+        src: 'generateSkaProfile',
+        input: ({ context }) => ({ context }),
+        onDone: { target: 'completing' },
+        onError: { target: 'completing' },
       },
     },
 

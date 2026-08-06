@@ -413,3 +413,60 @@ export const playbackErrorSchema = z.object({
   error: z.string(),
   code: z.enum(PLAYBACK_FAILURE_CODES),
 });
+
+/**
+ * Persona content as the editor posts it. Mirrors `PersonaSchema` but with
+ * every field explicitly optional: the editor autosaves whatever has been
+ * typed so far, and a blank field is meaningful — it means "fall back to the
+ * prompt's built-in default for this field".
+ */
+export const personaContentInputSchema = z.object({
+  basicInfo: z.string().max(20_000).default(''),
+  mission: z.string().max(20_000).default(''),
+  goal: z.string().max(20_000).default(''),
+  communicationStyle: z.string().max(20_000).default(''),
+  quotes: z.array(z.string().max(2_000)).max(500).default([]),
+  coreDirective: z.string().max(20_000).default(''),
+  howToAnswer: z.string().max(20_000).default(''),
+});
+export type PersonaContentInput = z.infer<typeof personaContentInputSchema>;
+
+/** POST body for creating a persona. Only the label is required. */
+export const createPersonaInputSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(120),
+});
+export type CreatePersonaInput = z.infer<typeof createPersonaInputSchema>;
+
+/** PATCH body for a persona — rename only; content goes through the draft. */
+export const renamePersonaInputSchema = createPersonaInputSchema;
+
+/** PUT body for the org default, and for a course's persona selection. */
+export const personaSelectionInputSchema = z.object({
+  personaId: z.number().int().positive().nullable(),
+});
+export type PersonaSelectionInput = z.infer<typeof personaSelectionInputSchema>;
+
+/** A persona as GET /api/admin/personas delivers it (dates as ISO strings). */
+export const adminPersonaSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  content: personaContentInputSchema,
+  /** `null` means no unpublished changes — the Draft badge's only source. */
+  draftContent: personaContentInputSchema.nullable(),
+  /** False until published once; gates assignment to a course or org default. */
+  isPublished: z.boolean(),
+  isOrgDefault: z.boolean(),
+  /** Names of courses in this org currently pinned to this persona. */
+  usedByCourses: z.array(z.string()),
+  updatedAt: z.string(),
+});
+export type AdminPersona = z.infer<typeof adminPersonaSchema>;
+
+/** GET /api/admin/courses/:id/persona. */
+export const coursePersonaSelectionSchema = z.object({
+  linked: z.boolean(),
+  personaId: z.number().nullable(),
+});
+export type CoursePersonaSelection = z.infer<
+  typeof coursePersonaSelectionSchema
+>;

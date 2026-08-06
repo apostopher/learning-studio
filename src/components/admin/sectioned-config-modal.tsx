@@ -15,6 +15,17 @@ export interface ConfigModalSection {
    * dependency tab, which edits the course's *modules*.
    */
   heading?: ReactNode;
+  /**
+   * Render this section as a full-height panel that owns its own scrolling,
+   * instead of sharing the shell's scroll area.
+   *
+   * For a section whose content must fill the modal rather than flow down it —
+   * the persona carousel, whose two panes slide horizontally and each scroll
+   * internally. Opt-in: sections that don't set it keep the shared scrolling
+   * behaviour exactly, so the lesson-config and course-edit dialogs are
+   * untouched.
+   */
+  fill?: boolean;
   /** Panel body, rendered in the main area when this section is active. */
   content: ReactNode;
 }
@@ -87,29 +98,62 @@ export const SectionedConfigModal = ({
                 ))}
               </Tabs.List>
 
-              <ScrollArea className="min-h-0" viewportClassName="p-6">
-                {sections.map((section) => (
-                  // The heading lives INSIDE each panel so a section can
-                  // override it; only the active panel renders, so exactly one
-                  // h2 is ever present. The flex column is an inner div rather
-                  // than the panel itself: Base UI hides inactive panels with
-                  // the `hidden` attribute, and a `display:flex` utility class
-                  // outranks the UA `[hidden]` rule, which would make every
-                  // hidden panel visible.
-                  <Tabs.Panel
-                    key={section.value}
-                    value={section.value}
-                    className="flex-1"
+              {/*
+                Both panel groups occupy the same grid cell; Base UI hides
+                inactive panels, and `.config-scroll-group` yields the cell
+                when it holds nothing visible (see styles.css), so exactly one
+                is ever live.
+              */}
+              <div className="grid min-h-0 grid-cols-1 grid-rows-1">
+                {sections.some((section) => !section.fill) && (
+                  <ScrollArea
+                    className="config-scroll-group col-start-1 row-start-1 min-h-0"
+                    viewportClassName="p-6"
                   >
-                    <div className="flex flex-col gap-6">
-                      <h2 className="break-words font-semibold text-2xl text-primary">
-                        {section.heading ?? heading}
-                      </h2>
-                      {section.content}
-                    </div>
-                  </Tabs.Panel>
-                ))}
-              </ScrollArea>
+                    {sections
+                      .filter((section) => !section.fill)
+                      .map((section) => (
+                        // The heading lives INSIDE each panel so a section can
+                        // override it; only the active panel renders, so exactly
+                        // one h2 is ever present. The flex column is an inner div
+                        // rather than the panel itself: Base UI hides inactive
+                        // panels with the `hidden` attribute, and a
+                        // `display:flex` utility class outranks the UA `[hidden]`
+                        // rule, which would make every hidden panel visible.
+                        <Tabs.Panel
+                          key={section.value}
+                          value={section.value}
+                          className="flex-1"
+                        >
+                          <div className="flex flex-col gap-6">
+                            <h2 className="break-words font-semibold text-2xl text-primary">
+                              {section.heading ?? heading}
+                            </h2>
+                            {section.content}
+                          </div>
+                        </Tabs.Panel>
+                      ))}
+                  </ScrollArea>
+                )}
+
+                {sections
+                  .filter((section) => section.fill)
+                  .map((section) => (
+                    // No shared padding and no heading: a fill section owns its
+                    // whole panel, including where its title sits and what
+                    // scrolls. Same `hidden`-vs-`display` caveat as above, so
+                    // the flex column is an inner div.
+                    <Tabs.Panel
+                      key={section.value}
+                      value={section.value}
+                      className="col-start-1 row-start-1 min-h-0"
+                    >
+                      <div className="flex h-full min-h-0 flex-col">
+                        {section.content}
+                      </div>
+                    </Tabs.Panel>
+                  ))}
+              </div>
             </Tabs.Root>
           )}
         </Dialog.Popup>

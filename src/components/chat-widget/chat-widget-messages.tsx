@@ -1,5 +1,6 @@
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
+import type { ReactNode } from 'react';
 import { useStickToBottom } from 'use-stick-to-bottom';
 import { ChatMessage } from '#/components/chat-widget/chat-message';
 import { TypingDots } from '#/components/chat-widget/typing-dots';
@@ -10,6 +11,18 @@ export interface ChatWidgetMessagesProps {
   messages: UIMessage[];
   /** True while a reply is pending/streaming (status submitted|streaming). */
   isLoading: boolean;
+  /**
+   * Rendered after the last message, INSIDE the scroll content — for anything
+   * that belongs to the end of the conversation rather than to the window
+   * chrome (today: the SKA profile card at the end of onboarding).
+   *
+   * In the scroll flow rather than in a fixed footer on purpose: the card is
+   * tall and editable, and a footer would either pin a form over the
+   * transcript or force the card to scroll independently of the conversation
+   * it belongs to. Inside the content, `useStickToBottom` also brings it into
+   * view on arrival, which is the whole point of showing it here.
+   */
+  trailing?: ReactNode;
 }
 
 /** Whether the assistant has started emitting visible text for the last turn.
@@ -32,6 +45,7 @@ function assistantHasStartedAnswering(messages: UIMessage[]): boolean {
 export function ChatWidgetMessages({
   messages,
   isLoading,
+  trailing,
 }: ChatWidgetMessagesProps) {
   const { scrollRef, contentRef } = useStickToBottom();
   const showTyping = isLoading && !assistantHasStartedAnswering(messages);
@@ -96,6 +110,7 @@ export function ChatWidgetMessages({
             </motion.div>
           )}
         </AnimatePresence>
+        {trailing}
       </div>
     </ScrollArea>
   );

@@ -20,6 +20,7 @@ const {
   createOnboardingImplementations,
   findOnboardingRow,
   hasUserReply,
+  findSkaProfile,
 } = vi.hoisted(() => ({
   getCourseIdentityBySlug: vi.fn(),
   loadOnboardingSession: vi.fn(),
@@ -29,9 +30,11 @@ const {
   createOnboardingImplementations: vi.fn(),
   findOnboardingRow: vi.fn(),
   hasUserReply: vi.fn(),
+  findSkaProfile: vi.fn(),
 }));
 
 vi.mock('#/db/course', () => ({ getCourseIdentityBySlug }));
+vi.mock('#/db/ska-profile', () => ({ findSkaProfile }));
 vi.mock('#/db/course-onboarding', () => ({
   loadOnboardingSession,
   saveMachineSnapshot,
@@ -223,6 +226,7 @@ describe('advanceOnboarding', () => {
     clearMachineSnapshot.mockResolvedValue(
       new Date('2026-07-28T00:00:02.000Z'),
     );
+    findSkaProfile.mockResolvedValue(null);
   });
 
   it('clears the snapshot instead of saving it when the turn ends in `failed` (Fix 1)', async () => {
@@ -425,5 +429,193 @@ describe('getOnboardingProgress', () => {
     });
     expect(result).toEqual({ ok: true, status: 'in_progress' });
     expect(hasUserReply).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The SKA profile's trip from storage to the client. `advanceOnboarding` is
+ * what puts it on the turn response, and the card renders from there — so
+ * these assert what the client actually receives, not merely that the DB
+ * reader was called.
+ */
+describe('advanceOnboarding — SKA profile on the turn', () => {
+  const row = {
+    id: 1,
+    userId: 'user-1',
+    courseId: 1,
+    answers: {},
+    questionSetHash: null,
+    questionSource: 'default',
+    consentDeclinedAt: null,
+    deletedAt: null,
+    machineSnapshot: null,
+    machineVersion: null,
+    onboardingCompletedAt: null,
+    createdAt: new Date('2026-07-28T00:00:00.000Z'),
+    updatedAt: new Date('2026-07-28T00:00:00.000Z'),
+  };
+
+  const PROFILE_ROW = {
+    skills: 'Flies gliders.',
+    knowledge: null,
+    attitude: 'Goes slowly.',
+    reviewedAt: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCourseIdentityBySlug.mockResolvedValue({ id: 1, name: 'PPL' });
+    loadOnboardingSession.mockResolvedValue({
+      row,
+      messages: [],
+      questions: [],
+      source: 'default',
+    });
+    createOnboardingImplementations.mockReturnValue({});
+    saveMachineSnapshot.mockResolvedValue(new Date('2026-07-28T00:00:01.000Z'));
+    clearMachineSnapshot.mockResolvedValue(
+      new Date('2026-07-28T00:00:02.000Z'),
+    );
+    findSkaProfile.mockResolvedValue(null);
+  });
+
+  it('carries the profile on a complete turn', async () => {
+    findSkaProfile.mockResolvedValue(PROFILE_ROW);
+    runOnboardingTurn.mockResolvedValue({
+      status: 'complete',
+      transcript: [],
+      newTurns: [],
+      snapshot: {},
+      restoredFromSnapshot: false,
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: { type: 'CONFIRM' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.body.skaProfile).toEqual({
+      skills: 'Flies gliders.',
+      knowledge: null,
+      attitude: 'Goes slowly.',
+      reviewedAt: null,
+    });
+  });
+
+  it('sends an UNREVIEWED profile to the client, since the card exists to review it', async () => {
+    // The reviewed-only filter belongs to the chat prompt read, not to this
+    // one. Applying it here would hide exactly the profiles that need showing
+    // and leave the learner with no way to activate theirs.
+    findSkaProfile.mockResolvedValue(PROFILE_ROW);
+    runOnboardingTurn.mockResolvedValue({
+      status: 'complete',
+      transcript: [],
+      newTurns: [],
+      snapshot: {},
+      restoredFromSnapshot: false,
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: { type: 'CONFIRM' },
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.body.skaProfile?.reviewedAt).toBeNull();
+  });
+
+  it('sends null when the interview completed without a profile', async () => {
+    // Generation is best-effort, so this is an ordinary ending — not an error
+    // state the client should render differently from any other completion.
+    findSkaProfile.mockResolvedValue(null);
+    runOnboardingTurn.mockResolvedValue({
+      status: 'complete',
+      transcript: [],
+      newTurns: [],
+      snapshot: {},
+      restoredFromSnapshot: false,
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: { type: 'CONFIRM' },
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.body.skaProfile).toBeNull();
+  });
+
+  it('does not read a profile on a mid-interview turn', async () => {
+    runOnboardingTurn.mockResolvedValue({
+      status: 'awaiting_answer',
+      transcript: [],
+      newTurns: [],
+      snapshot: {},
+      restoredFromSnapshot: false,
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: { type: 'REPLY', text: 'hi' },
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.body.skaProfile).toBeNull();
+    // There is no profile before the end of the interview, so the common case
+    // must not pay for a row that could not exist.
+    expect(findSkaProfile).not.toHaveBeenCalled();
+  });
+
+  it('replays the profile for an already-completed session', async () => {
+    // The recovery path for a learner who closed the widget before pressing
+    // the button: reopening it must put the unreviewed card back in front of
+    // them, and this branch never runs the machine at all.
+    findSkaProfile.mockResolvedValue(PROFILE_ROW);
+    loadOnboardingSession.mockResolvedValue({
+      row: { ...row, onboardingCompletedAt: new Date('2026-07-29T00:00:00Z') },
+      messages: [],
+      questions: [],
+      source: 'default',
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: null,
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.body.status).toBe('complete');
+    expect(result.body.skaProfile?.skills).toBe('Flies gliders.');
+    expect(runOnboardingTurn).not.toHaveBeenCalled();
+  });
+
+  it('sends no profile for a withdrawn session', async () => {
+    // `deleteOnboarding` removes the profile row in the same transaction, so
+    // there is nothing to find — but assert the response too, because the
+    // card must never reappear for someone who asked to be erased.
+    findSkaProfile.mockResolvedValue(null);
+    loadOnboardingSession.mockResolvedValue({
+      row: { ...row, deletedAt: new Date('2026-07-29T00:00:00Z') },
+      messages: [],
+      questions: [],
+      source: 'default',
+    });
+
+    const result = await advanceOnboarding({
+      userId: 'user-1',
+      courseSlug: 'ppl',
+      event: null,
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.body.status).toBe('deleted');
+    expect(result.body.skaProfile).toBeNull();
   });
 });

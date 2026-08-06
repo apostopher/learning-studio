@@ -4,12 +4,23 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { embeddingsSearchAtom, trainCourseAtom } from '#/atoms/admin';
+import {
+  editingPersonaIdAtom,
+  embeddingsSearchAtom,
+  newPersonaNameAtom,
+  pendingDeletePersonaIdAtom,
+  personaPaneAtom,
+  trainCourseAtom,
+} from '#/atoms/admin';
 import { useAddEmbeddings } from '#/data-hooks/use-add-embeddings';
 import { useCourseEmbeddings } from '#/data-hooks/use-course-embeddings';
 import { useDeleteEmbedding } from '#/data-hooks/use-delete-embedding';
 import { useUploadTrainingDoc } from '#/data-hooks/use-upload-training-doc';
-import { CourseEmbeddingsModal } from './course-embeddings-modal';
+import { PersonaSectionContainer } from './persona/persona-section-container';
+import {
+  type ConfigModalSection,
+  SectionedConfigModal,
+} from './sectioned-config-modal';
 import { TrainingDocUploadCard } from './training-doc-upload-card';
 import { TrainingDocsList } from './training-docs-list';
 import { deriveUploadStatus, resolveDocName } from './training-upload-helpers';
@@ -31,34 +42,67 @@ const uploadSchema = z.object({
 });
 type UploadForm = z.infer<typeof uploadSchema>;
 
-/** Container: AI-training modal for a course — upload docs + manage embeddings. */
+/**
+ * Container: AI-training modal for a course.
+ *
+ * Two sections behind the shared sidebar shell — training documents (course-
+ * scoped embeddings) and persona (org-scoped, but selected per course). The
+ * persona section is `fill`, because its carousel manages its own height and
+ * scrolling rather than flowing down the shell's scroll area.
+ */
 export const CourseEmbeddingsDialogContainer = () => {
   const [course, setCourse] = useAtom(trainCourseAtom);
   const setSearch = useSetAtom(embeddingsSearchAtom);
+  const setPane = useSetAtom(personaPaneAtom);
+  const setEditingPersonaId = useSetAtom(editingPersonaIdAtom);
+  const setPendingDelete = useSetAtom(pendingDeletePersonaIdAtom);
+  const setNewPersonaName = useSetAtom(newPersonaNameAtom);
+
+  const sections: ConfigModalSection[] = course
+    ? [
+        {
+          value: 'documents',
+          title: 'Training documents',
+          content: <Body courseId={course.id} />,
+        },
+        {
+          value: 'persona',
+          title: 'Persona',
+          fill: true,
+          content: (
+            <PersonaSectionContainer
+              courseId={course.id}
+              courseName={course.name}
+            />
+          ),
+        },
+      ]
+    : [];
+
   return (
-    <CourseEmbeddingsModal
+    <SectionedConfigModal
       open={course !== null}
       onOpenChange={(next) => {
         if (!next) {
           setCourse(null);
           setSearch('');
+          // Reset the persona section so reopening starts on the list rather
+          // than mid-edit on a persona from the previous course's visit.
+          setPane('list');
+          setEditingPersonaId(null);
+          setPendingDelete(null);
+          setNewPersonaName('');
         }
       }}
       title="AI training"
-    >
-      {course ? <Body courseId={course.id} courseName={course.name} /> : null}
-    </CourseEmbeddingsModal>
+      heading={course?.name ?? ''}
+      sections={sections}
+    />
   );
 };
 
 /** Data-bound body; mounts only while the modal is open. */
-const Body = ({
-  courseId,
-  courseName,
-}: {
-  courseId: number;
-  courseName: string;
-}) => {
+const Body = ({ courseId }: { courseId: number }) => {
   const [search, setSearch] = useAtom(embeddingsSearchAtom);
   const embeddings = useCourseEmbeddings(courseId);
   const uploadDoc = useUploadTrainingDoc();
@@ -98,10 +142,9 @@ const Body = ({
       : null);
 
   return (
+    // No course line here any more: the sidebar shell renders the course name
+    // as this panel's heading.
     <>
-      <p className="mb-4 text-secondary text-sm">
-        Course: <span className="font-medium text-primary">{courseName}</span>
-      </p>
       <TrainingDocUploadCard
         fileName={file?.name ?? null}
         onPickFile={(f) => form.setValue('file', f, { shouldValidate: true })}

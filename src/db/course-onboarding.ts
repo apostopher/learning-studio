@@ -12,6 +12,7 @@ import {
   courseOnboardingMessagesTable,
   courseOnboardingTable,
   coursesTable,
+  userSkaProfileTable,
 } from '@/db/schema';
 
 /**
@@ -159,6 +160,29 @@ export const findOnboardingRow = async ({
 };
 
 /**
+ * The complete transcript for a session, oldest turn first.
+ *
+ * Exists because the machine's `context.transcript` is capped at
+ * `TRANSCRIPT_TURN_LIMIT` and trims the OLDEST turns — fine for the
+ * conversational actors, which only need recent context, and wrong for
+ * anything summarising the interview as a whole, where the dropped turns are
+ * the substantive opening ones. Callers that need the whole conversation must
+ * come here rather than reading the context copy.
+ */
+export const loadFullTranscript = async ({
+  onboardingId,
+}: {
+  onboardingId: number;
+}): Promise<CourseOnboardingMessagesSelect[]> =>
+  (await db
+    .select()
+    .from(courseOnboardingMessagesTable)
+    .where(eq(courseOnboardingMessagesTable.onboardingId, onboardingId))
+    .orderBy(
+      asc(courseOnboardingMessagesTable.order),
+    )) as CourseOnboardingMessagesSelect[];
+
+/**
  * Whether the learner has ever sent at least one reply for this onboarding
  * session — the signal that distinguishes "greeted but never responded to
  * consent" from "actually engaged," without reading the machine's internal
@@ -295,6 +319,20 @@ export const declineConsent = async ({
  * withdrawal cosmetic, and would let the next request restore a machine
  * holding the transcript this call just removed. machineVersion goes with it
  * so no version/snapshot mismatch is left behind.
+ *
+ * The user's SKA profile goes for the same reason, and it is the most
+ * important of the three: it is a THIRD copy of the same disclosures, in the
+ * most sensitive form any of them takes — not the user's words but an AI's
+ * inference about their character, and the copy that is actually read into
+ * viper7's prompt. Leaving it standing would mean the assistant keeps
+ * personalising itself from exactly the material the user asked to have
+ * erased, which is the precise outcome this whole function exists to prevent.
+ *
+ * The profile row is DELETED outright rather than tombstoned like the row
+ * above, and that is safe specifically because the tombstone here exists:
+ * `deletedAt` stops onboarding ever being re-offered, and `profiling` is the
+ * only thing that ever creates a profile — so nothing can regenerate it. The
+ * tombstone's job is already done one table over.
  */
 export const deleteOnboarding = async ({
   onboardingId,
@@ -302,6 +340,28 @@ export const deleteOnboarding = async ({
   onboardingId: number;
 }): Promise<void> => {
   await db.transaction(async (tx) => {
+    // The profile is keyed on (user, course), not on onboardingId, so it has
+    // to be resolved through the row being tombstoned. Read inside the
+    // transaction so it cannot race the tombstone itself.
+    const [owner] = await tx
+      .select({
+        userId: courseOnboardingTable.userId,
+        courseId: courseOnboardingTable.courseId,
+      })
+      .from(courseOnboardingTable)
+      .where(eq(courseOnboardingTable.id, onboardingId));
+
+    if (owner) {
+      await tx
+        .delete(userSkaProfileTable)
+        .where(
+          and(
+            eq(userSkaProfileTable.userId, owner.userId),
+            eq(userSkaProfileTable.courseId, owner.courseId),
+          ),
+        );
+    }
+
     await tx
       .delete(courseOnboardingMessagesTable)
       .where(eq(courseOnboardingMessagesTable.onboardingId, onboardingId));

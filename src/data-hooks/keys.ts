@@ -17,6 +17,11 @@ export const dataKeys = {
     ['admin', 'course-onboarding', courseId] as const,
   courseNewsSources: (courseId: number) =>
     ['admin', 'course-news-sources', courseId] as const,
+  // Personas are org-level, so the list is not keyed by course — every course
+  // in the active org sees the same set.
+  personas: () => ['admin', 'personas'] as const,
+  coursePersona: (courseId: number) =>
+    ['admin', 'course-persona', courseId] as const,
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,
   courseProgressSummary: (slug: string) =>
@@ -26,6 +31,8 @@ export const dataKeys = {
     ['user', 'onboarding-session', courseSlug] as const,
   onboardingProgress: (courseSlug: string) =>
     ['user', 'onboarding-progress', courseSlug] as const,
+  skaProfile: (courseSlug: string) =>
+    ['user', 'ska-profile', courseSlug] as const,
   chats: () => ['user', 'chats'] as const,
   chatMessages: (chatId: string) => ['user', 'chat-messages', chatId] as const,
   subscribedSlugs: () => ['user', 'subscribed-slugs'] as const,
