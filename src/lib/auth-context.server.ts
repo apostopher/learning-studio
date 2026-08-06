@@ -1,3 +1,4 @@
+import { getUserPermissions } from '#/db/permissions';
 import { ensureUserProfile } from '#/db/user-profile';
 import { getUserRoleNames } from '#/db/user-roles';
 import { auth } from '#/lib/auth';
@@ -28,12 +29,20 @@ import { auth } from '#/lib/auth';
 export async function resolveAuthContext(headers: Headers) {
   const session = await auth.api.getSession({ headers });
   const userId = session?.user?.id;
-  if (!userId) return { session, roles: [] as string[] };
+  if (!userId) {
+    return { session, roles: [] as string[], permissions: [] as string[] };
+  }
 
   await ensureUserProfile(userId, session.user.email).catch((error) => {
     console.error(`Failed to ensure a user profile for ${userId}`, error);
   });
 
   const roles = await getUserRoleNames(userId).catch(() => [] as string[]);
-  return { session, roles };
+  // Serialised as an array because router context crosses the wire; the client
+  // rebuilds a Set only where it matters. `['*']` means owner — see
+  // `getUserPermissions`.
+  const permissions = await getUserPermissions(roles)
+    .then((set) => [...set])
+    .catch(() => [] as string[]);
+  return { session, roles, permissions };
 }

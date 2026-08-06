@@ -5,7 +5,7 @@ import {
   getCourseSlugForLesson,
   isSubscribedToCourse,
 } from '#/db/lesson-access';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
   evaluateLessonLock,
   evaluateMaterialLock,
@@ -80,7 +80,7 @@ export async function evaluateLessonGate({
     throw new Error(`Course payload unavailable for ${course.courseSlug}`);
   }
 
-  const isAdmin = roles.includes(ADMIN_ROLE);
+  const isAdmin = hasAdminAccess(roles);
   if (isAdmin) {
     return {
       ...course,

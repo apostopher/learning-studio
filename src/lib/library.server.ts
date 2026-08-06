@@ -6,7 +6,7 @@ import {
 import { getCourseProgress } from '#/db/course-progress';
 import { isSubscribedToCourse } from '#/db/lesson-access';
 import { getLibraryForCourse } from '#/db/library';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 import { type LibraryFile, resolveLibraryFiles } from '#/lib/library-gating';
 
@@ -41,7 +41,7 @@ export async function getLibraryForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  const isAdmin = roles.includes(ADMIN_ROLE);
+  const isAdmin = hasAdminAccess(roles);
   if (!isAdmin && !subscribed) return { adminBypass: false, files: [] };
 
   const [library, details, progress] = await Promise.all([

@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import type { LearnerCourseDetails } from '#/lib/course-details-shape';
 import { toLearnerCourseDetails } from '#/lib/course-details-shape';
@@ -59,7 +59,7 @@ export async function getCourseDetailsHandler(
     getUserRoleNames(session.user.id),
     isSubscribedToCourseSlug(session.user.id, slug),
   ]);
-  if (!roles.includes(ADMIN_ROLE) && !subscribed) {
+  if (!hasAdminAccess(roles) && !subscribed) {
     return new Response('Forbidden', { status: 403 });
   }
 

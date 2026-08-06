@@ -114,3 +114,20 @@ export const pendingDeletePersonaIdAtom = atom<number | null>(null);
 
 /** Draft name in the "New persona" inline field. Reset after a create. */
 export const newPersonaNameAtom = atom('');
+
+/** Person whose detail modal is open on /admin/users. */
+export const openUserRowAtom = atom<{
+  kind: 'user' | 'pending';
+  profileId: number | null;
+  email: string;
+  name: string;
+  roles: string[];
+  courses: { id: number; name: string }[];
+  firstName: string | null;
+  lastName: string | null;
+  callSign: string | null;
+  phoneNumber: string | null;
+} | null>(null);
+
+/** Draft email in the "add by email" field. Cleared after a successful add. */
+export const addUserEmailAtom = atom('');

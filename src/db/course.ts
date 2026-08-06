@@ -6,7 +6,7 @@ import {
   progressComponentGroupBy,
   toComponentFields,
 } from '#/db/progress-components';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { resolveCardResume } from '#/lib/course-card-resume';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
@@ -318,7 +318,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
     getLastViewedLessonIdsByCourse(userId),
     getUserRoleNames(userId),
   ]);
-  const bypassLocks = roles.includes(ADMIN_ROLE);
+  const bypassLocks = hasAdminAccess(roles);
 
   return Promise.all(
     [...courses.values()].map(async (course): Promise<MyCourseSummary> => {

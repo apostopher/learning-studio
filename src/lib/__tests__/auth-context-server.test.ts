@@ -5,12 +5,16 @@ const m = vi.hoisted(() => ({
   getSession: vi.fn(),
   ensureUserProfile: vi.fn(),
   getUserRoleNames: vi.fn(),
+  getUserPermissions: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
 vi.mock('#/db/user-profile', () => ({
   ensureUserProfile: m.ensureUserProfile,
 }));
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
+vi.mock('#/db/permissions', () => ({
+  getUserPermissions: m.getUserPermissions,
+}));
 
 import { resolveAuthContext } from '#/lib/auth-context.server';
 
@@ -23,6 +27,7 @@ beforeEach(() => {
   });
   m.ensureUserProfile.mockResolvedValue(undefined);
   m.getUserRoleNames.mockResolvedValue([]);
+  m.getUserPermissions.mockResolvedValue(new Set<string>());
 });
 
 /**
@@ -66,7 +71,7 @@ describe('resolveAuthContext', () => {
 
     expect(m.ensureUserProfile).not.toHaveBeenCalled();
     expect(m.getUserRoleNames).not.toHaveBeenCalled();
-    expect(result).toEqual({ session: null, roles: [] });
+    expect(result).toEqual({ session: null, roles: [], permissions: [] });
   });
 
   it('still returns roles when the profile ensure fails', async () => {
@@ -86,5 +91,34 @@ describe('resolveAuthContext', () => {
     const result = await resolveAuthContext(HEADERS);
 
     expect(result.roles).toEqual([]);
+  });
+
+  it('carries permissions into router context, serialised as an array', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['enrolment:create']));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    // Route gating reads this in `beforeLoad`; a Set would not survive the
+    // wire, so the array form is the contract.
+    expect(result.permissions).toEqual(['enrolment:create']);
+  });
+
+  it("passes the owner's wildcard through untouched", async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['owner']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['*']));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(result.permissions).toEqual(['*']);
+  });
+
+  it('degrades to no permissions if the lookup fails', async () => {
+    m.getUserPermissions.mockRejectedValueOnce(new Error('db down'));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    // Failing closed: a transient error must hide controls, never reveal them.
+    expect(result.permissions).toEqual([]);
   });
 });

@@ -470,3 +470,158 @@ export const coursePersonaSelectionSchema = z.object({
 export type CoursePersonaSelection = z.infer<
   typeof coursePersonaSelectionSchema
 >;
+
+/** Superuser. Bypasses every permission check; only an owner may grant roles. */
+export const OWNER_ROLE = 'owner';
+
+/**
+ * Roles that satisfy the existing admin gates.
+ *
+ * `owner` is a superuser, so it must pass everything `admin` passes — widening
+ * the check in one place keeps the 34 content routes untouched and avoids
+ * giving owners a duplicate `admin` row, where revoking one would silently
+ * strip access from someone still reading as owner.
+ */
+export function hasAdminAccess(roles: string[]): boolean {
+  return roles.includes(ADMIN_ROLE) || roles.includes(OWNER_ROLE);
+}
+
+/**
+ * Entities that permissions are expressed over. `enrolment` is separate from
+ * `user` on purpose: assigning a course is the day-to-day delegated task,
+ * while editing profiles is not, and they should be grantable independently.
+ */
+export const PERMISSION_ENTITIES = ['user', 'enrolment'] as const;
+export type PermissionEntity = (typeof PERMISSION_ENTITIES)[number];
+
+export const PERMISSION_ACTIONS = [
+  'create',
+  'read',
+  'update',
+  'delete',
+] as const;
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
+
+/**
+ * Only the combinations that have an endpoint behind them.
+ *
+ * `user:delete` is deferred (account deletion is the most destructive thing in
+ * the app and shouldn't ship alongside the system that guards it), and
+ * `enrolment:update` is meaningless — a subscription row has nothing to edit.
+ * A checkbox that enforces nothing is a dead field at the permission layer.
+ */
+export const GRANTABLE_PERMISSIONS: Record<
+  PermissionEntity,
+  readonly PermissionAction[]
+> = {
+  user: ['read', 'create', 'update'],
+  enrolment: ['read', 'create', 'delete'],
+};
+
+export const permissionSchema = z.object({
+  entity: z.enum(PERMISSION_ENTITIES),
+  action: z.enum(PERMISSION_ACTIONS),
+});
+export type Permission = z.infer<typeof permissionSchema>;
+
+/** Wire format: "entity:action", e.g. "enrolment:create". */
+export function permissionKey(entity: string, action: string): string {
+  return `${entity}:${action}`;
+}
+
+/**
+ * Profile fields an admin may edit.
+ *
+ * Everything on the profile except `email` — a separate column from the auth
+ * record that governs sign-in, so editing it only creates drift — and
+ * `associateNumber`, which comes from a counter rather than free text.
+ * `pilotLicenses` is omitted for now: it is a nested array whose editor is a
+ * feature of its own, and no admin surface asks for it yet.
+ */
+export const updateUserProfileInputSchema = z.object({
+  firstName: z.string().trim().max(100).nullable().optional(),
+  lastName: z.string().trim().max(100).nullable().optional(),
+  callSign: z.string().trim().max(100).nullable().optional(),
+  phoneNumber: z.string().trim().max(100).nullable().optional(),
+  age: z.number().int().min(0).max(150).nullable().optional(),
+  gender: z.enum(['M', 'F']).nullable().optional(),
+  uasLicenseCountry: z.string().trim().length(3).nullable().optional(),
+  uasWeightClass: z.string().trim().max(50).nullable().optional(),
+});
+export type UpdateUserProfileInput = z.infer<
+  typeof updateUserProfileInputSchema
+>;
+
+/** POST body for pre-assigning a course to an email with no account yet. */
+export const addPendingEnrolmentInputSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address'),
+  courseIds: z.array(z.number().int().positive()).min(1, 'Pick a course'),
+});
+export type AddPendingEnrolmentInput = z.infer<
+  typeof addPendingEnrolmentInputSchema
+>;
+
+/** PUT body for granting/revoking a course on an existing account. */
+export const setEnrolmentInputSchema = z.object({
+  courseId: z.number().int().positive(),
+  granted: z.boolean(),
+});
+
+/** PUT body for granting/revoking a role. Owner-only at the route layer. */
+export const setUserRoleInputSchema = z.object({
+  role: z.string().trim().min(1),
+  granted: z.boolean(),
+});
+
+/** PUT body for the role permission grid. Owner-only. */
+export const setRolePermissionInputSchema = z.object({
+  role: z.string().trim().min(1),
+  entity: z.enum(PERMISSION_ENTITIES),
+  action: z.enum(PERMISSION_ACTIONS),
+  granted: z.boolean(),
+});
+
+/** A user row as GET /api/admin/users delivers it. */
+export const adminUserSchema = z.object({
+  profileId: z.number(),
+  userId: z.string(),
+  email: z.string(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  callSign: z.string().nullable(),
+  phoneNumber: z.string().nullable(),
+  roles: z.array(z.string()),
+  courses: z.array(z.object({ id: z.number(), name: z.string() })),
+  createdAt: z.string(),
+});
+export type AdminUserRow = z.infer<typeof adminUserSchema>;
+
+/** Someone pre-assigned courses who has never signed in. */
+export const pendingPersonSchema = z.object({
+  email: z.string(),
+  addedAt: z.string(),
+  courses: z.array(z.object({ id: z.number(), name: z.string() })),
+});
+export type PendingPersonRow = z.infer<typeof pendingPersonSchema>;
+
+export const adminUsersResponseSchema = z.object({
+  users: z.array(adminUserSchema),
+  pending: z.array(pendingPersonSchema),
+});
+
+/**
+ * Client-side permission check. `'*'` is the owner's wildcard.
+ *
+ * Mirrors the server's `hasPermission`, but takes the serialised array that
+ * router context carries rather than a Set.
+ */
+export function hasPermissionKey(
+  permissions: string[],
+  entity: PermissionEntity,
+  action: PermissionAction,
+): boolean {
+  return (
+    permissions.includes('*') ||
+    permissions.includes(permissionKey(entity, action))
+  );
+}

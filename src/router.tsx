@@ -8,7 +8,7 @@ export function getRouter() {
 
   const router = createTanStackRouter({
     routeTree,
-    context: { ...context, session: null, roles: [] },
+    context: { ...context, session: null, roles: [], permissions: [] },
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,

@@ -5,7 +5,7 @@ import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getLastViewedLessonId } from '#/db/course-last-viewed';
 import { getCourseProgress } from '#/db/course-progress';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
@@ -56,7 +56,7 @@ export const getCourseResumeTarget = createServerFn({ method: 'GET' })
       throw new Error(`Course payload unavailable for ${data.courseSlug}`);
     }
 
-    const isAdmin = roles.includes(ADMIN_ROLE);
+    const isAdmin = hasAdminAccess(roles);
 
     // Progress is only needed to evaluate locks, and an admin has none to
     // evaluate — skip the aggregation entirely for them.

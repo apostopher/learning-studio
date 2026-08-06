@@ -4,6 +4,7 @@ import { emailOTP } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 
 import { db } from '../db';
+import { claimPendingEnrolments } from '../db/pending-enrolments';
 import { ensureUserProfile } from '../db/user-profile';
 import { env } from '../env';
 import { sendOtpEmail } from './email/send-otp-email';
@@ -50,9 +51,22 @@ export const auth = betterAuth({
         after: async (user) => {
           try {
             await ensureUserProfile(user.id, user.email);
+            // Only after the profile exists: course_subscriptions.user_id
+            // references it, so the order here is a foreign key, not a
+            // preference. An admin who pre-assigned courses to this email
+            // expects them to be there on the first page the person sees.
+            const claimed = await claimPendingEnrolments({
+              userId: user.id,
+              email: user.email,
+            });
+            if (claimed > 0) {
+              console.info(
+                `Claimed ${claimed} pre-assigned course(s) for ${user.email}.`,
+              );
+            }
           } catch (error) {
             console.error(
-              `Failed to create user profile for ${user.id}; the authenticated-request repair will retry.`,
+              `Failed to set up account ${user.id}; the authenticated-request repair will retry.`,
               error,
             );
           }

@@ -10,7 +10,7 @@ import {
   lessonsTable,
   modulesTable,
 } from '#/db/schema';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
   type CourseContent,
   courseContentToHtml,
@@ -131,7 +131,7 @@ export async function getCourseContentForAgent(
     getUserRoleNames(userId),
     isSubscribedToCourseSlug(userId, slug),
   ]);
-  const isAdmin = roles.includes(ADMIN_ROLE);
+  const isAdmin = hasAdminAccess(roles);
 
   // Filter 2: subscription, checked BEFORE any lock is evaluated and before
   // any course content is assembled. The lock predicates only prove a lesson's

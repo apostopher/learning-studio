@@ -9,7 +9,7 @@ import {
   listVisibleFeedRows,
   setSourceMuted,
 } from '#/db/news-feed';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { latestFirstSeenAt, shapeNewsFeed } from '#/lib/news-feed-shaping';
 import type { NewsFeedResponse } from '#/lib/news-schemas';
 
@@ -44,7 +44,7 @@ export async function getNewsForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  const isAdmin = roles.includes(ADMIN_ROLE);
+  const isAdmin = hasAdminAccess(roles);
   if (!isAdmin && !subscribed) {
     return {
       articles: [],
@@ -102,7 +102,7 @@ export async function setNewsSourceMuted({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, courseId),
   ]);
-  if (!subscribed && !roles.includes(ADMIN_ROLE)) {
+  if (!subscribed && !hasAdminAccess(roles)) {
     return { ok: false, reason: 'not_found' };
   }
 

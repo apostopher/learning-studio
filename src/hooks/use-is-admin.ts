@@ -1,5 +1,5 @@
 import { useRouteContext } from '@tanstack/react-router';
-import { ADMIN_ROLE } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 
 /**
  * Whether the signed-in user is an admin, from data the client already holds.
@@ -29,5 +29,5 @@ export function useIsAdmin(): boolean {
     | { roles?: unknown }
     | undefined;
   const roles = context?.roles;
-  return Array.isArray(roles) && roles.includes(ADMIN_ROLE);
+  return Array.isArray(roles) && hasAdminAccess(roles);
 }

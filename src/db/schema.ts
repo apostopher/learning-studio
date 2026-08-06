@@ -630,6 +630,96 @@ export const userRolesTableRelations = relations(
   userRolesTable,
   ({ many }) => ({
     users: many(userProfileRolesTable),
+    permissions: many(rolePermissionsTable),
+  }),
+);
+
+/**
+ * What a role may do, as entity × action.
+ *
+ * Granted to roles rather than to people, so "what can an admin do" has one
+ * answer instead of needing every admin inspected. Per-user overrides can be
+ * layered later as a second table unioned at check time — additive, so this
+ * stays the reversible choice.
+ *
+ * `owner` is deliberately absent from this table: it bypasses permission
+ * checks entirely (see `requirePermission`), so rows for it would be
+ * unreadable configuration that changes nothing.
+ *
+ * Entity and action are plain text rather than Postgres enums so adding an
+ * entity doesn't need a migration; the zod schemas at the API edge are what
+ * constrain the values.
+ */
+export const rolePermissionsTable = pgTable(
+  'role_permissions',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => userRolesTable.id, { onDelete: 'cascade' }),
+    entity: varchar('entity', { length: 50 }).notNull(),
+    action: varchar('action', { length: 20 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('role_permissions_role_entity_action_idx').on(
+      t.roleId,
+      t.entity,
+      t.action,
+    ),
+    index('role_permissions_role_idx').on(t.roleId),
+  ],
+);
+
+export const rolePermissionsRelations = relations(
+  rolePermissionsTable,
+  ({ one }) => ({
+    role: one(userRolesTable, {
+      fields: [rolePermissionsTable.roleId],
+      references: [userRolesTable.id],
+    }),
+  }),
+);
+
+/**
+ * A course assigned to an email address before that person has ever signed in.
+ *
+ * `course_subscriptions.user_id` references a real profile row, which cannot
+ * exist until first sign-in — so pre-assignment needs its own home. Kept at
+ * one row per (email, course), mirroring `course_subscriptions` exactly, which
+ * makes the claim a straight copy and makes adding or removing a single course
+ * a row insert/delete rather than an array rewrite.
+ *
+ * `claimedAt` is stamped rather than the row deleted, so the users list can
+ * still show who was invited and when.
+ */
+export const pendingEnrolmentsTable = pgTable(
+  'pending_enrolments',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    email: varchar('email', { length: 100 }).notNull(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    /** Acting admin/owner's user id — a plain id, see `grantedBy`. */
+    addedBy: varchar('added_by', { length: 255 }),
+    addedAt: timestamp('added_at', { mode: 'date' }).notNull().defaultNow(),
+    /** Null until the person first signs in and the row is applied. */
+    claimedAt: timestamp('claimed_at', { mode: 'date' }),
+  },
+  (t) => [
+    uniqueIndex('pending_enrolments_email_course_idx').on(t.email, t.courseId),
+    index('pending_enrolments_email_idx').on(t.email),
+  ],
+);
+
+export const pendingEnrolmentsRelations = relations(
+  pendingEnrolmentsTable,
+  ({ one }) => ({
+    course: one(coursesTable, {
+      fields: [pendingEnrolmentsTable.courseId],
+      references: [coursesTable.id],
+    }),
   }),
 );
 
@@ -918,6 +1008,15 @@ export const courseSubscriptionsTable = pgTable(
     courseId: integer('course_id')
       .notNull()
       .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    /**
+     * Who granted this entitlement — an admin/owner's user id, or null when it
+     * arrived any other way (seeded, or claimed from a pending row on first
+     * sign-in, where `pending_enrolments.addedBy` holds the real actor).
+     *
+     * A plain id rather than an FK: the audit string should outlive the
+     * account that created it.
+     */
+    grantedBy: varchar('granted_by', { length: 255 }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },

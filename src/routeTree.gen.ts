@@ -35,10 +35,13 @@ import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/detail
 import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
 import { Route as ApiChatTranscribeRouteImport } from './routes/api/chat/transcribe'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
 import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
+import { Route as ApiAdminRolePermissionsRouteImport } from './routes/api/admin/role-permissions'
 import { Route as ApiAdminPersonasRouteImport } from './routes/api/admin/personas'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
+import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
 import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
@@ -52,6 +55,7 @@ import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/cours
 import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
 import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
 import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
+import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
 import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
 import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
 import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
@@ -62,6 +66,8 @@ import { Route as AuthedCourseCourseSlugNewsRouteImport } from './routes/_authed
 import { Route as AuthedCourseCourseSlugLibraryRouteImport } from './routes/_authed/course.$courseSlug.library'
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
 import { Route as AuthedCourseCourseSlugModulesIndexRouteImport } from './routes/_authed/course.$courseSlug.modules.index'
+import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
+import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
 import { Route as ApiAdminPersonasPersonaIdPublishRouteImport } from './routes/api/admin/personas.$personaId.publish'
 import { Route as ApiAdminPersonasPersonaIdDraftRouteImport } from './routes/api/admin/personas.$personaId.draft'
 import { Route as ApiAdminPersonasPersonaIdDefaultRouteImport } from './routes/api/admin/personas.$personaId.default'
@@ -211,9 +217,19 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminUploadsRoute = ApiAdminUploadsRouteImport.update({
   id: '/api/admin/uploads',
   path: '/api/admin/uploads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminRolePermissionsRoute = ApiAdminRolePermissionsRouteImport.update({
+  id: '/api/admin/role-permissions',
+  path: '/api/admin/role-permissions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminPersonasRoute = ApiAdminPersonasRouteImport.update({
@@ -230,6 +246,11 @@ const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
   id: '/course/$courseSlug',
   path: '/course/$courseSlug',
   getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 const AuthedCourseCourseSlugIndexRoute =
   AuthedCourseCourseSlugIndexRouteImport.update({
@@ -303,6 +324,11 @@ const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
   path: '/mute',
   getParentRoute: () => ApiCourseNewsRoute,
 } as any)
+const ApiAdminUsersProfileIdRoute = ApiAdminUsersProfileIdRouteImport.update({
+  id: '/$profileId',
+  path: '/$profileId',
+  getParentRoute: () => ApiAdminUsersRoute,
+} as any)
 const ApiAdminPersonasPersonaIdRoute =
   ApiAdminPersonasPersonaIdRouteImport.update({
     id: '/$personaId',
@@ -359,6 +385,18 @@ const AuthedCourseCourseSlugModulesIndexRoute =
     id: '/modules/',
     path: '/modules/',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
+  } as any)
+const ApiAdminUsersProfileIdRolesRoute =
+  ApiAdminUsersProfileIdRolesRouteImport.update({
+    id: '/roles',
+    path: '/roles',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
+  } as any)
+const ApiAdminUsersProfileIdEnrolmentsRoute =
+  ApiAdminUsersProfileIdEnrolmentsRouteImport.update({
+    id: '/enrolments',
+    path: '/enrolments',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
   } as any)
 const ApiAdminPersonasPersonaIdPublishRoute =
   ApiAdminPersonasPersonaIdPublishRouteImport.update({
@@ -471,10 +509,13 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
+  '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
@@ -502,6 +543,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
+  '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -529,6 +571,8 @@ export interface FileRoutesByFullPath {
   '/api/admin/personas/$personaId/default': typeof ApiAdminPersonasPersonaIdDefaultRoute
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
+  '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -541,9 +585,12 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
+  '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
@@ -571,6 +618,7 @@ export interface FileRoutesByTo {
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
+  '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -598,6 +646,8 @@ export interface FileRoutesByTo {
   '/api/admin/personas/$personaId/default': typeof ApiAdminPersonasPersonaIdDefaultRoute
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
+  '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -613,10 +663,13 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
+  '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
+  '/api/admin/users': typeof ApiAdminUsersRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/chat/transcribe': typeof ApiChatTranscribeRoute
   '/api/chats/$chatId': typeof ApiChatsChatIdRoute
@@ -644,6 +697,7 @@ export interface FileRoutesById {
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
+  '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -671,6 +725,8 @@ export interface FileRoutesById {
   '/api/admin/personas/$personaId/default': typeof ApiAdminPersonasPersonaIdDefaultRoute
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
+  '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -686,10 +742,13 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/admin/users'
     | '/course/$courseSlug'
     | '/api/admin/courses'
     | '/api/admin/personas'
+    | '/api/admin/role-permissions'
     | '/api/admin/uploads'
+    | '/api/admin/users'
     | '/api/auth/$'
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
@@ -717,6 +776,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/admin/personas/$personaId'
+    | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -744,6 +804,8 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/default'
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
+    | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/roles'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -756,9 +818,12 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/admin/users'
     | '/api/admin/courses'
     | '/api/admin/personas'
+    | '/api/admin/role-permissions'
     | '/api/admin/uploads'
+    | '/api/admin/users'
     | '/api/auth/$'
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
@@ -786,6 +851,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/admin/personas/$personaId'
+    | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -813,6 +879,8 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/default'
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
+    | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/roles'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -827,10 +895,13 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/_authed/admin/users'
     | '/_authed/course/$courseSlug'
     | '/api/admin/courses'
     | '/api/admin/personas'
+    | '/api/admin/role-permissions'
     | '/api/admin/uploads'
+    | '/api/admin/users'
     | '/api/auth/$'
     | '/api/chat/transcribe'
     | '/api/chats/$chatId'
@@ -858,6 +929,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
     | '/api/admin/personas/$personaId'
+    | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -885,6 +957,8 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/default'
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
+    | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/roles'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -900,7 +974,9 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
   ApiAdminPersonasRoute: typeof ApiAdminPersonasRouteWithChildren
+  ApiAdminRolePermissionsRoute: typeof ApiAdminRolePermissionsRoute
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
+  ApiAdminUsersRoute: typeof ApiAdminUsersRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCourseDetailsRoute: typeof ApiCourseDetailsRoute
   ApiCourseLibraryRoute: typeof ApiCourseLibraryRoute
@@ -1116,11 +1192,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/uploads': {
       id: '/api/admin/uploads'
       path: '/api/admin/uploads'
       fullPath: '/api/admin/uploads'
       preLoaderRoute: typeof ApiAdminUploadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/role-permissions': {
+      id: '/api/admin/role-permissions'
+      path: '/api/admin/role-permissions'
+      fullPath: '/api/admin/role-permissions'
+      preLoaderRoute: typeof ApiAdminRolePermissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/personas': {
@@ -1143,6 +1233,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/course/$courseSlug'
       preLoaderRoute: typeof AuthedCourseCourseSlugRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin/users': {
+      id: '/_authed/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthedAdminUsersRouteImport
+      parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/course/$courseSlug/': {
       id: '/_authed/course/$courseSlug/'
@@ -1235,6 +1332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCourseNewsMuteRouteImport
       parentRoute: typeof ApiCourseNewsRoute
     }
+    '/api/admin/users/$profileId': {
+      id: '/api/admin/users/$profileId'
+      path: '/$profileId'
+      fullPath: '/api/admin/users/$profileId'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdRouteImport
+      parentRoute: typeof ApiAdminUsersRoute
+    }
     '/api/admin/personas/$personaId': {
       id: '/api/admin/personas/$personaId'
       path: '/$personaId'
@@ -1304,6 +1408,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/course/$courseSlug/modules/'
       preLoaderRoute: typeof AuthedCourseCourseSlugModulesIndexRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
+    }
+    '/api/admin/users/$profileId/roles': {
+      id: '/api/admin/users/$profileId/roles'
+      path: '/roles'
+      fullPath: '/api/admin/users/$profileId/roles'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdRolesRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
+    '/api/admin/users/$profileId/enrolments': {
+      id: '/api/admin/users/$profileId/enrolments'
+      path: '/enrolments'
+      fullPath: '/api/admin/users/$profileId/enrolments'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdEnrolmentsRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
     }
     '/api/admin/personas/$personaId/publish': {
       id: '/api/admin/personas/$personaId/publish'
@@ -1428,11 +1546,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteChildren {
+  AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedAdminCourseIdEditorRoute: typeof AuthedAdminCourseIdEditorRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedAdminCourseIdEditorRoute: AuthedAdminCourseIdEditorRoute,
 }
@@ -1608,6 +1728,35 @@ const ApiAdminPersonasRouteChildren: ApiAdminPersonasRouteChildren = {
 const ApiAdminPersonasRouteWithChildren =
   ApiAdminPersonasRoute._addFileChildren(ApiAdminPersonasRouteChildren)
 
+interface ApiAdminUsersProfileIdRouteChildren {
+  ApiAdminUsersProfileIdEnrolmentsRoute: typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  ApiAdminUsersProfileIdRolesRoute: typeof ApiAdminUsersProfileIdRolesRoute
+}
+
+const ApiAdminUsersProfileIdRouteChildren: ApiAdminUsersProfileIdRouteChildren =
+  {
+    ApiAdminUsersProfileIdEnrolmentsRoute:
+      ApiAdminUsersProfileIdEnrolmentsRoute,
+    ApiAdminUsersProfileIdRolesRoute: ApiAdminUsersProfileIdRolesRoute,
+  }
+
+const ApiAdminUsersProfileIdRouteWithChildren =
+  ApiAdminUsersProfileIdRoute._addFileChildren(
+    ApiAdminUsersProfileIdRouteChildren,
+  )
+
+interface ApiAdminUsersRouteChildren {
+  ApiAdminUsersProfileIdRoute: typeof ApiAdminUsersProfileIdRouteWithChildren
+}
+
+const ApiAdminUsersRouteChildren: ApiAdminUsersRouteChildren = {
+  ApiAdminUsersProfileIdRoute: ApiAdminUsersProfileIdRouteWithChildren,
+}
+
+const ApiAdminUsersRouteWithChildren = ApiAdminUsersRoute._addFileChildren(
+  ApiAdminUsersRouteChildren,
+)
+
 interface ApiCourseNewsRouteChildren {
   ApiCourseNewsMuteRoute: typeof ApiCourseNewsMuteRoute
 }
@@ -1662,7 +1811,9 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
   ApiAdminPersonasRoute: ApiAdminPersonasRouteWithChildren,
+  ApiAdminRolePermissionsRoute: ApiAdminRolePermissionsRoute,
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,
+  ApiAdminUsersRoute: ApiAdminUsersRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCourseDetailsRoute: ApiCourseDetailsRoute,
   ApiCourseLibraryRoute: ApiCourseLibraryRoute,
