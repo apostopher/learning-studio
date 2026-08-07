@@ -14,7 +14,7 @@ import {
 import { AddModuleButton } from './add-module-button';
 import { CreateModuleForm } from './create-module-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
-import { IconButtonTooltip } from './tooltip-icon-button';
+import { IconButtonTooltip } from '../ui/tooltip-icon-button';
 
 export const CreateModuleDialogContainer = ({
   courseId,

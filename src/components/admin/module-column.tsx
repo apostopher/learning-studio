@@ -4,7 +4,7 @@ import type { BoardModule } from '@/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
 import { LessonCard } from './lesson-card';
 import { OptimizedPicture } from './optimized-picture';
-import { TooltipIconButton } from './tooltip-icon-button';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 export const ModuleColumn = ({
   module: mod,

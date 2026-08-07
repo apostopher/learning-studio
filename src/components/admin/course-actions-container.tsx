@@ -7,7 +7,7 @@ import { CourseEmbeddingsDialogContainer } from './course-embeddings-dialog-cont
 import { CreateModuleDialogContainer } from './create-module-dialog-container';
 import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
-import { TooltipIconButton } from './tooltip-icon-button';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /** Course-level action toolbar: add module, AI training, edit course, delete course. */
 export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {

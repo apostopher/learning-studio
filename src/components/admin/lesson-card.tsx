@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
 import { LessonVideoTile } from './lesson-video-tile';
-import { TooltipIconButton } from './tooltip-icon-button';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 export const LessonCard = ({
   lesson,

@@ -1,7 +1,7 @@
 import { Button } from '@base-ui/react/button';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { iconButtonClass } from './tooltip-icon-button';
+import { iconButtonClass } from '../ui/tooltip-icon-button';
 
 /**
  * Icon-only "Add module" button. Shares the admin toolbar icon-button style so
