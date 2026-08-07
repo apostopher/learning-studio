@@ -1,6 +1,5 @@
-import { LogOut } from 'lucide-react';
 import { Logo } from './logo';
-import { TooltipIconButton } from './ui/tooltip-icon-button';
+import { SignOutButton } from './sign-out-button';
 
 type AppHeaderProps = {
   onSignOut: () => void;
@@ -26,20 +25,7 @@ export const AppHeader = ({ onSignOut, isSigningOut }: AppHeaderProps) => (
           rebranding is an env change rather than a code change. */}
       <Logo className="inline-flex h-8 w-8 shrink-0 items-center justify-center" />
 
-      <TooltipIconButton
-        // The label is the accessible name as well as the tooltip text, so the
-        // pending state is announced, not just drawn.
-        label={isSigningOut ? 'Signing out…' : 'Sign out'}
-        onClick={onSignOut}
-        disabled={isSigningOut}
-        variant="danger"
-        // Overrides the 28px admin-toolbar default: this is a primary,
-        // touch-reachable control, and 36px keeps it above the comfortable
-        // minimum without dominating the header.
-        className="h-9 w-9"
-      >
-        <LogOut className="h-4 w-4" aria-hidden="true" />
-      </TooltipIconButton>
+      <SignOutButton onSignOut={onSignOut} isSigningOut={isSigningOut} />
     </div>
   </header>
 );

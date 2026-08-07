@@ -16,6 +16,7 @@ import { AppShellSkeleton } from "../../components/app-shell-skeleton";
 import { CourseHeaderNav } from "../../components/course-header-nav";
 import { LessonHeaderWrapper } from "../../components/lesson-main";
 import { CourseSidebarWrapper } from "../../components/sidebar/course-sidebar-wrapper";
+import { SignOutButtonContainer } from "../../components/sign-out-button-container";
 
 export const Route = createFileRoute("/_authed/course/$courseSlug")({
   beforeLoad: async ({ context, params }) => {
@@ -159,6 +160,10 @@ function CourseLayout() {
             ) : null}
           </div>
           <CourseHeaderNav courseSlug={courseSlug} />
+          {/* Trailing-most, after the section nav: sign-out is an exit from
+              the whole app, not another destination within it, so it sits
+              outside the nav landmark rather than reading as a fifth tab. */}
+          <SignOutButtonContainer />
         </div>
       }
       aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
