@@ -76,7 +76,17 @@ export const env = createEnv({
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),
-    EMAIL_FROM: z.string().email().default('noreply@example.com'),
+    // Accepts either a bare address (`no-reply@example.com`) or the RFC 5322
+    // display-name form (`RMTP Studio <no-reply@example.com>`). Resend takes
+    // both, and the display name measurably helps inbox placement, so the
+    // schema must not reject it — `z.string().email()` alone does.
+    EMAIL_FROM: z
+      .string()
+      .regex(
+        /^(?:[^<>]*<\s*[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+\s*>|[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)$/,
+        'EMAIL_FROM must be "addr@domain" or "Display Name <addr@domain>"',
+      )
+      .default('noreply@example.com'),
     SYNTHESIA_API_KEY: z.string().min(1),
     DATABASE_URL: z.string().min(1),
     // Vercel Blob read-write token — powers admin client-side image uploads.
