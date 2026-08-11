@@ -9,13 +9,28 @@ import { ensureUserProfile } from '../db/user-profile';
 import { env } from '../env';
 import { sendOtpEmail } from './email/send-otp-email';
 
+/**
+ * Production hosts this app is served from, beyond `baseURL` itself.
+ *
+ * `authClient` is created without a `baseURL` (see `auth-client.ts`), so the
+ * browser posts to `/api/auth/*` on whatever host it is currently on and sends
+ * that host as the `Origin`. Better Auth rejects any request whose origin is
+ * neither `baseURL` nor listed here, and the symptom is a bare "invalid origin"
+ * at sign-in with nothing wrong on the DNS or domain side to point at. Every
+ * domain aliased to this deployment has to appear here until it *is*
+ * `BETTER_AUTH_URL`.
+ */
+const PRODUCTION_TRUSTED_ORIGINS = ['https://itps.rmtpstudio.com'];
+
 export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
   // Vite dev picks the first free port (5000 → 5001 → 5002), so the origin
   // won't always match BETTER_AUTH_URL. Trust any localhost port in dev only.
   trustedOrigins:
-    process.env.NODE_ENV === 'development' ? ['http://localhost:*'] : [],
+    process.env.NODE_ENV === 'development'
+      ? ['http://localhost:*']
+      : PRODUCTION_TRUSTED_ORIGINS,
   plugins: [
     tanstackStartCookies(),
     emailOTP({
