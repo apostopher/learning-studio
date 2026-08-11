@@ -15,6 +15,7 @@ import { AppShellFooter } from "../../components/app-shell-footer";
 import { AppShellSkeleton } from "../../components/app-shell-skeleton";
 import { CourseHeaderNav } from "../../components/course-header-nav";
 import { LessonHeaderWrapper } from "../../components/lesson-main";
+import { LogoLink } from "../../components/logo-link";
 import { CourseSidebarWrapper } from "../../components/sidebar/course-sidebar-wrapper";
 import { SignOutButtonContainer } from "../../components/sign-out-button-container";
 
@@ -143,6 +144,17 @@ function CourseLayout() {
 
   return (
     <AppShell
+      // The shell owns the viewport, so the logo goes in the header's aside
+      // cell rather than in a second header above it. `ms-4` mirrors the
+      // `pe-4` on headerMain so logo and sign-out sit at symmetric insets.
+      // Margin rather than padding, and `w-fit` rather than filling the
+      // cell: the aside cell clips overflow (`.app-shell__header-aside`),
+      // so a link stretched to the full cell box has its focus ring painted
+      // right at the clip edge (invisible) and a ~280px dead area beside the
+      // logo that still navigates. Margin keeps the ring's box inset from
+      // the clip boundary on every side, and `w-fit` shrinks the hit area to
+      // the logo itself.
+      headerAside={<LogoLink className="my-4 ms-4 flex w-fit items-center" />}
       // Always rendered now, because the nav sits at the trailing end on EVERY
       // leaf — including course home and the library, neither of which puts a
       // title here. The leaf's title stays in its own cell rather than beside

@@ -286,7 +286,13 @@ export const ModuleBoardContainer = ({
       onDragCancel={onDragCancel}
     >
       <div className="flex-1 overflow-auto">
-        <div className="flex w-max items-start gap-4 p-4">
+        {/* `h-full` gives this row a definite block-size, which
+            `.course-board__column`'s `min-block-size: calc(100% - …)` needs
+            to resolve against — a percentage against an auto-height parent
+            resolves to 0, which would silently collapse every column's
+            minimum height. Columns taller than this row (many lessons) still
+            grow past it and scroll via the parent's `overflow-auto`. */}
+        <div className="flex h-full w-max items-start gap-4 p-4">
           <SortableContext
             items={moduleIds}
             strategy={horizontalListSortingStrategy}

@@ -1,0 +1,59 @@
+import { Link } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
+import { AppHeaderContainer } from '../app-header-container';
+
+/**
+ * Chrome shared by every `/admin/*` screen: the app header (logo home + sign
+ * out) above the permission-gated section nav.
+ *
+ * Presentational apart from the header container it mounts — the permission
+ * read stays in the route, which is the only place that can perform it.
+ */
+export const AdminShellLayout = ({
+  canSeePeople,
+  children,
+}: {
+  canSeePeople: boolean;
+  children: ReactNode;
+}) => (
+  // The whole layout is now capped to the viewport so a full-height child
+  // (the course editor board) can size against it exactly, instead of
+  // assuming it owns the viewport itself. `min-h-0` on the children slot lets
+  // it shrink below its content's natural height — required for a flex child
+  // to size correctly — while ordinary scrolling pages (course list, people)
+  // are unaffected: with no `flex-1`/height of their own they still take
+  // their natural content height and overflow the slot normally, which
+  // bubbles up to a regular page-level scrollbar rather than being clipped.
+  <div className="flex h-dvh flex-col">
+    <AppHeaderContainer />
+    {canSeePeople && (
+      <nav
+        aria-label="Admin sections"
+        className="content-grid border-gray-6 border-b bg-gray-2"
+      >
+        <div className="content flex gap-1 py-2">
+          <AdminNavLink to="/admin">Courses</AdminNavLink>
+          <AdminNavLink to="/admin/users">People</AdminNavLink>
+        </div>
+      </nav>
+    )}
+    <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+  </div>
+);
+
+const AdminNavLink = ({
+  to,
+  children,
+}: {
+  to: string;
+  children: ReactNode;
+}) => (
+  <Link
+    to={to}
+    // `exact` on /admin only, so /admin/users doesn't light both links up.
+    activeOptions={{ exact: to === '/admin' }}
+    className="rounded-lg px-3 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 data-[status=active]:bg-gray-4 data-[status=active]:text-primary"
+  >
+    {children}
+  </Link>
+);

@@ -11,7 +11,7 @@ export const CourseBoard = ({
   children: React.ReactNode;
 }) => {
   return (
-    <div className="course-board flex h-dvh flex-col">
+    <div className="course-board flex min-h-0 flex-1 flex-col">
       <header className="flex h-[var(--board-header-height)] items-center gap-3 border-b border-gray-6 px-4">
         <Link
           to="/admin"
