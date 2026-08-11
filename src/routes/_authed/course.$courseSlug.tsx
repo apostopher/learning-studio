@@ -15,6 +15,7 @@ import { AppShellFooter } from "../../components/app-shell-footer";
 import { AppShellSkeleton } from "../../components/app-shell-skeleton";
 import { CourseHeaderNav } from "../../components/course-header-nav";
 import { LessonHeaderWrapper } from "../../components/lesson-main";
+import { LogoLink } from "../../components/logo-link";
 import { CourseSidebarWrapper } from "../../components/sidebar/course-sidebar-wrapper";
 import { SignOutButtonContainer } from "../../components/sign-out-button-container";
 
@@ -143,6 +144,10 @@ function CourseLayout() {
 
   return (
     <AppShell
+      // The shell owns the viewport, so the logo goes in the header's aside
+      // cell rather than in a second header above it. `ps-4` mirrors the
+      // `pe-4` on headerMain so logo and sign-out sit at symmetric insets.
+      headerAside={<LogoLink className="flex h-full items-center ps-4" />}
       // Always rendered now, because the nav sits at the trailing end on EVERY
       // leaf — including course home and the library, neither of which puts a
       // title here. The leaf's title stays in its own cell rather than beside
