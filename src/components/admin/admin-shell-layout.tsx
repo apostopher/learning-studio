@@ -16,7 +16,15 @@ export const AdminShellLayout = ({
   canSeePeople: boolean;
   children: ReactNode;
 }) => (
-  <>
+  // The whole layout is now capped to the viewport so a full-height child
+  // (the course editor board) can size against it exactly, instead of
+  // assuming it owns the viewport itself. `min-h-0` on the children slot lets
+  // it shrink below its content's natural height — required for a flex child
+  // to size correctly — while ordinary scrolling pages (course list, people)
+  // are unaffected: with no `flex-1`/height of their own they still take
+  // their natural content height and overflow the slot normally, which
+  // bubbles up to a regular page-level scrollbar rather than being clipped.
+  <div className="flex h-dvh flex-col">
     <AppHeaderContainer />
     {canSeePeople && (
       <nav
@@ -29,8 +37,8 @@ export const AdminShellLayout = ({
         </div>
       </nav>
     )}
-    {children}
-  </>
+    <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+  </div>
 );
 
 const AdminNavLink = ({

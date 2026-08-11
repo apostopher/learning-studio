@@ -56,7 +56,9 @@ const renderHeader = async (props: {
   // biome-ignore lint/suspicious/noExplicitAny: test-only router tree, not the app's registered one
   render(<RouterProvider router={router as any} />);
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: /Sign(ing)? out/ })).toBeDefined(),
+    expect(
+      screen.getByRole('button', { name: /Sign(ing)? out/ }),
+    ).toBeDefined(),
   );
 };
 

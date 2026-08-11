@@ -1002,8 +1002,11 @@
 }
 
 @layer components {
-  /* Course editor board: header + sub-header heights are the single source of
-     truth so a module column can fill the remaining viewport below them. */
+  /* Course editor board: header + sub-header heights size the header row
+     elements directly (see course-board.tsx). The remaining space they leave
+     for the board body comes from flex layout now (`.course-board` is a
+     `flex-1 min-h-0` column inside its shell), not from a viewport
+     calculation — see `.course-board__column` below. */
   .course-board {
     --board-header-height: 3.5rem;
     --board-subheader-height: 3.25rem;
@@ -1012,12 +1015,14 @@
   }
 
   /* Each module column is at least the remaining vertical space, so short or
-     empty columns still span the board (and read as full drop targets). */
+     empty columns still span the board (and read as full drop targets).
+     `100%` is relative to the columns row, which is `h-full` inside the
+     board's `flex-1 overflow-auto` region — i.e. whatever space is actually
+     left after the shell chrome and the board's own header/sub-header, on
+     any screen the board is mounted in (not a viewport calculation, which
+     would be wrong whenever the board sits below other chrome). */
   .course-board__column {
-    min-block-size: calc(
-      100dvh - var(--board-header-height) - var(--board-subheader-height) -
-        (var(--board-column-inset) * 2)
-    );
+    min-block-size: calc(100% - (var(--board-column-inset) * 2));
   }
 }
 
