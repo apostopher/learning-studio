@@ -171,14 +171,24 @@ Each new test must be seen to fail against the unfixed code before it counts.
 Add to `.env.local`:
 
 ```
-VITE_ALERT_BAR_COLOR=#cb0d39
+VITE_ALERT_BAR_COLOR='#cb0d39'
 ```
 
-`#cb0d39` is exactly `rgb(203, 13, 57)`; the hex form avoids dotenv quoting
-questions around the commas and spaces.
+`#cb0d39` is exactly `rgb(203, 13, 57)`.
 
-The same key must be set in Vercel. Project history: production theme values go
-stale silently, so confirm the **deployed CSS** actually contains
+**The quotes are mandatory.** Written unquoted, dotenv reads the `#` as the start
+of a comment and parses the value as an empty string; `emptyStringAsUndefined:
+true` in `src/env.ts` then turns that into `undefined`, so the var validates
+fine as an optional field, no token is emitted, and no bar renders — a silent
+failure with nothing in the logs. Every other hex var in `.env.local`
+(`VITE_GRAY_DARK`, `VITE_BG_DARK`, `VITE_PANEL_BG_DARK`) is single-quoted for
+this reason. This was found the hard way during implementation; an earlier draft
+of this document recommended the unquoted form and was wrong.
+
+The same key must be set in Vercel — but there **without** the quotes, as
+`#cb0d39`. Vercel stores the raw value and does no dotenv parsing, so quotes
+there would become part of the colour string. Project history: production theme
+values go stale silently, so confirm the **deployed CSS** actually contains
 `--color-alert-bar` — not merely that the key appears in the Vercel env list.
 
 ## Note on the chosen colour
