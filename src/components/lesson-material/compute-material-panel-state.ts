@@ -3,6 +3,12 @@ import type { LessonMaterialResponse } from '#/lib/lesson-gating';
 export type MaterialPanelState<TMaterial> =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
+  /**
+   * Unlocked, but this lesson has no material row. A normal shape for a
+   * video-only lesson — not an error, and deliberately not 'ready' so the tab
+   * strip is never rendered with nothing behind any of its tabs.
+   */
+  | { kind: 'empty' }
   | {
       kind: 'locked';
       lock: Extract<LessonMaterialResponse<TMaterial>, { locked: true }>;
@@ -53,6 +59,7 @@ export function computeMaterialPanelState<TMaterial>({
     };
   }
   if (data.locked) return { kind: 'locked', lock: data };
+  if (data.material === null) return { kind: 'empty' };
   return {
     kind: 'ready',
     material: data.material,

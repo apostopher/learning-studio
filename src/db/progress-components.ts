@@ -71,10 +71,15 @@ export const progressComponentColumns = (userId: string) => ({
   )`,
 
   /**
-   * The debrief generator has what it needs. Mirrors `onDebrief`'s own guard
-   * (`lesson-player-container.tsx`), which bails without key points and text —
-   * so without this the lesson would carry a component whose button, when
-   * pressed, silently does nothing.
+   * Whether the debrief COUNTS toward this lesson's completion — deliberately
+   * narrower than "a debrief can be generated".
+   *
+   * Authored key points AND body text, both from the material row. A debrief
+   * built from anything else is optional by design: a lesson with no material
+   * is complete once its video is watched, and a transcript-sourced debrief
+   * (see `resolveDebriefSource`) must not quietly become a second requirement
+   * on lessons that never asked for one. Same for key points derived from
+   * body text — reachable, scored when taken, never demanded.
    */
   canDebrief: sql<boolean>`exists (
     select 1 from lesson_material m

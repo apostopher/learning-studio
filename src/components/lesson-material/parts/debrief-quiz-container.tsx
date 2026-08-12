@@ -1,6 +1,5 @@
 import { useSetAtom } from 'jotai';
 import { useEffect, useRef } from 'react';
-import type { LessonMaterial } from '#/db/lesson';
 import {
   useAdvanceQuestion,
   useCurrentQuestion,
@@ -24,14 +23,18 @@ import {
 } from './question-card';
 import { ScoreReport } from './score-report';
 
+/**
+ * No `material` prop. The generator's source (authored material, else the video
+ * transcript) is resolved server-side from the slug, which is what lets this
+ * same container render for a lesson that has no material row at all — see
+ * `resolveDebriefSource`.
+ */
 type DebriefQuizContainerProps = {
   lessonSlug: string;
-  material: NonNullable<LessonMaterial>;
 };
 
 export const DebriefQuizContainer = ({
   lessonSlug,
-  material,
 }: DebriefQuizContainerProps) => {
   const test = useCurrentTest();
   const currentQuestion = useCurrentQuestion();
@@ -70,8 +73,7 @@ export const DebriefQuizContainer = ({
       <DebriefIntro
         loading={isGenerating}
         onStart={() => {
-          if (!material.keyPoints?.length || !material.text) return;
-          void generateTest(lessonSlug, material.keyPoints, material.text);
+          void generateTest(lessonSlug);
         }}
       />
     );
@@ -86,9 +88,7 @@ export const DebriefQuizContainer = ({
         onRetake={async () => {
           savedRef.current = false;
           resetTest();
-          if (material.keyPoints?.length && material.text) {
-            await generateTest(lessonSlug, material.keyPoints, material.text);
-          }
+          await generateTest(lessonSlug);
         }}
       />
     );
@@ -97,13 +97,7 @@ export const DebriefQuizContainer = ({
   if (!currentQuestion) return null;
 
   const handleSubmit = async (answer: string) => {
-    if (!material.keyPoints || !material.text) return;
-    await evaluateAnswer(
-      currentQuestion,
-      answer,
-      material.keyPoints,
-      material.text,
-    );
+    await evaluateAnswer(lessonSlug, currentQuestion, answer);
   };
 
   const handleNext = () => {

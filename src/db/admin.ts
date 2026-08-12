@@ -20,6 +20,7 @@ import {
   getCourseSlugForModuleId,
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
+import { getLessonTranscript } from '#/db/lesson-transcript';
 import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
@@ -102,7 +103,14 @@ async function invalidateLessonPlaybackCache(
 ): Promise<void> {
   if (!lessonSlug) return;
   try {
-    await getLessonPlayback.invalidate(lessonSlug);
+    // The transcript goes with it: it is the previous video's captions,
+    // flattened and cached for a week (far longer than any signed URL), and it
+    // is what a material-less lesson's debrief is generated from. Left behind,
+    // the new video would be debriefed on the old one's script.
+    await Promise.all([
+      getLessonPlayback.invalidate(lessonSlug),
+      getLessonTranscript.invalidate(lessonSlug),
+    ]);
   } catch (error) {
     console.error('Failed to invalidate lesson-playback cache:', error);
   }

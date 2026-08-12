@@ -41,20 +41,16 @@ export const LessonMainWrapper = ({
       isError: video.isError,
       error: video.error,
     },
+    // `isError` is deliberately not passed: a failed material query must not
+    // suppress the video. `LessonMaterialWrapper` owns that failure's message
+    // and retry — see computeLessonMainState.
     material: {
       data: material.data,
       isLoading: material.isLoading,
-      isError: material.isError,
-      error: material.error,
     },
     onRetryCourse: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.courseDetails(courseSlug),
-      });
-    },
-    onRetryMaterial: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonMaterial(lessonSlug),
       });
     },
     onRetryVideo: () => {

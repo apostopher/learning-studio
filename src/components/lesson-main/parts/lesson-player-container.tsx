@@ -2,6 +2,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
 import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
+import { canDebriefFromTranscript } from '#/components/lesson-material/compute-transcript-debrief';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
@@ -69,12 +70,10 @@ export const LessonPlayerContainer = ({
   }, [setReachedEnd]);
 
   const onDebrief = useCallback(async () => {
-    if (!material?.keyPoints?.length || !material?.text) return;
-    const test = await generateTest(
-      lessonSlug,
-      material.keyPoints,
-      material.text,
-    );
+    // No guard on the material's contents any more: the server resolves what
+    // the debrief is generated from (material, else the video transcript), and
+    // `canDebrief` below already decides whether to offer the button at all.
+    const test = await generateTest(lessonSlug);
     if (test) {
       setActiveTab('quiz');
       queueMicrotask(() => {
@@ -84,7 +83,7 @@ export const LessonPlayerContainer = ({
         });
       });
     }
-  }, [generateTest, lessonSlug, material, setActiveTab]);
+  }, [generateTest, lessonSlug, setActiveTab]);
 
   const overlayKind = computePlayerOverlay({
     reachedEnd,
@@ -96,9 +95,17 @@ export const LessonPlayerContainer = ({
     materialLocked,
     hasCurrentTest: Boolean(currentTest),
     hasDebrief,
-    // Mirrors onDebrief's own guard below — without these the button generates
-    // nothing, so it must not be offered in the first place.
-    canDebrief: Boolean(material?.keyPoints?.length && material?.text),
+    // A source the server can actually resolve: the authored material's body
+    // text, or — on a lesson with no material at all — this video's caption
+    // transcript. Without one, the button would generate nothing.
+    canDebrief:
+      Boolean(material?.text) ||
+      canDebriefFromTranscript({
+        hasDebrief,
+        // Already resolved into this component's own props — the same
+        // `captions === null` the material panel reads off the query.
+        hasCaptions: !videoState.captionsUnavailable,
+      }),
   });
 
   return (

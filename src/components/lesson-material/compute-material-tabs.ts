@@ -12,8 +12,10 @@ export type ComputeMaterialTabsArgs = {
   /** `lessons.has_debrief` — decides which activity tab 2 is. */
   hasDebrief: boolean;
   /**
-   * Whether a debrief could actually be generated: the generator needs key
-   * points and body text, and `onDebrief` bails without them.
+   * Whether a debrief could actually be generated. Body text is enough — the
+   * server derives key points from it when none were authored, and falls back
+   * to the video transcript when there is no material at all (see
+   * `resolveDebriefSource`).
    */
   canDebrief: boolean;
 };

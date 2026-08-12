@@ -177,6 +177,50 @@ describe('quiz XOR debrief', () => {
   });
 });
 
+describe('a lesson with no material', () => {
+  it('is complete on the video alone, debrief switch or not', () => {
+    // The rule for a video-only lesson: watching it IS finishing it. With no
+    // material row there are no applicable sections, no authored quiz, and
+    // `canDebrief` is false (it is SQL over lesson_material — see
+    // progress-components.ts), so the video is the only component.
+    //
+    // `hasDebrief: true` is the case that matters. Such a lesson still OFFERS a
+    // debrief, generated from the video transcript, and it renders below the
+    // player — but an optional debrief must never hold the lesson below 100%.
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: FULL,
+        hasDebrief: true,
+        canDebrief: false,
+        debriefAnswered: false,
+      }),
+    ]);
+    expect(lessons[0].percent).toBe(100);
+  });
+
+  it('is not complete before the video is watched', () => {
+    // The other half of the same rule: with the video as the only component,
+    // the lesson tracks it exactly rather than resting on the visit fallback.
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: 0,
+        hasDebrief: true,
+        canDebrief: false,
+        visited: true,
+      }),
+    ]);
+    expect(lessons[0].percent).toBe(0);
+  });
+});
+
 describe('combining components', () => {
   it('is the mean of the components that apply', () => {
     // video half-watched + 2 of 4 sections + quiz unplayed → (0.5+0.5+0)/3

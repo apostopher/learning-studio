@@ -96,10 +96,10 @@ export async function getLessonMaterialHandler(
     //
     // Past the gate, because reaching this line is server-verified proof the
     // learner was let in and is being served content; a lock screen is a door
-    // they bounced off. Before the lookup, because the next block 404s when a
-    // lesson has no material row, and a published lesson with no video and no
-    // material would otherwise never record a visit — leaving it stuck below
-    // 100% forever, which is exactly the case the visit rule exists to score.
+    // they bounced off. Before the lookup, because the lookup can come back
+    // empty, and a published lesson with no video and no material would
+    // otherwise never record a visit — leaving it stuck below 100% forever,
+    // which is exactly the case the visit rule exists to score.
     //
     // Recorded on the admin-bypass path too. Admins bypass every gate, so
     // their progress numbers carry no meaning worth protecting with a branch.
@@ -115,19 +115,18 @@ export async function getLessonMaterialHandler(
       console.error('Failed to record lesson visit:', error);
     }
 
+    // No material row is NOT an error. Plenty of lessons are video-only, and
+    // this used to 404 — which the client turned into a page-level error that
+    // hid the lesson's video along with the empty material panel. An unlocked
+    // response with `material: null` says "you're in, there's nothing to read"
+    // and leaves the player alone.
     const material = await getLessonMaterial(lessonSlug);
-    if (!material) {
-      return Response.json(
-        { error: 'Lesson material not found' },
-        { status: 404 },
-      );
-    }
-    reportUnaskableQuizQuestions(lessonSlug, material.quiz);
+    if (material) reportUnaskableQuizQuestions(lessonSlug, material.quiz);
 
     const payload: MaterialPayload = {
       locked: false,
       adminBypass: gate.isAdmin,
-      material,
+      material: material ?? null,
     };
     return Response.json(payload);
   } catch (error) {

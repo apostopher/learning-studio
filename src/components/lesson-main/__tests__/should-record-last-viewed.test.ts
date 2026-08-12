@@ -7,7 +7,6 @@ const noop = () => {};
 const states: Record<LessonMainState['kind'], LessonMainState> = {
   'course-loading': { kind: 'course-loading' },
   'course-error': { kind: 'course-error', message: 'x', onRetry: noop },
-  'material-error': { kind: 'material-error', message: 'x', onRetry: noop },
   'not-found': { kind: 'not-found', lessonSlug: 'l1' },
   'no-video': {
     kind: 'no-video',
@@ -53,7 +52,6 @@ describe('shouldRecordLastViewed', () => {
   it.each([
     'course-loading',
     'course-error',
-    'material-error',
     'not-found',
   ] as const)('does not record while %s', (kind) => {
     expect(shouldRecordLastViewed(states[kind])).toBe(false);
@@ -63,6 +61,6 @@ describe('shouldRecordLastViewed', () => {
     // If LessonMainState gains a kind, `states` fails to type-check above and
     // this file breaks — forcing a deliberate decision rather than letting the
     // new state inherit whichever branch the boolean happens to fall into.
-    expect(Object.keys(states)).toHaveLength(7);
+    expect(Object.keys(states)).toHaveLength(6);
   });
 });

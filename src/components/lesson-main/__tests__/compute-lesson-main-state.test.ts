@@ -114,7 +114,6 @@ describe('computeLessonMainState', () => {
       material: {
         data: { locked: false, adminBypass: false, material: {} },
         isLoading: false,
-        isError: false,
       },
       onRetryCourse,
       onRetryVideo,
@@ -270,7 +269,6 @@ describe('computeLessonMainState', () => {
           blockedBy: { lessonSlug: 'a', moduleSlug: 'm-1', lessonName: 'A' },
         },
         isLoading: false,
-        isError: false,
       },
       onRetryCourse,
       onRetryVideo,
@@ -299,7 +297,6 @@ describe('computeLessonMainState', () => {
       material: {
         data: { locked: true, reason: 'video' },
         isLoading: false,
-        isError: false,
       },
       onRetryCourse,
       onRetryVideo,
@@ -316,7 +313,7 @@ describe('computeLessonMainState', () => {
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
-      material: { data: undefined, isLoading: true, isError: false },
+      material: { data: undefined, isLoading: true },
       onRetryCourse,
       onRetryVideo,
     });
@@ -328,38 +325,25 @@ describe('computeLessonMainState', () => {
     expect(state).toEqual({ kind: 'course-loading' });
   });
 
-  it('reports a retryable error when the material query fails, instead of a blank panel', () => {
-    const onRetryMaterial = vi.fn();
+  it('still renders the player when the material query has failed', () => {
     const state = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
       courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
-      material: {
-        data: undefined,
-        isLoading: false,
-        isError: true,
-        error: new Error('material 500'),
-      },
+      // A failed query leaves no data — the shape no longer carries isError at
+      // all, so the page cannot key off it.
+      material: { data: undefined, isLoading: false },
       onRetryCourse,
       onRetryVideo,
-      onRetryMaterial,
     });
 
-    // The material response is the ONLY signal for a page-level lock, so a
-    // failed material query means the lock state is unknown. Falling through
-    // to 'ready' rendered the player with a silently empty material area —
-    // no message, no retry — and this branch introduced a real 500 path
-    // (lesson-gating.server throws on a missing cached payload). The ledger's
-    // failure table promises "Error state with retry, never a false lock".
-    expect(state).toMatchObject({
-      kind: 'material-error',
-      message: 'material 500',
-    });
-    if (state.kind !== 'material-error') throw new Error('unreachable');
-    state.onRetry();
-    expect(onRetryMaterial).toHaveBeenCalledTimes(1);
+    // A material failure used to produce 'material-error', which suppressed the
+    // video too. /api/lesson/playback re-evaluates the identical gate
+    // server-side, so the page-level suppression protected nothing and cost the
+    // learner the lesson; the material panel reports its own failure.
+    expect(state).toMatchObject({ kind: 'ready' });
   });
 
   it('surfaces a fast course error even while the material query is still loading', () => {
@@ -374,7 +358,7 @@ describe('computeLessonMainState', () => {
       moduleSlug: 'm-1',
       lessonSlug: 'l-1',
       video: { data: undefined, isError: false },
-      material: { data: undefined, isLoading: true, isError: false },
+      material: { data: undefined, isLoading: true },
       onRetryCourse,
       onRetryVideo,
     });
@@ -385,14 +369,14 @@ describe('computeLessonMainState', () => {
     expect(state).toMatchObject({ kind: 'course-error' });
   });
 
-  it('prefers not-found over material-error, since a 404 on material is the same missing lesson', () => {
+  it('reports not-found from the course payload, whatever the material query did', () => {
     const state = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },
       courseSlug: 'course-1',
       moduleSlug: 'm-1',
       lessonSlug: 'missing',
       video: { data: undefined, isError: false },
-      material: { data: undefined, isLoading: false, isError: true },
+      material: { data: undefined, isLoading: false },
       onRetryCourse,
       onRetryVideo,
     });

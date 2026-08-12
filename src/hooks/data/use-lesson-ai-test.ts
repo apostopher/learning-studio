@@ -1,18 +1,18 @@
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useAtomCallback } from "jotai/utils";
-import { useCallback } from "react";
-import type { AITest, AITestQuestion, AIEvaluationResult } from "#/ai/schemas";
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomCallback } from 'jotai/utils';
+import { useCallback } from 'react';
+import type { AIEvaluationResult, AITest, AITestQuestion } from '#/ai/schemas';
 import {
   activeTabAtom,
-  currentTestAtom,
-  currentQuestionIndexAtom,
-  evaluationsAtom,
-  isGeneratingAtom,
-  isEvaluatingAtom,
   currentQuestionAtom,
-  totalScoreAtom,
+  currentQuestionIndexAtom,
+  currentTestAtom,
+  evaluationsAtom,
+  isEvaluatingAtom,
+  isGeneratingAtom,
   testResultsAtomFamily,
-} from "#/atoms/lesson-ai-test";
+  totalScoreAtom,
+} from '#/atoms/lesson-ai-test';
 
 // Read hooks — thin wrappers over atoms
 export const useCurrentTest = () => useAtomValue(currentTestAtom);
@@ -33,18 +33,21 @@ export function useGenerateTest() {
   const setIndex = useSetAtom(currentQuestionIndexAtom);
   const setEvaluations = useSetAtom(evaluationsAtom);
 
+  // `lessonSlug` only: the server resolves what the questions are generated
+  // from — authored material, else the video transcript. Callers used to pass
+  // key points and body text, which no caller on a material-less lesson has.
   return useCallback(
-    async (lessonSlug: string, keyPoints: string[], text: string) => {
+    async (lessonSlug: string) => {
       setIsGenerating(true);
       setIndex(0);
       setEvaluations([]);
       try {
-        const response = await fetch("/api/lesson/ai-test/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lessonSlug, keyPoints, text }),
+        const response = await fetch('/api/lesson/ai-test/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lessonSlug }),
         });
-        if (!response.ok) throw new Error("Failed to generate test");
+        if (!response.ok) throw new Error('Failed to generate test');
         const test = (await response.json()) as AITest;
         setTest(test);
         return test;
@@ -72,7 +75,7 @@ export function useResetTest() {
 }
 
 function evaluateMCQLocal(
-  question: Extract<AITestQuestion, { type: "mcq" }>,
+  question: Extract<AITestQuestion, { type: 'mcq' }>,
   userAnswer: string,
 ): AIEvaluationResult {
   const correctOption = question.options.find(
@@ -80,7 +83,7 @@ function evaluateMCQLocal(
   );
   return {
     questionId: question.id,
-    type: "mcq",
+    type: 'mcq',
     score: userAnswer === question.correctOptionId ? 100 : 0,
     userAnswer,
     explanation: `The correct answer is: ${correctOption?.value ?? question.correctOptionId}`,
@@ -95,12 +98,11 @@ export function useEvaluateAnswer() {
 
   return useCallback(
     async (
+      lessonSlug: string,
       question: AITestQuestion,
       userAnswer: string,
-      keyPoints: string[],
-      text: string,
     ) => {
-      if (question.type === "mcq") {
+      if (question.type === 'mcq') {
         const result = evaluateMCQLocal(question, userAnswer);
         setEvaluations((prev) => [...prev, result]);
         return result;
@@ -108,12 +110,14 @@ export function useEvaluateAnswer() {
 
       setIsEvaluating(true);
       try {
-        const response = await fetch("/api/lesson/ai-test/evaluate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, userAnswer, keyPoints, text }),
+        // The grader's reference material is resolved server-side from the
+        // slug, for the same reason generation is.
+        const response = await fetch('/api/lesson/ai-test/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lessonSlug, question, userAnswer }),
         });
-        if (!response.ok) throw new Error("Failed to evaluate answer");
+        if (!response.ok) throw new Error('Failed to evaluate answer');
         const result = (await response.json()) as AIEvaluationResult;
         setEvaluations((prev) => [...prev, result]);
         return result;
@@ -133,11 +137,11 @@ export function useSaveResults() {
       const evaluations = get(evaluationsAtom);
       const totalScore = get(totalScoreAtom);
 
-      if (!test) throw new Error("No test to save");
+      if (!test) throw new Error('No test to save');
 
-      const response = await fetch("/api/lesson/ai-test/save-results", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/lesson/ai-test/save-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lessonSlug: test.lessonSlug,
           test,
@@ -146,7 +150,7 @@ export function useSaveResults() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to save results");
+      if (!response.ok) throw new Error('Failed to save results');
       return response.json();
     }, []),
   );

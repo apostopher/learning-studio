@@ -11,9 +11,8 @@ import type { LessonMainState } from './types';
  *   Recording it would make the next visit resume onto that same door, and
  *   would let a learner poking at locked sidebar rows destroy their real
  *   resume point.
- * - `course-loading` / `course-error` / `material-error` — the lock state is
- *   unknown, and unknown must not be treated as unlocked. Same rule
- *   computeLessonMainState applies to rendering the player.
+ * - `course-loading` / `course-error` — there is no lesson content on screen to
+ *   have been viewed.
  * - `not-found` — there is no lesson to point at.
  */
 export function shouldRecordLastViewed(state: LessonMainState): boolean {

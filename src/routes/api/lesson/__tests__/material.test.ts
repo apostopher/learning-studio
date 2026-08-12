@@ -166,13 +166,18 @@ describe('recording the visit', () => {
     });
   });
 
-  it('records before the material lookup, so a lesson with no material still counts', async () => {
-    // A published lesson with no video and no material row 404s below. If the
-    // write sat after that lookup it would never fire, leaving exactly the
-    // lesson the visit rule exists to score stuck below 100% forever.
+  it('serves an unlocked response with null material when a lesson has none', async () => {
+    // Video-only lessons are normal, and this used to 404 — which the client
+    // turned into a page-level error that hid the video too. The visit is still
+    // recorded, since the learner was let in.
     getLessonMaterial.mockResolvedValue(null);
     const res = await getLessonMaterialHandler(req());
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      locked: false,
+      adminBypass: false,
+      material: null,
+    });
     expect(recordLessonVisit).toHaveBeenCalledOnce();
   });
 

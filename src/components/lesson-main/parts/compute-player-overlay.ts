@@ -36,9 +36,10 @@ export type ComputePlayerOverlayArgs = {
    */
   hasDebrief: boolean;
   /**
-   * Whether a debrief could actually be generated (key points and body text
-   * present). `onDebrief` bails without them, so offering the button would
-   * produce a press that silently does nothing.
+   * Whether the server can resolve a source to generate a debrief from: the
+   * material's body text, or this video's caption transcript on a lesson with
+   * no material row. Without one, generation 422s and the button would be a
+   * press that produces nothing.
    */
   canDebrief: boolean;
 };

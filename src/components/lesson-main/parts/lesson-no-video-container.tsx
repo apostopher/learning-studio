@@ -35,9 +35,11 @@ export const LessonNoVideoContainer = ({
   const material = data && !data.locked ? data.material : null;
 
   // Mirrors computeMaterialTabs: no generator input means no Debrief tab, so
-  // a shortcut to it would land on a tab that does not exist.
-  const canDebrief =
-    hasDebrief && Boolean(material?.keyPoints?.length && material?.text);
+  // a shortcut to it would land on a tab that does not exist. Body text alone
+  // is enough now — the server derives key points from it when none were
+  // authored (see resolveDebriefSource). The transcript fallback cannot apply
+  // here: this branch exists precisely because the lesson has no video.
+  const canDebrief = hasDebrief && Boolean(material?.text);
 
   const onDebrief = useCallback(() => {
     setActiveTab('quiz');

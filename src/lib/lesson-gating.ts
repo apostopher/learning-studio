@@ -75,8 +75,15 @@ export type LockedMaterialResponse =
  * response CANNOT carry it. With a flat shape, every column added to
  * lesson_material would leak until someone remembered to null it too.
  */
+/**
+ * `material: null` is a first-class, non-error outcome: a lesson is allowed to
+ * exist with no `lesson_material` row at all (video-only lessons are normal).
+ * The route used to answer that with a 404, which the client surfaced as a
+ * page-level error and — because this response is the page's lock signal —
+ * suppressed the video too. Absent material is now "unlocked, nothing to read".
+ */
 export type LessonMaterialResponse<TMaterial> =
-  | { locked: false; adminBypass: boolean; material: TMaterial }
+  | { locked: false; adminBypass: boolean; material: TMaterial | null }
   | LockedMaterialResponse;
 
 /**

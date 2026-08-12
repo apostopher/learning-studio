@@ -35,15 +35,13 @@ export type VideoFetchState =
 export type LessonMainState =
   | { kind: 'course-loading' }
   | { kind: 'course-error'; message: string; onRetry: () => void }
-  /**
-   * The material query failed, so the lock state is unknown. Distinct from
-   * 'course-error' because it is the material query that must be retried, and
-   * because the copy has to name the right thing. Never falls through to
-   * 'ready': the material response is the only page-level lock signal, and
-   * rendering the player plus an empty material area is the silent failure the
-   * governing UX principle forbids.
+  /*
+   * There is deliberately no 'material-error' state. A lesson is allowed to
+   * have no material at all, and a material query that fails must not take the
+   * video down with it — /api/lesson/playback enforces the same gate
+   * server-side, and the material panel reports its own failure with its own
+   * retry. See computeLessonMainState.
    */
-  | { kind: 'material-error'; message: string; onRetry: () => void }
   | { kind: 'not-found'; lessonSlug: string }
   /**
    * Carries the slugs and `hasDebrief` because this branch now renders the

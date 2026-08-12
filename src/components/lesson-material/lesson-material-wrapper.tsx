@@ -6,10 +6,17 @@ import { useSectionTapRecorder } from '#/data-hooks/use-record-section-tap';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
+import { useLessonVideo } from '#/hooks/data/use-lesson-video';
 import { computeMaterialPanelState } from './compute-material-panel-state';
+import {
+  canDebriefFromTranscript,
+  playbackHasCaptions,
+} from './compute-transcript-debrief';
 import { LessonMaterialView } from './lesson-material';
 import { LessonMaterialSkeleton } from './lesson-material-skeleton';
 import { AdminPreviewNote } from './parts/admin-preview-note';
+import { DebriefQuizContainer } from './parts/debrief-quiz-container';
+import { LessonDebriefSection } from './parts/lesson-debrief-section';
 import { MaterialLocked } from './parts/material-locked';
 
 type LessonMaterialWrapperProps = {
@@ -24,6 +31,10 @@ export const LessonMaterialWrapper = ({
   const queryClient = useQueryClient();
   const query = useLessonMaterial(lessonSlug);
   const details = useCourseDetails(courseSlug);
+  // The same cached query the player made — read here only to learn whether
+  // the video has a caption track, which is what decides if a material-less
+  // lesson can still offer a transcript-sourced debrief.
+  const video = useLessonVideo(lessonSlug);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   lessonMaterialRef.current = tabsRef.current;
@@ -66,6 +77,20 @@ export const LessonMaterialWrapper = ({
           subject="this lesson"
         />
       );
+    // Nothing authored for this lesson — so no tab strip, and no error either:
+    // the lesson is open and its video is above. The debrief still belongs to
+    // the learner though, so it renders on its own below the video, generated
+    // from the video's transcript. `tabsRef` is reused as its scroll anchor so
+    // the post-video overlay's jump lands here (see LessonPlayerContainer).
+    case 'empty':
+      return canDebriefFromTranscript({
+        hasDebrief: lesson?.hasDebrief ?? false,
+        hasCaptions: playbackHasCaptions(video.data),
+      }) ? (
+        <LessonDebriefSection sectionRef={tabsRef}>
+          <DebriefQuizContainer lessonSlug={lessonSlug} />
+        </LessonDebriefSection>
+      ) : null;
     case 'locked':
       return <MaterialLocked lock={state.lock} courseSlug={courseSlug} />;
     case 'ready':

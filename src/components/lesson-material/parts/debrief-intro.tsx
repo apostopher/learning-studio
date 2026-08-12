@@ -16,9 +16,14 @@ type DebriefIntroProps = {
  */
 export const DebriefIntro = ({ loading, onStart }: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
+    {/*
+      No longer "generated from its key points": on a lesson with no material
+      the questions come from the video's own transcript, and copy that names
+      one source would be wrong half the time.
+    */}
     <p className="text-secondary text-sm">
-      A short set of questions on this lesson, generated from its key points.
-      Your answers are scored and saved.
+      A short set of questions on this lesson. Your answers are scored and
+      saved.
     </p>
     <button
       type="button"

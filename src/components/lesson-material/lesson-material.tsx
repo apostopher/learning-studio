@@ -29,7 +29,10 @@ export const LessonMaterialView = ({
 }: LessonMaterialProps) => {
   const [activeTab, setActiveTab] = useActiveTab();
 
-  const canDebrief = Boolean(material.keyPoints?.length && material.text);
+  // Body text is enough: when no key points were authored the server derives
+  // them from that text (see resolveDebriefSource), so a lesson with prose and
+  // no bullet list no longer loses its Debrief tab.
+  const canDebrief = Boolean(material.text);
   const tabs = computeMaterialTabs({ hasDebrief, canDebrief });
   const selected = resolveActiveTab(tabs, activeTab);
 
@@ -75,10 +78,7 @@ export const LessonMaterialView = ({
       {tabs.some((tab) => tab.value === 'quiz') ? (
         <Tabs.Panel value="quiz" className="outline-hidden">
           {hasDebrief ? (
-            <DebriefQuizContainer
-              lessonSlug={material.lessonSlug}
-              material={material}
-            />
+            <DebriefQuizContainer lessonSlug={material.lessonSlug} />
           ) : (
             <LessonQuizContainer
               lessonSlug={material.lessonSlug}
