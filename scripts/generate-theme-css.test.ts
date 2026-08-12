@@ -188,6 +188,33 @@ describe('buildThemeCss', () => {
     expect(css).toContain('--color-accent-1: var(--color-solo-1);')
     expect(css).not.toMatch(/--color-brand-/)
   })
+
+  it('emits --color-alert-bar in the light @theme block when alertBar is set', () => {
+    const css = buildThemeCss({
+      ...baseInputs,
+      brandColors: [{ name: 'solo', light: '#3D63DD', dark: '#3D63DD' }],
+      alertBar: '#cb0d39',
+    })
+
+    // Light @theme block only: one emit resolves in .dark too, because the
+    // .dark block overrides only the properties it redefines.
+    const lightBlock = css.slice(0, css.indexOf('.dark {'))
+    expect(lightBlock).toContain('--color-alert-bar: #cb0d39;')
+
+    const darkBlock = css.slice(css.indexOf('.dark {'), css.indexOf('@supports'))
+    expect(darkBlock).not.toMatch(/--color-alert-bar/)
+  })
+
+  it('omits --color-alert-bar entirely when alertBar is not set', () => {
+    const css = buildThemeCss({
+      ...baseInputs,
+      brandColors: [{ name: 'solo', light: '#3D63DD', dark: '#3D63DD' }],
+    })
+
+    // The token must be absent, not empty: tokens.css referential integrity
+    // depends on nothing referencing a property the generator did not emit.
+    expect(css).not.toMatch(/--color-alert-bar/)
+  })
 })
 
 describe('buildScaleBlock', () => {
@@ -233,6 +260,7 @@ describe('buildThemeModule', () => {
         dark: { kind: 'url', src: '/logo-dark.svg' },
       },
       brandNames: ['primary', 'danger'],
+      alertBarColor: null,
     })
 
     expect(out).toContain("export const appTitle = 'Test Studio'")
@@ -258,9 +286,38 @@ describe('buildThemeModule', () => {
         dark: { kind: 'url', src: '/b.svg' },
       },
       brandNames: ['solo'],
+      alertBarColor: null,
     })
     expect(out).toContain('export const fontLinkHref = null')
     expect(out).toContain("export const brandNames = ['solo'] as const")
+  })
+
+  it('exports alertBarColor as a quoted string when configured', () => {
+    const out = buildThemeModule({
+      appTitle: 'T',
+      fonts: { googleHref: null, extraHrefs: [] },
+      logos: {
+        light: { kind: 'url', src: '/a.svg' },
+        dark: { kind: 'url', src: '/b.svg' },
+      },
+      brandNames: ['solo'],
+      alertBarColor: '#cb0d39',
+    })
+    expect(out).toContain("export const alertBarColor = '#cb0d39'")
+  })
+
+  it('exports alertBarColor as null when not configured', () => {
+    const out = buildThemeModule({
+      appTitle: 'T',
+      fonts: { googleHref: null, extraHrefs: [] },
+      logos: {
+        light: { kind: 'url', src: '/a.svg' },
+        dark: { kind: 'url', src: '/b.svg' },
+      },
+      brandNames: ['solo'],
+      alertBarColor: null,
+    })
+    expect(out).toContain('export const alertBarColor = null')
   })
 })
 

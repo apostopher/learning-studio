@@ -181,6 +181,8 @@ export type ThemeColorInputs = {
   bg: { light: string; dark: string }
   panelBg: { light: string; dark: string }
   shellBg: { light: string; dark: string }
+  /** Optional. When absent, no --color-alert-bar is emitted at all. */
+  alertBar?: string
   fontFamilies: Record<FontSlotKey, string>
 }
 
@@ -300,6 +302,16 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     input: asScaleInput(colors, 'accent'),
   }))
 
+  // Emitted into the light @theme block only — the .dark block overrides just
+  // the properties it redefines, so one emit resolves in both scopes. Absent
+  // rather than empty when unconfigured: src/styles/tokens.test.ts asserts
+  // every var() in tokens.css resolves, so a conditional token must never be
+  // referenced from there. .alert-bar in styles.css consumes it instead.
+  const alertBarVar =
+    inputs.alertBar === undefined
+      ? []
+      : [`  --color-alert-bar: ${inputs.alertBar};`]
+
   const lightThemeBlock = [
     '@theme {',
     buildScaleBlock('gray', lightGrayInput),
@@ -308,6 +320,7 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     `  --color-background: ${inputs.bg.light};`,
     `  --color-panel-bg: ${inputs.panelBg.light};`,
     `  --color-shell-bg: ${inputs.shellBg.light};`,
+    ...alertBarVar,
     fontVars,
     '}',
   ].join('\n')
@@ -353,6 +366,8 @@ export type ThemeModuleInputs = {
   fonts: { googleHref: string | null; extraHrefs: string[] }
   logos: { light: LogoData; dark: LogoData }
   brandNames: readonly string[]
+  /** null when VITE_ALERT_BAR_COLOR is unset. Read by src/routes/_authed.tsx. */
+  alertBarColor: string | null
 }
 
 const q = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
@@ -374,6 +389,9 @@ export function buildThemeModule(inputs: ThemeModuleInputs): string {
     `export const logoLight = ${serializeLogo(inputs.logos.light)}`,
     `export const logoDark = ${serializeLogo(inputs.logos.dark)}`,
     `export const brandNames = [${inputs.brandNames.map(q).join(', ')}] as const`,
+    `export const alertBarColor = ${
+      inputs.alertBarColor === null ? 'null' : q(inputs.alertBarColor)
+    }`,
     '',
   ]
   return lines.join('\n')
@@ -399,6 +417,7 @@ export function generateTheme(): void {
     bg: { light: env.VITE_BG_LIGHT, dark: env.VITE_BG_DARK },
     panelBg: { light: env.VITE_PANEL_BG_LIGHT, dark: env.VITE_PANEL_BG_DARK },
     shellBg: { light: env.VITE_SHELL_BG_LIGHT, dark: env.VITE_SHELL_BG_DARK },
+    alertBar: env.VITE_ALERT_BAR_COLOR,
     fontFamilies: fonts.families,
   })
 
@@ -410,6 +429,7 @@ export function generateTheme(): void {
       dark: parseLogo(env.VITE_LOGO_DARK),
     },
     brandNames: env.VITE_BRAND_COLORS.map((e) => e.name),
+    alertBarColor: env.VITE_ALERT_BAR_COLOR ?? null,
   })
 
   mkdirSync(dirname(OUT_CSS), { recursive: true })

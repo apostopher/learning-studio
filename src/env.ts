@@ -127,6 +127,11 @@ export const env = createEnv({
     VITE_SHELL_BG_LIGHT: colorStr.default('#ffffff'),
     VITE_SHELL_BG_DARK: colorStr.default('#111111'),
 
+    // Optional alert bar pinned to the top of every authed screen. Unset →
+    // no bar renders anywhere; that is what makes the bar optional. Single
+    // value, not a light/dark pair, because the app is dark-only.
+    VITE_ALERT_BAR_COLOR: colorStr.optional(),
+
     VITE_FONT_SANS: fontStr,
     VITE_FONT_MONO: fontStr,
     VITE_FONT_DISPLAY: fontStr,
