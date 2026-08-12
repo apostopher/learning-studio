@@ -57,7 +57,8 @@
        On the /course/* family the strip lands exactly in AppShell's top
        gutter and covers nothing. On /app and /admin/* there is NO gutter —
        their header starts at y=0 — so the bar overlays its top 12px. That
-       band is empty (app-header's content row is h-14 and centred), so it
+       band is empty (app-header's content row is centred inside py-4, so its
+       top 16px is padding), so it
        reads as the bar sitting on the header, but it IS an overlap.
 
        A child taller than this overlaps real content on every layout.

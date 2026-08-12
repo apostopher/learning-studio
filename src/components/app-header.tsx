@@ -20,7 +20,7 @@ type AppHeaderProps = {
  */
 export const AppHeader = ({ onSignOut, isSigningOut }: AppHeaderProps) => (
   <header className="content-grid border-b border-gray-6 bg-gray-2">
-    <div className="content flex h-14 items-center justify-between gap-4">
+    <div className="content flex py-4 items-center justify-between gap-4">
       {/* Logo slot. The mark itself comes from the generated theme, so
           rebranding is an env change rather than a code change. It links to
           /app — a self-link on this page, and the way back from admin. */}
