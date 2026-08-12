@@ -102,7 +102,13 @@ export const RichTextEditor = ({
   return (
     <div className="rich-editor rounded-lg border border-gray-6 bg-gray-1 focus-within:ring-2 focus-within:ring-apple-9">
       {toolbar === 'fixed' && editor && hasControls && (
-        <div className="flex flex-wrap items-center gap-0.5 border-gray-6 border-b p-1">
+        // Sticky within this editor's own box: these fields grow to fit their
+        // content and the config modal's ScrollArea does the scrolling, so a
+        // static bar scrolls out of reach on a long lesson. `bg-gray-1` is
+        // load-bearing — the bar inherited its background before, and prose
+        // now scrolls UNDER it. `rounded-t-lg` matches the wrapper's radius,
+        // which a sticky child would otherwise paint over square.
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 rounded-t-lg border-gray-6 border-b bg-gray-1 p-1">
           <RichTextToolbar
             editor={editor as unknown as RichTextEditorApi}
             controls={controls}
