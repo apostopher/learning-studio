@@ -49,6 +49,15 @@
     --footer-height: 0px;
     --shell-padding: var(--layout-separator-size);
     --shell-gap: var(--layout-separator-size);
+
+    /* Resting height of the alert bar. Equal to --shell-padding by design:
+       the strip lands exactly in the shell's top gutter and covers no
+       content. A child taller than this WILL overlap the header — the bar is
+       absolute and the shell reserves only its own padding. Reserving real
+       space needs the bar's measured height, i.e. a hook, i.e. AlertBar stops
+       being presentational. Taken deliberately while children is null; see
+       docs/superpowers/specs/2026-08-12-alert-bar-design.md. */
+    --alert-bar-min-block-size: 12px;
     /* Panels (header/aside/main/footer) and the shell frame/gutter around
        them are explicit theme tokens (VITE_PANEL_BG_* / VITE_SHELL_BG_*),
        set independently of the page background and gray scale. */
@@ -240,6 +249,18 @@
 
   .app-shell__unsupported {
     display: none;
+  }
+
+  .alert-bar {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    min-block-size: var(--alert-bar-min-block-size);
+    background-color: var(--color-alert-bar);
+    /* Deliberately 1, not a high value: Base UI portals mount at the end of
+       <body>, so at equal z-index they stack above this. A tall bar must
+       never cover a dialog. */
+    z-index: 1;
   }
 
   .unsupported-screen {

@@ -616,3 +616,53 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     }
   })
 })
+
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+/**
+ * A generated token that nothing reads is dead code, and this codebase's most
+ * common defect shape. Pin both ends of the seam: the generator must emit the
+ * property, and styles.css must consume it under exactly that name. Renaming
+ * either side fails this test.
+ */
+describe('alert bar token consumer seam', () => {
+  const stylesCss = readFileSync(
+    resolve(process.cwd(), 'src/styles.css'),
+    'utf8',
+  )
+
+  it('styles.css consumes the property the generator emits', () => {
+    const css = buildThemeCss({
+      gray: { light: '#8B8D98', dark: '#8B8D98' },
+      bg: { light: '#ffffff', dark: '#111111' },
+      panelBg: { light: '#ffffff', dark: '#111111' },
+      shellBg: { light: '#ffffff', dark: '#111111' },
+      fontFamilies: {
+        sans: 'Inter',
+        mono: 'IBM Plex Mono',
+        display: 'Inter',
+        serif: 'Newsreader',
+      },
+      brandColors: [{ name: 'solo', light: '#3D63DD', dark: '#3D63DD' }],
+      alertBar: '#cb0d39',
+    })
+
+    expect(css).toContain('--color-alert-bar:')
+    expect(stylesCss).toContain('var(--color-alert-bar)')
+  })
+
+  it('.alert-bar positions itself with logical properties only', () => {
+    const rule = stylesCss.slice(
+      stylesCss.indexOf('.alert-bar {'),
+      stylesCss.indexOf('}', stylesCss.indexOf('.alert-bar {')),
+    )
+
+    expect(rule).toContain('position: absolute')
+    expect(rule).toContain('inset-block-start: 0')
+    expect(rule).toContain('inset-inline: 0')
+    expect(rule).toContain('min-block-size: var(--alert-bar-min-block-size)')
+    // Physical equivalents are a hard project rule violation.
+    expect(rule).not.toMatch(/\b(top|left|right|bottom|min-height):/)
+  })
+})
