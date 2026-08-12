@@ -18,6 +18,7 @@
     "db:grant-admin": "dotenv -e .env.local -- tsx src/db/grant-role.ts",
     "db:grant-role": "dotenv -e .env.local -- tsx src/db/grant-role.ts",
     "db:migrate-user-management": "dotenv -e .env.local -- tsx src/db/migrate-user-management.ts",
+    "db:migrate-material-links": "dotenv -e .env.local -- tsx src/db/migrate-material-links.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",

@@ -5,6 +5,11 @@ import { INLINE_CONTROLS } from './rich-text-toolbar';
 
 const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 
+// A <legend> is the fieldset's caption box, not a flex item, so the container's
+// `gap` never applies between it and the first row — the space has to be a
+// margin on the legend itself.
+const legendCls = `${labelCls} [margin-block-end:0.5rem]`;
+
 /** New id from an existing set, avoiding Math.random for stable behavior. */
 function nextId(prefix: string, existing: string[]): string {
   let n = existing.length + 1;
@@ -58,7 +63,7 @@ export const QuizField = ({
 
   return (
     <fieldset className="flex flex-col gap-4">
-      <legend className={labelCls}>Quiz</legend>
+      <legend className={legendCls}>Quiz</legend>
 
       {value.map((q, qi) => (
         <div

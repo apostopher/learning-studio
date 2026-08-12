@@ -7,6 +7,7 @@ import {
   type UseFormRegister,
 } from 'react-hook-form';
 import type { LessonMaterialGeneration } from '#/types';
+import { LinkListField } from './link-list-field';
 import { QuizField } from './quiz-field';
 import { RichTextEditor } from './rich-text-editor';
 import { INLINE_CONTROLS } from './rich-text-toolbar';
@@ -17,7 +18,8 @@ const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 /**
  * Presentational body of the material edit form. Prose fields (text, proTips,
  * assignments) and key points use RichTextEditor via Controller; jobOfTheDay is
- * a plain URL input; quiz + links keep their controls. The container owns
+ * a plain URL input; quiz keeps its control and links use LinkListField
+ * (name + URL per row). The container owns
  * useForm and submission.
  */
 export const MaterialForm = ({
@@ -137,12 +139,7 @@ export const MaterialForm = ({
         control={control}
         name="links"
         render={({ field }) => (
-          <StringListField
-            label="Links"
-            itemNoun="link"
-            value={field.value ?? []}
-            onChange={field.onChange}
-          />
+          <LinkListField value={field.value ?? []} onChange={field.onChange} />
         )}
       />
 

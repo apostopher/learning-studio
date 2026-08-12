@@ -251,13 +251,23 @@ export type CourseLessonQuizAnswers = z.infer<
 export const CourseLessonQuizSchema = z.array(CourseLessonQuizQuestionSchema);
 export type CourseLessonQuiz = z.infer<typeof CourseLessonQuizSchema>;
 
+/**
+ * A named external resource on a lesson. `name` is what the student reads;
+ * `url` is where it goes. An empty name falls back to the URL at render time.
+ */
+export const MaterialLinkSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+});
+export type MaterialLink = z.infer<typeof MaterialLinkSchema>;
+
 export const CourseLessonMaterialSchema = z.object({
   id: z.number(),
   text: z.string(),
   keyPoints: z.array(z.string()),
   proTips: z.string(),
   quiz: CourseLessonQuizSchema,
-  links: z.array(z.string()).optional(),
+  links: z.array(MaterialLinkSchema).optional(),
   assignments: z.string().optional(),
   jobOfTheDay: z.string().optional(),
   attachments: z.array(z.string()).optional(),

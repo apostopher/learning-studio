@@ -44,7 +44,7 @@ export const progressComponentColumns = (userId: string) => ({
     select
         (case when json_array_length(m.key_points) > 0 then 1 else 0 end)
       + (case when coalesce(m.pro_tips, '') <> '' then 1 else 0 end)
-      + (case when coalesce(array_length(m.links, 1), 0) > 0 then 1 else 0 end)
+      + (case when json_array_length(m.links) > 0 then 1 else 0 end)
       + (case when coalesce(m.assignments, '') <> '' then 1 else 0 end)
       + (case when coalesce(m.job_of_the_day, '') <> '' then 1 else 0 end)
     from lesson_material m

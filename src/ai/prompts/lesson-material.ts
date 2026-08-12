@@ -11,7 +11,9 @@ Fields:
 - proTips: HTML string for the Pro Tip section. "" if absent.
 - quiz: array of questions. Each: { id: "q1", question: <markdown>, options:
   [{ id: "a", value: <markdown> }, ...], correctOptionId: "a" }. [] if none.
-- links: array of URL strings mentioned in the document. Omit if none.
+- links: array of { name, url } for each external resource mentioned in the
+  document. "name" is the link's visible text or nearby label; use the URL as
+  the name when the document gives no label. Omit if none.
 - assignments: HTML string for the assignment section. Omit if none.
 - jobOfTheDay: the "Job of the Day" URL only. Omit if none.
 - attachments: array of referenced attachment file names. Omit if none.

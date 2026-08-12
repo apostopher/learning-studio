@@ -18,7 +18,7 @@ describe('LessonMaterialGenerationSchema', () => {
           correctOptionId: 'a',
         },
       ],
-      links: ['https://example.com'],
+      links: [{ name: 'Example', url: 'https://example.com' }],
     });
     expect(parsed.success).toBe(true);
   });

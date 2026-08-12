@@ -32,7 +32,10 @@ export const StringListField = ({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="font-medium text-secondary text-xs uppercase tracking-wide">
+      {/* A <legend> is the fieldset's caption box, not a flex item, so the
+          container's `gap` never applies between it and the first row — the
+          space has to be a margin on the legend itself. */}
+      <legend className="font-medium text-secondary text-xs uppercase tracking-wide [margin-block-end:0.5rem]">
         {label}
       </legend>
       {value.map((item, i) => (
