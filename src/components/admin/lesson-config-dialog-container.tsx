@@ -33,7 +33,7 @@ export const LessonConfigDialogContainer = ({
     },
     {
       value: 'material',
-      title: 'Material',
+      title: 'Content',
       content: lesson && <MaterialSectionContainer lesson={lesson} />,
     },
     {
