@@ -5,6 +5,13 @@
 @import "./styles/tokens.css";
 @plugin "@tailwindcss/typography";
 
+/* The app is dark-only: `__root.tsx` pins `class="dark"` on <html>.
+   Tailwind v4's default `dark:` variant keys off `prefers-color-scheme`, i.e.
+   the OS setting, while every colour token here keys off the `.dark` CLASS.
+   Without this the two disagree — a light-OS visitor would get dark tokens
+   with the light logo, `logo.tsx` being the only `dark:` consumer. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Registered so @container style() normalizes `0` == `0px` == `calc(0px)`. */
 @property --header-height {
   syntax: "<length>";
@@ -22,6 +29,11 @@
 /* https://x.com/csswizardry/status/1717841334462005661 */
 @layer base {
   html {
+    /* Dark-only app: renders scrollbars, form controls and browser chrome
+       dark. Previously set imperatively as `root.style.colorScheme` by the
+       theme-init script in `__root.tsx`, which no longer exists. */
+    color-scheme: dark;
+
     /* `html` is the shell-token query container so `@container shell-tokens
        style(--header-height: 0px)` rules below can re-template .app-shell. */
     container-name: shell-tokens;
