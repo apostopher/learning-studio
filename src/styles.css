@@ -50,14 +50,21 @@
     --shell-padding: var(--layout-separator-size);
     --shell-gap: var(--layout-separator-size);
 
-    /* Resting height of the alert bar. Equal to --shell-padding by design:
-       the strip lands exactly in the shell's top gutter and covers no
-       content. A child taller than this WILL overlap the header — the bar is
-       absolute and the shell reserves only its own padding. Reserving real
-       space needs the bar's measured height, i.e. a hook, i.e. AlertBar stops
-       being presentational. Taken deliberately while children is null; see
-       docs/superpowers/specs/2026-08-12-alert-bar-design.md. */
-    --alert-bar-min-block-size: 12px;
+    /* Resting height of the alert bar. Tracks --shell-padding rather than
+       repeating 12px, because the shell tokens above are overridable per
+       theme and the two must not silently drift apart.
+
+       On the /course/* family the strip lands exactly in AppShell's top
+       gutter and covers nothing. On /app and /admin/* there is NO gutter —
+       their header starts at y=0 — so the bar overlays its top 12px. That
+       band is empty (app-header's content row is h-14 and centred), so it
+       reads as the bar sitting on the header, but it IS an overlap.
+
+       A child taller than this overlaps real content on every layout.
+       Reserving space needs the bar's measured height, i.e. a hook, i.e.
+       AlertBar stops being presentational. Taken deliberately while children
+       is null; see docs/superpowers/specs/2026-08-12-alert-bar-design.md. */
+    --alert-bar-min-block-size: var(--shell-padding);
     /* Panels (header/aside/main/footer) and the shell frame/gutter around
        them are explicit theme tokens (VITE_PANEL_BG_* / VITE_SHELL_BG_*),
        set independently of the page background and gray scale. */
@@ -252,15 +259,23 @@
   }
 
   .alert-bar {
-    position: absolute;
+    /* fixed, not absolute: only the /course/* family renders AppShell, which
+       caps itself at 100dvh and scrolls internally. /app and /admin/* scroll
+       at page level, and an absolute bar scrolls out of view with them. */
+    position: fixed;
     inset-block-start: 0;
     inset-inline: 0;
     min-block-size: var(--alert-bar-min-block-size);
     background-color: var(--color-alert-bar);
-    /* Deliberately 1, not a high value: Base UI portals mount at the end of
-       <body>, so at equal z-index they stack above this. A tall bar must
-       never cover a dialog. */
-    z-index: 1;
+    /* No z-index ON PURPOSE. At z-index: auto the bar paints in DOM order
+       among positioned elements: above the static .app-shell, and below
+       anything mounted later in <body> — which is every Base UI portal, so
+       dialogs always cover it. Setting any positive z-index here inverts
+       that: seven admin dialogs render their backdrop as `fixed inset-0`
+       with no z-index of their own (e.g. create-lesson-dialog-container.tsx,
+       delete-module-dialog-container.tsx), and a positioned element at
+       z-index: auto paints below ANY positive z-index regardless of DOM
+       order. The bar would then show through their backdrops. */
   }
 
   .unsupported-screen {

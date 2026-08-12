@@ -652,17 +652,51 @@ describe('alert bar token consumer seam', () => {
     expect(stylesCss).toContain('var(--color-alert-bar)')
   })
 
-  it('.alert-bar positions itself with logical properties only', () => {
-    const rule = stylesCss.slice(
-      stylesCss.indexOf('.alert-bar {'),
-      stylesCss.indexOf('}', stylesCss.indexOf('.alert-bar {')),
-    )
+  /**
+   * The `.alert-bar` declarations with comments stripped. Comments must go:
+   * the rule's own prose explains why it sets no z-index by naming
+   * `z-index: auto`, and a naive text scan would match that and report a
+   * declaration the rule does not have.
+   */
+  const alertBarDeclarations = () => {
+    const start = stylesCss.indexOf('.alert-bar {')
+    expect(start).toBeGreaterThan(-1)
+    const rule = stylesCss.slice(start, stylesCss.indexOf('}', start))
+    const declarations = rule.replace(/\/\*[\s\S]*?\*\//g, '')
+    // Guard the slice: without this, every toContain below could pass
+    // vacuously against an empty string.
+    expect(declarations).toContain('.alert-bar {')
+    return declarations
+  }
 
-    expect(rule).toContain('position: absolute')
-    expect(rule).toContain('inset-block-start: 0')
-    expect(rule).toContain('inset-inline: 0')
-    expect(rule).toContain('min-block-size: var(--alert-bar-min-block-size)')
+  it('.alert-bar positions itself with logical properties only', () => {
+    const declarations = alertBarDeclarations()
+
+    // fixed, NOT absolute: /app and /admin/* scroll at page level, so an
+    // absolute bar scrolls out of view on two of the three authed layouts.
+    expect(declarations).toContain('position: fixed')
+    expect(declarations).toContain('inset-block-start: 0')
+    expect(declarations).toContain('inset-inline: 0')
+    expect(declarations).toContain(
+      'min-block-size: var(--alert-bar-min-block-size)',
+    )
     // Physical equivalents are a hard project rule violation.
-    expect(rule).not.toMatch(/\b(top|left|right|bottom|min-height):/)
+    expect(declarations).not.toMatch(/\b(top|left|right|bottom|min-height):/)
+  })
+
+  it('.alert-bar sets no z-index, so Base UI dialogs always paint above it', () => {
+    // Seven admin dialogs render `fixed inset-0` backdrops with no z-index.
+    // A positioned element at z-index: auto paints below ANY positive
+    // z-index regardless of DOM order, so a positive z-index here would
+    // show the bar through those backdrops.
+    expect(alertBarDeclarations()).not.toMatch(/z-index:/)
+  })
+
+  it('--alert-bar-min-block-size tracks --shell-padding rather than repeating 12px', () => {
+    // The shell tokens are overridable per theme; a hardcoded 12px here
+    // would silently drift from the gutter it is supposed to match.
+    expect(stylesCss).toContain(
+      '--alert-bar-min-block-size: var(--shell-padding);',
+    )
   })
 })
