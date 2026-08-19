@@ -15,6 +15,7 @@ const m = vi.hoisted(() => {
     getUserProfile: vi.fn(),
     listLevelHistory: vi.fn(),
     insertLevelRow: vi.fn(),
+    courseExists: vi.fn(),
   };
 });
 
@@ -26,6 +27,7 @@ vi.mock('#/lib/permissions.server', () => ({
   assertCanActOnProfile: m.assertCanActOnProfile,
 }));
 vi.mock('#/db/users', () => ({ getUserProfile: m.getUserProfile }));
+vi.mock('#/db/course', () => ({ courseExists: m.courseExists }));
 vi.mock('#/db/user-levels', () => ({
   listLevelHistory: m.listLevelHistory,
   insertLevelRow: m.insertLevelRow,
@@ -60,6 +62,7 @@ beforeEach(() => {
     email: 'p@e.com',
   });
   m.listLevelHistory.mockResolvedValue([]);
+  m.courseExists.mockResolvedValue(true);
 });
 
 describe('PUT /api/admin/users/:id/levels', () => {
@@ -144,6 +147,22 @@ describe('PUT /api/admin/users/:id/levels', () => {
     );
     expect(res.status).toBe(404);
   });
+
+  /**
+   * Left to the database, a bad courseId raises `user_levels.course_id`'s
+   * foreign key, the error escapes the handler, and the admin gets a 500 for
+   * what is a validation failure. Asserting the WRITE never happens as well as
+   * the status: the point is that the insert is not attempted at all.
+   */
+  it('404s an unknown course instead of letting the FK 500', async () => {
+    m.courseExists.mockResolvedValue(false);
+    const res = await putUserLevelHandler(
+      req({ courseId: 9999, level: 'advanced', message: 'x' }),
+      '5',
+    );
+    expect(res.status).toBe(404);
+    expect(m.insertLevelRow).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/admin/users/:id/levels', () => {
@@ -154,5 +173,17 @@ describe('GET /api/admin/users/:id/levels', () => {
       'level',
       'read',
     );
+  });
+
+  /**
+   * The PUT has always checked the target; the GET did not, so a `level:read`
+   * holder could read an OWNER's history — which carries the admin-written
+   * `message` and `note` of every change ever made to them.
+   */
+  it('refuses to read a privileged target’s history', async () => {
+    m.assertCanActOnProfile.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await getUserLevelsHandler(req(undefined, 'GET'), '5');
+    expect(res.status).toBe(403);
+    expect(m.listLevelHistory).not.toHaveBeenCalled();
   });
 });

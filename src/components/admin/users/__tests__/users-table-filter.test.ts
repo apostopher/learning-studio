@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterUserRows, type UserRow } from '../users-table';
+import { emptyReason, filterUserRows, type UserRow } from '../users-table';
 
 const row = (overrides: Partial<UserRow> = {}): UserRow => ({
   kind: 'user',
@@ -149,5 +149,47 @@ describe('filterUserRows', () => {
     });
 
     expect(result).toEqual([matching]);
+  });
+});
+
+/**
+ * The empty state is the only thing on screen when the table is empty, so it
+ * is the only thing that can tell an admin why. It used to always say "try a
+ * different search term" — advice nobody can act on when the search box is
+ * empty and it is the URL's course+level filter that emptied the table.
+ */
+describe('emptyReason', () => {
+  it('names the course and level when no search term was typed', () => {
+    expect(
+      emptyReason({ search: '', courseName: 'ITPS Basics', level: 'advanced' }),
+    ).toBe(
+      'Nobody is at Advanced in ITPS Basics. Clear the course filter to see everyone.',
+    );
+  });
+
+  it('names the course alone when only the course filter is set', () => {
+    expect(
+      emptyReason({ search: '  ', courseName: 'ITPS Basics', level: null }),
+    ).toBe(
+      'Nobody is enrolled in ITPS Basics. Clear the course filter to see everyone.',
+    );
+  });
+
+  it('mentions both causes when a search and a filter are both in force', () => {
+    expect(
+      emptyReason({
+        search: ' pat ',
+        courseName: 'ITPS Basics',
+        level: 'basic',
+      }),
+    ).toBe(
+      'Nobody matching “pat” is at Basic in ITPS Basics. Try a different search term, or clear the course filter.',
+    );
+  });
+
+  it('falls back to the search advice when the search really is the only filter', () => {
+    expect(
+      emptyReason({ search: 'pat', courseName: undefined, level: null }),
+    ).toBe('Try a different search term.');
   });
 });

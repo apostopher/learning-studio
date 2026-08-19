@@ -12,6 +12,43 @@ import { LEVEL_LABELS } from '#/lib/level-labels';
 import { USER_LEVELS, type UserLevel } from '#/types';
 import { UserAvatar } from './user-avatar';
 
+/**
+ * Why the table came back empty, in the pilot's own terms.
+ *
+ * Every branch names the filter that is actually in force and what to do about
+ * it, because "no matches" with no cause is indistinguishable from a bug — and
+ * the course/level filters live in the URL, so a shared link can arrive with
+ * them already applied and no visible search text to explain it.
+ */
+export function emptyReason({
+  search,
+  courseName,
+  level,
+}: {
+  search: string;
+  courseName: string | undefined;
+  level: UserLevel | null;
+}): string {
+  const hasSearch = search.trim().length > 0;
+  const scope =
+    courseName && level
+      ? `at ${LEVEL_LABELS[level]} in ${courseName}`
+      : courseName
+        ? `enrolled in ${courseName}`
+        : null;
+
+  if (hasSearch && scope) {
+    return `Nobody matching “${search.trim()}” is ${scope}. Try a different search term, or clear the course filter.`;
+  }
+  if (hasSearch) {
+    return 'Try a different search term.';
+  }
+  if (scope) {
+    return `Nobody is ${scope}. Clear the course filter to see everyone.`;
+  }
+  return 'Try a different search term.';
+}
+
 /** Sentinel values for the "no filter" option in each Select — nuqs stores
  * "no filter" as a missing param (`null`), but Base UI's `Select` needs a
  * real, non-empty value for that option to be selectable. */
@@ -438,10 +475,18 @@ export const UsersTable = ({
                       <span className="font-medium text-primary text-sm">
                         {rows.length === 0 ? 'Nobody yet' : 'No matches'}
                       </span>
+                      {/* Name the filter that actually emptied the table. The
+                          old copy always said "try a different search term",
+                          which is advice nobody can act on when the cause is a
+                          course+level filter and the search box is empty. */}
                       <span className="text-secondary text-sm">
                         {rows.length === 0
                           ? 'Add someone by email and assign them a course.'
-                          : 'Try a different search term.'}
+                          : emptyReason({
+                              search,
+                              courseName: selectedCourseName,
+                              level,
+                            })}
                       </span>
                     </div>
                   </td>

@@ -83,6 +83,7 @@ const renderArticleBody = (state: LessonMainState) => {
               lessonSlug={state.lessonSlug}
               hasDebrief={state.hasDebrief}
               videoExpected={state.videoExpected}
+              readOnly={false}
             />
           </div>
           {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
@@ -137,6 +138,7 @@ const renderArticleBody = (state: LessonMainState) => {
                 lessonSlug={state.lessonSlug}
                 hasDebrief={state.hasDebrief}
                 videoExpected={state.videoExpected}
+                readOnly
               />
             )}
           </div>

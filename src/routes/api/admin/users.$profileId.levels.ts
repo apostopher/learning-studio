@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { courseExists } from '#/db/course';
 import { insertLevelRow, listLevelHistory } from '#/db/user-levels';
 import { getUserProfile } from '#/db/users';
 import { ForbiddenError } from '#/lib/admin-functions.server';
@@ -13,7 +14,15 @@ export function parseProfileId(raw: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** GET a pilot's level history in one course. */
+/**
+ * GET a pilot's level history in one course.
+ *
+ * Guarded twice, exactly as the PUT below is: `requirePermission` checks the
+ * actor may read levels at all, and `assertCanActOnProfile` checks the TARGET
+ * is not an admin or owner. Without the second, a `level:read` holder could
+ * read an owner's history — a level change carries an admin-written `message`
+ * and `note`, so the history is not a neutral list of tiers.
+ */
 export async function getUserLevelsHandler(
   request: Request,
   profileIdRaw: string,
@@ -24,7 +33,8 @@ export async function getUserLevelsHandler(
   }
 
   try {
-    await requirePermission(request.headers, 'level', 'read');
+    const actor = await requirePermission(request.headers, 'level', 'read');
+    await assertCanActOnProfile(actor, profileId);
   } catch (error) {
     if (error instanceof ForbiddenError) {
       return new Response('Forbidden', { status: 403 });
@@ -100,6 +110,13 @@ export async function putUserLevelHandler(
   const profile = await getUserProfile(profileId);
   if (!profile) {
     return Response.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  // Checked rather than left to `user_levels.course_id`'s foreign key: the
+  // constraint violation propagates out of the handler uncaught and the admin
+  // gets a 500 for what is simply a bad id in the request.
+  if (!(await courseExists(parsed.data.courseId))) {
+    return Response.json({ error: 'Course not found' }, { status: 404 });
   }
 
   // `changedBy` is the acting admin from the guard's returned actor — never a

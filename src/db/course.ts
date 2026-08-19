@@ -432,6 +432,23 @@ export async function getSubscribedCourseSlugs(
 }
 
 /**
+ * Whether a course row with this id exists.
+ *
+ * One boolean, not a row: the admin level route needs it only to answer 404
+ * instead of letting `user_levels.course_id`'s foreign key raise and surface
+ * as an uncaught 500. A validation failure should read as a validation
+ * failure.
+ */
+export async function courseExists(courseId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: coursesTable.id })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, courseId))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
  * Resolve a course slug to the identity onboarding needs: its id, and the
  * name every onboarding prompt is written around. Returns null for an unknown
  * slug so callers can answer 404 rather than throwing.

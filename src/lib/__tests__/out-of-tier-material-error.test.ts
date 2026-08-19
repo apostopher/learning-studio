@@ -22,10 +22,22 @@ describe('readOutOfTierError', () => {
     expect(err?.level).toBe('intermediate');
   });
 
-  it('falls back to basic when the level is missing or malformed', async () => {
+  /**
+   * Deliberately NOT a 'basic' fallback. The level in this error is rendered
+   * verbatim by `OutOfTierNotice` — "your current level (Basic)" — so a
+   * default would tell an Advanced pilot something confidently wrong about
+   * their own account, sourced from a body we have just established we cannot
+   * read. Null sends the consumer down the generic error path instead, which
+   * says less and is entirely true.
+   */
+  it('returns null when the level is malformed, rather than guessing basic', async () => {
     const res = jsonResponse(403, { error: 'out-of-tier', level: 'nonsense' });
-    const err = await readOutOfTierError(res);
-    expect(err?.level).toBe('basic');
+    expect(await readOutOfTierError(res)).toBeNull();
+  });
+
+  it('returns null when the level is missing altogether', async () => {
+    const res = jsonResponse(403, { error: 'out-of-tier' });
+    expect(await readOutOfTierError(res)).toBeNull();
   });
 
   it('returns null for a 403 with a different body shape', async () => {

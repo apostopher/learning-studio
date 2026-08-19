@@ -6,14 +6,17 @@ const {
   getCourseIdentityBySlug,
   getCurrentLevel,
   getUnacknowledgedLevelChange,
+  isSubscribedToCourse,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getCourseIdentityBySlug: vi.fn(),
   getCurrentLevel: vi.fn(),
   getUnacknowledgedLevelChange: vi.fn(),
+  isSubscribedToCourse: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/db/course', () => ({ getCourseIdentityBySlug }));
+vi.mock('#/db/lesson-access', () => ({ isSubscribedToCourse }));
 vi.mock('#/db/user-levels', () => ({
   getCurrentLevel,
   getUnacknowledgedLevelChange,
@@ -31,6 +34,7 @@ beforeEach(() => {
   getCourseIdentityBySlug.mockResolvedValue({ id: 7, name: 'Course' });
   getCurrentLevel.mockResolvedValue('basic');
   getUnacknowledgedLevelChange.mockResolvedValue(null);
+  isSubscribedToCourse.mockResolvedValue(true);
 });
 
 describe('getMyLevelHandler', () => {
@@ -49,12 +53,29 @@ describe('getMyLevelHandler', () => {
     expect(getCourseIdentityBySlug).not.toHaveBeenCalled();
   });
 
-  it('404 when the course does not exist', async () => {
+  /**
+   * An unknown slug and a real course the caller is not enrolled in must be
+   * INDISTINGUISHABLE. A 404 for one and a 200 for the other turns this
+   * endpoint into a catalogue-enumeration oracle for any signed-in caller —
+   * the exact thing `course.$courseSlug.tsx` redirects both cases to `/app` to
+   * avoid.
+   */
+  it('403s an unknown course, revealing nothing about whether it exists', async () => {
     getCourseIdentityBySlug.mockResolvedValueOnce(null);
     const res = await getMyLevelHandler(
       req('http://test/api/user/my-level?slug=nope'),
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('403s a real course the caller is not subscribed to, identically', async () => {
+    isSubscribedToCourse.mockResolvedValueOnce(false);
+    const res = await getMyLevelHandler(
+      req('http://test/api/user/my-level?slug=someone-elses'),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe('Forbidden');
     expect(getCurrentLevel).not.toHaveBeenCalled();
   });
 

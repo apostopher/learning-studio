@@ -10,6 +10,13 @@ type LessonNoVideoContainerProps = {
   hasDebrief: boolean;
   /** `needsVideoWatch` — the admin's statement that a video belongs here. */
   videoExpected: boolean;
+  /**
+   * The lesson was completed at an earlier level. The Debrief shortcut only
+   * switches tabs, so offering it here would deposit the pilot on a Debrief
+   * panel whose Start is disabled — a button that leads to a dead end reads as
+   * a broken app, not as a deliberately inert archive.
+   */
+  readOnly: boolean;
 };
 
 /**
@@ -29,6 +36,7 @@ export const LessonNoVideoContainer = ({
   lessonSlug,
   hasDebrief,
   videoExpected,
+  readOnly,
 }: LessonNoVideoContainerProps) => {
   const setActiveTab = useSetAtom(activeTabAtom);
   const { data } = useLessonMaterial(lessonSlug);
@@ -39,7 +47,7 @@ export const LessonNoVideoContainer = ({
   // is enough now — the server derives key points from it when none were
   // authored (see resolveDebriefSource). The transcript fallback cannot apply
   // here: this branch exists precisely because the lesson has no video.
-  const canDebrief = hasDebrief && Boolean(material?.text);
+  const canDebrief = hasDebrief && Boolean(material?.text) && !readOnly;
 
   const onDebrief = useCallback(() => {
     setActiveTab('quiz');

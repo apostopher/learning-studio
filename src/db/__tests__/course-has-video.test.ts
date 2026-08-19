@@ -103,6 +103,10 @@ vi.mock('#/db/admin', () => ({ getUserRoleNames: vi.fn() }));
 vi.mock('#/db/course-last-viewed-batch', () => ({
   getLastViewedLessonIdsByCourse: vi.fn(),
 }));
+// getMyCourses now resolves a level per card. Stubbed like every other
+// internal module here: the real one value-imports `#/db/schema`, which
+// value-imports `@/types` — the alias vitest cannot resolve.
+vi.mock('#/db/user-levels', () => ({ getCurrentLevelsByCourse: vi.fn() }));
 
 const { getCourseDetails } = await import('#/db/course');
 

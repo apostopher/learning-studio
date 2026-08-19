@@ -2,9 +2,6 @@ import type { UserLevel } from '#/types';
 
 export type LevelFilterableLesson = { levels: readonly string[] };
 export type LevelFilterableModule<L> = { lessons: readonly L[] };
-export type LevelFilterableCourse<L, M extends LevelFilterableModule<L>> = {
-  modules: readonly M[];
-};
 
 /**
  * Exact match, with empty meaning "every tier".

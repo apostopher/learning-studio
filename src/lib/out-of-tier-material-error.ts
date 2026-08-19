@@ -44,5 +44,11 @@ export async function readOutOfTierError(
   const level = UserLevelSchema.safeParse(
     (body as Record<string, unknown>).level,
   );
-  return new OutOfTierMaterialError(level.success ? level.data : 'basic');
+  // No usable level, no OutOfTierMaterialError. Defaulting to 'basic' here
+  // would let `OutOfTierNotice` tell an Advanced pilot "your current level
+  // (Basic)" — a confidently wrong statement about their own account, from a
+  // body we have just established we cannot read. Falling through to the
+  // generic error path says less, and everything it says is true.
+  if (!level.success) return null;
+  return new OutOfTierMaterialError(level.data);
 }

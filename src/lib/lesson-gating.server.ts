@@ -113,7 +113,7 @@ export async function evaluateLessonGate({
     };
   }
 
-  // Concurrent, not sequential: one of this function's five callers is the
+  // Concurrent, not sequential: one of this function's nine callers is the
   // video-progress beacon, which fires repeatedly through a playing lesson,
   // and these two queries share no data.
   const [subscribed, level] = await Promise.all([
