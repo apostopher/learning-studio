@@ -35,6 +35,17 @@ async function main(): Promise<void> {
       ON user_levels (user_id, course_id, created_at DESC);
   `);
 
+  // At most one EARNED row per (user, course, level). See the matching index
+  // in src/db/schema.ts for why it is partial. This is the backstop for the
+  // conditional insert in `insertEarnedLevelRow`: without it, two overlapping
+  // progress writes can each append a promotion row and send a real email.
+  console.info('Enforcing one earned promotion per tier…');
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS user_levels_earned_once_idx
+      ON user_levels (user_id, course_id, level)
+      WHERE source = 'earned';
+  `);
+
   console.info('Adding lessons.levels…');
   await db.execute(sql`
     ALTER TABLE lessons

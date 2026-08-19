@@ -83,9 +83,13 @@ export async function listLevelHistory(
  * Append a row. Never updates — a correction is a newer row.
  *
  * Returns the new row's id so a caller that needs to acknowledge it later
- * (e.g. `maybePromote`, whose id lets an in-flow dismissal acknowledge the
- * same row the between-visits banner would otherwise announce again) doesn't
- * have to re-query for it.
+ * doesn't have to re-query for it — the same reason `insertEarnedLevelRow`
+ * below returns one: an in-flow dismissal can then acknowledge exactly the row
+ * the between-visits banner would otherwise announce again.
+ *
+ * Unconditional, and correct that way for the admin path it now serves alone:
+ * a correction legitimately repeats a level. Automatic promotions go through
+ * `insertEarnedLevelRow`, which must not.
  */
 export async function insertLevelRow(input: InsertLevelRow): Promise<number> {
   const [row] = await db
@@ -104,17 +108,63 @@ export async function insertLevelRow(input: InsertLevelRow): Promise<number> {
 }
 
 /**
+ * Append an EARNED promotion row, at most once per (user, course, level).
+ *
+ * Returns the new row's id, or null when the row already existed — which the
+ * caller must read as "somebody else promoted them already", not as a failure.
+ *
+ * `maybePromote` runs after every progress write and the video beacon fires
+ * repeatedly through a lesson, so two overlapping requests routinely reach
+ * this at the same moment. Both would read the same current level, both would
+ * pass the tier check, and an unconditional insert would append two rows and
+ * send two promotion emails.
+ *
+ * Belt AND braces: the `WHERE NOT EXISTS` closes the ordinary interleaving
+ * (and works whether or not the partial unique index has been created yet),
+ * while `ON CONFLICT DO NOTHING` — deliberately untargeted, so it needs no
+ * arbiter to infer — makes the genuinely simultaneous case a no-op rather than
+ * a duplicate once `user_levels_earned_once_idx` exists.
+ */
+export async function insertEarnedLevelRow(input: {
+  userId: string;
+  courseId: number;
+  level: UserLevel;
+}): Promise<number | null> {
+  const result = await db.execute<{ id: number }>(sql`
+    INSERT INTO user_levels (user_id, course_id, level, source)
+    SELECT ${input.userId}, ${input.courseId}, ${input.level}, 'earned'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM user_levels
+      WHERE user_id = ${input.userId}
+        AND course_id = ${input.courseId}
+        AND level = ${input.level}
+        AND source = 'earned'
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `);
+  return result.rows[0]?.id ?? null;
+}
+
+/**
  * Write the starting Basic row, once.
  *
  * Conditional on there being no rows at all — not on the absence of an
  * 'enrolment' row — so that unenrolling and re-enrolling an Advanced pilot
  * does not walk them back to Basic.
+ *
+ * `executor` exists so a caller already inside a transaction can run this on
+ * its `tx` — claiming pending enrolments does exactly that, and used to carry
+ * a verbatim copy of the SQL below because this helper was bound to `db`.
+ * Two copies of a WHERE NOT EXISTS is two places for the idempotency rule to
+ * drift.
  */
 export async function ensureEnrolmentLevel(
   userId: string,
   courseId: number,
+  executor: Pick<typeof db, 'execute'> = db,
 ): Promise<void> {
-  await db.execute(sql`
+  await executor.execute(sql`
     INSERT INTO user_levels (user_id, course_id, level, source)
     SELECT ${userId}, ${courseId}, 'basic', 'enrolment'
     WHERE NOT EXISTS (

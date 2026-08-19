@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
   getCurrentLevel: vi.fn(),
-  insertLevelRow: vi.fn(),
+  insertEarnedLevelRow: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
   getCourseIdentityBySlug: vi.fn(),
@@ -13,7 +13,7 @@ const m = vi.hoisted(() => ({
 
 vi.mock('#/db/user-levels', () => ({
   getCurrentLevel: m.getCurrentLevel,
-  insertLevelRow: m.insertLevelRow,
+  insertEarnedLevelRow: m.insertEarnedLevelRow,
 }));
 vi.mock('#/db/course', () => ({
   getCourseDetailsWithCache: m.getCourseDetailsWithCache,
@@ -48,7 +48,8 @@ beforeEach(() => {
   m.sendLevelPromotionEmail.mockResolvedValue(undefined);
   // The inserted row's id — maybePromote returns it so the caller can
   // acknowledge exactly this row later (see PromotionInterstitial's dismiss).
-  m.insertLevelRow.mockResolvedValue(42);
+  // Null would mean the conditional insert found a row already there.
+  m.insertEarnedLevelRow.mockResolvedValue(42);
 });
 
 describe('maybePromote', () => {
@@ -61,11 +62,10 @@ describe('maybePromote', () => {
     const result = await maybePromote({ userId: 'u1', courseSlug: 'rt' });
 
     expect(result).toEqual({ id: 42, from: 'basic', to: 'intermediate' });
-    expect(m.insertLevelRow).toHaveBeenCalledWith({
+    expect(m.insertEarnedLevelRow).toHaveBeenCalledWith({
       userId: 'u1',
       courseId: 7,
       level: 'intermediate',
-      source: 'earned',
     });
   });
 
@@ -76,7 +76,7 @@ describe('maybePromote', () => {
     });
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
-    expect(m.insertLevelRow).not.toHaveBeenCalled();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
   });
 
   it('short-circuits at the top rung without querying progress', async () => {
@@ -84,7 +84,7 @@ describe('maybePromote', () => {
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
     expect(m.getCourseProgress).not.toHaveBeenCalled();
-    expect(m.insertLevelRow).not.toHaveBeenCalled();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
   });
 
   it('emails the pilot on promotion', async () => {
@@ -112,6 +112,102 @@ describe('maybePromote', () => {
     const result = await maybePromote({ userId: 'u1', courseSlug: 'rt' });
 
     expect(result).toEqual({ id: 42, from: 'basic', to: 'intermediate' });
-    expect(m.insertLevelRow).toHaveBeenCalled();
+    expect(m.insertEarnedLevelRow).toHaveBeenCalled();
+  });
+
+  /**
+   * The deploy-day cascade. Every lesson ships `levels = '{}'`, and
+   * `isLessonVisibleAtLevel([], level)` is true for EVERY tier — so without a
+   * guard, any pilot already at 100% is promoted to intermediate on their next
+   * progress write and to advanced on the write after, each with a real email
+   * and an append-only row. Asserting on the WRITER and the MAILER, not just
+   * the return value: a promotion that wrote the row and then reported null
+   * would still have shipped the incident.
+   */
+  it('promotes nobody in a course where no lesson is tagged', async () => {
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          lessons: [
+            { id: 1, isAvailable: true, levels: [] },
+            { id: 2, isAvailable: true, levels: [] },
+          ],
+        },
+      ],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, percent: 100 },
+        { lessonId: 2, percent: 100 },
+      ],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
+  });
+
+  it('promotes nobody at the SECOND rung of an untagged course either', async () => {
+    // The second half of the cascade: the write after the first promotion
+    // would find `isTierComplete('intermediate')` true for exactly the same
+    // reason and send a second email.
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [{ lessons: [{ id: 1, isAvailable: true, levels: [] }] }],
+    });
+    m.getCurrentLevel.mockResolvedValue('intermediate');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 1, percent: 100 }],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
+  });
+
+  it('still promotes when only SOME lessons are tagged', async () => {
+    // The guard is "nothing in this course is tagged", not "every lesson is
+    // tagged" — a part-tagged course is the normal mid-rollout state.
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          lessons: [
+            { id: 1, isAvailable: true, levels: [] },
+            { id: 2, isAvailable: true, levels: ['intermediate'] },
+          ],
+        },
+      ],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, percent: 100 },
+        { lessonId: 2, percent: 100 },
+      ],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toEqual({
+      id: 42,
+      from: 'basic',
+      to: 'intermediate',
+    });
+  });
+
+  /**
+   * The concurrent case. Two overlapping progress writes both read
+   * `from = 'basic'` and both pass `isTierComplete`; the conditional insert
+   * is what stops the second from appending a row. Its null must reach the
+   * MAILER as "say nothing" — a second congratulatory email for a promotion
+   * that already happened is the visible half of the bug.
+   */
+  it('sends no email and reports nothing when the insert was skipped', async () => {
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 1, percent: 100 }],
+    });
+    m.insertEarnedLevelRow.mockResolvedValue(null);
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
   });
 });

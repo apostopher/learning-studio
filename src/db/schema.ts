@@ -1170,6 +1170,20 @@ export const userLevelsTable = pgTable(
       table.courseId,
       desc(table.createdAt),
     ),
+    // At most one EARNED row per (user, course, level). `maybePromote` runs
+    // after every progress write — including the video beacon, which fires
+    // repeatedly through a lesson — so two overlapping requests can read the
+    // same current level and both decide to promote. `insertEarnedLevelRow`
+    // guards that with a WHERE NOT EXISTS; this index is what makes the
+    // genuinely simultaneous case impossible rather than merely unlikely.
+    //
+    // Partial on purpose: admin corrections legitimately repeat a level (a
+    // demotion and a re-promotion are two rows), and the idempotent
+    // 'enrolment' row must stay untouched. Kept in sync with
+    // src/db/migrate-user-levels.ts.
+    uniqueIndex('user_levels_earned_once_idx')
+      .on(table.userId, table.courseId, table.level)
+      .where(sql`${table.source} = 'earned'`),
   ],
 );
 

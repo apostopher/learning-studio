@@ -3,7 +3,7 @@ import {
   getCourseIdentityBySlug,
 } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
-import { getCurrentLevel, insertLevelRow } from '#/db/user-levels';
+import { getCurrentLevel, insertEarnedLevelRow } from '#/db/user-levels';
 import { getUserEmail } from '#/db/user-profile';
 import { sendLevelPromotionEmail } from '#/lib/email/send-level-promotion-email';
 import { isTierComplete, nextLevel } from '#/lib/tier-completion';
@@ -54,16 +54,37 @@ export async function maybePromote(options: {
     })),
   );
 
+  // Nothing in this course is tagged, so there are no tiers to complete.
+  //
+  // Without this guard the untagged catalogue promotes the entire user base to
+  // `advanced` on deploy day: `isLessonVisibleAtLevel([], level)` is true for
+  // EVERY tier, so any pilot already at 100% satisfies `isTierComplete('basic')`
+  // on their next progress write (promoted, emailed), then
+  // `isTierComplete('intermediate')` on the write after (promoted, emailed
+  // again). The rows are append-only and the emails are real, and the first
+  // lesson an author later tags `['basic']` would then be invisible to
+  // everyone — correctable only one pilot at a time.
+  //
+  // This is what makes the spec's own rollout property true: the catalogue
+  // stays fully visible on deploy and the feature switches on lesson by lesson
+  // as authors tag content.
+  if (!lessons.some((lesson) => lesson.levels.length > 0)) return null;
+
   if (!isTierComplete({ lessons, progress: progress.lessons, level: from })) {
     return null;
   }
 
-  const id = await insertLevelRow({
+  // Conditional, not a plain insert: this function runs after EVERY progress
+  // write, and the video beacon fires repeatedly through a lesson — two
+  // overlapping requests both read `from = 'basic'`, both pass the check
+  // above, and without this both would append a row and send an email. A null
+  // means somebody else got there first, so there is nothing new to announce.
+  const id = await insertEarnedLevelRow({
     userId: options.userId,
     courseId,
     level: to,
-    source: 'earned',
   });
+  if (id === null) return null;
 
   // Best-effort. The promotion is already durable; a mail outage must not
   // undo it or hide it from the response.

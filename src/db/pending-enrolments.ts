@@ -5,6 +5,7 @@ import {
   coursesTable,
   pendingEnrolmentsTable,
 } from '#/db/schema';
+import { ensureEnrolmentLevel } from '#/db/user-levels';
 
 /**
  * Pre-assign a course to an email that may not have an account yet.
@@ -151,15 +152,10 @@ export async function claimPendingEnrolments(options: {
         ],
       });
 
+    // Through the shared helper, on this transaction's executor — one copy of
+    // the idempotency rule, not two.
     for (const row of pending) {
-      await tx.execute(sql`
-        INSERT INTO user_levels (user_id, course_id, level, source)
-        SELECT ${options.userId}, ${row.courseId}, 'basic', 'enrolment'
-        WHERE NOT EXISTS (
-          SELECT 1 FROM user_levels
-          WHERE user_id = ${options.userId} AND course_id = ${row.courseId}
-        )
-      `);
+      await ensureEnrolmentLevel(options.userId, row.courseId, tx);
     }
 
     await tx
