@@ -26,7 +26,11 @@ import {
   videoProgressTable,
 } from '@/db/schema';
 import { cacheWithRedis } from '@/integrations/upstash/redis';
-import type { CourseLessonDependencies, SubscriptionType } from '@/types';
+import type {
+  CourseLessonDependencies,
+  SubscriptionType,
+  UserLevel,
+} from '@/types';
 import { db } from '.';
 
 type LessonDetails = DBLesson & {
@@ -118,6 +122,7 @@ export async function getCourseDetails(slug: string) {
         ...lesson,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
+        levels: lesson.levels as UserLevel[],
         hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
         otherVideoIds: lesson.otherVideoIds || [],
         dependsOn: [],

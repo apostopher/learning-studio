@@ -5,6 +5,28 @@ export const SubscriptionSchema = z.enum(['associate', 'candidate', 'rpoc']);
 export const SubscriptionsSchema = z.array(SubscriptionSchema);
 export type SubscriptionType = z.infer<typeof SubscriptionSchema>;
 
+/**
+ * A pilot's competence tier within one course. Ordered — index is the rung.
+ *
+ * Stored as `text` rather than a pg enum, matching `required_subscriptions`:
+ * adding a tier should not need a migration, and the zod schema at the API
+ * edge is what constrains the values.
+ */
+export const USER_LEVELS = ['basic', 'intermediate', 'advanced'] as const;
+export const UserLevelSchema = z.enum(USER_LEVELS);
+export const UserLevelsSchema = z.array(UserLevelSchema);
+export type UserLevel = (typeof USER_LEVELS)[number];
+
+/**
+ * Where a `user_levels` row came from.
+ *
+ * `enrolment` — the idempotent starting row. `earned` — the pilot completed a
+ * tier. `admin` — a human intervened, and `message` is required.
+ */
+export const LEVEL_SOURCES = ['enrolment', 'earned', 'admin'] as const;
+export const LevelSourceSchema = z.enum(LEVEL_SOURCES);
+export type LevelSource = (typeof LEVEL_SOURCES)[number];
+
 // Video schemas
 export const VideoAvailableSchema = z.object({
   id: z.string(),

@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm';
+import { desc, relations, sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -24,6 +24,8 @@ import {
   CourseLessonQuizAnswerSchema,
   CourseLessonQuizAnswersSchema,
   CourseLessonQuizSchema,
+  type LevelSource,
+  LevelSourceSchema,
   type MaterialLink,
   type NewsScrapeStatus,
   OnboardingAnswersSchema,
@@ -33,6 +35,9 @@ import {
   PilotLicensesSchema,
   ProfileVisibilitySchema,
   SubscriptionsSchema,
+  type UserLevel,
+  UserLevelSchema,
+  UserLevelsSchema,
 } from '@/types';
 
 export * from './auth-schema';
@@ -128,6 +133,13 @@ export const lessonsTable = pgTable('lessons', {
   videoProvider: text('video_provider'), // 'mux' | 'synthesia' | null
   videoRef: text('video_ref'),
   requiredSubscriptions: text('required_subscriptions').array().notNull(),
+  /**
+   * Which competence tiers see this lesson. **Empty means every tier** — so the
+   * pre-existing catalogue stays fully visible and authors opt lessons in one
+   * at a time. Matching is exact, not a ceiling: an `advanced` pilot does not
+   * see a `['basic']` lesson.
+   */
+  levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
   rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
   isAvailable: boolean('is_available').notNull().default(false),
   exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
@@ -152,6 +164,7 @@ export const lessonsTable = pgTable('lessons', {
 
 export const dbLessonSchema = createSelectSchema(lessonsTable, {
   requiredSubscriptions: SubscriptionsSchema,
+  levels: UserLevelsSchema,
 });
 export type DBLesson = z.infer<typeof dbLessonSchema>;
 
@@ -1113,6 +1126,65 @@ export const courseSubscriptionsTableRelations = relations(
     }),
   }),
 );
+
+/**
+ * Append-only record of a pilot's level in one course. **The latest row wins.**
+ *
+ * There is deliberately no `level` column on `user_profiles`: the requirement
+ * is to capture that a pilot *becomes* intermediate or advanced — the
+ * transition, not just the value. A column cannot answer "when did they
+ * advance?" or "how long is the average pilot at Basic?".
+ *
+ * Rows are never updated except to stamp `acknowledgedAt`, and never deleted.
+ * A correction is a newer row, which means undo is a single insert and a
+ * demotion destroys no progress.
+ *
+ * `changedBy` is a plain id rather than an FK — the audit string should outlive
+ * the account that wrote it, matching `courseSubscriptions.grantedBy`.
+ */
+export const userLevelsTable = pgTable(
+  'user_levels',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    level: text('level').$type<UserLevel>().notNull(),
+    source: text('source').$type<LevelSource>().notNull(),
+    /** Pilot-facing. Required when `source` is 'admin', null otherwise. */
+    message: text('message'),
+    /** Admin-only context. Never rendered to the pilot. */
+    note: text('note'),
+    /** Acting admin's user id. Null for 'enrolment' and 'earned' rows. */
+    changedBy: varchar('changed_by', { length: 255 }),
+    /** Set when the pilot dismisses the change notice. Null = unseen. */
+    acknowledgedAt: timestamp('acknowledged_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('user_levels_lookup_idx').on(
+      table.userId,
+      table.courseId,
+      desc(table.createdAt),
+    ),
+  ],
+);
+
+export const dbUserLevelSchema = createSelectSchema(userLevelsTable, {
+  level: UserLevelSchema,
+  source: LevelSourceSchema,
+});
+export type DBUserLevel = z.infer<typeof dbUserLevelSchema>;
+
+export const userLevelsRelations = relations(userLevelsTable, ({ one }) => ({
+  course: one(coursesTable, {
+    fields: [userLevelsTable.courseId],
+    references: [coursesTable.id],
+  }),
+}));
 
 export const courseOnboardingTable = pgTable(
   'course_onboarding',
