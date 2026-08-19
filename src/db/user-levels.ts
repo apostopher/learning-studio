@@ -1,0 +1,132 @@
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { db } from '#/db';
+import { type DBUserLevel, userLevelsTable } from '#/db/schema';
+import type { LevelSource, UserLevel } from '#/types';
+
+export type InsertLevelRow = {
+  userId: string;
+  courseId: number;
+  level: UserLevel;
+  source: LevelSource;
+  message?: string | null;
+  note?: string | null;
+  changedBy?: string | null;
+};
+
+/**
+ * The pilot's level in one course — the newest row.
+ *
+ * Falls back to 'basic' rather than throwing. `ensureEnrolmentLevel` means an
+ * enrolled pilot always has a row, so the fallback only fires for a course
+ * they are not enrolled in, where 'basic' is the harmless answer.
+ */
+export async function getCurrentLevel(
+  userId: string,
+  courseId: number,
+): Promise<UserLevel> {
+  const [row] = await db
+    .select({ level: userLevelsTable.level })
+    .from(userLevelsTable)
+    .where(
+      and(
+        eq(userLevelsTable.userId, userId),
+        eq(userLevelsTable.courseId, courseId),
+      ),
+    )
+    .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
+    .limit(1);
+  return row?.level ?? 'basic';
+}
+
+/** Full history for one (user, course), newest first. */
+export async function listLevelHistory(
+  userId: string,
+  courseId: number,
+): Promise<DBUserLevel[]> {
+  return db
+    .select()
+    .from(userLevelsTable)
+    .where(
+      and(
+        eq(userLevelsTable.userId, userId),
+        eq(userLevelsTable.courseId, courseId),
+      ),
+    )
+    .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id));
+}
+
+/** Append a row. Never updates — a correction is a newer row. */
+export async function insertLevelRow(input: InsertLevelRow): Promise<void> {
+  await db.insert(userLevelsTable).values({
+    userId: input.userId,
+    courseId: input.courseId,
+    level: input.level,
+    source: input.source,
+    message: input.message ?? null,
+    note: input.note ?? null,
+    changedBy: input.changedBy ?? null,
+  });
+}
+
+/**
+ * Write the starting Basic row, once.
+ *
+ * Conditional on there being no rows at all — not on the absence of an
+ * 'enrolment' row — so that unenrolling and re-enrolling an Advanced pilot
+ * does not walk them back to Basic.
+ */
+export async function ensureEnrolmentLevel(
+  userId: string,
+  courseId: number,
+): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO user_levels (user_id, course_id, level, source)
+    SELECT ${userId}, ${courseId}, 'basic', 'enrolment'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM user_levels
+      WHERE user_id = ${userId} AND course_id = ${courseId}
+    )
+  `);
+}
+
+/**
+ * The newest row, if it was written by an admin and the pilot has not yet
+ * dismissed it. Drives the between-visits notice.
+ */
+export async function getUnacknowledgedAdminChange(
+  userId: string,
+  courseId: number,
+): Promise<DBUserLevel | null> {
+  const [row] = await db
+    .select()
+    .from(userLevelsTable)
+    .where(
+      and(
+        eq(userLevelsTable.userId, userId),
+        eq(userLevelsTable.courseId, courseId),
+      ),
+    )
+    .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
+    .limit(1);
+  if (!row) return null;
+  if (row.source !== 'admin') return null;
+  if (row.acknowledgedAt !== null) return null;
+  return row;
+}
+
+/** Stamp a row as seen. Scoped by userId so one pilot cannot dismiss another's. */
+export async function acknowledgeLevelRow(
+  userId: string,
+  rowId: number,
+): Promise<void> {
+  await db
+    .update(userLevelsTable)
+    .set({ acknowledgedAt: new Date() })
+    .where(
+      and(
+        eq(userLevelsTable.id, rowId),
+        eq(userLevelsTable.userId, userId),
+        isNull(userLevelsTable.acknowledgedAt),
+      ),
+    );
+}

@@ -37,6 +37,7 @@ function makeTx(pendingRows: unknown[]) {
     insertedInto: undefined as unknown,
     insertedValues: undefined as unknown,
     updateCalled: false,
+    executeCalls: 0,
   };
   const selectChain = {
     from: () => selectChain,
@@ -63,6 +64,10 @@ function makeTx(pendingRows: unknown[]) {
       return insertChain;
     },
     update: () => updateChain,
+    execute: () => {
+      calls.executeCalls += 1;
+      return Promise.resolve(undefined);
+    },
   };
   return { tx, calls };
 }
@@ -96,6 +101,9 @@ describe('claimPendingEnrolments', () => {
       { userId: 'user-1', courseId: 7, grantedBy: 'admin-9' },
       { userId: 'user-1', courseId: 8, grantedBy: 'admin-9' },
     ]);
+    // One level row per claimed course — a pilot who claims an entitlement
+    // but never gets a level row renders an empty course with no error.
+    expect(calls.executeCalls).toBe(2);
   });
 
   it('credits the admin who pre-assigned it, not the sign-in', async () => {
@@ -137,5 +145,6 @@ describe('claimPendingEnrolments', () => {
     expect(claimed).toBe(0);
     expect(calls.insertedInto).toBeUndefined();
     expect(calls.updateCalled).toBe(false);
+    expect(calls.executeCalls).toBe(0);
   });
 });

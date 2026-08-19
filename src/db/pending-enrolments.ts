@@ -151,6 +151,17 @@ export async function claimPendingEnrolments(options: {
         ],
       });
 
+    for (const row of pending) {
+      await tx.execute(sql`
+        INSERT INTO user_levels (user_id, course_id, level, source)
+        SELECT ${options.userId}, ${row.courseId}, 'basic', 'enrolment'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM user_levels
+          WHERE user_id = ${options.userId} AND course_id = ${row.courseId}
+        )
+      `);
+    }
+
     await tx
       .update(pendingEnrolmentsTable)
       .set({ claimedAt: sql`now()` })
