@@ -96,7 +96,10 @@ describe('QuizResult — read-only', () => {
     render(<QuizResult {...props} onRetake={onRetake} readOnly={true} />);
 
     const button = screen.getByRole('button', { name: /Retake quiz/ });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    // aria-disabled, not native disabled: the control must stay in the
+    // tab order (and thus reachable + its aria-describedby announced) for
+    // a keyboard/screen-reader user — see Minor 3 of the review.
+    expect(button.getAttribute('aria-disabled')).toBe('true');
 
     await userEvent.click(button);
     expect(onRetake).not.toHaveBeenCalled();
@@ -122,6 +125,6 @@ describe('QuizResult — read-only', () => {
     render(<QuizResult {...props} readOnly={false} />);
     const button = screen.getByRole('button', { name: /Retake quiz/ });
     expect(button.hasAttribute('aria-describedby')).toBe(false);
-    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
   });
 });

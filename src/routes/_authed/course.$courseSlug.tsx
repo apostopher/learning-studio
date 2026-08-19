@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import {
   createFileRoute,
   Outlet,
@@ -9,11 +8,8 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef } from 'react';
 import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
 import { outOfTierNoticeAtom } from '#/atoms/out-of-tier-notice';
-import { pendingPromotionAtom } from '#/atoms/promotion';
 import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
-import { dataKeys } from '#/data-hooks/keys';
 import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
-import { queryKeys } from '#/hooks/data/keys';
 import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
 import { AppShell } from '../../components/app-shell';
 import { AppShellFooter } from '../../components/app-shell-footer';
@@ -25,6 +21,7 @@ import { OutOfTierNotice } from '../../components/out-of-tier-notice';
 import { PromotionInterstitial } from '../../components/promotion-interstitial';
 import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
 import { SignOutButtonContainer } from '../../components/sign-out-button-container';
+import { usePromotionInterstitial } from '../../components/use-promotion-interstitial';
 
 export const Route = createFileRoute('/_authed/course/$courseSlug')({
   beforeLoad: async ({ context, params }) => {
@@ -133,39 +130,6 @@ function useAutoOpenOnboarding(courseSlug: string) {
 }
 
 /**
- * Reads the pending promotion set by any of the four progress mutations
- * (section tap, video milestone, quiz submit, debrief save) and returns the
- * dismiss handler for the interstitial that announces it.
- *
- * Mounted once here, on the layout, rather than per-lesson: the layout stays
- * mounted across every lesson within a course visit, so a promotion earned on
- * one lesson is still announced even if the mutation that earned it belongs
- * to a component that has since unmounted (e.g. the tab that fired the
- * winning section tap).
- *
- * On dismiss: clear the atom, then invalidate both queries that visibility
- * depends on. `myLevel` drives the sidebar's level-gated lesson list;
- * `courseDetails` is the cached course tree itself. Invalidating only one
- * would leave the other showing the pre-promotion lesson set — exactly the
- * "my finished work vanished" read this dialog exists to prevent.
- */
-function usePromotionInterstitial(courseSlug: string) {
-  const promotion = useAtomValue(pendingPromotionAtom);
-  const setPromotion = useSetAtom(pendingPromotionAtom);
-  const queryClient = useQueryClient();
-
-  const dismiss = useCallback(() => {
-    setPromotion(null);
-    queryClient.invalidateQueries({ queryKey: dataKeys.myLevel(courseSlug) });
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.courseDetails(courseSlug),
-    });
-  }, [courseSlug, queryClient, setPromotion]);
-
-  return { promotion, dismiss };
-}
-
-/**
  * Reads the notice set right before a redirect away from a never-completed
  * out-of-tier lesson (see LessonMainWrapper). Mounted here, not on the lesson
  * leaf, because the redirect target's own beforeLoad
@@ -202,7 +166,7 @@ function CourseLayout() {
   return (
     <>
       {/* Mounted once per course visit, not per lesson: see
-          usePromotionInterstitial's doc comment above. */}
+          usePromotionInterstitial's doc comment (use-promotion-interstitial.ts). */}
       <PromotionInterstitial promotion={promotion} onDismiss={dismiss} />
       <OutOfTierNotice notice={notice} onDismiss={dismissOutOfTierNotice} />
       <AppShell

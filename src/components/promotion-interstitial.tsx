@@ -3,7 +3,7 @@ import { LEVEL_LABELS } from '#/lib/level-labels';
 import type { UserLevel } from '#/types';
 
 export interface PromotionInterstitialProps {
-  promotion: { from: UserLevel; to: UserLevel } | null;
+  promotion: { id: number; from: UserLevel; to: UserLevel } | null;
   onDismiss: () => void;
 }
 

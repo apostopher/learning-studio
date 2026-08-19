@@ -14,7 +14,7 @@ describe('PromotionInterstitial', () => {
   it('announces the new level as the accessible title', () => {
     render(
       <PromotionInterstitial
-        promotion={{ from: 'basic', to: 'intermediate' }}
+        promotion={{ id: 1, from: 'basic', to: 'intermediate' }}
         onDismiss={vi.fn()}
       />,
     );
@@ -33,7 +33,7 @@ describe('PromotionInterstitial', () => {
     const onDismiss = vi.fn();
     render(
       <PromotionInterstitial
-        promotion={{ from: 'basic', to: 'intermediate' }}
+        promotion={{ id: 1, from: 'basic', to: 'intermediate' }}
         onDismiss={onDismiss}
       />,
     );
@@ -53,7 +53,7 @@ describe('PromotionInterstitial', () => {
     const onDismiss = vi.fn();
     render(
       <PromotionInterstitial
-        promotion={{ from: 'basic', to: 'intermediate' }}
+        promotion={{ id: 1, from: 'basic', to: 'intermediate' }}
         onDismiss={onDismiss}
       />,
     );

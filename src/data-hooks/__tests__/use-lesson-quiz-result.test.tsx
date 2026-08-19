@@ -45,7 +45,7 @@ describe('useSubmitLessonQuiz', () => {
         ok: true,
         json: async () => ({
           ...savedRow,
-          promotion: { from: 'basic', to: 'intermediate' },
+          promotion: { id: 42, from: 'basic', to: 'intermediate' },
         }),
       }),
     );
@@ -57,6 +57,7 @@ describe('useSubmitLessonQuiz', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(store.get(pendingPromotionAtom)).toEqual({
+      id: 42,
       from: 'basic',
       to: 'intermediate',
     });

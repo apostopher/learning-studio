@@ -47,7 +47,7 @@ export const ArchivedLessonsSection = ({
           aria-hidden="true"
         />
       </Collapsible.Trigger>
-      <Collapsible.Panel className="overflow-hidden data-[ending-hidden]:animate-collapse data-[starting-hidden]:animate-collapse">
+      <Collapsible.Panel className="overflow-hidden">
         <ul className="flex flex-col gap-sidebar-row-gap py-sidebar-row-block">
           {lessons.map((lesson) => (
             <li key={lesson.slug}>

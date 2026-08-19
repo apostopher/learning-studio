@@ -56,10 +56,15 @@ export const ScoreReport = ({
 
         <button
           type="button"
-          onClick={onRetake}
-          disabled={readOnly}
+          // Inert handler, not just aria-disabled: aria-disabled does not
+          // block the click event the way native `disabled` did, so the
+          // component itself — not just every caller — must refuse to act.
+          onClick={() => {
+            if (!readOnly) onRetake();
+          }}
+          aria-disabled={readOnly || undefined}
           aria-describedby={readOnly ? REASON_ID : undefined}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3 aria-disabled:pointer-events-none aria-disabled:opacity-60"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           Retake Quiz

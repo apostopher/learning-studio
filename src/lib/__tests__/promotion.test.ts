@@ -46,6 +46,9 @@ beforeEach(() => {
   m.getCourseDetailsWithCache.mockResolvedValue(DETAILS);
   m.getUserEmail.mockResolvedValue('pilot@example.com');
   m.sendLevelPromotionEmail.mockResolvedValue(undefined);
+  // The inserted row's id — maybePromote returns it so the caller can
+  // acknowledge exactly this row later (see PromotionInterstitial's dismiss).
+  m.insertLevelRow.mockResolvedValue(42);
 });
 
 describe('maybePromote', () => {
@@ -57,7 +60,7 @@ describe('maybePromote', () => {
 
     const result = await maybePromote({ userId: 'u1', courseSlug: 'rt' });
 
-    expect(result).toEqual({ from: 'basic', to: 'intermediate' });
+    expect(result).toEqual({ id: 42, from: 'basic', to: 'intermediate' });
     expect(m.insertLevelRow).toHaveBeenCalledWith({
       userId: 'u1',
       courseId: 7,
@@ -108,7 +111,7 @@ describe('maybePromote', () => {
 
     const result = await maybePromote({ userId: 'u1', courseSlug: 'rt' });
 
-    expect(result).toEqual({ from: 'basic', to: 'intermediate' });
+    expect(result).toEqual({ id: 42, from: 'basic', to: 'intermediate' });
     expect(m.insertLevelRow).toHaveBeenCalled();
   });
 });

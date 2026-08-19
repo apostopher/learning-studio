@@ -6,8 +6,17 @@ import { UserLevelSchema } from '#/types';
 /**
  * The promotion to show, set by whichever progress mutation's response carried
  * one. Null when there is nothing to announce.
+ *
+ * Carries `id` — the `user_levels` row's own id — so dismissing the
+ * interstitial can acknowledge that exact row (see
+ * usePromotionInterstitial in course.$courseSlug.tsx). Without it, the same
+ * earned promotion the pilot just dismissed in-flow would still be
+ * unacknowledged in the DB and reappear as the between-visits banner the
+ * next time useMyLevel refetched — which is exactly what invalidating
+ * `myLevel` on dismiss used to trigger.
  */
 export const pendingPromotionAtom = atom<{
+  id: number;
   from: UserLevel;
   to: UserLevel;
 } | null>(null);
@@ -20,6 +29,7 @@ export const pendingPromotionAtom = atom<{
  * promotion out without depending on the rest of the response shape.
  */
 const promotionShapeSchema = z.object({
+  id: z.number(),
   from: UserLevelSchema,
   to: UserLevelSchema,
 });
@@ -33,7 +43,7 @@ const promotionShapeSchema = z.object({
  */
 export function extractPromotion(
   json: unknown,
-): { from: UserLevel; to: UserLevel } | null {
+): { id: number; from: UserLevel; to: UserLevel } | null {
   if (typeof json !== 'object' || json === null || !('promotion' in json)) {
     return null;
   }

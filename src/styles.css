@@ -50,22 +50,36 @@
     --shell-padding: var(--layout-separator-size);
     --shell-gap: var(--layout-separator-size);
 
-    /* Resting height of the alert bar. Tracks --shell-padding rather than
-       repeating 12px, because the shell tokens above are overridable per
+    /* Resting (EMPTY) height of the alert bar. Tracks --shell-padding rather
+       than repeating 12px, because the shell tokens above are overridable per
        theme and the two must not silently drift apart.
 
        On the /course/* family the strip lands exactly in AppShell's top
        gutter and covers nothing. On /app and /admin/* there is NO gutter —
        their header starts at y=0 — so the bar overlays its top 12px. That
        band is empty (app-header's content row is centred inside py-4, so its
-       top 16px is padding), so it
-       reads as the bar sitting on the header, but it IS an overlap.
+       top 16px is padding), so it reads as the bar sitting on the header,
+       but it IS an overlap. Both are harmless ONLY because the bar is empty.
 
-       A child taller than this overlaps real content on every layout.
-       Reserving space needs the bar's measured height, i.e. a hook, i.e.
-       AlertBar stops being presentational. Taken deliberately while children
-       is null; see docs/superpowers/specs/2026-08-12-alert-bar-design.md. */
+       When the bar has a child, the nested `&:has(.alert-bar > *)` below
+       raises this same variable to a POPULATED size (3.5rem — two wrapped
+       lines of `text-sm` plus block padding, not just one), and every
+       layout's own top offset (.app-shell's padding-block-start,
+       .app-header's margin-block-start — see those rules) reads the SAME
+       variable, so the reserved gutter and the bar's own min-block-size can
+       never drift apart. `min-block-size`, not `block-size`, on .alert-bar
+       itself is what keeps a message even longer than this covered: the bar
+       still grows to fit it, it just also then overlaps content again for
+       the excess, same as any min-height. This used to require measuring the
+       bar's real height (a hook, so AlertBar would stop being presentational)
+       — the two fixed size STEPS (empty/populated) below are the tradeoff
+       that avoids that. See docs/superpowers/specs/2026-08-12-alert-bar-design.md
+       for the original (pre-population) decision. */
     --alert-bar-min-block-size: var(--shell-padding);
+
+    &:has(.alert-bar > *) {
+      --alert-bar-min-block-size: 3.5rem;
+    }
     /* Panels (header/aside/main/footer) and the shell frame/gutter around
        them are explicit theme tokens (VITE_PANEL_BG_* / VITE_SHELL_BG_*),
        set independently of the page background and gray scale. */
@@ -197,6 +211,13 @@
     column-gap: 0;
     row-gap: var(--shell-gap);
     padding: var(--shell-padding);
+    /* Overrides just the top side: reserves space for AlertBar, which is
+       position: fixed and so does not push this grid down on its own. Reads
+       --alert-bar-min-block-size (not --shell-padding) so this grows in step
+       with the bar the moment it is populated — see that variable's own
+       comment. Equal to --shell-padding, and so a no-op visually, whenever
+       the bar is empty. */
+    padding-block-start: var(--alert-bar-min-block-size);
     background-color: var(--shell-bg);
   }
 
@@ -267,6 +288,20 @@
     inset-block-start: 0;
     inset-inline: 0;
     min-block-size: var(--alert-bar-min-block-size);
+    /* Real inline padding so a populated bar's text does not start flush at
+       the viewport edge, and its Dismiss control does not end flush at the
+       other. Inline only, not block: the empty strip has nothing in it to
+       pad, but padding-BLOCK would still force box-sizing: border-box to
+       grow the box past --alert-bar-min-block-size even with zero content
+       (padding always claims its own space), which would silently grow the
+       "no-op" empty strip. Vertical centring for populated content comes
+       from `align-items: center` below instead, which needs no block
+       padding to do its job. */
+    padding-inline: 1rem;
+    /* Centres the child vertically once the bar grows past a single line —
+       see --alert-bar-min-block-size's own comment. */
+    display: flex;
+    align-items: center;
     background-color: var(--color-alert-bar);
     /* No z-index ON PURPOSE. At z-index: auto the bar paints in DOM order
        among positioned elements: above the static .app-shell, and below
@@ -277,6 +312,18 @@
        delete-module-dialog-container.tsx), and a positioned element at
        z-index: auto paints below ANY positive z-index regardless of DOM
        order. The bar would then show through their backdrops. */
+  }
+
+  /* Reserves space for AlertBar on /app and /admin/* (both mount this same
+     AppHeader; AppShell's /course/* family reserves its own space instead —
+     see .app-shell's padding-block-start). Padding, not margin: this
+     element's own py-4 utility lives on a CHILD div (the `.content` row),
+     not on this <header>, so there is no competing Tailwind utility on the
+     element this rule targets, and padding keeps the header's own
+     bg-gray-2/border-b extending under the reserved gap rather than showing
+     a seam of whatever sits behind it. */
+  .app-header {
+    padding-block-start: var(--alert-bar-min-block-size);
   }
 
   .unsupported-screen {

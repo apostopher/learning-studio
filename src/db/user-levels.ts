@@ -55,17 +55,28 @@ export async function listLevelHistory(
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id));
 }
 
-/** Append a row. Never updates — a correction is a newer row. */
-export async function insertLevelRow(input: InsertLevelRow): Promise<void> {
-  await db.insert(userLevelsTable).values({
-    userId: input.userId,
-    courseId: input.courseId,
-    level: input.level,
-    source: input.source,
-    message: input.message ?? null,
-    note: input.note ?? null,
-    changedBy: input.changedBy ?? null,
-  });
+/**
+ * Append a row. Never updates — a correction is a newer row.
+ *
+ * Returns the new row's id so a caller that needs to acknowledge it later
+ * (e.g. `maybePromote`, whose id lets an in-flow dismissal acknowledge the
+ * same row the between-visits banner would otherwise announce again) doesn't
+ * have to re-query for it.
+ */
+export async function insertLevelRow(input: InsertLevelRow): Promise<number> {
+  const [row] = await db
+    .insert(userLevelsTable)
+    .values({
+      userId: input.userId,
+      courseId: input.courseId,
+      level: input.level,
+      source: input.source,
+      message: input.message ?? null,
+      note: input.note ?? null,
+      changedBy: input.changedBy ?? null,
+    })
+    .returning({ id: userLevelsTable.id });
+  return row.id;
 }
 
 /**

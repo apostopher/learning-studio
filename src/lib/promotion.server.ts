@@ -9,7 +9,7 @@ import { sendLevelPromotionEmail } from '#/lib/email/send-level-promotion-email'
 import { isTierComplete, nextLevel } from '#/lib/tier-completion';
 import type { UserLevel } from '#/types';
 
-export type Promotion = { from: UserLevel; to: UserLevel };
+export type Promotion = { id: number; from: UserLevel; to: UserLevel };
 
 /**
  * Promote the pilot if they have just finished their tier.
@@ -58,7 +58,7 @@ export async function maybePromote(options: {
     return null;
   }
 
-  await insertLevelRow({
+  const id = await insertLevelRow({
     userId: options.userId,
     courseId,
     level: to,
@@ -80,5 +80,5 @@ export async function maybePromote(options: {
     console.error('Promotion email failed; the promotion stands.', error);
   }
 
-  return { from, to };
+  return { id, from, to };
 }

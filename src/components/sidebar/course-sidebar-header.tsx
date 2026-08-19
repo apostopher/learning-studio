@@ -43,7 +43,14 @@ export const CourseSidebarHeader = ({
           </h2>
           {level ? (
             <span className="shrink-0 rounded-full bg-accent-a3 px-2 py-0.5 text-xs font-medium text-accent-11">
-              {level}
+              {/* Visually hidden: read in sequence with the visible span
+                  below, a bare level name ("Intermediate") has no context —
+                  this makes it read as "Your level: Intermediate". Kept in
+                  its own element (not a bare text node) so `{level}` stays
+                  the exact, unadorned text content a test — or any other
+                  consumer — can still match directly. */}
+              <span className="sr-only">Your level: </span>
+              <span>{level}</span>
             </span>
           ) : null}
         </div>

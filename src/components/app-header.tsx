@@ -19,7 +19,7 @@ type AppHeaderProps = {
  * sidebar and footer this page has no use for.
  */
 export const AppHeader = ({ onSignOut, isSigningOut }: AppHeaderProps) => (
-  <header className="content-grid border-b border-gray-6 bg-gray-2">
+  <header className="app-header content-grid border-b border-gray-6 bg-gray-2">
     <div className="content flex py-4 items-center justify-between gap-4">
       {/* Logo slot. The mark itself comes from the generated theme, so
           rebranding is an env change rather than a code change. It links to
