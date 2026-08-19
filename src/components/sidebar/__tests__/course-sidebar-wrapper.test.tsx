@@ -7,7 +7,13 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { Atom } from 'jotai';
 import { atom, createStore, Provider } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -395,5 +401,141 @@ describe('CourseSidebarWrapper', () => {
     });
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(screen.queryByText('Advanced Only')).toBeNull();
+  });
+
+  it('shows the level badge for a non-admin pilot', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'intermediate', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
+    // fakeCourse also has a MODULE named "Intermediate" — scope the query to
+    // the header, where the badge actually renders, to disambiguate.
+    const header = screen.getByRole('heading', { level: 2 }).closest('header');
+    expect(header).not.toBeNull();
+    expect(
+      within(header as HTMLElement).getByText('Intermediate'),
+    ).toBeDefined();
+  });
+
+  it('shows no level badge for an admin (bypasses the level system entirely)', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt(
+      '/',
+      { data: fakeCourse, isLoading: false, isError: false },
+      ['admin'],
+    );
+    expect(screen.queryByText('Basic')).toBeNull();
+  });
+
+  // A dedicated fixture (not leveledCourse, which omits dependsOn/
+  // sequentialLessons/isAvailable/needsVideoWatch) — these two tests are the
+  // first in this file to give computeLessonLocks a genuinely non-empty
+  // progress payload against a level-gated course, which exercises
+  // toGateCourse's real field requirements.
+  const archivableCourse = {
+    id: 1,
+    slug: '3d-airmanship',
+    name: '3D Airmanship',
+    modules: [
+      {
+        id: 1,
+        slug: 'fundamentals',
+        name: 'Fundamentals',
+        dependsOn: [],
+        sequentialLessons: false,
+        lessons: [
+          {
+            id: 1,
+            slug: 'pitch',
+            name: 'Pitch',
+            hasVideo: false,
+            isAvailable: true,
+            needsVideoWatch: true,
+            dependsOn: [],
+            levels: [],
+          },
+        ],
+      },
+      {
+        id: 2,
+        slug: 'advanced-only',
+        name: 'Advanced Only',
+        dependsOn: [],
+        sequentialLessons: false,
+        lessons: [
+          {
+            id: 11,
+            slug: 'vortex',
+            name: 'Vortex Recovery',
+            hasVideo: false,
+            isAvailable: true,
+            needsVideoWatch: true,
+            dependsOn: [],
+            levels: ['advanced'],
+          },
+        ],
+      },
+    ],
+  };
+
+  it('lists a completed out-of-tier lesson in the archive disclosure, and opens it on click', async () => {
+    // 'vortex' (module 'advanced-only') has levels: ['advanced'] — invisible
+    // to a 'basic' pilot — and progress marks it 100% complete.
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [{ lessonId: 11, moduleId: 2, percent: 100, watched: true }],
+        modules: [],
+      },
+    });
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: archivableCourse,
+      isLoading: false,
+      isError: false,
+    });
+    // Still filtered out of the main tree.
+    expect(screen.queryByText('Vortex Recovery')).toBeNull();
+    // But reachable via the archive disclosure.
+    fireEvent.click(
+      screen.getByRole('button', { name: /Completed at earlier levels/ }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Vortex Recovery' }),
+      ).toBeDefined();
+    });
+    expect(
+      screen
+        .getByRole('link', { name: 'Vortex Recovery' })
+        .getAttribute('href'),
+    ).toBe('/course/3d-airmanship/modules/advanced-only/lessons/vortex');
+  });
+
+  it('does not archive an out-of-tier lesson that was never completed', async () => {
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [{ lessonId: 11, moduleId: 2, percent: 40, watched: false }],
+        modules: [],
+      },
+    });
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: archivableCourse,
+      isLoading: false,
+      isError: false,
+    });
+    expect(
+      screen.queryByRole('button', { name: /Completed at earlier levels/ }),
+    ).toBeNull();
   });
 });

@@ -17,6 +17,7 @@ import type { CourseLessonQuiz } from '#/types';
 import { computeLessonQuizView } from './compute-lesson-quiz-view';
 import { LessonQuiz } from './lesson-quiz';
 import type { QuizSaveState } from './quiz-result';
+import { shouldAutoSubmitQuiz } from './should-auto-submit-quiz';
 
 /** How long a correct answer stays on screen before advancing. */
 const CORRECT_ANSWER_DWELL_MS = 1200;
@@ -32,6 +33,8 @@ const retakingAtomFamily = atomFamily((_key: string) => atom(false));
 type LessonQuizContainerProps = {
   lessonSlug: string;
   quiz: CourseLessonQuiz | null;
+  /** The lesson was completed at an earlier level — submitting must be inert. */
+  readOnly: boolean;
 };
 
 /**
@@ -44,13 +47,24 @@ type LessonQuizContainerProps = {
 export const LessonQuizContainer = ({
   lessonSlug,
   quiz,
+  readOnly,
 }: LessonQuizContainerProps) => (
   <ClientGate>
-    {() => <LessonQuizClient lessonSlug={lessonSlug} quiz={quiz} />}
+    {() => (
+      <LessonQuizClient
+        lessonSlug={lessonSlug}
+        quiz={quiz}
+        readOnly={readOnly}
+      />
+    )}
   </ClientGate>
 );
 
-const LessonQuizClient = ({ lessonSlug, quiz }: LessonQuizContainerProps) => {
+const LessonQuizClient = ({
+  lessonSlug,
+  quiz,
+  readOnly,
+}: LessonQuizContainerProps) => {
   const session = useRouteContext({
     from: '__root__',
     select: (context) => context.session,
@@ -154,8 +168,12 @@ const LessonQuizClient = ({ lessonSlug, quiz }: LessonQuizContainerProps) => {
   const pendingAnswers =
     view.kind === 'quiz' && view.source === 'local' ? view.resultAnswers : null;
 
+  // `readOnly` is checked in `runSubmit` itself, not just in the effect that
+  // usually triggers it — `handleRetrySave` (a button) calls this same
+  // function, and a write must be inert on every path that can reach it, not
+  // merely on the one the effect happens to use.
   const runSubmit = useCallback(() => {
-    if (!pendingAnswers) return;
+    if (!pendingAnswers || readOnly) return;
     submittedRef.current = true;
     submit.mutate(pendingAnswers, {
       onSuccess: () => {
@@ -166,24 +184,41 @@ const LessonQuizClient = ({ lessonSlug, quiz }: LessonQuizContainerProps) => {
         setIsRetaking(false);
       },
     });
-  }, [pendingAnswers, setIsRetaking, setProgress, submit]);
+  }, [pendingAnswers, readOnly, setIsRetaking, setProgress, submit]);
 
+  // The dangerous one: this fires from a rendered state on mount/update, not
+  // a button press, so hiding the submit UI would not stop it writing. See
+  // shouldAutoSubmitQuiz's doc comment.
   useEffect(() => {
-    if (!pendingAnswers || submittedRef.current || submit.isPending) return;
+    if (
+      !shouldAutoSubmitQuiz({
+        pendingAnswers,
+        alreadySubmitted: submittedRef.current,
+        isPending: submit.isPending,
+        readOnly,
+      })
+    ) {
+      return;
+    }
     runSubmit();
-  }, [pendingAnswers, runSubmit, submit.isPending]);
+  }, [pendingAnswers, runSubmit, submit.isPending, readOnly]);
 
+  // Guarded too, not just the submit path: retaking an archive quiz would
+  // start an attempt that `runSubmit` can never save, which reads as a bug
+  // rather than a deliberately inert view.
   const handleRetake = useCallback(() => {
+    if (readOnly) return;
     submittedRef.current = false;
     submit.reset();
     setProgress(emptyQuizProgress);
     setIsRetaking(true);
-  }, [setIsRetaking, setProgress, submit]);
+  }, [readOnly, setIsRetaking, setProgress, submit]);
 
   const handleRetrySave = useCallback(() => {
+    if (readOnly) return;
     submittedRef.current = false;
     runSubmit();
-  }, [runSubmit]);
+  }, [readOnly, runSubmit]);
 
   if (view.kind === 'empty') {
     return (

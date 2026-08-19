@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { computeMaterialPanelState } from '../compute-material-panel-state';
+import {
+  computeMaterialPanelState,
+  isSectionTapRecordingEnabled,
+} from '../compute-material-panel-state';
 
 const material = { lessonSlug: 'b', text: 'body' };
 
@@ -60,7 +63,7 @@ describe('computeMaterialPanelState', () => {
         isLoading: false,
         isError: false,
       }),
-    ).toEqual({ kind: 'ready', material, adminBypass: true });
+    ).toEqual({ kind: 'ready', material, adminBypass: true, readOnly: false });
   });
 
   it('does not claim a bypass for an ordinary student', () => {
@@ -70,7 +73,42 @@ describe('computeMaterialPanelState', () => {
         isLoading: false,
         isError: false,
       }),
-    ).toEqual({ kind: 'ready', material, adminBypass: false });
+    ).toEqual({ kind: 'ready', material, adminBypass: false, readOnly: false });
+  });
+
+  it('flags a completed out-of-tier lesson as read-only', () => {
+    expect(
+      computeMaterialPanelState({
+        data: { locked: false, adminBypass: false, readOnly: true, material },
+        isLoading: false,
+        isError: false,
+      }),
+    ).toEqual({ kind: 'ready', material, adminBypass: false, readOnly: true });
+  });
+
+  it('carries readOnly on the empty panel too — a transcript debrief can render with no material row', () => {
+    expect(
+      computeMaterialPanelState({
+        data: {
+          locked: false,
+          adminBypass: false,
+          readOnly: true,
+          material: null,
+        },
+        isLoading: false,
+        isError: false,
+      }),
+    ).toEqual({ kind: 'empty', readOnly: true });
+  });
+
+  it('defaults readOnly to false on the empty panel for a normal unlocked lesson', () => {
+    expect(
+      computeMaterialPanelState({
+        data: { locked: false, adminBypass: false, material: null },
+        isLoading: false,
+        isError: false,
+      }),
+    ).toEqual({ kind: 'empty', readOnly: false });
   });
 
   it('prefers loading over a stale error, so a refetch does not flash an error card', () => {
@@ -82,5 +120,57 @@ describe('computeMaterialPanelState', () => {
         error: new Error('old'),
       }),
     ).toEqual({ kind: 'loading' });
+  });
+});
+
+describe('isSectionTapRecordingEnabled', () => {
+  it('enables recording for a normal ready panel', () => {
+    expect(
+      isSectionTapRecordingEnabled({
+        kind: 'ready',
+        material,
+        adminBypass: false,
+        readOnly: false,
+      }),
+    ).toBe(true);
+  });
+
+  // The seam this task is about: LessonMaterialWrapper cannot be rendered
+  // under Vitest (it calls useRef directly), so this pure function is the
+  // only place the "read-only disables recording" guard can go red.
+  it('disables recording for a read-only (archive) ready panel', () => {
+    expect(
+      isSectionTapRecordingEnabled({
+        kind: 'ready',
+        material,
+        adminBypass: false,
+        readOnly: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('disables recording while loading', () => {
+    expect(isSectionTapRecordingEnabled({ kind: 'loading' })).toBe(false);
+  });
+
+  it('disables recording on an error panel', () => {
+    expect(isSectionTapRecordingEnabled({ kind: 'error', message: 'x' })).toBe(
+      false,
+    );
+  });
+
+  it('disables recording on an empty panel, even a read-only one', () => {
+    expect(
+      isSectionTapRecordingEnabled({ kind: 'empty', readOnly: true }),
+    ).toBe(false);
+  });
+
+  it('disables recording on a locked panel', () => {
+    expect(
+      isSectionTapRecordingEnabled({
+        kind: 'locked',
+        lock: { locked: true, reason: 'video' },
+      }),
+    ).toBe(false);
   });
 });

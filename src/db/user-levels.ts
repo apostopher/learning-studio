@@ -90,10 +90,22 @@ export async function ensureEnrolmentLevel(
 }
 
 /**
- * The newest row, if it was written by an admin and the pilot has not yet
- * dismissed it. Drives the between-visits notice.
+ * The newest row, if it was written by an admin OR earned by the pilot and
+ * they have not yet dismissed it. Drives the between-visits notice.
+ *
+ * Renamed from `getUnacknowledgedAdminChange`: an earned promotion needed the
+ * same mechanism for a reason specific to how it is earned. Three of the four
+ * progress-write routes (section tap, quiz submit, debrief save) answer with
+ * a readable body the in-flow `PromotionInterstitial` reads directly, but
+ * `report-video-progress.ts` fires over `navigator.sendBeacon`, which has no
+ * readable response in the normal (non-unload) case — a promotion earned on a
+ * video milestone is otherwise invisible to the client. Surfacing it here
+ * means it is announced on the pilot's next load regardless of which write
+ * earned it, using the acknowledgedAt machinery this function already had.
+ * `'enrolment'` rows are excluded on purpose — the idempotent starting row is
+ * not a change to announce.
  */
-export async function getUnacknowledgedAdminChange(
+export async function getUnacknowledgedLevelChange(
   userId: string,
   courseId: number,
 ): Promise<DBUserLevel | null> {
@@ -109,7 +121,7 @@ export async function getUnacknowledgedAdminChange(
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
     .limit(1);
   if (!row) return null;
-  if (row.source !== 'admin') return null;
+  if (row.source !== 'admin' && row.source !== 'earned') return null;
   if (row.acknowledgedAt !== null) return null;
   return row;
 }

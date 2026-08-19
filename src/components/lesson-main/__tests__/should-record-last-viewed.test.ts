@@ -34,6 +34,15 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     hasDebrief: false,
     videoState: { status: 'fetching' },
   },
+  'read-only': {
+    kind: 'read-only',
+    lessonName: 'L1',
+    lessonSlug: 'l1',
+    courseSlug: 'c',
+    hasDebrief: false,
+    videoExpected: false,
+    videoState: { status: 'fetching' },
+  },
 };
 
 describe('shouldRecordLastViewed', () => {
@@ -57,10 +66,17 @@ describe('shouldRecordLastViewed', () => {
     expect(shouldRecordLastViewed(states[kind])).toBe(false);
   });
 
+  // A read-only archive view is one of the write paths that must stay inert
+  // (see isMaterialReadOnly): recording it would move the resume pointer onto
+  // a lesson that no longer counts toward the pilot's current tier.
+  it('does not record a read-only archive view', () => {
+    expect(shouldRecordLastViewed(states['read-only'])).toBe(false);
+  });
+
   it('covers every state kind, so a new one cannot silently default to recording', () => {
     // If LessonMainState gains a kind, `states` fails to type-check above and
     // this file breaks — forcing a deliberate decision rather than letting the
     // new state inherit whichever branch the boolean happens to fall into.
-    expect(Object.keys(states)).toHaveLength(6);
+    expect(Object.keys(states)).toHaveLength(7);
   });
 });

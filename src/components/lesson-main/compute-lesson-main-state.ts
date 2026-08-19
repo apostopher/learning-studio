@@ -1,8 +1,11 @@
-import type { LessonMaterialResponse } from '#/lib/lesson-gating';
+import {
+  isMaterialReadOnly,
+  type LessonMaterialResponse,
+} from '#/lib/lesson-gating';
 import { playbackToState } from '#/lib/video-providers/playback-to-state';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 import { findLesson } from './find-lesson';
-import type { LessonMainState } from './types';
+import type { LessonMainState, VideoFetchState } from './types';
 
 type CourseLike = {
   modules: readonly {
@@ -53,6 +56,20 @@ export type ComputeArgs = {
 
 const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : 'Something went wrong';
+
+const resolveVideoState = (
+  video: VideoQueryShape,
+  onRetryVideo: () => void,
+): VideoFetchState => {
+  if (video.isError) {
+    return {
+      status: 'error',
+      message: errorMessage(video.error),
+      onRetry: onRetryVideo,
+    };
+  }
+  return playbackToState(video.data, onRetryVideo);
+};
 
 export const computeLessonMainState = ({
   course,
@@ -124,6 +141,24 @@ export const computeLessonMainState = ({
     };
   }
 
+  // A completed out-of-tier lesson: served, but nothing done here is
+  // recorded. Checked before the `!lesson.hasVideo` branch below because a
+  // read-only lesson can have either shape (video or not) — 'read-only' is a
+  // different axis from 'no-video', not a special case of it.
+  if (isMaterialReadOnly(materialData)) {
+    return {
+      kind: 'read-only',
+      lessonName: lesson.name,
+      lessonSlug: lesson.slug,
+      courseSlug,
+      hasDebrief: lesson.hasDebrief,
+      videoExpected: lesson.needsVideoWatch,
+      videoState: lesson.hasVideo
+        ? resolveVideoState(video, onRetryVideo)
+        : null,
+    };
+  }
+
   if (!lesson.hasVideo) {
     // Carries the slugs so the caller can render the material panel beneath
     // the card. Without them this branch showed a bare "no video" notice and
@@ -137,20 +172,12 @@ export const computeLessonMainState = ({
       videoExpected: lesson.needsVideoWatch,
     };
   }
-  let videoState = playbackToState(video.data, onRetryVideo);
-  if (video.isError) {
-    videoState = {
-      status: 'error',
-      message: errorMessage(video.error),
-      onRetry: onRetryVideo,
-    };
-  }
   return {
     kind: 'ready',
     lessonName: lesson.name,
     lessonSlug: lesson.slug,
     courseSlug,
+    videoState: resolveVideoState(video, onRetryVideo),
     hasDebrief: lesson.hasDebrief,
-    videoState,
   };
 };

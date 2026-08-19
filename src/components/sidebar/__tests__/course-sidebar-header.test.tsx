@@ -77,4 +77,36 @@ describe('CourseSidebarHeader', () => {
     const backLink = screen.getByRole('link', { name: 'Courses' });
     expect(backLink.getAttribute('href')).toBe('/app');
   });
+
+  it('renders no level badge when level is absent', async () => {
+    await renderHeader({
+      title: '3D Airmanship',
+      moduleCount: 12,
+      lessonCount: 87,
+      coursePercent: 42,
+    });
+    expect(screen.queryByText('Intermediate')).toBeNull();
+  });
+
+  it('renders no level badge when level is explicitly null (admin bypass)', async () => {
+    await renderHeader({
+      title: '3D Airmanship',
+      moduleCount: 12,
+      lessonCount: 87,
+      coursePercent: 42,
+      level: null,
+    });
+    expect(screen.queryByText('Intermediate')).toBeNull();
+  });
+
+  it('renders the level badge when a level label is given', async () => {
+    await renderHeader({
+      title: '3D Airmanship',
+      moduleCount: 12,
+      lessonCount: 87,
+      coursePercent: 42,
+      level: 'Intermediate',
+    });
+    expect(screen.getByText('Intermediate')).toBeDefined();
+  });
 });

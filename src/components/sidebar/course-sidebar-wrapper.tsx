@@ -5,8 +5,13 @@ import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summa
 import { useMyLevel } from '#/data-hooks/use-my-level';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
 import { useIsAdmin } from '#/hooks/use-is-admin';
+import { LEVEL_LABELS } from '#/lib/level-labels';
 import { filterCourseToLevel } from '#/lib/level-visibility';
-import { openModuleSlugAtom } from '../../atoms/sidebar';
+import {
+  archiveSectionOpenAtom,
+  openModuleSlugAtom,
+} from '../../atoms/sidebar';
+import { computeArchivedLessons } from './compute-archived-lessons';
 import { computeLessonLocks } from './compute-lesson-locks';
 import { CourseSidebar } from './course-sidebar';
 
@@ -33,6 +38,9 @@ export const CourseSidebarWrapper = ({
   const levelQuery = useMyLevel(courseSlug);
   const isAdmin = useIsAdmin();
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
+  const [archiveSectionOpen, setArchiveSectionOpen] = useAtom(
+    archiveSectionOpenAtom,
+  );
 
   // Filter to what this pilot's level may see, before anything downstream
   // (percent maps, lock computation, module/lesson counts) reads the course
@@ -105,6 +113,22 @@ export const CourseSidebarWrapper = ({
     [visibleDetails, progressQuery.data, isAdmin],
   );
 
+  // Completed-at-an-earlier-level lessons the main (filtered) tree no longer
+  // shows — the sidebar's own archive index. Deliberately built from
+  // `detailsQuery.data` (the UNFILTERED tree), not `visibleDetails`: the
+  // whole point is lessons that filtering just removed. Empty for an admin
+  // (nothing is ever "out of tier" for them — see visibleDetails above) and
+  // while the level query hasn't resolved yet, so this can never show a
+  // lesson under the wrong level's rule for a moment.
+  const archivedLessons = useMemo(() => {
+    if (isAdmin || !levelQuery.data) return [];
+    return computeArchivedLessons(
+      detailsQuery.data,
+      progressQuery.data,
+      levelQuery.data.level,
+    );
+  }, [detailsQuery.data, progressQuery.data, levelQuery.data, isAdmin]);
+
   const derived = useMemo(() => {
     if (detailsQuery.isLoading || levelPending)
       return { status: 'loading' as const };
@@ -155,6 +179,12 @@ export const CourseSidebarWrapper = ({
       modulePercents={modulePercents}
       coursePercent={progressQuery.data?.percent ?? 0}
       lessonLocks={lessonLocks}
+      level={
+        isAdmin || !levelQuery.data ? null : LEVEL_LABELS[levelQuery.data.level]
+      }
+      archivedLessons={archivedLessons}
+      archiveSectionOpen={archiveSectionOpen}
+      onArchiveSectionOpenChange={setArchiveSectionOpen}
     />
   );
 };

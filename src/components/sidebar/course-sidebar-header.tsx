@@ -7,6 +7,14 @@ type CourseSidebarHeaderProps = {
   moduleCount: number;
   lessonCount: number;
   coursePercent: number;
+  /**
+   * The pilot's level in this course, already resolved to its display label
+   * (e.g. "Intermediate"). Optional and defaulting to absent so every
+   * pre-existing caller/test keeps compiling — null/absent means "don't show
+   * a badge" (the admin-bypass case: an admin's own level row carries no
+   * meaning worth displaying).
+   */
+  level?: string | null;
 };
 
 const plural = (n: number, singular: string) =>
@@ -17,6 +25,7 @@ export const CourseSidebarHeader = ({
   moduleCount,
   lessonCount,
   coursePercent,
+  level,
 }: CourseSidebarHeaderProps) => (
   <header className="flex flex-col gap-sidebar-row-gap px-sidebar-row-inline py-sidebar-row-block">
     <Link
@@ -28,9 +37,16 @@ export const CourseSidebarHeader = ({
     </Link>
     <div className="flex items-center gap-2">
       <div className="flex min-w-0 flex-1 flex-col gap-sidebar-row-gap">
-        <h2 className="text-sm font-semibold text-primary break-words">
-          {title}
-        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-primary break-words">
+            {title}
+          </h2>
+          {level ? (
+            <span className="shrink-0 rounded-full bg-accent-a3 px-2 py-0.5 text-xs font-medium text-accent-11">
+              {level}
+            </span>
+          ) : null}
+        </div>
         <p className="text-xs text-secondary">
           {plural(moduleCount, 'module')} · {plural(lessonCount, 'lesson')}
         </p>

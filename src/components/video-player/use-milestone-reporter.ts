@@ -61,6 +61,7 @@ async function fetchProgress(lessonSlug: string) {
 export function useMilestoneReporter(
   playerId: string,
   lessonSlug: string,
+  readOnly: boolean,
 ): void {
   const { currentTime, duration } = useAtomValue(
     videoPlayerStateAtomFamily(playerId),
@@ -76,6 +77,9 @@ export function useMilestoneReporter(
   const stateRef = useRef(initialMilestoneReporterState);
 
   useEffect(() => {
+    // An archive-view lesson (completed at an earlier level): the video still
+    // plays, but nothing about watching it is reported or reconciled.
+    if (readOnly) return;
     const { state, crossed, shouldReconcile } = computeMilestoneTick(
       stateRef.current,
       { lessonSlug, currentTime, duration, milestonesHit },
@@ -101,5 +105,5 @@ export function useMilestoneReporter(
         queryKey: dataKeys.lessonProgress(lessonSlug),
       });
     });
-  }, [currentTime, duration, lessonSlug, milestonesHit, queryClient]);
+  }, [currentTime, duration, lessonSlug, milestonesHit, queryClient, readOnly]);
 }

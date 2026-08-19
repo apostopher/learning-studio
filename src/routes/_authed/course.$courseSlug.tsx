@@ -8,6 +8,7 @@ import {
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef } from 'react';
 import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
+import { outOfTierNoticeAtom } from '#/atoms/out-of-tier-notice';
 import { pendingPromotionAtom } from '#/atoms/promotion';
 import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
 import { dataKeys } from '#/data-hooks/keys';
@@ -20,6 +21,7 @@ import { AppShellSkeleton } from '../../components/app-shell-skeleton';
 import { CourseHeaderNav } from '../../components/course-header-nav';
 import { LessonHeaderWrapper } from '../../components/lesson-main';
 import { LogoLink } from '../../components/logo-link';
+import { OutOfTierNotice } from '../../components/out-of-tier-notice';
 import { PromotionInterstitial } from '../../components/promotion-interstitial';
 import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
 import { SignOutButtonContainer } from '../../components/sign-out-button-container';
@@ -163,10 +165,26 @@ function usePromotionInterstitial(courseSlug: string) {
   return { promotion, dismiss };
 }
 
+/**
+ * Reads the notice set right before a redirect away from a never-completed
+ * out-of-tier lesson (see LessonMainWrapper). Mounted here, not on the lesson
+ * leaf, because the redirect target's own beforeLoad
+ * (`resumeCourseOrExplain`) can immediately redirect a second time — this
+ * layout is the one thing guaranteed to still be mounted once that settles,
+ * since `courseSlug` does not change across either hop.
+ */
+function useOutOfTierNotice() {
+  const notice = useAtomValue(outOfTierNoticeAtom);
+  const setNotice = useSetAtom(outOfTierNoticeAtom);
+  const dismiss = useCallback(() => setNotice(null), [setNotice]);
+  return { notice, dismiss };
+}
+
 function CourseLayout() {
   const { courseSlug } = Route.useParams();
   useAutoOpenOnboarding(courseSlug);
   const { promotion, dismiss } = usePromotionInterstitial(courseSlug);
+  const { notice, dismiss: dismissOutOfTierNotice } = useOutOfTierNotice();
   // Loose read: these two params belong to the deeper lesson route, not this
   // layout's own path. Their presence is how the layout knows which leaf is
   // active — the same idiom CourseSidebarWrapper already uses for the same
@@ -186,6 +204,7 @@ function CourseLayout() {
       {/* Mounted once per course visit, not per lesson: see
           usePromotionInterstitial's doc comment above. */}
       <PromotionInterstitial promotion={promotion} onDismiss={dismiss} />
+      <OutOfTierNotice notice={notice} onDismiss={dismissOutOfTierNotice} />
       <AppShell
         // The shell owns the viewport, so the logo goes in the header's aside
         // cell rather than in a second header above it. `ms-4` mirrors the

@@ -22,6 +22,7 @@ import {
   selectedOptionAtom,
 } from './question-card';
 import { ScoreReport } from './score-report';
+import { shouldAutoSaveDebrief } from './should-auto-save-debrief';
 
 /**
  * No `material` prop. The generator's source (authored material, else the video
@@ -31,10 +32,13 @@ import { ScoreReport } from './score-report';
  */
 type DebriefQuizContainerProps = {
   lessonSlug: string;
+  /** The lesson was completed at an earlier level — generate/evaluate/save must be inert. */
+  readOnly: boolean;
 };
 
 export const DebriefQuizContainer = ({
   lessonSlug,
+  readOnly,
 }: DebriefQuizContainerProps) => {
   const test = useCurrentTest();
   const currentQuestion = useCurrentQuestion();
@@ -58,12 +62,22 @@ export const DebriefQuizContainer = ({
     ? evaluations.find((e) => e.questionId === currentQuestion.id)
     : null;
 
+  // The dangerous one: this fires from a rendered state the moment the last
+  // evaluation lands, not a button press, so hiding the score report would
+  // not stop it writing. See shouldAutoSaveDebrief's doc comment.
   useEffect(() => {
-    if (isComplete && !savedRef.current) {
-      savedRef.current = true;
-      saveResults().catch(console.error);
+    if (
+      !shouldAutoSaveDebrief({
+        isComplete,
+        alreadySaved: savedRef.current,
+        readOnly,
+      })
+    ) {
+      return;
     }
-  }, [isComplete, saveResults]);
+    savedRef.current = true;
+    saveResults().catch(console.error);
+  }, [isComplete, saveResults, readOnly]);
 
   // Not `return null`: this tab is now the primary way into the debrief — the
   // only way, on a lesson with no video — so an empty panel here would be a
@@ -73,6 +87,7 @@ export const DebriefQuizContainer = ({
       <DebriefIntro
         loading={isGenerating}
         onStart={() => {
+          if (readOnly) return;
           void generateTest(lessonSlug);
         }}
       />
@@ -86,6 +101,7 @@ export const DebriefQuizContainer = ({
         questions={test.questions}
         evaluations={evaluations}
         onRetake={async () => {
+          if (readOnly) return;
           savedRef.current = false;
           resetTest();
           await generateTest(lessonSlug);
@@ -97,6 +113,7 @@ export const DebriefQuizContainer = ({
   if (!currentQuestion) return null;
 
   const handleSubmit = async (answer: string) => {
+    if (readOnly) return;
     await evaluateAnswer(lessonSlug, currentQuestion, answer);
   };
 

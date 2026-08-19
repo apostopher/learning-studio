@@ -409,3 +409,22 @@ export function lockedResponse(
   }
   return null;
 }
+
+/**
+ * Whether a `/api/lesson/material` response is an archive view: the pilot
+ * completed this lesson at an earlier level and it now sits outside their
+ * current one.
+ *
+ * The single place this is decided, so `computeLessonMainState`,
+ * `computeMaterialPanelState`, and `LessonPlayerContainer` (all of which read
+ * the same cached query independently) can never disagree about whether a
+ * lesson's writes should be inert. `data.locked` is checked defensively even
+ * though the two fields are mutually exclusive by type — a locked response
+ * never carries `readOnly` — so a malformed or cached-stale payload fails
+ * closed (not read-only) rather than accidentally unlocking write-guards.
+ */
+export function isMaterialReadOnly<TMaterial>(
+  data: LessonMaterialResponse<TMaterial> | undefined,
+): boolean {
+  return data != null && !data.locked && data.readOnly === true;
+}

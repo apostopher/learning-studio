@@ -129,4 +129,50 @@ describe('LessonMain', () => {
       'lesson-one:course-one',
     );
   });
+
+  it('renders the read-only banner and the player for a read-only lesson with video', () => {
+    render(
+      <LessonMain
+        state={{
+          kind: 'read-only',
+          lessonName: 'Lesson One',
+          lessonSlug: 'lesson-one',
+          courseSlug: 'course-one',
+          hasDebrief: false,
+          videoExpected: true,
+          videoState: { status: 'fetching' },
+        }}
+      />,
+    );
+    // Two role="status" elements exist while the video is still loading (the
+    // read-only banner and the player's own loading indicator) — find ours by
+    // its text rather than by role alone.
+    const banner = screen.getByText(/earlier level/);
+    expect(banner.getAttribute('role')).toBe('status');
+    expect(banner.textContent).toContain('nothing you do is recorded');
+    expect(screen.getByRole('region', { name: 'Video player' })).toBeTruthy();
+    expect(screen.getByTestId('lesson-material').textContent).toBe(
+      'lesson-one:course-one',
+    );
+  });
+
+  it('renders the no-video card instead of the player for a read-only lesson with no video', () => {
+    render(
+      <LessonMain
+        state={{
+          kind: 'read-only',
+          lessonName: 'Lesson One',
+          lessonSlug: 'lesson-one',
+          courseSlug: 'course-one',
+          hasDebrief: false,
+          videoExpected: false,
+          videoState: null,
+        }}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Video player' })).toBeNull();
+    expect(screen.getByTestId('lesson-material').textContent).toBe(
+      'lesson-one:course-one',
+    );
+  });
 });

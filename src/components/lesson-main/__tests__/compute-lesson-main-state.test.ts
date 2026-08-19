@@ -369,6 +369,122 @@ describe('computeLessonMainState', () => {
     expect(state).toMatchObject({ kind: 'course-error' });
   });
 
+  it('returns read-only with videoState when a read-only lesson has a video', () => {
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: {
+        data: {
+          status: 'ready',
+          url: 'https://cdn/v.mp4',
+          kind: 'file',
+          expiresInSeconds: 600,
+          poster: null,
+          captions: null,
+        },
+        isError: false,
+      },
+      material: {
+        data: {
+          locked: false,
+          adminBypass: false,
+          readOnly: true,
+          material: null,
+        },
+        isLoading: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(state).toMatchObject({
+      kind: 'read-only',
+      lessonName: 'Lesson One',
+      lessonSlug: 'l-1',
+      courseSlug: 'course-1',
+      videoState: { status: 'ready', src: 'https://cdn/v.mp4' },
+    });
+  });
+
+  it('returns read-only with videoState=null when a read-only lesson has no video', () => {
+    const state = computeLessonMainState({
+      course: {
+        data: {
+          modules: [
+            {
+              slug: 'm-1',
+              lessons: [{ ...baseLesson, hasVideo: false }],
+            },
+          ],
+        },
+        isLoading: false,
+        isError: false,
+      },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: {
+        data: {
+          locked: false,
+          adminBypass: false,
+          readOnly: true,
+          material: null,
+        },
+        isLoading: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(state).toEqual({
+      kind: 'read-only',
+      lessonName: 'Lesson One',
+      lessonSlug: 'l-1',
+      courseSlug: 'course-1',
+      hasDebrief: false,
+      videoExpected: true,
+      videoState: null,
+    });
+  });
+
+  it('does not treat a normal unlocked lesson (readOnly absent) as read-only', () => {
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: {
+        data: { locked: false, adminBypass: false, material: null },
+        isLoading: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(state.kind).toBe('ready');
+  });
+
+  it('does not treat a video-locked material response as read-only', () => {
+    // `readOnly` and `locked` are mutually exclusive by type, but a stale
+    // cache entry could in principle carry both — this must fail closed to
+    // 'ready' (video-locked material only), never open into an archive view.
+    const state = computeLessonMainState({
+      course: { data: baseCourse, isLoading: false, isError: false },
+      courseSlug: 'course-1',
+      moduleSlug: 'm-1',
+      lessonSlug: 'l-1',
+      video: { data: undefined, isError: false },
+      material: {
+        data: { locked: true, reason: 'video' },
+        isLoading: false,
+      },
+      onRetryCourse,
+      onRetryVideo,
+    });
+    expect(state.kind).toBe('ready');
+  });
+
   it('reports not-found from the course payload, whatever the material query did', () => {
     const state = computeLessonMainState({
       course: { data: baseCourse, isLoading: false, isError: false },

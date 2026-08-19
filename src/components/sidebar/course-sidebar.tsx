@@ -1,6 +1,8 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { LessonLock } from '#/lib/lesson-gating';
 import { readSidebarMotionTokens } from '../../lib/sidebar-motion';
+import { ArchivedLessonsSection } from './archived-lessons-section';
+import type { ArchivedLesson } from './compute-archived-lessons';
 import { CourseSidebarHeader } from './course-sidebar-header';
 import { ModuleAccordion } from './module-accordion';
 import { SidebarError } from './sidebar-error';
@@ -28,6 +30,12 @@ type CourseSidebarProps = {
   modulePercents?: Record<number, number>;
   coursePercent?: number;
   lessonLocks?: Record<string, LessonLock>;
+  /** See CourseSidebarHeaderProps — absent/null means no badge. */
+  level?: string | null;
+  /** Lessons completed at an earlier level — see ArchivedLessonsSection. */
+  archivedLessons?: readonly ArchivedLesson[];
+  archiveSectionOpen?: boolean;
+  onArchiveSectionOpenChange?: (open: boolean) => void;
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -46,6 +54,10 @@ export const CourseSidebar = ({
   modulePercents,
   coursePercent,
   lessonLocks,
+  level,
+  archivedLessons,
+  archiveSectionOpen,
+  onArchiveSectionOpenChange,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -93,6 +105,7 @@ export const CourseSidebar = ({
               moduleCount={moduleCount ?? 0}
               lessonCount={lessonCount ?? 0}
               coursePercent={coursePercent ?? 0}
+              level={level}
             />
             <ModuleAccordion
               courseSlug={courseSlug}
@@ -103,6 +116,12 @@ export const CourseSidebar = ({
               lessonPercents={lessonPercents ?? {}}
               modulePercents={modulePercents ?? {}}
               lessonLocks={lessonLocks ?? {}}
+            />
+            <ArchivedLessonsSection
+              courseSlug={courseSlug}
+              lessons={archivedLessons ?? []}
+              open={archiveSectionOpen ?? false}
+              onOpenChange={onArchiveSectionOpenChange ?? (() => {})}
             />
           </motion.div>
         )}

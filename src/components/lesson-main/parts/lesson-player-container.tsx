@@ -16,6 +16,7 @@ import {
 } from '#/hooks/data/use-lesson-ai-test';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { watchedMilestones } from '#/lib/course-milestones';
+import { isMaterialReadOnly } from '#/lib/lesson-gating';
 import type { VideoFetchState } from '../types';
 import { computePlayerOverlay } from './compute-player-overlay';
 import { videoReachedEndAtomFamily } from './lesson-player-atoms';
@@ -33,7 +34,13 @@ export const LessonPlayerContainer = ({
   hasDebrief,
 }: LessonPlayerContainerProps) => {
   const playerId = useId();
-  useMilestoneReporter(playerId, lessonSlug);
+  // Read once, up front: both the milestone-reporter guard below and the
+  // material/materialLocked derivations further down come off this same
+  // cached query, and readOnly has to be known before useMilestoneReporter is
+  // called.
+  const { data } = useLessonMaterial(lessonSlug);
+  const readOnly = isMaterialReadOnly(data);
+  useMilestoneReporter(playerId, lessonSlug, readOnly);
   const [reachedEnd, setReachedEnd] = useAtom(
     videoReachedEndAtomFamily(lessonSlug),
   );
@@ -52,7 +59,6 @@ export const LessonPlayerContainer = ({
   const isGenerating = useIsGenerating();
   const currentTest = useCurrentTest();
   const generateTest = useGenerateTest();
-  const { data } = useLessonMaterial(lessonSlug);
   const material = data && !data.locked ? data.material : null;
   // Task 11 routes 'lesson'/'module' locks to a page-level gate that never
   // mounts this container, so 'video' is the only reason this component
@@ -70,6 +76,9 @@ export const LessonPlayerContainer = ({
   }, [setReachedEnd]);
 
   const onDebrief = useCallback(async () => {
+    // Read-only guard first: this generates NEW debrief content, which
+    // read-only forbids the same as evaluating or saving one.
+    if (readOnly) return;
     // No guard on the material's contents any more: the server resolves what
     // the debrief is generated from (material, else the video transcript), and
     // `canDebrief` below already decides whether to offer the button at all.
@@ -83,7 +92,7 @@ export const LessonPlayerContainer = ({
         });
       });
     }
-  }, [generateTest, lessonSlug, setActiveTab]);
+  }, [generateTest, lessonSlug, readOnly, setActiveTab]);
 
   const overlayKind = computePlayerOverlay({
     reachedEnd,
@@ -130,7 +139,10 @@ export const LessonPlayerContainer = ({
       onEnded={onEnded}
       overlay={
         <AnimatePresence>
-          {overlayKind === 'coverage' ? (
+          {/* Neither overlay makes sense on an archive view: 'coverage' nudges
+              toward finishing a lesson that is already done, and 'debrief'
+              would generate new content that read-only forbids saving. */}
+          {readOnly ? null : overlayKind === 'coverage' ? (
             <CoverageNotice hit={hit} total={watchedMilestones.length} />
           ) : overlayKind === 'debrief' ? (
             <DebriefOverlay loading={isGenerating} onDebrief={onDebrief} />

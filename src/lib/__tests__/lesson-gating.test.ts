@@ -5,6 +5,7 @@ import {
   type GateCourse,
   type GateLesson,
   isLessonSatisfied,
+  isMaterialReadOnly,
   lockedResponse,
 } from '#/lib/lesson-gating';
 
@@ -250,5 +251,52 @@ describe('lockedResponse', () => {
 
   it('returns null when nothing is locked', () => {
     expect(lockedResponse({ kind: 'open' }, { kind: 'open' })).toBeNull();
+  });
+});
+
+describe('isMaterialReadOnly', () => {
+  it('is true for an unlocked response explicitly flagged readOnly', () => {
+    expect(
+      isMaterialReadOnly({
+        locked: false,
+        adminBypass: false,
+        readOnly: true,
+        material: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for an unlocked response with readOnly absent', () => {
+    expect(
+      isMaterialReadOnly({ locked: false, adminBypass: false, material: null }),
+    ).toBe(false);
+  });
+
+  it('is false for an unlocked response with readOnly explicitly false', () => {
+    expect(
+      isMaterialReadOnly({
+        locked: false,
+        adminBypass: false,
+        readOnly: false,
+        material: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for a locked response, whatever the (impossible) shape claims', () => {
+    // readOnly does not exist on the locked variant of the type — cast to
+    // prove the runtime check fails closed even against a malformed/stale
+    // cache entry that somehow carries both.
+    expect(
+      isMaterialReadOnly({
+        locked: true,
+        reason: 'video',
+        readOnly: true,
+      } as unknown as Parameters<typeof isMaterialReadOnly>[0]),
+    ).toBe(false);
+  });
+
+  it('is false for undefined (query not yet settled)', () => {
+    expect(isMaterialReadOnly(undefined)).toBe(false);
   });
 });

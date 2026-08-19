@@ -109,6 +109,40 @@ const renderArticleBody = (state: LessonMainState) => {
           {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
         </>
       );
+    // An archive view: the pilot completed this at an earlier level. The
+    // banner is announced (role="status") for the same reason LessonLocked's
+    // is — this content differs from what a normal client-side navigation
+    // would otherwise imply, and nothing else on the page says so.
+    case 'read-only':
+      return (
+        <>
+          {/* biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics */}
+          <p
+            role="status"
+            className="rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-secondary"
+          >
+            You completed this lesson at an earlier level. It&rsquo;s here for
+            reference &mdash; nothing you do is recorded.
+          </p>
+          <div className="lesson-player">
+            {state.videoState ? (
+              renderPlayerSlot(
+                state.videoState,
+                state.lessonSlug,
+                state.hasDebrief,
+              )
+            ) : (
+              <LessonNoVideoContainer
+                lessonName={state.lessonName}
+                lessonSlug={state.lessonSlug}
+                hasDebrief={state.hasDebrief}
+                videoExpected={state.videoExpected}
+              />
+            )}
+          </div>
+          {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
+        </>
+      );
     case 'course-loading': {
       // Handled by the early-return below; included here for switch exhaustiveness.
       return null;
@@ -120,10 +154,15 @@ const renderArticleBody = (state: LessonMainState) => {
   }
 };
 
-const isVideoInFlight = (state: LessonMainState): boolean =>
-  state.kind === 'ready' &&
-  (state.videoState.status === 'fetching' ||
-    state.videoState.status === 'rendering');
+const isVideoInFlight = (state: LessonMainState): boolean => {
+  const videoState =
+    state.kind === 'ready' || state.kind === 'read-only'
+      ? state.videoState
+      : null;
+  return (
+    videoState?.status === 'fetching' || videoState?.status === 'rendering'
+  );
+};
 
 /**
  * Crossfade rather than a hard cut on the skeleton→content swap. Opacity only,

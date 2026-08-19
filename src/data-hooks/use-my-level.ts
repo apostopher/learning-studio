@@ -10,6 +10,10 @@ const myLevelSchema = z.object({
       id: z.number(),
       level: UserLevelSchema,
       message: z.string().nullable(),
+      // 'earned' or 'admin' only — getUnacknowledgedLevelChange never returns
+      // an 'enrolment' row. Strict on purpose: an unrecognised source should
+      // fail loudly here rather than render with the wrong copy.
+      source: z.enum(['admin', 'earned']),
     })
     .nullable(),
 });
@@ -39,14 +43,11 @@ export function useMyLevel(courseSlug: string) {
 }
 
 /**
- * Dismiss an admin-issued level-change notice. No optimistic update — the
- * notice stays until the server confirms the acknowledgement, then this
- * invalidates useMyLevel so the next read reflects it.
+ * Dismiss an admin-issued or earned level-change notice. No optimistic
+ * update — the notice stays until the server confirms the acknowledgement,
+ * then this invalidates useMyLevel so the next read reflects it.
  *
- * No caller yet: this task only wires the sidebar's read side
- * (useMyLevel). This mutation exists because Task 7 also creates the
- * `/api/user/level-acknowledge` endpoint it calls; the between-visits notice
- * that renders `pendingChange` and calls this hook to dismiss it is later work.
+ * Called from CourseLevelBannerContainer on dismiss.
  */
 export function useAcknowledgeLevelChange(courseSlug: string) {
   const queryClient = useQueryClient();

@@ -1,10 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { useSetAtom } from 'jotai';
+import { useEffect } from 'react';
 import { refetchLessonPlaybackFresh } from '#/atoms/lesson-video';
+import { outOfTierNoticeAtom } from '#/atoms/out-of-tier-notice';
 import { useRecordLastViewedLesson } from '#/data-hooks/use-record-last-viewed';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useLessonVideo } from '#/hooks/data/use-lesson-video';
+import { OutOfTierMaterialError } from '#/lib/out-of-tier-material-error';
 import { computeLessonMainState } from './compute-lesson-main-state';
 import { LessonMain } from './lesson-main';
 import { shouldRecordLastViewed } from './should-record-last-viewed';
@@ -21,10 +26,37 @@ export const LessonMainWrapper = ({
   lessonSlug,
 }: LessonMainWrapperProps) => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const setOutOfTierNotice = useSetAtom(outOfTierNoticeAtom);
   const course = useCourseDetails(courseSlug);
   const courseData = course.data ?? undefined;
   const video = useLessonVideo(lessonSlug);
   const material = useLessonMaterial(lessonSlug);
+
+  // A never-completed out-of-tier lesson: /api/lesson/material 403s rather
+  // than serving anything, so there is no page-level state to render here —
+  // the pilot is sent back to the course with an explanation instead. Kept
+  // separate from computeLessonMainState, which deliberately does not read
+  // `material.isError` (a normal failed query must not take the video down
+  // with it — see that file's comment); this is a different signal, checked
+  // by error IDENTITY, not by isError alone.
+  useEffect(() => {
+    if (!material.isError) return;
+    const error = material.error;
+    if (!(error instanceof OutOfTierMaterialError)) return;
+    setOutOfTierNotice({ level: error.level });
+    navigate({
+      to: '/course/$courseSlug',
+      params: { courseSlug },
+      replace: true,
+    });
+  }, [
+    material.isError,
+    material.error,
+    courseSlug,
+    navigate,
+    setOutOfTierNotice,
+  ]);
 
   const state = computeLessonMainState({
     course: {

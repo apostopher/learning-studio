@@ -19,6 +19,8 @@ type LessonMaterialProps = {
   hasDebrief: boolean;
   /** Called with each newly selected tab, so the container can record it. */
   onTabSelected?: (tab: string) => void;
+  /** The lesson was completed at an earlier level — quiz/debrief writes must be inert. */
+  readOnly: boolean;
 };
 
 export const LessonMaterialView = ({
@@ -26,6 +28,7 @@ export const LessonMaterialView = ({
   tabsRef,
   hasDebrief,
   onTabSelected,
+  readOnly,
 }: LessonMaterialProps) => {
   const [activeTab, setActiveTab] = useActiveTab();
 
@@ -78,11 +81,15 @@ export const LessonMaterialView = ({
       {tabs.some((tab) => tab.value === 'quiz') ? (
         <Tabs.Panel value="quiz" className="outline-hidden">
           {hasDebrief ? (
-            <DebriefQuizContainer lessonSlug={material.lessonSlug} />
+            <DebriefQuizContainer
+              lessonSlug={material.lessonSlug}
+              readOnly={readOnly}
+            />
           ) : (
             <LessonQuizContainer
               lessonSlug={material.lessonSlug}
               quiz={material.quiz}
+              readOnly={readOnly}
             />
           )}
         </Tabs.Panel>

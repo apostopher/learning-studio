@@ -76,4 +76,25 @@ export type LessonMainState =
       /** Gates the post-video debrief overlay — see computePlayerOverlay. */
       hasDebrief: boolean;
       videoState: VideoFetchState;
+    }
+  /**
+   * The pilot completed this lesson at an earlier level; it now sits outside
+   * their current tier. Content is served — video and material alike — but
+   * nothing done here is recorded (see isMaterialReadOnly and the write-side
+   * guards in LessonPlayerContainer / LessonMaterialWrapper / the quiz and
+   * debrief containers).
+   *
+   * A distinct axis from 'no-video', not a specialisation of it: a read-only
+   * lesson can carry a video or not, so `videoState` is nullable here the
+   * same way 'no-video' has none at all.
+   */
+  | {
+      kind: 'read-only';
+      lessonName: string;
+      lessonSlug: string;
+      courseSlug: string;
+      hasDebrief: boolean;
+      videoState: VideoFetchState | null;
+      /** `needsVideoWatch` — only meaningful when `videoState` is null. */
+      videoExpected: boolean;
     };

@@ -2,15 +2,16 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getCourseIdentityBySlug } from '#/db/course';
 import {
   getCurrentLevel,
-  getUnacknowledgedAdminChange,
+  getUnacknowledgedLevelChange,
 } from '#/db/user-levels';
 import { auth } from '#/lib/auth';
 
 /**
  * The logged-in pilot's current level for one course (`?slug=`), plus any
- * admin-issued change they have not yet acknowledged. Any authenticated user
- * may read their own level — the user comes from the session, never the
- * query string, matching the other `/api/user/*` reads in this directory.
+ * admin-issued OR earned change they have not yet acknowledged. Any
+ * authenticated user may read their own level — the user comes from the
+ * session, never the query string, matching the other `/api/user/*` reads in
+ * this directory.
  */
 export async function getMyLevelHandler(request: Request): Promise<Response> {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -30,13 +31,21 @@ export async function getMyLevelHandler(request: Request): Promise<Response> {
 
   const [level, pending] = await Promise.all([
     getCurrentLevel(session.user.id, course.id),
-    getUnacknowledgedAdminChange(session.user.id, course.id),
+    getUnacknowledgedLevelChange(session.user.id, course.id),
   ]);
 
   return Response.json({
     level,
     pendingChange: pending
-      ? { id: pending.id, level: pending.level, message: pending.message }
+      ? {
+          id: pending.id,
+          level: pending.level,
+          message: pending.message,
+          // 'earned' vs 'admin' — the client's copy differs by kind: an
+          // earned promotion is an achievement, an admin change is something
+          // done to the pilot and carries the admin's message.
+          source: pending.source,
+        }
       : null,
   });
 }

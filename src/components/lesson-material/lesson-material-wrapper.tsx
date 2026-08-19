@@ -7,7 +7,10 @@ import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useLessonVideo } from '#/hooks/data/use-lesson-video';
-import { computeMaterialPanelState } from './compute-material-panel-state';
+import {
+  computeMaterialPanelState,
+  isSectionTapRecordingEnabled,
+} from './compute-material-panel-state';
 import {
   canDebriefFromTranscript,
   playbackHasCaptions,
@@ -48,12 +51,14 @@ export const LessonMaterialWrapper = ({
 
   const state = computeMaterialPanelState(query);
 
-  // Only record taps once the panel is actually showing material. A tab the
-  // learner never saw must not count toward their progress, and `state.kind`
-  // is the one place that fact is already decided.
+  // Only record taps once the panel is actually showing material, AND the
+  // lesson is not a read-only archive view — a tab the learner never saw
+  // must not count toward their progress, and neither must a tap on content
+  // completed at an earlier level. See isSectionTapRecordingEnabled's own
+  // tests for this decision (this component cannot be rendered under Vitest).
   const recordSectionTap = useSectionTapRecorder({
     lessonSlug,
-    enabled: state.kind === 'ready',
+    enabled: isSectionTapRecordingEnabled(state),
   });
 
   const onRetry = useCallback(() => {
@@ -88,7 +93,10 @@ export const LessonMaterialWrapper = ({
         hasCaptions: playbackHasCaptions(video.data),
       }) ? (
         <LessonDebriefSection sectionRef={tabsRef}>
-          <DebriefQuizContainer lessonSlug={lessonSlug} />
+          <DebriefQuizContainer
+            lessonSlug={lessonSlug}
+            readOnly={state.readOnly}
+          />
         </LessonDebriefSection>
       ) : null;
     case 'locked':
@@ -105,6 +113,7 @@ export const LessonMaterialWrapper = ({
             // lessons that have none, and briefly hide a quiz that does exist.
             hasDebrief={lesson?.hasDebrief ?? false}
             onTabSelected={recordSectionTap}
+            readOnly={state.readOnly}
           />
         </>
       );

@@ -1,4 +1,7 @@
-import type { LessonMaterialResponse } from '#/lib/lesson-gating';
+import {
+  isMaterialReadOnly,
+  type LessonMaterialResponse,
+} from '#/lib/lesson-gating';
 
 export type MaterialPanelState<TMaterial> =
   | { kind: 'loading' }
@@ -7,13 +10,23 @@ export type MaterialPanelState<TMaterial> =
    * Unlocked, but this lesson has no material row. A normal shape for a
    * video-only lesson — not an error, and deliberately not 'ready' so the tab
    * strip is never rendered with nothing behind any of its tabs.
+   *
+   * `readOnly` still matters here: a transcript-sourced debrief can render
+   * with no material row at all (see LessonMaterialWrapper's 'empty' branch),
+   * and its writes must stay inert the same as a 'ready' panel's.
    */
-  | { kind: 'empty' }
+  | { kind: 'empty'; readOnly: boolean }
   | {
       kind: 'locked';
       lock: Extract<LessonMaterialResponse<TMaterial>, { locked: true }>;
     }
-  | { kind: 'ready'; material: TMaterial; adminBypass: boolean };
+  | {
+      kind: 'ready';
+      material: TMaterial;
+      adminBypass: boolean;
+      /** The lesson was completed at an earlier level — every write here must be inert. */
+      readOnly: boolean;
+    };
 
 export type MaterialPanelQuery<TMaterial> = {
   data: LessonMaterialResponse<TMaterial> | undefined;
@@ -59,10 +72,28 @@ export function computeMaterialPanelState<TMaterial>({
     };
   }
   if (data.locked) return { kind: 'locked', lock: data };
-  if (data.material === null) return { kind: 'empty' };
+  const readOnly = isMaterialReadOnly(data);
+  if (data.material === null) return { kind: 'empty', readOnly };
   return {
     kind: 'ready',
     material: data.material,
     adminBypass: data.adminBypass,
+    readOnly,
   };
+}
+
+/**
+ * Whether a material-tab tap should be recorded — `LessonMaterialWrapper`'s
+ * `enabled` for `useSectionTapRecorder`.
+ *
+ * Pulled out, rather than left as an inline `state.kind === 'ready' &&
+ * !state.readOnly` at the call site, so the read-only write-guard has a test
+ * that does not require rendering `LessonMaterialWrapper` — that component
+ * calls `useRef` directly and so hits the same Vitest wall documented on
+ * `computeMaterialPanelState` above.
+ */
+export function isSectionTapRecordingEnabled<TMaterial>(
+  state: MaterialPanelState<TMaterial>,
+): boolean {
+  return state.kind === 'ready' && !state.readOnly;
 }
