@@ -2,6 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 import type { CourseLessonQuizQuestion } from '#/types';
 import { QuizQuestion } from '../quiz-question';
 
@@ -24,6 +25,7 @@ const props = {
   onSelect: () => {},
   onNext: () => {},
   reducedMotion: true,
+  readOnly: false,
 };
 
 describe('QuizQuestion', () => {
@@ -83,5 +85,41 @@ describe('QuizQuestion', () => {
     render(<QuizQuestion {...props} />);
     expect(screen.queryByText('<p>What is V1?</p>')).toBeNull();
     expect(screen.getByText('What is V1?')).toBeTruthy();
+  });
+
+  /**
+   * The archive case, and the common one: completion here is video-only, so a
+   * pilot re-opening an out-of-tier lesson usually has NO saved attempt and
+   * lands on question one. Before this, they could answer every question,
+   * reach the result slide, and have `runSubmit` refuse in silence —
+   * `saveState` resolves to 'idle', not 'error', so nothing was said at all.
+   */
+  it('offers no answerable option in read-only, and says why', () => {
+    const onSelect = vi.fn();
+    render(<QuizQuestion {...props} readOnly onSelect={onSelect} />);
+
+    // Static rows, not disabled buttons — a screen reader reads them as prose
+    // rather than announcing a list of unavailable controls.
+    expect(screen.queryByRole('button', { name: /Rotation speed/ })).toBeNull();
+    expect(screen.getByText(READ_ONLY_CONTROL_REASON)).toBeDefined();
+  });
+
+  it('refuses to advance from a read-only slide even when the control is clicked', async () => {
+    const onNext = vi.fn();
+    render(
+      <QuizQuestion
+        {...props}
+        readOnly
+        chosenOptionId="b"
+        revealed
+        onNext={onNext}
+      />,
+    );
+
+    const next = screen.getByRole('button', { name: /Next question/ });
+    expect(next.getAttribute('aria-disabled')).toBe('true');
+    // aria-disabled does not block the event, so the handler itself must.
+    await userEvent.click(next, { pointerEventsCheck: 0 });
+    expect(onNext).not.toHaveBeenCalled();
   });
 });

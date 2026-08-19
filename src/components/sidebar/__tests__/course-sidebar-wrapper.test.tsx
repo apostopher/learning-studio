@@ -538,4 +538,59 @@ describe('CourseSidebarWrapper', () => {
       screen.queryByRole('button', { name: /Completed at earlier levels/ }),
     ).toBeNull();
   });
+
+  /**
+   * `getCourseProgress` is not level-aware — it averages over every lesson in
+   * the course. The sidebar renders only the lessons this pilot can see, so
+   * the server's numbers describe a different course from the one on screen.
+   *
+   * Here the Basic pilot sees ONE lesson, at 50%. The server's payload says
+   * the course is 75% and module 'advanced-only' is 100% — both computed over
+   * a lesson this pilot can never open. The assertion is on what the RING was
+   * handed, because that is the only thing the pilot ever sees.
+   */
+  it('draws the rings over the lessons the pilot can actually see', async () => {
+    progressMock.mockReturnValue({
+      data: {
+        percent: 75,
+        lessons: [
+          { lessonId: 1, moduleId: 1, percent: 50, watched: false },
+          { lessonId: 11, moduleId: 2, percent: 100, watched: true },
+        ],
+        modules: [
+          { moduleId: 1, percent: 50 },
+          { moduleId: 2, percent: 100 },
+        ],
+      },
+    });
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: archivableCourse,
+      isLoading: false,
+      isError: false,
+    });
+
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Course 3D Airmanship progress' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('50');
+
+    // The out-of-tier module is not rendered at all, so only the visible one
+    // has a ring — and it reads the visible lesson's percent, not the
+    // server's module row.
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Module Fundamentals progress' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('50');
+    expect(
+      screen.queryByRole('progressbar', {
+        name: 'Module Advanced Only progress',
+      }),
+    ).toBeNull();
+  });
 });

@@ -15,6 +15,7 @@ import {
   useTotalScore,
 } from '#/hooks/data/use-lesson-ai-test';
 import { DebriefIntro } from './debrief-intro';
+import { debriefSessionForLesson } from './debrief-session-owner';
 import { EvaluationCard } from './evaluation-card';
 import {
   freeTextAnswerAtom,
@@ -40,7 +41,7 @@ export const DebriefQuizContainer = ({
   lessonSlug,
   readOnly,
 }: DebriefQuizContainerProps) => {
-  const test = useCurrentTest();
+  const sessionTest = useCurrentTest();
   const currentQuestion = useCurrentQuestion();
   const questionIndex = useCurrentQuestionIndex();
   const evaluations = useEvaluations();
@@ -55,6 +56,22 @@ export const DebriefQuizContainer = ({
   const setSelectedOption = useSetAtom(selectedOptionAtom);
   const setFreeTextAnswer = useSetAtom(freeTextAnswerAtom);
   const savedRef = useRef(false);
+
+  // A debrief session belongs to the lesson it was generated for — see
+  // debriefSessionForLesson for why that needs saying at all.
+  const test = debriefSessionForLesson(sessionTest, lessonSlug);
+  const isForeignSession = sessionTest !== null && test === null;
+
+  // Clear it rather than merely ignoring it, so the next lesson does not
+  // inherit the same stale session — and so `useSaveResults`, which reads the
+  // atom directly, can never post another lesson's answers under this slug.
+  useEffect(() => {
+    if (!isForeignSession) return;
+    savedRef.current = false;
+    resetTest();
+    setSelectedOption('');
+    setFreeTextAnswer('');
+  }, [isForeignSession, resetTest, setSelectedOption, setFreeTextAnswer]);
 
   const isComplete =
     test !== null && evaluations.length === test.questions.length;
@@ -145,6 +162,7 @@ export const DebriefQuizContainer = ({
       total={test.questions.length}
       isEvaluating={isEvaluating}
       onSubmit={handleSubmit}
+      readOnly={readOnly}
     />
   );
 };

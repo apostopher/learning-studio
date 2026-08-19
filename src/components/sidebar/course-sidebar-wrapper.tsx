@@ -73,29 +73,58 @@ export const CourseSidebarWrapper = ({
   // built by joining progress rows to course details' lessonId → slug, so the
   // percent LessonList looks up under `lesson.slug` actually matches the
   // lesson it's rendering, rather than colliding on an unrelated key space.
-  const { lessonPercents, modulePercents } = useMemo(() => {
+  //
+  // The module and course percentages are RECOMPUTED here rather than taken
+  // from `progress.modules` / `progress.percent`, because `getCourseProgress`
+  // is not level-aware: it averages over every lesson in the course, while
+  // this sidebar renders only the ones `visibleDetails` kept. Left as-is, a
+  // module showing 3 lessons draws a ring computed over 8, and a pilot set
+  // straight to Advanced has a course ring permanently capped by Basic lessons
+  // they can never open.
+  //
+  // The arithmetic deliberately mirrors `aggregateCourseProgress`: module% is
+  // the rounded mean of its lessons' percents, and course% the rounded mean of
+  // the modules that HAVE lessons — an empty module does not vote, for the
+  // same reason it does not there.
+  const { lessonPercents, modulePercents, coursePercent } = useMemo(() => {
     const lessonPercents: Record<string, number> = {};
     const modulePercents: Record<number, number> = {};
     const progress = progressQuery.data;
-    if (progress) {
-      for (const mod of progress.modules) {
-        modulePercents[mod.moduleId] = mod.percent;
-      }
-    }
     const details = visibleDetails;
-    if (progress && details) {
-      const slugByLessonId = new Map<number, string>();
-      for (const mod of details.modules) {
-        for (const lesson of mod.lessons) {
-          slugByLessonId.set(lesson.id, lesson.slug);
-        }
-      }
-      for (const lesson of progress.lessons) {
-        const slug = slugByLessonId.get(lesson.lessonId);
-        if (slug) lessonPercents[slug] = lesson.percent;
-      }
+    if (!progress || !details) {
+      return { lessonPercents, modulePercents, coursePercent: 0 };
     }
-    return { lessonPercents, modulePercents };
+
+    const percentByLessonId = new Map(
+      progress.lessons.map((lesson) => [lesson.lessonId, lesson.percent]),
+    );
+
+    const countedModulePercents: number[] = [];
+    for (const mod of details.modules) {
+      let sum = 0;
+      for (const lesson of mod.lessons) {
+        // A lesson with no progress row has done nothing, which is 0 — not
+        // "unknown". Skipping it would divide by a smaller denominator and
+        // read as further along than the pilot is.
+        const percent = percentByLessonId.get(lesson.id) ?? 0;
+        lessonPercents[lesson.slug] = percent;
+        sum += percent;
+      }
+      const percent =
+        mod.lessons.length === 0 ? 0 : Math.round(sum / mod.lessons.length);
+      modulePercents[mod.id] = percent;
+      if (mod.lessons.length > 0) countedModulePercents.push(percent);
+    }
+
+    const coursePercent =
+      countedModulePercents.length === 0
+        ? 0
+        : Math.round(
+            countedModulePercents.reduce((total, p) => total + p, 0) /
+              countedModulePercents.length,
+          );
+
+    return { lessonPercents, modulePercents, coursePercent };
   }, [progressQuery.data, visibleDetails]);
 
   // Computed client-side from the two queries above — never written back to
@@ -177,7 +206,7 @@ export const CourseSidebarWrapper = ({
       activeLessonSlug={params.lessonSlug ?? null}
       lessonPercents={lessonPercents}
       modulePercents={modulePercents}
-      coursePercent={progressQuery.data?.percent ?? 0}
+      coursePercent={coursePercent}
       lessonLocks={lessonLocks}
       level={
         isAdmin || !levelQuery.data ? null : LEVEL_LABELS[levelQuery.data.level]

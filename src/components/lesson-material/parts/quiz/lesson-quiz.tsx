@@ -39,7 +39,12 @@ type LessonQuizProps = {
   onNext: () => void;
   onRetake: () => void;
   onRetrySave: () => void;
-  /** Completed at an earlier level — threaded to QuizResult's Retake. */
+  /**
+   * Completed at an earlier level — threaded to QuizResult's Retake AND to
+   * QuizQuestion, whose options and Next control must be inert too. The result
+   * slide alone is not enough: the normal case here is `saved === null`, so
+   * the pilot lands on question one and can play the whole quiz.
+   */
   readOnly: boolean;
 };
 
@@ -158,6 +163,7 @@ export const LessonQuiz = ({
                 onSelect={onSelect}
                 onNext={onNext}
                 reducedMotion={reducedMotion}
+                readOnly={readOnly}
               />
             ) : null}
           </motion.section>

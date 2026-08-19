@@ -106,7 +106,11 @@ const LessonQuizClient = ({
   const viewRef = useRef(view);
   viewRef.current = view;
 
+  // Guarded like every other write path here: `setProgress` persists to
+  // localStorage, so an ungated advance would leave a half-played archive
+  // attempt behind that `runSubmit` can never save.
   const advance = useCallback(() => {
+    if (readOnly) return;
     const current = viewRef.current;
     if (current.kind !== 'quiz') return;
     setProgress({
@@ -114,10 +118,11 @@ const LessonQuizClient = ({
       answers: current.answers,
       revealedQuestionId: null,
     });
-  }, [setProgress]);
+  }, [readOnly, setProgress]);
 
   const handleSelect = useCallback(
     (optionId: string) => {
+      if (readOnly) return;
       if (view.kind !== 'quiz' || view.revealedQuestionId) return;
       const question = askable[view.index];
       if (!question) return;
@@ -128,7 +133,7 @@ const LessonQuizClient = ({
         revealedQuestionId: question.id,
       });
     },
-    [askable, setProgress, view],
+    [askable, readOnly, setProgress, view],
   );
 
   const revealedQuestionId =

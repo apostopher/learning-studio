@@ -6,9 +6,13 @@ import type {
   AITestMCQQuestion,
   AITestQuestion,
 } from '#/ai/schemas';
+import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 export const selectedOptionAtom = atom('');
 export const freeTextAnswerAtom = atom('');
+
+/** Ties every disabled control in this card to the one sentence saying why. */
+const REASON_ID = 'debrief-question-readonly-reason';
 
 // ─── MCQInput ────────────────────────────────────────────────────────────────
 
@@ -16,9 +20,16 @@ type MCQInputProps = {
   question: AITestMCQQuestion;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
+  /** Completed at an earlier level — nothing here may be answered or sent. */
+  readOnly: boolean;
 };
 
-const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
+const MCQInput = ({
+  question,
+  isEvaluating,
+  onSubmit,
+  readOnly,
+}: MCQInputProps) => {
   const [selected, setSelected] = useAtom(selectedOptionAtom);
 
   return (
@@ -34,10 +45,13 @@ const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
             <label
               key={option.id}
               className={[
-                'flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+                'flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+                readOnly ? 'cursor-default opacity-60' : 'cursor-pointer',
                 isSelected
                   ? 'border-accent-8 bg-accent-3 text-primary'
-                  : 'border-gray-6 bg-gray-2 text-secondary hover:border-gray-7 hover:bg-gray-3',
+                  : readOnly
+                    ? 'border-gray-6 bg-gray-2 text-secondary'
+                    : 'border-gray-6 bg-gray-2 text-secondary hover:border-gray-7 hover:bg-gray-3',
               ].join(' ')}
             >
               <input
@@ -46,6 +60,8 @@ const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
                 value={option.id}
                 checked={isSelected}
                 onChange={() => setSelected(option.id)}
+                disabled={readOnly}
+                aria-describedby={readOnly ? REASON_ID : undefined}
                 className="sr-only"
               />
               {/* Custom radio indicator */}
@@ -70,9 +86,17 @@ const MCQInput = ({ question, isEvaluating, onSubmit }: MCQInputProps) => {
 
       <button
         type="button"
-        onClick={() => onSubmit(selected)}
-        disabled={!selected || isEvaluating}
-        className="ms-auto inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10 disabled:cursor-not-allowed disabled:opacity-50"
+        // Inert handler, not just aria-disabled: aria-disabled does not block
+        // the click, so the control itself must refuse. Deliberately NOT
+        // native `disabled` for the read-only case — a disabled button is not
+        // focusable, so nothing would ever announce the reason.
+        onClick={() => {
+          if (!readOnly) onSubmit(selected);
+        }}
+        disabled={!readOnly && (!selected || isEvaluating)}
+        aria-disabled={readOnly || undefined}
+        aria-describedby={readOnly ? REASON_ID : undefined}
+        className="ms-auto inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-60"
       >
         {isEvaluating && <Loader2 size={14} className="animate-spin" />}
         Submit
@@ -87,12 +111,15 @@ type FreeTextInputProps = {
   question: AITestFreeTextQuestion;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
+  /** Completed at an earlier level — nothing here may be answered or sent. */
+  readOnly: boolean;
 };
 
 const FreeTextInput = ({
   question: _question,
   isEvaluating,
   onSubmit,
+  readOnly,
 }: FreeTextInputProps) => {
   const [text, setText] = useAtom(freeTextAnswerAtom);
 
@@ -103,14 +130,22 @@ const FreeTextInput = ({
         placeholder="Type your answer..."
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-gray-9 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
+        readOnly={readOnly}
+        aria-describedby={readOnly ? REASON_ID : undefined}
+        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-gray-9 read-only:opacity-60 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
       />
 
       <button
         type="button"
-        onClick={() => onSubmit(text)}
-        disabled={!text.trim() || isEvaluating}
-        className="ms-auto inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10 disabled:cursor-not-allowed disabled:opacity-50"
+        // See MCQInput's Submit for why this is aria-disabled plus an inert
+        // handler rather than native `disabled`.
+        onClick={() => {
+          if (!readOnly) onSubmit(text);
+        }}
+        disabled={!readOnly && (!text.trim() || isEvaluating)}
+        aria-disabled={readOnly || undefined}
+        aria-describedby={readOnly ? REASON_ID : undefined}
+        className="ms-auto inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-60"
       >
         {isEvaluating && <Loader2 size={14} className="animate-spin" />}
         Submit
@@ -127,6 +162,12 @@ type QuestionCardProps = {
   total: number;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
+  /**
+   * The lesson was completed at an earlier level. `handleSubmit` already
+   * returned silently in that state, which meant a pilot could type a full
+   * answer, press Submit, and be told nothing at all.
+   */
+  readOnly: boolean;
 };
 
 export const QuestionCard = ({
@@ -135,6 +176,7 @@ export const QuestionCard = ({
   total,
   isEvaluating,
   onSubmit,
+  readOnly,
 }: QuestionCardProps) => {
   const reduced = useReducedMotion();
 
@@ -160,18 +202,27 @@ export const QuestionCard = ({
         {question.question}
       </p>
 
+      {/* Visible, not sr-only — same reasoning as DebriefIntro's reason text. */}
+      {readOnly && (
+        <p id={REASON_ID} className="text-xs text-tertiary">
+          {READ_ONLY_CONTROL_REASON}
+        </p>
+      )}
+
       {/* Input */}
       {question.type === 'mcq' ? (
         <MCQInput
           question={question}
           isEvaluating={isEvaluating}
           onSubmit={onSubmit}
+          readOnly={readOnly}
         />
       ) : (
         <FreeTextInput
           question={question}
           isEvaluating={isEvaluating}
           onSubmit={onSubmit}
+          readOnly={readOnly}
         />
       )}
     </motion.div>
