@@ -4,6 +4,7 @@ import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
 import {
   CourseLessonDependencySchema,
   SubscriptionsSchema,
+  UserLevelSchema,
   UserLevelsSchema,
 } from '#/types';
 
@@ -495,8 +496,14 @@ export function hasAdminAccess(roles: string[]): boolean {
  * Entities that permissions are expressed over. `enrolment` is separate from
  * `user` on purpose: assigning a course is the day-to-day delegated task,
  * while editing profiles is not, and they should be grantable independently.
+ *
+ * `level` is separate from `enrolment` on purpose: enrolling grants access to a
+ * course, while setting a level changes which lessons inside it a pilot can
+ * see — and, because the automatic path only writes upward, it is the only
+ * correction mechanism in the system. Folding it into an existing entity would
+ * grant that power silently to everyone who already holds it.
  */
-export const PERMISSION_ENTITIES = ['user', 'enrolment'] as const;
+export const PERMISSION_ENTITIES = ['user', 'enrolment', 'level'] as const;
 export type PermissionEntity = (typeof PERMISSION_ENTITIES)[number];
 
 export const PERMISSION_ACTIONS = [
@@ -521,6 +528,7 @@ export const GRANTABLE_PERMISSIONS: Record<
 > = {
   user: ['read', 'create', 'update'],
   enrolment: ['read', 'create', 'delete'],
+  level: ['read', 'update'],
 };
 
 export const permissionSchema = z.object({
@@ -556,6 +564,21 @@ export const updateUserProfileInputSchema = z.object({
 export type UpdateUserProfileInput = z.infer<
   typeof updateUserProfileInputSchema
 >;
+
+/**
+ * `message` is required and non-empty because it is shown to the pilot. `note`
+ * is admin-only. Two fields so neither audience reads a sentence written for
+ * the other.
+ */
+export const setUserLevelInputSchema = z
+  .object({
+    courseId: z.number().int().positive(),
+    level: UserLevelSchema,
+    message: z.string().trim().min(1, 'A message for the pilot is required'),
+    note: z.string().trim().optional(),
+  })
+  .strict();
+export type SetUserLevelInput = z.infer<typeof setUserLevelInputSchema>;
 
 /** POST body for pre-assigning a course to an email with no account yet. */
 export const addPendingEnrolmentInputSchema = z.object({

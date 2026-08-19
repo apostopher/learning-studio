@@ -69,6 +69,7 @@ import { Route as AuthedCourseCourseSlugLibraryRouteImport } from './routes/_aut
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
 import { Route as AuthedCourseCourseSlugModulesIndexRouteImport } from './routes/_authed/course.$courseSlug.modules.index'
 import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
+import { Route as ApiAdminUsersProfileIdLevelsRouteImport } from './routes/api/admin/users.$profileId.levels'
 import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
 import { Route as ApiAdminPersonasPersonaIdPublishRouteImport } from './routes/api/admin/personas.$personaId.publish'
 import { Route as ApiAdminPersonasPersonaIdDraftRouteImport } from './routes/api/admin/personas.$personaId.draft'
@@ -404,6 +405,12 @@ const ApiAdminUsersProfileIdRolesRoute =
     path: '/roles',
     getParentRoute: () => ApiAdminUsersProfileIdRoute,
   } as any)
+const ApiAdminUsersProfileIdLevelsRoute =
+  ApiAdminUsersProfileIdLevelsRouteImport.update({
+    id: '/levels',
+    path: '/levels',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
+  } as any)
 const ApiAdminUsersProfileIdEnrolmentsRoute =
   ApiAdminUsersProfileIdEnrolmentsRouteImport.update({
     id: '/enrolments',
@@ -586,6 +593,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -663,6 +671,7 @@ export interface FileRoutesByTo {
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -744,6 +753,7 @@ export interface FileRoutesById {
   '/api/admin/personas/$personaId/draft': typeof ApiAdminPersonasPersonaIdDraftRoute
   '/api/admin/personas/$personaId/publish': typeof ApiAdminPersonasPersonaIdPublishRoute
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -825,6 +835,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
     | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -902,6 +913,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
     | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -982,6 +994,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId/draft'
     | '/api/admin/personas/$personaId/publish'
     | '/api/admin/users/$profileId/enrolments'
+    | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -1456,6 +1469,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminUsersProfileIdRolesRouteImport
       parentRoute: typeof ApiAdminUsersProfileIdRoute
     }
+    '/api/admin/users/$profileId/levels': {
+      id: '/api/admin/users/$profileId/levels'
+      path: '/levels'
+      fullPath: '/api/admin/users/$profileId/levels'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdLevelsRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
     '/api/admin/users/$profileId/enrolments': {
       id: '/api/admin/users/$profileId/enrolments'
       path: '/enrolments'
@@ -1770,6 +1790,7 @@ const ApiAdminPersonasRouteWithChildren =
 
 interface ApiAdminUsersProfileIdRouteChildren {
   ApiAdminUsersProfileIdEnrolmentsRoute: typeof ApiAdminUsersProfileIdEnrolmentsRoute
+  ApiAdminUsersProfileIdLevelsRoute: typeof ApiAdminUsersProfileIdLevelsRoute
   ApiAdminUsersProfileIdRolesRoute: typeof ApiAdminUsersProfileIdRolesRoute
 }
 
@@ -1777,6 +1798,7 @@ const ApiAdminUsersProfileIdRouteChildren: ApiAdminUsersProfileIdRouteChildren =
   {
     ApiAdminUsersProfileIdEnrolmentsRoute:
       ApiAdminUsersProfileIdEnrolmentsRoute,
+    ApiAdminUsersProfileIdLevelsRoute: ApiAdminUsersProfileIdLevelsRoute,
     ApiAdminUsersProfileIdRolesRoute: ApiAdminUsersProfileIdRolesRoute,
   }
 

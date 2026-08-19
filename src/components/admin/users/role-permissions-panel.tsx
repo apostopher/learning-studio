@@ -25,6 +25,7 @@ interface RolePermissionsPanelProps {
 const ENTITY_LABELS: Record<PermissionEntity, string> = {
   user: 'People',
   enrolment: 'Course access',
+  level: 'Pilot levels',
 };
 
 const ACTION_LABELS: Record<PermissionAction, string> = {
