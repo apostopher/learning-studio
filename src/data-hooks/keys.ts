@@ -19,6 +19,8 @@ export const dataKeys = {
     ['admin', 'course-news-sources', courseId] as const,
   // Accounts and pending invitees arrive together, so one key covers both.
   adminUsers: () => ['admin', 'users'] as const,
+  userLevelHistory: (profileId: number, courseId: number) =>
+    ['admin', 'user-level-history', profileId, courseId] as const,
   rolePermissions: () => ['admin', 'role-permissions'] as const,
   // Personas are org-level, so the list is not keyed by course — every course
   // in the active org sees the same set.

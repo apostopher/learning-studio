@@ -620,6 +620,8 @@ export const adminUserSchema = z.object({
   phoneNumber: z.string().nullable(),
   roles: z.array(z.string()),
   courses: z.array(z.object({ id: z.number(), name: z.string() })),
+  /** Current level per course id. Absent for a course with no rows. */
+  levels: z.record(z.coerce.number(), UserLevelSchema),
   createdAt: z.string(),
 });
 export type AdminUserRow = z.infer<typeof adminUserSchema>;

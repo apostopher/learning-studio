@@ -1,4 +1,5 @@
 import { Tabs } from '@base-ui/react/tabs';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { useQueryState } from 'nuqs';
 import { useForm } from 'react-hook-form';
@@ -6,7 +7,9 @@ import {
   addPersonCourseIdsAtom,
   addPersonOpenAtom,
   addUserEmailAtom,
+  openLevelHistoryCourseIdAtom,
   openUserRowAtom,
+  setLevelDraftAtom,
 } from '#/atoms/admin';
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import {
@@ -19,9 +22,19 @@ import {
   useSetUserRole,
   useUpdateUserProfile,
 } from '#/data-hooks/use-admin-users';
-import { hasPermissionKey, OWNER_ROLE } from '#/lib/admin-schemas';
+import {
+  useSetUserLevel,
+  useUserLevelHistory,
+} from '#/data-hooks/use-user-levels';
+import {
+  hasPermissionKey,
+  OWNER_ROLE,
+  setUserLevelInputSchema,
+} from '#/lib/admin-schemas';
+import type { UserLevel } from '#/types';
 import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
+import { SetLevelDialog } from './set-level-dialog';
 import { UserDetailModal } from './user-detail-modal';
 import { type UserRow, UsersTable } from './users-table';
 
@@ -30,6 +43,14 @@ type ProfileForm = {
   lastName: string;
   callSign: string;
   phoneNumber: string;
+};
+
+/** Message required, note optional — `courseId` comes from the draft atom, not the form. */
+const levelFormSchema = setUserLevelInputSchema.omit({ courseId: true });
+type LevelForm = {
+  level: UserLevel;
+  message: string;
+  note?: string;
 };
 
 /**
@@ -53,12 +74,17 @@ export const UsersPageContainer = ({
   const [addOpen, setAddOpen] = useAtom(addPersonOpenAtom);
   const [newEmail, setNewEmail] = useAtom(addUserEmailAtom);
   const [newCourseIds, setNewCourseIds] = useAtom(addPersonCourseIdsAtom);
+  const [openLevelHistoryCourseId, setOpenLevelHistoryCourseId] = useAtom(
+    openLevelHistoryCourseIdAtom,
+  );
+  const [levelDraft, setLevelDraft] = useAtom(setLevelDraftAtom);
 
   const isOwner = roles.includes(OWNER_ROLE);
   const canAdd = hasPermissionKey(permissions, 'user', 'create');
   const canEditProfile = hasPermissionKey(permissions, 'user', 'update');
   const canGrantCourse = hasPermissionKey(permissions, 'enrolment', 'create');
   const canRevokeCourse = hasPermissionKey(permissions, 'enrolment', 'delete');
+  const canEditLevels = hasPermissionKey(permissions, 'level', 'update');
 
   const users = useAdminUsers();
   const courses = useAdminCourses();
@@ -70,6 +96,24 @@ export const UsersPageContainer = ({
   const updateProfile = useUpdateUserProfile(openProfileId);
   const setEnrolment = useSetUserEnrolment(openProfileId);
   const setUserRole = useSetUserRole(openProfileId);
+  const levelHistory = useUserLevelHistory(
+    openProfileId,
+    openLevelHistoryCourseId,
+  );
+  const setLevel = useSetUserLevel(openProfileId);
+
+  // A userId → email map so the history disclosure can show who made an admin
+  // change, rather than the raw auth user id `changedBy` actually stores.
+  const emailByUserId = new Map(
+    (users.data?.users ?? []).map((u) => [u.userId, u.email]),
+  );
+
+  const levelForm = useForm<LevelForm>({
+    resolver: zodResolver(levelFormSchema),
+    values: levelDraft
+      ? { level: levelDraft.level, message: '', note: '' }
+      : undefined,
+  });
 
   const profileForm = useForm<ProfileForm>({
     values: {
@@ -88,6 +132,7 @@ export const UsersPageContainer = ({
       name: [u.firstName, u.lastName].filter(Boolean).join(' '),
       roles: u.roles,
       courses: u.courses,
+      levels: u.levels,
       joinedAt: u.createdAt,
       firstName: u.firstName,
       lastName: u.lastName,
@@ -101,6 +146,9 @@ export const UsersPageContainer = ({
       name: '',
       roles: [],
       courses: p.courses,
+      // No profile exists yet, so there is nothing to hold a level row —
+      // the modal hides level controls for pending rows entirely.
+      levels: {},
       // Pending people haven't joined — the column reads "–" rather than
       // showing the date an admin typed their address.
       joinedAt: null,
@@ -118,6 +166,19 @@ export const UsersPageContainer = ({
 
   const errorOf = (e: unknown) =>
     e instanceof AdminUsersError ? e.message : undefined;
+
+  const handleSetLevel = levelForm.handleSubmit((values) => {
+    if (!levelDraft) return;
+    setLevel.mutate(
+      {
+        courseId: levelDraft.courseId,
+        level: values.level,
+        message: values.message,
+        note: values.note || undefined,
+      },
+      { onSuccess: () => setLevelDraft(null) },
+    );
+  });
 
   const handleAdd = () => {
     const email = newEmail.trim();
@@ -228,7 +289,11 @@ export const UsersPageContainer = ({
 
       <UserDetailModal
         row={openRow}
-        onClose={() => setOpenRow(null)}
+        onClose={() => {
+          setOpenRow(null);
+          setOpenLevelHistoryCourseId(null);
+          setLevelDraft(null);
+        }}
         allCourses={courseOptions}
         canEditEnrolments={canGrantCourse || canRevokeCourse}
         onToggleCourse={(courseId, granted) =>
@@ -259,6 +324,27 @@ export const UsersPageContainer = ({
           setEnrolment.isPending
             ? (setEnrolment.variables?.courseId ?? null)
             : null
+        }
+        canEditLevels={canEditLevels}
+        levels={openRow?.levels ?? {}}
+        openLevelHistoryCourseId={openLevelHistoryCourseId}
+        levelHistory={(levelHistory.data ?? []).map((row) => ({
+          ...row,
+          changedBy: row.changedBy
+            ? (emailByUserId.get(row.changedBy) ?? row.changedBy)
+            : row.changedBy,
+        }))}
+        isLevelHistoryLoading={levelHistory.isLoading}
+        onToggleLevelHistory={(courseId) =>
+          setOpenLevelHistoryCourseId((current) =>
+            current === courseId ? null : courseId,
+          )
+        }
+        onLevelChange={(courseId, courseName, level) =>
+          setLevelDraft({ courseId, courseName, level })
+        }
+        savingLevelCourseId={
+          setLevel.isPending ? (setLevel.variables?.courseId ?? null) : null
         }
         canEditProfile={canEditProfile}
         registerFirstName={profileForm.register('firstName')}
@@ -297,6 +383,21 @@ export const UsersPageContainer = ({
         }
         roleError={errorOf(setUserRole.error)}
         isSavingRole={setUserRole.isPending}
+      />
+
+      <SetLevelDialog
+        open={levelDraft !== null}
+        onOpenChange={(next) => {
+          if (!next) setLevelDraft(null);
+        }}
+        courseName={levelDraft?.courseName ?? ''}
+        level={levelDraft?.level ?? 'basic'}
+        onSubmit={handleSetLevel}
+        registerMessage={levelForm.register('message')}
+        registerNote={levelForm.register('note')}
+        messageError={levelForm.formState.errors.message?.message}
+        isPending={setLevel.isPending}
+        error={errorOf(setLevel.error)}
       />
     </div>
   );

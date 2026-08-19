@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import type { ProviderId } from '@/lib/admin-schemas';
+import type { UserLevel } from '@/types';
 
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);
@@ -123,11 +124,34 @@ export const openUserRowAtom = atom<{
   name: string;
   roles: string[];
   courses: { id: number; name: string }[];
+  /** Current level per course id. Absent for a course with no rows. */
+  levels: Record<number, UserLevel>;
   joinedAt: string | null;
   firstName: string | null;
   lastName: string | null;
   callSign: string | null;
   phoneNumber: string | null;
+} | null>(null);
+
+/**
+ * Course id whose level history disclosure is open in the user detail modal,
+ * or null when every disclosure is collapsed. Only one is ever open — the
+ * history hook is keyed to a single (profile, course) pair, so opening a
+ * second row's history closes the first rather than fetching both.
+ */
+export const openLevelHistoryCourseIdAtom = atom<number | null>(null);
+
+/**
+ * The course + target level a "set level" confirmation dialog is collecting
+ * a message (and optional note) for. Null when the dialog is closed. Set the
+ * moment the level select changes — the mutation itself doesn't fire until
+ * the form is submitted, so picking a new level never writes anything on its
+ * own.
+ */
+export const setLevelDraftAtom = atom<{
+  courseId: number;
+  courseName: string;
+  level: UserLevel;
 } | null>(null);
 
 /** Whether the "add person" dialog is open. */

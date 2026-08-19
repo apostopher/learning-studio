@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, Search, UserPlus } from 'lucide-react';
 import { cn } from '#/lib/cn';
+import type { UserLevel } from '#/types';
 import { UserAvatar } from './user-avatar';
 
 /**
@@ -24,6 +25,8 @@ export type UserRow = {
   name: string;
   roles: string[];
   courses: { id: number; name: string }[];
+  /** Current level per course id. Absent for a course with no rows. */
+  levels: Record<number, UserLevel>;
   joinedAt: string | null;
   firstName: string | null;
   lastName: string | null;

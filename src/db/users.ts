@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   courseSubscriptionsTable,
@@ -9,6 +9,7 @@ import {
 } from '#/db/schema';
 import { ensureEnrolmentLevel } from '#/db/user-levels';
 import type { UpdateUserProfileInput } from '#/lib/admin-schemas';
+import type { UserLevel } from '#/types';
 
 export type AdminUser = {
   profileId: number;
@@ -20,15 +21,17 @@ export type AdminUser = {
   phoneNumber: string | null;
   roles: string[];
   courses: { id: number; name: string }[];
+  /** Current level per course id. Absent for a course with no rows. */
+  levels: Record<number, UserLevel>;
   createdAt: Date;
 };
 
 /**
- * Every account with its roles and course entitlements.
+ * Every account with its roles, course entitlements, and current levels.
  *
- * Three queries rather than one join: a user × roles × courses join multiplies
- * rows and needs de-duplicating in JS anyway, and at this scale (single-digit
- * users) the round trips are cheaper than the cartesian product.
+ * Four queries rather than one join: a user × roles × courses × levels join
+ * multiplies rows and needs de-duplicating in JS anyway, and at this scale
+ * (single-digit users) the round trips are cheaper than the cartesian product.
  */
 export async function listUsers(): Promise<AdminUser[]> {
   const profiles = await db
@@ -69,6 +72,19 @@ export async function listUsers(): Promise<AdminUser[]> {
     )
     .orderBy(asc(coursesTable.name));
 
+  // DISTINCT ON rather than a join against the roles/courses queries above:
+  // the newest row per (user, course) is a ranking, not a filter a
+  // drizzle join expresses cleanly, and raw SQL here is the readable option.
+  const levelRows = await db.execute<{
+    user_id: string;
+    course_id: number;
+    level: UserLevel;
+  }>(sql`
+    SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
+    FROM user_levels
+    ORDER BY user_id, course_id, created_at DESC, id DESC
+  `);
+
   const rolesByProfile = new Map<number, string[]>();
   for (const row of roleRows) {
     const list = rolesByProfile.get(row.profileId) ?? [];
@@ -83,10 +99,18 @@ export async function listUsers(): Promise<AdminUser[]> {
     coursesByUser.set(row.userId, list);
   }
 
+  const levelsByUser = new Map<string, Record<number, UserLevel>>();
+  for (const row of levelRows.rows) {
+    const existing = levelsByUser.get(row.user_id) ?? {};
+    existing[row.course_id] = row.level;
+    levelsByUser.set(row.user_id, existing);
+  }
+
   return profiles.map((p) => ({
     ...p,
     roles: rolesByProfile.get(p.profileId) ?? [],
     courses: coursesByUser.get(p.userId) ?? [],
+    levels: levelsByUser.get(p.userId) ?? {},
   }));
 }
 

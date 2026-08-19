@@ -2,7 +2,10 @@ import { Dialog } from '@base-ui/react/dialog';
 import { Loader2, X } from 'lucide-react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { ScrollArea } from '#/components/scroll-area';
+import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
 import { cn } from '#/lib/cn';
+import type { UserLevel } from '#/types';
+import { UserCourseLevelRow } from './user-course-level-row';
 import type { UserRow } from './users-table';
 
 export interface CourseOption {
@@ -19,6 +22,22 @@ interface UserDetailModalProps {
   canEditEnrolments: boolean;
   onToggleCourse: (courseId: number, granted: boolean) => void;
   pendingCourseId: number | null;
+
+  /** Level controls are hidden entirely without `level:update` — see below. */
+  canEditLevels: boolean;
+  /** Current level per course id. Absent for a course with no rows. */
+  levels: Record<number, UserLevel>;
+  openLevelHistoryCourseId: number | null;
+  levelHistory: LevelHistoryRow[];
+  isLevelHistoryLoading: boolean;
+  onToggleLevelHistory: (courseId: number) => void;
+  onLevelChange: (
+    courseId: number,
+    courseName: string,
+    level: UserLevel,
+  ) => void;
+  /** Course whose level change is currently being written, if any. */
+  savingLevelCourseId: number | null;
 
   canEditProfile: boolean;
   registerFirstName: UseFormRegisterReturn;
@@ -51,6 +70,14 @@ export const UserDetailModal = ({
   canEditEnrolments,
   onToggleCourse,
   pendingCourseId,
+  canEditLevels,
+  levels,
+  openLevelHistoryCourseId,
+  levelHistory,
+  isLevelHistoryLoading,
+  onToggleLevelHistory,
+  onLevelChange,
+  savingLevelCourseId,
   canEditProfile,
   registerFirstName,
   registerLastName,
@@ -142,6 +169,40 @@ export const UserDetailModal = ({
                               />
                             )}
                           </label>
+
+                          {/*
+                            Absent rather than disabled without level:update —
+                            same convention as the checkbox above. Also absent
+                            for a pending row: there is no profile, and so no
+                            level rows, until they sign in.
+                          */}
+                          {enrolled && canEditLevels && !isPending && (
+                            <div className="mt-2 ps-3">
+                              <UserCourseLevelRow
+                                courseName={course.name}
+                                level={levels[course.id] ?? 'basic'}
+                                history={
+                                  openLevelHistoryCourseId === course.id
+                                    ? levelHistory
+                                    : []
+                                }
+                                historyOpen={
+                                  openLevelHistoryCourseId === course.id
+                                }
+                                historyLoading={
+                                  openLevelHistoryCourseId === course.id &&
+                                  isLevelHistoryLoading
+                                }
+                                saving={savingLevelCourseId === course.id}
+                                onToggleHistory={() =>
+                                  onToggleLevelHistory(course.id)
+                                }
+                                onLevelChange={(next) =>
+                                  onLevelChange(course.id, course.name, next)
+                                }
+                              />
+                            </div>
+                          )}
                         </li>
                       );
                     })}

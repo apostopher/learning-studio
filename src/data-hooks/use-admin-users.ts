@@ -68,7 +68,8 @@ export function useRolePermissions(enabled: boolean) {
   });
 }
 
-function useInvalidateUsers() {
+/** Shared by every mutation here, and by the levels hooks in use-user-levels.ts. */
+export function useInvalidateUsers() {
   const queryClient = useQueryClient();
   return () => {
     queryClient.invalidateQueries({ queryKey: dataKeys.adminUsers() });
