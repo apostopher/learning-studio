@@ -27,6 +27,7 @@ export const dataKeys = {
     ['admin', 'course-persona', courseId] as const,
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,
+  myLevel: (courseSlug: string) => ['user', 'my-level', courseSlug] as const,
   courseProgressSummary: (slug: string) =>
     ['course', 'progress-summary', slug] as const,
   myCourses: () => ['user', 'my-courses'] as const,

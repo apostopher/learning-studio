@@ -2,8 +2,10 @@ import { useParams } from '@tanstack/react-router';
 import { useAtom, useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
+import { useMyLevel } from '#/data-hooks/use-my-level';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
 import { useIsAdmin } from '#/hooks/use-is-admin';
+import { filterCourseToLevel } from '#/lib/level-visibility';
 import { openModuleSlugAtom } from '../../atoms/sidebar';
 import { computeLessonLocks } from './compute-lesson-locks';
 import { CourseSidebar } from './course-sidebar';
@@ -28,8 +30,32 @@ export const CourseSidebarWrapper = ({
   };
   const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
   const progressQuery = useCourseProgressSummary(courseSlug);
+  const levelQuery = useMyLevel(courseSlug);
   const isAdmin = useIsAdmin();
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
+
+  // Filter to what this pilot's level may see, before anything downstream
+  // (percent maps, lock computation, module/lesson counts) reads the course
+  // tree — so a hidden lesson never appears as the blocker in a lock reason
+  // the pilot cannot act on, and never surfaces anywhere else in the sidebar.
+  // Admins bypass the filter, matching evaluateLessonGate's admin
+  // short-circuit. Until the level query resolves, this stays undefined
+  // rather than falling back to the unfiltered payload — computeLessonLocks
+  // and `derived` below already treat "no details yet" as "still loading", so
+  // nothing unfiltered is ever handed to them, even transiently.
+  const visibleDetails = useMemo(() => {
+    if (!detailsQuery.data) return detailsQuery.data;
+    if (isAdmin) return detailsQuery.data;
+    if (!levelQuery.data) return undefined;
+    return filterCourseToLevel(detailsQuery.data, levelQuery.data.level);
+  }, [detailsQuery.data, levelQuery.data, isAdmin]);
+
+  // Non-admin and course details have arrived, but the level query hasn't
+  // settled (and hasn't errored) yet — visibleDetails is intentionally
+  // undefined in this window; treat the sidebar as still loading rather than
+  // erroring or showing anything unfiltered.
+  const levelPending =
+    !isAdmin && !!detailsQuery.data && !levelQuery.data && !levelQuery.isError;
 
   // Server-aggregated progress → the slug-keyed / moduleId-keyed maps the
   // sidebar renders. Replaces the old client-side jotai aggregation.
@@ -48,7 +74,7 @@ export const CourseSidebarWrapper = ({
         modulePercents[mod.moduleId] = mod.percent;
       }
     }
-    const details = detailsQuery.data;
+    const details = visibleDetails;
     if (progress && details) {
       const slugByLessonId = new Map<number, string>();
       for (const mod of details.modules) {
@@ -62,7 +88,7 @@ export const CourseSidebarWrapper = ({
       }
     }
     return { lessonPercents, modulePercents };
-  }, [progressQuery.data, detailsQuery.data]);
+  }, [progressQuery.data, visibleDetails]);
 
   // Computed client-side from the two queries above — never written back to
   // getCourseDetailsWithCache, whose Redis entry is shared across every
@@ -72,18 +98,19 @@ export const CourseSidebarWrapper = ({
   const lessonLocks = useMemo(
     () =>
       computeLessonLocks(
-        detailsQuery.data ?? undefined,
+        visibleDetails ?? undefined,
         progressQuery.data,
         isAdmin,
       ),
-    [detailsQuery.data, progressQuery.data, isAdmin],
+    [visibleDetails, progressQuery.data, isAdmin],
   );
 
   const derived = useMemo(() => {
-    if (detailsQuery.isLoading) return { status: 'loading' as const };
-    if (detailsQuery.isError || detailsQuery.data == null)
+    if (detailsQuery.isLoading || levelPending)
+      return { status: 'loading' as const };
+    if (detailsQuery.isError || visibleDetails == null)
       return { status: 'error' as const };
-    const data = detailsQuery.data;
+    const data = visibleDetails;
     const modules = data.modules as unknown as readonly ModuleLike[];
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((sum, m) => sum + m.lessons.length, 0);
@@ -94,7 +121,12 @@ export const CourseSidebarWrapper = ({
       lessonCount,
       modules,
     };
-  }, [detailsQuery.data, detailsQuery.isError, detailsQuery.isLoading]);
+  }, [
+    visibleDetails,
+    detailsQuery.isError,
+    detailsQuery.isLoading,
+    levelPending,
+  ]);
 
   if (derived.status === 'loading' || derived.status === 'error') {
     return (

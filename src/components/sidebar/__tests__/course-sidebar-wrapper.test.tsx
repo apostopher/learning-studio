@@ -41,6 +41,18 @@ vi.mock('../../../data-hooks/use-course-progress-summary', () => ({
   useCourseProgressSummary: () => progressMock(),
 }));
 
+// Defaults to a settled 'basic' level with no pending change, so every test
+// that does not care about levels still exercises filterCourseToLevel (with
+// fixture lessons carrying `levels: []`, i.e. visible to everyone) rather
+// than accidentally short-circuiting on a still-loading level query.
+const levelMock = vi.fn<() => { data: unknown; isError: boolean }>(() => ({
+  data: { level: 'basic', pendingChange: null },
+  isError: false,
+}));
+vi.mock('../../../data-hooks/use-my-level', () => ({
+  useMyLevel: () => levelMock(),
+}));
+
 import { CourseSidebarWrapper } from '../course-sidebar-wrapper';
 
 const fakeCourse = {
@@ -52,15 +64,15 @@ const fakeCourse = {
       id: 1,
       slug: 'fundamentals',
       name: 'Fundamentals',
-      lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false }],
+      lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false, levels: [] }],
     },
     {
       id: 2,
       slug: 'intermediate',
       name: 'Intermediate',
       lessons: [
-        { slug: 'yaw', name: 'Yaw', hasVideo: false },
-        { slug: 'roll', name: 'Roll', hasVideo: false },
+        { slug: 'yaw', name: 'Yaw', hasVideo: false, levels: [] },
+        { slug: 'roll', name: 'Roll', hasVideo: false, levels: [] },
       ],
     },
   ],
@@ -85,6 +97,7 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [],
+          levels: [],
         },
       ],
     },
@@ -102,6 +115,7 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [],
+          levels: [],
         },
         {
           id: 3,
@@ -111,6 +125,34 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [{ lessonSlug: 'yaw', moduleSlug: 'intermediate' }],
+          levels: [],
+        },
+      ],
+    },
+  ],
+};
+
+const leveledCourse = {
+  id: 1,
+  slug: '3d-airmanship',
+  name: '3D Airmanship',
+  modules: [
+    {
+      id: 1,
+      slug: 'fundamentals',
+      name: 'Fundamentals',
+      lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false, levels: [] }],
+    },
+    {
+      id: 2,
+      slug: 'advanced-only',
+      name: 'Advanced Only',
+      lessons: [
+        {
+          slug: 'vortex',
+          name: 'Vortex Recovery',
+          hasVideo: false,
+          levels: ['advanced'],
         },
       ],
     },
@@ -161,6 +203,10 @@ async function renderAt(
 describe('CourseSidebarWrapper', () => {
   beforeEach(() => {
     progressMock.mockReturnValue({ data: undefined });
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
   });
 
   it('renders the skeleton while loading', async () => {
@@ -305,5 +351,49 @@ describe('CourseSidebarWrapper', () => {
       .getAllByRole('link')
       .find((a) => a.getAttribute('href')?.includes('/lessons/roll'));
     expect(rollLink?.textContent).not.toContain('Finish');
+  });
+
+  it('hides a lesson outside the pilot level and drops its module when it was the only lesson', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: leveledCourse,
+      isLoading: false,
+      isError: false,
+    });
+    expect(screen.getByText('1 module · 1 lesson')).toBeDefined();
+    expect(screen.queryByText('Advanced Only')).toBeNull();
+    expect(screen.queryByText('Vortex Recovery')).toBeNull();
+  });
+
+  it('shows an out-of-tier lesson to an admin, bypassing the level filter', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt(
+      '/',
+      { data: leveledCourse, isLoading: false, isError: false },
+      ['admin'],
+    );
+    expect(screen.getByText('2 modules · 2 lessons')).toBeDefined();
+    expect(screen.getByText('Advanced Only')).toBeDefined();
+  });
+
+  it('treats the sidebar as still loading while the level query is pending, never rendering the unfiltered course', async () => {
+    // Course details have already arrived; only the level query hasn't. If
+    // visibleDetails fell back to the raw payload here, this would render
+    // "Advanced Only" (and hand it to computeLessonLocks) before the level
+    // query settles.
+    levelMock.mockReturnValue({ data: undefined, isError: false });
+    const { container } = await renderAt('/', {
+      data: leveledCourse,
+      isLoading: false,
+      isError: false,
+    });
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.queryByText('Advanced Only')).toBeNull();
   });
 });
