@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { recordLessonSectionTap } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
+import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
 
 const sectionTapSchema = z.object({
@@ -18,12 +19,18 @@ const sectionTapSchema = z.object({
  *
  * Any authenticated user may record their own tap: it is their own navigation
  * within content they are already being served, the user comes from the
- * session rather than the body, and the section is enumerated. The lesson GATE
- * is deliberately not re-checked, matching `/api/user/last-viewed` — the tab
- * only renders inside material the gate already released, and re-running a
- * full progress aggregation on every tab tap would cost far more than the
- * worst forgery achieves (a learner inflating their own progress ring, which
- * gates nothing — see D1).
+ * session rather than the body, and the section is enumerated. The prerequisite
+ * LOCKS are deliberately not re-checked, matching `/api/user/last-viewed` — the
+ * tab only renders inside material the gate already released, and the worst
+ * forgery achieves is a learner inflating their own progress ring, which gates
+ * nothing (see D1).
+ *
+ * The LEVEL check is different in kind and IS enforced, because here the
+ * progress ring is not cosmetic: tapped sections feed `lessonPercent`, and the
+ * level gate reads percent to decide whether an out-of-tier lesson opens
+ * read-only. Without this, a caller could tap their way to 100% on a
+ * material-only lesson outside their tier and turn its `403 out-of-tier` into
+ * a 200 with the full material.
  */
 export async function recordLessonSectionHandler(
   request: Request,
@@ -43,6 +50,26 @@ export async function recordLessonSectionHandler(
   const parsed = sectionTapSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const gate = await evaluateLessonGate({
+    userId: session.user.id,
+    lessonSlug: parsed.data.lessonSlug,
+  });
+  // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
+  // and an archive view must not write anything. It matters because what it
+  // writes feeds `lessonPercent`, and percent is exactly what the gate reads
+  // to decide `readOnly` — so a caller could POST their way from a
+  // `403 out-of-tier` to a 200 serving the full material.
+  //
+  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing
+  // on those would newly 403 flows that succeed today, which is a separate
+  // decision with its own blast radius (see this handler's doc comment).
+  // Refusing on `outOfTier` alone breaks nothing that currently works: every
+  // lesson ships with `levels = '{}'`, so nothing is out of tier until an
+  // author tags one — which is precisely when this should start to bite.
+  if (gate?.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
   }
 
   try {

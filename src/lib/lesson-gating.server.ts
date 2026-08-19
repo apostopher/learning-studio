@@ -113,8 +113,13 @@ export async function evaluateLessonGate({
     };
   }
 
-  const subscribed = await isSubscribedToCourse(userId, course.courseId);
-  const level = await getCurrentLevel(userId, course.courseId);
+  // Concurrent, not sequential: one of this function's five callers is the
+  // video-progress beacon, which fires repeatedly through a playing lesson,
+  // and these two queries share no data.
+  const [subscribed, level] = await Promise.all([
+    isSubscribedToCourse(userId, course.courseId),
+    getCurrentLevel(userId, course.courseId),
+  ]);
 
   // Fail closed on the REQUESTED lesson, against the unfiltered payload.
   //
@@ -127,7 +132,20 @@ export async function evaluateLessonGate({
     .flatMap((mod) => mod.lessons)
     .find((lesson) => lesson.slug === lessonSlug);
 
-  if (target && !isLessonVisibleAtLevel(target.levels, level)) {
+  // The lesson resolved in `getCourseSlugForLesson` and is available, so the
+  // cached payload disagreeing about its existence means the payload is wrong
+  // — the same class of problem as the missing-payload branch above, and
+  // thrown for the same reason. Returning here instead would skip the level
+  // check entirely and hand the decision to locks that answer `open` for a
+  // lesson they cannot locate: the one line the whole fail-closed intent rests
+  // on would be the line that fails open.
+  if (!target) {
+    throw new Error(
+      `Lesson ${lessonSlug} missing from course payload for ${course.courseSlug}`,
+    );
+  }
+
+  if (!isLessonVisibleAtLevel(target.levels, level)) {
     // Out-of-tier work you already finished stays readable; out-of-tier work
     // you never did is not yours. `percent` is the aggregate across every
     // component of the lesson, so 100 is the only honest reading of "done".

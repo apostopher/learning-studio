@@ -10,6 +10,7 @@ import {
   lessonsTable,
   modulesTable,
 } from '#/db/schema';
+import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
   type CourseContent,
@@ -22,6 +23,10 @@ import {
   type GateCourse,
 } from '#/lib/lesson-gating';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import {
+  filterCourseToLevel,
+  isLessonVisibleAtLevel,
+} from '#/lib/level-visibility';
 
 type GatedRow = { lessonSlug: string };
 
@@ -65,7 +70,7 @@ export function filterGatedLessons<T extends GatedRow>(
  * lessons.slug = lesson_material.lesson_slug), ordered by rank, and hands the
  * assembled shape to the pure builder in src/lib/course-content.ts.
  *
- * Three filters run before any content is assembled, in this order:
+ * Four filters run before any content is assembled, in this order:
  *
  * 1. **WIP lessons** (`is_available = false`) are dropped outright. The gate
  *    predicate cannot do this job: `getCourseDetailsWithCache` no longer
@@ -83,11 +88,17 @@ export function filterGatedLessons<T extends GatedRow>(
  *    all-unwatched result for a user with no subscription, so skipping this
  *    check would let a subscriber of Course A ask about a lesson in Course B
  *    that merely has no unmet prerequisites and no video).
- * 3. **Per-lesson locks**, via `filterGatedLessons`, so a locked lesson's
+ * 3. **Level visibility.** A lesson outside the pilot's tier for this course
+ *    is dropped before the locks run. Without it the assistant was the widest
+ *    hole in the level feature: `/api/lesson/material` refuses an out-of-tier
+ *    lesson, and the pilot could then ask the chat widget for the same text
+ *    and proTips — the exact failure this file's header exists to prevent,
+ *    reached by a different door.
+ * 4. **Per-lesson locks**, via `filterGatedLessons`, so a locked lesson's
  *    text/proTips never reach the caller either.
  *
  * `userId` is required. It used to be optional, and calling without it skipped
- * filters 2 and 3 entirely — full course content for anyone who called it the
+ * filters 2, 3 and 4 entirely — full course content for anyone who called it the
  * short way. The sole caller always had a session, so nothing needed that
  * escape, and now no future caller can reach it by omission.
  */
@@ -97,6 +108,7 @@ export async function getCourseContentForAgent(
 ): Promise<string> {
   const rows = await db
     .select({
+      courseId: coursesTable.id,
       courseName: coursesTable.name,
       moduleId: modulesTable.id,
       moduleName: modulesTable.name,
@@ -161,10 +173,39 @@ export async function getCourseContentForAgent(
     throw new Error(`Course payload unavailable for ${slug}`);
   }
 
-  const gateCourse = toGateCourse(details);
+  // Filter 3: level visibility. Admins have no tier — they author every one —
+  // so they skip it, exactly as they skip every gate in `evaluateLessonGate`.
+  const level = isAdmin
+    ? null
+    : await getCurrentLevel(userId, rows[0].courseId);
+
+  // Two halves, for the same reason `evaluateLessonGate` needs two: the
+  // explicit slug set below is what actually withholds an out-of-tier lesson,
+  // and the filtered course is only there so a hidden lesson cannot gate a
+  // visible one. Neither substitutes for the other — filtering ALONE would
+  // make an out-of-tier lesson unlocatable, and `evaluateLessonLock` answers
+  // "open" for lessons it cannot locate, so the filter meant to hide a lesson
+  // would be the very thing that released it.
+  const gateCourse = toGateCourse(
+    level === null ? details : filterCourseToLevel(details, level),
+  );
   const watched = watchedLessonSlugs(details, progress);
 
-  // Filter 3: per-lesson locks. Gate on the distinct lesson slugs rather than
+  // Built from the UNFILTERED payload, and a slug the payload does not contain
+  // is simply absent from it — so an unknown lesson is dropped rather than
+  // waved through. Fail closed, matching the gate.
+  const visibleLessonSlugs =
+    level === null
+      ? null
+      : new Set(
+          details.modules.flatMap((mod) =>
+            mod.lessons
+              .filter((lesson) => isLessonVisibleAtLevel(lesson.levels, level))
+              .map((lesson) => lesson.slug),
+          ),
+        );
+
+  // Filter 4: per-lesson locks. Gate on the distinct lesson slugs rather than
   // the raw (possibly duplicated, possibly lesson-less) rows, then filter the
   // rows by the resulting allow-list — this keeps the module/lesson rank
   // ordering intact and leaves module-only rows alone, since they carry no
@@ -175,7 +216,12 @@ export async function getCourseContentForAgent(
         .map((r) => r.lessonSlug)
         .filter((lessonSlug): lessonSlug is string => lessonSlug !== null),
     ),
-  ].map((lessonSlug) => ({ lessonSlug }));
+  ]
+    .filter(
+      (lessonSlug) =>
+        visibleLessonSlugs === null || visibleLessonSlugs.has(lessonSlug),
+    )
+    .map((lessonSlug) => ({ lessonSlug }));
   const allowedLessonSlugs = new Set(
     filterGatedLessons(distinctLessonRows, gateCourse, watched, isAdmin).map(
       (r) => r.lessonSlug,

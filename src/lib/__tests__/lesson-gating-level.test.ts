@@ -146,6 +146,23 @@ describe('level enforcement', () => {
     expect(result?.level).toBe('advanced');
   });
 
+  it('rejects rather than skipping the check when the payload omits the lesson', async () => {
+    // The lesson resolved in getCourseSlugForLesson and is available, so a
+    // payload that does not contain it is a broken payload. Returning a
+    // verdict here would skip the level check and hand the decision to locks
+    // that answer `open` for a lesson they cannot locate — the one line the
+    // fail-closed intent rests on would be the line that fails open.
+    m.getCurrentLevel.mockResolvedValue('intermediate');
+    m.getCourseSlugForLesson.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      isAvailable: true,
+    });
+    await expect(
+      evaluateLessonGate({ userId: 'u1', lessonSlug: 'not-in-payload' }),
+    ).rejects.toThrow(/not-in-payload/);
+  });
+
   it('bypasses the level entirely for an admin', async () => {
     // The admin path must not consult the level at all: an admin authors every
     // tier, and a level lookup there is a chance for the bypass to acquire a

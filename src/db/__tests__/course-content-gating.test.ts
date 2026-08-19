@@ -21,11 +21,13 @@ const {
   getCourseDetailsWithCache,
   getCourseProgress,
   isSubscribedToCourseSlug,
+  getCurrentLevel,
 } = vi.hoisted(() => ({
   getUserRoleNames: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
   isSubscribedToCourseSlug: vi.fn(),
+  getCurrentLevel: vi.fn(),
 }));
 
 vi.mock('#/db', () => {
@@ -47,6 +49,7 @@ vi.mock('#/db/course', () => ({ getCourseDetailsWithCache }));
 vi.mock('#/db/course-progress', () => ({ getCourseProgress }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
 vi.mock('#/db/lesson-access', () => ({ isSubscribedToCourseSlug }));
+vi.mock('#/db/user-levels', () => ({ getCurrentLevel }));
 
 import {
   filterGatedLessons,
@@ -64,6 +67,9 @@ const row = (
   lessonName: lessonSlug,
   moduleId: 1,
   moduleName: 'M',
+  // The real SELECT carries the course id so the pilot's level can be
+  // resolved without a second lookup; the level assertions below read it.
+  courseId: 7,
   courseName: 'C',
   isAvailable,
   text,
@@ -133,6 +139,9 @@ const detailsFor = (
     hasVideo: boolean;
     needsVideoWatch: boolean;
     dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
+    /** Defaults to [] — visible at every tier — so the fixtures above keep
+     * describing the subscription and material gates and nothing else. */
+    levels?: readonly string[];
   }[],
 ) => ({
   // Chain off: these fixtures state their prerequisites explicitly and are
@@ -145,7 +154,7 @@ const detailsFor = (
       name: 'M',
       dependsOn: [],
       sequentialLessons: false,
-      lessons,
+      lessons: lessons.map((lesson) => ({ levels: [], ...lesson })),
     },
   ],
 });
@@ -154,6 +163,7 @@ describe('getCourseContentForAgent subscription gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbState.rows = [];
+    getCurrentLevel.mockResolvedValue('basic');
   });
 
   // The exact bypass the reviewer traced: a lesson with no unmet
@@ -310,5 +320,105 @@ describe('getCourseContentForAgent subscription gate', () => {
 
     expect(html).toContain('B body');
     expect(html).not.toContain('A body');
+  });
+});
+
+/**
+ * Level visibility in the agent corpus.
+ *
+ * The chat widget is mounted app-wide, and its course content is assembled
+ * from lesson_material — the same text `/api/lesson/material` refuses for an
+ * out-of-tier lesson. Without this filter a pilot who is refused a lesson can
+ * simply ask the assistant to read it out, which is the exact failure the
+ * gating in this file exists to prevent, reached through a different door.
+ *
+ * These assert on the assembled HTML because that string IS what the consumer
+ * receives: `makeSearchKBTool` passes it straight into the model's context.
+ */
+describe('getCourseContentForAgent level visibility', () => {
+  const twoTiers = () =>
+    detailsFor([
+      {
+        id: 10,
+        slug: 'a',
+        name: 'A',
+        isAvailable: true,
+        hasVideo: false,
+        needsVideoWatch: false,
+        dependsOn: [],
+        levels: ['basic'],
+      },
+      {
+        id: 11,
+        slug: 'b',
+        name: 'B',
+        isAvailable: true,
+        hasVideo: false,
+        needsVideoWatch: false,
+        dependsOn: [],
+        levels: ['intermediate'],
+      },
+    ]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbState.rows = [row('a', 'A body', 10), row('b', 'B body', 11)];
+    getUserRoleNames.mockResolvedValue([]);
+    isSubscribedToCourseSlug.mockResolvedValue(true);
+    getCourseDetailsWithCache.mockResolvedValue(twoTiers());
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+    getCurrentLevel.mockResolvedValue('intermediate');
+  });
+
+  it('withholds an out-of-tier lesson whose locks are wide open', async () => {
+    // Both lessons have no video and no prerequisites, so both pass
+    // evaluateLessonLock/evaluateMaterialLock for any watched-set. The level
+    // filter is the only thing standing between the pilot and A's text.
+    const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+    expect(html).toContain('B body');
+    expect(html).not.toContain('A body');
+  });
+
+  it('resolves the level for the course the content belongs to', async () => {
+    // The mock is only load-bearing if it actually replaced the module.
+    await getCourseContentForAgent('c1', { userId: 'u1' });
+    expect(getCurrentLevel).toHaveBeenCalledWith('u1', 7);
+  });
+
+  it('keeps untagged lessons, which belong to every tier', async () => {
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'a',
+          name: 'A',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+        },
+      ]),
+    );
+    dbState.rows = [row('a', 'A body', 10)];
+    const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+    expect(html).toContain('A body');
+  });
+
+  it('drops a lesson the cached payload does not contain at all', async () => {
+    // Fail closed, matching evaluateLessonGate: an unknown lesson cannot be
+    // level-checked, and the lock predicates answer "open" for lessons they
+    // cannot locate — so waving it through would make the unknown case the
+    // most permissive one.
+    dbState.rows = [row('ghost', 'Ghost body', 99)];
+    const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+    expect(html).not.toContain('Ghost body');
+  });
+
+  it('does not resolve a level for an admin, who authors every tier', async () => {
+    getUserRoleNames.mockResolvedValue(['admin']);
+    const html = await getCourseContentForAgent('c1', { userId: 'admin-1' });
+    expect(html).toContain('A body');
+    expect(html).toContain('B body');
+    expect(getCurrentLevel).not.toHaveBeenCalled();
   });
 });

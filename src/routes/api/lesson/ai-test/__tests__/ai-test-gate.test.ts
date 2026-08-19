@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   generateTest: vi.fn(),
   evaluateFreeText: vi.fn(),
   evaluateMCQ: vi.fn(),
+  saveTestResult: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -18,6 +19,7 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
+vi.mock('#/db/lesson-test', () => ({ saveTestResult: m.saveTestResult }));
 vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: m.evaluateFreeText,
   evaluateMCQ: m.evaluateMCQ,
@@ -29,6 +31,7 @@ vi.mock('#/ai/evaluate-answer', () => ({
 
 import { evaluateAnswerHandler } from '../evaluate';
 import { generateTestHandler } from '../generate';
+import { saveTestResultsHandler } from '../save-results';
 
 const post = (url: string, body: unknown) =>
   new Request(`http://t${url}`, {
@@ -60,6 +63,7 @@ beforeEach(() => {
   m.resolveDebriefSource.mockResolvedValue({ keyPoints: ['k'], text: 'body' });
   m.generateTest.mockResolvedValue({ lessonSlug: 'l1', questions: [] });
   m.evaluateFreeText.mockResolvedValue({ score: 80 });
+  m.saveTestResult.mockResolvedValue({ id: 1 });
 });
 
 /**
@@ -148,5 +152,63 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
     );
     expect(res.status).toBe(200);
     expect(m.evaluateFreeText).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * Saving a completed debrief is the third write that feeds `lessonPercent`
+ * (via `debriefAnswered`), so it is refused for an out-of-tier lesson in both
+ * read-only states — an archive view may show a pilot the debrief they already
+ * did, never record a new one.
+ *
+ * Each case asserts `saveTestResult` was not called: a 403 that had already
+ * written the row would have handed over the escalation it exists to stop.
+ */
+describe('save-results refuses out-of-tier lessons', () => {
+  const savePayload = {
+    lessonSlug: 'l1',
+    test: { lessonSlug: 'l1', questions: [] },
+    evaluations: [],
+    totalScore: 80,
+  };
+
+  it('403s a never-completed out-of-tier lesson without writing', async () => {
+    m.evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: false },
+    });
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveTestResult).not.toHaveBeenCalled();
+  });
+
+  it('403s a COMPLETED out-of-tier lesson without writing', async () => {
+    m.evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+    });
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveTestResult).not.toHaveBeenCalled();
+  });
+
+  it('still saves an in-tier result, locks and all', async () => {
+    // Deliberately narrow, matching the other two write routes: the locks are
+    // not honoured here, and widening that is a separate decision.
+    m.evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
+    });
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(res.status).toBe(200);
+    expect(m.saveTestResult).toHaveBeenCalledOnce();
   });
 });
