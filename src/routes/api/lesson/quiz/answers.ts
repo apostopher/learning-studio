@@ -44,6 +44,22 @@ export async function submitLessonQuizHandler(
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
   });
+  // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
+  // has always answered this question; this route just never asked it. It is
+  // load-bearing now: what this writes feeds `lessonPercent`, and in a
+  // video-less course that is enough to drive `maybePromote` into writing a
+  // durable level row and sending a real promotion email — for a course the
+  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // into the same 403 rather than a distinguishable 404, matching
+  // report-video-progress and the playback route: telling the two apart hands
+  // an enumeration oracle to any signed-in caller.
+  //
+  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
+  // that remains a separate decision with its own blast radius.
+  if (!gate?.subscribed) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
   // and an archive view must not write anything. It matters because a saved
   // attempt feeds `quizPlayed`, which feeds `lessonPercent`, which is exactly
@@ -69,22 +85,18 @@ export async function submitLessonQuizHandler(
     });
 
     // Best-effort: a promotion-check failure must never fail the quiz
-    // attempt the pilot just recorded. `gate` is null only when the lesson
-    // itself doesn't exist/isn't available, in which case there is no course
-    // to promote in.
+    // attempt the pilot just recorded.
     let promotion: Promotion | null = null;
-    if (gate) {
-      try {
-        promotion = await maybePromote({
-          userId: session.user.id,
-          courseSlug: gate.courseSlug,
-        });
-      } catch (error) {
-        console.error(
-          'Promotion check failed; the quiz attempt was still recorded.',
-          error,
-        );
-      }
+    try {
+      promotion = await maybePromote({
+        userId: session.user.id,
+        courseSlug: gate.courseSlug,
+      });
+    } catch (error) {
+      console.error(
+        'Promotion check failed; the quiz attempt was still recorded.',
+        error,
+      );
     }
 
     return Response.json({ ...row, promotion });

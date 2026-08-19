@@ -19,13 +19,13 @@ const sectionTapSchema = z.object({
 /**
  * Record that the logged-in learner opened a material tab.
  *
- * Any authenticated user may record their own tap: it is their own navigation
- * within content they are already being served, the user comes from the
- * session rather than the body, and the section is enumerated. The prerequisite
- * LOCKS are deliberately not re-checked, matching `/api/user/last-viewed` — the
- * tab only renders inside material the gate already released, and the worst
- * forgery achieves is a learner inflating their own progress ring, which gates
- * nothing (see D1).
+ * Any user SUBSCRIBED to the course may record their own tap: it is their own
+ * navigation within content they are already being served, the user comes from
+ * the session rather than the body, and the section is enumerated. The
+ * prerequisite LOCKS are deliberately not re-checked, matching
+ * `/api/user/last-viewed` — the tab only renders inside material the gate
+ * already released, and the worst forgery achieves is a learner inflating
+ * their own progress ring, which gates nothing (see D1).
  *
  * The LEVEL check is different in kind and IS enforced, because here the
  * progress ring is not cosmetic: tapped sections feed `lessonPercent`, and the
@@ -58,6 +58,22 @@ export async function recordLessonSectionHandler(
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
   });
+  // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
+  // has always answered this question; this route just never asked it. It is
+  // load-bearing now: what this writes feeds `lessonPercent`, and in a
+  // video-less course that is enough to drive `maybePromote` into writing a
+  // durable level row and sending a real promotion email — for a course the
+  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // into the same 403 rather than a distinguishable 404, matching
+  // report-video-progress and the playback route: telling the two apart hands
+  // an enumeration oracle to any signed-in caller.
+  //
+  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
+  // that remains a separate decision with its own blast radius.
+  if (!gate?.subscribed) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
   // and an archive view must not write anything. It matters because what it
   // writes feeds `lessonPercent`, and percent is exactly what the gate reads
@@ -86,21 +102,18 @@ export async function recordLessonSectionHandler(
   }
 
   // Best-effort: a promotion-check failure must never fail the tap the pilot
-  // actually recorded. `gate` is null only when the lesson itself doesn't
-  // exist/isn't available, in which case there is no course to promote in.
+  // actually recorded.
   let promotion: Promotion | null = null;
-  if (gate) {
-    try {
-      promotion = await maybePromote({
-        userId: session.user.id,
-        courseSlug: gate.courseSlug,
-      });
-    } catch (error) {
-      console.error(
-        'Promotion check failed; progress was still recorded.',
-        error,
-      );
-    }
+  try {
+    promotion = await maybePromote({
+      userId: session.user.id,
+      courseSlug: gate.courseSlug,
+    });
+  } catch (error) {
+    console.error(
+      'Promotion check failed; progress was still recorded.',
+      error,
+    );
   }
 
   return Response.json(

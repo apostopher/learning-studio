@@ -217,3 +217,36 @@ describe('save-results refuses out-of-tier lessons', () => {
     expect(m.saveTestResult).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * A signed-in caller is not a subscriber. `generate` and `evaluate` already
+ * refused one; `save-results` is the write, and a saved debrief feeds
+ * `debriefAnswered` → `lessonPercent` → `maybePromote`.
+ */
+describe('save-results from a non-subscriber', () => {
+  const savePayload = {
+    lessonSlug: 'l1',
+    test: { lessonSlug: 'l1', questions: [] },
+    evaluations: [],
+    totalScore: 80,
+  };
+
+  it('403s without writing or checking promotion', async () => {
+    m.evaluateLessonGate.mockResolvedValue({ ...openGate, subscribed: false });
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveTestResult).not.toHaveBeenCalled();
+    expect(m.maybePromote).not.toHaveBeenCalled();
+  });
+
+  it('403s an unknown lesson rather than writing against it', async () => {
+    m.evaluateLessonGate.mockResolvedValue(null);
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveTestResult).not.toHaveBeenCalled();
+  });
+});

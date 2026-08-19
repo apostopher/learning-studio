@@ -50,6 +50,22 @@ export async function saveTestResultsHandler(
     userId: session.user.id,
     lessonSlug,
   });
+  // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
+  // has always answered this question; this route just never asked it. It is
+  // load-bearing now: what this writes feeds `lessonPercent`, and in a
+  // video-less course that is enough to drive `maybePromote` into writing a
+  // durable level row and sending a real promotion email — for a course the
+  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // into the same 403 rather than a distinguishable 404, matching
+  // report-video-progress and the playback route: telling the two apart hands
+  // an enumeration oracle to any signed-in caller.
+  //
+  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
+  // that remains a separate decision with its own blast radius.
+  if (!gate?.subscribed) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   // Refuse an out-of-tier lesson, in BOTH read-only states: a read-only
   // archive view may show a pilot the debrief they already did, never record a
   // new one. A completed debrief sets `debriefAnswered`, which feeds
@@ -82,24 +98,20 @@ export async function saveTestResultsHandler(
     });
 
     // Best-effort: a promotion-check failure must never fail the debrief the
-    // pilot just completed. `gate` is null only when the lesson itself
-    // doesn't exist/isn't available, in which case there is no course to
-    // promote in. Checked against the real session user, not the 'dev-user'
-    // placeholder above — this is already correct for when that TODO is
-    // fixed.
+    // pilot just completed. Checked against the real session user, not the
+    // 'dev-user' placeholder above — this is already correct for when that
+    // TODO is fixed.
     let promotion: Promotion | null = null;
-    if (gate) {
-      try {
-        promotion = await maybePromote({
-          userId: session.user.id,
-          courseSlug: gate.courseSlug,
-        });
-      } catch (error) {
-        console.error(
-          'Promotion check failed; the debrief was still saved.',
-          error,
-        );
-      }
+    try {
+      promotion = await maybePromote({
+        userId: session.user.id,
+        courseSlug: gate.courseSlug,
+      });
+    } catch (error) {
+      console.error(
+        'Promotion check failed; the debrief was still saved.',
+        error,
+      );
     }
 
     return Response.json({ ...result, promotion });

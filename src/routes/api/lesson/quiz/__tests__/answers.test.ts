@@ -110,3 +110,30 @@ describe('out-of-tier quiz submissions are refused', () => {
     expect(m.saveLessonQuizAnswers).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * A signed-in caller is not a subscriber. A saved attempt feeds `quizPlayed`
+ * → `lessonPercent`, and in a video-less course that is enough to drive
+ * `maybePromote` into appending a durable level row and sending a real
+ * promotion email for a course the caller does not own.
+ */
+describe('quiz submit from a non-subscriber', () => {
+  it('403s without recording the attempt or checking promotion', async () => {
+    m.evaluateLessonGate.mockResolvedValue({ ...inTier, subscribed: false });
+    const res = await submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', answers }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+    expect(m.maybePromote).not.toHaveBeenCalled();
+  });
+
+  it('403s an unknown lesson rather than writing against it', async () => {
+    m.evaluateLessonGate.mockResolvedValue(null);
+    const res = await submitLessonQuizHandler(
+      post({ lessonSlug: 'nope', answers }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+  });
+});

@@ -156,3 +156,48 @@ describe('out-of-tier writes are refused', () => {
     });
   });
 });
+
+/**
+ * A signed-in caller is not a subscriber. Every one of these writes feeds
+ * `lessonPercent`, and in a video-less course a percent of 100 is enough to
+ * drive `maybePromote` into appending a durable level row and sending a real
+ * promotion email — for a course the caller does not own.
+ *
+ * Each case asserts the WRITER and the PROMOTER were not reached, not merely
+ * the status: a 403 issued after the write would have handed over exactly what
+ * the guard exists to withhold.
+ */
+describe('writes from a non-subscriber are refused', () => {
+  const unsubscribed = { ...inTier, subscribed: false };
+
+  it('403s a lesson-section tap without recording it or checking promotion', async () => {
+    m.evaluateLessonGate.mockResolvedValue(unsubscribed);
+    const res = await recordLessonSectionHandler(
+      post('/api/user/lesson-section', {
+        lessonSlug: 'l1',
+        section: 'keyPoints',
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
+    expect(m.maybePromote).not.toHaveBeenCalled();
+  });
+
+  it('403s a last-viewed write without moving the pointer', async () => {
+    m.evaluateLessonGate.mockResolvedValue(unsubscribed);
+    const res = await recordLastViewedHandler(
+      post('/api/user/last-viewed', { lessonSlug: 'l1' }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.recordLastViewedLesson).not.toHaveBeenCalled();
+  });
+
+  it('403s rather than 404s an unknown lesson, so the route is not an oracle', async () => {
+    m.evaluateLessonGate.mockResolvedValue(null);
+    const res = await recordLastViewedHandler(
+      post('/api/user/last-viewed', { lessonSlug: 'nope' }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.recordLastViewedLesson).not.toHaveBeenCalled();
+  });
+});

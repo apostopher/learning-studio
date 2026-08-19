@@ -9,9 +9,9 @@ const lastViewedSchema = z.object({
 });
 
 /**
- * Move the logged-in user's resume pointer to a lesson. Any authenticated user
- * may move their own pointer — it is their own navigation history, and the
- * user is taken from the session, never from the body.
+ * Move the logged-in user's resume pointer to a lesson. Any user subscribed to
+ * the course may move their own pointer — it is their own navigation history,
+ * and the user is taken from the session, never from the body.
  *
  * The lesson's course is derived from the lesson (see recordLastViewedLesson),
  * so a forged slug cannot write a pointer into an unrelated course. The
@@ -48,6 +48,22 @@ export async function recordLastViewedHandler(
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
   });
+  // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
+  // has always answered this question; this route just never asked it. It is
+  // load-bearing now: what this writes feeds `lessonPercent`, and in a
+  // video-less course that is enough to drive `maybePromote` into writing a
+  // durable level row and sending a real promotion email — for a course the
+  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // into the same 403 rather than a distinguishable 404, matching
+  // report-video-progress and the playback route: telling the two apart hands
+  // an enumeration oracle to any signed-in caller.
+  //
+  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
+  // that remains a separate decision with its own blast radius.
+  if (!gate?.subscribed) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
   // and an archive view must not write anything. It matters because what it
   // writes feeds `lessonPercent`, and percent is exactly what the gate reads
