@@ -18,6 +18,7 @@ const lesson = (
   hasDebrief: false,
   needsVideoWatch: true,
   requiredSubscriptions: [],
+  levels: [],
   isConfigured: true,
   quizQuestionCount: 0,
   dependsOn: [],

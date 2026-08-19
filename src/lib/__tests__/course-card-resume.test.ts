@@ -13,6 +13,7 @@ const lesson = (
   isAvailable: true,
   hasVideo: true,
   needsVideoWatch: true,
+  levels: [],
   dependsOn,
 });
 

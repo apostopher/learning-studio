@@ -202,7 +202,15 @@ export const getCourseDetailsWithCache = cacheWithRedis<
   // column existed deserialise without it, so `sequentialLessons` would read as
   // undefined — falsy — and every module's lesson chain would be silently off
   // for up to the 6h TTL, on a payload that looks otherwise complete.
->('course-details-v3', getCourseDetails);
+  //
+  // v3 -> v4: `lessons.levels` added. An entry written before this column
+  // existed deserialises with `levels` absent, and a level-aware gate reading
+  // `undefined` there is exactly the same failure mode as the `hasVideo` and
+  // `sequentialLessons` bumps above — either it throws, or a defaulted `[]`
+  // reads as "visible to everyone," silently defeating the whole feature for
+  // up to the 6h TTL. Bumping the prefix orphans the old entries instead of
+  // reading them back as this shape.
+>('course-details-v4', getCourseDetails);
 
 export type MyCourseSummary = {
   id: number;

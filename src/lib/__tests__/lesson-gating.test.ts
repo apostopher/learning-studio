@@ -14,6 +14,7 @@ const lesson = (over: Partial<GateLesson> = {}): GateLesson => ({
   isAvailable: true,
   hasVideo: true,
   needsVideoWatch: true,
+  levels: [],
   dependsOn: [],
   ...over,
 });

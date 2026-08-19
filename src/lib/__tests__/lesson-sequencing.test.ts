@@ -17,6 +17,7 @@ const blocking = (
   isAvailable: true,
   hasVideo: true,
   needsVideoWatch: true,
+  levels: [],
   dependsOn,
 });
 

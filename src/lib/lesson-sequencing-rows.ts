@@ -28,6 +28,7 @@ export function toGateCourseFromBoard(
         isAvailable: l.isAvailable,
         hasVideo: l.isConfigured,
         needsVideoWatch: l.needsVideoWatch,
+        levels: l.levels,
         dependsOn: l.dependsOn,
       })),
     })),

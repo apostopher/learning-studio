@@ -60,7 +60,7 @@ import {
   resolvePlayback,
   validateCredentials,
 } from '#/lib/video-providers/resolve.server';
-import type { OnboardingQuestions, SubscriptionType } from '#/types';
+import type { OnboardingQuestions, SubscriptionType, UserLevel } from '#/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -337,6 +337,7 @@ export async function createLesson(input: {
     hasDebrief: created.hasDebrief,
     needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
+    levels: created.levels as UserLevel[],
     isConfigured: created.videoRef !== null,
     // A lesson is created before any material exists, so it has no quiz yet.
     quizQuestionCount: 0,
@@ -425,6 +426,7 @@ export async function getCourseBoard(
           hasDebrief: lessonsTable.hasDebrief,
           needsVideoWatch: lessonsTable.needsVideoWatch,
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
+          levels: lessonsTable.levels,
           videoProvider: lessonsTable.videoProvider,
           videoRef: lessonsTable.videoRef,
           // Scalar subquery, not a join: `lesson_material.lesson_slug` carries
@@ -499,6 +501,7 @@ export async function getCourseBoard(
         hasDebrief: l.hasDebrief,
         needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
+        levels: l.levels as UserLevel[],
         isConfigured: l.videoRef !== null,
         quizQuestionCount: Number(l.quizQuestionCount),
         dependsOn: dependsOnByLesson.get(l.id) ?? [],

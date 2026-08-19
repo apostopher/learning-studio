@@ -72,13 +72,13 @@ describe('getCourseDetailsWithCache cache key', () => {
     await getCourseDetailsWithCache('flight-basics');
 
     expect(redisClient.get).toHaveBeenCalledWith(
-      'course-details-v3:"flight-basics"',
+      'course-details-v4:"flight-basics"',
     );
-    // The pre-`hasVideo` key. If this were ever called, a same-named entry
-    // written before this migration (missing `hasVideo`) would be served as
+    // The pre-`levels` key. If this were ever called, a same-named entry
+    // written before this migration (missing `levels`) would be served as
     // if it were current.
     expect(redisClient.get).not.toHaveBeenCalledWith(
-      'course-details:"flight-basics"',
+      'course-details-v3:"flight-basics"',
     );
   });
 });

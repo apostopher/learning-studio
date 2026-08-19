@@ -22,6 +22,7 @@ const lesson = (over: Partial<BoardLesson> = {}): BoardLesson => ({
   hasDebrief: false,
   needsVideoWatch: true,
   requiredSubscriptions: [],
+  levels: [],
   isConfigured: true,
   quizQuestionCount: 0,
   dependsOn: [],

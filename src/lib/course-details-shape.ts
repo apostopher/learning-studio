@@ -113,5 +113,7 @@ export type LearnerCourseLesson = {
    * panel reads it, so no cache-key bump is involved.
    */
   hasDebrief: boolean;
+  /** Tiers that see this lesson. Empty means all. */
+  levels: readonly string[];
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };

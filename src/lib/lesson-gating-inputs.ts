@@ -12,6 +12,7 @@ export type DetailsLesson = {
   isAvailable: boolean;
   hasVideo: boolean;
   needsVideoWatch: boolean;
+  levels: readonly string[];
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };
 export type DetailsModule = {
@@ -43,6 +44,7 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
         isAvailable: l.isAvailable,
         hasVideo: l.hasVideo,
         needsVideoWatch: l.needsVideoWatch,
+        levels: l.levels ?? [],
         dependsOn: l.dependsOn,
       })),
     })),

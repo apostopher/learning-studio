@@ -22,6 +22,14 @@ export type GateLesson = {
   isAvailable: boolean;
   hasVideo: boolean;
   needsVideoWatch: boolean;
+  /**
+   * Tiers that see this lesson; empty means all.
+   *
+   * Carried on the gate type so that a level-filtered GateCourse and an
+   * unfiltered one are the same shape — the filter is applied by the caller,
+   * not by the predicate.
+   */
+  levels: readonly string[];
   dependsOn: readonly GateLessonDependency[];
 };
 

@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
-import { CourseLessonDependencySchema, SubscriptionsSchema } from '#/types';
+import {
+  CourseLessonDependencySchema,
+  SubscriptionsSchema,
+  UserLevelsSchema,
+} from '#/types';
 
 export const ADMIN_ROLE = 'admin';
 
@@ -91,6 +95,7 @@ export const boardLessonSchema = z.object({
   /** Whether the learner must watch the video before the lesson completes. */
   needsVideoWatch: z.boolean(),
   requiredSubscriptions: SubscriptionsSchema,
+  levels: UserLevelsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
   /**

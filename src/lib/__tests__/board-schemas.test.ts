@@ -11,6 +11,7 @@ vi.mock('@/lib/video-providers', () => ({
 }));
 vi.mock('@/types', () => ({
   SubscriptionsSchema: z.array(z.enum(['associate', 'candidate', 'rpoc'])),
+  UserLevelsSchema: z.array(z.enum(['basic', 'intermediate', 'advanced'])),
 }));
 
 const { boardLessonSchema, boardModuleSchema } = await import(
@@ -28,6 +29,7 @@ describe('boardLessonSchema', () => {
       hasDebrief: false,
       needsVideoWatch: true,
       requiredSubscriptions: ['associate'],
+      levels: [],
       isConfigured: false,
       quizQuestionCount: 0,
       dependsOn: [],
@@ -49,6 +51,7 @@ describe('boardLessonSchema', () => {
         hasDebrief: true,
         needsVideoWatch: true,
         requiredSubscriptions: ['gold'],
+        levels: [],
         isConfigured: false,
         videoProvider: null,
         videoRef: null,

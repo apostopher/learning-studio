@@ -84,6 +84,7 @@ const course = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [],
         },
         {
@@ -92,6 +93,7 @@ const course = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [],
         },
       ],

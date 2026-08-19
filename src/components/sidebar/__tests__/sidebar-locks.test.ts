@@ -17,6 +17,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [],
         },
         {
@@ -26,6 +27,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [{ lessonSlug: 'a', moduleSlug: 'm1' }],
         },
       ],
