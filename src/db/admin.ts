@@ -795,6 +795,7 @@ export async function updateLessonConfig(
     hasDebrief?: boolean;
     needsVideoWatch?: boolean;
     requiredSubscriptions?: SubscriptionType[];
+    levels?: UserLevel[];
   },
 ): Promise<{
   id: number;
@@ -802,6 +803,7 @@ export async function updateLessonConfig(
   hasDebrief: boolean;
   needsVideoWatch: boolean;
   requiredSubscriptions: SubscriptionType[];
+  levels: UserLevel[];
 } | null> {
   const [updated] = await db
     .update(lessonsTable)
@@ -813,6 +815,7 @@ export async function updateLessonConfig(
       hasDebrief: lessonsTable.hasDebrief,
       needsVideoWatch: lessonsTable.needsVideoWatch,
       requiredSubscriptions: lessonsTable.requiredSubscriptions,
+      levels: lessonsTable.levels,
     });
   if (!updated) return null;
 
@@ -821,6 +824,7 @@ export async function updateLessonConfig(
   return {
     ...updated,
     requiredSubscriptions: updated.requiredSubscriptions as SubscriptionType[],
+    levels: updated.levels as UserLevel[],
   };
 }
 

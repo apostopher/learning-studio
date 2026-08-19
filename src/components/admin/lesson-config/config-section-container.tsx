@@ -1,3 +1,4 @@
+import { LevelPicker } from '#/components/admin/level-picker';
 import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '@/lib/admin-schemas';
 import { BinaryToggle } from './binary-toggle';
@@ -128,6 +129,22 @@ export const ConfigSectionContainer = ({
             { value: 'on', label: 'On' },
             { value: 'off', label: 'Off' },
           ]}
+        />
+      </ConfigSettingRow>
+
+      <ConfigSettingRow
+        layout="stacked"
+        title="Levels"
+        description="Which pilot levels see this lesson. Leave empty to show it to everyone."
+      >
+        <LevelPicker
+          value={lesson.levels}
+          onValueChange={(next) =>
+            updateConfig.mutate({
+              lessonId: lesson.id,
+              patch: { levels: next },
+            })
+          }
         />
       </ConfigSettingRow>
     </div>

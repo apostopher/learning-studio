@@ -229,6 +229,7 @@ export const updateLessonConfigInputSchema = z
     hasDebrief: z.boolean().optional(),
     needsVideoWatch: z.boolean().optional(),
     requiredSubscriptions: SubscriptionsSchema.optional(),
+    levels: UserLevelsSchema.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
