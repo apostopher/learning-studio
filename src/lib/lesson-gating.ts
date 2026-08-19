@@ -91,7 +91,17 @@ export type LockedMaterialResponse =
  * suppressed the video too. Absent material is now "unlocked, nothing to read".
  */
 export type LessonMaterialResponse<TMaterial> =
-  | { locked: false; adminBypass: boolean; material: TMaterial | null }
+  | {
+      locked: false;
+      adminBypass: boolean;
+      /**
+       * Set only when the lesson sits outside the pilot's current level and
+       * they completed it at an earlier one. The content is served, but
+       * nothing they do with it is recorded — absent means the normal case.
+       */
+      readOnly?: boolean;
+      material: TMaterial | null;
+    }
   | LockedMaterialResponse;
 
 /**

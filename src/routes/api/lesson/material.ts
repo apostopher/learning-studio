@@ -86,6 +86,31 @@ export async function getLessonMaterialHandler(
       return new Response('Forbidden', { status: 403 });
     }
 
+    // Out of the pilot's tier. Handled before the prerequisite locks because
+    // it is a different answer, not a stricter one: those locks read "open"
+    // here by construction, since the gate filters the course to the pilot's
+    // level before evaluating them.
+    if (gate.outOfTier) {
+      if (!gate.outOfTier.readOnly) {
+        return Response.json(
+          { error: 'out-of-tier', level: gate.level },
+          { status: 403 },
+        );
+      }
+
+      // Completed at an earlier tier. Serve it, but do NOT record a visit:
+      // this is an archive view, not attendance, and a visit would move a
+      // progress number for a lesson that no longer counts toward anything.
+      const archived = await getLessonMaterial(lessonSlug);
+      const readOnlyPayload: MaterialPayload = {
+        locked: false,
+        adminBypass: false,
+        readOnly: true,
+        material: archived ?? null,
+      };
+      return Response.json(readOnlyPayload);
+    }
+
     const locked: MaterialPayload | null = lockedResponse(
       gate.lessonLock,
       gate.materialLock,

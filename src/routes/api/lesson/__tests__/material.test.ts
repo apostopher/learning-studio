@@ -26,6 +26,8 @@ const openGate = {
   courseId: 7,
   isAdmin: false,
   subscribed: true,
+  level: 'basic',
+  outOfTier: null,
   lessonLock: { kind: 'open' },
   materialLock: { kind: 'open' },
 };
@@ -141,6 +143,64 @@ describe('getLessonMaterialHandler', () => {
     expect((await getLessonMaterialHandler(req(''))).status).toBe(401);
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     expect((await getLessonMaterialHandler(req(''))).status).toBe(400);
+  });
+});
+
+/**
+ * Out-of-tier lessons. The gate reports both locks open for these — the course
+ * is filtered to the pilot's level before the locks are evaluated — so the
+ * only thing standing between a pilot and content outside their level is this
+ * branch. Its two outcomes are asserted on the response AND, for the read-only
+ * one, on `recordLessonVisit`: serving an archive must not look like attendance.
+ */
+describe('out-of-tier lessons', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    getLessonMaterial.mockResolvedValue(material);
+  });
+
+  it('403s a lesson outside the level that was never completed, and names the level', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: false },
+    });
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(403);
+    // The client turns this into copy naming the tier, so the level has to
+    // travel with the refusal.
+    expect(await res.json()).toEqual({
+      error: 'out-of-tier',
+      level: 'intermediate',
+    });
+    expect(getLessonMaterial).not.toHaveBeenCalled();
+  });
+
+  it('serves a completed out-of-tier lesson flagged read-only', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+    });
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      locked: false,
+      adminBypass: false,
+      readOnly: true,
+      material,
+    });
+  });
+
+  it('records no visit for a read-only view — an archive is not attendance', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+    });
+    await getLessonMaterialHandler(req());
+    expect(recordLessonVisit).not.toHaveBeenCalled();
   });
 });
 

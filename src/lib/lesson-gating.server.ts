@@ -5,6 +5,7 @@ import {
   getCourseSlugForLesson,
   isSubscribedToCourse,
 } from '#/db/lesson-access';
+import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
   evaluateLessonLock,
@@ -13,6 +14,11 @@ import {
   type MaterialLock,
 } from '#/lib/lesson-gating';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import {
+  filterCourseToLevel,
+  isLessonVisibleAtLevel,
+} from '#/lib/level-visibility';
+import type { UserLevel } from '#/types';
 
 export * from '#/lib/lesson-gating-inputs';
 
@@ -21,6 +27,16 @@ export type LessonGateResult = {
   courseId: number;
   isAdmin: boolean;
   subscribed: boolean;
+  /** The pilot's tier in this course, for copy that has to name it. */
+  level: UserLevel;
+  /**
+   * Null when the lesson is in the pilot's tier.
+   *
+   * Otherwise `readOnly` says whether they completed it before moving on:
+   * out-of-tier content you've done is read-only, out-of-tier content you
+   * haven't is not yours.
+   */
+  outOfTier: null | { readOnly: boolean };
   lessonLock: LessonLock;
   materialLock: MaterialLock;
 };
@@ -82,23 +98,67 @@ export async function evaluateLessonGate({
 
   const isAdmin = hasAdminAccess(roles);
   if (isAdmin) {
+    // Admins author every tier, so no level applies to them. 'advanced' is
+    // reported rather than a fourth value because the field exists for copy
+    // that has to name a tier, and the bypass is already signalled by
+    // `isAdmin` — a caller that cares reads that, not this.
     return {
       ...course,
       isAdmin: true,
       subscribed: true,
+      level: 'advanced',
+      outOfTier: null,
       lessonLock: { kind: 'open' },
       materialLock: { kind: 'open' },
     };
   }
 
   const subscribed = await isSubscribedToCourse(userId, course.courseId);
-  const gateCourse = toGateCourse(details);
+  const level = await getCurrentLevel(userId, course.courseId);
+
+  // Fail closed on the REQUESTED lesson, against the unfiltered payload.
+  //
+  // This check must not be delegated to `filterCourseToLevel`: dropping the
+  // lesson from the payload makes `evaluateLessonLock` fail to locate it, and
+  // that function answers `{kind:'open'}` for unknown lessons by contract. So
+  // filtering alone would answer "open" for exactly the lessons it is meant to
+  // withhold.
+  const target = details.modules
+    .flatMap((mod) => mod.lessons)
+    .find((lesson) => lesson.slug === lessonSlug);
+
+  if (target && !isLessonVisibleAtLevel(target.levels, level)) {
+    // Out-of-tier work you already finished stays readable; out-of-tier work
+    // you never did is not yours. `percent` is the aggregate across every
+    // component of the lesson, so 100 is the only honest reading of "done".
+    const completed = progress.lessons.some(
+      (row) => row.lessonId === target.id && row.percent === 100,
+    );
+    return {
+      ...course,
+      isAdmin: false,
+      subscribed,
+      level,
+      outOfTier: { readOnly: completed },
+      lessonLock: { kind: 'open' },
+      materialLock: { kind: 'open' },
+    };
+  }
+
+  // Filter first, then gate — so a lesson the pilot cannot see can never be
+  // named as the prerequisite blocking one they can.
+  const gateCourse = toGateCourse(filterCourseToLevel(details, level));
+  // Deliberately the UNFILTERED payload: a hidden lesson the pilot completed
+  // at an earlier tier still counts as watched, so a visible lesson that
+  // explicitly depends on it does not lock on work already done.
   const watched = watchedLessonSlugs(details, progress);
 
   return {
     ...course,
     isAdmin: false,
     subscribed,
+    level,
+    outOfTier: null,
     lessonLock: evaluateLessonLock(gateCourse, lessonSlug, watched),
     materialLock: evaluateMaterialLock(gateCourse, lessonSlug, watched),
   };

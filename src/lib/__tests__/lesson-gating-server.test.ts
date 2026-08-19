@@ -7,12 +7,14 @@ const {
   getCourseSlugForLesson,
   isSubscribedToCourse,
   getUserRoleNames,
+  getCurrentLevel,
 } = vi.hoisted(() => ({
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
   getCourseSlugForLesson: vi.fn(),
   isSubscribedToCourse: vi.fn(),
   getUserRoleNames: vi.fn(),
+  getCurrentLevel: vi.fn(),
 }));
 
 vi.mock('#/db/course', () => ({ getCourseDetailsWithCache }));
@@ -22,6 +24,7 @@ vi.mock('#/db/lesson-access', () => ({
   isSubscribedToCourse,
 }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
+vi.mock('#/db/user-levels', () => ({ getCurrentLevel }));
 
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
@@ -40,6 +43,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [],
         },
         {
@@ -49,6 +53,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
+          levels: [],
           dependsOn: [{ lessonSlug: 'a', moduleSlug: 'm1' }],
         },
       ],
@@ -87,6 +92,7 @@ describe('evaluateLessonGate', () => {
     getCourseProgress.mockResolvedValue(progress([]));
     isSubscribedToCourse.mockResolvedValue(true);
     getUserRoleNames.mockResolvedValue([]);
+    getCurrentLevel.mockResolvedValue('basic');
   });
 
   it('returns null for a lesson that does not exist', async () => {
