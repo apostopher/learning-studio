@@ -6,8 +6,10 @@ import {
 import { getCourseProgress } from '#/db/course-progress';
 import { isSubscribedToCourse } from '#/db/lesson-access';
 import { getLibraryForCourse } from '#/db/library';
+import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import { filterCourseToLevel } from '#/lib/level-visibility';
 import { type LibraryFile, resolveLibraryFiles } from '#/lib/library-gating';
 
 export type LibraryResult = { adminBypass: boolean; files: LibraryFile[] };
@@ -44,10 +46,13 @@ export async function getLibraryForUser({
   const isAdmin = hasAdminAccess(roles);
   if (!isAdmin && !subscribed) return { adminBypass: false, files: [] };
 
-  const [library, details, progress] = await Promise.all([
+  // Admins have no tier — they author every one — so they skip the level
+  // lookup entirely, exactly as they skip every gate in `evaluateLessonGate`.
+  const [library, details, progress, level] = await Promise.all([
     getLibraryForCourse(course.id),
     getCourseDetailsWithCache(courseSlug),
     getCourseProgress({ userId, slug: courseSlug }),
+    isAdmin ? null : getCurrentLevel(userId, course.id),
   ]);
 
   // A gate that cannot be evaluated must never fail open — the same rule
@@ -60,13 +65,31 @@ export async function getLibraryForUser({
     throw new Error(`Course payload unavailable for ${courseSlug}`);
   }
 
-  const gateCourse = toGateCourse(details);
+  // Filter first, then gate — the sixth enforcement surface, and the one
+  // place where filtering ALONE is sufficient.
+  //
+  // `evaluateLessonGate` and `getCourseContentForAgent` both need a second,
+  // explicit check because `evaluateLessonLock` answers `{kind:'open'}` for a
+  // lesson it cannot locate. `resolveAssignment` is the opposite by contract:
+  // a lesson (or module) absent from the index returns `null`, which drops the
+  // file from the result entirely rather than unlocking it. So removing an
+  // out-of-tier lesson here HIDES its files instead of releasing them.
+  //
+  // Withheld in BOTH out-of-tier states, read-only included: a file is a
+  // durable copy that leaves the site, not a rendering of work already done.
+  const gateCourse = toGateCourse(
+    level === null ? details : filterCourseToLevel(details, level),
+  );
 
   // The admin bypass is expressed as "every lesson is watched", not as a
   // branch that skips `resolveLibraryFiles`. That keeps admins on exactly the
   // same code path as students — so a file hidden by D9 (WIP lesson) stays
   // hidden for admins too, which is what makes the admin view a truthful
   // preview of what a finished student sees rather than a different feature.
+  //
+  // Deliberately the UNFILTERED payload for a student: a lesson finished at an
+  // earlier tier still satisfies a visible lesson's file. Slugs no longer in
+  // `gateCourse` are simply never looked up.
   const watched = isAdmin
     ? new Set(gateCourse.modules.flatMap((m) => m.lessons.map((l) => l.slug)))
     : watchedLessonSlugs(details, progress);

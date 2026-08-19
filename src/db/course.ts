@@ -6,12 +6,14 @@ import {
   progressComponentGroupBy,
   toComponentFields,
 } from '#/db/progress-components';
+import { getCurrentLevelsByCourse } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { resolveCardResume } from '#/lib/course-card-resume';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { shapeModuleLessons } from '#/lib/course-shaping';
+import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
   courseSubscriptionsTable,
@@ -241,6 +243,10 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       imageUrlWebp: coursesTable.imageUrlWebp,
       moduleId: modulesTable.id,
       lessonId: lessonsTable.id,
+      // Needed to drop out-of-tier lessons from the card's percentage. Not in
+      // GROUP BY because `lessons.id` is, and Postgres treats every other
+      // column of that table as functionally dependent on its primary key.
+      levels: lessonsTable.levels,
       watchedHits: countDistinct(videoProgressTable.progress),
       ...progressComponentColumns(userId),
     })
@@ -299,14 +305,38 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       asc(lessonsTable.rank),
     );
 
+  // Resolved up front because BOTH the percentage and the card's destination
+  // depend on the pilot's tier: a ring computed over lessons they can never
+  // open is permanently capped, and a destination chosen from them is a
+  // redirect loop (see resolveResumeTargetForLevel).
+  const [pointers, roles, levels] = await Promise.all([
+    getLastViewedLessonIdsByCourse(userId),
+    getUserRoleNames(userId),
+    getCurrentLevelsByCourse(userId),
+  ]);
+  const bypassLocks = hasAdminAccess(roles);
+  // Null for an admin: they author every tier, so none of them filters what
+  // they see — the same short-circuit `evaluateLessonGate` makes.
+  const levelFor = (courseId: number): UserLevel | null =>
+    bypassLocks ? null : (levels.get(courseId) ?? 'basic');
+
   const percents = aggregatePercentByCourse(
-    rows.map((r) => ({
-      courseId: r.courseId,
-      moduleId: r.moduleId,
-      lessonId: r.lessonId,
-      watchedHits: Number(r.watchedHits),
-      ...toComponentFields(r),
-    })),
+    rows
+      .filter((r) => {
+        // Keep the moduleId/lessonId placeholder rows: they are what keeps a
+        // course with no modules (or no visible lessons) in the map at 0%
+        // rather than vanishing from it.
+        if (r.lessonId === null) return true;
+        const level = levelFor(r.courseId);
+        return level === null || isLessonVisibleAtLevel(r.levels ?? [], level);
+      })
+      .map((r) => ({
+        courseId: r.courseId,
+        moduleId: r.moduleId,
+        lessonId: r.lessonId,
+        watchedHits: Number(r.watchedHits),
+        ...toComponentFields(r),
+      })),
   );
 
   const courses = new Map<number, Omit<MyCourseSummary, 'resume'>>();
@@ -327,12 +357,6 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
   // extra batched query plus the already-cached course payloads — not a round
   // trip per course. All the real logic is in resolveCardResume, which is pure
   // and tested; this is just plumbing.
-  const [pointers, roles] = await Promise.all([
-    getLastViewedLessonIdsByCourse(userId),
-    getUserRoleNames(userId),
-  ]);
-  const bypassLocks = hasAdminAccess(roles);
-
   return Promise.all(
     [...courses.values()].map(async (course): Promise<MyCourseSummary> => {
       // getCourseDetailsWithCache has no internal try/catch, so a Redis outage
@@ -375,6 +399,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
               watchedHits: Number(r.watchedHits),
             })),
           pointerLessonId: pointers.get(course.id) ?? null,
+          level: levelFor(course.id),
           bypassLocks,
         }),
       };

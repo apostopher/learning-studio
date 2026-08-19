@@ -5,10 +5,12 @@ import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getLastViewedLessonId } from '#/db/course-last-viewed';
 import { getCourseProgress } from '#/db/course-progress';
+import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
-import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
-import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import type { ResumeTarget } from '#/lib/course-resume';
+import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
+import { watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 
 /**
  * Where `/course/$courseSlug` should redirect this learner.
@@ -60,25 +62,24 @@ export const getCourseResumeTarget = createServerFn({ method: 'GET' })
 
     // Progress is only needed to evaluate locks, and an admin has none to
     // evaluate — skip the aggregation entirely for them.
-    const progress = isAdmin
-      ? { lessons: [] as { lessonId: number; watched: boolean }[] }
-      : await getCourseProgress({ userId, slug: data.courseSlug });
+    // Both skipped for an admin: they have no progress to evaluate and no
+    // tier to be filtered by — the same short-circuit `evaluateLessonGate`
+    // makes.
+    const [progress, level] = isAdmin
+      ? [{ lessons: [] as { lessonId: number; watched: boolean }[] }, null]
+      : await Promise.all([
+          getCourseProgress({ userId, slug: data.courseSlug }),
+          getCurrentLevel(userId, details.id),
+        ]);
 
-    // id → slug. The pointer is stored as an FK (a slug would rot on rename),
-    // while the predicate works in slugs. An id absent from the payload —
-    // deleted, made WIP, or a cache race — resolves to null, which
-    // resolveResumeTarget treats exactly like a first visit.
-    const pointerLessonSlug =
-      pointerLessonId == null
-        ? null
-        : (details.modules
-            .flatMap((m) => m.lessons)
-            .find((l) => l.id === pointerLessonId)?.slug ?? null);
-
-    return resolveResumeTarget({
-      course: toGateCourse(details),
+    // `watched` is deliberately computed from the UNFILTERED payload while
+    // the course handed to the predicate is filtered — see
+    // resolveResumeTargetForLevel for why the two halves must differ.
+    return resolveResumeTargetForLevel({
+      details,
       watched: watchedLessonSlugs(details, progress),
-      pointerLessonSlug,
+      pointerLessonId,
+      level,
       bypassLocks: isAdmin,
     });
   });

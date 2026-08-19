@@ -1,16 +1,25 @@
 import { watchedMilestones } from '#/lib/course-milestones';
-import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
+import type { ResumeTarget } from '#/lib/course-resume';
+import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
 import {
   type DetailsCourse,
-  toGateCourse,
   watchedLessonSlugs,
 } from '#/lib/lesson-gating-inputs';
+import type { UserLevel } from '#/types';
 
 type CardResumeArgs = {
   details: DetailsCourse;
   /** Per-lesson distinct watched-milestone counts, straight from the grid query. */
   lessonHits: readonly { lessonId: number; watchedHits: number }[];
   pointerLessonId: number | null;
+  /**
+   * The pilot's tier in this course, or null for an admin — who authors every
+   * tier and so is filtered by none. Without this the card links to the first
+   * lesson unlocked in the WHOLE course, which can be one from another tier
+   * that the pilot never completed: clicking it redirects to a lesson whose
+   * material 403s, and the lesson page bounces straight back to the course.
+   */
+  level: UserLevel | null;
   bypassLocks: boolean;
 };
 
@@ -26,12 +35,16 @@ export function resolveCardResume({
   details,
   lessonHits,
   pointerLessonId,
+  level,
   bypassLocks,
 }: CardResumeArgs): ResumeTarget {
   // A lesson counts as watched only when EVERY watched-milestone was hit — the
   // same rule as hasWatchedLesson and isVideoWatched. A `> 0` test here would
   // mark a lesson complete after seconds of playback and unlock everything
   // downstream of it.
+  //
+  // Built from the UNFILTERED payload deliberately: a lesson finished at an
+  // earlier tier still satisfies a visible lesson's prerequisite.
   const watched = watchedLessonSlugs(details, {
     lessons: lessonHits.map((hit) => ({
       lessonId: hit.lessonId,
@@ -39,20 +52,11 @@ export function resolveCardResume({
     })),
   });
 
-  // The pointer is stored as an FK; the predicate works in slugs. An id absent
-  // from the payload — deleted, made WIP, or a cache race — resolves to null,
-  // which resolveResumeTarget treats exactly like a first visit.
-  const pointerLessonSlug =
-    pointerLessonId == null
-      ? null
-      : (details.modules
-          .flatMap((m) => m.lessons)
-          .find((l) => l.id === pointerLessonId)?.slug ?? null);
-
-  return resolveResumeTarget({
-    course: toGateCourse(details),
+  return resolveResumeTargetForLevel({
+    details,
     watched,
-    pointerLessonSlug,
+    pointerLessonId,
+    level,
     bypassLocks,
   });
 }

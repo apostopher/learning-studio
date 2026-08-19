@@ -38,6 +38,30 @@ export async function getCurrentLevel(
   return row?.level ?? 'basic';
 }
 
+/**
+ * Every course this pilot has a level row in, keyed by course id.
+ *
+ * One query rather than N: `getMyCourses` needs a level per card to decide
+ * where each card links, and a per-course round trip there would be one query
+ * per subscribed course on the /app critical path. DISTINCT ON for the same
+ * reason `listUsersWithLevels` uses it — "newest row per (user, course)" is a
+ * ranking, not something a drizzle join expresses cleanly.
+ *
+ * A course absent from the map has no rows at all; callers should read that as
+ * 'basic', matching `getCurrentLevel`'s fallback.
+ */
+export async function getCurrentLevelsByCourse(
+  userId: string,
+): Promise<Map<number, UserLevel>> {
+  const rows = await db.execute<{ course_id: number; level: UserLevel }>(sql`
+    SELECT DISTINCT ON (course_id) course_id, level
+    FROM user_levels
+    WHERE user_id = ${userId}
+    ORDER BY course_id, created_at DESC, id DESC
+  `);
+  return new Map(rows.rows.map((row) => [row.course_id, row.level]));
+}
+
 /** Full history for one (user, course), newest first. */
 export async function listLevelHistory(
   userId: string,
