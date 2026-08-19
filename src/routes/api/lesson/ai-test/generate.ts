@@ -44,6 +44,14 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     ) {
       return new Response('Forbidden', { status: 403 });
     }
+    // Outside the pilot's level — refused in BOTH out-of-tier cases, read-only
+    // included. Generating a debrief is new assessment work, and an archive
+    // view must not start fresh work for a tier the pilot has moved past.
+    // Placed before the source lookup and the model call, so a refusal costs
+    // no tokens. Opaque 403 for the anti-enumeration reason above.
+    if (gate.outOfTier) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     const source = await resolveDebriefSource(lessonSlug);
     if (!source) {

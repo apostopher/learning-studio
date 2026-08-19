@@ -38,6 +38,44 @@ beforeEach(() => {
   getLessonIdBySlug.mockResolvedValue(10);
 });
 
+/**
+ * Out-of-tier lessons are refused here in BOTH cases, read-only included.
+ * Progress rows are what the gate reads to decide what has been watched, so a
+ * read-only archive view that could write them would move the pilot's live
+ * progress from a tier they have moved past. The client stops reporting in
+ * read-only mode; these assert the half that does not depend on the client.
+ */
+describe('out-of-tier progress reports', () => {
+  it('403s a never-completed out-of-tier lesson without writing', async () => {
+    evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      level: 'intermediate',
+      outOfTier: { readOnly: false },
+      lessonLock: { kind: 'open' },
+    });
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', progress: 50 }),
+    );
+    expect(res.status).toBe(403);
+    expect(recordLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('403s a COMPLETED out-of-tier lesson without writing', async () => {
+    // Read-only playback is allowed; recording that it happened is not.
+    evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+      lessonLock: { kind: 'open' },
+    });
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', progress: 95 }),
+    );
+    expect(res.status).toBe(403);
+    expect(recordLessonProgress).not.toHaveBeenCalled();
+  });
+});
+
 describe('reportVideoProgressHandler', () => {
   it('401 when not authenticated', async () => {
     getSession.mockResolvedValueOnce(null);

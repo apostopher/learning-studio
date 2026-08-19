@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonPlayback } from '#/db/lesson-playback';
-import { PlaybackError } from '#/lib/video-providers/errors';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import { PlaybackError } from '#/lib/video-providers/errors';
 
 /**
  * Provider-agnostic playback for the learner player.
@@ -37,6 +37,22 @@ export async function getLessonPlaybackHandler(
       lessonSlug,
     });
     if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
+      return new Response('Forbidden', { status: 403 });
+    }
+    // Outside the pilot's level. A lesson they COMPLETED at an earlier level
+    // still plays: the read-only page exists to show them their own earlier
+    // work, and a read-only lesson behind a dead player is a broken promise.
+    // Nothing on this path writes — the milestone beacon posts to
+    // /api/user/report-video-progress, which refuses out-of-tier lessons
+    // outright, so watching an archive records nothing against it.
+    //
+    // Refused with the same opaque 403 as every other reason above, NOT with a
+    // named `out-of-tier` body: naming it would tell any signed-in caller that
+    // a slug exists and merely sits in another tier, which is the enumeration
+    // oracle the uniform 403 exists to deny. The lesson page learns the reason
+    // from /api/lesson/material, the endpoint that already distinguishes its
+    // refusals.
+    if (gate.outOfTier && !gate.outOfTier.readOnly) {
       return new Response('Forbidden', { status: 403 });
     }
     const playback = await getLessonPlayback(lessonSlug, {

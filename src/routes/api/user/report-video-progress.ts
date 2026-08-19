@@ -49,6 +49,15 @@ export async function reportVideoProgressHandler(
   if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
     return new Response('Forbidden', { status: 403 });
   }
+  // Outside the pilot's level — refused in BOTH out-of-tier cases, read-only
+  // included. This is the write the archive view must never perform: video
+  // progress rows are what the gate reads to decide what has been watched, so
+  // recording them against a lesson from another tier would let a read-only
+  // view move the pilot's live progress. The client stops reporting in
+  // read-only mode; this is the half that does not depend on the client.
+  if (gate.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
+  }
 
   const lessonId = await getLessonIdBySlug(parsed.data.lessonSlug);
   if (lessonId === null) {

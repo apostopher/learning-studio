@@ -63,6 +63,13 @@ export async function evaluateAnswerHandler(
     ) {
       return new Response('Forbidden', { status: 403 });
     }
+    // Outside the pilot's level — refused in BOTH out-of-tier cases, read-only
+    // included, for the same reason as the generate route: grading a free-text
+    // answer is new assessment work against a tier the pilot has moved past.
+    // Before the source lookup and the grader, so a refusal costs no tokens.
+    if (gate.outOfTier) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     const source = await resolveDebriefSource(lessonSlug);
     if (!source) {

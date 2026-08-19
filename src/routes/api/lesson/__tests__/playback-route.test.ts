@@ -36,6 +36,41 @@ beforeEach(() => {
   });
 });
 
+/**
+ * Out-of-tier lessons. The gate reports `lessonLock: open` for these — the
+ * course is filtered to the pilot's level before the locks are evaluated — so
+ * the guard above cannot catch them and this branch is the only thing between
+ * a pilot and a signed, directly-playable URL for content outside their level.
+ */
+describe('out-of-tier playback', () => {
+  it('403s a never-completed out-of-tier lesson without minting a URL', async () => {
+    m.evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      level: 'intermediate',
+      outOfTier: { readOnly: false },
+      lessonLock: { kind: 'open' },
+    });
+    expect((await getLessonPlaybackHandler(req('l1'))).status).toBe(403);
+    // The whole point: a 403 that had already resolved the URL would have
+    // handed the provider request out anyway.
+    expect(m.getLessonPlayback).not.toHaveBeenCalled();
+  });
+
+  it('still plays a lesson completed at an earlier level', async () => {
+    // The read-only page exists to show the pilot their own earlier work. A
+    // dead player there would be a broken promise, and nothing on this path
+    // writes — the milestone beacon is refused separately.
+    m.evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+      lessonLock: { kind: 'open' },
+    });
+    expect((await getLessonPlaybackHandler(req('l1'))).status).toBe(200);
+    expect(m.getLessonPlayback).toHaveBeenCalledOnce();
+  });
+});
+
 describe('getLessonPlaybackHandler', () => {
   it('401s an anonymous caller before resolving anything', async () => {
     m.getSession.mockResolvedValueOnce(null);
