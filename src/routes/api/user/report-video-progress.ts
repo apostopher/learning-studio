@@ -4,6 +4,8 @@ import { getLessonIdBySlug } from '#/db/lesson-access';
 import { recordLessonProgress } from '#/db/videos-progress';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import type { Promotion } from '#/lib/promotion.server';
+import { maybePromote } from '#/lib/promotion.server';
 
 const reportVideoProgressSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -75,7 +77,27 @@ export async function reportVideoProgressHandler(
     return Response.json({ error: 'Failed to save progress' }, { status: 500 });
   }
 
-  return Response.json({ message: 'Video progress saved' }, { status: 201 });
+  // Best-effort: a promotion-check failure must never fail the progress write
+  // the pilot actually made. This route is the video-milestone beacon, fired
+  // repeatedly during playback — `maybePromote`'s early-out at the top rung is
+  // what keeps that affordable.
+  let promotion: Promotion | null = null;
+  try {
+    promotion = await maybePromote({
+      userId: session.user.id,
+      courseSlug: gate.courseSlug,
+    });
+  } catch (error) {
+    console.error(
+      'Promotion check failed; progress was still recorded.',
+      error,
+    );
+  }
+
+  return Response.json(
+    { message: 'Video progress saved', promotion },
+    { status: 201 },
+  );
 }
 
 export const Route = createFileRoute('/api/user/report-video-progress')({

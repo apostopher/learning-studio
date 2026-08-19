@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
+import { getCourseSlugForLesson } from '#/db/lesson-access';
 import { saveLessonQuizAnswers } from '#/db/lesson-quiz';
 import { auth } from '#/lib/auth';
+import type { Promotion } from '#/lib/promotion.server';
+import { maybePromote } from '#/lib/promotion.server';
 import { CourseLessonQuizAnswersSchema } from '#/types';
 
 const SubmitQuizInputSchema = z.object({
@@ -39,7 +42,28 @@ export async function submitLessonQuizHandler(
       lessonSlug: parsed.data.lessonSlug,
       answers: parsed.data.answers,
     });
-    return Response.json(row);
+
+    // Best-effort: a promotion-check failure must never fail the quiz
+    // attempt the pilot just recorded. `course` is null only when the lesson
+    // itself doesn't exist/isn't available, in which case there is no course
+    // to promote in.
+    let promotion: Promotion | null = null;
+    const course = await getCourseSlugForLesson(parsed.data.lessonSlug);
+    if (course) {
+      try {
+        promotion = await maybePromote({
+          userId: session.user.id,
+          courseSlug: course.courseSlug,
+        });
+      } catch (error) {
+        console.error(
+          'Promotion check failed; the quiz attempt was still recorded.',
+          error,
+        );
+      }
+    }
+
+    return Response.json({ ...row, promotion });
   } catch (error) {
     console.error('Failed to save lesson quiz answers:', error);
     return Response.json(

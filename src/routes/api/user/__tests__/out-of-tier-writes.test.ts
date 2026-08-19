@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   evaluateLessonGate: vi.fn(),
   recordLastViewedLesson: vi.fn(),
   recordLessonSectionTap: vi.fn(),
+  maybePromote: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -18,6 +19,9 @@ vi.mock('#/db/course-last-viewed', () => ({
 vi.mock('#/db/lesson-visit', () => ({
   recordLessonSectionTap: m.recordLessonSectionTap,
 }));
+// lesson-section calls maybePromote after a successful tap — stubbed so this
+// file never reaches the real db/email modules it pulls in transitively.
+vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
 
 import { recordLastViewedHandler } from '../last-viewed';
 import { recordLessonSectionHandler } from '../lesson-section';
@@ -46,6 +50,7 @@ beforeEach(() => {
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.recordLastViewedLesson.mockResolvedValue(true);
   m.recordLessonSectionTap.mockResolvedValue(undefined);
+  m.maybePromote.mockResolvedValue(null);
 });
 
 /**

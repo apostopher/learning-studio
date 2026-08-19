@@ -4,6 +4,8 @@ import { recordLessonSectionTap } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
+import type { Promotion } from '#/lib/promotion.server';
+import { maybePromote } from '#/lib/promotion.server';
 
 const sectionTapSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -83,7 +85,28 @@ export async function recordLessonSectionHandler(
     return Response.json({ error: 'Failed to save' }, { status: 500 });
   }
 
-  return Response.json({ message: 'Section recorded' }, { status: 201 });
+  // Best-effort: a promotion-check failure must never fail the tap the pilot
+  // actually recorded. `gate` is null only when the lesson itself doesn't
+  // exist/isn't available, in which case there is no course to promote in.
+  let promotion: Promotion | null = null;
+  if (gate) {
+    try {
+      promotion = await maybePromote({
+        userId: session.user.id,
+        courseSlug: gate.courseSlug,
+      });
+    } catch (error) {
+      console.error(
+        'Promotion check failed; progress was still recorded.',
+        error,
+      );
+    }
+  }
+
+  return Response.json(
+    { message: 'Section recorded', promotion },
+    { status: 201 },
+  );
 }
 
 export const Route = createFileRoute('/api/user/lesson-section')({

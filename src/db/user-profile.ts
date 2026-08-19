@@ -42,3 +42,13 @@ export async function ensureUserProfile(
     .values({ userId, email })
     .onConflictDoNothing();
 }
+
+/** This account's email, or `null` if it has no profile row. */
+export async function getUserEmail(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ email: userProfileTable.email })
+    .from(userProfileTable)
+    .where(eq(userProfileTable.userId, userId))
+    .limit(1);
+  return row?.email ?? null;
+}

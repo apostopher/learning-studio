@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   evaluateMCQ: vi.fn(),
   saveTestResult: vi.fn(),
+  maybePromote: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -24,6 +25,9 @@ vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: m.evaluateFreeText,
   evaluateMCQ: m.evaluateMCQ,
 }));
+// save-results calls maybePromote after a successful write — stubbed so this
+// file never reaches the real db/email modules it pulls in transitively.
+vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
 
 // `#/ai/schemas` is deliberately NOT mocked: the real AITestQuestionSchema has
 // to run, or a malformed question in these fixtures would 400 before ever
@@ -64,6 +68,7 @@ beforeEach(() => {
   m.generateTest.mockResolvedValue({ lessonSlug: 'l1', questions: [] });
   m.evaluateFreeText.mockResolvedValue({ score: 80 });
   m.saveTestResult.mockResolvedValue({ id: 1 });
+  m.maybePromote.mockResolvedValue(null);
 });
 
 /**

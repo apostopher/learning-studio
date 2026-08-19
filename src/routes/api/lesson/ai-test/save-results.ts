@@ -4,6 +4,8 @@ import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
 import { saveTestResult } from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import type { Promotion } from '#/lib/promotion.server';
+import { maybePromote } from '#/lib/promotion.server';
 
 const SaveResultsInputSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -78,7 +80,29 @@ export async function saveTestResultsHandler(
       answers: evaluations,
       totalScore,
     });
-    return Response.json(result);
+
+    // Best-effort: a promotion-check failure must never fail the debrief the
+    // pilot just completed. `gate` is null only when the lesson itself
+    // doesn't exist/isn't available, in which case there is no course to
+    // promote in. Checked against the real session user, not the 'dev-user'
+    // placeholder above — this is already correct for when that TODO is
+    // fixed.
+    let promotion: Promotion | null = null;
+    if (gate) {
+      try {
+        promotion = await maybePromote({
+          userId: session.user.id,
+          courseSlug: gate.courseSlug,
+        });
+      } catch (error) {
+        console.error(
+          'Promotion check failed; the debrief was still saved.',
+          error,
+        );
+      }
+    }
+
+    return Response.json({ ...result, promotion });
   } catch (error) {
     console.error('Failed to save test result:', error);
     return Response.json(

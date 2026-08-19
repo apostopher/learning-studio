@@ -6,16 +6,23 @@ const {
   recordLessonProgress,
   evaluateLessonGate,
   getLessonIdBySlug,
+  maybePromote,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   recordLessonProgress: vi.fn(),
   evaluateLessonGate: vi.fn(),
   getLessonIdBySlug: vi.fn(),
+  maybePromote: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/db/videos-progress', () => ({ recordLessonProgress }));
 vi.mock('#/lib/lesson-gating.server', () => ({ evaluateLessonGate }));
 vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
+// The route calls maybePromote after every successful write — stubbed so
+// this file never reaches the real db/email modules it pulls in
+// transitively (this route is the highest-frequency caller, the video
+// beacon).
+vi.mock('#/lib/promotion.server', () => ({ maybePromote }));
 
 import { reportVideoProgressHandler } from '../report-video-progress';
 
@@ -36,6 +43,7 @@ beforeEach(() => {
     lessonLock: { kind: 'open' },
   });
   getLessonIdBySlug.mockResolvedValue(10);
+  maybePromote.mockResolvedValue(null);
 });
 
 /**
