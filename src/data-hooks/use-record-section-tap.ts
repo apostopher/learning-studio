@@ -1,5 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
+import { useSetAtom } from 'jotai';
 import { useCallback, useRef } from 'react';
+import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
 import {
   isTrackedLessonSection,
   type TrackedLessonSection,
@@ -19,16 +21,25 @@ export interface RecordSectionTapInput {
  * survive and a real request buys a status code and a retry. That matters
  * here: this is the only signal the sections component has, and a beacon's
  * failure is both invisible and unretryable.
+ *
+ * `/api/user/lesson-section` returns a `promotion` alongside the save, so
+ * `parse` pulls it out and the pending-promotion atom gets set on success.
  */
 export function useRecordSectionTap() {
+  const setPromotion = useSetAtom(pendingPromotionAtom);
+
   return useMutation({
     mutationFn: (input: RecordSectionTapInput) =>
       saveJson({
         url: '/api/user/lesson-section',
         method: 'POST',
         body: input,
+        parse: extractPromotion,
       }),
     retry: 1,
+    onSuccess: (promotion) => {
+      if (promotion) setPromotion(promotion);
+    },
   });
 }
 

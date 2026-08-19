@@ -13,6 +13,7 @@ import {
   testResultsAtomFamily,
   totalScoreAtom,
 } from '#/atoms/lesson-ai-test';
+import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
 
 // Read hooks — thin wrappers over atoms
 export const useCurrentTest = () => useAtomValue(currentTestAtom);
@@ -130,9 +131,14 @@ export function useEvaluateAnswer() {
 }
 
 // Mutation: Save completed test results
+//
+// `/api/lesson/ai-test/save-results` returns `{ ...result, promotion }` —
+// `promotion` is read out of the raw json and pushed straight into the
+// pending-promotion atom via `set`, the same seam every other progress
+// mutation in this file already writes through.
 export function useSaveResults() {
   return useAtomCallback(
-    useCallback(async (get) => {
+    useCallback(async (get, set) => {
       const test = get(currentTestAtom);
       const evaluations = get(evaluationsAtom);
       const totalScore = get(totalScoreAtom);
@@ -151,7 +157,10 @@ export function useSaveResults() {
       });
 
       if (!response.ok) throw new Error('Failed to save results');
-      return response.json();
+      const json = await response.json();
+      const promotion = extractPromotion(json);
+      if (promotion) set(pendingPromotionAtom, promotion);
+      return json;
     }, []),
   );
 }

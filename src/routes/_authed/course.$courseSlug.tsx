@@ -1,25 +1,30 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createFileRoute,
   Outlet,
   redirect,
   useParams,
-} from "@tanstack/react-router";
-import { useAtomValue, useSetAtom } from "jotai";
-import { useEffect, useRef } from "react";
-import { chatWidgetModeAtom, chatWidgetOpenAtom } from "#/atoms/chat-widget";
-import { subscribedSlugsQueryOptions } from "#/data-hooks/course-access-queries";
-import { useOnboardingStatus } from "#/data-hooks/use-onboarding-status";
-import { shouldAutoOpenOnboarding } from "#/lib/onboarding-auto-open";
-import { AppShell } from "../../components/app-shell";
-import { AppShellFooter } from "../../components/app-shell-footer";
-import { AppShellSkeleton } from "../../components/app-shell-skeleton";
-import { CourseHeaderNav } from "../../components/course-header-nav";
-import { LessonHeaderWrapper } from "../../components/lesson-main";
-import { LogoLink } from "../../components/logo-link";
-import { CourseSidebarWrapper } from "../../components/sidebar/course-sidebar-wrapper";
-import { SignOutButtonContainer } from "../../components/sign-out-button-container";
+} from '@tanstack/react-router';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useCallback, useEffect, useRef } from 'react';
+import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
+import { pendingPromotionAtom } from '#/atoms/promotion';
+import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
+import { dataKeys } from '#/data-hooks/keys';
+import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
+import { queryKeys } from '#/hooks/data/keys';
+import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
+import { AppShell } from '../../components/app-shell';
+import { AppShellFooter } from '../../components/app-shell-footer';
+import { AppShellSkeleton } from '../../components/app-shell-skeleton';
+import { CourseHeaderNav } from '../../components/course-header-nav';
+import { LessonHeaderWrapper } from '../../components/lesson-main';
+import { LogoLink } from '../../components/logo-link';
+import { PromotionInterstitial } from '../../components/promotion-interstitial';
+import { CourseSidebarWrapper } from '../../components/sidebar/course-sidebar-wrapper';
+import { SignOutButtonContainer } from '../../components/sign-out-button-container';
 
-export const Route = createFileRoute("/_authed/course/$courseSlug")({
+export const Route = createFileRoute('/_authed/course/$courseSlug')({
   beforeLoad: async ({ context, params }) => {
     const slugs = await context.queryClient.ensureQueryData(
       subscribedSlugsQueryOptions(),
@@ -34,7 +39,7 @@ export const Route = createFileRoute("/_authed/course/$courseSlug")({
       // 3. Redirecting *both* the bogus-slug and the not-enrolled case to
       //    the same place avoids leaking which slugs are real courses.
       //    Distinguishing them would let someone enumerate the catalogue.
-      throw redirect({ to: "/app" });
+      throw redirect({ to: '/app' });
     }
   },
   component: CourseLayout,
@@ -110,7 +115,7 @@ function useAutoOpenOnboarding(courseSlug: string) {
         widgetMode,
       })
     ) {
-      setMode({ kind: "onboarding", courseSlug });
+      setMode({ kind: 'onboarding', courseSlug });
       setOpen(true);
     }
   }, [
@@ -125,9 +130,43 @@ function useAutoOpenOnboarding(courseSlug: string) {
   ]);
 }
 
+/**
+ * Reads the pending promotion set by any of the four progress mutations
+ * (section tap, video milestone, quiz submit, debrief save) and returns the
+ * dismiss handler for the interstitial that announces it.
+ *
+ * Mounted once here, on the layout, rather than per-lesson: the layout stays
+ * mounted across every lesson within a course visit, so a promotion earned on
+ * one lesson is still announced even if the mutation that earned it belongs
+ * to a component that has since unmounted (e.g. the tab that fired the
+ * winning section tap).
+ *
+ * On dismiss: clear the atom, then invalidate both queries that visibility
+ * depends on. `myLevel` drives the sidebar's level-gated lesson list;
+ * `courseDetails` is the cached course tree itself. Invalidating only one
+ * would leave the other showing the pre-promotion lesson set — exactly the
+ * "my finished work vanished" read this dialog exists to prevent.
+ */
+function usePromotionInterstitial(courseSlug: string) {
+  const promotion = useAtomValue(pendingPromotionAtom);
+  const setPromotion = useSetAtom(pendingPromotionAtom);
+  const queryClient = useQueryClient();
+
+  const dismiss = useCallback(() => {
+    setPromotion(null);
+    queryClient.invalidateQueries({ queryKey: dataKeys.myLevel(courseSlug) });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.courseDetails(courseSlug),
+    });
+  }, [courseSlug, queryClient, setPromotion]);
+
+  return { promotion, dismiss };
+}
+
 function CourseLayout() {
   const { courseSlug } = Route.useParams();
   useAutoOpenOnboarding(courseSlug);
+  const { promotion, dismiss } = usePromotionInterstitial(courseSlug);
   // Loose read: these two params belong to the deeper lesson route, not this
   // layout's own path. Their presence is how the layout knows which leaf is
   // active — the same idiom CourseSidebarWrapper already uses for the same
@@ -143,44 +182,49 @@ function CourseLayout() {
   };
 
   return (
-    <AppShell
-      // The shell owns the viewport, so the logo goes in the header's aside
-      // cell rather than in a second header above it. `ms-4` mirrors the
-      // `pe-4` on headerMain so logo and sign-out sit at symmetric insets.
-      // Margin rather than padding, and `w-fit` rather than filling the
-      // cell: the aside cell clips overflow (`.app-shell__header-aside`),
-      // so a link stretched to the full cell box has its focus ring painted
-      // right at the clip edge (invisible) and a ~280px dead area beside the
-      // logo that still navigates. Margin keeps the ring's box inset from
-      // the clip boundary on every side, and `w-fit` shrinks the hit area to
-      // the logo itself.
-      headerAside={<LogoLink className="my-4 ms-4 flex w-fit items-center" />}
-      // Always rendered now, because the nav sits at the trailing end on EVERY
-      // leaf — including course home and the library, neither of which puts a
-      // title here. The leaf's title stays in its own cell rather than beside
-      // the nav, so LessonHeader's role="status" live region never wraps the
-      // links and a loading announcement cannot swallow them.
-      headerMain={
-        <div className="flex h-full w-full items-center justify-between gap-4 pe-4">
-          <div className="flex min-w-0 flex-1 items-center">
-            {moduleSlug != null && lessonSlug != null ? (
-              <LessonHeaderWrapper
-                courseSlug={courseSlug}
-                moduleSlug={moduleSlug}
-                lessonSlug={lessonSlug}
-              />
-            ) : null}
-          </div>
-          <CourseHeaderNav courseSlug={courseSlug} />
-          {/* Trailing-most, after the section nav: sign-out is an exit from
+    <>
+      {/* Mounted once per course visit, not per lesson: see
+          usePromotionInterstitial's doc comment above. */}
+      <PromotionInterstitial promotion={promotion} onDismiss={dismiss} />
+      <AppShell
+        // The shell owns the viewport, so the logo goes in the header's aside
+        // cell rather than in a second header above it. `ms-4` mirrors the
+        // `pe-4` on headerMain so logo and sign-out sit at symmetric insets.
+        // Margin rather than padding, and `w-fit` rather than filling the
+        // cell: the aside cell clips overflow (`.app-shell__header-aside`),
+        // so a link stretched to the full cell box has its focus ring painted
+        // right at the clip edge (invisible) and a ~280px dead area beside the
+        // logo that still navigates. Margin keeps the ring's box inset from
+        // the clip boundary on every side, and `w-fit` shrinks the hit area to
+        // the logo itself.
+        headerAside={<LogoLink className="my-4 ms-4 flex w-fit items-center" />}
+        // Always rendered now, because the nav sits at the trailing end on EVERY
+        // leaf — including course home and the library, neither of which puts a
+        // title here. The leaf's title stays in its own cell rather than beside
+        // the nav, so LessonHeader's role="status" live region never wraps the
+        // links and a loading announcement cannot swallow them.
+        headerMain={
+          <div className="flex h-full w-full items-center justify-between gap-4 pe-4">
+            <div className="flex min-w-0 flex-1 items-center">
+              {moduleSlug != null && lessonSlug != null ? (
+                <LessonHeaderWrapper
+                  courseSlug={courseSlug}
+                  moduleSlug={moduleSlug}
+                  lessonSlug={lessonSlug}
+                />
+              ) : null}
+            </div>
+            <CourseHeaderNav courseSlug={courseSlug} />
+            {/* Trailing-most, after the section nav: sign-out is an exit from
               the whole app, not another destination within it, so it sits
               outside the nav landmark rather than reading as a fifth tab. */}
-          <SignOutButtonContainer />
-        </div>
-      }
-      aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
-      main={<Outlet />}
-      footer={<AppShellFooter />}
-    />
+            <SignOutButtonContainer />
+          </div>
+        }
+        aside={<CourseSidebarWrapper courseSlug={courseSlug} />}
+        main={<Outlet />}
+        footer={<AppShellFooter />}
+      />
+    </>
   );
 }

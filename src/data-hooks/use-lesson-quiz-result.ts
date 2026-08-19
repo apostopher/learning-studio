@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSetAtom } from 'jotai';
 import { z } from 'zod';
+import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
 import {
   type CourseLessonQuizAnswers,
   CourseLessonQuizAnswersSchema,
@@ -55,9 +57,16 @@ export function useLessonQuizResult(lessonSlug: string) {
  * tab reads as completed without a refetch. Deliberately no `invalidateQueries`
  * — the response is the row, and a refetch would only re-fetch what we already
  * hold.
+ *
+ * The route returns `{ ...row, promotion }`. `lessonQuizResultSchema` doesn't
+ * declare `promotion`, so `.parse` on the raw response would silently strip
+ * it (zod's default `object()` mode drops unrecognised keys) — `promotion` is
+ * read from the same raw json separately via `extractPromotion` so it never
+ * gets dropped on the floor.
  */
 export function useSubmitLessonQuiz(lessonSlug: string) {
   const queryClient = useQueryClient();
+  const setPromotion = useSetAtom(pendingPromotionAtom);
 
   return useMutation({
     mutationFn: async (answers: CourseLessonQuizAnswers) => {
@@ -69,10 +78,15 @@ export function useSubmitLessonQuiz(lessonSlug: string) {
       if (!res.ok) {
         throw new Error(`Failed to save quiz answers (${res.status})`);
       }
-      return lessonQuizResultSchema.parse(await res.json());
+      const json = await res.json();
+      return {
+        row: lessonQuizResultSchema.parse(json),
+        promotion: extractPromotion(json),
+      };
     },
-    onSuccess: (row) => {
+    onSuccess: ({ row, promotion }) => {
       queryClient.setQueryData(dataKeys.lessonQuizResult(lessonSlug), row);
+      if (promotion) setPromotion(promotion);
     },
   });
 }
