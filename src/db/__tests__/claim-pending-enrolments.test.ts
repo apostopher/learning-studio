@@ -1,5 +1,16 @@
 // @vitest-environment node
+import { StringChunk } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * The bound parameters of a drizzle `sql` template — the interpolated values,
+ * in order, with the literal SQL text chunks filtered out. This is how the
+ * test can see whether `${options.userId}` and `${row.courseId}` actually
+ * landed in the query, as opposed to merely being called with *something*.
+ */
+function boundParams(query: { queryChunks: unknown[] }): unknown[] {
+  return query.queryChunks.filter((chunk) => !(chunk instanceof StringChunk));
+}
 
 const db = vi.hoisted(() => ({ transaction: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
@@ -37,7 +48,7 @@ function makeTx(pendingRows: unknown[]) {
     insertedInto: undefined as unknown,
     insertedValues: undefined as unknown,
     updateCalled: false,
-    executeCalls: 0,
+    executedParams: [] as unknown[][],
   };
   const selectChain = {
     from: () => selectChain,
@@ -64,8 +75,8 @@ function makeTx(pendingRows: unknown[]) {
       return insertChain;
     },
     update: () => updateChain,
-    execute: () => {
-      calls.executeCalls += 1;
+    execute: (query: { queryChunks: unknown[] }) => {
+      calls.executedParams.push(boundParams(query));
       return Promise.resolve(undefined);
     },
   };
@@ -101,9 +112,12 @@ describe('claimPendingEnrolments', () => {
       { userId: 'user-1', courseId: 7, grantedBy: 'admin-9' },
       { userId: 'user-1', courseId: 8, grantedBy: 'admin-9' },
     ]);
-    // One level row per claimed course — a pilot who claims an entitlement
-    // but never gets a level row renders an empty course with no error.
-    expect(calls.executeCalls).toBe(2);
+    // One level row per claimed course, carrying this user's id and that
+    // course's id — a swapped or dropped id would silently misfile the row.
+    expect(calls.executedParams).toEqual([
+      ['user-1', 7, 'user-1', 7],
+      ['user-1', 8, 'user-1', 8],
+    ]);
   });
 
   it('credits the admin who pre-assigned it, not the sign-in', async () => {
@@ -145,6 +159,6 @@ describe('claimPendingEnrolments', () => {
     expect(claimed).toBe(0);
     expect(calls.insertedInto).toBeUndefined();
     expect(calls.updateCalled).toBe(false);
-    expect(calls.executeCalls).toBe(0);
+    expect(calls.executedParams).toEqual([]);
   });
 });
