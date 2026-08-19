@@ -1,9 +1,14 @@
 import { Loader2, NotebookPen } from 'lucide-react';
+import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 type DebriefIntroProps = {
   loading: boolean;
   onStart: () => void;
+  /** Completed at an earlier level — Start must be disabled, not silently inert. */
+  readOnly: boolean;
 };
+
+const REASON_ID = 'debrief-intro-readonly-reason';
 
 /**
  * The Debrief tab before a debrief has been generated.
@@ -14,7 +19,11 @@ type DebriefIntroProps = {
  * entry point (and the only one on a lesson with no video), it needs a state
  * that says what it is and how to start it.
  */
-export const DebriefIntro = ({ loading, onStart }: DebriefIntroProps) => (
+export const DebriefIntro = ({
+  loading,
+  onStart,
+  readOnly,
+}: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
     {/*
       No longer "generated from its key points": on a lesson with no material
@@ -28,7 +37,8 @@ export const DebriefIntro = ({ loading, onStart }: DebriefIntroProps) => (
     <button
       type="button"
       onClick={onStart}
-      disabled={loading}
+      disabled={loading || readOnly}
+      aria-describedby={readOnly ? REASON_ID : undefined}
       className="inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10 disabled:opacity-60"
     >
       <span aria-hidden="true" className="inline-flex">
@@ -40,5 +50,12 @@ export const DebriefIntro = ({ loading, onStart }: DebriefIntroProps) => (
       </span>
       {loading ? 'Preparing debrief…' : 'Start debrief'}
     </button>
+    {/* Visible, not sr-only: a locked control states its reason where anyone
+        can read it, not only where a screen reader can. */}
+    {readOnly && (
+      <p id={REASON_ID} className="text-xs text-tertiary">
+        {READ_ONLY_CONTROL_REASON}
+      </p>
+    )}
   </div>
 );

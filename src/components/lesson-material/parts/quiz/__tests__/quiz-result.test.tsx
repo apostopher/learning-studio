@@ -34,6 +34,7 @@ const props = {
   onRetrySave: () => {},
   onRetake: () => {},
   reducedMotion: true,
+  readOnly: false,
 };
 
 describe('QuizResult', () => {
@@ -86,5 +87,41 @@ describe('QuizResult', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Retake quiz/ }));
     expect(onRetake).toHaveBeenCalledOnce();
+  });
+});
+
+describe('QuizResult — read-only', () => {
+  it('disables Retake and never fires it, even if clicked', async () => {
+    const onRetake = vi.fn();
+    render(<QuizResult {...props} onRetake={onRetake} readOnly={true} />);
+
+    const button = screen.getByRole('button', { name: /Retake quiz/ });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+
+    await userEvent.click(button);
+    expect(onRetake).not.toHaveBeenCalled();
+  });
+
+  it('states the reason where assistive tech reaches it, not just visually', () => {
+    render(<QuizResult {...props} readOnly={true} />);
+
+    const button = screen.getByRole('button', { name: /Retake quiz/ });
+    const describedById = button.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+
+    const reason = document.getElementById(describedById as string);
+    expect(reason).not.toBeNull();
+    expect(reason?.textContent).toContain(
+      'you completed this lesson at an earlier level',
+    );
+    // Visible, not sr-only — findable without a screen reader too.
+    expect(reason?.className).not.toContain('sr-only');
+  });
+
+  it('carries no reason (and no aria-describedby) when not read-only', () => {
+    render(<QuizResult {...props} readOnly={false} />);
+    const button = screen.getByRole('button', { name: /Retake quiz/ });
+    expect(button.hasAttribute('aria-describedby')).toBe(false);
+    expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 });

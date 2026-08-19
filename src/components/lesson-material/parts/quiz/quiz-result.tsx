@@ -6,6 +6,7 @@ import {
   quizOptionState,
   scoreQuizAnswers,
 } from '#/lib/lesson-quiz';
+import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 import type { CourseLessonQuizAnswers } from '#/types';
 import { QuizOption } from './quiz-option';
 
@@ -18,7 +19,11 @@ type QuizResultProps = {
   onRetrySave: () => void;
   onRetake: () => void;
   reducedMotion: boolean;
+  /** Completed at an earlier level — Retake must be disabled, not silently inert. */
+  readOnly: boolean;
 };
+
+const REASON_ID = 'quiz-result-readonly-reason';
 
 const scoreToneClass = ({ correct, total }: QuizScore) => {
   if (total > 0 && correct === total) {
@@ -44,6 +49,7 @@ export const QuizResult = ({
   onRetrySave,
   onRetake,
   reducedMotion,
+  readOnly,
 }: QuizResultProps) => {
   const score = scoreQuizAnswers(answers);
 
@@ -60,11 +66,19 @@ export const QuizResult = ({
         <button
           type="button"
           onClick={onRetake}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3"
+          disabled={readOnly}
+          aria-describedby={readOnly ? REASON_ID : undefined}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3 disabled:opacity-60"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           Retake quiz
         </button>
+        {/* Visible, not sr-only — same reasoning as DebriefIntro's reason text. */}
+        {readOnly && (
+          <p id={REASON_ID} className="text-xs text-tertiary">
+            {READ_ONLY_CONTROL_REASON}
+          </p>
+        )}
       </div>
 
       {/* Never silently swallow a failed save: without this the student walks

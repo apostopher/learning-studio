@@ -272,6 +272,7 @@ const LessonQuizClient = ({
       onNext={advance}
       onRetake={handleRetake}
       onRetrySave={handleRetrySave}
+      readOnly={readOnly}
     />
   );
 };

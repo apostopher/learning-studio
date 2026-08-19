@@ -1,6 +1,7 @@
 import { Collapsible } from '@base-ui/react/collapsible';
 import { ChevronDown, RotateCcw } from 'lucide-react';
 import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
+import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
@@ -8,7 +9,11 @@ type ScoreReportProps = {
   questions: AITestQuestion[];
   evaluations: AIEvaluationResult[];
   onRetake: () => void;
+  /** Completed at an earlier level — Retake must be disabled, not silently inert. */
+  readOnly: boolean;
 };
+
+const REASON_ID = 'score-report-readonly-reason';
 
 const gradeLabel = (score: number): string => {
   if (score >= 90) return 'Excellent';
@@ -30,6 +35,7 @@ export const ScoreReport = ({
   questions,
   evaluations,
   onRetake,
+  readOnly,
 }: ScoreReportProps) => {
   const correctCount = evaluations.filter((e) => e.score >= 70).length;
 
@@ -51,11 +57,19 @@ export const ScoreReport = ({
         <button
           type="button"
           onClick={onRetake}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3"
+          disabled={readOnly}
+          aria-describedby={readOnly ? REASON_ID : undefined}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3 disabled:opacity-60"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           Retake Quiz
         </button>
+        {/* Visible, not sr-only — same reasoning as DebriefIntro's reason text. */}
+        {readOnly && (
+          <p id={REASON_ID} className="text-xs text-tertiary">
+            {READ_ONLY_CONTROL_REASON}
+          </p>
+        )}
       </div>
 
       {/* Question review */}

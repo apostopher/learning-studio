@@ -39,6 +39,8 @@ type LessonQuizProps = {
   onNext: () => void;
   onRetake: () => void;
   onRetrySave: () => void;
+  /** Completed at an earlier level — threaded to QuizResult's Retake. */
+  readOnly: boolean;
 };
 
 export const LessonQuiz = ({
@@ -53,6 +55,7 @@ export const LessonQuiz = ({
   onNext,
   onRetake,
   onRetrySave,
+  readOnly,
 }: LessonQuizProps) => {
   const reducedMotion = useReducedMotion() ?? false;
   const hasMountedSlide = useRef(false);
@@ -143,6 +146,7 @@ export const LessonQuiz = ({
                 onRetrySave={onRetrySave}
                 onRetake={onRetake}
                 reducedMotion={reducedMotion}
+                readOnly={readOnly}
               />
             ) : question ? (
               <QuizQuestion

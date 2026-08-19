@@ -90,6 +90,7 @@ export const DebriefQuizContainer = ({
           if (readOnly) return;
           void generateTest(lessonSlug);
         }}
+        readOnly={readOnly}
       />
     );
   }
@@ -106,6 +107,7 @@ export const DebriefQuizContainer = ({
           resetTest();
           await generateTest(lessonSlug);
         }}
+        readOnly={readOnly}
       />
     );
   }
