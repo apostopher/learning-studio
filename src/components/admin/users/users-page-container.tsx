@@ -71,6 +71,8 @@ export const UsersPageContainer = ({
   // The tab lives in the URL so a permissions link is shareable and survives
   // a reload, same as the search term.
   const [tab, setTab] = useQueryState('tab', { defaultValue: 'people' });
+  const [courseFilter, setCourseFilter] = useQueryState('course');
+  const [levelFilter, setLevelFilter] = useQueryState('level');
   const [openRow, setOpenRow] = useAtom(openUserRowAtom);
   const [addOpen, setAddOpen] = useAtom(addPersonOpenAtom);
   const [newEmail, setNewEmail] = useAtom(addUserEmailAtom);
@@ -170,6 +172,14 @@ export const UsersPageContainer = ({
   const errorOf = (e: unknown) =>
     e instanceof AdminUsersError ? e.message : undefined;
 
+  // A level only means something within a course, so dropping the course
+  // must drop any level filter riding on it — otherwise a stale level
+  // filter with no course would silently show nobody.
+  const handleCourseFilterChange = (next: string | null) => {
+    setCourseFilter(next);
+    if (!next) setLevelFilter(null);
+  };
+
   const handleSetLevel = levelForm.handleSubmit((values) => {
     if (!levelDraft) return;
     setLevel.mutate(
@@ -238,6 +248,11 @@ export const UsersPageContainer = ({
                   : errorOf(setEnrolment.error)
               }
               onAddPerson={canAdd ? () => setAddOpen(true) : undefined}
+              courses={courseOptions}
+              courseFilter={courseFilter}
+              onCourseFilterChange={handleCourseFilterChange}
+              levelFilter={levelFilter}
+              onLevelFilterChange={setLevelFilter}
             />
           </Tabs.Panel>
 
