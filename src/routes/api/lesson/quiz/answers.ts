@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
-import { getCourseSlugForLesson } from '#/db/lesson-access';
 import { saveLessonQuizAnswers } from '#/db/lesson-quiz';
 import { auth } from '#/lib/auth';
+import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import type { Promotion } from '#/lib/promotion.server';
 import { maybePromote } from '#/lib/promotion.server';
 import { CourseLessonQuizAnswersSchema } from '#/types';
@@ -19,6 +19,10 @@ const SubmitQuizInputSchema = z.object({
  * previous implementation of this endpoint parsed the body and then overwrote
  * `userId` with the authenticated one, which worked but left a request shape
  * that looks like it accepts a user id.
+ *
+ * The prerequisite LOCKS are deliberately not checked here, matching the
+ * other write routes: honouring them would newly 403 flows that succeed
+ * today, which is a separate decision. The LEVEL check is enforced.
  */
 export async function submitLessonQuizHandler(
   request: Request,
@@ -36,6 +40,27 @@ export async function submitLessonQuizHandler(
     );
   }
 
+  const gate = await evaluateLessonGate({
+    userId: session.user.id,
+    lessonSlug: parsed.data.lessonSlug,
+  });
+  // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
+  // and an archive view must not write anything. It matters because a saved
+  // attempt feeds `quizPlayed`, which feeds `lessonPercent`, which is exactly
+  // what the gate reads to decide `readOnly` — so an unrefused caller could
+  // POST their way from a `403 out-of-tier` to a 200 serving the full
+  // material.
+  //
+  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing
+  // on those would newly 403 flows that succeed today, which is a separate
+  // decision with its own blast radius. Refusing on `outOfTier` alone breaks
+  // nothing that currently works: every lesson ships with `levels = '{}'`, so
+  // nothing is out of tier until an author tags one — which is precisely when
+  // this should start to bite.
+  if (gate?.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   try {
     const row = await saveLessonQuizAnswers({
       userId: session.user.id,
@@ -44,16 +69,15 @@ export async function submitLessonQuizHandler(
     });
 
     // Best-effort: a promotion-check failure must never fail the quiz
-    // attempt the pilot just recorded. `course` is null only when the lesson
+    // attempt the pilot just recorded. `gate` is null only when the lesson
     // itself doesn't exist/isn't available, in which case there is no course
     // to promote in.
     let promotion: Promotion | null = null;
-    const course = await getCourseSlugForLesson(parsed.data.lessonSlug);
-    if (course) {
+    if (gate) {
       try {
         promotion = await maybePromote({
           userId: session.user.id,
-          courseSlug: course.courseSlug,
+          courseSlug: gate.courseSlug,
         });
       } catch (error) {
         console.error(
