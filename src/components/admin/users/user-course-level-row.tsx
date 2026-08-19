@@ -12,6 +12,22 @@ interface UserCourseLevelRowProps {
   history: readonly LevelHistoryRow[];
   historyOpen: boolean;
   historyLoading: boolean;
+  /**
+   * `level:update` — the select is interactive. Without it (read-only, i.e.
+   * `level:read` alone) the level renders as plain text: this file has no
+   * existing "disabled control with a stated reason" pattern to reuse, and a
+   * disabled `Select` here would need one invented just for this row, so
+   * plain text is the smaller, more honest option — the reason ("View only")
+   * is real text content, not a colour or a greyed-out affordance.
+   */
+  canEdit: boolean;
+  /**
+   * `level:read` — the history disclosure is reachable at all. A pilot's
+   * level can be visible (`level:read`) without the history endpoint being
+   * reachable if an owner grants `update` without `read`, so this is checked
+   * separately from `canEdit` rather than implied by it.
+   */
+  canViewHistory: boolean;
   /** True while a change for this course is in flight. */
   saving: boolean;
   onToggleHistory: () => void;
@@ -34,6 +50,8 @@ export const UserCourseLevelRow = ({
   history,
   historyOpen,
   historyLoading,
+  canEdit,
+  canViewHistory,
   saving,
   onToggleHistory,
   onLevelChange,
@@ -48,89 +66,104 @@ export const UserCourseLevelRow = ({
             aria-hidden="true"
           />
         )}
-        <Select.Root
-          value={level}
-          onValueChange={(next) => onLevelChange(next as UserLevel)}
-          disabled={saving}
-        >
-          <Select.Trigger
-            aria-label={`Level in ${courseName}`}
-            className="flex items-center gap-1.5 rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+        {canEdit ? (
+          <Select.Root
+            value={level}
+            onValueChange={(next) => onLevelChange(next as UserLevel)}
+            disabled={saving}
           >
-            <Select.Value>
-              {(value: UserLevel) => LEVEL_LABELS[value]}
-            </Select.Value>
-            <Select.Icon>
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
-            </Select.Icon>
-          </Select.Trigger>
-          <Select.Portal>
-            <Select.Positioner sideOffset={4} className="z-50">
-              <Select.Popup className="rounded-lg border border-gray-6 bg-gray-2 p-1 shadow-lg">
-                {USER_LEVELS.map((value) => (
-                  <Select.Item
-                    key={value}
-                    value={value}
-                    className="cursor-pointer rounded-md px-2 py-1.5 text-primary text-sm data-[highlighted]:bg-gray-4"
-                  >
-                    <Select.ItemText>{LEVEL_LABELS[value]}</Select.ItemText>
-                  </Select.Item>
-                ))}
-              </Select.Popup>
-            </Select.Positioner>
-          </Select.Portal>
-        </Select.Root>
+            <Select.Trigger
+              aria-label={`Level in ${courseName}`}
+              className="flex items-center gap-1.5 rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+            >
+              <Select.Value>
+                {(value: UserLevel) => LEVEL_LABELS[value]}
+              </Select.Value>
+              <Select.Icon>
+                <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner sideOffset={4} className="z-50">
+                <Select.Popup className="rounded-lg border border-gray-6 bg-gray-2 p-1 shadow-lg">
+                  {USER_LEVELS.map((value) => (
+                    <Select.Item
+                      key={value}
+                      value={value}
+                      className="cursor-pointer rounded-md px-2 py-1.5 text-primary text-sm data-[highlighted]:bg-gray-4"
+                    >
+                      <Select.ItemText>{LEVEL_LABELS[value]}</Select.ItemText>
+                    </Select.Item>
+                  ))}
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
+        ) : (
+          // Visible text, not a disabled control: the reason ("View only")
+          // is real text content so it reaches assistive tech the same way
+          // it reaches sighted users, rather than relying on a greyed-out
+          // appearance alone.
+          <span className="rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs">
+            {LEVEL_LABELS[level]}
+            <span className="ms-1.5 text-tertiary">View only</span>
+          </span>
+        )}
       </div>
     </div>
 
-    <button
-      type="button"
-      onClick={onToggleHistory}
-      aria-expanded={historyOpen}
-      className="mt-1 text-secondary text-xs underline underline-offset-2 hover:text-primary"
-    >
-      {historyOpen ? 'Hide history' : 'Show history'}
-    </button>
+    {canViewHistory && (
+      <>
+        <button
+          type="button"
+          onClick={onToggleHistory}
+          aria-expanded={historyOpen}
+          className="mt-1 text-secondary text-xs underline underline-offset-2 hover:text-primary"
+        >
+          {historyOpen ? 'Hide history' : 'Show history'}
+        </button>
 
-    {historyOpen && (
-      <div className="mt-2">
-        {historyLoading ? (
-          <p className="text-secondary text-xs">Loading history…</p>
-        ) : history.length === 0 ? (
-          <p className="text-secondary text-xs">No history yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {history.map((row) => (
-              <li
-                key={row.id}
-                className="rounded-md border border-gray-6 bg-gray-1 px-2.5 py-2 text-xs"
-              >
-                <div className="flex flex-wrap items-center gap-x-1.5 text-secondary">
-                  <span className="font-medium text-primary">
-                    {LEVEL_LABELS[row.level]}
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span>{format(row.createdAt, 'd MMM yyyy')}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{row.source}</span>
-                  {row.changedBy && (
-                    <>
+        {historyOpen && (
+          <div className="mt-2">
+            {historyLoading ? (
+              <p className="text-secondary text-xs">Loading history…</p>
+            ) : history.length === 0 ? (
+              <p className="text-secondary text-xs">No history yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {history.map((row) => (
+                  <li
+                    key={row.id}
+                    className="rounded-md border border-gray-6 bg-gray-1 px-2.5 py-2 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-1.5 text-secondary">
+                      <span className="font-medium text-primary">
+                        {LEVEL_LABELS[row.level]}
+                      </span>
                       <span aria-hidden="true">·</span>
-                      <span>by {row.changedBy}</span>
-                    </>
-                  )}
-                </div>
-                {row.message && (
-                  <p className="mt-1 text-primary">“{row.message}”</p>
-                )}
-                {row.note && (
-                  <p className="mt-1 text-secondary">Note: {row.note}</p>
-                )}
-              </li>
-            ))}
-          </ul>
+                      <span>{format(row.createdAt, 'd MMM yyyy')}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{row.source}</span>
+                      {row.changedBy && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>by {row.changedBy}</span>
+                        </>
+                      )}
+                    </div>
+                    {row.message && (
+                      <p className="mt-1 text-primary">“{row.message}”</p>
+                    )}
+                    {row.note && (
+                      <p className="mt-1 text-secondary">Note: {row.note}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
-      </div>
+      </>
     )}
   </div>
 );

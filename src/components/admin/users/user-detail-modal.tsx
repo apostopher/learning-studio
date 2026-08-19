@@ -23,8 +23,21 @@ interface UserDetailModalProps {
   onToggleCourse: (courseId: number, granted: boolean) => void;
   pendingCourseId: number | null;
 
-  /** Level controls are hidden entirely without `level:update` — see below. */
+  /**
+   * The level row is hidden entirely without `level:read` or `level:update`
+   * — same "omit rather than disable" convention as the course checkboxes
+   * above. `level:read` alone still shows the row and its history, just as
+   * plain text rather than an editable select; `level:update` is what makes
+   * the select interactive.
+   */
+  canViewLevels: boolean;
   canEditLevels: boolean;
+  /**
+   * `level:read` — kept separate from `canViewLevels` because an owner could
+   * grant `update` without `read`, in which case the row shows but the
+   * history disclosure doesn't (fetching it would 403).
+   */
+  canReadLevels: boolean;
   /** Current level per course id. Absent for a course with no rows. */
   levels: Record<number, UserLevel>;
   openLevelHistoryCourseId: number | null;
@@ -70,7 +83,9 @@ export const UserDetailModal = ({
   canEditEnrolments,
   onToggleCourse,
   pendingCourseId,
+  canViewLevels,
   canEditLevels,
+  canReadLevels,
   levels,
   openLevelHistoryCourseId,
   levelHistory,
@@ -171,12 +186,14 @@ export const UserDetailModal = ({
                           </label>
 
                           {/*
-                            Absent rather than disabled without level:update —
+                            Absent without level:read AND level:update —
                             same convention as the checkbox above. Also absent
                             for a pending row: there is no profile, and so no
-                            level rows, until they sign in.
+                            level rows, until they sign in. level:read alone
+                            still renders the row (see canEdit on the row
+                            itself, below).
                           */}
-                          {enrolled && canEditLevels && !isPending && (
+                          {enrolled && canViewLevels && !isPending && (
                             <div className="mt-2 ps-3">
                               <UserCourseLevelRow
                                 courseName={course.name}
@@ -193,6 +210,8 @@ export const UserDetailModal = ({
                                   openLevelHistoryCourseId === course.id &&
                                   isLevelHistoryLoading
                                 }
+                                canEdit={canEditLevels}
+                                canViewHistory={canReadLevels}
                                 saving={savingLevelCourseId === course.id}
                                 onToggleHistory={() =>
                                   onToggleLevelHistory(course.id)

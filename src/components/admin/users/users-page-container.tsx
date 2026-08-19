@@ -36,6 +36,7 @@ import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
 import { SetLevelDialog } from './set-level-dialog';
 import { UserDetailModal } from './user-detail-modal';
+import { resolveChangedByEmail } from './user-levels-helpers';
 import { type UserRow, UsersTable } from './users-table';
 
 type ProfileForm = {
@@ -85,6 +86,8 @@ export const UsersPageContainer = ({
   const canGrantCourse = hasPermissionKey(permissions, 'enrolment', 'create');
   const canRevokeCourse = hasPermissionKey(permissions, 'enrolment', 'delete');
   const canEditLevels = hasPermissionKey(permissions, 'level', 'update');
+  const canReadLevels = hasPermissionKey(permissions, 'level', 'read');
+  const canViewLevels = canReadLevels || canEditLevels;
 
   const users = useAdminUsers();
   const courses = useAdminCourses();
@@ -325,15 +328,15 @@ export const UsersPageContainer = ({
             ? (setEnrolment.variables?.courseId ?? null)
             : null
         }
+        canViewLevels={canViewLevels}
         canEditLevels={canEditLevels}
+        canReadLevels={canReadLevels}
         levels={openRow?.levels ?? {}}
         openLevelHistoryCourseId={openLevelHistoryCourseId}
-        levelHistory={(levelHistory.data ?? []).map((row) => ({
-          ...row,
-          changedBy: row.changedBy
-            ? (emailByUserId.get(row.changedBy) ?? row.changedBy)
-            : row.changedBy,
-        }))}
+        levelHistory={resolveChangedByEmail(
+          levelHistory.data ?? [],
+          emailByUserId,
+        )}
         isLevelHistoryLoading={levelHistory.isLoading}
         onToggleLevelHistory={(courseId) =>
           setOpenLevelHistoryCourseId((current) =>

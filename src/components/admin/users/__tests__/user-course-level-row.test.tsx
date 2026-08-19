@@ -17,7 +17,7 @@ const history: LevelHistoryRow[] = [
 ];
 
 describe('UserCourseLevelRow', () => {
-  it('labels the level select with the course it belongs to', () => {
+  it('labels the level select with the course it belongs to when editable', () => {
     render(
       <UserCourseLevelRow
         courseName="Advanced Aerial Photography"
@@ -25,6 +25,8 @@ describe('UserCourseLevelRow', () => {
         history={[]}
         historyOpen={false}
         historyLoading={false}
+        canEdit={true}
+        canViewHistory={true}
         saving={false}
         onToggleHistory={vi.fn()}
         onLevelChange={vi.fn()}
@@ -46,6 +48,8 @@ describe('UserCourseLevelRow', () => {
         history={history}
         historyOpen={true}
         historyLoading={false}
+        canEdit={true}
+        canViewHistory={true}
         saving={false}
         onToggleHistory={vi.fn()}
         onLevelChange={vi.fn()}
@@ -68,6 +72,8 @@ describe('UserCourseLevelRow', () => {
         history={history}
         historyOpen={false}
         historyLoading={false}
+        canEdit={true}
+        canViewHistory={true}
         saving={false}
         onToggleHistory={vi.fn()}
         onLevelChange={vi.fn()}
@@ -77,5 +83,49 @@ describe('UserCourseLevelRow', () => {
     expect(
       screen.queryByText(/Cleared for advanced ops after the check ride\./),
     ).toBeNull();
+  });
+
+  it('renders the level as plain, reason-stating text without level:update', () => {
+    render(
+      <UserCourseLevelRow
+        courseName="Advanced Aerial Photography"
+        level="advanced"
+        history={[]}
+        historyOpen={false}
+        historyLoading={false}
+        canEdit={false}
+        canViewHistory={true}
+        saving={false}
+        onToggleHistory={vi.fn()}
+        onLevelChange={vi.fn()}
+      />,
+    );
+
+    // No interactive select for a read-only actor.
+    expect(screen.queryByRole('combobox')).toBeNull();
+    // The current level and the reason it can't be changed are both real,
+    // visible text — not a greyed-out control with no explanation.
+    expect(screen.getByText('Advanced')).toBeTruthy();
+    expect(screen.getByText('View only')).toBeTruthy();
+  });
+
+  it('hides the history disclosure without level:read', () => {
+    render(
+      <UserCourseLevelRow
+        courseName="Advanced Aerial Photography"
+        level="advanced"
+        history={history}
+        historyOpen={false}
+        historyLoading={false}
+        canEdit={true}
+        canViewHistory={false}
+        saving={false}
+        onToggleHistory={vi.fn()}
+        onLevelChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Show history')).toBeNull();
+    expect(screen.queryByRole('button', { name: /history/i })).toBeNull();
   });
 });
