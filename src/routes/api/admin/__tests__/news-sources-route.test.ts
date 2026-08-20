@@ -10,7 +10,7 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
-    requireAdmin: vi.fn(),
+    requireCoursePermission: vi.fn(),
     listCourseNewsSources: vi.fn(),
     createNewsSource: vi.fn(),
     updateNewsSource: vi.fn(),
@@ -19,8 +19,10 @@ const m = vi.hoisted(() => {
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin: m.requireAdmin,
   ForbiddenError: m.ForbiddenError,
+}));
+vi.mock('#/lib/permissions.server', () => ({
+  requireCoursePermission: m.requireCoursePermission,
 }));
 vi.mock('#/db/news-sources', () => ({
   listCourseNewsSources: m.listCourseNewsSources,
@@ -60,20 +62,33 @@ const jsonReq = (method: 'POST' | 'PATCH', body: unknown): Request =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
+  m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  m.listCourseNewsSources.mockResolvedValue([]);
+  m.createNewsSource.mockResolvedValue({ ok: true, source: SOURCE });
 });
 
 describe('getNewsSourcesHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+  it('asks for content:read on that specific course', async () => {
+    await getNewsSourcesHandler(new Request('http://t'), '1');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'read',
+    );
+  });
+
+  it('403 when refused, without reading sources', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await getNewsSourcesHandler(new Request('http://t'), '1');
     expect(res.status).toBe(403);
     expect(m.listCourseNewsSources).not.toHaveBeenCalled();
   });
 
-  it('400 on an invalid course id', async () => {
+  it('400 on an invalid course id, before guarding', async () => {
     const res = await getNewsSourcesHandler(new Request('http://t'), 'abc');
     expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.listCourseNewsSources).not.toHaveBeenCalled();
   });
 
@@ -87,13 +102,36 @@ describe('getNewsSourcesHandler', () => {
 });
 
 describe('postNewsSourceHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+  it('asks for content:create on that specific course', async () => {
+    await postNewsSourceHandler(
+      jsonReq('POST', { name: 'AVweb', url: 'https://www.avweb.com/' }),
+      '1',
+    );
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'create',
+    );
+  });
+
+  it('403 when refused, without creating a source', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await postNewsSourceHandler(
       jsonReq('POST', { name: 'AVweb', url: 'https://www.avweb.com/' }),
       '1',
     );
     expect(res.status).toBe(403);
+    expect(m.createNewsSource).not.toHaveBeenCalled();
+  });
+
+  it('400 on an invalid course id, before guarding', async () => {
+    const res = await postNewsSourceHandler(
+      jsonReq('POST', { name: 'AVweb', url: 'https://www.avweb.com/' }),
+      'abc',
+    );
+    expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.createNewsSource).not.toHaveBeenCalled();
   });
 
@@ -159,14 +197,40 @@ describe('postNewsSourceHandler', () => {
 });
 
 describe('patchNewsSourceHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+  it('asks for content:update on that specific course', async () => {
+    await patchNewsSourceHandler(
+      jsonReq('PATCH', { prevSourceId: 1, nextSourceId: null }),
+      '1',
+      '7',
+    );
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'update',
+    );
+  });
+
+  it('403 when refused, without touching either writer', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await patchNewsSourceHandler(
       jsonReq('PATCH', { prevSourceId: 1, nextSourceId: null }),
       '1',
       '7',
     );
     expect(res.status).toBe(403);
+    expect(m.reorderNewsSource).not.toHaveBeenCalled();
+    expect(m.updateNewsSource).not.toHaveBeenCalled();
+  });
+
+  it('400 on an unparseable id, before guarding', async () => {
+    const res = await patchNewsSourceHandler(
+      jsonReq('PATCH', { prevSourceId: 1, nextSourceId: null }),
+      'nope',
+      '7',
+    );
+    expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.reorderNewsSource).not.toHaveBeenCalled();
     expect(m.updateNewsSource).not.toHaveBeenCalled();
   });
@@ -254,23 +318,56 @@ describe('patchNewsSourceHandler', () => {
 });
 
 describe('deleteNewsSourceHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await deleteNewsSourceHandler(new Request('http://t'), '1', '7');
+  it('asks for content:delete on that specific course', async () => {
+    await deleteNewsSourceHandler(new Request('http://t'), '1', '7');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'delete',
+    );
+  });
+
+  it('403 when refused, without deleting', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await deleteNewsSourceHandler(
+      new Request('http://t'),
+      '1',
+      '7',
+    );
     expect(res.status).toBe(403);
+    expect(m.deleteNewsSource).not.toHaveBeenCalled();
+  });
+
+  it('400 on an unparseable id, before guarding', async () => {
+    const res = await deleteNewsSourceHandler(
+      new Request('http://t'),
+      'nope',
+      '7',
+    );
+    expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.deleteNewsSource).not.toHaveBeenCalled();
   });
 
   it('deletes scoped to both the course and the source', async () => {
     m.deleteNewsSource.mockResolvedValue(true);
-    const res = await deleteNewsSourceHandler(new Request('http://t'), '1', '7');
+    const res = await deleteNewsSourceHandler(
+      new Request('http://t'),
+      '1',
+      '7',
+    );
     expect(res.status).toBe(204);
     expect(m.deleteNewsSource).toHaveBeenCalledWith(1, 7);
   });
 
   it('404s when nothing matched', async () => {
     m.deleteNewsSource.mockResolvedValue(false);
-    const res = await deleteNewsSourceHandler(new Request('http://t'), '1', '7');
+    const res = await deleteNewsSourceHandler(
+      new Request('http://t'),
+      '1',
+      '7',
+    );
     expect(res.status).toBe(404);
   });
 });

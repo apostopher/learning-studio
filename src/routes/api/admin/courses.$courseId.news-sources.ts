@@ -1,11 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createNewsSource, listCourseNewsSources } from '#/db/news-sources';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { ForbiddenError } from '#/lib/admin-functions.server';
 import { createNewsSourceInputSchema } from '#/lib/admin-schemas';
+import { requireCoursePermission } from '#/lib/permissions.server';
 
-async function guard(request: Request): Promise<Response | null> {
+async function guard(
+  request: Request,
+  courseId: number,
+  action: 'read' | 'create',
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireCoursePermission(request.headers, courseId, 'content', action);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -24,12 +29,12 @@ export async function getNewsSourcesHandler(
   request: Request,
   courseIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const courseId = parseCourseId(courseIdRaw);
   if (courseId === null) {
     return Response.json({ error: 'Invalid course id' }, { status: 400 });
   }
+  const denied = await guard(request, courseId, 'read');
+  if (denied) return denied;
   return Response.json(await listCourseNewsSources(courseId));
 }
 
@@ -37,12 +42,12 @@ export async function postNewsSourceHandler(
   request: Request,
   courseIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const courseId = parseCourseId(courseIdRaw);
   if (courseId === null) {
     return Response.json({ error: 'Invalid course id' }, { status: 400 });
   }
+  const denied = await guard(request, courseId, 'create');
+  if (denied) return denied;
   let body: unknown;
   try {
     body = await request.json();

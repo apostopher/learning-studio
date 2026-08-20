@@ -10,14 +10,16 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
-    requireAdmin: vi.fn(),
+    requireCoursePermission: vi.fn(),
     getCourseOnboarding: vi.fn(),
     updateCourseOnboarding: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin: m.requireAdmin,
   ForbiddenError: m.ForbiddenError,
+}));
+vi.mock('#/lib/permissions.server', () => ({
+  requireCoursePermission: m.requireCoursePermission,
 }));
 vi.mock('#/db/admin', () => ({
   getCourseOnboarding: m.getCourseOnboarding,
@@ -39,19 +41,35 @@ function postReq(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
+  m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  m.getCourseOnboarding.mockResolvedValue([]);
+  m.updateCourseOnboarding.mockResolvedValue([]);
 });
 
 describe('getOnboardingHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+  it('asks for content:read on that specific course', async () => {
+    await getOnboardingHandler(new Request('http://t'), '1');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'read',
+    );
+  });
+
+  it('403 when refused, without reading onboarding', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await getOnboardingHandler(new Request('http://t'), '1');
     expect(res.status).toBe(403);
+    expect(m.getCourseOnboarding).not.toHaveBeenCalled();
   });
-  it('400 on invalid course id', async () => {
+
+  it('400 on invalid course id, before guarding', async () => {
     const res = await getOnboardingHandler(new Request('http://t'), 'abc');
     expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
   });
+
   it('returns the questions', async () => {
     m.getCourseOnboarding.mockResolvedValue([{ id: 'a', text: 'Q1' }]);
     const res = await getOnboardingHandler(new Request('http://t'), '1');
@@ -62,11 +80,29 @@ describe('getOnboardingHandler', () => {
 });
 
 describe('postOnboardingHandler', () => {
-  it('403 when not admin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+  it('asks for content:update on that specific course', async () => {
+    await postOnboardingHandler(postReq({ questions: [] }), '1');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'content',
+      'update',
+    );
+  });
+
+  it('403 when refused, without saving', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await postOnboardingHandler(postReq({ questions: [] }), '1');
     expect(res.status).toBe(403);
+    expect(m.updateCourseOnboarding).not.toHaveBeenCalled();
   });
+
+  it('400 on invalid course id, before guarding', async () => {
+    const res = await postOnboardingHandler(postReq({ questions: [] }), 'abc');
+    expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+  });
+
   it('400 on bad JSON', async () => {
     const bad = new Request('http://t', {
       method: 'POST',

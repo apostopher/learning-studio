@@ -4,15 +4,20 @@ import {
   reorderNewsSource,
   updateNewsSource,
 } from '#/db/news-sources';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   reorderNewsSourceInputSchema,
   updateNewsSourceInputSchema,
 } from '#/lib/admin-schemas';
+import { requireCoursePermission } from '#/lib/permissions.server';
 
-async function guard(request: Request): Promise<Response | null> {
+async function guard(
+  request: Request,
+  courseId: number,
+  action: 'update' | 'delete',
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireCoursePermission(request.headers, courseId, 'content', action);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -27,19 +32,20 @@ function parseId(raw: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** Resolves the guard and both path ids, or the Response that ends the request. */
+/** Resolves both path ids and the guard, or the Response that ends the request. */
 async function resolve(
   request: Request,
   courseIdRaw: string,
   sourceIdRaw: string,
+  action: 'update' | 'delete',
 ): Promise<{ courseId: number; sourceId: number } | Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const courseId = parseId(courseIdRaw);
   const sourceId = parseId(sourceIdRaw);
   if (courseId === null || sourceId === null) {
     return Response.json({ error: 'Invalid id' }, { status: 400 });
   }
+  const denied = await guard(request, courseId, action);
+  if (denied) return denied;
   return { courseId, sourceId };
 }
 
@@ -48,7 +54,7 @@ export async function patchNewsSourceHandler(
   courseIdRaw: string,
   sourceIdRaw: string,
 ): Promise<Response> {
-  const resolved = await resolve(request, courseIdRaw, sourceIdRaw);
+  const resolved = await resolve(request, courseIdRaw, sourceIdRaw, 'update');
   if (resolved instanceof Response) return resolved;
 
   let body: unknown;
@@ -115,7 +121,7 @@ export async function deleteNewsSourceHandler(
   courseIdRaw: string,
   sourceIdRaw: string,
 ): Promise<Response> {
-  const resolved = await resolve(request, courseIdRaw, sourceIdRaw);
+  const resolved = await resolve(request, courseIdRaw, sourceIdRaw, 'delete');
   if (resolved instanceof Response) return resolved;
 
   const removed = await deleteNewsSource(resolved.courseId, resolved.sourceId);

@@ -4,6 +4,9 @@ import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import { personaSelectionInputSchema } from '#/lib/admin-schemas';
 
+// Deliberately NOT converted to `requireCoursePermission`: this pins an
+// org-level AI persona to a course. The persona itself is org config, not
+// this course's content, so it stays behind the org-wide admin guard.
 async function guard(request: Request): Promise<Response | null> {
   try {
     await requireAdmin(request.headers);

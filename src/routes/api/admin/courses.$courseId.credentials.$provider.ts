@@ -3,6 +3,9 @@ import { deleteCourseProvider } from '@/db/admin';
 import { ForbiddenError, requireAdmin } from '@/lib/admin-functions.server';
 import { providerIdSchema } from '@/lib/admin-schemas';
 
+// Deliberately NOT converted to `requireCoursePermission`: these are
+// video-provider *secrets*. Course-scoped, but a professor authoring lessons
+// on this course has no business reading deployment credentials.
 /** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
 async function guard(request: Request): Promise<Response | null> {
   try {
