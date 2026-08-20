@@ -57,6 +57,16 @@ export async function requirePermission(
   };
 }
 
+/**
+ * An actor whose authority was resolved against ONE specific course.
+ *
+ * `permissions` is course-scoped despite being structurally identical to the
+ * org-wide set `requirePermission` returns: it is derived from the union of
+ * global and per-course roles, so it means "grants valid on this course". Never
+ * carry it to another course — re-run the guard with that course's id. `roles`
+ * stays global-only and `courseRoles` holds the roles held here, so a caller
+ * can tell org-wide authority from authority on this one course.
+ */
 export type CourseActor = PermittedActor & { courseRoles: string[] };
 
 /**

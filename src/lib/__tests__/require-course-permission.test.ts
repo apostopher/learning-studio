@@ -60,6 +60,34 @@ describe('requireCoursePermission', () => {
     expect(actor.userId).toBe('u1');
     expect(actor.courseRoles).toEqual(['subject-expert']);
     expect(m.getCourseRoleNames).toHaveBeenCalledWith('u1', 7);
+    // The grants lookup must actually receive the course role — this is the
+    // whole reason the guard exists, and asserting only on the returned actor
+    // leaves it free to be dropped.
+    expect(m.getUserPermissions).toHaveBeenCalledWith(['subject-expert']);
+    // `roles` is the GLOBAL list. Folding the two together would erase the
+    // distinction the staff-appointment guard depends on.
+    expect(actor.roles).toEqual([]);
+  });
+
+  it('asks for grants under both hats, global first, for a mixed actor', async () => {
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseRoleNames.mockResolvedValue(['subject-expert']);
+    m.getUserPermissions.mockResolvedValue(new Set(['content:update']));
+
+    const actor = await requireCoursePermission(
+      HEADERS,
+      7,
+      'content',
+      'update',
+    );
+
+    // The exact concatenation: both halves present, global before course.
+    expect(m.getUserPermissions).toHaveBeenCalledWith([
+      'admin',
+      'subject-expert',
+    ]);
+    expect(actor.roles).toEqual(['admin']);
+    expect(actor.courseRoles).toEqual(['subject-expert']);
   });
 
   it('refuses a subject expert on a course they are not staff on', async () => {
@@ -128,6 +156,27 @@ describe('requireCoursePermission', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(ForbiddenError);
     expect(m.getCourseRoleNames).not.toHaveBeenCalled();
+  });
+
+  it('does not let a course_staff row confer ownership', async () => {
+    // `owner` held on ONE course, nothing globally. The union legitimately
+    // yields the wildcard for this course, but `isOwner` is an org-level claim
+    // and must stay false, or a per-course row would read as deployment-wide
+    // authority everywhere it is inspected.
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.getCourseRoleNames.mockResolvedValue(['owner']);
+    m.getUserPermissions.mockResolvedValue(new Set(['*']));
+
+    const actor = await requireCoursePermission(
+      HEADERS,
+      7,
+      'content',
+      'update',
+    );
+
+    expect(actor.isOwner).toBe(false);
+    expect(actor.roles).toEqual([]);
+    expect(actor.courseRoles).toEqual(['owner']);
   });
 
   it('refuses an anonymous caller before touching the database', async () => {
