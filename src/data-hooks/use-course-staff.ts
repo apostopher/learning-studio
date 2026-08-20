@@ -38,8 +38,12 @@ const courseStaffMemberSchema = z.object({
 const courseStaffResponseSchema = z.object({
   staff: z.array(courseStaffMemberSchema),
   assignableRoles: z.array(z.enum(COURSE_SCOPED_ROLES)),
-  /** Whether the per-member Remove control may render at all. */
-  canRemove: z.boolean(),
+  /**
+   * Roles this actor may take away. A set, not a flag: an SME may dismiss a
+   * course manager and never a fellow subject expert, so the Remove control is
+   * gated per badge.
+   */
+  removableRoles: z.array(z.enum(COURSE_SCOPED_ROLES)),
 });
 export type CourseStaffResponse = z.infer<typeof courseStaffResponseSchema>;
 

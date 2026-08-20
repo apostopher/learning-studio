@@ -22,8 +22,11 @@ interface CourseStaffPanelProps {
   assignableRoles: string[];
   /** Whether the assign form renders at all. */
   canAssign: boolean;
-  /** Whether the per-member Remove control renders at all. */
-  canRemove: boolean;
+  /**
+   * Course-scoped role names this actor may take away. Gated per badge, not
+   * per panel: an SME may dismiss a course manager and never a peer.
+   */
+  removableRoles: string[];
   /** Candidates for the person picker — a server-side search result. */
   people: CourseStaffPersonOption[];
   /** The picker's search term. Controlled: the container turns it into a query. */
@@ -45,19 +48,37 @@ interface CourseStaffPanelProps {
  * Why a control this actor can see is not offered to them.
  *
  * `staff:create` and `staff:delete` are independently grantable, so a roster
- * can legitimately be readable and not writable. Both controls used to render
- * regardless and 403 on use; hiding them without saying why would only trade a
- * broken control for a mystery.
+ * can legitimately be readable and not writable — and beyond that, removal is
+ * railed by ROLE: a subject expert may dismiss their assistant but not a
+ * fellow professor. That produces a list where some badges have a Remove
+ * control and others do not, which is a genuinely puzzling absence and so
+ * earns a sentence. Both controls used to render regardless and 403 on use;
+ * hiding them without saying why would only trade a broken control for a
+ * mystery.
  */
-function readOnlyNotice(canAssign: boolean, canRemove: boolean): string | null {
-  if (canAssign && canRemove) return null;
-  if (!canAssign && !canRemove) {
+function staffNotice(
+  canAssign: boolean,
+  removableRoles: string[],
+  staff: CourseStaffMember[],
+): string | null {
+  const canRemoveAny = removableRoles.length > 0;
+  if (!canAssign && !canRemoveAny) {
     return 'You can see the staff for this course but not change it. Ask an admin for permission to assign and remove staff here.';
   }
   if (!canAssign) {
     return 'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.';
   }
-  return 'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.';
+  if (!canRemoveAny) {
+    return 'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.';
+  }
+  // Only mention what is actually on screen — a rule about a role nobody
+  // holds here is a rule about nothing.
+  const locked = [...new Set(staff.flatMap((member) => member.roles))].filter(
+    (role) => !removableRoles.includes(role),
+  );
+  if (locked.length === 0) return null;
+  const names = locked.map((role) => `a ${roleDisplayName(role)}`).join(' or ');
+  return `Only an admin or owner can remove ${names} from this course.`;
 }
 
 function staffDisplayName(member: CourseStaffMember): string {
@@ -84,7 +105,7 @@ export const CourseStaffPanel = ({
   isLoading,
   assignableRoles,
   canAssign,
-  canRemove,
+  removableRoles,
   people,
   peopleQuery,
   onPeopleQueryChange,
@@ -100,7 +121,7 @@ export const CourseStaffPanel = ({
 }: CourseStaffPanelProps) => {
   const labelByUserId = new Map(people.map((p) => [p.userId, p.label]));
   const personIds = people.map((p) => p.userId);
-  const notice = readOnlyNotice(canAssign, canRemove);
+  const notice = staffNotice(canAssign, removableRoles, staff);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -153,13 +174,15 @@ export const CourseStaffPanel = ({
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {member.roles.map((role) => (
-                            <span
-                              key={role}
-                              className={`flex items-center gap-1 rounded bg-gray-4 py-0.5 text-primary text-xs ${canRemove ? 'ps-2 pe-1' : 'px-2'}`}
-                            >
-                              {roleAcronym(role)}
-                              {/*
+                          {member.roles.map((role) => {
+                            const removable = removableRoles.includes(role);
+                            return (
+                              <span
+                                key={role}
+                                className={`flex items-center gap-1 rounded bg-gray-4 py-0.5 text-primary text-xs ${removable ? 'ps-2 pe-1' : 'px-2'}`}
+                              >
+                                {roleAcronym(role)}
+                                {/*
                                 With no remove button there is nothing else
                                 carrying the full role name, and "SME" alone
                                 reads as nothing useful. Only rendered in that
@@ -167,24 +190,27 @@ export const CourseStaffPanel = ({
                                 name already says it, and a second copy would
                                 have a screen reader announce it twice.
                               */}
-                              {!canRemove && (
-                                <span className="sr-only">
-                                  {roleDisplayName(role)}
-                                </span>
-                              )}
-                              {canRemove && (
-                                <button
-                                  type="button"
-                                  onClick={() => onRemove(member.userId, role)}
-                                  disabled={isSaving}
-                                  aria-label={`Remove ${roleDisplayName(role)} from ${name}`}
-                                  className="rounded p-0.5 text-secondary transition-colors hover:bg-gray-6 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
-                                >
-                                  <X className="h-3 w-3" aria-hidden="true" />
-                                </button>
-                              )}
-                            </span>
-                          ))}
+                                {!removable && (
+                                  <span className="sr-only">
+                                    {roleDisplayName(role)}
+                                  </span>
+                                )}
+                                {removable && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onRemove(member.userId, role)
+                                    }
+                                    disabled={isSaving}
+                                    aria-label={`Remove ${roleDisplayName(role)} from ${name}`}
+                                    className="rounded p-0.5 text-secondary transition-colors hover:bg-gray-6 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+                                  >
+                                    <X className="h-3 w-3" aria-hidden="true" />
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })}
                         </div>
                       </li>
                     );

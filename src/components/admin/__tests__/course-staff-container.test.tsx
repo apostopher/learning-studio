@@ -61,7 +61,7 @@ const ROSTER: CourseStaffResponse['staff'] = [
 const SME_VIEW: CourseStaffResponse = {
   staff: ROSTER,
   assignableRoles: ['course-manager'],
-  canRemove: true,
+  removableRoles: ['course-manager'],
 };
 
 const CANDIDATES: StaffCandidate[] = [
@@ -151,7 +151,7 @@ describe('CourseStaffContainer', () => {
     const props = renderWith({
       staff: ROSTER,
       assignableRoles: ['subject-expert', 'course-manager'],
-      canRemove: true,
+      removableRoles: ['subject-expert', 'course-manager'],
     });
 
     expect(props?.assignableRoles).toEqual([
@@ -164,18 +164,28 @@ describe('CourseStaffContainer', () => {
     const props = renderWith({
       staff: ROSTER,
       assignableRoles: [],
-      canRemove: true,
+      removableRoles: ['course-manager'],
     });
 
     expect(props?.canAssign).toBe(false);
     expect(props?.assignableRoles).toEqual([]);
   });
 
-  /** `staff:delete` is granted separately from `staff:create`. */
-  it("relays the server's removal verdict", () => {
-    const props = renderWith({ ...SME_VIEW, canRemove: false });
+  /**
+   * `staff:delete` is granted separately from `staff:create`, AND removal is
+   * railed by role — an SME may dismiss an assistant, never a peer. The
+   * container must relay the set verbatim, not collapse it to a flag.
+   */
+  it("relays the server's removable set verbatim", () => {
+    const props = renderWith(SME_VIEW);
 
-    expect(props?.canRemove).toBe(false);
+    expect(props?.removableRoles).toEqual(['course-manager']);
+  });
+
+  it('relays an empty removable set', () => {
+    const props = renderWith({ ...SME_VIEW, removableRoles: [] });
+
+    expect(props?.removableRoles).toEqual([]);
   });
 
   it('passes the roster through to the panel', () => {

@@ -47,46 +47,61 @@ async function guard(
 }
 
 /**
- * The course-scoped roles this actor may grant on this course.
+ * The course-scoped roles this actor may add or take away on this course.
  *
- * The asymmetry is the point: an admin or owner may appoint either role, a
- * subject expert may bring in a course manager and never a peer (see
- * `putCourseStaffHandler`). No client-side check can express that from the
- * router context, which carries global roles only — so this is computed once,
- * server-side, and both the GET that renders the picker and the PUT that
- * enforces the write read it. Two derivations of the same policy is how the
- * panel and the guard drift apart.
+ * ONE function for both verbs, because spec §3 gives `subject-expert`
+ * "CRD (own courses, **CRS-MGR only**)" — that qualifier governs all three
+ * verbs, not just create. Splitting it produced exactly the drift it warns
+ * about: create was railed and delete was not, so a subject expert could
+ * remove every OTHER subject expert from their own course and become its sole
+ * authority. That is the self-propagation hole the PUT rail closes, running in
+ * reverse and worse, since removal is destructive and immediate.
  *
- * `staff:create` is checked rather than assumed: `staff:read` and
- * `staff:create` are independently grantable in the permission grid, so
- * someone may legitimately see the roster with no power to change it.
+ * The permission is checked per verb rather than assumed: `staff:read`,
+ * `staff:create` and `staff:delete` are independently grantable in the
+ * permission grid, so someone may legitimately see the roster and add to it
+ * without being able to take anything away.
  */
-export function assignableCourseRoles(actor: CourseActor): CourseScopedRole[] {
-  if (!hasPermission(actor.permissions, 'staff', 'create')) return [];
+function courseRolesActorMayChange(
+  actor: CourseActor,
+  action: 'create' | 'delete',
+): CourseScopedRole[] {
+  if (!hasPermission(actor.permissions, 'staff', action)) return [];
   return hasAdminAccess(actor.roles)
     ? [...COURSE_SCOPED_ROLES]
     : [COURSE_MANAGER_ROLE];
 }
 
 /**
- * Whether this actor may take a role away on this course.
+ * Roles this actor may appoint here. An admin or owner may appoint either; a
+ * subject expert may bring in a course manager and never a peer.
  *
- * A plain boolean, not a role set: `deleteCourseStaffHandler` enforces
- * `staff:delete` and nothing finer, so advertising anything more here would be
- * the panel inventing policy the write does not have. It exists because the
- * per-member Remove button rendered unconditionally — a live control that
- * 403s for a `staff:read`-only actor.
+ * Read both by the GET that renders the role picker and by the PUT that
+ * enforces the write, so the panel can never offer an option the write
+ * refuses. Two derivations of the same policy is how they drift apart.
  */
-export function canRemoveCourseStaff(actor: CourseActor): boolean {
-  return hasPermission(actor.permissions, 'staff', 'delete');
+export function assignableCourseRoles(actor: CourseActor): CourseScopedRole[] {
+  return courseRolesActorMayChange(actor, 'create');
+}
+
+/**
+ * Roles this actor may take away here — the same asymmetry as appointment.
+ *
+ * A role SET, not the boolean this used to be: an SME may remove their own
+ * assistant but not a fellow professor, and a flat "can remove" cannot say
+ * that. The panel gates each badge's Remove control on membership, and
+ * `deleteCourseStaffHandler` refuses anything outside it.
+ */
+export function removableCourseRoles(actor: CourseActor): CourseScopedRole[] {
+  return courseRolesActorMayChange(actor, 'delete');
 }
 
 /**
  * The roster, plus what this actor may do with it.
  *
- * `assignableRoles` and `canRemove` ship with the roster rather than being
- * derived on the client because both depend on `course_staff` and on grants
- * resolved for THIS course — neither of which the browser holds.
+ * `assignableRoles` and `removableRoles` ship with the roster rather than
+ * being derived on the client because both depend on `course_staff` and on
+ * grants resolved for THIS course — neither of which the browser holds.
  */
 export async function getCourseStaffHandler(
   request: Request,
@@ -103,7 +118,7 @@ export async function getCourseStaffHandler(
   return Response.json({
     staff: await listCourseStaff(courseId),
     assignableRoles: assignableCourseRoles(actor),
-    canRemove: canRemoveCourseStaff(actor),
+    removableRoles: removableCourseRoles(actor),
   });
 }
 
@@ -198,6 +213,9 @@ export async function putCourseStaffHandler(
  * Deliberately does NOT un-enrol: someone who stops being a professor may
  * still legitimately be a learner on that course, and silently revoking
  * their access would destroy their progress visibility.
+ *
+ * Railed identically to appointment — see `courseRolesActorMayChange`. An SME
+ * may dismiss their assistant; only an admin or owner may unseat a professor.
  */
 export async function deleteCourseStaffHandler(
   request: Request,
@@ -221,6 +239,24 @@ export async function deleteCourseStaffHandler(
   const parsed = setCourseStaffInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  /**
+   * The mirror of the PUT rail, asked of the same function that tells the
+   * panel which Remove controls to draw. Without it a subject expert could
+   * clear every peer off their own course — no admin involved, nothing
+   * recoverable, and the roster the next professor never appears on.
+   */
+  if (!removableCourseRoles(actor).includes(parsed.data.role)) {
+    return Response.json(
+      {
+        error:
+          parsed.data.role === SUBJECT_EXPERT_ROLE
+            ? 'Only an admin or owner can remove a subject expert.'
+            : 'You cannot remove that role on this course.',
+      },
+      { status: 403 },
+    );
   }
 
   await removeCourseStaff(parsed.data.userId, courseId, parsed.data.role);

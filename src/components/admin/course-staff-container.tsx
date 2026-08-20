@@ -42,8 +42,8 @@ function personLabel(candidate: StaffCandidate): string {
  * client-side permission check before firing the GET; the request itself is
  * the check, matching how `useCourseBoard` treats a 404 as "no board".
  *
- * `assignableRoles` and `canRemove` come back with the roster rather than
- * being derived here. `/admin` now admits course-scoped staff, so "is an
+ * `assignableRoles` and `removableRoles` come back with the roster rather
+ * than being derived here. `/admin` now admits course-scoped staff, so "is an
  * admin" is no longer the same question as "may assign": the set is
  * asymmetric — an admin may appoint either role, a subject expert only a
  * course manager — and no client-side check over global roles can express
@@ -71,7 +71,7 @@ export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
 
   if (staffQuery.data == null) return null;
 
-  const { staff, assignableRoles, canRemove } = staffQuery.data;
+  const { staff, assignableRoles, removableRoles } = staffQuery.data;
   const canAssign = assignableRoles.length > 0;
 
   const found: CourseStaffPersonOption[] = (candidates.data ?? []).map(
@@ -111,7 +111,7 @@ export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
         isLoading={staffQuery.isLoading}
         assignableRoles={assignableRoles}
         canAssign={canAssign}
-        canRemove={canRemove}
+        removableRoles={removableRoles}
         people={people}
         peopleQuery={candidateQuery}
         onPeopleQueryChange={setCandidateQuery}

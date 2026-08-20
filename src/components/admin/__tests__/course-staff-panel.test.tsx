@@ -21,7 +21,7 @@ const baseProps = {
   isLoading: false,
   assignableRoles: ['subject-expert', 'course-manager'],
   canAssign: true,
-  canRemove: true,
+  removableRoles: ['subject-expert', 'course-manager'],
   people: [{ userId: 'u2', label: 'Sam Lee (sam@example.com)' }],
   peopleQuery: '',
   onPeopleQueryChange: vi.fn(),
@@ -86,7 +86,9 @@ describe('CourseStaffPanel', () => {
   });
 
   it('hides the Remove control, and says why, when the actor cannot remove', () => {
-    render(<CourseStaffPanel {...baseProps} staff={staff} canRemove={false} />);
+    render(
+      <CourseStaffPanel {...baseProps} staff={staff} removableRoles={[]} />,
+    );
 
     expect(
       screen.queryByRole('button', {
@@ -105,7 +107,9 @@ describe('CourseStaffPanel', () => {
    * button's accessible name was the only thing spelling out "SME".
    */
   it('keeps the full role name reachable once the button is gone', () => {
-    render(<CourseStaffPanel {...baseProps} staff={staff} canRemove={false} />);
+    render(
+      <CourseStaffPanel {...baseProps} staff={staff} removableRoles={[]} />,
+    );
 
     expect(screen.getByText('SME')).toBeTruthy();
     expect(screen.getByText('Subject Expert')).toBeTruthy();
@@ -117,7 +121,7 @@ describe('CourseStaffPanel', () => {
         {...baseProps}
         staff={staff}
         canAssign={false}
-        canRemove={false}
+        removableRoles={[]}
       />,
     );
 
@@ -132,5 +136,88 @@ describe('CourseStaffPanel', () => {
     render(<CourseStaffPanel {...baseProps} staff={staff} />);
 
     expect(screen.queryByText(/Ask an admin for permission/)).toBeNull();
+    expect(screen.queryByText(/Only an admin or owner can remove/)).toBeNull();
+  });
+
+  /**
+   * Round 2. Removal is railed by role, so a subject expert sees a Remove
+   * control on their assistant and none on a fellow professor. A live control
+   * that 403s is what this task has been sweeping; the mixed list is also a
+   * genuinely puzzling absence, so it earns a sentence.
+   */
+  it('offers no Remove on a role this actor may not take away', () => {
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={staff}
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        'Only an admin or owner can remove a Subject Expert from this course.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('keeps Remove on the roles it may take away', () => {
+    const mixed = [
+      ...staff,
+      {
+        userId: 'u2',
+        email: 'sam@example.com',
+        firstName: 'Sam',
+        lastName: 'Lee',
+        roles: ['course-manager'],
+      },
+    ];
+
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={mixed}
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Course Manager from Sam Lee',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeNull();
+  });
+
+  /** A rule about a role nobody on this roster holds is a rule about nothing. */
+  it('stays quiet about a locked role that is not on the roster', () => {
+    const onlyManagers = [
+      {
+        userId: 'u2',
+        email: 'sam@example.com',
+        firstName: 'Sam',
+        lastName: 'Lee',
+        roles: ['course-manager'],
+      },
+    ];
+
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={onlyManagers}
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(screen.queryByText(/Only an admin or owner can remove/)).toBeNull();
   });
 });

@@ -47,14 +47,14 @@ const ADMIN = {
   userId: 'a1',
   roles: ['admin'],
   courseRoles: [],
-  permissions: new Set<string>(['staff:read', 'staff:create']),
+  permissions: new Set<string>(['staff:read', 'staff:create', 'staff:delete']),
   isOwner: false,
 };
 const SME = {
   userId: 's1',
   roles: [],
   courseRoles: ['subject-expert'],
-  permissions: new Set<string>(['staff:read', 'staff:create']),
+  permissions: new Set<string>(['staff:read', 'staff:create', 'staff:delete']),
   isOwner: false,
 };
 
@@ -246,6 +246,118 @@ describe('DELETE /api/admin/courses/:courseId/staff', () => {
     );
     expect(m.addUserEnrolment).not.toHaveBeenCalled();
   });
+
+  /**
+   * Round 2. Spec §3 gives an SME "CRD (own courses, CRS-MGR only)" — the
+   * qualifier governs delete as much as create. Unrailed, a subject expert
+   * could clear every peer off their own course and become its sole
+   * authority: the self-propagation hole the PUT rail closes, running in
+   * reverse and worse, because removal is destructive and immediate.
+   */
+  it('refuses an SME removing a subject expert, and writes nothing', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'subject-expert' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(403);
+    expect(m.removeCourseStaff).not.toHaveBeenCalled();
+  });
+
+  it('lets an SME remove a course manager', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'course-manager' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(204);
+    expect(m.removeCourseStaff).toHaveBeenCalledWith('u9', 7, 'course-manager');
+  });
+
+  it('lets an admin remove a subject expert', async () => {
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'subject-expert' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(204);
+    expect(m.removeCourseStaff).toHaveBeenCalledWith('u9', 7, 'subject-expert');
+  });
+
+  it('lets an admin remove a course manager', async () => {
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'course-manager' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(204);
+    expect(m.removeCourseStaff).toHaveBeenCalledWith('u9', 7, 'course-manager');
+  });
+
+  /** The rail reads GLOBAL roles, exactly as the PUT rail does. */
+  it('admits an admin who is also an SME on this course', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      ...ADMIN,
+      userId: 'a2',
+      courseRoles: ['subject-expert'],
+    });
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'subject-expert' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(204);
+  });
+
+  it('refuses every role when staff:delete is not granted', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      ...ADMIN,
+      permissions: new Set(['staff:read', 'staff:create']),
+    });
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'u9', role: 'course-manager' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(403);
+    expect(m.removeCourseStaff).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The two rails are one rule. This pins the roles the GET advertises as
+ * removable to what the DELETE actually accepts, per actor and per role — if
+ * they ever disagree, the panel draws a Remove control the write refuses, or
+ * hides one it would have allowed.
+ */
+describe('the offered removals and the enforced removals are the same rule', () => {
+  it.each([
+    ['admin', ADMIN],
+    ['subject expert', SME],
+  ])('agree for a %s', async (_label, actor) => {
+    m.requireCoursePermission.mockResolvedValue(actor);
+
+    const offered: string[] = (
+      await (await getCourseStaffHandler(req(undefined, 'GET'), '7')).json()
+    ).removableRoles;
+
+    for (const role of ['subject-expert', 'course-manager']) {
+      const res = await deleteCourseStaffHandler(
+        req({ userId: 'u9', role }, 'DELETE'),
+        '7',
+      );
+      expect({ role, accepted: res.status === 204 }).toEqual({
+        role,
+        accepted: offered.includes(role),
+      });
+    }
+  });
 });
 
 describe('GET /api/admin/courses/:courseId/staff', () => {
@@ -294,22 +406,32 @@ describe('GET /api/admin/courses/:courseId/staff', () => {
   });
 
   /**
-   * The per-member Remove button rendered unconditionally before this, so a
-   * `staff:read`-only actor got a live control that 403'd on click.
+   * The per-member Remove button rendered unconditionally before round 1, so a
+   * `staff:read`-only actor got a live control that 403'd on click — and until
+   * round 2 it was a flat boolean, which cannot express that an SME may
+   * dismiss an assistant but not a peer.
    */
-  it('reports removal authority from staff:delete', async () => {
-    m.requireCoursePermission.mockResolvedValue({
-      ...ADMIN,
-      permissions: new Set(['staff:read', 'staff:create', 'staff:delete']),
-    });
+  it('lets an admin take away either role', async () => {
     const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
-    expect((await res.json()).canRemove).toBe(true);
+    expect((await res.json()).removableRoles).toEqual([
+      'subject-expert',
+      'course-manager',
+    ]);
   });
 
-  it('withholds removal from an actor without staff:delete', async () => {
+  it('lets an SME take away only a course manager', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
     const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
-    // The base fixture holds read + create only.
-    expect((await res.json()).canRemove).toBe(false);
+    expect((await res.json()).removableRoles).toEqual(['course-manager']);
+  });
+
+  it('withholds removal entirely from an actor without staff:delete', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      ...ADMIN,
+      permissions: new Set(['staff:read', 'staff:create']),
+    });
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    expect((await res.json()).removableRoles).toEqual([]);
   });
 
   it("grants an owner's wildcard everything", async () => {
@@ -323,7 +445,7 @@ describe('GET /api/admin/courses/:courseId/staff', () => {
     const body = await (
       await getCourseStaffHandler(req(undefined, 'GET'), '7')
     ).json();
-    expect(body.canRemove).toBe(true);
+    expect(body.removableRoles).toEqual(['subject-expert', 'course-manager']);
     expect(body.assignableRoles).toEqual(['subject-expert', 'course-manager']);
   });
 
