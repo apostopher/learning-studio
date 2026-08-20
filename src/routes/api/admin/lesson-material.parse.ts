@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { generateLessonMaterial } from '#/ai/generate-lesson-material';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { isAnyCourseStaff } from '#/db/course-staff';
+import { getUserRoleNames } from '#/db/user-roles';
+import { hasAdminAccess } from '#/lib/admin-schemas';
+import { auth } from '#/lib/auth';
 import { wordToHtml } from '#/lib/word-to-html.server';
 
 const DOCX_MIME =
@@ -15,14 +18,22 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
-  try {
-    await requireAdmin(request.headers);
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return new Response('Forbidden', { status: 403 });
-    }
-    throw error;
-  }
+  // Guarded on being staff ANYWHERE rather than on a specific course.
+  //
+  // This route takes a .docx and returns generated material. It persists
+  // nothing and receives no course, module or lesson id of any kind — only a
+  // multipart file. Course-scoping it would mean inventing an identifier the
+  // client does not have, to protect a write that never happens. So the
+  // check is admin-or-owner, or holding any `course_staff` row at all —
+  // not `requireCoursePermission`, which needs a course id this route
+  // doesn't have.
+  const session = await auth.api.getSession({ headers: request.headers });
+  const userId = session?.user?.id;
+  if (!userId) return new Response('Forbidden', { status: 403 });
+
+  const roles = await getUserRoleNames(userId);
+  const allowed = hasAdminAccess(roles) || (await isAnyCourseStaff(userId));
+  if (!allowed) return new Response('Forbidden', { status: 403 });
 
   let file: File | null;
   try {
