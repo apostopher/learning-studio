@@ -97,7 +97,6 @@ export const userInfoPrompt = (userInfo?: {
   name: string;
   callSign: string;
   location: string;
-  userRoles: string[];
 }) => {
   if (!userInfo) return '';
 
@@ -191,7 +190,6 @@ export function viper7SystemPrompt({
     name: string;
     callSign: string;
     location: string;
-    userRoles: string[];
   };
   /**
    * Present only when the learner has REVIEWED their profile. The reviewed

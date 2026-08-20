@@ -29,7 +29,6 @@ export type BuildChatStreamOptions = {
     name: string;
     callSign: string;
     location: string;
-    userRoles: string[];
   };
   subscriptions: string[];
   writer?: { write: (p: unknown) => void };

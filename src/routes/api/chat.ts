@@ -6,7 +6,6 @@ import {
 } from 'ai';
 import { z } from 'zod';
 import { buildChatStream } from '#/ai/chat';
-import { getUserRoleNames } from '#/db/admin';
 import { appendMessages, ensureChat } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { getActiveOrgId } from '#/lib/active-org.server';
@@ -31,11 +30,11 @@ function textOf(message: UIMessage): string {
 }
 
 /**
- * Streaming chat endpoint: authenticates, loads the viper7 persona + the
- * caller's roles, then hands off to `buildChatStream` (ai@6 `streamText`)
- * and pipes its output back as a UI message stream. Persistence (creating/
- * continuing the chat row and appending the user + assistant turn) happens
- * in `onFinish`, after the stream has already been sent to the client —
+ * Streaming chat endpoint: authenticates, loads the viper7 persona, then
+ * hands off to `buildChatStream` (ai@6 `streamText`) and pipes its output
+ * back as a UI message stream. Persistence (creating/continuing the chat
+ * row and appending the user + assistant turn) happens in `onFinish`,
+ * after the stream has already been sent to the client —
  * a persistence failure is logged and swallowed so it can never surface as
  * a broken response for a turn the user already saw stream successfully.
  */
@@ -67,13 +66,12 @@ export async function chatHandler(request: Request): Promise<Response> {
     courseSlug?: string;
   };
 
-  const [persona, userRoles, skaProfile] = await Promise.all([
+  const [persona, skaProfile] = await Promise.all([
     // Personas are org-level and a course may pin its own: this resolves
     // `course_orgs.personaId` → the org default → null (prompt defaults).
     // It reads published `content` only — a persona's unpublished
     // `draftContent` must never reach a live system prompt.
     resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
-    getUserRoleNames(session.user.id),
     // Reviewed profiles only, and section-narrowed by whether a course is in
     // context — see resolveChatSkaProfile. Joins the existing parallel read
     // rather than adding a round trip of its own.
@@ -84,7 +82,6 @@ export async function chatHandler(request: Request): Promise<Response> {
     name: session.user.name ?? 'unknown',
     callSign: 'unknown',
     location: 'unknown',
-    userRoles,
   };
 
   // TODO: no subscriptions reader exists in this repo yet — wire this up to

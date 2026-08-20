@@ -7,7 +7,6 @@ const {
   resolvePersonaForChat,
   ensureChat,
   appendMessages,
-  getUserRoleNames,
   resolveChatSkaProfile,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -15,7 +14,6 @@ const {
   resolvePersonaForChat: vi.fn(),
   ensureChat: vi.fn(),
   appendMessages: vi.fn(),
-  getUserRoleNames: vi.fn(),
   resolveChatSkaProfile: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
@@ -25,7 +23,6 @@ vi.mock('#/ai/chat', () => ({ buildChatStream, isAssociateFrom: () => false }));
 vi.mock('#/db/course-orgs', () => ({ resolvePersonaForChat }));
 vi.mock('#/lib/active-org.server', () => ({ getActiveOrgId: () => 1 }));
 vi.mock('#/db/chat', () => ({ ensureChat, appendMessages }));
-vi.mock('#/db/admin', () => ({ getUserRoleNames }));
 // Mocked rather than left real because the module reaches `#/db/schema`
 // transitively; the route only passes its result through to `buildChatStream`,
 // which is mocked too, so nothing here depends on its internals.
@@ -47,7 +44,6 @@ beforeEach(() => {
     content: { basicInfo: 'published' },
     source: 'course',
   });
-  getUserRoleNames.mockResolvedValue([]);
   resolveChatSkaProfile.mockResolvedValue(undefined);
   ensureChat.mockResolvedValue('chat-1');
   appendMessages.mockResolvedValue(undefined);

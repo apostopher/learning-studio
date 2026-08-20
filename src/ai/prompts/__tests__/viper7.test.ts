@@ -9,7 +9,6 @@ describe('viper7SystemPrompt', () => {
         name: 'Rahul',
         callSign: 'cooker',
         location: 'Perth',
-        userRoles: ['instructor'],
       },
     });
     expect(s).toContain('cooker');
@@ -19,18 +18,23 @@ describe('viper7SystemPrompt', () => {
    * Regression pin for the dead role clause removed in Task 13: REVIEWER,
    * SME, and ASSOCIATE were never real roles (this feature's role is
    * `subject-expert`), so the prompt must never assert an access model that
-   * doesn't exist — access control lives in code, not in the prompt.
+   * doesn't exist — access control lives in code, not in the prompt. `userInfo`
+   * no longer has a `userRoles` field at all (see `#/ai/chat.ts` and
+   * `src/routes/api/chat.ts`, which stopped computing it), so this pins the
+   * positive guarantee: the prompt carries no roles-derived block whatsoever,
+   * not just that the stale phrasing is gone.
    */
-  it('never asserts the stale REVIEWER/SME/ASSOCIATE access clause', () => {
+  it('builds the prompt with no roles block at all', () => {
     const s = viper7SystemPrompt({
       isAssociate: false,
       userInfo: {
         name: 'Rahul',
         callSign: 'cooker',
         location: 'Perth',
-        userRoles: ['instructor'],
       },
     });
+    expect(s).toContain('cooker');
+    expect(s).not.toContain('roles in the course');
     expect(s).not.toContain('REVIEWER');
     expect(s).not.toContain('SME');
     expect(s).not.toContain('prepaid access');
