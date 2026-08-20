@@ -532,8 +532,26 @@ export function hasAdminAccess(roles: string[]): boolean {
  * see — and, because the automatic path only writes upward, it is the only
  * correction mechanism in the system. Folding it into an existing entity would
  * grant that power silently to everyone who already holds it.
+ *
+ * `course` is org-level: creating and deleting courses is a university act, and
+ * a course-scoped role cannot create the course it would be scoped to.
+ *
+ * `structure`, `content` and `staff` are per-course — checked against
+ * `course_staff`, not against a global role. They are separate entities because
+ * a course manager prepares the scaffolding (modules, lessons, ordering, level
+ * tags) while a subject expert owns the substance (material, video, quiz,
+ * debrief). Folding them together would give an assistant authority over the
+ * syllabus.
  */
-export const PERMISSION_ENTITIES = ['user', 'enrolment', 'level'] as const;
+export const PERMISSION_ENTITIES = [
+  'user',
+  'enrolment',
+  'level',
+  'course',
+  'structure',
+  'content',
+  'staff',
+] as const;
 export type PermissionEntity = (typeof PERMISSION_ENTITIES)[number];
 
 export const PERMISSION_ACTIONS = [
@@ -559,7 +577,25 @@ export const GRANTABLE_PERMISSIONS: Record<
   user: ['read', 'create', 'update'],
   enrolment: ['read', 'create', 'delete'],
   level: ['read', 'update'],
+  course: ['read', 'create', 'update', 'delete'],
+  structure: ['read', 'create', 'update', 'delete'],
+  content: ['read', 'create', 'update', 'delete'],
+  staff: ['read', 'create', 'delete'],
 };
+
+/** Entities resolved against `course_staff` rather than a global role. */
+export const COURSE_SCOPED_ENTITIES = [
+  'structure',
+  'content',
+  'staff',
+] as const;
+export type CourseScopedEntity = (typeof COURSE_SCOPED_ENTITIES)[number];
+
+export function isCourseScopedEntity(
+  entity: PermissionEntity,
+): entity is CourseScopedEntity {
+  return (COURSE_SCOPED_ENTITIES as readonly string[]).includes(entity);
+}
 
 export const permissionSchema = z.object({
   entity: z.enum(PERMISSION_ENTITIES),

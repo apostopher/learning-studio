@@ -269,7 +269,12 @@ describe('PUT /api/admin/role-permissions — owner only', () => {
 
   it('rejects an entity that has no endpoint behind it', async () => {
     const res = await putRolePermissionHandler(
-      req({ role: 'admin', entity: 'course', action: 'delete', granted: true }),
+      req({
+        role: 'admin',
+        entity: 'made-up',
+        action: 'delete',
+        granted: true,
+      }),
     );
     expect(res.status).toBe(400);
     expect(m.setRolePermission).not.toHaveBeenCalled();

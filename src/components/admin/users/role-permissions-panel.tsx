@@ -26,6 +26,10 @@ const ENTITY_LABELS: Record<PermissionEntity, string> = {
   user: 'People',
   enrolment: 'Course access',
   level: 'Pilot levels',
+  course: 'Courses',
+  structure: 'Course structure',
+  content: 'Course content',
+  staff: 'Course staff',
 };
 
 const ACTION_LABELS: Record<PermissionAction, string> = {
