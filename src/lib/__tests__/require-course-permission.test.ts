@@ -17,10 +17,9 @@ vi.mock('#/db/course-staff', () => ({
 }));
 // `hasPermission` is pure — stubbing it would mean the wildcard logic under
 // test was written twice and could drift — so `#/db/permissions` is only
-// partially mocked. Loading it for real drags in `#/db` and `#/db/schema`,
-// and the latter imports `@/types`, an alias vitest cannot resolve (repo-wide
-// finding, see .superpowers/sdd/progress.md). Stubbing those two transitive
-// modules keeps the real `hasPermission` reachable without a database.
+// partially mocked. Loading it for real pulls in `#/db`, whose module body
+// constructs a pg Pool, and the whole schema graph behind it. These two stubs
+// keep the real `hasPermission` reachable with no database machinery at all.
 vi.mock('#/db', () => ({ db: {} }));
 vi.mock('#/db/schema', () => ({
   rolePermissionsTable: {},

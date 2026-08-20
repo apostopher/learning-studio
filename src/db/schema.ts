@@ -38,7 +38,7 @@ import {
   type UserLevel,
   UserLevelSchema,
   UserLevelsSchema,
-} from '@/types';
+} from '#/types';
 
 export * from './auth-schema';
 
