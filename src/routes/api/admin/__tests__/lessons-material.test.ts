@@ -1,12 +1,13 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Fully stub admin-functions.server (see mocking rules: no importOriginal on
-// internal @/-using modules). The route imports ForbiddenError from this same
+// internal #/-using modules). The route imports ForbiddenError from this same
 // mocked path, so this stub class is what `instanceof` checks against.
 const {
-  requireAdmin,
+  requireCoursePermission,
   ForbiddenError,
+  getCourseIdForLessonId,
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
 } = vi.hoisted(() => {
@@ -17,16 +18,16 @@ const {
     }
   }
   return {
-    requireAdmin: vi.fn(),
+    requireCoursePermission: vi.fn(),
     ForbiddenError,
+    getCourseIdForLessonId: vi.fn(),
     getLessonMaterialByLessonId: vi.fn(),
     upsertLessonMaterial: vi.fn(),
   };
 });
-vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin,
-  ForbiddenError,
-}));
+vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
+vi.mock('#/lib/permissions.server', () => ({ requireCoursePermission }));
+vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
@@ -49,34 +50,84 @@ function getReq(): Request {
   return new Request('http://test/api/admin/lessons/1/material');
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  getCourseIdForLessonId.mockResolvedValue(42);
+  requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+});
+
 describe('lessons material route', () => {
-  it('GET returns 403 for a non-admin', async () => {
-    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
-    expect((await getMaterialHandler(getReq(), '1')).status).toBe(403);
+  it('GET asks for content:read scoped to the lesson’s course', async () => {
+    getLessonMaterialByLessonId.mockResolvedValueOnce(null);
+    await getMaterialHandler(getReq(), '1');
+    expect(requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'content',
+      'read',
+    );
+  });
+
+  it('GET returns 403 for a refused actor, without reading the material', async () => {
+    requireCoursePermission.mockRejectedValueOnce(new ForbiddenError());
+    const res = await getMaterialHandler(getReq(), '1');
+    expect(res.status).toBe(403);
+    expect(getLessonMaterialByLessonId).not.toHaveBeenCalled();
+  });
+
+  it('GET 404s a lesson that does not exist, before guarding', async () => {
+    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    const res = await getMaterialHandler(getReq(), '999');
+    expect(res.status).toBe(404);
+    expect(requireCoursePermission).not.toHaveBeenCalled();
   });
 
   it('GET 400 on a bad lesson id', async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
-    expect((await getMaterialHandler(getReq(), 'abc')).status).toBe(400);
+    const res = await getMaterialHandler(getReq(), 'abc');
+    expect(res.status).toBe(400);
+    expect(getCourseIdForLessonId).not.toHaveBeenCalled();
   });
 
   it('GET returns the material row (or null)', async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
     getLessonMaterialByLessonId.mockResolvedValueOnce(null);
     const res = await getMaterialHandler(getReq(), '1');
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
   });
 
+  it('POST asks for content:update scoped to the lesson’s course', async () => {
+    upsertLessonMaterial.mockResolvedValueOnce({ id: 7, ...material });
+    await saveMaterialHandler(postReq(material), '1');
+    expect(requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'content',
+      'update',
+    );
+  });
+
+  it('POST 403s a course manager (read-only on content) without writing', async () => {
+    requireCoursePermission.mockRejectedValueOnce(new ForbiddenError());
+    const res = await saveMaterialHandler(postReq(material), '1');
+    expect(res.status).toBe(403);
+    expect(upsertLessonMaterial).not.toHaveBeenCalled();
+  });
+
+  it('POST 404s a lesson that does not exist, before guarding or parsing the body', async () => {
+    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    const res = await saveMaterialHandler(postReq(material), '999');
+    expect(res.status).toBe(404);
+    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(upsertLessonMaterial).not.toHaveBeenCalled();
+  });
+
   it('POST 400 on an invalid body', async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
     expect((await saveMaterialHandler(postReq({ text: 5 }), '1')).status).toBe(
       400,
     );
   });
 
   it("POST 404 when the lesson doesn't exist", async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
     upsertLessonMaterial.mockResolvedValueOnce(null);
     expect((await saveMaterialHandler(postReq(material), '1')).status).toBe(
       404,
@@ -84,7 +135,6 @@ describe('lessons material route', () => {
   });
 
   it('POST upserts and returns the saved row', async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
     const saved = { id: 7, lessonSlug: 'l', ...material };
     upsertLessonMaterial.mockResolvedValueOnce(saved);
     const res = await saveMaterialHandler(postReq(material), '1');
@@ -94,7 +144,6 @@ describe('lessons material route', () => {
   });
 
   it('POST 500 when upsertLessonMaterial rejects', async () => {
-    requireAdmin.mockResolvedValueOnce({ userId: 'u', roles: ['admin'] });
     upsertLessonMaterial.mockRejectedValueOnce(new Error('db down'));
     expect((await saveMaterialHandler(postReq(material), '1')).status).toBe(
       500,

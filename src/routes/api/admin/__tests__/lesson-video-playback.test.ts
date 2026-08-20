@@ -5,27 +5,30 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 // Fully stub admin-functions.server (see mocking rules: no importOriginal on
 // internal alias-using modules). The route imports ForbiddenError from this same
 // mocked path, so this stub class is what `instanceof` checks against.
-const { requireAdmin, ForbiddenError, resolveLessonPlayback } = vi.hoisted(
-  () => {
-    class ForbiddenError extends Error {
-      constructor() {
-        super('Forbidden');
-        this.name = 'ForbiddenError';
-      }
-    }
-    return {
-      requireAdmin: vi.fn(),
-      ForbiddenError,
-      // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
-      // is a tsc error, not something only a runtime parse would catch.
-      resolveLessonPlayback: vi.fn<() => Promise<PlaybackResult | null>>(),
-    };
-  },
-);
-vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin,
+const {
+  requireCoursePermission,
   ForbiddenError,
-}));
+  getCourseIdForLessonId,
+  resolveLessonPlayback,
+} = vi.hoisted(() => {
+  class ForbiddenError extends Error {
+    constructor() {
+      super('Forbidden');
+      this.name = 'ForbiddenError';
+    }
+  }
+  return {
+    requireCoursePermission: vi.fn(),
+    ForbiddenError,
+    getCourseIdForLessonId: vi.fn(),
+    // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
+    // is a tsc error, not something only a runtime parse would catch.
+    resolveLessonPlayback: vi.fn<() => Promise<PlaybackResult | null>>(),
+  };
+});
+vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
+vi.mock('#/lib/permissions.server', () => ({ requireCoursePermission }));
+vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
 vi.mock('#/db/admin', () => ({ resolveLessonPlayback }));
 
 import { lessonPlaybackSchema } from '#/lib/admin-schemas';
@@ -37,7 +40,19 @@ const req = () => new Request('http://test/api/admin/lessons/1/video-playback');
 describe('getVideoPlaybackHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    requireAdmin.mockResolvedValue({ id: 'admin' });
+    getCourseIdForLessonId.mockResolvedValue(42);
+    requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  });
+
+  it('asks for content:read scoped to the lesson’s course', async () => {
+    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+    await getVideoPlaybackHandler(req(), '1');
+    expect(requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'content',
+      'read',
+    );
   });
 
   it('returns a resolved playback the client schema can actually parse', async () => {
@@ -71,8 +86,8 @@ describe('getVideoPlaybackHandler', () => {
     expect(parsed).toEqual({ status: 'rendering' });
   });
 
-  it('403s a non-admin without touching the database', async () => {
-    requireAdmin.mockRejectedValue(new ForbiddenError());
+  it('403s a refused actor without touching the database', async () => {
+    requireCoursePermission.mockRejectedValue(new ForbiddenError());
 
     const res = await getVideoPlaybackHandler(req(), '1');
 
@@ -80,10 +95,21 @@ describe('getVideoPlaybackHandler', () => {
     expect(resolveLessonPlayback).not.toHaveBeenCalled();
   });
 
+  it('404s a lesson that does not exist, before guarding', async () => {
+    getCourseIdForLessonId.mockResolvedValue(null);
+
+    const res = await getVideoPlaybackHandler(req(), '999');
+
+    expect(res.status).toBe(404);
+    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(resolveLessonPlayback).not.toHaveBeenCalled();
+  });
+
   it('400s an invalid lesson id', async () => {
     const res = await getVideoPlaybackHandler(req(), 'abc');
 
     expect(res.status).toBe(400);
+    expect(getCourseIdForLessonId).not.toHaveBeenCalled();
     expect(resolveLessonPlayback).not.toHaveBeenCalled();
   });
 

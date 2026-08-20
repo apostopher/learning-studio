@@ -1,11 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonMaterialByLessonId, upsertLessonMaterial } from '#/db/lesson';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { getCourseIdForLessonId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
+import type { PermissionAction } from '#/lib/admin-schemas';
+import { requireCoursePermission } from '#/lib/permissions.server';
 import { LessonMaterialGenerationSchema } from '#/types';
 
-async function guard(request: Request): Promise<Response | null> {
+/**
+ * Material is content: a course manager may read it, only a subject expert
+ * may write it.
+ */
+async function guard(
+  request: Request,
+  courseId: number,
+  action: PermissionAction,
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireCoursePermission(request.headers, courseId, 'content', action);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -24,12 +35,19 @@ export async function getMaterialHandler(
   request: Request,
   lessonIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const lessonId = parseLessonId(lessonIdRaw);
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
+  // Resolve the course before guarding: a lesson that doesn't exist must
+  // 404, not 403 — guarding on a null course id would misreport "no such
+  // lesson" as "forbidden".
+  const courseId = await getCourseIdForLessonId(lessonId);
+  if (courseId === null) {
+    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+  }
+  const denied = await guard(request, courseId, 'read');
+  if (denied) return denied;
   const material = await getLessonMaterialByLessonId(lessonId);
   return Response.json(material ?? null);
 }
@@ -38,12 +56,16 @@ export async function saveMaterialHandler(
   request: Request,
   lessonIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const lessonId = parseLessonId(lessonIdRaw);
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
+  const courseId = await getCourseIdForLessonId(lessonId);
+  if (courseId === null) {
+    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+  }
+  const denied = await guard(request, courseId, 'update');
+  if (denied) return denied;
 
   let body: unknown;
   try {

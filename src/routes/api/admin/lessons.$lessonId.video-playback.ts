@@ -1,12 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { resolveLessonPlayback } from '#/db/admin';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { getCourseIdForLessonId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
+import { requireCoursePermission } from '#/lib/permissions.server';
 import { PlaybackError } from '#/lib/video-providers/errors';
 
-/** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
-async function guard(request: Request): Promise<Response | null> {
+/** Video playback is content, read-only here. */
+async function guard(
+  request: Request,
+  courseId: number,
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireCoursePermission(request.headers, courseId, 'content', 'read');
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -25,12 +30,20 @@ export async function getVideoPlaybackHandler(
   request: Request,
   rawLessonId: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const lessonId = parseLessonId(rawLessonId);
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
+  // Resolve the course before guarding: a lesson that doesn't exist must
+  // 404, not 403 — guarding on a null course id would misreport "no such
+  // lesson" as "forbidden". Distinct from the "no video assigned" 404 below,
+  // which only fires once we know the lesson is real.
+  const courseId = await getCourseIdForLessonId(lessonId);
+  if (courseId === null) {
+    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+  }
+  const denied = await guard(request, courseId);
+  if (denied) return denied;
 
   try {
     const playback = await resolveLessonPlayback(lessonId);

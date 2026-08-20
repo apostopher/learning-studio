@@ -8,18 +8,32 @@ import {
   updateModuleDependencies,
   updateModuleSequential,
 } from '#/db/admin';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { getCourseIdForModuleId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   reorderModuleInputSchema,
   updateModuleDependenciesInputSchema,
   updateModuleInputSchema,
   updateModuleSequentialInputSchema,
 } from '#/lib/admin-schemas';
+import { requireCoursePermission } from '#/lib/permissions.server';
 
-/** Admin guard — returns a 403 Response to short-circuit, or null to proceed. */
-async function guard(request: Request): Promise<Response | null> {
+/**
+ * Course-scoped guard — modules are structure, full CRUD for a course manager.
+ * Returns a 403 Response to short-circuit, or null to proceed.
+ */
+async function guard(
+  request: Request,
+  courseId: number,
+  action: 'update' | 'delete',
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireCoursePermission(
+      request.headers,
+      courseId,
+      'structure',
+      action,
+    );
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -38,12 +52,19 @@ export async function patchModuleHandler(
   request: Request,
   moduleIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const moduleId = parseModuleId(moduleIdRaw);
   if (moduleId === null) {
     return Response.json({ error: 'Invalid module id' }, { status: 400 });
   }
+  // Resolve the course before guarding: a module that doesn't exist must 404,
+  // not 403 — guarding on a null course id would misreport "no such module"
+  // as "forbidden".
+  const courseId = await getCourseIdForModuleId(moduleId);
+  if (courseId === null) {
+    return Response.json({ error: 'Module not found' }, { status: 404 });
+  }
+  const denied = await guard(request, courseId, 'update');
+  if (denied) return denied;
   let body: unknown;
   try {
     body = await request.json();
@@ -114,12 +135,16 @@ export async function deleteModuleHandler(
   request: Request,
   moduleIdRaw: string,
 ): Promise<Response> {
-  const denied = await guard(request);
-  if (denied) return denied;
   const moduleId = parseModuleId(moduleIdRaw);
   if (moduleId === null) {
     return Response.json({ error: 'Invalid module id' }, { status: 400 });
   }
+  const courseId = await getCourseIdForModuleId(moduleId);
+  if (courseId === null) {
+    return Response.json({ error: 'Module not found' }, { status: 404 });
+  }
+  const denied = await guard(request, courseId, 'delete');
+  if (denied) return denied;
   const deleted = await deleteModule(moduleId);
   if (!deleted) return new Response('Not found', { status: 404 });
   return new Response(null, { status: 204 });

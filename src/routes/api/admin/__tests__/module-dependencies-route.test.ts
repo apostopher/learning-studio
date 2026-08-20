@@ -10,7 +10,8 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
-    requireAdmin: vi.fn(),
+    requireCoursePermission: vi.fn(),
+    getCourseIdForModuleId: vi.fn(),
     deleteModule: vi.fn(),
     reorderModule: vi.fn(),
     updateModule: vi.fn(),
@@ -18,8 +19,13 @@ const m = vi.hoisted(() => {
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin: m.requireAdmin,
   ForbiddenError: m.ForbiddenError,
+}));
+vi.mock('#/lib/permissions.server', () => ({
+  requireCoursePermission: m.requireCoursePermission,
+}));
+vi.mock('#/db/lesson-access', () => ({
+  getCourseIdForModuleId: m.getCourseIdForModuleId,
 }));
 vi.mock('#/db/admin', () => ({
   deleteModule: m.deleteModule,
@@ -28,7 +34,7 @@ vi.mock('#/db/admin', () => ({
   updateModuleDependencies: m.updateModuleDependencies,
 }));
 
-import { patchModuleHandler } from '../modules.$moduleId';
+import { deleteModuleHandler, patchModuleHandler } from '../modules.$moduleId';
 
 const patch = (body: unknown): Request =>
   new Request('http://test/api/admin/modules/7', {
@@ -39,17 +45,47 @@ const patch = (body: unknown): Request =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
+  m.getCourseIdForModuleId.mockResolvedValue(42);
+  m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
 });
 
-describe('patchModuleHandler — dependencies', () => {
-  it('403s a non-admin before touching the database', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+describe('patchModuleHandler — course resolution and guard', () => {
+  it('asks for structure:update scoped to the module’s course', async () => {
+    m.updateModuleDependencies.mockResolvedValue({ ok: true, dependsOn: [] });
+    await patchModuleHandler(patch({ dependsOn: [] }), '7');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'structure',
+      'update',
+    );
+  });
+
+  it('404s a module that does not exist, before guarding', async () => {
+    m.getCourseIdForModuleId.mockResolvedValue(null);
+    const res = await patchModuleHandler(patch({ dependsOn: ['a'] }), '999');
+    expect(res.status).toBe(404);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.updateModuleDependencies).not.toHaveBeenCalled();
+  });
+
+  it('403s a refused course manager before touching the database', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await patchModuleHandler(patch({ dependsOn: ['a'] }), '7');
     expect(res.status).toBe(403);
     expect(m.updateModuleDependencies).not.toHaveBeenCalled();
   });
 
+  it('400s an invalid module id without resolving a course or guarding', async () => {
+    const res = await patchModuleHandler(patch({ dependsOn: ['a'] }), 'abc');
+    expect(res.status).toBe(400);
+    expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.updateModuleDependencies).not.toHaveBeenCalled();
+  });
+});
+
+describe('patchModuleHandler — dependencies', () => {
   it('forwards the parsed slugs to the writer', async () => {
     // The point of the whole route: assert what the writer RECEIVED, not that
     // the response looks plausible.
@@ -106,12 +142,6 @@ describe('patchModuleHandler — dependencies', () => {
     expect(res.status).toBe(404);
   });
 
-  it('400s an invalid module id without calling the writer', async () => {
-    const res = await patchModuleHandler(patch({ dependsOn: ['a'] }), 'abc');
-    expect(res.status).toBe(400);
-    expect(m.updateModuleDependencies).not.toHaveBeenCalled();
-  });
-
   it('does not route a rename to the dependency writer', async () => {
     // The two bodies are disjoint, and the dependency branch is checked first
     // — a rename must still reach updateModule.
@@ -129,5 +159,40 @@ describe('patchModuleHandler — dependencies', () => {
     );
     expect(m.updateModuleDependencies).not.toHaveBeenCalled();
     expect(m.reorderModule).toHaveBeenCalled();
+  });
+});
+
+describe('deleteModuleHandler', () => {
+  it('asks for structure:delete scoped to the module’s course', async () => {
+    m.deleteModule.mockResolvedValue(true);
+    await deleteModuleHandler(new Request('http://test/x'), '7');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'structure',
+      'delete',
+    );
+  });
+
+  it('404s a module that does not exist, before guarding', async () => {
+    m.getCourseIdForModuleId.mockResolvedValue(null);
+    const res = await deleteModuleHandler(new Request('http://test/x'), '999');
+    expect(res.status).toBe(404);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.deleteModule).not.toHaveBeenCalled();
+  });
+
+  it('403s a refused course manager without deleting', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await deleteModuleHandler(new Request('http://test/x'), '7');
+    expect(res.status).toBe(403);
+    expect(m.deleteModule).not.toHaveBeenCalled();
+  });
+
+  it('deletes once permitted', async () => {
+    m.deleteModule.mockResolvedValue(true);
+    const res = await deleteModuleHandler(new Request('http://test/x'), '7');
+    expect(res.status).toBe(204);
+    expect(m.deleteModule).toHaveBeenCalledWith(7);
   });
 });
