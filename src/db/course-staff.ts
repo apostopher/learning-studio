@@ -1,0 +1,181 @@
+import { and, eq } from 'drizzle-orm';
+import { db } from '#/db';
+import {
+  courseStaffTable,
+  userProfileTable,
+  userRolesTable,
+} from '#/db/schema';
+
+export type CourseStaffMember = {
+  userId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  roles: string[];
+};
+
+export type AssignCourseStaffInput = {
+  userId: string;
+  courseId: number;
+  roleName: string;
+  assignedBy: string;
+};
+
+/**
+ * The roles this person holds ON this course. Empty for everyone else.
+ *
+ * This runs on every gated request for a signed-in user, which is why
+ * `course_staff_user_course_idx` exists.
+ */
+export async function getCourseRoleNames(
+  userId: string,
+  courseId: number,
+): Promise<string[]> {
+  const rows = await db
+    .select({ name: userRolesTable.name })
+    .from(courseStaffTable)
+    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(courseStaffTable.courseId, courseId),
+      ),
+    );
+  return rows.map((r) => r.name);
+}
+
+/** Does this person hold any staff role on this course? Drives the gate bypass. */
+export async function isCourseStaff(
+  userId: string,
+  courseId: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: courseStaffTable.id })
+    .from(courseStaffTable)
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(courseStaffTable.courseId, courseId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Staff on ANY course.
+ *
+ * Used only by the lesson-material parser, which takes a file and returns
+ * generated material without persisting anything and without carrying a course
+ * id of any kind. Course-scoping it would mean inventing an identifier the
+ * client does not have, for a route that writes nothing.
+ */
+export async function isAnyCourseStaff(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: courseStaffTable.id })
+    .from(courseStaffTable)
+    .where(eq(courseStaffTable.userId, userId))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Everyone staffed on a course, one entry per person with their roles collected.
+ *
+ * A single join, unlike `listUsers`' four separate queries: that function
+ * de-dupes a user × roles × courses × levels cartesian product spanning every
+ * account in the org, where the join multiplies rows well past what's cheap to
+ * ship over the wire. Here the query is already scoped to one course and the
+ * only multiplicity is roles-per-person-per-course — at most two, since
+ * `COURSE_SCOPED_ROLES` has two entries. A join stays small and reads as one
+ * query instead of three round trips to assemble by hand.
+ */
+export async function listCourseStaff(
+  courseId: number,
+): Promise<CourseStaffMember[]> {
+  const rows = await db
+    .select({
+      userId: courseStaffTable.userId,
+      email: userProfileTable.email,
+      firstName: userProfileTable.firstName,
+      lastName: userProfileTable.lastName,
+      role: userRolesTable.name,
+    })
+    .from(courseStaffTable)
+    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
+    .innerJoin(
+      userProfileTable,
+      eq(userProfileTable.userId, courseStaffTable.userId),
+    )
+    .where(eq(courseStaffTable.courseId, courseId));
+
+  const byUser = new Map<string, CourseStaffMember>();
+  for (const row of rows) {
+    const existing = byUser.get(row.userId);
+    if (existing) {
+      existing.roles.push(row.role);
+      continue;
+    }
+    byUser.set(row.userId, {
+      userId: row.userId,
+      email: row.email,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      roles: [row.role],
+    });
+  }
+  return Array.from(byUser.values());
+}
+
+/** Add a staff assignment. Idempotent — re-assigning the same role is a no-op. */
+export async function assignCourseStaff(
+  input: AssignCourseStaffInput,
+): Promise<{ ok: true } | { ok: false; reason: 'not-found' }> {
+  const [role] = await db
+    .select({ id: userRolesTable.id })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.name, input.roleName))
+    .limit(1);
+  if (!role) return { ok: false, reason: 'not-found' };
+
+  await db
+    .insert(courseStaffTable)
+    .values({
+      userId: input.userId,
+      courseId: input.courseId,
+      roleId: role.id,
+      assignedBy: input.assignedBy,
+    })
+    .onConflictDoNothing({
+      target: [
+        courseStaffTable.userId,
+        courseStaffTable.courseId,
+        courseStaffTable.roleId,
+      ],
+    });
+  return { ok: true };
+}
+
+/** Remove one staff assignment. Silent when the row is already gone. */
+export async function removeCourseStaff(
+  userId: string,
+  courseId: number,
+  roleName: string,
+): Promise<void> {
+  const [role] = await db
+    .select({ id: userRolesTable.id })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.name, roleName))
+    .limit(1);
+  if (!role) return;
+
+  await db
+    .delete(courseStaffTable)
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(courseStaffTable.courseId, courseId),
+        eq(courseStaffTable.roleId, role.id),
+      ),
+    );
+}
