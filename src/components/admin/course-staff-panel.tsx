@@ -45,40 +45,62 @@ interface CourseStaffPanelProps {
 }
 
 /**
- * Why a control this actor can see is not offered to them.
+ * Why the controls this actor can see are not all offered to them.
  *
- * `staff:create` and `staff:delete` are independently grantable, so a roster
- * can legitimately be readable and not writable — and beyond that, removal is
- * railed by ROLE: a subject expert may dismiss their assistant but not a
- * fellow professor. That produces a list where some badges have a Remove
- * control and others do not, which is a genuinely puzzling absence and so
- * earns a sentence. Both controls used to render regardless and 403 on use;
- * hiding them without saying why would only trade a broken control for a
- * mystery.
+ * Returns a LIST, and each condition is tested independently, because two
+ * unrelated things can be true at once: `staff:create` and `staff:delete` are
+ * separately grantable, and on top of that removal is railed by ROLE — a
+ * subject expert may dismiss their assistant but not a fellow professor.
+ *
+ * An earlier version returned one string and early-returned on the first
+ * match, which silently swallowed the case this list exists for: an actor who
+ * cannot assign AND holds a partial removable set saw "you cannot add anyone"
+ * and never reached the locked-role sentence, so the roster showed a Remove
+ * control on one badge, none on the next, and nothing explaining the
+ * difference. Composing rather than branching makes that unrepresentable.
  */
-function staffNotice(
+function staffNotices(
   canAssign: boolean,
   removableRoles: string[],
   staff: CourseStaffMember[],
-): string | null {
+): string[] {
   const canRemoveAny = removableRoles.length > 0;
+
+  // The one genuine merge: "cannot add" plus "cannot remove" says nothing
+  // that "cannot change it" does not, and two sentences would be nagging.
   if (!canAssign && !canRemoveAny) {
-    return 'You can see the staff for this course but not change it. Ask an admin for permission to assign and remove staff here.';
+    return [
+      'You can see the staff for this course but not change it. Ask an admin for permission to assign and remove staff here.',
+    ];
   }
+
+  const notices: string[] = [];
   if (!canAssign) {
-    return 'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.';
+    notices.push(
+      'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.',
+    );
   }
   if (!canRemoveAny) {
-    return 'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.';
+    notices.push(
+      'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.',
+    );
   }
+
   // Only mention what is actually on screen — a rule about a role nobody
   // holds here is a rule about nothing.
   const locked = [...new Set(staff.flatMap((member) => member.roles))].filter(
     (role) => !removableRoles.includes(role),
   );
-  if (locked.length === 0) return null;
-  const names = locked.map((role) => `a ${roleDisplayName(role)}`).join(' or ');
-  return `Only an admin or owner can remove ${names} from this course.`;
+  if (canRemoveAny && locked.length > 0) {
+    const names = locked
+      .map((role) => `a ${roleDisplayName(role)}`)
+      .join(' or ');
+    notices.push(
+      `Only an admin or owner can remove ${names} from this course.`,
+    );
+  }
+
+  return notices;
 }
 
 function staffDisplayName(member: CourseStaffMember): string {
@@ -121,7 +143,7 @@ export const CourseStaffPanel = ({
 }: CourseStaffPanelProps) => {
   const labelByUserId = new Map(people.map((p) => [p.userId, p.label]));
   const personIds = people.map((p) => p.userId);
-  const notice = staffNotice(canAssign, removableRoles, staff);
+  const notices = staffNotices(canAssign, removableRoles, staff);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -360,10 +382,17 @@ export const CourseStaffPanel = ({
                 </form>
               )}
 
-              {notice && (
-                <p className="border-gray-6 border-t pt-5 text-secondary text-sm">
-                  {notice}
-                </p>
+              {notices.length > 0 && (
+                // One paragraph per reason, not one run-on sentence: they are
+                // independent facts and a reader should be able to take them
+                // one at a time.
+                <div className="flex flex-col gap-2 border-gray-6 border-t pt-5">
+                  {notices.map((notice) => (
+                    <p key={notice} className="text-secondary text-sm">
+                      {notice}
+                    </p>
+                  ))}
+                </div>
               )}
             </div>
           </ScrollArea>

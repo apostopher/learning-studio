@@ -27,9 +27,9 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 }));
 
 // The panel is the consumer under test: `canAssign`, `assignableRoles`,
-// `canRemove` and `people` are only meaningful if they arrive HERE. Asserting
-// on the container's own state would pass even if the props stopped being
-// wired.
+// `removableRoles` and `people` are only meaningful if they arrive HERE.
+// Asserting on the container's own state would pass even if the props stopped
+// being wired.
 vi.mock('../course-staff-panel', () => ({
   CourseStaffPanel: (props: Record<string, unknown>) => {
     m.panel(props);

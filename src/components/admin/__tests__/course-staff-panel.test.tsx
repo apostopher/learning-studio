@@ -198,6 +198,61 @@ describe('CourseStaffPanel', () => {
     ).toBeNull();
   });
 
+  /**
+   * The round-3 defect, from the reviewer's throwaway case. `staffNotice`
+   * early-returned on the first matching condition, so an actor who could
+   * neither assign NOR remove a subject expert got only "you cannot add
+   * anyone" — and the roster showed a Remove control on the course-manager
+   * badge, none on the subject-expert badge, and nothing saying why. Reachable
+   * whenever the grid grants `staff:delete` without `staff:create`, which are
+   * independently grantable. The two conditions are now composed, not
+   * branched, so neither can swallow the other.
+   */
+  it('explains the assign gate AND the locked role together', () => {
+    const mixed = [
+      ...staff,
+      {
+        userId: 'u2',
+        email: 'sam@example.com',
+        firstName: 'Sam',
+        lastName: 'Lee',
+        roles: ['course-manager'],
+      },
+    ];
+
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={mixed}
+        canAssign={false}
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Only an admin or owner can remove a Subject Expert from this course.',
+      ),
+    ).toBeTruthy();
+    // And the state it describes is really on screen: one badge keeps its
+    // control, the other does not.
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Course Manager from Sam Lee',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeNull();
+  });
+
   /** A rule about a role nobody on this roster holds is a rule about nothing. */
   it('stays quiet about a locked role that is not on the roster', () => {
     const onlyManagers = [
