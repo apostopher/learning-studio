@@ -19,6 +19,10 @@ export const dataKeys = {
     ['admin', 'course-news-sources', courseId] as const,
   courseStaff: (courseId: number) =>
     ['admin', 'course-staff', courseId] as const,
+  // Keyed by search term: each term is its own cached answer, which is what
+  // lets the picker retype a prefix without re-hitting the server.
+  courseStaffCandidates: (courseId: number, query: string) =>
+    ['admin', 'course-staff-candidates', courseId, query] as const,
   // Accounts and pending invitees arrive together, so one key covers both.
   adminUsers: () => ['admin', 'users'] as const,
   userLevelHistory: (profileId: number, courseId: number) =>

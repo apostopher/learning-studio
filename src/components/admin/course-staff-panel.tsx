@@ -22,8 +22,15 @@ interface CourseStaffPanelProps {
   assignableRoles: string[];
   /** Whether the assign form renders at all. */
   canAssign: boolean;
-  /** Candidates for the person picker. */
+  /** Whether the per-member Remove control renders at all. */
+  canRemove: boolean;
+  /** Candidates for the person picker — a server-side search result. */
   people: CourseStaffPersonOption[];
+  /** The picker's search term. Controlled: the container turns it into a query. */
+  peopleQuery: string;
+  onPeopleQueryChange: (query: string) => void;
+  /** What the picker says when it has nothing to offer, and why. */
+  peopleEmptyLabel: string;
   selectedUserId: string | null;
   onSelectedUserIdChange: (userId: string | null) => void;
   selectedRole: string | null;
@@ -32,6 +39,25 @@ interface CourseStaffPanelProps {
   onRemove: (userId: string, role: string) => void;
   isSaving: boolean;
   error?: string;
+}
+
+/**
+ * Why a control this actor can see is not offered to them.
+ *
+ * `staff:create` and `staff:delete` are independently grantable, so a roster
+ * can legitimately be readable and not writable. Both controls used to render
+ * regardless and 403 on use; hiding them without saying why would only trade a
+ * broken control for a mystery.
+ */
+function readOnlyNotice(canAssign: boolean, canRemove: boolean): string | null {
+  if (canAssign && canRemove) return null;
+  if (!canAssign && !canRemove) {
+    return 'You can see the staff for this course but not change it. Ask an admin for permission to assign and remove staff here.';
+  }
+  if (!canAssign) {
+    return 'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.';
+  }
+  return 'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.';
 }
 
 function staffDisplayName(member: CourseStaffMember): string {
@@ -58,7 +84,11 @@ export const CourseStaffPanel = ({
   isLoading,
   assignableRoles,
   canAssign,
+  canRemove,
   people,
+  peopleQuery,
+  onPeopleQueryChange,
+  peopleEmptyLabel,
   selectedUserId,
   onSelectedUserIdChange,
   selectedRole,
@@ -70,6 +100,7 @@ export const CourseStaffPanel = ({
 }: CourseStaffPanelProps) => {
   const labelByUserId = new Map(people.map((p) => [p.userId, p.label]));
   const personIds = people.map((p) => p.userId);
+  const notice = readOnlyNotice(canAssign, canRemove);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -125,18 +156,33 @@ export const CourseStaffPanel = ({
                           {member.roles.map((role) => (
                             <span
                               key={role}
-                              className="flex items-center gap-1 rounded bg-gray-4 py-0.5 ps-2 pe-1 text-primary text-xs"
+                              className={`flex items-center gap-1 rounded bg-gray-4 py-0.5 text-primary text-xs ${canRemove ? 'ps-2 pe-1' : 'px-2'}`}
                             >
                               {roleAcronym(role)}
-                              <button
-                                type="button"
-                                onClick={() => onRemove(member.userId, role)}
-                                disabled={isSaving}
-                                aria-label={`Remove ${roleDisplayName(role)} from ${name}`}
-                                className="rounded p-0.5 text-secondary transition-colors hover:bg-gray-6 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
-                              >
-                                <X className="h-3 w-3" aria-hidden="true" />
-                              </button>
+                              {/*
+                                With no remove button there is nothing else
+                                carrying the full role name, and "SME" alone
+                                reads as nothing useful. Only rendered in that
+                                case: when the button IS there its accessible
+                                name already says it, and a second copy would
+                                have a screen reader announce it twice.
+                              */}
+                              {!canRemove && (
+                                <span className="sr-only">
+                                  {roleDisplayName(role)}
+                                </span>
+                              )}
+                              {canRemove && (
+                                <button
+                                  type="button"
+                                  onClick={() => onRemove(member.userId, role)}
+                                  disabled={isSaving}
+                                  aria-label={`Remove ${roleDisplayName(role)} from ${name}`}
+                                  className="rounded p-0.5 text-secondary transition-colors hover:bg-gray-6 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+                                >
+                                  <X className="h-3 w-3" aria-hidden="true" />
+                                </button>
+                              )}
                             </span>
                           ))}
                         </div>
@@ -173,6 +219,13 @@ export const CourseStaffPanel = ({
                     itemToStringLabel={(userId: string) =>
                       labelByUserId.get(userId) ?? userId
                     }
+                    // The list is already the answer to `peopleQuery` — the
+                    // search ran on the server, over a directory this actor
+                    // may not read in full. Filtering it again here would
+                    // drop matches whose stored name differs from the label.
+                    filter={null}
+                    inputValue={peopleQuery}
+                    onInputValueChange={onPeopleQueryChange}
                     disabled={isSaving}
                   >
                     {/*
@@ -191,7 +244,7 @@ export const CourseStaffPanel = ({
                       <Combobox.Positioner sideOffset={4} className="z-50">
                         <Combobox.Popup className="w-[var(--anchor-width)] rounded-md border border-gray-6 bg-gray-2 py-1 shadow-lg">
                           <Combobox.Empty className="px-3 py-2 text-secondary text-sm">
-                            No matching people
+                            {peopleEmptyLabel}
                           </Combobox.Empty>
                           <ScrollArea className="max-h-64">
                             <Combobox.List>
@@ -279,6 +332,12 @@ export const CourseStaffPanel = ({
                     Assign
                   </button>
                 </form>
+              )}
+
+              {notice && (
+                <p className="border-gray-6 border-t pt-5 text-secondary text-sm">
+                  {notice}
+                </p>
               )}
             </div>
           </ScrollArea>

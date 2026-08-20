@@ -21,7 +21,11 @@ const baseProps = {
   isLoading: false,
   assignableRoles: ['subject-expert', 'course-manager'],
   canAssign: true,
+  canRemove: true,
   people: [{ userId: 'u2', label: 'Sam Lee (sam@example.com)' }],
+  peopleQuery: '',
+  onPeopleQueryChange: vi.fn(),
+  peopleEmptyLabel: 'Type at least 2 characters to search',
   selectedUserId: null,
   onSelectedUserIdChange: vi.fn(),
   selectedRole: null,
@@ -63,5 +67,70 @@ describe('CourseStaffPanel', () => {
     expect(
       screen.getByRole('combobox', { name: 'Person to assign' }),
     ).toBeTruthy();
+  });
+
+  /**
+   * A hidden control still owes the reader a reason. `staff:read` and
+   * `staff:create` are independently grantable, so "you can look but not
+   * touch" is a real state — and it used to render a live assign form and a
+   * live Remove button that both 403'd.
+   */
+  it('says why the assign form is missing', () => {
+    render(<CourseStaffPanel {...baseProps} staff={staff} canAssign={false} />);
+
+    expect(
+      screen.getByText(
+        'You can remove staff from this course but not add anyone. Ask an admin for permission to assign staff here.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('hides the Remove control, and says why, when the actor cannot remove', () => {
+    render(<CourseStaffPanel {...baseProps} staff={staff} canRemove={false} />);
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        'You can add staff to this course but not remove anyone. Ask an admin for permission to remove staff here.',
+      ),
+    ).toBeTruthy();
+  });
+
+  /**
+   * Losing the remove button must not lose the role's name with it — the
+   * button's accessible name was the only thing spelling out "SME".
+   */
+  it('keeps the full role name reachable once the button is gone', () => {
+    render(<CourseStaffPanel {...baseProps} staff={staff} canRemove={false} />);
+
+    expect(screen.getByText('SME')).toBeTruthy();
+    expect(screen.getByText('Subject Expert')).toBeTruthy();
+  });
+
+  it('explains a wholly read-only roster in one sentence', () => {
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={staff}
+        canAssign={false}
+        canRemove={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'You can see the staff for this course but not change it. Ask an admin for permission to assign and remove staff here.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says nothing extra when the actor can do everything', () => {
+    render(<CourseStaffPanel {...baseProps} staff={staff} />);
+
+    expect(screen.queryByText(/Ask an admin for permission/)).toBeNull();
   });
 });

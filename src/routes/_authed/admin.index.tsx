@@ -8,11 +8,16 @@ export const Route = createFileRoute('/_authed/admin/')({
 
 function AdminCoursesPage() {
   const { permissions } = Route.useRouteContext();
-  // `course:create` is org-level and has no staff fallback — a subject expert
-  // authors inside a course, they do not found one. Reading it here rather
-  // than in the container keeps the permission read in the route, which is the
-  // only place that holds it.
-  const canCreateCourse = hasPermissionKey(permissions, 'course', 'create');
-
-  return <AdminCoursesPageContainer canCreateCourse={canCreateCourse} />;
+  // Two separate facts, deliberately not one. `course:read` decides whether
+  // the list is the whole catalogue or only this actor's staffed courses —
+  // that is what the page's copy describes. `course:create` decides one
+  // button, and is org-level with no staff fallback: a subject expert authors
+  // inside a course, they do not found one. Read here rather than in the
+  // container because the route is the only place holding permissions.
+  return (
+    <AdminCoursesPageContainer
+      canCreateCourse={hasPermissionKey(permissions, 'course', 'create')}
+      canReadCatalogue={hasPermissionKey(permissions, 'course', 'read')}
+    />
+  );
 }

@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   courseSubscriptionsTable,
@@ -25,6 +25,58 @@ export type AdminUser = {
   levels: Record<number, UserLevel>;
   createdAt: Date;
 };
+
+/** One candidate for a staff appointment — the least a picker can be built on. */
+export type StaffCandidate = {
+  userId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+/** LIKE treats these as wildcards; a search for "a_b" must mean "a_b". */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+/**
+ * Accounts matching a search term, for the course-staff person picker.
+ *
+ * Deliberately NOT `listUsers`. That function answers "who has access" for the
+ * People screen and carries roles, entitlements and levels for every account
+ * in the org — a directory dump behind `user:read`, which has an admin floor.
+ * A subject expert holds no global role at all, so they cannot call it, and
+ * appointing the assistant the spec promises them was unreachable.
+ *
+ * The projection is the four fields a picker draws, and nothing else: this is
+ * reachable by anyone holding `staff:create` on any one course, which is a
+ * wider audience than the People screen has. For the same reason the caller
+ * must supply a search term — see the route.
+ */
+export async function searchStaffCandidates(
+  query: string,
+  limit = 20,
+): Promise<StaffCandidate[]> {
+  const pattern = `%${escapeLikePattern(query.trim())}%`;
+  return db
+    .select({
+      userId: userProfileTable.userId,
+      email: userProfileTable.email,
+      firstName: userProfileTable.firstName,
+      lastName: userProfileTable.lastName,
+    })
+    .from(userProfileTable)
+    .where(
+      or(
+        ilike(userProfileTable.email, pattern),
+        ilike(userProfileTable.firstName, pattern),
+        ilike(userProfileTable.lastName, pattern),
+        ilike(userProfileTable.callSign, pattern),
+      ),
+    )
+    .orderBy(asc(userProfileTable.email))
+    .limit(limit);
+}
 
 /**
  * Every account with its roles, course entitlements, and current levels.

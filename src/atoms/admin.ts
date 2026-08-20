@@ -103,8 +103,25 @@ export const embeddingsSearchAtom = atom('');
 /** Whether the current course's staff-assignment dialog is open. */
 export const courseStaffDialogOpenAtom = atom(false);
 
-/** Person picked in the staff dialog's assign form. Cleared after a successful assign. */
-export const courseStaffSelectedUserIdAtom = atom<string | null>(null);
+/**
+ * Person picked in the staff dialog's assign form. Cleared after a successful
+ * assign.
+ *
+ * Holds the label as well as the id because the candidate list is now a
+ * server-side search: the options change as the search term does, so an id
+ * alone would lose its display name the moment the term moved off it.
+ */
+export const courseStaffSelectedPersonAtom = atom<{
+  userId: string;
+  label: string;
+} | null>(null);
+
+/**
+ * The person picker's search term. Lives here, not in the picker, because the
+ * container turns it into a query — the directory is searched on the server,
+ * since no client holds one an SME is allowed to read.
+ */
+export const courseStaffCandidateQueryAtom = atom('');
 
 /** Role picked in the staff dialog's assign form. Cleared after a successful assign. */
 export const courseStaffSelectedRoleAtom = atom<string | null>(null);

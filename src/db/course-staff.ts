@@ -112,10 +112,17 @@ export async function getStaffCourseIds(userId: string): Promise<Set<number>> {
 /**
  * Staff on ANY course.
  *
- * Used only by the lesson-material parser, which takes a file and returns
- * generated material without persisting anything and without carrying a course
- * id of any kind. Course-scoping it would mean inventing an identifier the
- * client does not have, for a route that writes nothing.
+ * Two callers, both of which genuinely have no course id to scope by:
+ *
+ * - The lesson-material parser, which takes a file and returns generated
+ *   material without persisting anything. Course-scoping it would mean
+ *   inventing an identifier the client does not have, for a route that
+ *   writes nothing.
+ * - `resolveAuthContext`, which answers `/admin`'s route guard. Entering the
+ *   admin console is not a per-course question — which course is decided,
+ *   per request, by `requireCoursePermission`. A boolean is all the router
+ *   may hold; a list of ids would be a second copy of course-scoped
+ *   authority living on the client.
  */
 export async function isAnyCourseStaff(userId: string): Promise<boolean> {
   const [row] = await db

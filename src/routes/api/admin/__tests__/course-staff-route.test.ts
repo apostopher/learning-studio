@@ -293,6 +293,40 @@ describe('GET /api/admin/courses/:courseId/staff', () => {
     expect((await res.json()).assignableRoles).toEqual(['course-manager']);
   });
 
+  /**
+   * The per-member Remove button rendered unconditionally before this, so a
+   * `staff:read`-only actor got a live control that 403'd on click.
+   */
+  it('reports removal authority from staff:delete', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      ...ADMIN,
+      permissions: new Set(['staff:read', 'staff:create', 'staff:delete']),
+    });
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    expect((await res.json()).canRemove).toBe(true);
+  });
+
+  it('withholds removal from an actor without staff:delete', async () => {
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    // The base fixture holds read + create only.
+    expect((await res.json()).canRemove).toBe(false);
+  });
+
+  it("grants an owner's wildcard everything", async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      userId: 'o1',
+      roles: ['owner'],
+      courseRoles: [],
+      permissions: new Set(['*']),
+      isOwner: true,
+    });
+    const body = await (
+      await getCourseStaffHandler(req(undefined, 'GET'), '7')
+    ).json();
+    expect(body.canRemove).toBe(true);
+    expect(body.assignableRoles).toEqual(['subject-expert', 'course-manager']);
+  });
+
   it('offers nothing to an actor who can read the roster but not add to it', async () => {
     m.requireCoursePermission.mockResolvedValue({
       ...ADMIN,

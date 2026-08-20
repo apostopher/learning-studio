@@ -1,33 +1,35 @@
 import { useAtom } from 'jotai';
 import { Users } from 'lucide-react';
 import {
+  courseStaffCandidateQueryAtom,
   courseStaffDialogOpenAtom,
+  courseStaffSelectedPersonAtom,
   courseStaffSelectedRoleAtom,
-  courseStaffSelectedUserIdAtom,
 } from '#/atoms/admin';
-import { useAdminUsers } from '#/data-hooks/use-admin-users';
 import {
   CourseStaffRequestError,
+  type StaffCandidate,
   useAssignCourseStaff,
   useCourseStaff,
+  useCourseStaffCandidates,
   useRemoveCourseStaff,
 } from '#/data-hooks/use-course-staff';
-import type { BoardCourse, CourseScopedRole } from '#/lib/admin-schemas';
+import {
+  type BoardCourse,
+  type CourseScopedRole,
+  STAFF_CANDIDATE_MIN_QUERY,
+} from '#/lib/admin-schemas';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import {
   CourseStaffPanel,
   type CourseStaffPersonOption,
 } from './course-staff-panel';
 
-function personLabel(user: {
-  firstName: string | null;
-  lastName: string | null;
-  email: string;
-}): string {
-  const name = [user.firstName, user.lastName]
+function personLabel(candidate: StaffCandidate): string {
+  const name = [candidate.firstName, candidate.lastName]
     .filter((part): part is string => Boolean(part?.trim()))
     .join(' ');
-  return name ? `${name} (${user.email})` : user.email;
+  return name ? `${name} (${candidate.email})` : candidate.email;
 }
 
 /**
@@ -40,37 +42,60 @@ function personLabel(user: {
  * client-side permission check before firing the GET; the request itself is
  * the check, matching how `useCourseBoard` treats a 404 as "no board".
  *
- * `assignableRoles` comes back with the roster rather than being derived
- * here. `/admin` now admits course-scoped staff, so "is an admin" is no longer
- * the same question as "may assign": the set is asymmetric — an admin may
- * appoint either role, a subject expert only a course manager — and no
- * client-side check over global roles can express that. The server computes it
- * with the same function that guards the write, so an option can never appear
- * here that the PUT would refuse. An empty set means no assign form.
+ * `assignableRoles` and `canRemove` come back with the roster rather than
+ * being derived here. `/admin` now admits course-scoped staff, so "is an
+ * admin" is no longer the same question as "may assign": the set is
+ * asymmetric — an admin may appoint either role, a subject expert only a
+ * course manager — and no client-side check over global roles can express
+ * that. The server computes both with the same functions that guard the
+ * writes, so a control can never appear here that the request would refuse.
+ *
+ * Candidates come from a course-scoped search, NOT from `/api/admin/users`:
+ * that endpoint requires `user:read`, which has an admin floor, so for a
+ * subject expert it 403'd and the picker silently offered nobody.
  */
 export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
   const [open, setOpen] = useAtom(courseStaffDialogOpenAtom);
-  const [selectedUserId, setSelectedUserId] = useAtom(
-    courseStaffSelectedUserIdAtom,
+  const [selectedPerson, setSelectedPerson] = useAtom(
+    courseStaffSelectedPersonAtom,
   );
   const [selectedRole, setSelectedRole] = useAtom(courseStaffSelectedRoleAtom);
+  const [candidateQuery, setCandidateQuery] = useAtom(
+    courseStaffCandidateQueryAtom,
+  );
 
   const staffQuery = useCourseStaff(course.id);
-  const adminUsers = useAdminUsers();
+  const candidates = useCourseStaffCandidates(course.id, candidateQuery);
   const assign = useAssignCourseStaff(course.id);
   const remove = useRemoveCourseStaff(course.id);
 
   if (staffQuery.data == null) return null;
 
-  const people: CourseStaffPersonOption[] = (adminUsers.data?.users ?? []).map(
-    (user) => ({ userId: user.userId, label: personLabel(user) }),
+  const { staff, assignableRoles, canRemove } = staffQuery.data;
+  const canAssign = assignableRoles.length > 0;
+
+  const found: CourseStaffPersonOption[] = (candidates.data ?? []).map(
+    (candidate) => ({
+      userId: candidate.userId,
+      label: personLabel(candidate),
+    }),
   );
+  // The picked person is kept in the list even once the search has moved off
+  // them, so the closed picker keeps showing a name rather than a raw user id.
+  const people =
+    selectedPerson && !found.some((p) => p.userId === selectedPerson.userId)
+      ? [selectedPerson, ...found]
+      : found;
 
   const errorOf = (err: unknown) =>
     err instanceof CourseStaffRequestError ? err.message : undefined;
 
-  const { staff, assignableRoles } = staffQuery.data;
-  const canAssign = assignableRoles.length > 0;
+  const peopleEmptyLabel =
+    candidateQuery.trim().length < STAFF_CANDIDATE_MIN_QUERY
+      ? `Type at least ${STAFF_CANDIDATE_MIN_QUERY} characters to search`
+      : candidates.isFetching
+        ? 'Searching…'
+        : 'No matching people';
 
   return (
     <>
@@ -86,22 +111,29 @@ export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
         isLoading={staffQuery.isLoading}
         assignableRoles={assignableRoles}
         canAssign={canAssign}
+        canRemove={canRemove}
         people={people}
-        selectedUserId={selectedUserId}
-        onSelectedUserIdChange={setSelectedUserId}
+        peopleQuery={candidateQuery}
+        onPeopleQueryChange={setCandidateQuery}
+        peopleEmptyLabel={peopleEmptyLabel}
+        selectedUserId={selectedPerson?.userId ?? null}
+        onSelectedUserIdChange={(userId) =>
+          setSelectedPerson(people.find((p) => p.userId === userId) ?? null)
+        }
         selectedRole={selectedRole}
         onSelectedRoleChange={setSelectedRole}
         onAssign={() => {
-          if (!selectedUserId || !selectedRole) return;
+          if (!selectedPerson || !selectedRole) return;
           assign.mutate(
             {
-              userId: selectedUserId,
+              userId: selectedPerson.userId,
               role: selectedRole as CourseScopedRole,
             },
             {
               onSuccess: () => {
-                setSelectedUserId(null);
+                setSelectedPerson(null);
                 setSelectedRole(null);
+                setCandidateQuery('');
               },
             },
           );

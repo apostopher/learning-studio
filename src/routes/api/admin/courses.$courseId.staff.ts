@@ -69,11 +69,24 @@ export function assignableCourseRoles(actor: CourseActor): CourseScopedRole[] {
 }
 
 /**
+ * Whether this actor may take a role away on this course.
+ *
+ * A plain boolean, not a role set: `deleteCourseStaffHandler` enforces
+ * `staff:delete` and nothing finer, so advertising anything more here would be
+ * the panel inventing policy the write does not have. It exists because the
+ * per-member Remove button rendered unconditionally — a live control that
+ * 403s for a `staff:read`-only actor.
+ */
+export function canRemoveCourseStaff(actor: CourseActor): boolean {
+  return hasPermission(actor.permissions, 'staff', 'delete');
+}
+
+/**
  * The roster, plus what this actor may do with it.
  *
- * `assignableRoles` ships with the roster rather than being derived on the
- * client because it depends on `course_staff` and on grants resolved for THIS
- * course — neither of which the browser holds.
+ * `assignableRoles` and `canRemove` ship with the roster rather than being
+ * derived on the client because both depend on `course_staff` and on grants
+ * resolved for THIS course — neither of which the browser holds.
  */
 export async function getCourseStaffHandler(
   request: Request,
@@ -90,6 +103,7 @@ export async function getCourseStaffHandler(
   return Response.json({
     staff: await listCourseStaff(courseId),
     assignableRoles: assignableCourseRoles(actor),
+    canRemove: canRemoveCourseStaff(actor),
   });
 }
 

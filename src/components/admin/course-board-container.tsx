@@ -1,9 +1,18 @@
 import { useCourseBoard } from '@/data-hooks/use-course-board';
-import { CourseActionsContainer } from './course-actions-container';
+import {
+  CourseActionsContainer,
+  type CourseToolbarCapabilities,
+} from './course-actions-container';
 import { CourseBoard } from './course-board';
 import { ModuleBoardContainer } from './module-board-container';
 
-export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
+export const CourseBoardContainer = ({
+  courseId,
+  capabilities,
+}: {
+  courseId: number;
+  capabilities: CourseToolbarCapabilities;
+}) => {
   const { data: board, isLoading, error } = useCourseBoard(courseId);
 
   if (isLoading) {
@@ -23,7 +32,12 @@ export const CourseBoardContainer = ({ courseId }: { courseId: number }) => {
   return (
     <CourseBoard
       courseName={board.course.name}
-      toolbar={<CourseActionsContainer course={board.course} />}
+      toolbar={
+        <CourseActionsContainer
+          course={board.course}
+          capabilities={capabilities}
+        />
+      }
     >
       {board.modules.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">

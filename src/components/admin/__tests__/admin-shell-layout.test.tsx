@@ -97,8 +97,9 @@ describe('AdminShellLayout', () => {
   /**
    * `canSeePeople` used to gate the entire `<nav>`, so an admin without
    * `user:read` — the default, since `role_permissions` ships empty — lost
-   * the Courses link too and got a nav-less shell. Only the People link
-   * should be conditional.
+   * the Courses link too and got a nav-less shell. Both links are conditional
+   * now, but each on its OWN destination: losing People must never take
+   * Courses with it.
    */
   it('keeps the Courses link when the actor cannot see People', async () => {
     await renderAdmin(false);

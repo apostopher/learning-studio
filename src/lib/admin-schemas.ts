@@ -510,6 +510,15 @@ export function isCourseScopedRole(name: string): name is CourseScopedRole {
   return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
 }
 
+/**
+ * The shortest search the course-staff person picker may send.
+ *
+ * Here rather than in the route because both the browser (which stops the
+ * request) and the handler (which refuses it) need the same number, and the
+ * route module imports the database layer.
+ */
+export const STAFF_CANDIDATE_MIN_QUERY = 2;
+
 /** PUT/DELETE body for assigning or removing course staff. */
 export const setCourseStaffInputSchema = z
   .object({

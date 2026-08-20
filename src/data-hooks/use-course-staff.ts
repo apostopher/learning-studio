@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   COURSE_SCOPED_ROLES,
   type SetCourseStaffInput,
+  STAFF_CANDIDATE_MIN_QUERY,
   setCourseStaffInputSchema,
 } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
@@ -37,6 +38,8 @@ const courseStaffMemberSchema = z.object({
 const courseStaffResponseSchema = z.object({
   staff: z.array(courseStaffMemberSchema),
   assignableRoles: z.array(z.enum(COURSE_SCOPED_ROLES)),
+  /** Whether the per-member Remove control may render at all. */
+  canRemove: z.boolean(),
 });
 export type CourseStaffResponse = z.infer<typeof courseStaffResponseSchema>;
 
@@ -125,5 +128,44 @@ export function useRemoveCourseStaff(courseId: number) {
         queryKey: dataKeys.courseStaff(courseId),
       });
     },
+  });
+}
+
+const staffCandidateSchema = z.object({
+  userId: z.string(),
+  email: z.string(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+});
+export type StaffCandidate = z.infer<typeof staffCandidateSchema>;
+
+/**
+ * People who may be appointed to this course's staff, by search term.
+ *
+ * Not `useAdminUsers`. That hook fetches `/api/admin/users`, which requires
+ * `user:read` — a permission with an admin floor that a subject expert cannot
+ * hold. It answered 403, `data` was `undefined`, and the picker silently
+ * offered nobody. This route is guarded on `staff:create` for this course:
+ * exactly the authority that permits the appointment being made.
+ *
+ * Disabled below the minimum term rather than debounced: the request only ever
+ * fires for a search the server would accept, and React Query caches per term,
+ * so retyping a prefix costs nothing.
+ */
+export function useCourseStaffCandidates(courseId: number, query: string) {
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: dataKeys.courseStaffCandidates(courseId, trimmed),
+    queryFn: async (): Promise<StaffCandidate[]> => {
+      const res = await fetch(
+        `/api/admin/courses/${courseId}/staff/candidates?q=${encodeURIComponent(trimmed)}`,
+      );
+      if (!res.ok) {
+        await readError(res, 'Could not search for people');
+      }
+      return staffCandidateSchema.array().parse(await res.json());
+    },
+    enabled: trimmed.length >= STAFF_CANDIDATE_MIN_QUERY,
+    staleTime: 30_000,
   });
 }
