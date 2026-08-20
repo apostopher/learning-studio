@@ -144,11 +144,14 @@ export async function requireOwner(
 }
 
 /**
- * Refuse an action aimed at a privileged account unless the actor is an owner.
+ * Refuse to act on a privileged target unless you are the owner.
  *
- * A permission grants power over ordinary learners only. Without this, an admin
- * holding `user:update` could rewrite an owner's record — the delegation
- * boundary has to hold on the *target* as well as the actor.
+ * "Privileged" means a GLOBAL role only. `getRoleNamesForProfile` reads
+ * `user_profile_roles`, which by construction never contains a course-scoped
+ * role — those live in `course_staff`. That separation is load-bearing: if a
+ * professor counted as privileged here, the admins who hired them could not
+ * enrol them, set their pilot level, or fix their profile, and the *student*
+ * half of a staff account would become unadministrable.
  */
 export async function assertCanActOnProfile(
   actor: PermittedActor,

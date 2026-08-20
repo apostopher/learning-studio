@@ -152,3 +152,41 @@ describe('assertCanActOnProfile', () => {
     expect(m.getRoleNamesForProfile).not.toHaveBeenCalled();
   });
 });
+
+describe('assertCanActOnProfile with course-scoped roles', () => {
+  it('still refuses a target holding a global role', async () => {
+    m.getRoleNamesForProfile.mockResolvedValueOnce(['admin']);
+    await expect(
+      assertCanActOnProfile(
+        { userId: 'a1', roles: ['admin'], permissions: new Set<string>(), isOwner: false },
+        5,
+      ),
+    ).rejects.toThrow('Forbidden');
+  });
+
+  it('permits acting on a professor — a course role is not global privilege', async () => {
+    // `getRoleNamesForProfile` reads `user_profile_roles` only, which never
+    // holds a course-scoped role, so a professor with a `course_staff` grant
+    // and no global role resolves to `[]` here — exactly what the real
+    // implementation returns. If this ever regresses (someone starts writing
+    // course roles into `user_profile_roles`, or widens this function to union
+    // both tables), this test — not a production incident — is what catches it.
+    m.getRoleNamesForProfile.mockResolvedValueOnce([]);
+    await expect(
+      assertCanActOnProfile(
+        { userId: 'a1', roles: ['admin'], permissions: new Set<string>(), isOwner: false },
+        5,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('lets an owner act on anyone', async () => {
+    m.getRoleNamesForProfile.mockResolvedValueOnce(['admin']);
+    await expect(
+      assertCanActOnProfile(
+        { userId: 'o1', roles: ['owner'], permissions: new Set(['*']), isOwner: true },
+        5,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
