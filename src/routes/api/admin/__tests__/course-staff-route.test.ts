@@ -47,7 +47,15 @@ const ADMIN = {
   userId: 'a1',
   roles: ['admin'],
   courseRoles: [],
-  permissions: new Set<string>(['staff:read', 'staff:create', 'staff:delete']),
+  // `enrolment:create` is here because spec §3 gives it to `admin` — and the
+  // auto-enrol on appointment now turns on holding it. The SME below
+  // deliberately has no enrolment grant of any kind, which is spec §3 too.
+  permissions: new Set<string>([
+    'staff:read',
+    'staff:create',
+    'staff:delete',
+    'enrolment:create',
+  ]),
   isOwner: false,
 };
 const SME = {
@@ -222,6 +230,71 @@ describe('PUT /api/admin/courses/:courseId/staff', () => {
     expect(res.status).toBe(404);
     expect(m.addUserEnrolment).not.toHaveBeenCalled();
   });
+
+  /**
+   * Spec §3 gives `subject-expert` `enrolment: —`. An unconditional auto-enrol
+   * handed them the effect of the grant anyway: appoint anyone as a course
+   * manager, a `course_subscriptions` row is written, take the staff role away
+   * again (removal deliberately does not un-enrol) and the access is permanent.
+   * On a paid product that is a free-access dispenser held by someone with no
+   * enrolment authority and no admin in the loop.
+   */
+  it('does not enrol the appointee when the actor holds no enrolment:create', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+
+    const res = await putCourseStaffHandler(
+      req({ userId: 'u9', role: 'course-manager' }),
+      '7',
+    );
+
+    // The appointment still lands — it is the enrolment that is not theirs
+    // to grant.
+    expect(res.status).toBe(204);
+    expect(m.assignCourseStaff).toHaveBeenCalled();
+    expect(m.addUserEnrolment).not.toHaveBeenCalled();
+  });
+
+  it("enrols on an owner's wildcard", async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      userId: 'o1',
+      roles: ['owner'],
+      courseRoles: [],
+      permissions: new Set(['*']),
+      isOwner: true,
+    });
+
+    await putCourseStaffHandler(
+      req({ userId: 'u9', role: 'course-manager' }),
+      '7',
+    );
+
+    expect(m.addUserEnrolment).toHaveBeenCalledWith({
+      userId: 'u9',
+      courseId: 7,
+      grantedBy: 'o1',
+    });
+  });
+
+  /**
+   * A user id the directory does not know used to reach the insert and raise
+   * `course_staff.user_id`'s foreign key, which nothing catches — so a bad
+   * request body read as a server fault.
+   */
+  it('404s an unknown appointee instead of raising the foreign key', async () => {
+    m.assignCourseStaff.mockResolvedValue({
+      ok: false,
+      reason: 'unknown-user',
+    });
+
+    const res = await putCourseStaffHandler(
+      req({ userId: 'nobody', role: 'course-manager' }),
+      '7',
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'User not found' });
+    expect(m.addUserEnrolment).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/admin/courses/:courseId/staff', () => {
@@ -259,6 +332,41 @@ describe('DELETE /api/admin/courses/:courseId/staff', () => {
 
     const res = await deleteCourseStaffHandler(
       req({ userId: 'u9', role: 'subject-expert' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(403);
+    expect(m.removeCourseStaff).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Resignation, restored. The delete rail exists to stop privilege
+   * ESCALATION — an SME must not unseat a peer. Stepping down is privilege
+   * reduction, which that rule has nothing to say about, and without the
+   * exemption only an admin can take the role off a departing professor.
+   */
+  it('lets a subject expert remove THEMSELVES', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 's1', role: 'subject-expert' }, 'DELETE'),
+      '7',
+    );
+
+    expect(res.status).toBe(204);
+    expect(m.removeCourseStaff).toHaveBeenCalledWith('s1', 7, 'subject-expert');
+  });
+
+  /**
+   * The exemption is spent on the actor's own id and nobody else's — the peer
+   * rail has to survive it, or "an SME cannot unseat a professor" becomes
+   * "unless they send a different user id".
+   */
+  it('still refuses an SME removing a DIFFERENT subject expert', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+
+    const res = await deleteCourseStaffHandler(
+      req({ userId: 'someone-else', role: 'subject-expert' }, 'DELETE'),
       '7',
     );
 
@@ -397,6 +505,17 @@ describe('GET /api/admin/courses/:courseId/staff', () => {
       'subject-expert',
       'course-manager',
     ]);
+  });
+
+  /**
+   * The panel draws the resignation control off this — without it a professor
+   * has no Remove button on their own badge and cannot step down through the
+   * UI at all.
+   */
+  it('tells the panel which user it is answering for', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    expect((await res.json()).selfUserId).toBe('s1');
   });
 
   it('offers an SME only a course manager, never a peer', async () => {

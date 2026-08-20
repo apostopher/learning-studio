@@ -27,6 +27,13 @@ interface CourseStaffPanelProps {
    * per panel: an SME may dismiss a course manager and never a peer.
    */
   removableRoles: string[];
+  /**
+   * The signed-in actor's own user id. Their badges always keep a Remove
+   * control whatever `removableRoles` says: the rail stops an SME unseating a
+   * PEER, and resigning escalates nobody. Server-supplied — see
+   * `getCourseStaffHandler` — because the browser holds no trustworthy copy.
+   */
+  selfUserId: string;
   /** Candidates for the person picker — a server-side search result. */
   people: CourseStaffPersonOption[];
   /** The picker's search term. Controlled: the container turns it into a query. */
@@ -63,6 +70,7 @@ function staffNotices(
   canAssign: boolean,
   removableRoles: string[],
   staff: CourseStaffMember[],
+  selfUserId: string,
 ): string[] {
   const canRemoveAny = removableRoles.length > 0;
 
@@ -87,10 +95,17 @@ function staffNotices(
   }
 
   // Only mention what is actually on screen — a rule about a role nobody
-  // holds here is a rule about nothing.
-  const locked = [...new Set(staff.flatMap((member) => member.roles))].filter(
-    (role) => !removableRoles.includes(role),
-  );
+  // holds here is a rule about nothing. The actor's own badges are excluded
+  // for the same reason: they keep their Remove control regardless, so a
+  // sentence saying only an admin can take that role away would contradict
+  // the button sitting next to it.
+  const locked = [
+    ...new Set(
+      staff
+        .filter((member) => member.userId !== selfUserId)
+        .flatMap((member) => member.roles),
+    ),
+  ].filter((role) => !removableRoles.includes(role));
   if (canRemoveAny && locked.length > 0) {
     const names = locked
       .map((role) => `a ${roleDisplayName(role)}`)
@@ -128,6 +143,7 @@ export const CourseStaffPanel = ({
   assignableRoles,
   canAssign,
   removableRoles,
+  selfUserId,
   people,
   peopleQuery,
   onPeopleQueryChange,
@@ -143,7 +159,7 @@ export const CourseStaffPanel = ({
 }: CourseStaffPanelProps) => {
   const labelByUserId = new Map(people.map((p) => [p.userId, p.label]));
   const personIds = people.map((p) => p.userId);
-  const notices = staffNotices(canAssign, removableRoles, staff);
+  const notices = staffNotices(canAssign, removableRoles, staff, selfUserId);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -197,7 +213,14 @@ export const CourseStaffPanel = ({
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {member.roles.map((role) => {
-                            const removable = removableRoles.includes(role);
+                            // Their own badge is always removable: stepping
+                            // down is privilege reduction, which the peer rail
+                            // has nothing to say about. `deleteCourseStaffHandler`
+                            // makes the same exception, so this control can
+                            // never be one the request would refuse.
+                            const removable =
+                              member.userId === selfUserId ||
+                              removableRoles.includes(role);
                             return (
                               <span
                                 key={role}

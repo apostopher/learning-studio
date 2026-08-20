@@ -22,6 +22,9 @@ const baseProps = {
   assignableRoles: ['subject-expert', 'course-manager'],
   canAssign: true,
   removableRoles: ['subject-expert', 'course-manager'],
+  // Nobody on the fixture roster is the actor, so these cases exercise the
+  // role rail alone; the self-removal cases override it.
+  selfUserId: 'me',
   people: [{ userId: 'u2', label: 'Sam Lee (sam@example.com)' }],
   peopleQuery: '',
   onPeopleQueryChange: vi.fn(),
@@ -249,6 +252,76 @@ describe('CourseStaffPanel', () => {
     expect(
       screen.queryByRole('button', {
         name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeNull();
+  });
+
+  /**
+   * Resignation. The rail stops an SME unseating a PEER; taking the role off
+   * yourself escalates nobody, and without the exemption a departing professor
+   * has to ask an admin to remove them. `deleteCourseStaffHandler` makes the
+   * same exception, so this control is never one the request would refuse.
+   */
+  it("keeps Remove on the actor's own badge, whatever the role rail says", () => {
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={staff}
+        selfUserId="u1"
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('does not claim only an admin can remove a role the actor holds themselves', () => {
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={staff}
+        selfUserId="u1"
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    // The sentence would contradict the button sitting beside it.
+    expect(screen.queryByText(/Only an admin or owner can remove/)).toBeNull();
+  });
+
+  it('still refuses Remove on ANOTHER subject expert', () => {
+    const peer = [
+      ...staff,
+      {
+        userId: 'u2',
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Byron',
+        roles: ['subject-expert'],
+      },
+    ];
+
+    render(
+      <CourseStaffPanel
+        {...baseProps}
+        staff={peer}
+        selfUserId="u1"
+        removableRoles={['course-manager']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Subject Expert from Jane Doe',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove Subject Expert from Ada Byron',
       }),
     ).toBeNull();
   });

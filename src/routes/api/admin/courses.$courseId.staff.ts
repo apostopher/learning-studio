@@ -90,7 +90,9 @@ export function assignableCourseRoles(actor: CourseActor): CourseScopedRole[] {
  * A role SET, not the boolean this used to be: an SME may remove their own
  * assistant but not a fellow professor, and a flat "can remove" cannot say
  * that. The panel gates each badge's Remove control on membership, and
- * `deleteCourseStaffHandler` refuses anything outside it.
+ * `deleteCourseStaffHandler` refuses anything outside it — with one exception
+ * both of them make: the actor's OWN badges, which are always removable,
+ * because resigning cannot escalate anybody.
  */
 export function removableCourseRoles(actor: CourseActor): CourseScopedRole[] {
   return courseRolesActorMayChange(actor, 'delete');
@@ -99,9 +101,10 @@ export function removableCourseRoles(actor: CourseActor): CourseScopedRole[] {
 /**
  * The roster, plus what this actor may do with it.
  *
- * `assignableRoles` and `removableRoles` ship with the roster rather than
- * being derived on the client because both depend on `course_staff` and on
- * grants resolved for THIS course — neither of which the browser holds.
+ * `assignableRoles`, `removableRoles` and `selfUserId` ship with the roster
+ * rather than being derived on the client because all three depend on
+ * `course_staff`, on grants resolved for THIS course, or on the session —
+ * none of which the browser holds.
  */
 export async function getCourseStaffHandler(
   request: Request,
@@ -119,6 +122,11 @@ export async function getCourseStaffHandler(
     staff: await listCourseStaff(courseId),
     assignableRoles: assignableCourseRoles(actor),
     removableRoles: removableCourseRoles(actor),
+    // Who the panel is drawing FOR, so it can offer the one removal the role
+    // rail exempts: their own. The browser holds no trustworthy copy of the
+    // session user id, and deriving it client-side would let the resignation
+    // control be pointed at someone else.
+    selfUserId: actor.userId,
   });
 }
 
@@ -127,12 +135,20 @@ export async function getCourseStaffHandler(
  * role on any course; a subject expert may bring in a course manager on
  * their own courses — see the self-propagation guard rail below.
  *
- * Also enrols the appointee in the course, idempotently. Staff are also
- * students: the course route redirects anyone not subscribed to `/app`, and
- * `getMyCourses` is driven off `course_subscriptions`, so a staffed-but-
- * unenrolled professor would be bounced before any of the authoring work
- * they were just assigned becomes reachable, and would have no card on
- * `/app` either.
+ * Enrols the appointee too, but ONLY when the actor actually holds
+ * `enrolment:create`. Spec §3 gives `subject-expert` no enrolment authority at
+ * all, and an unconditional enrol handed them the effect of one: appoint
+ * anyone as a course manager, a `course_subscriptions` row is written, remove
+ * the staff role again — `deleteCourseStaffHandler` deliberately does not
+ * un-enrol — and the access survives permanently. With the whole org directory
+ * in the person picker that is a free-access dispenser held by someone with no
+ * enrolment grant and no admin in the loop.
+ *
+ * The reason it was unconditional is gone: `getSubscribedCourseSlugs` now
+ * unions the courses someone is staffed on, so a professor reaches their own
+ * course whether or not a subscription row exists. An SME's appointee still
+ * needs an admin to enrol them as a *learner*, which is what spec §5
+ * describes.
  */
 export async function putCourseStaffHandler(
   request: Request,
@@ -195,14 +211,23 @@ export async function putCourseStaffHandler(
         { status: 400 },
       );
     }
+    if (result.reason === 'unknown-user') {
+      // 404, not the 500 the `course_staff.user_id` foreign key would have
+      // raised: a user id the directory doesn't know is a bad request body,
+      // and must not read as a server fault.
+      return Response.json({ error: 'User not found' }, { status: 404 });
+    }
     return Response.json({ error: 'Role not found' }, { status: 404 });
   }
 
-  await addUserEnrolment({
-    userId: parsed.data.userId,
-    courseId,
-    grantedBy: actor.userId,
-  });
+  // Enrolment is a separate authority from appointment — see the doc comment.
+  if (hasPermission(actor.permissions, 'enrolment', 'create')) {
+    await addUserEnrolment({
+      userId: parsed.data.userId,
+      courseId,
+      grantedBy: actor.userId,
+    });
+  }
 
   return new Response(null, { status: 204 });
 }
@@ -215,7 +240,13 @@ export async function putCourseStaffHandler(
  * their access would destroy their progress visibility.
  *
  * Railed identically to appointment — see `courseRolesActorMayChange`. An SME
- * may dismiss their assistant; only an admin or owner may unseat a professor.
+ * may dismiss their assistant; only an admin or owner may unseat a PEER.
+ *
+ * Removing YOURSELF is exempt, whatever the role. The rail exists to stop
+ * privilege escalation — an SME must not mint or unseat a fellow professor.
+ * Stepping down is privilege reduction, which that rule has nothing to say
+ * about, and without the exemption a departing professor cannot resign: only
+ * an admin can take the role off them, including off themselves.
  */
 export async function deleteCourseStaffHandler(
   request: Request,
@@ -246,8 +277,16 @@ export async function deleteCourseStaffHandler(
    * panel which Remove controls to draw. Without it a subject expert could
    * clear every peer off their own course — no admin involved, nothing
    * recoverable, and the roster the next professor never appears on.
+   *
+   * Self-removal skips the rail: resigning is the one removal that cannot
+   * escalate anyone. The check is on the actor's own id, so it cannot be
+   * spent on anybody else's row.
    */
-  if (!removableCourseRoles(actor).includes(parsed.data.role)) {
+  const isSelfRemoval = parsed.data.userId === actor.userId;
+  if (
+    !isSelfRemoval &&
+    !removableCourseRoles(actor).includes(parsed.data.role)
+  ) {
     return Response.json(
       {
         error:

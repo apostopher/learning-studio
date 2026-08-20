@@ -44,6 +44,13 @@ const courseStaffResponseSchema = z.object({
    * gated per badge.
    */
   removableRoles: z.array(z.enum(COURSE_SCOPED_ROLES)),
+  /**
+   * The signed-in actor's user id, so the panel can draw the one Remove
+   * control `removableRoles` deliberately leaves out: their own. Resigning is
+   * privilege reduction, and the rail that stops an SME unseating a peer has
+   * nothing to say about it.
+   */
+  selfUserId: z.string(),
 });
 export type CourseStaffResponse = z.infer<typeof courseStaffResponseSchema>;
 
