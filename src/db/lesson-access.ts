@@ -70,6 +70,44 @@ export async function getCourseSlugForModuleId(
   return row?.courseSlug ?? null;
 }
 
+/**
+ * The course id a lesson belongs to.
+ *
+ * The slug-returning siblings above exist for cache invalidation, which is
+ * keyed by slug. Authorization is keyed by id, and round-tripping id → slug →
+ * id would be two queries to answer one question. Returns null (never
+ * throws) when the lesson doesn't exist, so callers can tell "no such
+ * lesson" (404) apart from a real query failure.
+ */
+export async function getCourseIdForLessonId(
+  lessonId: number,
+): Promise<number | null> {
+  const [row] = await db
+    .select({ courseId: coursesTable.id })
+    .from(lessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
+    .where(eq(lessonsTable.id, lessonId))
+    .limit(1);
+  return row?.courseId ?? null;
+}
+
+/**
+ * The course id a module belongs to. Returns null (never throws) when the
+ * module doesn't exist — see `getCourseIdForLessonId` for why.
+ */
+export async function getCourseIdForModuleId(
+  moduleId: number,
+): Promise<number | null> {
+  const [row] = await db
+    .select({ courseId: coursesTable.id })
+    .from(modulesTable)
+    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
+    .where(eq(modulesTable.id, moduleId))
+    .limit(1);
+  return row?.courseId ?? null;
+}
+
 /** Course slug resolved directly by numeric course id. */
 export async function getCourseSlugForCourseId(
   courseId: number,
