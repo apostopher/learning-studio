@@ -1,4 +1,9 @@
-import { getCourseRoleNames, getStaffCourseIds } from '#/db/course-staff';
+import {
+  getCourseRoleNames,
+  getStaffCourseIds,
+  getStaffRoleNames,
+  isAnyCourseStaff,
+} from '#/db/course-staff';
 import {
   getRoleNamesForProfile,
   getUserPermissions,
@@ -97,6 +102,12 @@ export async function requireCoursePermission(
   // `enrolment`, so the union below would judge the actor against grants that
   // do not apply. A plain Error on purpose — `ForbiddenError` would dress the
   // bug up as a 403 and it would read as the guard working correctly.
+  //
+  // It therefore surfaces as an uncaught 500, deliberately: every route's
+  // `catch` maps only `ForbiddenError`. No caller in the tree trips it today
+  // (each passes a literal `'structure'`, `'content'` or `'staff'`), so it is
+  // a tripwire for a future route author, not a runtime branch — if you see
+  // this 500, the route is asking the wrong guard, not refusing a request.
   if (!isCourseScopedEntity(entity)) {
     throw new Error(
       `requireCoursePermission called with '${entity}', which is not course-scoped`,
@@ -148,6 +159,85 @@ export async function getStaffScopedCourseIds(
   const userId = session?.user?.id;
   if (!userId) return [];
   return [...(await getStaffCourseIds(userId))];
+}
+
+/**
+ * Is this caller staff ANYWHERE — admin or owner globally, or holding any
+ * `course_staff` row at all?
+ *
+ * The honest bound for a route that has no course id to scope by. It grants
+ * nothing on any particular course; it answers only "is this person part of
+ * the teaching side of the deployment, or a stranger?" Two kinds of caller
+ * need that: the blob-upload token endpoint (a blob pathname carries no course
+ * id) and the lesson/module routes deciding whether a missing row may be
+ * reported as a 404 rather than a flat 403.
+ *
+ * False for an anonymous request, and it never throws for one: the session
+ * lookup is optional-chained, so nothing downstream runs without a user id.
+ */
+export async function isStaffAnywhere(headers: Headers): Promise<boolean> {
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) return false;
+  const roles = await getUserRoleNames(userId);
+  return hasAdminAccess(roles) || (await isAnyCourseStaff(userId));
+}
+
+/**
+ * The response for a course-scoped route whose lesson or module id resolved to
+ * no course — i.e. the row does not exist.
+ *
+ * 404 is the useful answer and the wrong one to give everybody. These handlers
+ * resolve the row BEFORE guarding (guarding on a null course id would
+ * misreport "no such lesson" as "forbidden"), which means an unauthenticated
+ * caller could previously walk sequential integer ids and read the id space
+ * straight off the status code — 404 absent, 403 present. That is the same
+ * oracle `routes/_authed/course.$courseSlug.tsx` refuses to be.
+ *
+ * So the fidelity is kept for the people who need it — anyone on the teaching
+ * side — and everyone else gets the flat 403 they would have got had the row
+ * existed. Fails closed: a caller with no session is not staff.
+ */
+export async function absentResourceResponse(
+  headers: Headers,
+  error: string,
+): Promise<Response> {
+  if (await isStaffAnywhere(headers)) {
+    return Response.json({ error }, { status: 404 });
+  }
+  return new Response('Forbidden', { status: 403 });
+}
+
+/**
+ * Does this person hold `entity:action` on ANY course?
+ *
+ * The course-less counterpart of `requireCoursePermission`: it unions their
+ * global roles with every distinct role they hold in `course_staff` and asks
+ * `getUserPermissions` for the combined grant set — the same table, the same
+ * function, the same wildcard short-circuit for an owner.
+ *
+ * For the one route that genuinely has no identifier to scope by
+ * (`lesson-material.parse.ts`: a .docx in, generated material out, nothing
+ * persisted). "Is staff somewhere" is too loose there — it admits a
+ * course-manager, who holds `content:read` only, and an admin, who by design
+ * holds no `content` grant at all; both would burn LLM budget generating
+ * material neither of them may save.
+ *
+ * Not a guard: it returns a boolean and throws nothing, because its one caller
+ * has already resolved the session for itself.
+ */
+export async function hasCoursePermissionAnywhere(
+  userId: string,
+  entity: PermissionEntity,
+  action: PermissionAction,
+): Promise<boolean> {
+  const [globalRoles, staffRoles] = await Promise.all([
+    getUserRoleNames(userId),
+    getStaffRoleNames(userId),
+  ]);
+  const roles = [...new Set([...globalRoles, ...staffRoles])];
+  if (roles.length === 0) return false;
+  return hasPermission(await getUserPermissions(roles), entity, action);
 }
 
 /** Owner-only guard, for role assignment and permission editing. */

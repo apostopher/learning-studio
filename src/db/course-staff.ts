@@ -110,19 +110,61 @@ export async function getStaffCourseIds(userId: string): Promise<Set<number>> {
 }
 
 /**
+ * Every course this person is staffed on, as slugs.
+ *
+ * The slug-keyed sibling of `getStaffCourseIds`, for the enrolment guard on
+ * `/course/$courseSlug`, which holds a slug and compares against a list of
+ * them. Resolving ids to slugs caller-side would be a second round trip on the
+ * critical path of every course navigation; this is one indexed read on
+ * `course_staff.user_id` with the course join the caller would have had to do
+ * anyway.
+ */
+export async function getStaffCourseSlugs(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ slug: coursesTable.slug })
+    .from(courseStaffTable)
+    .innerJoin(coursesTable, eq(coursesTable.id, courseStaffTable.courseId))
+    .where(eq(courseStaffTable.userId, userId));
+  return rows.map((r) => r.slug);
+}
+
+/**
+ * The distinct staff roles this person holds anywhere, across every course.
+ *
+ * Deliberately drops the course each role came from: its one caller
+ * (`hasCoursePermissionAnywhere`) is answering a question that has no course
+ * in it — "may this person do X on ANY course?" — and grants are keyed on the
+ * role name alone in `role_permissions`. Returning pairs would invite a caller
+ * to treat the set as authority on a specific course, which it is not.
+ */
+export async function getStaffRoleNames(userId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ name: userRolesTable.name })
+    .from(courseStaffTable)
+    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
+    .where(eq(courseStaffTable.userId, userId));
+  return rows.map((r) => r.name);
+}
+
+/**
  * Staff on ANY course.
  *
  * Two callers, both of which genuinely have no course id to scope by:
  *
- * - The lesson-material parser, which takes a file and returns generated
- *   material without persisting anything. Course-scoping it would mean
- *   inventing an identifier the client does not have, for a route that
- *   writes nothing.
  * - `resolveAuthContext`, which answers `/admin`'s route guard. Entering the
  *   admin console is not a per-course question — which course is decided,
  *   per request, by `requireCoursePermission`. A boolean is all the router
  *   may hold; a list of ids would be a second copy of course-scoped
  *   authority living on the client.
+ * - `isStaffAnywhere`, which answers "teaching side or stranger?" for the
+ *   blob-upload token endpoint (a blob key carries no course id) and for the
+ *   lesson/module routes deciding whether an absent row may be reported as a
+ *   404 at all.
+ *
+ * NOT for anything that turns on a specific GRANT — that is
+ * `hasCoursePermissionAnywhere`, which resolves the roles rather than merely
+ * counting rows. Holding a `course_staff` row says nothing about which of
+ * `structure`/`content`/`staff` the role behind it was given.
  */
 export async function isAnyCourseStaff(userId: string): Promise<boolean> {
   const [row] = await db
@@ -192,11 +234,18 @@ export async function listCourseStaff(
  * unconditional authority that merely *looks* course-scoped. Refusing
  * anything outside `COURSE_SCOPED_ROLES` here closes that off at the write,
  * not only at whichever route happens to call this.
+ *
+ * An unknown `userId` is reported, not raised. `course_staff.user_id` is a
+ * foreign key into `user_profiles`, so the insert would otherwise throw a
+ * constraint violation nobody catches and a bad id in the request body would
+ * read as a server fault — the same reason `courseExists` exists for the admin
+ * level route.
  */
 export async function assignCourseStaff(
   input: AssignCourseStaffInput,
 ): Promise<
-  { ok: true } | { ok: false; reason: 'not-found' | 'not-assignable' }
+  | { ok: true }
+  | { ok: false; reason: 'not-found' | 'not-assignable' | 'unknown-user' }
 > {
   if (!isCourseScopedRole(input.roleName)) {
     return { ok: false, reason: 'not-assignable' };
@@ -208,6 +257,13 @@ export async function assignCourseStaff(
     .where(eq(userRolesTable.name, input.roleName))
     .limit(1);
   if (!role) return { ok: false, reason: 'not-found' };
+
+  const [profile] = await db
+    .select({ id: userProfileTable.id })
+    .from(userProfileTable)
+    .where(eq(userProfileTable.userId, input.userId))
+    .limit(1);
+  if (!profile) return { ok: false, reason: 'unknown-user' };
 
   await db
     .insert(courseStaffTable)

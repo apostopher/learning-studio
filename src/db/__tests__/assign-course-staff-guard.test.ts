@@ -69,3 +69,58 @@ describe('assignCourseStaff — course-scoped role guard', () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * `course_staff.user_id` is a foreign key into `user_profiles`, so an id the
+ * directory does not know used to reach the insert and raise a constraint
+ * violation nothing catches — a bad request body reading as a 500.
+ */
+describe('assignCourseStaff — unknown appointee', () => {
+  /** `select(...).from(...).where(...).limit(1)` resolving with queued rows. */
+  function selectReturning(...results: unknown[][]) {
+    let call = 0;
+    db.select.mockImplementation(() => {
+      const rows = results[call] ?? [];
+      call += 1;
+      const chain = {
+        from: () => chain,
+        where: () => chain,
+        limit: () => Promise.resolve(rows),
+      };
+      return chain;
+    });
+  }
+
+  it('reports an unknown user instead of letting the foreign key raise', async () => {
+    // Role found, profile missing.
+    selectReturning([{ id: 3 }], []);
+
+    const result = await assignCourseStaff({
+      userId: 'nobody',
+      courseId: 1,
+      roleName: 'course-manager',
+      assignedBy: 'admin-1',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'unknown-user' });
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('still writes when the appointee exists', async () => {
+    selectReturning([{ id: 3 }], [{ id: 12 }]);
+    const onConflictDoNothing = vi.fn().mockResolvedValue(undefined);
+    db.insert.mockReturnValue({
+      values: () => ({ onConflictDoNothing }),
+    });
+
+    const result = await assignCourseStaff({
+      userId: 'user-1',
+      courseId: 1,
+      roleName: 'course-manager',
+      assignedBy: 'admin-1',
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(onConflictDoNothing).toHaveBeenCalled();
+  });
+});

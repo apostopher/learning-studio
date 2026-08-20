@@ -14,6 +14,8 @@ const m = vi.hoisted(() => {
     getUserRoleNames: vi.fn(),
     getUserPermissions: vi.fn(),
     getRoleNamesForProfile: vi.fn(),
+    isAnyCourseStaff: vi.fn(),
+    getStaffRoleNames: vi.fn(),
   };
 });
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -21,10 +23,14 @@ vi.mock('#/lib/admin-functions.server', () => ({
   ForbiddenError: m.ForbiddenError,
 }));
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
-// `permissions.server.ts` imports this for `requireCoursePermission`; none of
-// the guards exercised here call it, but leaving it real would drag `#/db` and
-// its schema into a unit test that must not touch a database.
-vi.mock('#/db/course-staff', () => ({ getCourseRoleNames: vi.fn() }));
+// `permissions.server.ts` imports these; leaving them real would drag `#/db`
+// and its schema into a unit test that must not touch a database.
+vi.mock('#/db/course-staff', () => ({
+  getCourseRoleNames: vi.fn(),
+  getStaffCourseIds: vi.fn(),
+  isAnyCourseStaff: m.isAnyCourseStaff,
+  getStaffRoleNames: m.getStaffRoleNames,
+}));
 vi.mock('#/db/permissions', () => ({
   getUserPermissions: m.getUserPermissions,
   getRoleNamesForProfile: m.getRoleNamesForProfile,
@@ -35,7 +41,10 @@ vi.mock('#/db/permissions', () => ({
 }));
 
 import {
+  absentResourceResponse,
   assertCanActOnProfile,
+  hasCoursePermissionAnywhere,
+  isStaffAnywhere,
   requireOwner,
   requirePermission,
 } from '#/lib/permissions.server';
@@ -43,11 +52,18 @@ import {
 const HEADERS = new Headers();
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // resetAllMocks, not clearAllMocks: a guard that refuses BEFORE reaching
+  // `getUserPermissions` (e.g. the admin floor) leaves that test's queued
+  // `.mockResolvedValueOnce` unconsumed, and clearAllMocks would hand it to
+  // whichever later test calls the mock first. Every default below is
+  // re-established after the reset, so nothing is lost.
+  vi.resetAllMocks();
   m.getSession.mockResolvedValue({ user: { id: 'actor-1' } });
   m.getUserRoleNames.mockResolvedValue(['admin']);
   m.getUserPermissions.mockResolvedValue(new Set<string>());
   m.getRoleNamesForProfile.mockResolvedValue([]);
+  m.isAnyCourseStaff.mockResolvedValue(false);
+  m.getStaffRoleNames.mockResolvedValue([]);
 });
 
 describe('requirePermission', () => {
@@ -158,7 +174,12 @@ describe('assertCanActOnProfile with course-scoped roles', () => {
     m.getRoleNamesForProfile.mockResolvedValueOnce(['admin']);
     await expect(
       assertCanActOnProfile(
-        { userId: 'a1', roles: ['admin'], permissions: new Set<string>(), isOwner: false },
+        {
+          userId: 'a1',
+          roles: ['admin'],
+          permissions: new Set<string>(),
+          isOwner: false,
+        },
         5,
       ),
     ).rejects.toThrow('Forbidden');
@@ -174,7 +195,12 @@ describe('assertCanActOnProfile with course-scoped roles', () => {
     m.getRoleNamesForProfile.mockResolvedValueOnce([]);
     await expect(
       assertCanActOnProfile(
-        { userId: 'a1', roles: ['admin'], permissions: new Set<string>(), isOwner: false },
+        {
+          userId: 'a1',
+          roles: ['admin'],
+          permissions: new Set<string>(),
+          isOwner: false,
+        },
         5,
       ),
     ).resolves.toBeUndefined();
@@ -184,9 +210,142 @@ describe('assertCanActOnProfile with course-scoped roles', () => {
     m.getRoleNamesForProfile.mockResolvedValueOnce(['admin']);
     await expect(
       assertCanActOnProfile(
-        { userId: 'o1', roles: ['owner'], permissions: new Set(['*']), isOwner: true },
+        {
+          userId: 'o1',
+          roles: ['owner'],
+          permissions: new Set(['*']),
+          isOwner: true,
+        },
         5,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('isStaffAnywhere', () => {
+  it('is true for an admin, without a course_staff lookup', async () => {
+    await expect(isStaffAnywhere(HEADERS)).resolves.toBe(true);
+    expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
+  });
+
+  it('is true for a professor holding no global role at all', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+
+    await expect(isStaffAnywhere(HEADERS)).resolves.toBe(true);
+  });
+
+  it('is false for an ordinary learner', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+
+    await expect(isStaffAnywhere(HEADERS)).resolves.toBe(false);
+  });
+
+  /**
+   * The whole point of the helper: an anonymous caller must get a clean
+   * answer, not a thrown session lookup that would surface as a 500 and be
+   * indistinguishable from a real fault.
+   */
+  it('is false for an anonymous request, and does not throw', async () => {
+    m.getSession.mockResolvedValueOnce(null);
+
+    await expect(isStaffAnywhere(HEADERS)).resolves.toBe(false);
+    expect(m.getUserRoleNames).not.toHaveBeenCalled();
+  });
+});
+
+describe('absentResourceResponse', () => {
+  it('404s with the message for someone on the teaching side', async () => {
+    const res = await absentResourceResponse(HEADERS, 'Lesson not found');
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Lesson not found' });
+  });
+
+  it('403s an ordinary learner rather than confirming the row is absent', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+
+    const res = await absentResourceResponse(HEADERS, 'Lesson not found');
+
+    expect(res.status).toBe(403);
+  });
+
+  /**
+   * `DELETE /api/admin/lessons/N` from the open internet used to answer 404
+   * for an absent id and 403 for a present one, over sequential integer ids —
+   * handing out the exact lesson id space. Both answers are 403 now.
+   */
+  it('403s an anonymous caller, so the two answers are indistinguishable', async () => {
+    m.getSession.mockResolvedValueOnce(null);
+
+    const res = await absentResourceResponse(HEADERS, 'Lesson not found');
+
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe('Forbidden');
+  });
+});
+
+describe('hasCoursePermissionAnywhere', () => {
+  it('unions global roles with every course_staff role before asking', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
+    m.getStaffRoleNames.mockResolvedValueOnce(['subject-expert']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:create']));
+
+    await expect(
+      hasCoursePermissionAnywhere('u1', 'content', 'create'),
+    ).resolves.toBe(true);
+    expect(m.getUserPermissions).toHaveBeenCalledWith([
+      'admin',
+      'subject-expert',
+    ]);
+  });
+
+  it('refuses a course manager, who holds content:read only', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+    m.getStaffRoleNames.mockResolvedValueOnce(['course-manager']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:read']));
+
+    await expect(
+      hasCoursePermissionAnywhere('u1', 'content', 'create'),
+    ).resolves.toBe(false);
+  });
+
+  it('refuses an admin, who by design holds no content grant', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
+    m.getUserPermissions.mockResolvedValueOnce(
+      new Set(['course:create', 'staff:create']),
+    );
+
+    await expect(
+      hasCoursePermissionAnywhere('a1', 'content', 'create'),
+    ).resolves.toBe(false);
+  });
+
+  it('passes an owner on the wildcard', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['owner']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['*']));
+
+    await expect(
+      hasCoursePermissionAnywhere('o1', 'content', 'create'),
+    ).resolves.toBe(true);
+  });
+
+  it('asks for no grants at all when the user holds no role anywhere', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+
+    await expect(
+      hasCoursePermissionAnywhere('u1', 'content', 'create'),
+    ).resolves.toBe(false);
+    expect(m.getUserPermissions).not.toHaveBeenCalled();
+  });
+
+  it('de-duplicates a role held both globally and on a course', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['subject-expert']);
+    m.getStaffRoleNames.mockResolvedValueOnce(['subject-expert']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:create']));
+
+    await hasCoursePermissionAnywhere('u1', 'content', 'create');
+
+    expect(m.getUserPermissions).toHaveBeenCalledWith(['subject-expert']);
   });
 });
