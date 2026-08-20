@@ -1,8 +1,24 @@
-import { useAdminCourses } from '@/data-hooks/use-admin-courses';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import { CourseTile } from './course-tile';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 
-export const AdminCoursesPageContainer = () => {
+/**
+ * The `/admin` landing page.
+ *
+ * What the list holds depends on the actor: the whole catalogue for anyone
+ * with `course:read`, and only the courses they are staffed on for a subject
+ * expert or course manager, who holds no such grant. The endpoint decides
+ * that — nothing here branches on it — so the only thing this component needs
+ * told is whether founding a new course is on offer, which is a separate,
+ * org-level grant with no staff fallback.
+ */
+export const AdminCoursesPageContainer = ({
+  canCreateCourse,
+}: {
+  canCreateCourse: boolean;
+}) => {
   const { data: courses, isLoading, error } = useAdminCourses();
 
   return (
@@ -12,10 +28,12 @@ export const AdminCoursesPageContainer = () => {
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold text-primary">Courses</h1>
             <p className="text-sm text-secondary">
-              Manage your courses and their modules.
+              {canCreateCourse
+                ? 'Manage your courses and their modules.'
+                : 'The courses you are staff on.'}
             </p>
           </div>
-          <CreateCourseDialogContainer />
+          {canCreateCourse && <CreateCourseDialogContainer />}
         </header>
 
         {isLoading ? (
@@ -28,7 +46,9 @@ export const AdminCoursesPageContainer = () => {
           <div className="rounded-xl border border-dashed border-gray-6 bg-gray-2 p-10 text-center">
             <p className="text-sm font-medium text-primary">No courses yet</p>
             <p className="mt-1 text-sm text-secondary">
-              Create your first course to get started.
+              {canCreateCourse
+                ? 'Create your first course to get started.'
+                : 'You will see a course here once an admin assigns you to one as staff.'}
             </p>
           </div>
         ) : (

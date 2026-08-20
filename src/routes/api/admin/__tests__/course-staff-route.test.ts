@@ -39,18 +39,22 @@ import {
   putCourseStaffHandler,
 } from '../courses.$courseId.staff';
 
+// `permissions` mirrors what the real `requireCoursePermission` returns: it
+// resolves the grant set BEFORE letting the request through, so an actor who
+// reached a `staff:create` handler necessarily holds that key. The guard is
+// mocked here, so these stand in for it.
 const ADMIN = {
   userId: 'a1',
   roles: ['admin'],
   courseRoles: [],
-  permissions: new Set<string>(),
+  permissions: new Set<string>(['staff:read', 'staff:create']),
   isOwner: false,
 };
 const SME = {
   userId: 's1',
   roles: [],
   courseRoles: ['subject-expert'],
-  permissions: new Set<string>(),
+  permissions: new Set<string>(['staff:read', 'staff:create']),
   isOwner: false,
 };
 
@@ -132,7 +136,7 @@ describe('PUT /api/admin/courses/:courseId/staff', () => {
       userId: 'a2',
       roles: ['admin'],
       courseRoles: ['subject-expert'],
-      permissions: new Set<string>(),
+      permissions: new Set<string>(['staff:read', 'staff:create']),
       isOwner: false,
     });
     const res = await putCourseStaffHandler(
@@ -267,6 +271,63 @@ describe('GET /api/admin/courses/:courseId/staff', () => {
     ];
     m.listCourseStaff.mockResolvedValue(roster);
     const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
-    expect(await res.json()).toEqual(roster);
+    expect((await res.json()).staff).toEqual(roster);
+  });
+
+  /**
+   * The panel renders its role picker from this, so it is the only thing
+   * standing between an actor and an option the PUT would refuse. It is the
+   * SERVER's answer, not a client re-derivation of the same policy.
+   */
+  it('offers an admin both course-scoped roles', async () => {
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    expect((await res.json()).assignableRoles).toEqual([
+      'subject-expert',
+      'course-manager',
+    ]);
+  });
+
+  it('offers an SME only a course manager, never a peer', async () => {
+    m.requireCoursePermission.mockResolvedValue(SME);
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    expect((await res.json()).assignableRoles).toEqual(['course-manager']);
+  });
+
+  it('offers nothing to an actor who can read the roster but not add to it', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      ...ADMIN,
+      permissions: new Set<string>(['staff:read']),
+    });
+    const res = await getCourseStaffHandler(req(undefined, 'GET'), '7');
+    // `staff:read` and `staff:create` are independently grantable, so an empty
+    // set here is what hides the assign form entirely.
+    expect((await res.json()).assignableRoles).toEqual([]);
+  });
+});
+
+/**
+ * The picker and the guard must be one rule, not two. These pin the GET's
+ * advertised set to the PUT's enforcement for the same actor — if they ever
+ * disagree, the panel offers a role the write refuses (or hides one it would
+ * have allowed).
+ */
+describe('the offered roles and the enforced roles are the same rule', () => {
+  it.each([
+    ['admin', ADMIN],
+    ['subject expert', SME],
+  ])('agree for a %s', async (_label, actor) => {
+    m.requireCoursePermission.mockResolvedValue(actor);
+
+    const offered: string[] = (
+      await (await getCourseStaffHandler(req(undefined, 'GET'), '7')).json()
+    ).assignableRoles;
+
+    for (const role of ['subject-expert', 'course-manager']) {
+      const res = await putCourseStaffHandler(req({ userId: 'u9', role }), '7');
+      expect({ role, accepted: res.status === 204 }).toEqual({
+        role,
+        accepted: offered.includes(role),
+      });
+    }
   });
 });

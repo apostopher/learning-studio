@@ -1,3 +1,4 @@
+import { isAnyCourseStaff } from '#/db/course-staff';
 import { getUserPermissions } from '#/db/permissions';
 import { ensureUserProfile } from '#/db/user-profile';
 import { getUserRoleNames } from '#/db/user-roles';
@@ -25,12 +26,25 @@ import { auth } from '#/lib/auth';
  * Failures are swallowed. This is the fallback path, not the primary one (the
  * sign-in hook is), and a transient write error must not take down every
  * authenticated page load.
+ *
+ * `isStaffAnywhere` rides alongside `roles` and `permissions` because
+ * `course_staff` membership is invisible to both: a subject expert holds no
+ * global role and no global grant, so a route guard reading only those two
+ * cannot tell them apart from an ordinary learner. It is deliberately a
+ * boolean and not a list of course ids — the only question the router asks is
+ * whether `/admin` is theirs to enter at all; which course is a per-request,
+ * server-side decision that `requireCoursePermission` owns.
  */
 export async function resolveAuthContext(headers: Headers) {
   const session = await auth.api.getSession({ headers });
   const userId = session?.user?.id;
   if (!userId) {
-    return { session, roles: [] as string[], permissions: [] as string[] };
+    return {
+      session,
+      roles: [] as string[],
+      permissions: [] as string[],
+      isStaffAnywhere: false,
+    };
   }
 
   await ensureUserProfile(userId, session.user.email).catch((error) => {
@@ -41,8 +55,13 @@ export async function resolveAuthContext(headers: Headers) {
   // Serialised as an array because router context crosses the wire; the client
   // rebuilds a Set only where it matters. `['*']` means owner — see
   // `getUserPermissions`.
-  const permissions = await getUserPermissions(roles)
-    .then((set) => [...set])
-    .catch(() => [] as string[]);
-  return { session, roles, permissions };
+  const [permissions, isStaffAnywhere] = await Promise.all([
+    getUserPermissions(roles)
+      .then((set) => [...set])
+      .catch(() => [] as string[]),
+    // Failing closed, exactly like the two above: a transient error must hide
+    // the admin console, never open it.
+    isAnyCourseStaff(userId).catch(() => false),
+  ]);
+  return { session, roles, permissions, isStaffAnywhere };
 }

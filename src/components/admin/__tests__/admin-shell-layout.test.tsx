@@ -24,7 +24,7 @@ vi.mock('../../../styles/theme.generated', () => ({
   logoDark: { kind: 'url', src: '/logo.png' },
 }));
 
-const renderAdmin = async (canSeePeople: boolean) => {
+const renderAdmin = async (canSeePeople: boolean, canSeeCourses = true) => {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const homeRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -40,7 +40,10 @@ const renderAdmin = async (canSeePeople: boolean) => {
     getParentRoute: () => rootRoute,
     path: '/admin',
     component: () => (
-      <AdminShellLayout canSeePeople={canSeePeople}>
+      <AdminShellLayout
+        canSeePeople={canSeePeople}
+        canSeeCourses={canSeeCourses}
+      >
         <p>Course list</p>
       </AdminShellLayout>
     ),
@@ -109,5 +112,44 @@ describe('AdminShellLayout', () => {
 
     expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
     expect(screen.getByRole('link', { name: 'People' })).toBeDefined();
+  });
+
+  /**
+   * `/admin` now admits course-scoped staff, so the Courses link stopped being
+   * unconditional: an admin with an empty grant set and no `course_staff` row
+   * gets a 403 from the course endpoint, and a link that bounces is worse than
+   * no link.
+   */
+  it('hides the Courses link when the course index has nothing for the actor', async () => {
+    await renderAdmin(true, false);
+
+    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'People' })).toBeDefined();
+  });
+
+  /**
+   * A nav with no links must not be a bare strip — an actor who can reach
+   * neither section is told why, in text assistive tech reaches.
+   */
+  it('explains itself when neither section is available', async () => {
+    await renderAdmin(false, false);
+
+    expect(screen.queryAllByRole('link', { name: 'Courses' })).toHaveLength(0);
+    expect(screen.queryAllByRole('link', { name: 'People' })).toHaveLength(0);
+    expect(
+      screen.getByText(
+        'No admin sections are available with your current permissions.',
+      ),
+    ).toBeDefined();
+  });
+
+  it('says nothing about permissions when a section is available', async () => {
+    await renderAdmin(false, true);
+
+    expect(
+      screen.queryByText(
+        'No admin sections are available with your current permissions.',
+      ),
+    ).toBeNull();
   });
 });

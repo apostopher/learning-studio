@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   ensureUserProfile: vi.fn(),
   getUserRoleNames: vi.fn(),
   getUserPermissions: vi.fn(),
+  isAnyCourseStaff: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
 vi.mock('#/db/user-profile', () => ({
@@ -14,6 +15,9 @@ vi.mock('#/db/user-profile', () => ({
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
 vi.mock('#/db/permissions', () => ({
   getUserPermissions: m.getUserPermissions,
+}));
+vi.mock('#/db/course-staff', () => ({
+  isAnyCourseStaff: m.isAnyCourseStaff,
 }));
 
 import { resolveAuthContext } from '#/lib/auth-context.server';
@@ -28,6 +32,7 @@ beforeEach(() => {
   m.ensureUserProfile.mockResolvedValue(undefined);
   m.getUserRoleNames.mockResolvedValue([]);
   m.getUserPermissions.mockResolvedValue(new Set<string>());
+  m.isAnyCourseStaff.mockResolvedValue(false);
 });
 
 /**
@@ -71,7 +76,13 @@ describe('resolveAuthContext', () => {
 
     expect(m.ensureUserProfile).not.toHaveBeenCalled();
     expect(m.getUserRoleNames).not.toHaveBeenCalled();
-    expect(result).toEqual({ session: null, roles: [], permissions: [] });
+    expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      session: null,
+      roles: [],
+      permissions: [],
+      isStaffAnywhere: false,
+    });
   });
 
   it('still returns roles when the profile ensure fails', async () => {
@@ -120,5 +131,53 @@ describe('resolveAuthContext', () => {
 
     // Failing closed: a transient error must hide controls, never reveal them.
     expect(result.permissions).toEqual([]);
+  });
+
+  /**
+   * `/admin`'s route guard reads `isStaffAnywhere` and nothing else can tell it
+   * a subject expert apart from a learner — `roles` and `permissions` are both
+   * global, and a course-scoped role appears in neither.
+   */
+  it("reports course staff, asking about THIS session's user", async () => {
+    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(m.isAnyCourseStaff).toHaveBeenCalledWith('user-1');
+    expect(result.isStaffAnywhere).toBe(true);
+  });
+
+  it('reports no staffing for someone with no course_staff row', async () => {
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(result.isStaffAnywhere).toBe(false);
+  });
+
+  it('degrades to not-staff if the staff lookup fails', async () => {
+    m.isAnyCourseStaff.mockRejectedValueOnce(new Error('db down'));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    // Failing closed, like the two lookups beside it: a transient error must
+    // shut the admin console, never open it.
+    expect(result.isStaffAnywhere).toBe(false);
+  });
+
+  /**
+   * An admin who is also staff somewhere must not have one answer mask the
+   * other — the guard ORs them, and the nav gates on them separately.
+   */
+  it('carries roles, permissions and staffing together', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
+    m.getUserPermissions.mockResolvedValueOnce(new Set(['course:read']));
+    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(result).toMatchObject({
+      roles: ['admin'],
+      permissions: ['course:read'],
+      isStaffAnywhere: true,
+    });
   });
 });

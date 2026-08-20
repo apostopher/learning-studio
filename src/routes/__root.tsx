@@ -25,12 +25,23 @@ interface MyRouterContext {
   roles: string[];
   /** `entity:action` strings; `['*']` for an owner. */
   permissions: string[];
+  /**
+   * Whether this person holds a `course_staff` row on any course.
+   *
+   * Course-scoped authority is invisible to `roles` and `permissions`, which
+   * are both global — so this is the only thing `/admin`'s guard can read to
+   * tell a professor from a learner. It answers "may they enter at all", never
+   * "what may they do here": every per-course decision stays server-side in
+   * `requireCoursePermission`.
+   */
+  isStaffAnywhere: boolean;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: async () => {
-    const { session, roles, permissions } = await getAuthContext();
-    return { session, roles, permissions };
+    const { session, roles, permissions, isStaffAnywhere } =
+      await getAuthContext();
+    return { session, roles, permissions, isStaffAnywhere };
   },
   head: () => ({
     meta: [

@@ -4,9 +4,13 @@ import {
   listCourseStaff,
   removeCourseStaff,
 } from '#/db/course-staff';
+import { hasPermission } from '#/db/permissions';
 import { addUserEnrolment } from '#/db/users';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
+  COURSE_MANAGER_ROLE,
+  COURSE_SCOPED_ROLES,
+  type CourseScopedRole,
   hasAdminAccess,
   SUBJECT_EXPERT_ROLE,
   setCourseStaffInputSchema,
@@ -42,6 +46,35 @@ async function guard(
   }
 }
 
+/**
+ * The course-scoped roles this actor may grant on this course.
+ *
+ * The asymmetry is the point: an admin or owner may appoint either role, a
+ * subject expert may bring in a course manager and never a peer (see
+ * `putCourseStaffHandler`). No client-side check can express that from the
+ * router context, which carries global roles only — so this is computed once,
+ * server-side, and both the GET that renders the picker and the PUT that
+ * enforces the write read it. Two derivations of the same policy is how the
+ * panel and the guard drift apart.
+ *
+ * `staff:create` is checked rather than assumed: `staff:read` and
+ * `staff:create` are independently grantable in the permission grid, so
+ * someone may legitimately see the roster with no power to change it.
+ */
+export function assignableCourseRoles(actor: CourseActor): CourseScopedRole[] {
+  if (!hasPermission(actor.permissions, 'staff', 'create')) return [];
+  return hasAdminAccess(actor.roles)
+    ? [...COURSE_SCOPED_ROLES]
+    : [COURSE_MANAGER_ROLE];
+}
+
+/**
+ * The roster, plus what this actor may do with it.
+ *
+ * `assignableRoles` ships with the roster rather than being derived on the
+ * client because it depends on `course_staff` and on grants resolved for THIS
+ * course — neither of which the browser holds.
+ */
 export async function getCourseStaffHandler(
   request: Request,
   courseIdRaw: string,
@@ -54,7 +87,10 @@ export async function getCourseStaffHandler(
   const actor = await guard(request, courseId, 'read');
   if (actor instanceof Response) return actor;
 
-  return Response.json(await listCourseStaff(courseId));
+  return Response.json({
+    staff: await listCourseStaff(courseId),
+    assignableRoles: assignableCourseRoles(actor),
+  });
 }
 
 /**
@@ -100,11 +136,19 @@ export async function putCourseStaffHandler(
    * could grant another person full authority over their subject with no
    * admin involvement, and the "admin hires professors" rule would hold only
    * until the first professor was hired.
+   *
+   * Asked of `assignableCourseRoles` — the same function that tells the panel
+   * which roles to offer — so the picker can never show an option this
+   * refuses, and tightening the rule cannot leave a stale control behind.
    */
-  const isGlobalStaff = hasAdminAccess(actor.roles);
-  if (!isGlobalStaff && parsed.data.role === SUBJECT_EXPERT_ROLE) {
+  if (!assignableCourseRoles(actor).includes(parsed.data.role)) {
     return Response.json(
-      { error: 'Only an admin or owner can appoint a subject expert.' },
+      {
+        error:
+          parsed.data.role === SUBJECT_EXPERT_ROLE
+            ? 'Only an admin or owner can appoint a subject expert.'
+            : 'You cannot assign that role on this course.',
+      },
       { status: 403 },
     );
   }

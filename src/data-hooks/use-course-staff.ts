@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import type { CourseStaffMember } from '#/db/course-staff';
 import {
+  COURSE_SCOPED_ROLES,
   type SetCourseStaffInput,
   setCourseStaffInputSchema,
 } from '#/lib/admin-schemas';
@@ -24,7 +24,21 @@ const courseStaffMemberSchema = z.object({
   lastName: z.string().nullable(),
   roles: z.array(z.string()),
 });
-const courseStaffListSchema = z.array(courseStaffMemberSchema);
+
+/**
+ * The roster together with what this actor may grant on this course.
+ *
+ * `assignableRoles` is server-computed (see `assignableCourseRoles`): the rule
+ * is asymmetric — an admin may appoint either role, a subject expert only a
+ * course manager — and the router context carries global roles only, so the
+ * client cannot derive it without re-implementing the policy that the write
+ * guard already owns.
+ */
+const courseStaffResponseSchema = z.object({
+  staff: z.array(courseStaffMemberSchema),
+  assignableRoles: z.array(z.enum(COURSE_SCOPED_ROLES)),
+});
+export type CourseStaffResponse = z.infer<typeof courseStaffResponseSchema>;
 
 async function readError(res: Response, fallback: string): Promise<never> {
   let message = fallback;
@@ -38,7 +52,7 @@ async function readError(res: Response, fallback: string): Promise<never> {
 }
 
 /**
- * Everyone staffed on this course.
+ * Everyone staffed on this course, plus the roles this actor may grant here.
  *
  * `null` means the actor cannot see this course's roster — `staff:read` is
  * course-scoped, so the route context (global permissions only) can't decide
@@ -48,7 +62,7 @@ async function readError(res: Response, fallback: string): Promise<never> {
 export function useCourseStaff(courseId: number) {
   return useQuery({
     queryKey: dataKeys.courseStaff(courseId),
-    queryFn: async (): Promise<CourseStaffMember[] | null> => {
+    queryFn: async (): Promise<CourseStaffResponse | null> => {
       const res = await fetch(`/api/admin/courses/${courseId}/staff`);
       if (res.status === 403) return null;
       if (!res.ok) {
@@ -57,7 +71,7 @@ export function useCourseStaff(courseId: number) {
           res.status,
         );
       }
-      return courseStaffListSchema.parse(await res.json());
+      return courseStaffResponseSchema.parse(await res.json());
     },
     staleTime: 30_000,
   });

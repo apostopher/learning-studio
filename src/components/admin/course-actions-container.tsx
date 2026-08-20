@@ -15,13 +15,7 @@ import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
 
 /** Course-level action toolbar: add module, staff, AI training, edit course, delete course. */
-export const CourseActionsContainer = ({
-  course,
-  roles,
-}: {
-  course: BoardCourse;
-  roles: string[];
-}) => {
+export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
   const setEditCourse = useSetAtom(editCourseAtom);
   const setDeleteCourse = useSetAtom(deleteCourseAtom);
   const setTrainCourse = useSetAtom(trainCourseAtom);
@@ -29,7 +23,7 @@ export const CourseActionsContainer = ({
   return (
     <div className="flex items-center gap-1">
       <CreateModuleDialogContainer courseId={course.id} />
-      <CourseStaffContainer course={course} roles={roles} />
+      <CourseStaffContainer course={course} />
       <TooltipIconButton
         label="AI training"
         onClick={() => setTrainCourse({ id: course.id, name: course.name })}

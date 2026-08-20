@@ -12,12 +12,7 @@ import {
   useCourseStaff,
   useRemoveCourseStaff,
 } from '#/data-hooks/use-course-staff';
-import {
-  type BoardCourse,
-  COURSE_SCOPED_ROLES,
-  type CourseScopedRole,
-  hasAdminAccess,
-} from '#/lib/admin-schemas';
+import type { BoardCourse, CourseScopedRole } from '#/lib/admin-schemas';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import {
   CourseStaffPanel,
@@ -45,17 +40,15 @@ function personLabel(user: {
  * client-side permission check before firing the GET; the request itself is
  * the check, matching how `useCourseBoard` treats a 404 as "no board".
  *
- * Every actor who reaches this container already holds global `admin` or
- * `owner` — `/admin`'s route guard enforces that — so `canAssign` reflects
- * that rather than probing course-scoped `staff:create` locally.
+ * `assignableRoles` comes back with the roster rather than being derived
+ * here. `/admin` now admits course-scoped staff, so "is an admin" is no longer
+ * the same question as "may assign": the set is asymmetric — an admin may
+ * appoint either role, a subject expert only a course manager — and no
+ * client-side check over global roles can express that. The server computes it
+ * with the same function that guards the write, so an option can never appear
+ * here that the PUT would refuse. An empty set means no assign form.
  */
-export const CourseStaffContainer = ({
-  course,
-  roles,
-}: {
-  course: BoardCourse;
-  roles: string[];
-}) => {
+export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
   const [open, setOpen] = useAtom(courseStaffDialogOpenAtom);
   const [selectedUserId, setSelectedUserId] = useAtom(
     courseStaffSelectedUserIdAtom,
@@ -76,7 +69,8 @@ export const CourseStaffContainer = ({
   const errorOf = (err: unknown) =>
     err instanceof CourseStaffRequestError ? err.message : undefined;
 
-  const canAssign = hasAdminAccess(roles);
+  const { staff, assignableRoles } = staffQuery.data;
+  const canAssign = assignableRoles.length > 0;
 
   return (
     <>
@@ -88,9 +82,9 @@ export const CourseStaffContainer = ({
         open={open}
         onOpenChange={setOpen}
         courseName={course.name}
-        staff={staffQuery.data}
+        staff={staff}
         isLoading={staffQuery.isLoading}
-        assignableRoles={canAssign ? [...COURSE_SCOPED_ROLES] : []}
+        assignableRoles={assignableRoles}
         canAssign={canAssign}
         people={people}
         selectedUserId={selectedUserId}

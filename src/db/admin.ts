@@ -147,8 +147,19 @@ async function invalidateSynthesiaThumbnailsCache(
   }
 }
 
-/** All courses with their module and lesson counts, newest-updated first. */
-export async function listAdminCourses(): Promise<AdminCourseSummary[]> {
+/**
+ * Courses with their module and lesson counts, newest-updated first.
+ *
+ * `courseIds` narrows the result to exactly those courses. It exists for the
+ * staff-scoped view of `/admin`: a subject expert has no `course:read` and no
+ * business seeing the catalogue, but must still reach the courses they author.
+ * An empty array is NOT the same as omitting the argument — it means "these
+ * zero courses", so the caller decides what no membership should do rather
+ * than falling through to the whole catalogue.
+ */
+export async function listAdminCourses(
+  courseIds?: number[],
+): Promise<AdminCourseSummary[]> {
   const rows = await db
     .select({
       id: coursesTable.id,
@@ -163,6 +174,7 @@ export async function listAdminCourses(): Promise<AdminCourseSummary[]> {
     .from(coursesTable)
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
     .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
+    .where(courseIds ? inArray(coursesTable.id, courseIds) : undefined)
     .groupBy(coursesTable.id)
     .orderBy(desc(coursesTable.updatedAt), desc(coursesTable.id));
 

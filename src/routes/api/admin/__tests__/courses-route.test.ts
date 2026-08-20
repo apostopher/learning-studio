@@ -11,6 +11,7 @@ const m = vi.hoisted(() => {
   return {
     ForbiddenError,
     requirePermission: vi.fn(),
+    getStaffScopedCourseIds: vi.fn(),
     listAdminCourses: vi.fn(),
     createCourse: vi.fn(),
     getActiveOrgId: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 }));
 vi.mock('#/lib/permissions.server', () => ({
   requirePermission: m.requirePermission,
+  getStaffScopedCourseIds: m.getStaffScopedCourseIds,
 }));
 vi.mock('#/db/admin', () => ({
   listAdminCourses: m.listAdminCourses,
@@ -50,6 +52,7 @@ function postReq(body: unknown = { name: 'CPL' }): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   m.requirePermission.mockResolvedValue({ userId: 'u1' });
+  m.getStaffScopedCourseIds.mockResolvedValue([]);
   m.listAdminCourses.mockResolvedValue(COURSES);
   m.createCourse.mockResolvedValue(NEW_COURSE);
   m.getActiveOrgId.mockReturnValue(1);
@@ -71,6 +74,14 @@ describe('listAdminCoursesHandler', () => {
     expect(await res.json()).toEqual(COURSES);
   });
 
+  it('lists the whole catalogue, unfiltered, for course:read', async () => {
+    await listAdminCoursesHandler(getReq());
+    // `undefined`, not `[]` — an empty id list would mean "these zero
+    // courses" and silently blank the catalogue for every admin.
+    expect(m.listAdminCourses).toHaveBeenCalledWith();
+    expect(m.getStaffScopedCourseIds).not.toHaveBeenCalled();
+  });
+
   it('403s when refused, without listing courses', async () => {
     m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await listAdminCoursesHandler(getReq());
@@ -78,9 +89,38 @@ describe('listAdminCoursesHandler', () => {
     expect(m.listAdminCourses).not.toHaveBeenCalled();
   });
 
+  /**
+   * A subject expert holds no `course:read` — that grant is the whole
+   * catalogue, and "a Biology SME cannot teach Computer Science" is precisely
+   * why they must not have it. Without this fallback /admin's index, which the
+   * route guard now admits them to, answers 403 and they can reach neither the
+   * editor nor the staff panel built for them.
+   */
+  it('falls back to the courses a staff-only actor is staffed on', async () => {
+    m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    m.getStaffScopedCourseIds.mockResolvedValueOnce([4, 9]);
+    const res = await listAdminCoursesHandler(getReq());
+    expect(res.status).toBe(200);
+    // The narrowing has to reach the query — a scoped response that still asks
+    // for every course would hand a professor the whole catalogue.
+    expect(m.listAdminCourses).toHaveBeenCalledWith([4, 9]);
+  });
+
+  it('403s an actor refused course:read who is staff on nothing', async () => {
+    m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    m.getStaffScopedCourseIds.mockResolvedValueOnce([]);
+    const res = await listAdminCoursesHandler(getReq());
+    expect(res.status).toBe(403);
+    // Never `[]` with a 200: that reads as "no courses exist" to the page.
+    expect(m.listAdminCourses).not.toHaveBeenCalled();
+  });
+
   it('rethrows non-ForbiddenError failures', async () => {
     m.requirePermission.mockRejectedValueOnce(new Error('db down'));
     await expect(listAdminCoursesHandler(getReq())).rejects.toThrow('db down');
+    // A database outage must not be mistaken for "not permitted" and quietly
+    // downgraded into the staff-scoped view.
+    expect(m.getStaffScopedCourseIds).not.toHaveBeenCalled();
   });
 });
 
@@ -103,6 +143,19 @@ describe('createCourseHandler', () => {
 
   it('403s when refused, without creating a course', async () => {
     m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await createCourseHandler(postReq());
+    expect(res.status).toBe(403);
+    expect(m.createCourse).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Founding a course is org-level and has no staff fallback: a subject expert
+   * authors inside a course, they do not create one. The read path's fallback
+   * must not leak across.
+   */
+  it('offers no staff fallback on create', async () => {
+    m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    m.getStaffScopedCourseIds.mockResolvedValueOnce([4]);
     const res = await createCourseHandler(postReq());
     expect(res.status).toBe(403);
     expect(m.createCourse).not.toHaveBeenCalled();

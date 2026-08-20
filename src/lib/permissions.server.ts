@@ -1,4 +1,4 @@
-import { getCourseRoleNames } from '#/db/course-staff';
+import { getCourseRoleNames, getStaffCourseIds } from '#/db/course-staff';
 import {
   getRoleNamesForProfile,
   getUserPermissions,
@@ -129,6 +129,25 @@ export async function requireCoursePermission(
     permissions,
     isOwner: globalRoles.includes(OWNER_ROLE),
   };
+}
+
+/**
+ * The courses this actor is staffed on. Empty for everyone else, and for a
+ * request with no session at all.
+ *
+ * Not a guard — it grants nothing and throws nothing. It answers the one
+ * question `/admin`'s course list needs after `course:read` has been refused:
+ * *is there a narrower set of courses this person may still see?* Session
+ * resolution lives here beside the guards rather than in the route, so a
+ * handler never reaches for `auth` itself.
+ */
+export async function getStaffScopedCourseIds(
+  headers: Headers,
+): Promise<number[]> {
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) return [];
+  return [...(await getStaffCourseIds(userId))];
 }
 
 /** Owner-only guard, for role assignment and permission editing. */
