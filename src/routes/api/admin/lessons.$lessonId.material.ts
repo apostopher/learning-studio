@@ -3,7 +3,10 @@ import { getLessonMaterialByLessonId, upsertLessonMaterial } from '#/db/lesson';
 import { getCourseIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import type { PermissionAction } from '#/lib/admin-schemas';
-import { requireCoursePermission } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireCoursePermission,
+} from '#/lib/permissions.server';
 import { LessonMaterialGenerationSchema } from '#/types';
 
 /**
@@ -39,12 +42,13 @@ export async function getMaterialHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: a lesson that doesn't exist must
-  // 404, not 403 — guarding on a null course id would misreport "no such
-  // lesson" as "forbidden".
+  // Resolve the course before guarding: guarding on a null course id would
+  // misreport "no such lesson" as "forbidden". The 404 is then answered only
+  // to someone on the teaching side — see `absentResourceResponse`, which
+  // closes the id-enumeration oracle this ordering would otherwise open.
   const courseId = await getCourseIdForLessonId(lessonId);
   if (courseId === null) {
-    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Lesson not found');
   }
   const denied = await guard(request, courseId, 'read');
   if (denied) return denied;
@@ -62,7 +66,7 @@ export async function saveMaterialHandler(
   }
   const courseId = await getCourseIdForLessonId(lessonId);
   if (courseId === null) {
-    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Lesson not found');
   }
   const denied = await guard(request, courseId, 'update');
   if (denied) return denied;

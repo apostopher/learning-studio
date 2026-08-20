@@ -5,7 +5,10 @@ import { createLesson } from '#/db/admin';
 import { getCourseIdForModuleId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { createLessonInputSchema } from '#/lib/admin-schemas';
-import { requireCoursePermission } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireCoursePermission,
+} from '#/lib/permissions.server';
 
 function parseModuleId(raw: string): number | null {
   const id = Number(raw);
@@ -20,12 +23,13 @@ export async function postLessonHandler(
   if (moduleId === null) {
     return Response.json({ error: 'Invalid module id' }, { status: 400 });
   }
-  // Resolve the course before guarding: a module that doesn't exist must
-  // 404, not 403 — guarding on a null course id would misreport "no such
-  // module" as "forbidden".
+  // Resolve the course before guarding: guarding on a null course id would
+  // misreport "no such module" as "forbidden". The 404 is then answered only
+  // to someone on the teaching side — see `absentResourceResponse`, which
+  // closes the id-enumeration oracle this ordering would otherwise open.
   const courseId = await getCourseIdForModuleId(moduleId);
   if (courseId === null) {
-    return Response.json({ error: 'Module not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Module not found');
   }
   try {
     await requireCoursePermission(

@@ -11,6 +11,7 @@ const m = vi.hoisted(() => {
   return {
     ForbiddenError,
     requireCoursePermission: vi.fn(),
+    absentResourceResponse: vi.fn(),
     getCourseIdForLessonId: vi.fn(),
     deleteLesson: vi.fn(),
     moveLesson: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 }));
 vi.mock('#/lib/permissions.server', () => ({
   requireCoursePermission: m.requireCoursePermission,
+  absentResourceResponse: m.absentResourceResponse,
 }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForLessonId: m.getCourseIdForLessonId,
@@ -54,10 +56,67 @@ beforeEach(() => {
   vi.resetAllMocks();
   m.getCourseIdForLessonId.mockResolvedValue(42);
   m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  // Stands in for the real helper (unit-tested in
+  // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
+  // the teaching side and a flat 403 to everyone else, so a missing row
+  // cannot be used to enumerate ids.
+  m.absentResourceResponse.mockResolvedValue(
+    new Response(null, { status: 404 }),
+  );
   // Default to a successful write so a permission bug that lets a body
   // through shows up as "the write happened" (200), not as an incidental
   // 404 from an unmocked falsy return.
   m.updateLessonConfig.mockResolvedValue({ id: 10 });
+});
+
+/**
+ * The enumeration oracle. These handlers resolve the row BEFORE guarding, so
+ * an unauthenticated caller could walk sequential integer ids and read the id
+ * space straight off the status code — 404 absent, 403 present. The absent
+ * branch is delegated to `absentResourceResponse`, which answers 404 only to
+ * someone on the teaching side; the real behaviour is unit-tested in
+ * lib/__tests__/permissions-server.test.ts.
+ */
+describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
+  it('hands the absent PATCH lesson to absentResourceResponse, not a bare 404', async () => {
+    m.getCourseIdForLessonId.mockResolvedValue(null);
+    const request = req({ dependsOn: [] });
+
+    await patchLessonHandler(request, '999');
+
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
+  });
+
+  it('returns what that helper answered — a stranger gets 403, not 404', async () => {
+    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.absentResourceResponse.mockResolvedValue(
+      new Response('Forbidden', { status: 403 }),
+    );
+
+    const res = await patchLessonHandler(req({ dependsOn: [] }), '999');
+
+    expect(res.status).toBe(403);
+  });
+
+  it('hands the absent DELETE lesson to it too, and returns its answer', async () => {
+    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.absentResourceResponse.mockResolvedValue(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = req({});
+
+    const res = await deleteLessonHandler(request, '999');
+
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
+    expect(res.status).toBe(403);
+    expect(m.deleteLesson).not.toHaveBeenCalled();
+  });
 });
 
 describe('patchLessonHandler — course resolution', () => {
@@ -153,9 +212,12 @@ describe('patchLessonHandler — config branch, every field lands in its entity'
     { field: 'isAvailable', body: { isAvailable: false }, entity: 'structure' },
     { field: 'levels', body: { levels: ['basic'] }, entity: 'structure' },
     {
+      // `content`, not `structure`: spec §3 enumerates structure's fields and
+      // this is not among them — it is the paywall control, and filing it
+      // under structure hands the paywall to `course-manager`.
       field: 'requiredSubscriptions',
       body: { requiredSubscriptions: ['associate'] },
-      entity: 'structure',
+      entity: 'content',
     },
     { field: 'hasDebrief', body: { hasDebrief: false }, entity: 'content' },
     {

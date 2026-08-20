@@ -11,6 +11,7 @@ const m = vi.hoisted(() => {
   return {
     ForbiddenError,
     requireCoursePermission: vi.fn(),
+    absentResourceResponse: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
     deleteModule: vi.fn(),
     reorderModule: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 }));
 vi.mock('#/lib/permissions.server', () => ({
   requireCoursePermission: m.requireCoursePermission,
+  absentResourceResponse: m.absentResourceResponse,
 }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: m.getCourseIdForModuleId,
@@ -47,6 +49,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.getCourseIdForModuleId.mockResolvedValue(42);
   m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  // Stands in for the real helper (unit-tested in
+  // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
+  // the teaching side and a flat 403 to everyone else, so a missing row
+  // cannot be used to enumerate ids.
+  m.absentResourceResponse.mockResolvedValue(
+    new Response(null, { status: 404 }),
+  );
 });
 
 describe('patchModuleHandler — course resolution and guard', () => {
@@ -59,6 +68,31 @@ describe('patchModuleHandler — course resolution and guard', () => {
       'structure',
       'update',
     );
+  });
+
+  /**
+   * The enumeration oracle. This handler resolves the row BEFORE guarding, so
+   * an unauthenticated caller could walk sequential integer ids and read the
+   * id space off the status code — 404 absent, 403 present. The absent branch
+   * is delegated to `absentResourceResponse`, which answers 404 only to
+   * someone on the teaching side (unit-tested in
+   * lib/__tests__/permissions-server.test.ts).
+   */
+  it('hands an absent module to absentResourceResponse and returns its answer', async () => {
+    m.getCourseIdForModuleId.mockResolvedValue(null);
+    m.absentResourceResponse.mockResolvedValue(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = patch({ dependsOn: ['a'] });
+
+    const res = await patchModuleHandler(request, '999');
+
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Module not found',
+    );
+    expect(res.status).toBe(403);
+    expect(m.updateModuleDependencies).not.toHaveBeenCalled();
   });
 
   it('404s a module that does not exist, before guarding', async () => {

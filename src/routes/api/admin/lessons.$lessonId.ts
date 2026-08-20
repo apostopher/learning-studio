@@ -17,7 +17,10 @@ import {
   updateLessonConfigInputSchema,
   updateLessonDependenciesInputSchema,
 } from '#/lib/admin-schemas';
-import { requireCoursePermission } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireCoursePermission,
+} from '#/lib/permissions.server';
 
 /**
  * Course-scoped guard for the structure-only branches (dependencies, rename,
@@ -67,7 +70,12 @@ const CONFIG_FIELD_ENTITY: Record<
 > = {
   isAvailable: 'structure',
   levels: 'structure',
-  requiredSubscriptions: 'structure',
+  // `content`, not `structure`. Spec §3 enumerates what structure covers —
+  // modules, lessons, ordering, dependencies, `isAvailable` and the lesson
+  // `levels` tag — and this is not among them; it is the paywall control.
+  // Filing it under structure would hand the paywall to `course-manager`,
+  // which was never decided.
+  requiredSubscriptions: 'content',
   hasDebrief: 'content',
   needsVideoWatch: 'content',
 };
@@ -126,12 +134,13 @@ export async function patchLessonHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: a lesson that doesn't exist must
-  // 404, not 403 — guarding on a null course id would misreport "no such
-  // lesson" as "forbidden".
+  // Resolve the course before guarding: guarding on a null course id would
+  // misreport "no such lesson" as "forbidden". The 404 is then answered only
+  // to someone on the teaching side — see `absentResourceResponse`, which
+  // closes the id-enumeration oracle this ordering would otherwise open.
   const courseId = await getCourseIdForLessonId(lessonId);
   if (courseId === null) {
-    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Lesson not found');
   }
 
   let body: unknown;
@@ -207,7 +216,7 @@ export async function deleteLessonHandler(
   }
   const courseId = await getCourseIdForLessonId(lessonId);
   if (courseId === null) {
-    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Lesson not found');
   }
   const denied = await guardStructure(request, courseId, 'delete');
   if (denied) return denied;

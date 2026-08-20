@@ -16,7 +16,10 @@ import {
   updateModuleInputSchema,
   updateModuleSequentialInputSchema,
 } from '#/lib/admin-schemas';
-import { requireCoursePermission } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireCoursePermission,
+} from '#/lib/permissions.server';
 
 /**
  * Course-scoped guard — modules are structure, full CRUD for a course manager.
@@ -56,12 +59,13 @@ export async function patchModuleHandler(
   if (moduleId === null) {
     return Response.json({ error: 'Invalid module id' }, { status: 400 });
   }
-  // Resolve the course before guarding: a module that doesn't exist must 404,
-  // not 403 — guarding on a null course id would misreport "no such module"
-  // as "forbidden".
+  // Resolve the course before guarding: guarding on a null course id would
+  // misreport "no such module" as "forbidden". The 404 is then answered only
+  // to someone on the teaching side — see `absentResourceResponse`, which
+  // closes the id-enumeration oracle this ordering would otherwise open.
   const courseId = await getCourseIdForModuleId(moduleId);
   if (courseId === null) {
-    return Response.json({ error: 'Module not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Module not found');
   }
   const denied = await guard(request, courseId, 'update');
   if (denied) return denied;
@@ -141,7 +145,7 @@ export async function deleteModuleHandler(
   }
   const courseId = await getCourseIdForModuleId(moduleId);
   if (courseId === null) {
-    return Response.json({ error: 'Module not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Module not found');
   }
   const denied = await guard(request, courseId, 'delete');
   if (denied) return denied;

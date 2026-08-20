@@ -7,6 +7,7 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 // mocked path, so this stub class is what `instanceof` checks against.
 const {
   requireCoursePermission,
+  absentResourceResponse,
   ForbiddenError,
   getCourseIdForLessonId,
   resolveLessonPlayback,
@@ -19,6 +20,7 @@ const {
   }
   return {
     requireCoursePermission: vi.fn(),
+    absentResourceResponse: vi.fn(),
     ForbiddenError,
     getCourseIdForLessonId: vi.fn(),
     // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
@@ -27,7 +29,10 @@ const {
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
-vi.mock('#/lib/permissions.server', () => ({ requireCoursePermission }));
+vi.mock('#/lib/permissions.server', () => ({
+  requireCoursePermission,
+  absentResourceResponse,
+}));
 vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
 vi.mock('#/db/admin', () => ({ resolveLessonPlayback }));
 
@@ -42,6 +47,13 @@ describe('getVideoPlaybackHandler', () => {
     vi.clearAllMocks();
     getCourseIdForLessonId.mockResolvedValue(42);
     requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+    // Stands in for the real helper (unit-tested in
+    // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
+    // the teaching side and a flat 403 to everyone else, so a missing row
+    // cannot be used to enumerate ids.
+    absentResourceResponse.mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
   });
 
   it('asks for content:read scoped to the lesson’s course', async () => {
@@ -91,6 +103,31 @@ describe('getVideoPlaybackHandler', () => {
 
     const res = await getVideoPlaybackHandler(req(), '1');
 
+    expect(res.status).toBe(403);
+    expect(resolveLessonPlayback).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The enumeration oracle. This handler resolves the row BEFORE guarding, so
+   * an unauthenticated caller could walk sequential integer ids and read the
+   * id space off the status code — 404 absent, 403 present. The absent branch
+   * is delegated to `absentResourceResponse`, which answers 404 only to
+   * someone on the teaching side (unit-tested in
+   * lib/__tests__/permissions-server.test.ts).
+   */
+  it('hands an absent lesson to absentResourceResponse and returns its answer', async () => {
+    getCourseIdForLessonId.mockResolvedValue(null);
+    absentResourceResponse.mockResolvedValue(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = req();
+
+    const res = await getVideoPlaybackHandler(request, '999');
+
+    expect(absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
     expect(res.status).toBe(403);
     expect(resolveLessonPlayback).not.toHaveBeenCalled();
   });

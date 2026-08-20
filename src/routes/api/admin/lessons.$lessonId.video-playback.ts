@@ -2,7 +2,10 @@ import { createFileRoute } from '@tanstack/react-router';
 import { resolveLessonPlayback } from '#/db/admin';
 import { getCourseIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import { requireCoursePermission } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireCoursePermission,
+} from '#/lib/permissions.server';
 import { PlaybackError } from '#/lib/video-providers/errors';
 
 /** Video playback is content, read-only here. */
@@ -34,13 +37,14 @@ export async function getVideoPlaybackHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: a lesson that doesn't exist must
-  // 404, not 403 — guarding on a null course id would misreport "no such
-  // lesson" as "forbidden". Distinct from the "no video assigned" 404 below,
+  // Resolve the course before guarding: guarding on a null course id would
+  // misreport "no such lesson" as "forbidden". The 404 is then answered only
+  // to someone on the teaching side — see `absentResourceResponse`, which
+  // closes the id-enumeration oracle this ordering would otherwise open. Distinct from the "no video assigned" 404 below,
   // which only fires once we know the lesson is real.
   const courseId = await getCourseIdForLessonId(lessonId);
   if (courseId === null) {
-    return Response.json({ error: 'Lesson not found' }, { status: 404 });
+    return absentResourceResponse(request.headers, 'Lesson not found');
   }
   const denied = await guard(request, courseId);
   if (denied) return denied;

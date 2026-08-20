@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // mocked path, so this stub class is what `instanceof` checks against.
 const {
   requireCoursePermission,
+  absentResourceResponse,
   ForbiddenError,
   getCourseIdForLessonId,
   getLessonMaterialByLessonId,
@@ -19,6 +20,7 @@ const {
   }
   return {
     requireCoursePermission: vi.fn(),
+    absentResourceResponse: vi.fn(),
     ForbiddenError,
     getCourseIdForLessonId: vi.fn(),
     getLessonMaterialByLessonId: vi.fn(),
@@ -26,7 +28,10 @@ const {
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
-vi.mock('#/lib/permissions.server', () => ({ requireCoursePermission }));
+vi.mock('#/lib/permissions.server', () => ({
+  requireCoursePermission,
+  absentResourceResponse,
+}));
 vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
@@ -54,6 +59,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   getCourseIdForLessonId.mockResolvedValue(42);
   requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  // Stands in for the real helper (unit-tested in
+  // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
+  // the teaching side and a flat 403 to everyone else, so a missing row
+  // cannot be used to enumerate ids.
+  absentResourceResponse.mockResolvedValue(new Response(null, { status: 404 }));
 });
 
 describe('lessons material route', () => {
@@ -73,6 +83,48 @@ describe('lessons material route', () => {
     const res = await getMaterialHandler(getReq(), '1');
     expect(res.status).toBe(403);
     expect(getLessonMaterialByLessonId).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The enumeration oracle. This handler resolves the row BEFORE guarding, so
+   * an unauthenticated caller could walk sequential integer ids and read the
+   * id space off the status code — 404 absent, 403 present. The absent branch
+   * is delegated to `absentResourceResponse`, which answers 404 only to
+   * someone on the teaching side (unit-tested in
+   * lib/__tests__/permissions-server.test.ts).
+   */
+  it('GET hands an absent lesson to absentResourceResponse and returns its answer', async () => {
+    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    absentResourceResponse.mockResolvedValueOnce(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = getReq();
+
+    const res = await getMaterialHandler(request, '999');
+
+    expect(absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
+    expect(res.status).toBe(403);
+    expect(getLessonMaterialByLessonId).not.toHaveBeenCalled();
+  });
+
+  it('POST hands an absent lesson to absentResourceResponse and returns its answer', async () => {
+    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    absentResourceResponse.mockResolvedValueOnce(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = postReq(material);
+
+    const res = await saveMaterialHandler(request, '999');
+
+    expect(absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
+    expect(res.status).toBe(403);
+    expect(upsertLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('GET 404s a lesson that does not exist, before guarding', async () => {
