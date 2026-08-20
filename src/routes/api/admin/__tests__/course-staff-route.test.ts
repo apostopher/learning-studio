@@ -127,6 +127,27 @@ describe('PUT /api/admin/courses/:courseId/staff', () => {
     expect(m.assignCourseStaff).not.toHaveBeenCalled();
   });
 
+  it('admits an admin who is also an SME on this course — the rail reads global roles, not course roles', async () => {
+    m.requireCoursePermission.mockResolvedValue({
+      userId: 'a2',
+      roles: ['admin'],
+      courseRoles: ['subject-expert'],
+      permissions: new Set<string>(),
+      isOwner: false,
+    });
+    const res = await putCourseStaffHandler(
+      req({ userId: 'u9', role: 'subject-expert' }),
+      '7',
+    );
+    expect(res.status).toBe(204);
+    expect(m.assignCourseStaff).toHaveBeenCalledWith({
+      userId: 'u9',
+      courseId: 7,
+      roleName: 'subject-expert',
+      assignedBy: 'a2',
+    });
+  });
+
   it('lets an SME appoint a course manager', async () => {
     m.requireCoursePermission.mockResolvedValue(SME);
     const res = await putCourseStaffHandler(
