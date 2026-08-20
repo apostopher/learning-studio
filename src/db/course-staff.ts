@@ -5,6 +5,7 @@ import {
   userProfileTable,
   userRolesTable,
 } from '#/db/schema';
+import { isCourseScopedRole } from '#/lib/admin-schemas';
 
 export type CourseStaffMember = {
   userId: string;
@@ -127,10 +128,27 @@ export async function listCourseStaff(
   return Array.from(byUser.values());
 }
 
-/** Add a staff assignment. Idempotent — re-assigning the same role is a no-op. */
+/**
+ * Add a staff assignment. Idempotent — re-assigning the same role is a no-op.
+ *
+ * `requireCoursePermission` unions an actor's global roles with their
+ * `course_staff` roles on the course in question, then asks
+ * `getUserPermissions` for the combined set — and that function returns
+ * `Set(['*'])` the instant `owner` appears anywhere in the list. A
+ * `course_staff` row naming `owner` (or `admin`) would therefore grant
+ * unconditional authority that merely *looks* course-scoped. Refusing
+ * anything outside `COURSE_SCOPED_ROLES` here closes that off at the write,
+ * not only at whichever route happens to call this.
+ */
 export async function assignCourseStaff(
   input: AssignCourseStaffInput,
-): Promise<{ ok: true } | { ok: false; reason: 'not-found' }> {
+): Promise<
+  { ok: true } | { ok: false; reason: 'not-found' | 'not-assignable' }
+> {
+  if (!isCourseScopedRole(input.roleName)) {
+    return { ok: false, reason: 'not-assignable' };
+  }
+
   const [role] = await db
     .select({ id: userRolesTable.id })
     .from(userRolesTable)
