@@ -1,6 +1,8 @@
 import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import { useCourseBoard } from '@/data-hooks/use-course-board';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { BOARD_FORBIDDEN, useCourseBoard } from '#/data-hooks/use-course-board';
 import {
   useUpdateLessonDependencies,
   useUpdateModuleSequential,
@@ -49,6 +51,16 @@ export const LessonSequencingContainer = ({
   if (error) {
     return (
       <p className="text-error-text text-sm">Failed to load this course.</p>
+    );
+  }
+
+  // The same refusal the board itself reports — this tab reads the board's
+  // cache, so it inherits the 403 and must not render it as an empty course.
+  if (board === BOARD_FORBIDDEN) {
+    return (
+      <p className="text-secondary text-sm">
+        You are not staff on this course. Ask an admin to assign you.
+      </p>
     );
   }
 
