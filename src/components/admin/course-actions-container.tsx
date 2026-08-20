@@ -1,16 +1,27 @@
 import { useSetAtom } from 'jotai';
 import { BrainCircuit, Pencil, Trash2 } from 'lucide-react';
 
-import { deleteCourseAtom, editCourseAtom, trainCourseAtom } from '@/atoms/admin';
+import {
+  deleteCourseAtom,
+  editCourseAtom,
+  trainCourseAtom,
+} from '@/atoms/admin';
 import type { BoardCourse } from '@/lib/admin-schemas';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { CourseEmbeddingsDialogContainer } from './course-embeddings-dialog-container';
+import { CourseStaffContainer } from './course-staff-container';
 import { CreateModuleDialogContainer } from './create-module-dialog-container';
 import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
-import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
-/** Course-level action toolbar: add module, AI training, edit course, delete course. */
-export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
+/** Course-level action toolbar: add module, staff, AI training, edit course, delete course. */
+export const CourseActionsContainer = ({
+  course,
+  roles,
+}: {
+  course: BoardCourse;
+  roles: string[];
+}) => {
   const setEditCourse = useSetAtom(editCourseAtom);
   const setDeleteCourse = useSetAtom(deleteCourseAtom);
   const setTrainCourse = useSetAtom(trainCourseAtom);
@@ -18,6 +29,7 @@ export const CourseActionsContainer = ({ course }: { course: BoardCourse }) => {
   return (
     <div className="flex items-center gap-1">
       <CreateModuleDialogContainer courseId={course.id} />
+      <CourseStaffContainer course={course} roles={roles} />
       <TooltipIconButton
         label="AI training"
         onClick={() => setTrainCourse({ id: course.id, name: course.name })}

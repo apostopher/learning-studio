@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import {
   GRANTABLE_PERMISSIONS,
+  isCourseScopedEntity,
   type PermissionAction,
   type PermissionEntity,
   permissionKey,
@@ -38,6 +39,19 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
   update: 'Edit',
   delete: 'Remove',
 };
+
+/**
+ * Why `structure`, `content` and `staff` render read-only here.
+ *
+ * Those three are checked against `course_staff`, not a global role (see
+ * `isCourseScopedEntity`) — a course-manager or subject-expert holds them by
+ * being assigned to a course, not by an owner ticking a box for their role
+ * name. Letting the grid tick them anyway would look like it worked while
+ * silently reopening authoring authority the design deliberately keeps
+ * course-scoped.
+ */
+const COURSE_SCOPED_REASON =
+  'Granted by assigning someone to a course, not by this grid.';
 
 /**
  * What a role may do, as entity × action.
@@ -84,46 +98,66 @@ export const RolePermissionsPanel = ({
           </h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {(Object.keys(GRANTABLE_PERMISSIONS) as PermissionEntity[]).map(
-              (entity) => (
-                <fieldset
-                  key={entity}
-                  className="rounded-lg border border-gray-6 bg-gray-1 p-3"
-                >
-                  <legend className="px-1 font-medium text-primary text-sm">
-                    {ENTITY_LABELS[entity]}
-                  </legend>
-                  <div className="flex flex-col gap-2 pt-1">
-                    {GRANTABLE_PERMISSIONS[entity].map((action) => {
-                      const key = permissionKey(entity, action);
-                      const isOn = (granted[role] ?? []).includes(key);
-                      return (
-                        <label
-                          key={action}
-                          className="flex cursor-pointer items-center gap-2.5"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isOn}
-                            disabled={isSaving}
-                            onChange={(event) =>
-                              onToggle(
-                                role,
-                                entity,
-                                action,
-                                event.target.checked,
-                              )
+              (entity) => {
+                const courseScoped = isCourseScopedEntity(entity);
+                const reasonId = `course-scoped-reason-${role}-${entity}`;
+                return (
+                  <fieldset
+                    key={entity}
+                    className="rounded-lg border border-gray-6 bg-gray-1 p-3"
+                  >
+                    <legend className="px-1 font-medium text-primary text-sm">
+                      {ENTITY_LABELS[entity]}
+                    </legend>
+                    <div className="flex flex-col gap-2 pt-1">
+                      {GRANTABLE_PERMISSIONS[entity].map((action) => {
+                        const key = permissionKey(entity, action);
+                        const isOn = (granted[role] ?? []).includes(key);
+                        return (
+                          <label
+                            key={action}
+                            className={
+                              courseScoped
+                                ? 'flex items-center gap-2.5'
+                                : 'flex cursor-pointer items-center gap-2.5'
                             }
-                            className="h-4 w-4 accent-apple-9"
-                          />
-                          <span className="text-primary text-sm">
-                            {ACTION_LABELS[action]}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-              ),
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isOn}
+                              disabled={isSaving || courseScoped}
+                              aria-describedby={
+                                courseScoped ? reasonId : undefined
+                              }
+                              onChange={(event) =>
+                                onToggle(
+                                  role,
+                                  entity,
+                                  action,
+                                  event.target.checked,
+                                )
+                              }
+                              className="h-4 w-4 accent-apple-9 disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <span className="text-primary text-sm">
+                              {ACTION_LABELS[action]}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {courseScoped && (
+                      // Visible, not just an aria-describedby: a disabled
+                      // control must say why it's unavailable in a way
+                      // sighted and assistive-tech users both get, not one
+                      // conveyed by styling (greyed-out) alone.
+                      <p id={reasonId} className="pt-2 text-tertiary text-xs">
+                        {COURSE_SCOPED_REASON}
+                      </p>
+                    )}
+                  </fieldset>
+                );
+              },
             )}
           </div>
         </div>

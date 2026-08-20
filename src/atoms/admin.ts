@@ -100,6 +100,15 @@ export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);
 /** Client-side search filter for the training-documents list. Reset on close. */
 export const embeddingsSearchAtom = atom('');
 
+/** Whether the current course's staff-assignment dialog is open. */
+export const courseStaffDialogOpenAtom = atom(false);
+
+/** Person picked in the staff dialog's assign form. Cleared after a successful assign. */
+export const courseStaffSelectedUserIdAtom = atom<string | null>(null);
+
+/** Role picked in the staff dialog's assign form. Cleared after a successful assign. */
+export const courseStaffSelectedRoleAtom = atom<string | null>(null);
+
 /**
  * Which pane of the persona section's two-screen carousel is showing. Both
  * panes stay mounted — this only drives the track's horizontal offset — so the
