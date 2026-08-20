@@ -1,19 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
+import { describe, expect, it } from 'vitest';
 
-// admin-schemas.ts imports `@/lib/video-providers` and (after this task)
-// `@/types` — vitest cannot resolve the `@/` alias at all (repo-wide finding,
-// see .superpowers/sdd/progress.md), so both are full-stubbed here (no
-// importOriginal) with values that mirror the real modules closely enough to
-// exercise real schema behavior (e.g. the unknown-tier rejection below).
-vi.mock('@/lib/video-providers', () => ({
-  PROVIDER_IDS: ['mux', 'synthesia'],
-}));
-vi.mock('@/types', () => ({
-  SubscriptionsSchema: z.array(z.enum(['associate', 'candidate', 'rpoc'])),
-  UserLevelsSchema: z.array(z.enum(['basic', 'intermediate', 'advanced'])),
-}));
-
+// admin-schemas.ts imports via the `#/` alias (`#/lib/video-providers`,
+// `#/types`), not `@/`, so no mocking is needed here — these tests exercise
+// the real modules directly.
 const { boardLessonSchema, boardModuleSchema } = await import(
   '../admin-schemas'
 );
