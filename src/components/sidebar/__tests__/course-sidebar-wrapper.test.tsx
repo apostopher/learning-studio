@@ -165,20 +165,11 @@ const leveledCourse = {
   ],
 };
 
-async function renderAt(
-  path: string,
-  details: DetailsResult,
-  // The real root route's beforeLoad puts `roles` into the router context
-  // (src/routes/__root.tsx); useIsAdmin reads it from there. Injecting it the
-  // same way is the only honest way to prove the wrapper threads the flag
-  // through to the rendered rows.
-  roles: string[] = [],
-) {
+async function renderAt(path: string, details: DetailsResult) {
   const store = createStore();
   store.set(detailsAtom, details);
 
   const rootRoute = createRootRoute({
-    beforeLoad: () => ({ roles }),
     component: () => <Outlet />,
   });
   const indexRoute = createRoute({
@@ -297,11 +288,14 @@ describe('CourseSidebarWrapper', () => {
     expect(rollLink?.textContent).toContain('Finish Yaw first');
   });
 
-  it('shows an admin no lock reason on a row a student would see locked', async () => {
+  it('shows an author no lock reason on a row a student would see locked', async () => {
     // Identical inputs to the test above, which proves Roll's row DOES carry
-    // "Finish Yaw first" for a non-admin. Admins bypass all three gates
-    // server-side, so the row opened when they clicked it — the sidebar was
-    // telling them something untrue.
+    // "Finish Yaw first" for a learner. Whoever the server flagged
+    // `viewingAsAuthor` bypasses all three gates server-side, so the row
+    // opened when they clicked it — the sidebar was telling them something
+    // untrue. The flag comes from the PAYLOAD, not from the viewer's roles:
+    // a subject expert authors one course and is a gated learner in every
+    // other, so roles cannot answer this question.
     progressMock.mockReturnValue({
       data: {
         lessons: [
@@ -311,11 +305,11 @@ describe('CourseSidebarWrapper', () => {
         modules: [],
       },
     });
-    await renderAt(
-      '/',
-      { data: gatedCourse, isLoading: false, isError: false },
-      ['admin'],
-    );
+    await renderAt('/', {
+      data: { ...gatedCourse, viewingAsAuthor: true },
+      isLoading: false,
+      isError: false,
+    });
     fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
     await waitFor(() => {
       expect(
@@ -374,18 +368,67 @@ describe('CourseSidebarWrapper', () => {
     expect(screen.queryByText('Vortex Recovery')).toBeNull();
   });
 
-  it('shows an out-of-tier lesson to an admin, bypassing the level filter', async () => {
+  it('shows an out-of-tier lesson to an author, bypassing the level filter', async () => {
     levelMock.mockReturnValue({
       data: { level: 'basic', pendingChange: null },
       isError: false,
     });
-    await renderAt(
-      '/',
-      { data: leveledCourse, isLoading: false, isError: false },
-      ['admin'],
-    );
+    await renderAt('/', {
+      data: { ...leveledCourse, viewingAsAuthor: true },
+      isLoading: false,
+      isError: false,
+    });
     expect(screen.getByText('2 modules · 2 lessons')).toBeDefined();
     expect(screen.getByText('Advanced Only')).toBeDefined();
+  });
+
+  it('hides that same lesson when the payload says this is not their course', async () => {
+    // The Biology professor's sidebar on the Computer Science course: same
+    // component, same fixtures, one field different. If this ever renders the
+    // author's tree, a course-scoped grant has leaked into a course it does
+    // not cover.
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: { ...leveledCourse, viewingAsAuthor: false },
+      isLoading: false,
+      isError: false,
+    });
+    expect(screen.getByText('1 module · 1 lesson')).toBeDefined();
+    expect(screen.queryByText('Advanced Only')).toBeNull();
+  });
+
+  it('locks a prerequisite-blocked row when the payload says this is not their course', async () => {
+    // The other half of the same property, on the locks rather than the
+    // filter: identical inputs to the author test above except the flag.
+    progressMock.mockReturnValue({
+      data: {
+        lessons: [
+          { lessonId: 2, watched: false },
+          { lessonId: 3, watched: false },
+        ],
+        modules: [],
+      },
+    });
+    await renderAt('/', {
+      data: { ...gatedCourse, viewingAsAuthor: false },
+      isLoading: false,
+      isError: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Intermediate/ }));
+    await waitFor(() => {
+      expect(
+        screen
+          .queryAllByRole('link')
+          .some((a) => a.getAttribute('href')?.includes('/lessons/roll')),
+      ).toBe(true);
+    });
+    const rollLink = screen
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href')?.includes('/lessons/roll'));
+    expect(rollLink?.textContent).toContain('Finish Yaw first');
   });
 
   it('treats the sidebar as still loading while the level query is pending, never rendering the unfiltered course', async () => {
@@ -418,16 +461,16 @@ describe('CourseSidebarWrapper', () => {
     ).toBeDefined();
   });
 
-  it('shows no level badge for an admin (bypasses the level system entirely)', async () => {
+  it('shows no level badge for an author (bypasses the level system entirely)', async () => {
     levelMock.mockReturnValue({
       data: { level: 'basic', pendingChange: null },
       isError: false,
     });
-    await renderAt(
-      '/',
-      { data: fakeCourse, isLoading: false, isError: false },
-      ['admin'],
-    );
+    await renderAt('/', {
+      data: { ...fakeCourse, viewingAsAuthor: true },
+      isLoading: false,
+      isError: false,
+    });
     expect(screen.queryByText('Basic')).toBeNull();
   });
 

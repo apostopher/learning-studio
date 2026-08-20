@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   courseStaffTable,
+  coursesTable,
   userProfileTable,
   userRolesTable,
 } from '#/db/schema';
@@ -57,6 +58,35 @@ export async function isCourseStaff(
       and(
         eq(courseStaffTable.userId, userId),
         eq(courseStaffTable.courseId, courseId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Does this person hold any staff role on the course with this SLUG?
+ *
+ * A slug-keyed sibling of `isCourseStaff` rather than a caller-side
+ * `getCourseIdentityBySlug` + `isCourseStaff` pair, because `/api/course/details`
+ * asks this for EVERY non-admin request — it has to, since the answer also
+ * ships in the payload to tell the sidebar whether it is drawing an author's
+ * view — and two round trips on that path would be two too many. An unknown
+ * slug simply matches no row, so the caller fails closed without a separate
+ * existence check.
+ */
+export async function isCourseStaffBySlug(
+  userId: string,
+  courseSlug: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: courseStaffTable.id })
+    .from(courseStaffTable)
+    .innerJoin(coursesTable, eq(coursesTable.id, courseStaffTable.courseId))
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(coursesTable.slug, courseSlug),
       ),
     )
     .limit(1);

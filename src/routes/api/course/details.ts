@@ -1,10 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getUserRoleNames } from '#/db/admin';
-import {
-  getCourseDetailsWithCache,
-  getCourseIdentityBySlug,
-} from '#/db/course';
-import { isCourseStaff } from '#/db/course-staff';
+import { getCourseDetailsWithCache } from '#/db/course';
+import { isCourseStaffBySlug } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
@@ -64,21 +61,21 @@ export async function getCourseDetailsHandler(
     getUserRoleNames(session.user.id),
     isSubscribedToCourseSlug(session.user.id, slug),
   ]);
-  // Three questions, cheapest first, and each one settles it: an org
-  // `owner`/`admin` bypasses everywhere, an enrolled learner is already in.
-  // Only someone who is neither pays the two lookups below — and this route
-  // carries a slug, not a course id, so resolving one is what a staff check
-  // costs here. A `subject-expert`/`course-manager` reads the tree of the
-  // course they are staffed on; on any other course they are refused exactly
-  // as any other stranger is.
-  if (!hasAdminAccess(roles) && !subscribed) {
-    const identity = await getCourseIdentityBySlug(slug);
-    const staff = identity
-      ? await isCourseStaff(session.user.id, identity.id)
-      : false;
-    if (!staff) {
-      return new Response('Forbidden', { status: 403 });
-    }
+  // Asked for every non-admin, subscribers included — not only for the
+  // strangers the guard below would otherwise refuse. The answer is not just
+  // an entry ticket: it ships in the payload, and the sidebar draws an
+  // author's unfiltered, unlocked tree from it. A subject expert enrolled in
+  // the course they staff is the ordinary case, so skipping the lookup once
+  // `subscribed` was true would leave exactly the people this feature exists
+  // for looking at a learner's tree. One indexed join
+  // (`isCourseStaffBySlug`), and an org `owner`/`admin` still pays nothing.
+  const viewingAsAuthor =
+    hasAdminAccess(roles) || (await isCourseStaffBySlug(session.user.id, slug));
+  // A `subject-expert`/`course-manager` reads the tree of the course they are
+  // staffed on; on any other course they are refused exactly as any other
+  // stranger is. An unknown slug matches no staff row, so it fails closed.
+  if (!viewingAsAuthor && !subscribed) {
+    return new Response('Forbidden', { status: 403 });
   }
 
   const course = await getCourseDetailsWithCache(slug);
@@ -89,7 +86,7 @@ export async function getCourseDetailsHandler(
   // satisfying what `LearnerCourseDetails` promises consumers, `tsc` catches
   // it here, at the one place both types meet.
   const payload: LearnerCourseDetails = course
-    ? toLearnerCourseDetails(course)
+    ? toLearnerCourseDetails(course, viewingAsAuthor)
     : null;
   return Response.json(payload);
 }

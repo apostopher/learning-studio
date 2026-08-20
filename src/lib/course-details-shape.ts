@@ -57,9 +57,18 @@ type CourseShape = {
  * structural typing at the one call site that matters,
  * `routes/api/course/details.ts`.
  */
-export function toLearnerCourseDetails<C extends CourseShape>(course: C) {
+export function toLearnerCourseDetails<C extends CourseShape>(
+  course: C,
+  viewingAsAuthor: boolean,
+) {
   return {
     ...course,
+    // Required, not optional, and taken as an argument rather than defaulted:
+    // the sidebar draws a filtered, locked tree whenever this is false, so a
+    // caller that forgot to answer would silently hide an author's own
+    // lessons from them. Making it impossible to shape the payload without
+    // answering is the only version of this that cannot rot.
+    viewingAsAuthor,
     modules: course.modules.map((mod) => ({
       ...mod,
       lessons: mod.lessons.map(omitLessonSecrets),
@@ -86,6 +95,22 @@ export type LearnerCourseDetails = {
   id: number;
   slug: string;
   name: string;
+  /**
+   * Whether THIS viewer reads THIS course as its author: an org `owner`/
+   * `admin`, or a `subject-expert`/`course-manager` staffed on this course.
+   *
+   * Per-request, never cached — `getCourseDetailsWithCache`'s Redis entry is
+   * keyed by course slug and shared across every student, so this is attached
+   * by the route after the shared payload comes back.
+   *
+   * The client must learn this from the server rather than from its own roles:
+   * "am I an admin" and "am I viewing this course as its author" are different
+   * questions that only coincided while staff roles did not exist. A sidebar
+   * that answers the first one hides a subject expert's own out-of-tier
+   * lessons and paints locks on rows that open when clicked — the lessons they
+   * are there to author, unreachable through navigation.
+   */
+  viewingAsAuthor: boolean;
   modules: LearnerCourseModule[];
 } | null;
 

@@ -17,12 +17,21 @@ vi.mock('#/data-hooks/use-my-level', () => ({
   useAcknowledgeLevelChange: () => ({ mutate: vi.fn() }),
 }));
 
+// "Am I reading this course as its author" is answered by the SERVER, in the
+// course-details payload — not by the viewer's roles. A `subject-expert`
+// authors one course and is an ordinary gated learner in every other, so a
+// roles check would silence this banner on courses where their level really
+// did change.
+const useCourseDetailsMock = vi.fn();
+vi.mock('#/hooks/data/use-course-details', () => ({
+  useCourseDetails: (slug?: string) => useCourseDetailsMock(slug),
+}));
+
 import { CourseLevelBannerContainer } from '../course-level-banner-container';
 
-async function renderAt(path: string, roles: string[] = []) {
+async function renderAt(path: string) {
   const queryClient = new QueryClient();
   const rootRoute = createRootRoute({
-    beforeLoad: () => ({ roles }),
     component: () => (
       <QueryClientProvider client={queryClient}>
         <CourseLevelBannerContainer />
@@ -53,10 +62,13 @@ async function renderAt(path: string, roles: string[] = []) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A settled payload for someone who does NOT author this course, so every
+  // test that does not care about authorship still takes the learner path.
+  useCourseDetailsMock.mockReturnValue({ data: { viewingAsAuthor: false } });
 });
 
 describe('CourseLevelBannerContainer', () => {
-  it('shows the banner for a non-admin pilot with a pending change', async () => {
+  it('shows the banner for a pilot with a pending change', async () => {
     useMyLevelMock.mockReturnValue({
       data: {
         level: 'intermediate',
@@ -75,12 +87,13 @@ describe('CourseLevelBannerContainer', () => {
   });
 
   /**
-   * The consistency fix: the level badge already hides for admins
-   * ("an admin's own row carries no meaning" — course-sidebar-wrapper.tsx).
-   * The banner must not contradict that by announcing a change to a level
-   * the sidebar itself refuses to show.
+   * The consistency fix: the level badge already hides for someone reading
+   * the course as its author ("an author's own row carries no meaning" —
+   * course-sidebar-wrapper.tsx). The banner must not contradict that by
+   * announcing a change to a level the sidebar itself refuses to show.
    */
-  it('hides the banner for an admin, even with a pending change', async () => {
+  it('hides the banner for an author of this course, even with a pending change', async () => {
+    useCourseDetailsMock.mockReturnValue({ data: { viewingAsAuthor: true } });
     useMyLevelMock.mockReturnValue({
       data: {
         level: 'intermediate',
@@ -92,10 +105,39 @@ describe('CourseLevelBannerContainer', () => {
         },
       },
     });
-    await renderAt('/course/c-1', ['admin']);
+    await renderAt('/course/c-1');
     expect(screen.queryByRole('status')).toBeNull();
-    // Never even asked for the admin's own level.
+    // Never even asked for the author's own level.
     expect(useMyLevelMock).not.toHaveBeenCalled();
+  });
+
+  it('asks about the course in the URL, not about courses in general', async () => {
+    // A course-scoped grant only silences the banner on the course it covers,
+    // which is only true if the question names that course.
+    await renderAt('/course/c-1');
+    expect(useCourseDetailsMock).toHaveBeenCalledWith('c-1');
+  });
+
+  it('holds the bar until the payload says who is reading', async () => {
+    // Announcing a level change to someone who turns out to author the course
+    // is the wrong way to be wrong, so an unresolved payload shows nothing.
+    useCourseDetailsMock.mockReturnValue({ data: undefined });
+    useMyLevelMock.mockReturnValue({
+      data: {
+        level: 'intermediate',
+        pendingChange: {
+          id: 1,
+          level: 'intermediate',
+          message: null,
+          source: 'earned',
+        },
+      },
+    });
+    const { container } = await renderAt('/course/c-1');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      container.querySelector('.alert-bar')?.getAttribute('aria-hidden'),
+    ).toBe('true');
   });
 
   it('renders the bare bar off a course route', async () => {

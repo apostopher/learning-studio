@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { useMyLevel } from '#/data-hooks/use-my-level';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
-import { useIsAdmin } from '#/hooks/use-is-admin';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import { filterCourseToLevel } from '#/lib/level-visibility';
 import {
@@ -36,7 +35,15 @@ export const CourseSidebarWrapper = ({
   const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
   const progressQuery = useCourseProgressSummary(courseSlug);
   const levelQuery = useMyLevel(courseSlug);
-  const isAdmin = useIsAdmin();
+  // From the SERVER, not from the viewer's roles. `useIsAdmin` answers "am I
+  // an admin"; the question here is "am I looking at a course I author", and
+  // for a `subject-expert`/`course-manager` those differ — they author one
+  // course and are an ordinary gated learner in every other. The route that
+  // built this payload already decided (see `viewingAsAuthor` in
+  // `course-details-shape.ts`), so the sidebar cannot disagree with the gate
+  // the server just applied. Absent (still loading, or an error) reads as
+  // false: a learner's tree is the safe thing to draw while we do not know.
+  const viewingAsAuthor = detailsQuery.data?.viewingAsAuthor ?? false;
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
   const [archiveSectionOpen, setArchiveSectionOpen] = useAtom(
     archiveSectionOpenAtom,
@@ -46,24 +53,27 @@ export const CourseSidebarWrapper = ({
   // (percent maps, lock computation, module/lesson counts) reads the course
   // tree — so a hidden lesson never appears as the blocker in a lock reason
   // the pilot cannot act on, and never surfaces anywhere else in the sidebar.
-  // Admins bypass the filter, matching evaluateLessonGate's admin
-  // short-circuit. Until the level query resolves, this stays undefined
+  // An author bypasses the filter, matching evaluateLessonGate's own
+  // short-circuit for the same viewer. Until the level query resolves, this stays undefined
   // rather than falling back to the unfiltered payload — computeLessonLocks
   // and `derived` below already treat "no details yet" as "still loading", so
   // nothing unfiltered is ever handed to them, even transiently.
   const visibleDetails = useMemo(() => {
     if (!detailsQuery.data) return detailsQuery.data;
-    if (isAdmin) return detailsQuery.data;
+    if (viewingAsAuthor) return detailsQuery.data;
     if (!levelQuery.data) return undefined;
     return filterCourseToLevel(detailsQuery.data, levelQuery.data.level);
-  }, [detailsQuery.data, levelQuery.data, isAdmin]);
+  }, [detailsQuery.data, levelQuery.data, viewingAsAuthor]);
 
-  // Non-admin and course details have arrived, but the level query hasn't
+  // Not an author, and course details have arrived, but the level query hasn't
   // settled (and hasn't errored) yet — visibleDetails is intentionally
   // undefined in this window; treat the sidebar as still loading rather than
   // erroring or showing anything unfiltered.
   const levelPending =
-    !isAdmin && !!detailsQuery.data && !levelQuery.data && !levelQuery.isError;
+    !viewingAsAuthor &&
+    !!detailsQuery.data &&
+    !levelQuery.data &&
+    !levelQuery.isError;
 
   // Server-aggregated progress → the slug-keyed / moduleId-keyed maps the
   // sidebar renders. Replaces the old client-side jotai aggregation.
@@ -130,33 +140,33 @@ export const CourseSidebarWrapper = ({
   // Computed client-side from the two queries above — never written back to
   // getCourseDetailsWithCache, whose Redis entry is shared across every
   // student. Resolves to {} until both queries have data, so a half-loaded
-  // sidebar never shows a lock nobody can yet explain, and to {} for an admin,
-  // whose rows all open regardless of what the predicate says.
+  // sidebar never shows a lock nobody can yet explain, and to {} for an
+  // author, whose rows all open regardless of what the predicate says.
   const lessonLocks = useMemo(
     () =>
       computeLessonLocks(
         visibleDetails ?? undefined,
         progressQuery.data,
-        isAdmin,
+        viewingAsAuthor,
       ),
-    [visibleDetails, progressQuery.data, isAdmin],
+    [visibleDetails, progressQuery.data, viewingAsAuthor],
   );
 
   // Completed-at-an-earlier-level lessons the main (filtered) tree no longer
   // shows — the sidebar's own archive index. Deliberately built from
   // `detailsQuery.data` (the UNFILTERED tree), not `visibleDetails`: the
-  // whole point is lessons that filtering just removed. Empty for an admin
+  // whole point is lessons that filtering just removed. Empty for an author
   // (nothing is ever "out of tier" for them — see visibleDetails above) and
   // while the level query hasn't resolved yet, so this can never show a
   // lesson under the wrong level's rule for a moment.
   const archivedLessons = useMemo(() => {
-    if (isAdmin || !levelQuery.data) return [];
+    if (viewingAsAuthor || !levelQuery.data) return [];
     return computeArchivedLessons(
       detailsQuery.data,
       progressQuery.data,
       levelQuery.data.level,
     );
-  }, [detailsQuery.data, progressQuery.data, levelQuery.data, isAdmin]);
+  }, [detailsQuery.data, progressQuery.data, levelQuery.data, viewingAsAuthor]);
 
   const derived = useMemo(() => {
     if (detailsQuery.isLoading || levelPending)
@@ -209,7 +219,9 @@ export const CourseSidebarWrapper = ({
       coursePercent={coursePercent}
       lessonLocks={lessonLocks}
       level={
-        isAdmin || !levelQuery.data ? null : LEVEL_LABELS[levelQuery.data.level]
+        viewingAsAuthor || !levelQuery.data
+          ? null
+          : LEVEL_LABELS[levelQuery.data.level]
       }
       archivedLessons={archivedLessons}
       archiveSectionOpen={archiveSectionOpen}

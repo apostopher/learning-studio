@@ -7,27 +7,22 @@ const {
   getCourseDetails,
   getUserRoleNames,
   isSubscribedToCourseSlug,
-  getCourseIdentityBySlug,
-  isCourseStaff,
+  isCourseStaffBySlug,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseDetails: vi.fn(),
   getUserRoleNames: vi.fn(),
   isSubscribedToCourseSlug: vi.fn(),
-  getCourseIdentityBySlug: vi.fn(),
-  isCourseStaff: vi.fn(),
+  isCourseStaffBySlug: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
-vi.mock('#/db/course', () => ({
-  getCourseDetailsWithCache,
-  getCourseDetails,
-  getCourseIdentityBySlug,
-}));
-// This route carries a slug, not a course id, so the staff check resolves one
-// first. The real modules are drizzle-backed and would open a connection.
-vi.mock('#/db/course-staff', () => ({ isCourseStaff }));
+vi.mock('#/db/course', () => ({ getCourseDetailsWithCache, getCourseDetails }));
+// This route carries a slug, not a course id, so the staff check is the
+// slug-keyed one. The real module is drizzle-backed and would open a
+// connection.
+vi.mock('#/db/course-staff', () => ({ isCourseStaffBySlug }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
 vi.mock('#/db/lesson-access', () => ({ isSubscribedToCourseSlug }));
 
@@ -74,9 +69,14 @@ const course = {
 };
 
 // What the route actually serves: same as `course`, minus every
-// video-identifying field.
-const learnerCourse = {
+// video-identifying field, plus this viewer's own answer to "am I reading
+// this as its author". Taken as an argument rather than fixed, so every
+// deep-equal below asserts the flag the payload SHOULD carry for that caller
+// — the sidebar draws a filtered, locked tree whenever it is false, so a
+// payload that carries the wrong one is the whole defect.
+const learnerCourse = (viewingAsAuthor: boolean) => ({
   ...course,
+  viewingAsAuthor,
   modules: course.modules.map((mod) => ({
     ...mod,
     lessons: mod.lessons.map(
@@ -88,7 +88,7 @@ const learnerCourse = {
       }) => rest,
     ),
   })),
-};
+});
 
 describe('getCourseDetailsHandler', () => {
   beforeEach(() => {
@@ -98,8 +98,7 @@ describe('getCourseDetailsHandler', () => {
     isSubscribedToCourseSlug.mockResolvedValue(true);
     getCourseDetailsWithCache.mockResolvedValue(course);
     getCourseDetails.mockResolvedValue(course);
-    getCourseIdentityBySlug.mockResolvedValue({ id: 1, name: 'Course One' });
-    isCourseStaff.mockResolvedValue(false);
+    isCourseStaffBySlug.mockResolvedValue(false);
   });
 
   it('401s an anonymous caller without reading the course', async () => {
@@ -141,7 +140,7 @@ describe('getCourseDetailsHandler', () => {
     // before this reaches the client, since nothing outside the playback
     // layer should learn a video's identity from this route.
     const body = await res.json();
-    expect(body).toEqual(learnerCourse);
+    expect(body).toEqual(learnerCourse(false));
     const lesson = body.modules[0].lessons[0];
     expect(lesson).not.toHaveProperty('videoProvider');
     expect(lesson).not.toHaveProperty('videoRef');
@@ -156,28 +155,43 @@ describe('getCourseDetailsHandler', () => {
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(learnerCourse);
+    // `viewingAsAuthor: true` — the sidebar reads this field to decide
+    // whether to draw the unfiltered, unlocked tree, so an admin whose
+    // payload said false would be shown locks on rows that open.
+    expect(await res.json()).toEqual(learnerCourse(true));
   });
 
-  it('serves a subject expert the tree of the course they staff', async () => {
+  it('serves a subject expert the tree of the course they staff, flagged as authored', async () => {
     isSubscribedToCourseSlug.mockResolvedValue(false);
-    isCourseStaff.mockResolvedValue(true);
+    isCourseStaffBySlug.mockResolvedValue(true);
 
     const res = await getCourseDetailsHandler(req());
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(learnerCourse);
-    // The slug is resolved to an id and the grant tested against THAT course.
-    expect(getCourseIdentityBySlug).toHaveBeenCalledWith('c1');
-    expect(isCourseStaff).toHaveBeenCalledWith('u1', 1);
+    expect(await res.json()).toEqual(learnerCourse(true));
+    // The grant is tested against the slug being served, not "any course".
+    expect(isCourseStaffBySlug).toHaveBeenCalledWith('u1', 'c1');
+  });
+
+  it('flags an enrolled subject expert as an author too', async () => {
+    // The ordinary case, and the one a subscription-first short-circuit would
+    // get wrong: staff are also students, so the SME who authors this course
+    // is usually enrolled in it. Answering only for strangers would leave
+    // exactly these people looking at a learner's filtered, locked tree.
+    isSubscribedToCourseSlug.mockResolvedValue(true);
+    isCourseStaffBySlug.mockResolvedValue(true);
+
+    const res = await getCourseDetailsHandler(req());
+
+    expect(await res.json()).toEqual(learnerCourse(true));
   });
 
   it('403s a subject expert on a course they do not staff', async () => {
-    // The dependency graph is an enumeration surface. A grant on course 99
-    // buys nothing on course 1.
+    // The dependency graph is an enumeration surface. A grant on another
+    // course buys nothing here.
     isSubscribedToCourseSlug.mockResolvedValue(false);
-    isCourseStaff.mockImplementation(
-      async (_userId: string, courseId: number) => courseId === 99,
+    isCourseStaffBySlug.mockImplementation(
+      async (_userId: string, slug: string) => slug === 'biology',
     );
 
     const res = await getCourseDetailsHandler(req());
@@ -186,26 +200,28 @@ describe('getCourseDetailsHandler', () => {
     expect(getCourseDetailsWithCache).not.toHaveBeenCalled();
   });
 
-  it('403s when the slug resolves to no course at all', async () => {
+  it('403s when the slug matches no course at all', async () => {
     isSubscribedToCourseSlug.mockResolvedValue(false);
-    getCourseIdentityBySlug.mockResolvedValue(null);
+    // An unknown slug joins to no staff row, so the answer is a plain false —
+    // fail closed, with no separate existence check to forget.
+    isCourseStaffBySlug.mockResolvedValue(false);
 
     const res = await getCourseDetailsHandler(req('?slug=ghost'));
 
     expect(res.status).toBe(403);
-    // No id to test a grant against, so no grant can be found — fail closed
-    // rather than asking the staff table about `undefined`.
-    expect(isCourseStaff).not.toHaveBeenCalled();
+    expect(isCourseStaffBySlug).toHaveBeenCalledWith('u1', 'ghost');
   });
 
-  it('asks nothing of the staff table for a subscriber or an admin', async () => {
-    await getCourseDetailsHandler(req());
-    expect(isCourseStaff).not.toHaveBeenCalled();
-
+  it('asks nothing of the staff table for an admin', async () => {
+    // The one short-circuit that must survive: org-wide authority settles it,
+    // so an admin never pays the extra query. (A non-admin subscriber DOES
+    // pay it — see the enrolled-subject-expert case above for why.)
     getUserRoleNames.mockResolvedValue(['admin']);
     isSubscribedToCourseSlug.mockResolvedValue(false);
+
     await getCourseDetailsHandler(req());
-    expect(isCourseStaff).not.toHaveBeenCalled();
+
+    expect(isCourseStaffBySlug).not.toHaveBeenCalled();
   });
 
   it('400s a signed-in request with no slug', async () => {

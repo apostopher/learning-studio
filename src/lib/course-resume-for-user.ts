@@ -5,21 +5,54 @@ import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
 import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
+import { auth } from '#/lib/auth';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
 import { watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 
 /**
+ * The session half of `getCourseResumeTarget`, kept OUT of the server fn's
+ * handler so the wiring below can be asserted.
+ *
+ * Start's compiler rewrites an exported server fn into an RPC shim that
+ * resolves its body through a manifest built only for the server bundle
+ * (`@tanstack/start-server-core`'s `#tanstack-start-server-fn-resolver` import
+ * maps to `fake-start-server-fn-resolver` under every other condition, and
+ * that fake returns `undefined`), so anything left inside a handler is
+ * unreachable from a test. Leaving `session.user.id` in there would mean
+ * nothing could prove the resume target is resolved for the SIGNED-IN user
+ * rather than, say, the slug — a type-legal mistake. What remains in the
+ * handler is one `getRequestHeaders()` call.
+ *
+ * Derives the user from the session, never from an argument, for the same
+ * reason `getMySubscribedSlugs` does.
+ */
+export async function resumeTargetForRequest({
+  headers,
+  courseSlug,
+}: {
+  headers: HeadersInit;
+  courseSlug: string;
+}): Promise<ResumeTarget> {
+  const session = await auth.api.getSession({ headers });
+  // The parent route's beforeLoad already rejects anonymous callers; an
+  // unauthenticated hit here means the guard changed, so report "nothing to
+  // resume" rather than inventing a target for a user we cannot identify.
+  if (!session) return { kind: 'none', reason: 'no-lessons' };
+
+  return resumeTargetForUser({ userId: session.user.id, courseSlug });
+}
+
+/**
  * Where `/course/$courseSlug` should send this learner.
  *
  * Lives here rather than inside `getCourseResumeTarget`'s handler purely so it
- * can be called from a test: Start's compiler rewrites the exported server fn
- * into an RPC shim that resolves its body through a manifest vitest does not
- * have, so a handler body is unreachable in-process. Not a `.server.ts` and
- * not exported to any client module — `course-resume-functions.ts` imports it
- * only from inside the handler body, which the same compiler strips from the
- * client bundle along with this import, exactly as it already does for the
- * drizzle modules above.
+ * can be called from a test — see `resumeTargetForRequest` above. Not a
+ * `.server.ts` and not exported to any client module:
+ * `course-resume-functions.ts` imports this file only from inside the handler
+ * body, which the compiler strips from the client bundle along with this
+ * import, exactly as it already does for the drizzle and auth modules above.
+ * (Verified after a full build by grepping every client asset.)
  */
 export async function resumeTargetForUser({
   userId,
