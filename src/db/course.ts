@@ -1,7 +1,7 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
-import { getStaffCourseIds } from '#/db/course-staff';
+import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
 import {
   progressComponentColumns,
   progressComponentGroupBy,
@@ -419,27 +419,44 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
 }
 
 /**
- * Just the slugs this user is subscribed to, for the course route's
- * enrollment guard.
+ * The slugs this user may open, for the course route's enrollment guard:
+ * everything they are subscribed to, PLUS every course they are staffed on.
  *
  * Separate from getMyCourses deliberately: the guard runs on the critical
  * path of every course navigation and needs one column, while getMyCourses
  * joins modules, lessons and video progress to compute a percentage the guard
  * then discards.
+ *
+ * The staff union is what makes spec §6 — "staff view as authors and bypass
+ * all gates, but only where they hold authority" — true by construction rather
+ * than by side effect. This guard sits IN FRONT of every one of the eight
+ * bypass sites: on subscriptions alone, an admin revoking a professor's
+ * enrolment (a plain `enrolment:delete`) redirected them off their own course
+ * to `/app` with no explanation while `course_staff` still said they authored
+ * it, and every bypass behind it became unreachable. It also removes the
+ * reason `putCourseStaffHandler` used to auto-enrol everyone it appointed.
+ *
+ * Two indexed reads rather than one outer-joined scan of `courses`: each side
+ * is keyed on `user_id` and the sets are tiny. The result is de-duplicated —
+ * a professor is usually enrolled as well — and the caller tests membership,
+ * so the appended staff slugs need no place in the name ordering.
  */
 export async function getSubscribedCourseSlugs(
   userId: string,
 ): Promise<string[]> {
-  const rows = await db
-    .select({ slug: coursesTable.slug })
-    .from(courseSubscriptionsTable)
-    .innerJoin(
-      coursesTable,
-      eq(coursesTable.id, courseSubscriptionsTable.courseId),
-    )
-    .where(eq(courseSubscriptionsTable.userId, userId))
-    .orderBy(asc(coursesTable.name));
-  return rows.map((r) => r.slug);
+  const [subscribed, staffed] = await Promise.all([
+    db
+      .select({ slug: coursesTable.slug })
+      .from(courseSubscriptionsTable)
+      .innerJoin(
+        coursesTable,
+        eq(coursesTable.id, courseSubscriptionsTable.courseId),
+      )
+      .where(eq(courseSubscriptionsTable.userId, userId))
+      .orderBy(asc(coursesTable.name)),
+    getStaffCourseSlugs(userId),
+  ]);
+  return [...new Set([...subscribed.map((r) => r.slug), ...staffed])];
 }
 
 /**

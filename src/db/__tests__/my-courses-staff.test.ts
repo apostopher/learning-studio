@@ -64,6 +64,9 @@ vi.mock('#/db/user-levels', () => ({
 }));
 vi.mock('#/db/course-staff', () => ({
   getStaffCourseIds: m.getStaffCourseIds,
+  // course.ts imports this for `getSubscribedCourseSlugs`; unused here, but a
+  // factory that omits it fails the module import outright.
+  getStaffCourseSlugs: vi.fn(),
 }));
 vi.mock('#/db/progress-components', () => ({
   progressComponentColumns: () => ({}),
