@@ -1,10 +1,10 @@
 import { useAtom } from 'jotai';
 import { Users } from 'lucide-react';
 import {
-  courseStaffCandidateQueryAtom,
-  courseStaffDialogOpenAtom,
-  courseStaffSelectedPersonAtom,
-  courseStaffSelectedRoleAtom,
+  courseStaffCandidateQueryAtomFamily,
+  courseStaffDialogOpenAtomFamily,
+  courseStaffSelectedPersonAtomFamily,
+  courseStaffSelectedRoleAtomFamily,
 } from '#/atoms/admin';
 import {
   CourseStaffRequestError,
@@ -55,13 +55,18 @@ function personLabel(candidate: StaffCandidate): string {
  * subject expert it 403'd and the picker silently offered nobody.
  */
 export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
-  const [open, setOpen] = useAtom(courseStaffDialogOpenAtom);
+  // Every one of these is keyed by course id: the panel is a per-course
+  // roster, and a shared cell carried one course's half-finished assignment
+  // into the next course's picker.
+  const [open, setOpen] = useAtom(courseStaffDialogOpenAtomFamily(course.id));
   const [selectedPerson, setSelectedPerson] = useAtom(
-    courseStaffSelectedPersonAtom,
+    courseStaffSelectedPersonAtomFamily(course.id),
   );
-  const [selectedRole, setSelectedRole] = useAtom(courseStaffSelectedRoleAtom);
+  const [selectedRole, setSelectedRole] = useAtom(
+    courseStaffSelectedRoleAtomFamily(course.id),
+  );
   const [candidateQuery, setCandidateQuery] = useAtom(
-    courseStaffCandidateQueryAtom,
+    courseStaffCandidateQueryAtomFamily(course.id),
   );
 
   const staffQuery = useCourseStaff(course.id);
@@ -71,7 +76,8 @@ export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
 
   if (staffQuery.data == null) return null;
 
-  const { staff, assignableRoles, removableRoles } = staffQuery.data;
+  const { staff, assignableRoles, removableRoles, selfUserId } =
+    staffQuery.data;
   const canAssign = assignableRoles.length > 0;
 
   const found: CourseStaffPersonOption[] = (candidates.data ?? []).map(
@@ -112,6 +118,7 @@ export const CourseStaffContainer = ({ course }: { course: BoardCourse }) => {
         assignableRoles={assignableRoles}
         canAssign={canAssign}
         removableRoles={removableRoles}
+        selfUserId={selfUserId}
         people={people}
         peopleQuery={candidateQuery}
         onPeopleQueryChange={setCandidateQuery}

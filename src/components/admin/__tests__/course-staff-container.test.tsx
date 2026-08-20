@@ -62,6 +62,7 @@ const SME_VIEW: CourseStaffResponse = {
   staff: ROSTER,
   assignableRoles: ['course-manager'],
   removableRoles: ['course-manager'],
+  selfUserId: 'sme-1',
 };
 
 const CANDIDATES: StaffCandidate[] = [
@@ -86,8 +87,9 @@ function renderWith(
     data: candidates.data,
     isFetching: candidates.isFetching ?? false,
   });
-  // A fresh jotai store per render: the search term and the selected person
-  // are module-level atoms, and one test's typing must not leak into the next.
+  // A fresh jotai store per render: the picker's atoms are keyed by course id
+  // but still live in one store, so one test's typing must not leak into the
+  // next.
   render(
     <Provider store={createStore()}>
       <CourseStaffContainer course={COURSE} />
@@ -152,6 +154,7 @@ describe('CourseStaffContainer', () => {
       staff: ROSTER,
       assignableRoles: ['subject-expert', 'course-manager'],
       removableRoles: ['subject-expert', 'course-manager'],
+      selfUserId: 'admin-1',
     });
 
     expect(props?.assignableRoles).toEqual([
@@ -165,6 +168,7 @@ describe('CourseStaffContainer', () => {
       staff: ROSTER,
       assignableRoles: [],
       removableRoles: ['course-manager'],
+      selfUserId: 'sme-1',
     });
 
     expect(props?.canAssign).toBe(false);
@@ -248,5 +252,50 @@ describe('CourseStaffContainer', () => {
     const props = renderWith(null);
 
     expect(props).toBeUndefined();
+  });
+
+  /** The actor's own id has to reach the panel, or the Remove control on their
+   * own badge — the only one the role rail exempts — is never drawn. */
+  it('tells the panel who it is drawing for', () => {
+    const props = renderWith(SME_VIEW);
+
+    expect(props?.selfUserId).toBe('sme-1');
+  });
+
+  /**
+   * The picker's state is per course, not per app. It used to be four
+   * module-global atoms, so a person picked on course A was still selected
+   * when the dialog opened on course B — one click away from being assigned to
+   * the wrong course.
+   */
+  it('does not carry a selection from one course into another', () => {
+    m.useCourseStaff.mockReturnValue({ data: SME_VIEW, isLoading: false });
+    m.useCourseStaffCandidates.mockReturnValue({
+      data: CANDIDATES,
+      isFetching: false,
+    });
+    // ONE store across both courses — a per-test store would hide the bug
+    // this test exists for.
+    const store = createStore();
+
+    render(
+      <Provider store={store}>
+        <CourseStaffContainer course={COURSE} />
+      </Provider>,
+    );
+    act(() => {
+      (lastPanelProps()?.onSelectedUserIdChange as (id: string) => void)('u3');
+    });
+    expect(lastPanelProps()?.selectedUserId).toBe('u3');
+
+    render(
+      <Provider store={store}>
+        <CourseStaffContainer course={{ ...COURSE, id: 8, slug: 'cpl' }} />
+      </Provider>,
+    );
+
+    // The consumer is the panel: course 8's picker must arrive with nothing
+    // selected, whatever course 7's picker still holds.
+    expect(lastPanelProps()?.selectedUserId).toBeNull();
   });
 });

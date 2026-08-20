@@ -1,4 +1,5 @@
 import { atom } from 'jotai';
+import { atomFamily } from 'jotai-family';
 import type { ProviderId } from '@/lib/admin-schemas';
 import type { UserLevel } from '@/types';
 
@@ -100,8 +101,19 @@ export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);
 /** Client-side search filter for the training-documents list. Reset on close. */
 export const embeddingsSearchAtom = atom('');
 
-/** Whether the current course's staff-assignment dialog is open. */
-export const courseStaffDialogOpenAtom = atom(false);
+/**
+ * The staff dialog's state, keyed by course id.
+ *
+ * An `atomFamily`, not four module-global atoms: the dialog is mounted once
+ * per course editor and the panel is a per-course roster, so a single shared
+ * cell carried one course's half-finished assignment into the next. Open the
+ * panel on course A, pick a person, close it, open course B — and B's picker
+ * showed A's selection, ready to be assigned to the wrong course. Keying by id
+ * makes that unrepresentable without an effect to reset on navigation.
+ */
+export const courseStaffDialogOpenAtomFamily = atomFamily((_courseId: number) =>
+  atom(false),
+);
 
 /**
  * Person picked in the staff dialog's assign form. Cleared after a successful
@@ -111,20 +123,27 @@ export const courseStaffDialogOpenAtom = atom(false);
  * server-side search: the options change as the search term does, so an id
  * alone would lose its display name the moment the term moved off it.
  */
-export const courseStaffSelectedPersonAtom = atom<{
-  userId: string;
-  label: string;
-} | null>(null);
+export const courseStaffSelectedPersonAtomFamily = atomFamily(
+  (_courseId: number) =>
+    atom<{
+      userId: string;
+      label: string;
+    } | null>(null),
+);
 
 /**
  * The person picker's search term. Lives here, not in the picker, because the
  * container turns it into a query — the directory is searched on the server,
  * since no client holds one an SME is allowed to read.
  */
-export const courseStaffCandidateQueryAtom = atom('');
+export const courseStaffCandidateQueryAtomFamily = atomFamily(
+  (_courseId: number) => atom(''),
+);
 
 /** Role picked in the staff dialog's assign form. Cleared after a successful assign. */
-export const courseStaffSelectedRoleAtom = atom<string | null>(null);
+export const courseStaffSelectedRoleAtomFamily = atomFamily(
+  (_courseId: number) => atom<string | null>(null),
+);
 
 /**
  * Which pane of the persona section's two-screen carousel is showing. Both

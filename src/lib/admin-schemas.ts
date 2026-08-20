@@ -498,14 +498,6 @@ export const COURSE_SCOPED_ROLES = [
 ] as const;
 export type CourseScopedRole = (typeof COURSE_SCOPED_ROLES)[number];
 
-/** Every role that makes someone staff rather than purely a learner. */
-export const STAFF_ROLES = [
-  OWNER_ROLE,
-  ADMIN_ROLE,
-  SUBJECT_EXPERT_ROLE,
-  COURSE_MANAGER_ROLE,
-] as const;
-
 export function isCourseScopedRole(name: string): name is CourseScopedRole {
   return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
 }
