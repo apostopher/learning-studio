@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { viper7Quotes, viper7SystemPrompt } from '#/ai/prompts/viper7';
 
 describe('viper7SystemPrompt', () => {
-  it('injects user name/callsign and roles when provided', () => {
+  it('injects user name/callsign when provided', () => {
     const s = viper7SystemPrompt({
       isAssociate: false,
       userInfo: {
@@ -13,7 +13,28 @@ describe('viper7SystemPrompt', () => {
       },
     });
     expect(s).toContain('cooker');
-    expect(s.toLowerCase()).toContain('instructor');
+  });
+
+  /**
+   * Regression pin for the dead role clause removed in Task 13: REVIEWER,
+   * SME, and ASSOCIATE were never real roles (this feature's role is
+   * `subject-expert`), so the prompt must never assert an access model that
+   * doesn't exist — access control lives in code, not in the prompt.
+   */
+  it('never asserts the stale REVIEWER/SME/ASSOCIATE access clause', () => {
+    const s = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: {
+        name: 'Rahul',
+        callSign: 'cooker',
+        location: 'Perth',
+        userRoles: ['instructor'],
+      },
+    });
+    expect(s).not.toContain('REVIEWER');
+    expect(s).not.toContain('SME');
+    expect(s).not.toContain('prepaid access');
+    expect(s).not.toContain('default role for all users');
   });
 
   it('produces a non-empty prompt with no userInfo', () => {

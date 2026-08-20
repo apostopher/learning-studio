@@ -111,22 +111,8 @@ export const userInfoPrompt = (userInfo?: {
 
   if (!addressUser) return '';
 
-  const userRolesPrompt =
-    userInfo?.userRoles.length > 0
-      ? `The user has the following roles in the course: ${userInfo.userRoles
-          .map((role) => `"${role.toLowerCase()}"`)
-          .join(', ')}
-
-          ### IMPORTANT
-          The "REVIEWER" and "SME" roles have full prepaid access to the course and can ask any question.
-          The "ASSOCIATE" role is the default role for all users.
-          `
-      : '';
-
   return `# User Info
 The user you are talking to is ${userInfo.name} with call sign ${userInfo.callSign} from ${userInfo.location}. Use their personal address "${addressUser}" only once in your first message to establish rapport, then continue the conversation naturally without repeatedly using their name/callSign.
-
-${userRolesPrompt}
 `;
 };
 
