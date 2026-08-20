@@ -1,6 +1,7 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
+import { getStaffCourseIds } from '#/db/course-staff';
 import {
   progressComponentColumns,
   progressComponentGroupBy,
@@ -315,10 +316,20 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
     getCurrentLevelsByCourse(userId),
   ]);
   const bypassLocks = hasAdminAccess(roles);
-  // Null for an admin: they author every tier, so none of them filters what
+  // One query for the whole grid, not one per card — and none at all for an
+  // admin, who already bypasses on org-wide authority. `subject-expert` and
+  // `course-manager` are grants over single courses, so this set is tested
+  // per card: staff read their own course as its author and every other card
+  // as an ordinary gated learner.
+  const staffCourseIds = bypassLocks
+    ? new Set<number>()
+    : await getStaffCourseIds(userId);
+  const viewsAsAuthor = (courseId: number): boolean =>
+    bypassLocks || staffCourseIds.has(courseId);
+  // Null for an author: they wrote every tier, so none of them filters what
   // they see — the same short-circuit `evaluateLessonGate` makes.
   const levelFor = (courseId: number): UserLevel | null =>
-    bypassLocks ? null : (levels.get(courseId) ?? 'basic');
+    viewsAsAuthor(courseId) ? null : (levels.get(courseId) ?? 'basic');
 
   const percents = aggregatePercentByCourse(
     rows
@@ -400,7 +411,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
             })),
           pointerLessonId: pointers.get(course.id) ?? null,
           level: levelFor(course.id),
-          bypassLocks,
+          bypassLocks: viewsAsAuthor(course.id),
         }),
       };
     }),

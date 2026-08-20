@@ -1,5 +1,6 @@
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseIdentityBySlug } from '#/db/course';
+import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourse } from '#/db/lesson-access';
 import { RETENTION_DAYS } from '#/db/news-articles';
 import {
@@ -26,7 +27,8 @@ import type { NewsFeedResponse } from '#/lib/news-schemas';
  *
  * Admins read any course without a subscription (D16), matching the library —
  * they configure these sources and should be able to see what the feed
- * produced without enrolling.
+ * produced without enrolling. Course staff do the same on the one course they
+ * are staffed on, and nowhere else.
  */
 export async function getNewsForUser({
   userId,
@@ -44,8 +46,11 @@ export async function getNewsForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  const isAdmin = hasAdminAccess(roles);
-  if (!isAdmin && !subscribed) {
+  // Org `owner`/`admin` first so they never pay the staff query; a
+  // `subject-expert`/`course-manager` bypasses only on their own course.
+  const viewingAsAuthor =
+    hasAdminAccess(roles) || (await isCourseStaff(userId, course.id));
+  if (!viewingAsAuthor && !subscribed) {
     return {
       articles: [],
       sources: [],
@@ -69,7 +74,9 @@ export async function getNewsForUser({
     articles: shapeNewsFeed(rows),
     sources,
     lastUpdatedAt: latestFirstSeenAt(rows),
-    adminBypass: isAdmin && !subscribed,
+    // Named for the admin case it was built for; now also true for a
+    // subject expert reading their own course without enrolling in it.
+    adminBypass: viewingAsAuthor && !subscribed,
   };
 }
 
@@ -102,7 +109,14 @@ export async function setNewsSourceMuted({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, courseId),
   ]);
-  if (!subscribed && !hasAdminAccess(roles)) {
+  // Subscription first, then org-wide authority, and only then the staff row:
+  // the common caller is an enrolled learner, and neither they nor an admin
+  // should pay for a query that answers a question already settled.
+  if (
+    !subscribed &&
+    !hasAdminAccess(roles) &&
+    !(await isCourseStaff(userId, courseId))
+  ) {
     return { ok: false, reason: 'not_found' };
   }
 

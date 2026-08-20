@@ -1,6 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getUserRoleNames } from '#/db/admin';
-import { getCourseDetailsWithCache } from '#/db/course';
+import {
+  getCourseDetailsWithCache,
+  getCourseIdentityBySlug,
+} from '#/db/course';
+import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
@@ -16,8 +20,9 @@ import { toLearnerCourseDetails } from '#/lib/course-details-shape';
  * it was a free enumeration source for exactly the slugs `/api/lesson/playback`
  * (née `/api/lesson/video`) was hardened against — anyone on the internet
  * could list them. It now requires a session (401) and a subscription to the
- * course (403), with admins bypassing, matching `/api/lesson/material` and
- * `/api/lesson/playback`. Every video-identifying field on each lesson —
+ * course (403), with admins — and the staff of that one course — bypassing,
+ * matching `/api/lesson/material` and `/api/lesson/playback`. Every
+ * video-identifying field on each lesson —
  * `videoProvider`, `videoRef`, `otherVideoIds` —
  * is additionally stripped (`toLearnerCourseDetails`, `#/lib/course-details-shape`)
  * before the response is built. `videoProvider`/`videoRef` matter most: this
@@ -59,8 +64,21 @@ export async function getCourseDetailsHandler(
     getUserRoleNames(session.user.id),
     isSubscribedToCourseSlug(session.user.id, slug),
   ]);
+  // Three questions, cheapest first, and each one settles it: an org
+  // `owner`/`admin` bypasses everywhere, an enrolled learner is already in.
+  // Only someone who is neither pays the two lookups below — and this route
+  // carries a slug, not a course id, so resolving one is what a staff check
+  // costs here. A `subject-expert`/`course-manager` reads the tree of the
+  // course they are staffed on; on any other course they are refused exactly
+  // as any other stranger is.
   if (!hasAdminAccess(roles) && !subscribed) {
-    return new Response('Forbidden', { status: 403 });
+    const identity = await getCourseIdentityBySlug(slug);
+    const staff = identity
+      ? await isCourseStaff(session.user.id, identity.id)
+      : false;
+    if (!staff) {
+      return new Response('Forbidden', { status: 403 });
+    }
   }
 
   const course = await getCourseDetailsWithCache(slug);

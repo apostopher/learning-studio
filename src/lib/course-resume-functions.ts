@@ -1,16 +1,9 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequestHeaders } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { getUserRoleNames } from '#/db/admin';
-import { getCourseDetailsWithCache } from '#/db/course';
-import { getLastViewedLessonId } from '#/db/course-last-viewed';
-import { getCourseProgress } from '#/db/course-progress';
-import { getCurrentLevel } from '#/db/user-levels';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import type { ResumeTarget } from '#/lib/course-resume';
-import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
-import { watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import { resumeTargetForUser } from '#/lib/course-resume-for-user';
 
 /**
  * Where `/course/$courseSlug` should redirect this learner.
@@ -22,7 +15,8 @@ import { watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
  * a page that is about to navigate away.
  *
  * Derives the user from the session, never from an argument, for the same
- * reason `getMySubscribedSlugs` does.
+ * reason `getMySubscribedSlugs` does. The decision itself lives in
+ * `resumeTargetForUser` — see there for why it is not inlined here.
  *
  * Named `-functions.ts`, not `.server.ts`, deliberately: a `.server.ts` module
  * is strictly server-only and Start's import-protection plugin fails the build
@@ -41,45 +35,8 @@ export const getCourseResumeTarget = createServerFn({ method: 'GET' })
     // resume" rather than inventing a target for a user we cannot identify.
     if (!session) return { kind: 'none', reason: 'no-lessons' };
 
-    const userId = session.user.id;
-    const [details, roles, pointerLessonId] = await Promise.all([
-      getCourseDetailsWithCache(data.courseSlug),
-      getUserRoleNames(userId),
-      getLastViewedLessonId({ userId, courseSlug: data.courseSlug }),
-    ]);
-
-    // Not the "course doesn't exist" case — the parent beforeLoad already
-    // confirmed a subscription to this slug. A missing payload means Redis is
-    // down or a cache-population race lost, and rendering "this course has no
-    // lessons yet" would state something false about the course. Throwing
-    // surfaces it as a real, retryable error, matching evaluateLessonGate's
-    // handling of the same condition.
-    if (!details) {
-      throw new Error(`Course payload unavailable for ${data.courseSlug}`);
-    }
-
-    const isAdmin = hasAdminAccess(roles);
-
-    // Progress is only needed to evaluate locks, and an admin has none to
-    // evaluate — skip the aggregation entirely for them.
-    // Both skipped for an admin: they have no progress to evaluate and no
-    // tier to be filtered by — the same short-circuit `evaluateLessonGate`
-    // makes.
-    const [progress, level] = isAdmin
-      ? [{ lessons: [] as { lessonId: number; watched: boolean }[] }, null]
-      : await Promise.all([
-          getCourseProgress({ userId, slug: data.courseSlug }),
-          getCurrentLevel(userId, details.id),
-        ]);
-
-    // `watched` is deliberately computed from the UNFILTERED payload while
-    // the course handed to the predicate is filtered — see
-    // resolveResumeTargetForLevel for why the two halves must differ.
-    return resolveResumeTargetForLevel({
-      details,
-      watched: watchedLessonSlugs(details, progress),
-      pointerLessonId,
-      level,
-      bypassLocks: isAdmin,
+    return resumeTargetForUser({
+      userId: session.user.id,
+      courseSlug: data.courseSlug,
     });
   });

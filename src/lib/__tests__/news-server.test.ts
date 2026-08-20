@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   listCourseSourceChoices: vi.fn(),
   listVisibleFeedRows: vi.fn(),
   setSourceMuted: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/db/admin', () => ({ getUserRoleNames: m.getUserRoleNames }));
@@ -19,6 +20,9 @@ vi.mock('#/db/course', () => ({
 vi.mock('#/db/lesson-access', () => ({
   isSubscribedToCourse: m.isSubscribedToCourse,
 }));
+// The course-staff bypass runs for every non-admin, so the real (drizzle-
+// backed) module would otherwise open a database connection here.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff: m.isCourseStaff }));
 vi.mock('#/db/news-articles', () => ({ RETENTION_DAYS: 7 }));
 vi.mock('#/db/news-feed', () => ({
   getMutedSourceIds: m.getMutedSourceIds,
@@ -41,6 +45,7 @@ beforeEach(() => {
   m.listVisibleFeedRows.mockResolvedValue([]);
   m.listCourseSourceChoices.mockResolvedValue([]);
   m.setSourceMuted.mockResolvedValue(undefined);
+  m.isCourseStaff.mockResolvedValue(false);
 });
 
 describe('getNewsForUser — access', () => {
@@ -78,6 +83,40 @@ describe('getNewsForUser — access', () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
     const result = await getNewsForUser({ userId: 'a1', courseSlug: 'rpl' });
     expect(result?.adminBypass).toBe(false);
+  });
+
+  it('lets an unsubscribed subject expert read their own course, and says so', async () => {
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockResolvedValue(true);
+    const result = await getNewsForUser({ userId: 'u1', courseSlug: 'rpl' });
+    expect(result?.adminBypass).toBe(true);
+    expect(m.listVisibleFeedRows).toHaveBeenCalled();
+    // Asked about THIS course — a grant on another one must not reach here.
+    expect(m.isCourseStaff).toHaveBeenCalledWith('u1', 7);
+  });
+
+  it('gives a subject expert nothing from a course they do not staff', async () => {
+    // Staff on course 99, asking about course 7, and not enrolled in it: the
+    // same empty feed any other stranger gets, and no query runs.
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+    const result = await getNewsForUser({ userId: 'u1', courseSlug: 'rpl' });
+    expect(result).toEqual({
+      articles: [],
+      sources: [],
+      lastUpdatedAt: null,
+      adminBypass: false,
+    });
+    expect(m.listVisibleFeedRows).not.toHaveBeenCalled();
+  });
+
+  it('does not query staff for an admin — they bypass on role alone', async () => {
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    await getNewsForUser({ userId: 'a1', courseSlug: 'rpl' });
+    expect(m.isCourseStaff).not.toHaveBeenCalled();
   });
 });
 
@@ -207,5 +246,47 @@ describe('setNewsSourceMuted', () => {
       muted: true,
     });
     expect(result.ok).toBe(true);
+  });
+
+  it('lets a subject expert mute a source in the course they staff', async () => {
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockResolvedValue(true);
+    const result = await setNewsSourceMuted({
+      userId: 'u1',
+      sourceId: 5,
+      muted: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(m.setSourceMuted).toHaveBeenCalledWith({
+      userId: 'u1',
+      sourceId: 5,
+      muted: true,
+    });
+    // The source's own course id, resolved from the source — not any course
+    // the caller happens to staff.
+    expect(m.isCourseStaff).toHaveBeenCalledWith('u1', 7);
+  });
+
+  it('refuses a subject expert a source in a course they do not staff', async () => {
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+    expect(
+      await setNewsSourceMuted({ userId: 'u1', sourceId: 5, muted: true }),
+    ).toEqual({ ok: false, reason: 'not_found' });
+    expect(m.setSourceMuted).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing of the staff table for a subscriber or an admin', async () => {
+    // The common caller is an enrolled learner; neither they nor an admin
+    // should pay a query for a question already settled.
+    await setNewsSourceMuted({ userId: 'u1', sourceId: 5, muted: true });
+    expect(m.isCourseStaff).not.toHaveBeenCalled();
+
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.getUserRoleNames.mockResolvedValue(['owner']);
+    await setNewsSourceMuted({ userId: 'a1', sourceId: 5, muted: true });
+    expect(m.isCourseStaff).not.toHaveBeenCalled();
   });
 });

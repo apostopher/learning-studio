@@ -8,6 +8,7 @@ const {
   isSubscribedToCourse,
   getUserRoleNames,
   getCurrentLevel,
+  isCourseStaff,
 } = vi.hoisted(() => ({
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
@@ -15,10 +16,14 @@ const {
   isSubscribedToCourse: vi.fn(),
   getUserRoleNames: vi.fn(),
   getCurrentLevel: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/db/course', () => ({ getCourseDetailsWithCache }));
 vi.mock('#/db/course-progress', () => ({ getCourseProgress }));
+// The course-staff bypass runs for every non-admin, so the real (drizzle-
+// backed) module would otherwise open a database connection here.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugForLesson,
   isSubscribedToCourse,
@@ -93,6 +98,7 @@ describe('evaluateLessonGate', () => {
     isSubscribedToCourse.mockResolvedValue(true);
     getUserRoleNames.mockResolvedValue([]);
     getCurrentLevel.mockResolvedValue('basic');
+    isCourseStaff.mockResolvedValue(false);
   });
 
   it('returns null for a lesson that does not exist', async () => {

@@ -22,12 +22,14 @@ const {
   getCourseProgress,
   isSubscribedToCourseSlug,
   getCurrentLevel,
+  isCourseStaff,
 } = vi.hoisted(() => ({
   getUserRoleNames: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
   isSubscribedToCourseSlug: vi.fn(),
   getCurrentLevel: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/db', () => {
@@ -49,6 +51,9 @@ vi.mock('#/db/course', () => ({ getCourseDetailsWithCache }));
 vi.mock('#/db/course-progress', () => ({ getCourseProgress }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
 vi.mock('#/db/lesson-access', () => ({ isSubscribedToCourseSlug }));
+// The course-staff bypass runs for every non-admin, and the real module
+// would reach for the `db` stub above with a chain it does not implement.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff }));
 vi.mock('#/db/user-levels', () => ({ getCurrentLevel }));
 
 import {
@@ -164,6 +169,7 @@ describe('getCourseContentForAgent subscription gate', () => {
     vi.clearAllMocks();
     dbState.rows = [];
     getCurrentLevel.mockResolvedValue('basic');
+    isCourseStaff.mockResolvedValue(false);
   });
 
   // The exact bypass the reviewer traced: a lesson with no unmet
@@ -228,6 +234,40 @@ describe('getCourseContentForAgent subscription gate', () => {
     });
 
     expect(html).toContain('B body');
+  });
+
+  it('gives an unenrolled subject expert their own course, and nothing elsewhere', async () => {
+    dbState.rows = [row('b', 'B body')];
+    getUserRoleNames.mockResolvedValue([]);
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'b',
+          name: 'B',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+        },
+      ]),
+    );
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+    // The rows carry courseId 7; this grant is on 99.
+    isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+
+    expect(
+      await getCourseContentForAgent('course-b', { userId: 'sme-1' }),
+    ).toBe('');
+    expect(getCourseDetailsWithCache).not.toHaveBeenCalled();
+
+    isCourseStaff.mockResolvedValue(true);
+    expect(
+      await getCourseContentForAgent('course-b', { userId: 'sme-1' }),
+    ).toContain('B body');
   });
 
   // The gate predicate answers "unknown lesson -> open" by contract, and
@@ -368,6 +408,7 @@ describe('getCourseContentForAgent level visibility', () => {
     getCourseDetailsWithCache.mockResolvedValue(twoTiers());
     getCourseProgress.mockResolvedValue({ lessons: [] });
     getCurrentLevel.mockResolvedValue('intermediate');
+    isCourseStaff.mockResolvedValue(false);
   });
 
   it('withholds an out-of-tier lesson whose locks are wide open', async () => {
@@ -420,5 +461,33 @@ describe('getCourseContentForAgent level visibility', () => {
     expect(html).toContain('A body');
     expect(html).toContain('B body');
     expect(getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('does not resolve a level for a subject expert on their own course', async () => {
+    isCourseStaff.mockResolvedValue(true);
+    const html = await getCourseContentForAgent('c1', { userId: 'sme-1' });
+    expect(html).toContain('A body');
+    expect(html).toContain('B body');
+    expect(getCurrentLevel).not.toHaveBeenCalled();
+    // The course id comes from the row the query returned, so the grant is
+    // tested against the course whose content is being assembled.
+    expect(isCourseStaff).toHaveBeenCalledWith('sme-1', 7);
+  });
+
+  it('still filters by tier for a subject expert who staffs another course', async () => {
+    // Staff on course 99, reading course 7: an ordinary intermediate learner
+    // here, so the basic-tier lesson stays withheld.
+    isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+    const html = await getCourseContentForAgent('c1', { userId: 'sme-1' });
+    expect(html).toContain('B body');
+    expect(html).not.toContain('A body');
+  });
+
+  it('does not query staff for an admin — they bypass on role alone', async () => {
+    getUserRoleNames.mockResolvedValue(['admin']);
+    await getCourseContentForAgent('c1', { userId: 'admin-1' });
+    expect(isCourseStaff).not.toHaveBeenCalled();
   });
 });

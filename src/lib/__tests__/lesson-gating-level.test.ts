@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   getCourseProgress: vi.fn(),
   isSubscribedToCourse: vi.fn(),
   getCurrentLevel: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/db/lesson-access', () => ({
@@ -23,6 +24,9 @@ vi.mock('#/db/course', () => ({
 vi.mock('#/db/course-progress', () => ({
   getCourseProgress: m.getCourseProgress,
 }));
+// The course-staff bypass runs for every non-admin, so the real (drizzle-
+// backed) module would otherwise open a database connection here.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff: m.isCourseStaff }));
 vi.mock('#/db/user-levels', () => ({ getCurrentLevel: m.getCurrentLevel }));
 
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
@@ -72,6 +76,7 @@ beforeEach(() => {
   m.getCourseDetailsWithCache.mockResolvedValue(DETAILS);
   m.isSubscribedToCourse.mockResolvedValue(true);
   m.getCourseProgress.mockResolvedValue({ lessons: [] });
+  m.isCourseStaff.mockResolvedValue(false);
 });
 
 describe('level enforcement', () => {

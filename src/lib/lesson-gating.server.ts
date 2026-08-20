@@ -1,6 +1,7 @@
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
+import { isCourseStaff } from '#/db/course-staff';
 import {
   getCourseSlugForLesson,
   isSubscribedToCourse,
@@ -25,6 +26,12 @@ export * from '#/lib/lesson-gating-inputs';
 export type LessonGateResult = {
   courseSlug: string;
   courseId: number;
+  /**
+   * "Viewing as author", despite the name: true for org `owner`/`admin`, and
+   * also for a `subject-expert`/`course-manager` staffed on THIS course. Kept
+   * as `isAdmin` because its one consumer renders `<AdminPreviewNote />`, and
+   * an SME previewing their own course is exactly what that note describes.
+   */
   isAdmin: boolean;
   subscribed: boolean;
   /** The pilot's tier in this course, for copy that has to name it. */
@@ -50,6 +57,13 @@ export type LessonGateResult = {
  * content and should not sit through their own videos to proofread it. The
  * `isAdmin` flag is returned rather than swallowed so the UI can say the
  * bypass applied — a silent bypass makes the feature untestable.
+ *
+ * Course staff bypass on the same terms, but only on the course they are
+ * staffed on: `owner`/`admin` is org-wide authority, while `subject-expert`
+ * and `course-manager` are grants over one course. A subject expert opening
+ * someone else's course is an ordinary gated learner there — enrolment, tier
+ * and prerequisites all enforced — which is what keeps "staff are also
+ * students" true.
  */
 export async function evaluateLessonGate({
   userId,
@@ -96,8 +110,12 @@ export async function evaluateLessonGate({
     throw new Error(`Course payload unavailable for ${course.courseSlug}`);
   }
 
-  const isAdmin = hasAdminAccess(roles);
-  if (isAdmin) {
+  // `hasAdminAccess` first, and only then the staff row: `owner`/`admin`
+  // authority is org-wide, so an admin must not pay a `course_staff` query on
+  // a path that runs for every gated request.
+  const viewingAsAuthor =
+    hasAdminAccess(roles) || (await isCourseStaff(userId, course.courseId));
+  if (viewingAsAuthor) {
     // Admins author every tier, so no level applies to them. 'advanced' is
     // reported rather than a fourth value because the field exists for copy
     // that has to name a tier, and the bypass is already signalled by

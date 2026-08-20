@@ -4,6 +4,7 @@ import {
   getCourseIdentityBySlug,
 } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
+import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourse } from '#/db/lesson-access';
 import { getLibraryForCourse } from '#/db/library';
 import { getCurrentLevel } from '#/db/user-levels';
@@ -12,7 +13,16 @@ import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 import { filterCourseToLevel } from '#/lib/level-visibility';
 import { type LibraryFile, resolveLibraryFiles } from '#/lib/library-gating';
 
-export type LibraryResult = { adminBypass: boolean; files: LibraryFile[] };
+export type LibraryResult = {
+  /**
+   * "Read as author", despite the name: true for org `owner`/`admin`, and for
+   * a `subject-expert`/`course-manager` staffed on THIS course. Kept as
+   * `adminBypass` because its consumers render the admin preview notice, which
+   * says exactly what an SME previewing their own course needs told.
+   */
+  adminBypass: boolean;
+  files: LibraryFile[];
+};
 
 /**
  * Every library file one learner may see in one course, with its lock.
@@ -27,7 +37,9 @@ export type LibraryResult = { adminBypass: boolean; files: LibraryFile[] };
  *
  * Admins bypass both the subscription check and the gate (D21), matching
  * `evaluateLessonGate` — they author this content and should not have to sit
- * through their own videos to check a PDF is attached correctly.
+ * through their own videos to check a PDF is attached correctly. Course staff
+ * bypass on the same terms, but only on the course they are staffed on: an
+ * SME opening someone else's course is an ordinary gated learner there.
  */
 export async function getLibraryForUser({
   userId,
@@ -43,16 +55,19 @@ export async function getLibraryForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  const isAdmin = hasAdminAccess(roles);
-  if (!isAdmin && !subscribed) return { adminBypass: false, files: [] };
+  // Org `owner`/`admin` first so they never pay the staff query; a
+  // `subject-expert`/`course-manager` bypasses only on their own course.
+  const viewingAsAuthor =
+    hasAdminAccess(roles) || (await isCourseStaff(userId, course.id));
+  if (!viewingAsAuthor && !subscribed) return { adminBypass: false, files: [] };
 
-  // Admins have no tier — they author every one — so they skip the level
+  // An author has no tier — they wrote every one — so they skip the level
   // lookup entirely, exactly as they skip every gate in `evaluateLessonGate`.
   const [library, details, progress, level] = await Promise.all([
     getLibraryForCourse(course.id),
     getCourseDetailsWithCache(courseSlug),
     getCourseProgress({ userId, slug: courseSlug }),
-    isAdmin ? null : getCurrentLevel(userId, course.id),
+    viewingAsAuthor ? null : getCurrentLevel(userId, course.id),
   ]);
 
   // A gate that cannot be evaluated must never fail open — the same rule
@@ -81,21 +96,21 @@ export async function getLibraryForUser({
     level === null ? details : filterCourseToLevel(details, level),
   );
 
-  // The admin bypass is expressed as "every lesson is watched", not as a
-  // branch that skips `resolveLibraryFiles`. That keeps admins on exactly the
+  // The author bypass is expressed as "every lesson is watched", not as a
+  // branch that skips `resolveLibraryFiles`. That keeps authors on exactly the
   // same code path as students — so a file hidden by D9 (WIP lesson) stays
-  // hidden for admins too, which is what makes the admin view a truthful
+  // hidden for them too, which is what makes the author view a truthful
   // preview of what a finished student sees rather than a different feature.
   //
   // Deliberately the UNFILTERED payload for a student: a lesson finished at an
   // earlier tier still satisfies a visible lesson's file. Slugs no longer in
   // `gateCourse` are simply never looked up.
-  const watched = isAdmin
+  const watched = viewingAsAuthor
     ? new Set(gateCourse.modules.flatMap((m) => m.lessons.map((l) => l.slug)))
     : watchedLessonSlugs(details, progress);
 
   return {
-    adminBypass: isAdmin,
+    adminBypass: viewingAsAuthor,
     files: resolveLibraryFiles({
       files: library.files,
       assignments: library.assignments,

@@ -3,6 +3,7 @@ import { db } from '#/db';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
+import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import {
   coursesTable,
@@ -40,15 +41,17 @@ type GatedRow = { lessonSlug: string };
  * `watchedLessonSlugsSet` is required, not nullable: the previous "null means
  * no user context, keep everything" escape had no production call site and
  * existed only as a fail-open branch a future caller could stumble into.
- * Admin is the one and only bypass, and it is explicit.
+ * Viewing-as-author is the one and only bypass, and it is explicit — the
+ * caller decides who qualifies (org `owner`/`admin`, or staff on this very
+ * course), this function just honours the answer.
  */
 export function filterGatedLessons<T extends GatedRow>(
   rows: T[],
   course: GateCourse,
   watchedLessonSlugsSet: ReadonlySet<string>,
-  isAdmin: boolean,
+  viewingAsAuthor: boolean,
 ): T[] {
-  if (isAdmin) return rows;
+  if (viewingAsAuthor) return rows;
   return rows.filter((r) => {
     const lessonLock = evaluateLessonLock(
       course,
@@ -143,7 +146,11 @@ export async function getCourseContentForAgent(
     getUserRoleNames(userId),
     isSubscribedToCourseSlug(userId, slug),
   ]);
-  const isAdmin = hasAdminAccess(roles);
+  // Org `owner`/`admin` first so they never pay the staff query; a
+  // `subject-expert`/`course-manager` reads their OWN course as its author
+  // and every other course as an ordinary gated learner.
+  const viewingAsAuthor =
+    hasAdminAccess(roles) || (await isCourseStaff(userId, rows[0].courseId));
 
   // Filter 2: subscription, checked BEFORE any lock is evaluated and before
   // any course content is assembled. The lock predicates only prove a lesson's
@@ -155,7 +162,7 @@ export async function getCourseContentForAgent(
   // subscriber of an entirely different course. Fail toward NO content, never
   // partial content: a non-admin, non-subscriber gets nothing from this
   // course's corpus, same as when no courseSlug is in context at all.
-  if (!isAdmin && !subscribed) {
+  if (!viewingAsAuthor && !subscribed) {
     return '';
   }
 
@@ -173,9 +180,10 @@ export async function getCourseContentForAgent(
     throw new Error(`Course payload unavailable for ${slug}`);
   }
 
-  // Filter 3: level visibility. Admins have no tier — they author every one —
-  // so they skip it, exactly as they skip every gate in `evaluateLessonGate`.
-  const level = isAdmin
+  // Filter 3: level visibility. An author has no tier — they wrote every one
+  // — so they skip it, exactly as they skip every gate in
+  // `evaluateLessonGate`.
+  const level = viewingAsAuthor
     ? null
     : await getCurrentLevel(userId, rows[0].courseId);
 
@@ -223,9 +231,12 @@ export async function getCourseContentForAgent(
     )
     .map((lessonSlug) => ({ lessonSlug }));
   const allowedLessonSlugs = new Set(
-    filterGatedLessons(distinctLessonRows, gateCourse, watched, isAdmin).map(
-      (r) => r.lessonSlug,
-    ),
+    filterGatedLessons(
+      distinctLessonRows,
+      gateCourse,
+      watched,
+      viewingAsAuthor,
+    ).map((r) => r.lessonSlug),
   );
   const gatedRows = availableRows.filter(
     (r) => r.lessonSlug === null || allowedLessonSlugs.has(r.lessonSlug),

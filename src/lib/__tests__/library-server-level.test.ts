@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   isSubscribedToCourse: vi.fn(),
   getLibraryForCourse: vi.fn(),
   getCurrentLevel: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/db/admin', () => ({ getUserRoleNames: m.getUserRoleNames }));
@@ -25,6 +26,9 @@ vi.mock('#/db/lesson-access', () => ({
 vi.mock('#/db/library', () => ({
   getLibraryForCourse: m.getLibraryForCourse,
 }));
+// The course-staff bypass runs for every non-admin, so the real (drizzle-
+// backed) module would otherwise open a database connection here.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff: m.isCourseStaff }));
 vi.mock('#/db/user-levels', () => ({ getCurrentLevel: m.getCurrentLevel }));
 
 import { getLibraryForUser } from '#/lib/library.server';
@@ -92,6 +96,7 @@ beforeEach(() => {
   m.getCourseProgress.mockResolvedValue({ lessons: [] });
   m.getLibraryForCourse.mockResolvedValue(library);
   m.getCurrentLevel.mockResolvedValue('basic');
+  m.isCourseStaff.mockResolvedValue(false);
 });
 
 describe('getLibraryForUser level visibility', () => {
@@ -151,5 +156,62 @@ describe('getLibraryForUser level visibility', () => {
 
     expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
     expect(m.getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('does not filter for a subject expert on their own course', async () => {
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.isCourseStaff.mockResolvedValue(true);
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
+    expect(result?.adminBypass).toBe(true);
+    // Asked about THIS course — a grant on another one must not reach here.
+    expect(m.isCourseStaff).toHaveBeenCalledWith('u1', 7);
+    expect(m.getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('filters a subject expert normally on a course they do not staff', async () => {
+    // Staff on course 99, reading course 7: an ordinary intermediate learner
+    // here, so the basic-tier handout is withheld exactly as for anyone else.
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+    m.getCurrentLevel.mockResolvedValue('intermediate');
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Inter Handout']);
+    expect(result?.adminBypass).toBe(false);
+  });
+
+  it('refuses the library to a non-staff learner who is not enrolled', async () => {
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockResolvedValue(false);
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(result).toEqual({ adminBypass: false, files: [] });
+    expect(m.getLibraryForCourse).not.toHaveBeenCalled();
+  });
+
+  it('lets a subject expert read their own course without enrolling', async () => {
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.isSubscribedToCourse.mockResolvedValue(false);
+    m.isCourseStaff.mockResolvedValue(true);
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
+  });
+
+  it('does not query staff for an admin — they bypass on role alone', async () => {
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+
+    await getLibraryForUser({ userId: 'a1', courseSlug: 'rt' });
+
+    expect(m.isCourseStaff).not.toHaveBeenCalled();
   });
 });

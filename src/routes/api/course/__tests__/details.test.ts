@@ -7,16 +7,27 @@ const {
   getCourseDetails,
   getUserRoleNames,
   isSubscribedToCourseSlug,
+  getCourseIdentityBySlug,
+  isCourseStaff,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseDetails: vi.fn(),
   getUserRoleNames: vi.fn(),
   isSubscribedToCourseSlug: vi.fn(),
+  getCourseIdentityBySlug: vi.fn(),
+  isCourseStaff: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
-vi.mock('#/db/course', () => ({ getCourseDetailsWithCache, getCourseDetails }));
+vi.mock('#/db/course', () => ({
+  getCourseDetailsWithCache,
+  getCourseDetails,
+  getCourseIdentityBySlug,
+}));
+// This route carries a slug, not a course id, so the staff check resolves one
+// first. The real modules are drizzle-backed and would open a connection.
+vi.mock('#/db/course-staff', () => ({ isCourseStaff }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
 vi.mock('#/db/lesson-access', () => ({ isSubscribedToCourseSlug }));
 
@@ -87,6 +98,8 @@ describe('getCourseDetailsHandler', () => {
     isSubscribedToCourseSlug.mockResolvedValue(true);
     getCourseDetailsWithCache.mockResolvedValue(course);
     getCourseDetails.mockResolvedValue(course);
+    getCourseIdentityBySlug.mockResolvedValue({ id: 1, name: 'Course One' });
+    isCourseStaff.mockResolvedValue(false);
   });
 
   it('401s an anonymous caller without reading the course', async () => {
@@ -144,6 +157,55 @@ describe('getCourseDetailsHandler', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(learnerCourse);
+  });
+
+  it('serves a subject expert the tree of the course they staff', async () => {
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    isCourseStaff.mockResolvedValue(true);
+
+    const res = await getCourseDetailsHandler(req());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(learnerCourse);
+    // The slug is resolved to an id and the grant tested against THAT course.
+    expect(getCourseIdentityBySlug).toHaveBeenCalledWith('c1');
+    expect(isCourseStaff).toHaveBeenCalledWith('u1', 1);
+  });
+
+  it('403s a subject expert on a course they do not staff', async () => {
+    // The dependency graph is an enumeration surface. A grant on course 99
+    // buys nothing on course 1.
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    isCourseStaff.mockImplementation(
+      async (_userId: string, courseId: number) => courseId === 99,
+    );
+
+    const res = await getCourseDetailsHandler(req());
+
+    expect(res.status).toBe(403);
+    expect(getCourseDetailsWithCache).not.toHaveBeenCalled();
+  });
+
+  it('403s when the slug resolves to no course at all', async () => {
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    getCourseIdentityBySlug.mockResolvedValue(null);
+
+    const res = await getCourseDetailsHandler(req('?slug=ghost'));
+
+    expect(res.status).toBe(403);
+    // No id to test a grant against, so no grant can be found — fail closed
+    // rather than asking the staff table about `undefined`.
+    expect(isCourseStaff).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing of the staff table for a subscriber or an admin', async () => {
+    await getCourseDetailsHandler(req());
+    expect(isCourseStaff).not.toHaveBeenCalled();
+
+    getUserRoleNames.mockResolvedValue(['admin']);
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    await getCourseDetailsHandler(req());
+    expect(isCourseStaff).not.toHaveBeenCalled();
   });
 
   it('400s a signed-in request with no slug', async () => {

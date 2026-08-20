@@ -64,6 +64,22 @@ export async function isCourseStaff(
 }
 
 /**
+ * Every course this person is staffed on, in one query.
+ *
+ * `getMyCourses` decides the author bypass once for a LIST of course cards,
+ * so asking `isCourseStaff` per card would be an N+1 on /app — the app's
+ * landing page. One indexed read on `course_staff.user_id` answers all of
+ * them; the caller tests membership per card.
+ */
+export async function getStaffCourseIds(userId: string): Promise<Set<number>> {
+  const rows = await db
+    .select({ courseId: courseStaffTable.courseId })
+    .from(courseStaffTable)
+    .where(eq(courseStaffTable.userId, userId));
+  return new Set(rows.map((r) => r.courseId));
+}
+
+/**
  * Staff on ANY course.
  *
  * Used only by the lesson-material parser, which takes a file and returns
