@@ -1,9 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { generateLessonMaterial } from '#/ai/generate-lesson-material';
-import { isAnyCourseStaff } from '#/db/course-staff';
-import { getUserRoleNames } from '#/db/user-roles';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
+import { hasCoursePermissionAnywhere } from '#/lib/permissions.server';
 import { wordToHtml } from '#/lib/word-to-html.server';
 
 const DOCX_MIME =
@@ -18,22 +16,26 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
-  // Guarded on being staff ANYWHERE rather than on a specific course.
+  // Guarded on holding `content:create` on ANY course (spec §9b.2).
   //
   // This route takes a .docx and returns generated material. It persists
   // nothing and receives no course, module or lesson id of any kind — only a
-  // multipart file. Course-scoping it would mean inventing an identifier the
-  // client does not have, to protect a write that never happens. So the
-  // check is admin-or-owner, or holding any `course_staff` row at all —
-  // not `requireCoursePermission`, which needs a course id this route
-  // doesn't have.
+  // multipart file, so `requireCoursePermission` has no course id to work
+  // with and course-scoping it would mean inventing an identifier the client
+  // does not have.
+  //
+  // The grant, not merely "is staff somewhere": a course manager holds
+  // `content:read` only and an admin by design holds no `content` grant at
+  // all, and both would otherwise burn LLM budget generating material that
+  // `lessons.$lessonId.material.ts` — which correctly requires
+  // `content:update` — would refuse to save.
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
   if (!userId) return new Response('Forbidden', { status: 403 });
 
-  const roles = await getUserRoleNames(userId);
-  const allowed = hasAdminAccess(roles) || (await isAnyCourseStaff(userId));
-  if (!allowed) return new Response('Forbidden', { status: 403 });
+  if (!(await hasCoursePermissionAnywhere(userId, 'content', 'create'))) {
+    return new Response('Forbidden', { status: 403 });
+  }
 
   let file: File | null;
   try {
