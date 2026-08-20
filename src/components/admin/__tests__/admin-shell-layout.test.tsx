@@ -82,15 +82,32 @@ describe('AdminShellLayout', () => {
   });
 
   /**
-   * The section nav is permission-gated, but the header is not: an admin
-   * without `user:read` still needs to be able to leave.
+   * The header is never permission-gated: an admin without `user:read`
+   * still needs to be able to leave.
    */
-  it('keeps sign-out reachable when the section nav is hidden', async () => {
+  it('keeps sign-out reachable when the People link is hidden', async () => {
     await renderAdmin(false);
 
-    expect(
-      screen.queryByRole('navigation', { name: 'Admin sections' }),
-    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined();
+  });
+
+  /**
+   * `canSeePeople` used to gate the entire `<nav>`, so an admin without
+   * `user:read` — the default, since `role_permissions` ships empty — lost
+   * the Courses link too and got a nav-less shell. Only the People link
+   * should be conditional.
+   */
+  it('keeps the Courses link when the actor cannot see People', async () => {
+    await renderAdmin(false);
+
+    expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'People' })).toBeNull();
+  });
+
+  it('shows the People link when the actor can see People', async () => {
+    await renderAdmin(true);
+
+    expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'People' })).toBeDefined();
   });
 });

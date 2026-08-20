@@ -26,17 +26,17 @@ export const AdminShellLayout = ({
   // bubbles up to a regular page-level scrollbar rather than being clipped.
   <div className="flex h-dvh flex-col">
     <AppHeaderContainer />
-    {canSeePeople && (
-      <nav
-        aria-label="Admin sections"
-        className="content-grid border-gray-6 border-b bg-gray-2"
-      >
-        <div className="content flex gap-1 py-2">
-          <AdminNavLink to="/admin">Courses</AdminNavLink>
+    <nav
+      aria-label="Admin sections"
+      className="content-grid border-gray-6 border-b bg-gray-2"
+    >
+      <div className="content flex gap-1 py-2">
+        <AdminNavLink to="/admin">Courses</AdminNavLink>
+        {canSeePeople && (
           <AdminNavLink to="/admin/users">People</AdminNavLink>
-        </div>
-      </nav>
-    )}
+        )}
+      </div>
+    </nav>
     <div className="flex min-h-0 flex-1 flex-col">{children}</div>
   </div>
 );
