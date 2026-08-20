@@ -510,6 +510,15 @@ export function isCourseScopedRole(name: string): name is CourseScopedRole {
   return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
 }
 
+/** PUT/DELETE body for assigning or removing course staff. */
+export const setCourseStaffInputSchema = z
+  .object({
+    userId: z.string().min(1),
+    role: z.enum(COURSE_SCOPED_ROLES),
+  })
+  .strict();
+export type SetCourseStaffInput = z.infer<typeof setCourseStaffInputSchema>;
+
 /**
  * Roles that satisfy the existing admin gates.
  *
