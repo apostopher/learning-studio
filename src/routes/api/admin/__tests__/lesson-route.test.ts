@@ -138,6 +138,55 @@ describe('patchLessonHandler — dependencies / rename / move (structure)', () =
   });
 });
 
+describe('patchLessonHandler — config branch, every field lands in its entity', () => {
+  // Table-driven over ALL FIVE fields the config schema carries, not just the
+  // two ('levels', 'hasDebrief') the other tests happen to exercise. This is
+  // what actually closes the hole a hand-maintained field list leaves open:
+  // 'isAvailable', 'requiredSubscriptions' and 'needsVideoWatch' were
+  // previously untested and could each be moved to the wrong group (or land
+  // in neither) with a green suite.
+  const CONFIG_FIELD_CASES: Array<{
+    field: string;
+    body: Record<string, unknown>;
+    entity: 'structure' | 'content';
+  }> = [
+    { field: 'isAvailable', body: { isAvailable: false }, entity: 'structure' },
+    { field: 'levels', body: { levels: ['basic'] }, entity: 'structure' },
+    {
+      field: 'requiredSubscriptions',
+      body: { requiredSubscriptions: ['associate'] },
+      entity: 'structure',
+    },
+    { field: 'hasDebrief', body: { hasDebrief: false }, entity: 'content' },
+    {
+      field: 'needsVideoWatch',
+      body: { needsVideoWatch: false },
+      entity: 'content',
+    },
+  ];
+  const OTHER_ENTITY: Record<'structure' | 'content', 'structure' | 'content'> =
+    { structure: 'content', content: 'structure' };
+
+  it.each(
+    CONFIG_FIELD_CASES,
+  )('$field alone asks only for $entity:update', async ({ body, entity }) => {
+    m.updateLessonConfig.mockResolvedValue({ id: 10 });
+    await patchLessonHandler(req(body), '10');
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      entity,
+      'update',
+    );
+    expect(m.requireCoursePermission).not.toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      OTHER_ENTITY[entity],
+      'update',
+    );
+  });
+});
+
 describe('patchLessonHandler — config branch, split by field group', () => {
   it('lets a course manager set the level tag', async () => {
     m.updateLessonConfig.mockResolvedValue({ id: 10, levels: ['basic'] });

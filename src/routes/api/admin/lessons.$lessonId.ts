@@ -13,6 +13,7 @@ import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
   renameLessonInputSchema,
+  type UpdateLessonConfigInput,
   updateLessonConfigInputSchema,
   updateLessonDependenciesInputSchema,
 } from '#/lib/admin-schemas';
@@ -53,13 +54,23 @@ function parseLessonId(raw: string): number | null {
  * manager may set availability and level tags (structure); only a subject
  * expert may change whether a lesson has a debrief or requires its video
  * watched (content).
+ *
+ * `Record<keyof UpdateLessonConfigInput, ...>` on purpose, not two hand-kept
+ * arrays: that keeps this map TOTAL over the schema's keys, so adding,
+ * renaming, or removing a config field is a `tsc` error here rather than a
+ * field that silently lands in neither group — which would reach
+ * `updateLessonConfig` with zero permission checks at all.
  */
-const STRUCTURE_CONFIG_FIELDS = [
-  'isAvailable',
-  'levels',
-  'requiredSubscriptions',
-] as const;
-const CONTENT_CONFIG_FIELDS = ['hasDebrief', 'needsVideoWatch'] as const;
+const CONFIG_FIELD_ENTITY: Record<
+  keyof UpdateLessonConfigInput,
+  'structure' | 'content'
+> = {
+  isAvailable: 'structure',
+  levels: 'structure',
+  requiredSubscriptions: 'structure',
+  hasDebrief: 'content',
+  needsVideoWatch: 'content',
+};
 
 /**
  * Guard the config PATCH body per field group it touches. The client sends
@@ -71,10 +82,15 @@ const CONTENT_CONFIG_FIELDS = ['hasDebrief', 'needsVideoWatch'] as const;
 async function guardConfig(
   request: Request,
   courseId: number,
-  patch: Record<string, unknown>,
+  patch: UpdateLessonConfigInput,
 ): Promise<Response | null> {
-  const touchesStructure = STRUCTURE_CONFIG_FIELDS.some((f) => f in patch);
-  const touchesContent = CONTENT_CONFIG_FIELDS.some((f) => f in patch);
+  const touchedEntities = new Set(
+    (Object.keys(patch) as (keyof UpdateLessonConfigInput)[]).map(
+      (field) => CONFIG_FIELD_ENTITY[field],
+    ),
+  );
+  const touchesStructure = touchedEntities.has('structure');
+  const touchesContent = touchedEntities.has('content');
 
   try {
     if (touchesStructure) {
