@@ -21,6 +21,10 @@ vi.mock('#/lib/admin-functions.server', () => ({
   ForbiddenError: m.ForbiddenError,
 }));
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
+// `permissions.server.ts` imports this for `requireCoursePermission`; none of
+// the guards exercised here call it, but leaving it real would drag `#/db` and
+// its schema into a unit test that must not touch a database.
+vi.mock('#/db/course-staff', () => ({ getCourseRoleNames: vi.fn() }));
 vi.mock('#/db/permissions', () => ({
   getUserPermissions: m.getUserPermissions,
   getRoleNamesForProfile: m.getRoleNamesForProfile,

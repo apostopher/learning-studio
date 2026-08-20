@@ -1,3 +1,4 @@
+import { getCourseRoleNames } from '#/db/course-staff';
 import {
   getRoleNamesForProfile,
   getUserPermissions,
@@ -7,6 +8,7 @@ import { getUserRoleNames } from '#/db/user-roles';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   hasAdminAccess,
+  isCourseScopedEntity,
   OWNER_ROLE,
   type PermissionAction,
   type PermissionEntity,
@@ -52,6 +54,70 @@ export async function requirePermission(
     roles,
     permissions,
     isOwner: roles.includes(OWNER_ROLE),
+  };
+}
+
+export type CourseActor = PermittedActor & { courseRoles: string[] };
+
+/**
+ * Guard for the per-course entities: `structure`, `content`, `staff`.
+ *
+ * Deliberately has NO admin floor. `requirePermission`'s floor exists because
+ * its entities refine what an admin may do; these entities are held by people
+ * who are not admins at all — a subject expert is staff on one course and
+ * nothing anywhere else. Requiring admin here would make the two new roles
+ * inert, which is the failure this whole design exists to avoid.
+ *
+ * Authority is the union of the actor's global roles and their roles on THIS
+ * course, so an owner (wildcard) passes, and an admin passes only for entities
+ * their global role was actually granted.
+ *
+ * `courseRoles` rides along on the returned actor so a caller can tell "allowed
+ * because they own the deployment" from "allowed because they are the professor
+ * on this one course" — the staff-appointment guard turns on that difference.
+ */
+export async function requireCoursePermission(
+  headers: Headers,
+  courseId: number,
+  entity: PermissionEntity,
+  action: PermissionAction,
+): Promise<CourseActor> {
+  // A caller reaching this guard with an org-level entity is a wiring mistake,
+  // not a denied request: `course_staff` has nothing to say about `user` or
+  // `enrolment`, so the union below would judge the actor against grants that
+  // do not apply. A plain Error on purpose — `ForbiddenError` would dress the
+  // bug up as a 403 and it would read as the guard working correctly.
+  if (!isCourseScopedEntity(entity)) {
+    throw new Error(
+      `requireCoursePermission called with '${entity}', which is not course-scoped`,
+    );
+  }
+
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) throw new ForbiddenError();
+
+  const [globalRoles, courseRoles] = await Promise.all([
+    getUserRoleNames(userId),
+    getCourseRoleNames(userId, courseId),
+  ]);
+
+  // No role anywhere — globally or on this course — is no authority at all.
+  // Refusing here rather than asking for the grants of an empty role list keeps
+  // the join off the path of every ordinary learner, and fails closed if a
+  // permission lookup ever starts answering generously for `[]`.
+  const roles = [...globalRoles, ...courseRoles];
+  if (roles.length === 0) throw new ForbiddenError();
+
+  const permissions = await getUserPermissions(roles);
+  if (!hasPermission(permissions, entity, action)) throw new ForbiddenError();
+
+  return {
+    userId,
+    roles: globalRoles,
+    courseRoles,
+    permissions,
+    isOwner: globalRoles.includes(OWNER_ROLE),
   };
 }
 
