@@ -20,6 +20,7 @@
     "db:migrate-user-management": "dotenv -e .env.local -- tsx src/db/migrate-user-management.ts",
     "db:migrate-user-levels": "dotenv -e .env.local -- tsx src/db/migrate-user-levels.ts",
     "db:migrate-material-links": "dotenv -e .env.local -- tsx src/db/migrate-material-links.ts",
+    "db:migrate-staff-roles": "dotenv -e .env.local -- tsx src/db/migrate-staff-roles.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",

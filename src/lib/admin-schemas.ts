@@ -481,6 +481,35 @@ export type CoursePersonaSelection = z.infer<
 /** Superuser. Bypasses every permission check; only an owner may grant roles. */
 export const OWNER_ROLE = 'owner';
 
+export const SUBJECT_EXPERT_ROLE = 'subject-expert';
+export const COURSE_MANAGER_ROLE = 'course-manager';
+
+/**
+ * Roles that mean something only in the context of one course.
+ *
+ * The stored name is `subject-expert`, not `SME`: `src/ai/prompts/viper7.ts`
+ * special-cases the literal string "SME" in a clause written before any such
+ * role existed, and a role name should not silently change what an AI is told.
+ * The acronym people actually use lives in ROLE_LABELS.
+ */
+export const COURSE_SCOPED_ROLES = [
+  SUBJECT_EXPERT_ROLE,
+  COURSE_MANAGER_ROLE,
+] as const;
+export type CourseScopedRole = (typeof COURSE_SCOPED_ROLES)[number];
+
+/** Every role that makes someone staff rather than purely a learner. */
+export const STAFF_ROLES = [
+  OWNER_ROLE,
+  ADMIN_ROLE,
+  SUBJECT_EXPERT_ROLE,
+  COURSE_MANAGER_ROLE,
+] as const;
+
+export function isCourseScopedRole(name: string): name is CourseScopedRole {
+  return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
+}
+
 /**
  * Roles that satisfy the existing admin gates.
  *

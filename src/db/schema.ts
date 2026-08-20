@@ -771,6 +771,60 @@ export const userProfileRolesRelations = relations(
 );
 
 /**
+ * Which courses a person is staff on, and in what capacity.
+ *
+ * Separate from `user_profile_roles` on purpose: that table means "global role"
+ * and every existing guard reads it that way. Encoding scope as a nullable
+ * `course_id` there would mean every authorization query had to remember
+ * `OR course_id IS NULL`, and the two ways to forget it are silently
+ * over-granting and silently under-granting.
+ *
+ * `assignedBy` is a plain id rather than an FK — the audit string should outlive
+ * the account that wrote it, matching `courseSubscriptions.grantedBy`.
+ */
+export const courseStaffTable = pgTable(
+  'course_staff',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => userRolesTable.id, { onDelete: 'restrict' }),
+    /** Acting admin's or SME's user id. */
+    assignedBy: varchar('assigned_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('course_staff_user_course_role_idx').on(
+      table.userId,
+      table.courseId,
+      table.roleId,
+    ),
+    index('course_staff_user_course_idx').on(table.userId, table.courseId),
+    index('course_staff_course_idx').on(table.courseId),
+  ],
+);
+
+export const dbCourseStaffSchema = createSelectSchema(courseStaffTable);
+export type DBCourseStaff = z.infer<typeof dbCourseStaffSchema>;
+
+export const courseStaffRelations = relations(courseStaffTable, ({ one }) => ({
+  course: one(coursesTable, {
+    fields: [courseStaffTable.courseId],
+    references: [coursesTable.id],
+  }),
+  role: one(userRolesTable, {
+    fields: [courseStaffTable.roleId],
+    references: [userRolesTable.id],
+  }),
+}));
+
+/**
  * News sources are sandboxed per course: a row belongs to exactly one course,
  * and the same outlet tracked by two courses is two independent rows. There is
  * deliberately no "global" source — `course_id` is NOT NULL, so every row is
