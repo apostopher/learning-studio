@@ -2,10 +2,12 @@ import { Loader2 } from 'lucide-react';
 import {
   GRANTABLE_PERMISSIONS,
   isCourseScopedEntity,
+  isCourseScopedRole,
   type PermissionAction,
   type PermissionEntity,
   permissionKey,
 } from '#/lib/admin-schemas';
+import { roleDisplayName } from '#/lib/role-labels';
 
 interface RolePermissionsPanelProps {
   /** Roles the grid configures — `owner` is excluded by the container. */
@@ -41,17 +43,35 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
 };
 
 /**
- * Why `structure`, `content` and `staff` render read-only here.
+ * Whether this ROLE may be granted this ENTITY here — a per-pair lock, not a
+ * per-entity one.
  *
- * Those three are checked against `course_staff`, not a global role (see
- * `isCourseScopedEntity`) — a course-manager or subject-expert holds them by
- * being assigned to a course, not by an owner ticking a box for their role
- * name. Letting the grid tick them anyway would look like it worked while
- * silently reopening authoring authority the design deliberately keeps
- * course-scoped.
+ * `structure`, `content` and `staff` really are configured in this table:
+ * `requireCoursePermission` unions an actor's global and `course_staff` roles
+ * and hands the names to `getUserPermissions`, which reads `role_permissions`
+ * keyed on role NAME. `course_staff` supplies only which role someone holds on
+ * which course — never what that role may do. So a subject expert's
+ * `structure:*` and `content:*` live in exactly the rows this grid edits, and
+ * ticking them for `subject-expert` or `course-manager` is legitimate
+ * configuration.
+ *
+ * What must stay locked is the same entity on an ORG-LEVEL role. `admin` is
+ * global, so `structure:update` on `admin` is authoring authority over every
+ * course at once — which spec §3 forbids ("admin is a jack of all trades…and
+ * cannot author"; to edit a course an admin assigns themselves as an SME,
+ * which is a visible act recorded in `course_staff.assigned_by`).
+ *
+ * The lock is UI-only. `role-permissions.ts` still accepts
+ * `{ role: 'admin', entity: 'structure' }` over HTTP — owner-only, so not an
+ * escalation, and deliberately the escape hatch for a deployment that decides
+ * otherwise.
  */
-const COURSE_SCOPED_REASON =
-  'Granted by assigning someone to a course, not by this grid.';
+function courseGrantLockedFor(role: string, entity: PermissionEntity): boolean {
+  return isCourseScopedEntity(entity) && !isCourseScopedRole(role);
+}
+
+const lockReason = (role: string) =>
+  `${roleDisplayName(role)} is an org-level role — granting this here would apply to every course. Assign someone to the course instead.`;
 
 /**
  * What a role may do, as entity × action.
@@ -74,8 +94,9 @@ export const RolePermissionsPanel = ({
         Roles &amp; permissions
       </h2>
       <p className="text-secondary text-sm">
-        What an admin may do once you make someone an admin. Owners bypass these
-        checks entirely, so they aren't listed.
+        What each role may do once you give it to someone. The course entities
+        are per course — a subject expert holds them only where they are
+        assigned. Owners bypass these checks entirely, so they aren't listed.
       </p>
     </header>
 
@@ -99,7 +120,7 @@ export const RolePermissionsPanel = ({
           <div className="grid gap-3 sm:grid-cols-2">
             {(Object.keys(GRANTABLE_PERMISSIONS) as PermissionEntity[]).map(
               (entity) => {
-                const courseScoped = isCourseScopedEntity(entity);
+                const locked = courseGrantLockedFor(role, entity);
                 const reasonId = `course-scoped-reason-${role}-${entity}`;
                 return (
                   <fieldset
@@ -117,7 +138,7 @@ export const RolePermissionsPanel = ({
                           <label
                             key={action}
                             className={
-                              courseScoped
+                              locked
                                 ? 'flex items-center gap-2.5'
                                 : 'flex cursor-pointer items-center gap-2.5'
                             }
@@ -125,10 +146,8 @@ export const RolePermissionsPanel = ({
                             <input
                               type="checkbox"
                               checked={isOn}
-                              disabled={isSaving || courseScoped}
-                              aria-describedby={
-                                courseScoped ? reasonId : undefined
-                              }
+                              disabled={isSaving || locked}
+                              aria-describedby={locked ? reasonId : undefined}
                               onChange={(event) =>
                                 onToggle(
                                   role,
@@ -146,13 +165,13 @@ export const RolePermissionsPanel = ({
                         );
                       })}
                     </div>
-                    {courseScoped && (
+                    {locked && (
                       // Visible, not just an aria-describedby: a disabled
                       // control must say why it's unavailable in a way
                       // sighted and assistive-tech users both get, not one
                       // conveyed by styling (greyed-out) alone.
                       <p id={reasonId} className="pt-2 text-tertiary text-xs">
-                        {COURSE_SCOPED_REASON}
+                        {lockReason(role)}
                       </p>
                     )}
                   </fieldset>
