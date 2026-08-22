@@ -1,9 +1,9 @@
 import { GripVertical, Pencil, Trash2 } from 'lucide-react';
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
-import { LessonVideoTile } from './lesson-video-tile';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
+import { LessonVideoTile } from './lesson-video-tile';
 
 export const LessonCard = ({
   lesson,
@@ -12,6 +12,7 @@ export const LessonCard = ({
   onEdit,
   onDelete,
   onPlay,
+  quickshotSlot,
 }: {
   lesson: BoardLesson;
   /** Poster frame for this lesson's video, when its provider exposes one. */
@@ -21,6 +22,13 @@ export const LessonCard = ({
   onDelete?: () => void;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
   onPlay?: () => void;
+  /**
+   * The row of settings chips, as a node rather than data: the chips need a
+   * mutation hook and this card must stay pure. Omitted by the drag overlay
+   * and the module overlay's static list, where a ghost card has nothing to
+   * edit — without it the card collapses back to its original single row.
+   */
+  quickshotSlot?: ReactNode;
 }) => {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary">
@@ -30,40 +38,46 @@ export const LessonCard = ({
         posterUrl={posterUrl}
         onPlay={onPlay}
       />
-      <ClampedText text={lesson.name} className="min-w-0 flex-1" />
-      {/*
-        Replaces the status dot the tile took over from. The dot was
-        `aria-hidden`, so published/draft was invisible to a screen reader and
-        the board had no other cue; a word is legible to everyone and, since
-        most lessons end up published, is absent most of the time.
-      */}
-      {!lesson.isAvailable && (
-        <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
-          Draft
-        </span>
-      )}
-      {onEdit && (
-        <TooltipIconButton label="Edit lesson" onClick={onEdit}>
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-        </TooltipIconButton>
-      )}
-      {onDelete && (
-        <TooltipIconButton
-          label="Delete lesson"
-          onClick={onDelete}
-          variant="danger"
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </TooltipIconButton>
-      )}
-      <button
-        type="button"
-        aria-label="Drag to reorder lesson"
-        {...dragHandleProps}
-        className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
-      >
-        <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
+      {/* The tile spans both rows; everything else stacks beside it. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <ClampedText text={lesson.name} className="min-w-0 flex-1" />
+          {/*
+            Replaces the status dot the tile took over from. The dot was
+            `aria-hidden`, so published/draft was invisible to a screen reader and
+            the board had no other cue; a word is legible to everyone and, since
+            most lessons end up published, is absent most of the time.
+          */}
+          {!lesson.isAvailable && (
+            <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
+              Draft
+            </span>
+          )}
+          {onEdit && (
+            <TooltipIconButton label="Edit lesson" onClick={onEdit}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </TooltipIconButton>
+          )}
+          {onDelete && (
+            <TooltipIconButton
+              label="Delete lesson"
+              onClick={onDelete}
+              variant="danger"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </TooltipIconButton>
+          )}
+          <button
+            type="button"
+            aria-label="Drag to reorder lesson"
+            {...dragHandleProps}
+            className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
+          >
+            <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        {quickshotSlot}
+      </div>
     </div>
   );
 };

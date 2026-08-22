@@ -4,7 +4,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
-import type { BoardLesson } from '@/lib/admin-schemas';
+import type { BoardModule } from '@/lib/admin-schemas';
 import { containerDndId, lessonDndId } from '@/lib/dnd-ids';
 import { SortableLessonCard } from './sortable-lesson-card';
 
@@ -14,16 +14,18 @@ import { SortableLessonCard } from './sortable-lesson-card';
  * SortableContext. All drag handling lives in ModuleBoardContainer.
  */
 export const LessonBoardContainer = ({
-  moduleId,
-  lessons,
+  courseId,
+  module: mod,
   posters,
 }: {
-  moduleId: number;
-  lessons: BoardLesson[];
+  courseId: number;
+  /** The whole module: each card's quickshot needs it, not just its id. */
+  module: BoardModule;
   /** lessonId → poster url, from `useLessonPosters`. Missing ids draw the
    *  grey tile. */
   posters: Record<string, string>;
 }) => {
+  const { id: moduleId, lessons } = mod;
   const { setNodeRef } = useDroppable({
     id: containerDndId(moduleId),
     data: { type: 'container', moduleId },
@@ -41,8 +43,9 @@ export const LessonBoardContainer = ({
           lessons.map((lesson) => (
             <SortableLessonCard
               key={lesson.id}
+              courseId={courseId}
               lesson={lesson}
-              moduleId={moduleId}
+              module={mod}
               posterUrl={posters[lesson.id]}
             />
           ))

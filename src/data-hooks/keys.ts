@@ -3,6 +3,12 @@ export const dataKeys = {
   adminCourses: () => ['admin', 'courses'] as const,
   courseBoard: (courseId: number) =>
     ['admin', 'course-board', courseId] as const,
+  /**
+   * Mutation key, not a query key: it lets a settling lesson-config write ask
+   * whether it is the last one in flight before invalidating the board.
+   */
+  updateLessonConfig: (courseId: number) =>
+    ['admin', 'update-lesson-config', courseId] as const,
   courseCredentials: (courseId: number) =>
     ['admin', 'course-credentials', courseId] as const,
   lessonPlayback: (lessonId: number) =>

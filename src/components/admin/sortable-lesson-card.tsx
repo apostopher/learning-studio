@@ -5,21 +5,27 @@ import {
   configureLessonIdAtom,
   deleteLessonAtom,
   playLessonIdAtom,
-} from '@/atoms/admin';
-import type { BoardLesson } from '@/lib/admin-schemas';
-import { cn } from '@/lib/cn';
-import { lessonDndId } from '@/lib/dnd-ids';
+} from '#/atoms/admin';
+import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
+import { cn } from '#/lib/cn';
+import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
+import { LessonQuickshotContainer } from './lesson-quickshot-container';
 
 export const SortableLessonCard = ({
+  courseId,
   lesson,
-  moduleId,
+  module: mod,
   posterUrl,
 }: {
+  courseId: number;
   lesson: BoardLesson;
-  moduleId: number;
+  /** The whole module, not just its id: the quickshot's access chip depends
+   *  on what the module allows, and dnd needs the id. */
+  module: BoardModule;
   posterUrl?: string | null;
 }) => {
+  const moduleId = mod.id;
   const {
     attributes,
     listeners,
@@ -56,6 +62,13 @@ export const SortableLessonCard = ({
         onDelete={() => setDeleteLesson({ id: lesson.id, name: lesson.name })}
         onPlay={
           lesson.isConfigured ? () => setPlayLessonId(lesson.id) : undefined
+        }
+        quickshotSlot={
+          <LessonQuickshotContainer
+            courseId={courseId}
+            lesson={lesson}
+            module={mod}
+          />
         }
       />
     </div>

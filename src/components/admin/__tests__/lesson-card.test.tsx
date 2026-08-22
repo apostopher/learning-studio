@@ -86,4 +86,27 @@ describe('LessonCard', () => {
       'https://image.mux.com/abc/thumbnail.jpg',
     );
   });
+
+  it('renders the quickshot slot it was handed', () => {
+    // The chips reach the board through this slot and nowhere else, so a card
+    // that accepts the node and never renders it would leave every lesson's
+    // settings unreachable while every other test still passed.
+    render(
+      <LessonCard
+        lesson={lesson()}
+        quickshotSlot={<span>quickshot chips</span>}
+      />,
+    );
+
+    expect(screen.getByText('quickshot chips')).toBeTruthy();
+  });
+
+  it('still renders as a single row when no quickshot is given', () => {
+    // The drag overlay and the module overlay's static list pass no slot;
+    // neither should sprout an empty second row.
+    render(<LessonCard lesson={lesson()} />);
+
+    expect(screen.queryByText('quickshot chips')).toBeNull();
+    expect(screen.getByText('Crosswind landings')).toBeTruthy();
+  });
 });

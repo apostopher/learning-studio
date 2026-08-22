@@ -13,9 +13,11 @@ import { LessonBoardContainer } from './lesson-board-container';
 import { ModuleColumn } from './module-column';
 
 export const SortableModuleColumn = ({
+  courseId,
   module: mod,
   posters,
 }: {
+  courseId: number;
   module: BoardModule;
   posters: Record<string, string>;
 }) => {
@@ -62,8 +64,8 @@ export const SortableModuleColumn = ({
         onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
         lessonsSlot={
           <LessonBoardContainer
-            moduleId={mod.id}
-            lessons={mod.lessons}
+            courseId={courseId}
+            module={mod}
             posters={posters}
           />
         }

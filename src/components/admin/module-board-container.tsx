@@ -300,6 +300,7 @@ export const ModuleBoardContainer = ({
             {modules.map((mod) => (
               <SortableModuleColumn
                 key={mod.id}
+                courseId={courseId}
                 module={mod}
                 posters={postersById}
               />
