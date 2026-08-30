@@ -1,15 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ execute: vi.fn().mockResolvedValue([]) }));
+const db = vi.hoisted(() => ({ execute: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
 
 const { migrateLessonPlacements } = await import(
   '#/db/migrate-lesson-placements'
 );
 
+type Query = { queryChunks?: Array<{ value?: unknown }> };
+
 /**
- * Flatten every executed statement into one lowercase string per call.
+ * Flatten one executed statement (a drizzle `sql` template) into a single
+ * lowercase, whitespace-collapsed string.
  *
  * A drizzle `sql` template's `queryChunks` holds `StringChunk` wrapper objects
  * (each a `{ value: string[] }`), not plain strings — `.join()` on the array
@@ -18,18 +21,43 @@ const { migrateLessonPlacements } = await import(
  * is a `StringChunk`; pulling `.value` out of each is what makes the text
  * actually readable.
  */
+function textOf(query: Query): string {
+  return (query.queryChunks ?? [])
+    .map((chunk) => (Array.isArray(chunk.value) ? chunk.value.join('') : ''))
+    .join(' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/** Flatten every executed statement into one lowercase string per call. */
 function statements(): string[] {
-  return db.execute.mock.calls.map((c) => {
-    const query = c[0] as { queryChunks?: Array<{ value?: unknown }> };
-    const text = (query.queryChunks ?? [])
-      .map((chunk) => (Array.isArray(chunk.value) ? chunk.value.join('') : ''))
-      .join(' ');
-    return text.toLowerCase().replace(/\s+/g, ' ');
-  });
+  return db.execute.mock.calls.map((c) => textOf(c[0] as Query));
+}
+
+const ORPHAN_COUNT_QUERY =
+  'select count(*)::int as "n" from "lessons" where "org_id" is null';
+
+/**
+ * Real driver shape: `drizzle-orm/node-postgres`'s `db.execute` resolves to
+ * the raw pg `QueryResult` (`{ rows, rowCount, ... }`), never a bare array.
+ * `resolveOrphanCount` lets a test answer just the one query the migration
+ * actually reads a result from; every other statement gets an empty result
+ * set, which is all the migration ever needs from them.
+ */
+function resolveOrphanCount(n: number): void {
+  db.execute.mockImplementation((query: Query) =>
+    Promise.resolve(
+      textOf(query).includes(ORPHAN_COUNT_QUERY)
+        ? { rows: [{ n }] }
+        : { rows: [] },
+    ),
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  db.execute.mockReset();
+  db.execute.mockResolvedValue({ rows: [] });
 });
 
 describe('migrateLessonPlacements', () => {
@@ -84,5 +112,28 @@ describe('migrateLessonPlacements', () => {
     );
     expect(createDisciplines).toBeGreaterThanOrEqual(0);
     expect(createIndex).toBeGreaterThan(createDisciplines);
+  });
+
+  it('rejects and never sets NOT NULL when the orphan count comes back positive', async () => {
+    resolveOrphanCount(3);
+
+    let error: Error | undefined;
+    try {
+      await migrateLessonPlacements();
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error?.message).toContain('3 lesson(s) have no org');
+    expect(error?.message).toContain('db:seed-org-links');
+    // The gate actually stopped the migration, not just reported a message.
+    expect(statements().join('\n')).not.toContain('set not null');
+  });
+
+  it('proceeds to set org_id NOT NULL when the orphan count comes back zero', async () => {
+    resolveOrphanCount(0);
+
+    await expect(migrateLessonPlacements()).resolves.toBeUndefined();
+    expect(statements().join('\n')).toContain('set not null');
   });
 });

@@ -93,10 +93,10 @@ export async function migrateLessonPlacements(): Promise<void> {
   `);
 
   // The gate. A lesson with no org would have to be invented, so stop instead.
-  const orphans = await db.execute(sql`
+  const { rows } = await db.execute<{ n: number }>(sql`
     select count(*)::int as "n" from "lessons" where "org_id" is null;
   `);
-  const n = Number((orphans as unknown as Array<{ n: number }>)[0]?.n ?? 0);
+  const n = rows[0]?.n ?? 0;
   if (n > 0) {
     throw new Error(
       `${n} lesson(s) have no org — their course has no course_orgs row. ` +
