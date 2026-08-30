@@ -706,6 +706,17 @@ export async function resolveLessonPlayback(
   // credential at all even though the course actually being viewed has one.
   // Threading the caller's own courseId makes the permission check and the
   // credential lookup agree by construction instead of by coincidence.
+  //
+  // The unique index on module_lessons only covers (module_id, lesson_id),
+  // per module — nothing in the DB stops the SAME lesson from having two
+  // placements inside this ONE course (two different modules). Unlike
+  // resolveLessonPlaybackUncached (lesson-playback.ts), ordering by
+  // `modules.course_id` can't disambiguate here — courseId is already fixed
+  // by the WHERE clause, so every candidate row would tie on it. The
+  // remaining ambiguity axis is which MODULE the lesson sits in, so the
+  // tie-break orders by that instead, matching lesson-access.ts's "same
+  // shape" (`orderBy` + `limit(1)` for a deterministic pick) with the column
+  // adjusted to the axis that's actually still ambiguous here.
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
@@ -719,7 +730,9 @@ export async function resolveLessonPlayback(
     .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .where(
       and(eq(lessonsTable.id, lessonId), eq(modulesTable.courseId, courseId)),
-    );
+    )
+    .orderBy(moduleLessonsTable.moduleId)
+    .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
   const provider = lesson.videoProvider as ProviderId;
   const creds = await resolveCourseProvider(courseId, provider);

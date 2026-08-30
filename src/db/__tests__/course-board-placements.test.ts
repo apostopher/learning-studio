@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   boolean,
   integer,
@@ -9,6 +10,8 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql } from '#/db/__tests__/render-sql';
+import { watchedMilestones } from '#/lib/course-milestones';
 
 // admin.ts drags in a long tail of server-only modules (crypto.server,
 // resolve.server, posters.server, Redis clients) — same landmine documented
@@ -102,6 +105,50 @@ function makeChain(result: unknown) {
     limit: () => p,
   });
   return p;
+}
+
+type SelectCalls = {
+  from: unknown[];
+  innerJoin: Array<[table: unknown, condition: unknown]>;
+  where: unknown[];
+  groupBy: unknown[];
+};
+
+/**
+ * Variant of `makeChain` that records every argument passed to
+ * `.from()`/`.innerJoin()`/`.where()`/`.groupBy()`, in call order. Needed for
+ * `countLearnersByModule` (Task 5e, Part 2d): the plain `makeChain` above
+ * discards every builder argument, so the original version of that test
+ * could only assert the SELECT's own field-object identity
+ * (`db.select.mock.calls[4][0]`) and left `.from`/`.innerJoin`/`.where`/
+ * `.groupBy` completely unasserted — a wrong join target, a wrong join
+ * pairing, or a wrong WHERE/GROUP BY column would all still pass.
+ */
+function makeCapturingSelectChain(result: unknown, calls: SelectCalls) {
+  const chain = {
+    from: (table: unknown) => {
+      calls.from.push(table);
+      return chain;
+    },
+    innerJoin: (table: unknown, condition: unknown) => {
+      calls.innerJoin.push([table, condition]);
+      return chain;
+    },
+    where: (condition: unknown) => {
+      calls.where.push(condition);
+      return chain;
+    },
+    groupBy: (col: unknown) => {
+      calls.groupBy.push(col);
+      return chain;
+    },
+    // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+    then: (
+      resolve: (v: unknown) => unknown,
+      reject?: (e: unknown) => unknown,
+    ) => Promise.resolve(result).then(resolve, reject),
+  };
+  return chain;
 }
 
 const getPlacementsForCourse = vi.hoisted(() => vi.fn());
@@ -311,8 +358,23 @@ describe('getCourseBoard', () => {
           { id: 9, moduleId: 99, name: 'Lesson 9', slug: 'l9', rank: '1' },
         ]),
       ) // lessons
-      .mockReturnValueOnce(makeChain([])) // module dependencies
-      .mockReturnValueOnce(makeChain([{ moduleId: 4, learners: '2' }])); // learner counts
+      .mockReturnValueOnce(makeChain([])); // module dependencies
+    // The 5th db.select call is countLearnersByModule's own query — captured
+    // rather than canned, so `.from`/`.innerJoin`/`.where`/`.groupBy` can be
+    // asserted on directly (Task 5e, Part 2d: these were previously
+    // unasserted entirely).
+    const learnerCountCalls: SelectCalls = {
+      from: [],
+      innerJoin: [],
+      where: [],
+      groupBy: [],
+    };
+    db.select.mockReturnValueOnce(
+      makeCapturingSelectChain(
+        [{ moduleId: 4, learners: '2' }],
+        learnerCountCalls,
+      ),
+    );
 
     const board = await getCourseBoard(3);
 
@@ -321,6 +383,32 @@ describe('getCourseBoard', () => {
       moduleId: unknown;
     };
     expect(learnerCountsCallArg.moduleId).toBe(moduleLessonsTable.moduleId);
+
+    expect(learnerCountCalls.from[0]).toBe(moduleLessonsTable);
+
+    expect(learnerCountCalls.innerJoin[0][0]).toBe(videoProgressTable);
+    // Built from the real production values (the actual `watchedMilestones`
+    // list, imported rather than hardcoded, so this doesn't drift if that
+    // list changes for unrelated reasons) and compared by rendered SQL text,
+    // not by table/token presence: a mutant that swapped which side of the
+    // join carries `lessonId` vs which carries the milestone filter would
+    // still reference every one of the same tables and columns somewhere,
+    // but render to a different string.
+    expect(renderSql(learnerCountCalls.innerJoin[0][1] as never)).toBe(
+      renderSql(
+        and(
+          eq(videoProgressTable.lessonId, moduleLessonsTable.lessonId),
+          inArray(videoProgressTable.progress, watchedMilestones),
+        ) as never,
+      ),
+    );
+
+    expect(renderSql(learnerCountCalls.where[0] as never)).toBe(
+      renderSql(inArray(moduleLessonsTable.moduleId, [4]) as never),
+    );
+
+    expect(learnerCountCalls.groupBy[0]).toBe(moduleLessonsTable.moduleId);
+
     // Sanity check on the JS-layer mapping this query result feeds: the
     // canned row's moduleId (4, the placement's module) is what the board
     // must report the learner count under.

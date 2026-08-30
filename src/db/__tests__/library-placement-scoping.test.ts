@@ -4,12 +4,12 @@ import {
   integer,
   jsonb,
   numeric,
-  PgDialect,
   pgTable,
   text,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 // Task 5b moves the STUDENT-facing library scoping (`#/db/library.ts`) onto
 // placements: a lesson's course is now reached through `module_lessons`
@@ -112,25 +112,15 @@ function makeCapturingChain(result: unknown, calls: JoinCalls) {
   return chain;
 }
 
-const dialect = new PgDialect();
-
-/**
- * Render a captured drizzle condition to its exact parameterized SQL text —
- * no database needed. Fix round 1 replaced a hand-rolled tree-walk
- * (`collectColumnChunks`, keeping columns by `.table` reference) with this:
- * the walk could prove a column belonged to the right TABLE, but flattened
- * every join's condition into one bag before asserting, so it could not tell
- * "module_lessons.module_id and lesson_module.id both appear somewhere" apart
- * from "module_lessons.module_id is correctly PAIRED with lesson_module.id on
- * THIS join" — the actual content of the rewrite. Exact SQL text pins the
- * pairing, the boolean shape (`and` vs `or`, `is null` vs `is not null`), and
- * incidentally the join order (a reordered join renders a different string at
- * the position under test). Verified against this repo's installed
- * `drizzle-orm` (`^0.45.1`) — see fix-round-1 report for the probe output.
- */
-function render(condition: SQL): string {
-  return dialect.sqlToQuery(condition).sql;
-}
+// `renderSql`/`renderSqlParams` (shared, see their doc comment in
+// `render-sql.ts`) replace a hand-rolled tree-walk (`collectColumnChunks`,
+// keeping columns by `.table` reference) that fix round 1 removed: that walk
+// could prove a column belonged to the right TABLE, but flattened every
+// join's condition into one bag before asserting, so it could not tell
+// "module_lessons.module_id and lesson_module.id both appear somewhere" apart
+// from "module_lessons.module_id is correctly PAIRED with lesson_module.id on
+// THIS join" — the actual content of the rewrite.
+const render = renderSql;
 
 const db = vi.hoisted(() => ({ select: vi.fn(), selectDistinct: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
@@ -247,16 +237,8 @@ describe('getLibraryForCourse', () => {
     await getLibraryForCourse(101);
     await getLibraryForCourse(202);
 
-    expect(dialect.sqlToQuery(callsA.where[0]).params).toEqual([
-      '%/library-%',
-      101,
-      101,
-    ]);
-    expect(dialect.sqlToQuery(callsB.where[0]).params).toEqual([
-      '%/library-%',
-      202,
-      202,
-    ]);
+    expect(renderSqlParams(callsA.where[0])).toEqual(['%/library-%', 101, 101]);
+    expect(renderSqlParams(callsB.where[0])).toEqual(['%/library-%', 202, 202]);
   });
 });
 

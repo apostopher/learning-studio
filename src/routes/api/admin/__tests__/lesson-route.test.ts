@@ -80,7 +80,7 @@ beforeEach(() => {
 describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
   it('hands the absent PATCH lesson to absentResourceResponse, not a bare 404', async () => {
     m.getCourseIdForLessonId.mockResolvedValue(null);
-    const request = req({ dependsOn: [] });
+    const request = req({ courseId: 1, dependsOn: [] });
 
     await patchLessonHandler(request, '999');
 
@@ -96,7 +96,10 @@ describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
       new Response('Forbidden', { status: 403 }),
     );
 
-    const res = await patchLessonHandler(req({ dependsOn: [] }), '999');
+    const res = await patchLessonHandler(
+      req({ courseId: 1, dependsOn: [] }),
+      '999',
+    );
 
     expect(res.status).toBe(403);
   });
@@ -122,13 +125,19 @@ describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
 describe('patchLessonHandler — course resolution', () => {
   it('404s a lesson that does not exist, before guarding or parsing', async () => {
     m.getCourseIdForLessonId.mockResolvedValue(null);
-    const res = await patchLessonHandler(req({ dependsOn: [] }), '999');
+    const res = await patchLessonHandler(
+      req({ courseId: 1, dependsOn: [] }),
+      '999',
+    );
     expect(res.status).toBe(404);
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
   });
 
   it('400s an invalid lesson id without resolving a course', async () => {
-    const res = await patchLessonHandler(req({ dependsOn: [] }), 'abc');
+    const res = await patchLessonHandler(
+      req({ courseId: 1, dependsOn: [] }),
+      'abc',
+    );
     expect(res.status).toBe(400);
     expect(m.getCourseIdForLessonId).not.toHaveBeenCalled();
   });

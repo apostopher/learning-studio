@@ -9,6 +9,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql } from '#/db/__tests__/render-sql';
 import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 // Task 5a moves "which course does this lesson belong to" onto placements
@@ -178,6 +179,12 @@ function makeOrderedChain(result: unknown, orderByCalls: unknown[]) {
  * would satisfy every assertion built on plain `makeChain` or
  * `makeOrderedChain`. Pair with `collectSqlTokens` below to inspect what a
  * captured condition actually references.
+ *
+ * `orderBy`/`limit` chain through untouched (rather than being omitted, as in
+ * the original version of this stub) so the same capturing chain also works
+ * for `getCourseSlugForLesson`/`getCourseSlugForLessonId`/
+ * `getCourseIdForLessonId`, which all call `.orderBy().limit(1)` after
+ * `.where()` — see the per-join rendered-SQL tests below (Task 5e, Part 2a).
  */
 function makeJoinCapturingChain(
   result: unknown,
@@ -190,6 +197,8 @@ function makeJoinCapturingChain(
       return chain;
     },
     where: () => chain,
+    orderBy: () => chain,
+    limit: () => chain,
     // biome-ignore lint/suspicious/noThenProperty: see makeChain above
     then: (
       resolve: (v: unknown) => unknown,
@@ -406,6 +415,90 @@ describe('getCourseIdForLessonId determinism', () => {
     for (const col of orderByCalls) {
       expect((col as { name: string }).name).toBe('course_id');
     }
+  });
+});
+
+// Task 5e, Part 2a: before this block, `getCourseSlugsForLessonId` was the
+// only one of these four functions with ANY join-argument assertion (the
+// `collectSqlTokens` check above). `getCourseSlugForLesson`,
+// `getCourseSlugForLessonId` and `getCourseIdForLessonId` share the
+// identical `lessons -> module_lessons -> modules -> courses` hop, but were
+// argument-blind: a PARTIAL revert of any one of their three joins back to
+// the legacy path — e.g. `.innerJoin(modulesTable, eq(modulesTable.id,
+// lessonsTable.moduleId))`, skipping module_lessons entirely for that one
+// hop — was "correct-shaped" (still an integer FK join, still compiles) but
+// silently reverted this function's course resolution to the legacy
+// single-valued `lessons.module_id`, while the OTHER functions in this file
+// stayed migrated. Every existing test for these three functions builds on
+// `makeChain`/`makeOrderedChain`, which both discard join arguments (see
+// their doc comments), so none of them could catch that. These three tests
+// capture every `(table, condition)` pair passed to `.innerJoin()`, in call
+// order, and render each condition to its exact SQL text — pinning both the
+// join order and which columns are paired on each hop.
+describe('join argument pinning: lessons -> module_lessons -> modules -> courses', () => {
+  const expectedJoinChain = (
+    joinCalls: Array<[table: unknown, condition: unknown]>,
+  ) => {
+    expect(joinCalls).toHaveLength(3);
+    expect(joinCalls[0][0]).toBe(moduleLessonsTable);
+    expect(renderSql(joinCalls[0][1] as never)).toBe(
+      '"module_lessons"."lesson_id" = "lessons"."id"',
+    );
+    expect(joinCalls[1][0]).toBe(modulesTable);
+    expect(renderSql(joinCalls[1][1] as never)).toBe(
+      '"modules"."id" = "module_lessons"."module_id"',
+    );
+    expect(joinCalls[2][0]).toBe(coursesTable);
+    expect(renderSql(joinCalls[2][1] as never)).toBe(
+      '"courses"."id" = "modules"."course_id"',
+    );
+  };
+
+  // Mutant: revert getCourseSlugForLesson's SECOND join back to
+  // `.innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))`.
+  // Every other test for this function uses `makeOrderedChain`, which
+  // discards join arguments entirely, so that mutant passed the whole file
+  // undetected before this test existed. Verified RED against it (the
+  // rendered second-join string reads
+  // `"modules"."id" = "lessons"."module_id"` instead).
+  it('getCourseSlugForLesson joins module_lessons, then modules, then courses, each correctly paired', async () => {
+    const joinCalls: Array<[unknown, unknown]> = [];
+    db.select.mockReturnValueOnce(
+      makeJoinCapturingChain(
+        [{ courseSlug: 'flight-basics', courseId: 3, isAvailable: true }],
+        joinCalls,
+      ),
+    );
+
+    await getCourseSlugForLesson('stall-recovery');
+
+    expectedJoinChain(joinCalls);
+  });
+
+  // Mutant: same partial revert, applied to getCourseSlugForLessonId's
+  // second join instead.
+  it('getCourseSlugForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
+    const joinCalls: Array<[unknown, unknown]> = [];
+    db.select.mockReturnValueOnce(
+      makeJoinCapturingChain([{ courseSlug: 'flight-basics' }], joinCalls),
+    );
+
+    await getCourseSlugForLessonId(9);
+
+    expectedJoinChain(joinCalls);
+  });
+
+  // Mutant: same partial revert, applied to getCourseIdForLessonId's second
+  // join instead.
+  it('getCourseIdForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
+    const joinCalls: Array<[unknown, unknown]> = [];
+    db.select.mockReturnValueOnce(
+      makeJoinCapturingChain([{ courseId: 3 }], joinCalls),
+    );
+
+    await getCourseIdForLessonId(9);
+
+    expectedJoinChain(joinCalls);
   });
 });
 

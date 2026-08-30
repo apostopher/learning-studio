@@ -5,24 +5,21 @@ import {
   integer,
   jsonb,
   numeric,
-  PgDialect,
   pgTable,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql } from '#/db/__tests__/render-sql';
 
 // Renders a captured drizzle condition/expression to exact parameterized SQL
-// text — house pattern from library-placement-scoping.test.ts /
-// learner-read-placements.test.ts. Needed here (Task 5d) to prove a query
-// reads/writes through `module_lessons`/its own column rather than the
-// legacy `lessons.module_id`/`lesson_dependencies` — a canned-row mock
-// returns whatever it's told regardless of which table was actually queried,
-// so only rendering the real condition tree can catch that class of mutant.
-const dialect = new PgDialect();
-function render(condition: SQL): string {
-  return dialect.sqlToQuery(condition).sql;
-}
+// text — shared house pattern, see `render-sql.ts`'s doc comment. Needed here
+// (Task 5d) to prove a query reads/writes through `module_lessons`/its own
+// column rather than the legacy `lessons.module_id`/`lesson_dependencies` — a
+// canned-row mock returns whatever it's told regardless of which table was
+// actually queried, so only rendering the real condition tree can catch that
+// class of mutant.
+const render = renderSql;
 
 // admin.ts pulls in real drizzle table objects, `#/lib/crypto.server` (which
 // reads CREDENTIALS_ENCRYPTION_KEY off `#/env` at import time), and
@@ -239,6 +236,7 @@ const {
   deleteModule,
   moveLesson,
   reorderModule,
+  resolveLessonPlayback,
   saveCourseProvider,
   setLessonVideo,
   updateCourse,
@@ -248,6 +246,11 @@ const {
   updateLessonName,
   updateModule,
 } = await import('#/db/admin');
+// Real crypto.server (see the note above `courseVideoProvidersTable`) —
+// used here just to build a decryptable `secrets` fixture for
+// resolveLessonPlayback's `resolveCourseProvider` call, not to test
+// encryption itself.
+const { encryptJson } = await import('#/lib/crypto.server');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -462,7 +465,7 @@ describe('course-details cache invalidation', () => {
     );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
-    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+    const result = await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
     expect(maxRankCalls.from[0]).toBe(moduleLessonsTable);
     expect(render(maxRankCalls.where[0])).toBe(
@@ -482,6 +485,17 @@ describe('course-details cache invalidation', () => {
     // the kind of drift this migration exists to stop.
     expect(lessonInsert.valuesArg).toMatchObject({ rank: '4' });
     expect(placementInsert.valuesArg).toMatchObject({ rank: '4' });
+    // Task 5e, Part 3b: a previous round deleted `expect(created.rank).toBe(4)`
+    // as tautological about `maxRank` (correctly — see the comment above),
+    // but its NUMBER-MAPPING coverage went with it. `admin.ts`'s
+    // `rank: Number(created.rank)` is what turns Postgres's `numeric`
+    // string ('4') into the `number` the returned `BoardLesson` promises —
+    // a mutant that returned `rank: created.rank` (the string '4') instead
+    // would still satisfy every `valuesArg` assertion above (those check the
+    // WRITE side, not what's returned) and now passes the whole file
+    // undetected. Verified RED against that mutant (`typeof result.rank`
+    // is `'string'`, not `'number'`).
+    expect(typeof result.rank).toBe('number');
   });
 
   it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
@@ -1072,6 +1086,104 @@ describe('course-details cache invalidation', () => {
     expect(consoleError).toHaveBeenCalled();
 
     consoleError.mockRestore();
+  });
+});
+
+describe('resolveLessonPlayback course scoping', () => {
+  // Task 5e, Part 2e: the caller's own `courseId` is a WHERE predicate
+  // (`eq(modulesTable.courseId, courseId)`), added alongside `eq(lessonsTable
+  // .id, lessonId)` in fix round 1 so the permission guard and the credential
+  // lookup can never disagree about which course they're both looking at
+  // (see this function's own doc comment on why). Before this test, nothing
+  // rendered that predicate to SQL — a mutant that dropped it (leaving only
+  // the lessonId check) would still resolve videoProvider/videoRef from
+  // WHICHEVER course a join happened to return first, silently reintroducing
+  // the exact bug fix round 1 closed, undetected by anything in this file.
+  it('scopes the lesson lookup by BOTH lessonId and the caller-supplied courseId', async () => {
+    const whereCalls: SQL[] = [];
+    const lessonLookupChain = {
+      from: () => lessonLookupChain,
+      innerJoin: () => lessonLookupChain,
+      where: (condition: SQL) => {
+        whereCalls.push(condition);
+        return lessonLookupChain;
+      },
+      orderBy: () => lessonLookupChain,
+      limit: () =>
+        Promise.resolve([{ videoProvider: 'mux', videoRef: 'ref-123' }]),
+    };
+    db.select
+      .mockReturnValueOnce(lessonLookupChain)
+      .mockReturnValueOnce(
+        makeChain([{ secrets: encryptJson({ keyId: 'k', privateKey: 'p' }) }]),
+      );
+    resolveServer.resolvePlayback.mockResolvedValue({
+      status: 'ready',
+      url: 'https://x/y.m3u8',
+      kind: 'hls',
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+    });
+
+    await resolveLessonPlayback(9, 3);
+
+    expect(whereCalls).toHaveLength(1);
+    expect(render(whereCalls[0])).toBe(
+      '("lessons"."id" = $1 and "modules"."course_id" = $2)',
+    );
+  });
+
+  // Task 5e, Part 3a (production regression): the unique index on
+  // module_lessons only covers (module_id, lesson_id), per MODULE — nothing
+  // in the DB stops the same lesson from having two placements inside this
+  // one course, in two different modules. Before this fix, `resolveLesson
+  // Playback` destructured `[lesson]` from an UNBOUNDED, unordered result:
+  // with two matching rows, which one's videoProvider/videoRef "won" was
+  // arbitrary and could differ between calls, flapping playback. Fixed by
+  // adding `.orderBy(moduleLessonsTable.moduleId).limit(1)`, matching the
+  // "deterministic tie-break" shape `lesson-access.ts` uses for the same
+  // class of ambiguity (there, across courses; here, across modules within
+  // one fixed course). Verified RED against dropping both calls: with no
+  // `.orderBy()`/`.limit()` in the chain, `await db.select()...where(...)`
+  // resolves to the (non-array) chain object itself, and destructuring
+  // `[lesson]` off it throws instead of returning a lesson.
+  it('orders by module id and takes exactly one row, so two placements of one lesson within a course resolve deterministically', async () => {
+    const orderByCalls: unknown[] = [];
+    const limitCalls: unknown[] = [];
+    const lessonLookupChain = {
+      from: () => lessonLookupChain,
+      innerJoin: () => lessonLookupChain,
+      where: () => lessonLookupChain,
+      orderBy: (col: unknown) => {
+        orderByCalls.push(col);
+        return lessonLookupChain;
+      },
+      limit: (n: unknown) => {
+        limitCalls.push(n);
+        return Promise.resolve([{ videoProvider: 'mux', videoRef: 'ref-123' }]);
+      },
+    };
+    db.select
+      .mockReturnValueOnce(lessonLookupChain)
+      .mockReturnValueOnce(
+        makeChain([{ secrets: encryptJson({ keyId: 'k', privateKey: 'p' }) }]),
+      );
+    resolveServer.resolvePlayback.mockResolvedValue({
+      status: 'ready',
+      url: 'https://x/y.m3u8',
+      kind: 'hls',
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+    });
+
+    const result = await resolveLessonPlayback(9, 3);
+
+    expect(orderByCalls).toHaveLength(1);
+    expect((orderByCalls[0] as { name: string }).name).toBe('module_id');
+    expect(limitCalls).toEqual([1]);
+    expect(result?.status).toBe('ready');
   });
 });
 

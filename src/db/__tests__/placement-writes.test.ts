@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { integer, jsonb, numeric, pgTable } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 const moduleLessonsTable = pgTable('module_lessons', {
@@ -250,6 +251,15 @@ describe('unlinkLesson', () => {
     // every course teaching it, not just module 40's. Capturing what
     // `.where()` was actually called with (not a stub that discards it)
     // proves the DELETE is scoped to both moduleId and lessonId.
+    //
+    // Task 5e, Part 2b: this used to check `collectSqlTokens` for presence of
+    // 'module_id'/'40'/'lesson_id'/'9' — which cannot tell a correctly paired
+    // `and(eq(moduleId, 40), eq(lessonId, 9))` apart from a SWAPPED
+    // `and(eq(moduleId, 9), eq(lessonId, 40))`: both produce the exact same
+    // four tokens, just paired with the wrong column. Exact SQL text pins the
+    // pairing. Verified RED against that swap mutant (renders
+    // `("module_lessons"."module_id" = $1 and "module_lessons"."lesson_id" =
+    // $2)` with params `[9, 40]` instead of `[40, 9]`).
     const where = vi.fn().mockReturnValue({
       returning: vi.fn().mockResolvedValue([{ id: 1 }]),
     });
@@ -258,11 +268,11 @@ describe('unlinkLesson', () => {
     expect(await unlinkLesson(40, 9)).toBe(true);
 
     expect(db.delete).toHaveBeenCalledWith(moduleLessonsTable);
-    const tokens = collectSqlTokens(where.mock.calls[0][0]);
-    expect(tokens).toContain('module_id');
-    expect(tokens).toContain('40');
-    expect(tokens).toContain('lesson_id');
-    expect(tokens).toContain('9');
+    const condition = where.mock.calls[0][0];
+    expect(renderSql(condition)).toBe(
+      '("module_lessons"."module_id" = $1 and "module_lessons"."lesson_id" = $2)',
+    );
+    expect(renderSqlParams(condition)).toEqual([40, 9]);
 
     expect(getCourseSlugForModuleId).toHaveBeenCalledWith(40);
     expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
@@ -339,21 +349,33 @@ describe('movePlacement', () => {
     // module 41) — this is the mechanism that keeps module 90 (course 7)
     // out of the allowlist, not an assertion that merely repeats a value no
     // stub ever produced.
-    const lookupTokens = collectSqlTokens(moduleLookupWhere.mock.calls[0][0]);
-    expect(lookupTokens).toContain('course_id');
-    expect(lookupTokens).toContain('3');
+    //
+    // Task 5e, Part 2b: exact SQL text, not `collectSqlTokens`, which cannot
+    // tell "scoped by course_id" apart from a mutant that scoped by a
+    // different integer column entirely as long as the value 3 still
+    // appears somewhere in the tree.
+    expect(renderSql(moduleLookupWhere.mock.calls[0][0])).toBe(
+      '"modules"."course_id" = $1',
+    );
+    expect(renderSqlParams(moduleLookupWhere.mock.calls[0][0])).toEqual([3]);
 
     expect(where).toHaveBeenCalledTimes(1);
-    const tokens = collectSqlTokens(where.mock.calls[0][0]);
-    // The WHERE clause must reference module_id (proving it is scoped
-    // beyond a bare lessonId match) and must only ever mention the ids that
-    // were actually looked up for course 3.
-    expect(tokens).toContain('module_id');
-    expect(tokens).toContain('40');
-    expect(tokens).toContain('41');
-    // Documentation, not proof on its own (see the scoped assertions
-    // above): module 90 belongs to course 7 and is never fetched.
-    expect(tokens).not.toContain('90');
+    const condition = where.mock.calls[0][0];
+    // Task 5e, Part 2b: this used to check `collectSqlTokens` for presence
+    // of 'module_id'/'40'/'41' — which cannot tell "scoped by
+    // module_lessons.lesson_id AND module_lessons.module_id in (40, 41)"
+    // apart from a mutant that SWAPPED which column carries the lessonId vs
+    // the moduleId allowlist (e.g. `eq(moduleId, 9)` +
+    // `inArray(lessonId, [40, 41])`): both produce the exact same token set
+    // ('module_id', 'lesson_id', '9', '40', '41'), just paired with the
+    // wrong column. Exact SQL text pins the pairing. Verified RED against
+    // that swap mutant (renders `("module_lessons"."module_id" = $1 and
+    // "module_lessons"."lesson_id" in ($2, $3))` with params `[9, 40, 41]`
+    // instead of the column names swapped back).
+    expect(renderSql(condition)).toBe(
+      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in ($2, $3))',
+    );
+    expect(renderSqlParams(condition)).toEqual([9, 40, 41]);
   });
 
   it('invalidates the target course cache so learners see the move', async () => {

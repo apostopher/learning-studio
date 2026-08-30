@@ -5,11 +5,11 @@ import {
   integer,
   jsonb,
   numeric,
-  PgDialect,
   pgTable,
   text,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql } from '#/db/__tests__/render-sql';
 
 /**
  * Task 5c moves the LEARNER-FACING read path onto placements
@@ -176,11 +176,8 @@ function makeCapturingChain(result: unknown, calls: JoinCalls) {
   return chain;
 }
 
-const dialect = new PgDialect();
-/** Render a captured drizzle condition to its exact parameterized SQL text. */
-function render(condition: SQL): string {
-  return dialect.sqlToQuery(condition).sql;
-}
+// Shared house pattern — see doc comment in `render-sql.ts`.
+const render = renderSql;
 
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 const schema = {
@@ -457,27 +454,51 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
   // reading 0%. Verified RED (moduleLessonsTable then shows up in
   // calls.innerJoin, not calls.leftJoin, and the position-based lessonsTable
   // check fails).
-  it('getMyCourses left-joins module_lessons then lessons, never inner', async () => {
+  //
+  // Task 5e, Part 2c: the original version of this test located
+  // module_lessons with `joinedTables.indexOf(moduleLessonsTable)` and
+  // checked `[idx + 1]` for lessons — which proves lessons is joined
+  // immediately off module_lessons with nothing between them, but says
+  // nothing about `modulesTable`'s OWN join, three lines above the ones
+  // asserted on in course.ts. A mutant flipping THAT join
+  // (`.leftJoin(modulesTable, ...)` -> `.innerJoin(modulesTable, ...)`)
+  // would make a subscribed course with zero modules at all silently vanish
+  // from `/app` instead of reading 0% — and passed the whole suite
+  // undetected, since `indexOf` only ever looked for module_lessons, never
+  // asked whether modules itself was joined the same way. Pinning the FULL
+  // ordered join list (fixed indices, not `indexOf`) closes that gap.
+  // Verified RED against that mutant (modulesTable then shows up in
+  // `calls.innerJoin`, and `calls.leftJoin` has only 2 entries instead of 3).
+  it('getMyCourses left-joins courses -> modules -> module_lessons -> lessons, only courses ever inner', async () => {
     const calls = newJoinCalls();
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
     await getMyCourses('u1');
 
-    const joinedTables = calls.leftJoin.map(([table]) => table);
-    const moduleLessonsIndex = joinedTables.indexOf(moduleLessonsTable);
-    expect(moduleLessonsIndex).toBeGreaterThanOrEqual(0);
-    expect(render(calls.leftJoin[moduleLessonsIndex][1])).toBe(
+    // The single innerJoin is courses-onto-subscriptions — every downstream
+    // hop (modules, module_lessons, lessons, and the two progress tables not
+    // pinned by this test) must be a LEFT join, never inner.
+    expect(calls.innerJoin).toHaveLength(1);
+    expect(calls.innerJoin[0][0]).toBe(coursesTable);
+    expect(render(calls.innerJoin[0][1])).toBe(
+      '"courses"."id" = "course_subscriptions"."course_id"',
+    );
+
+    // First three leftJoins, by FIXED index rather than `indexOf` — proves
+    // modules is joined (and LEFT, not inner) immediately after courses,
+    // with module_lessons and lessons following in that exact order.
+    expect(calls.leftJoin[0][0]).toBe(modulesTable);
+    expect(render(calls.leftJoin[0][1])).toBe(
+      '"modules"."course_id" = "courses"."id"',
+    );
+    expect(calls.leftJoin[1][0]).toBe(moduleLessonsTable);
+    expect(render(calls.leftJoin[1][1])).toBe(
       '"module_lessons"."module_id" = "modules"."id"',
     );
-
-    const nextJoin = calls.leftJoin[moduleLessonsIndex + 1];
-    expect(nextJoin?.[0]).toBe(lessonsTable);
-    expect(render(nextJoin[1])).toBe(
+    expect(calls.leftJoin[2][0]).toBe(lessonsTable);
+    expect(render(calls.leftJoin[2][1])).toBe(
       '("lessons"."id" = "module_lessons"."lesson_id" and "lessons"."is_available" = $1)',
     );
-
-    expect(calls.innerJoin.some(([t]) => t === moduleLessonsTable)).toBe(false);
-    expect(calls.innerJoin.some(([t]) => t === lessonsTable)).toBe(false);
   });
 
   // Mutant: change `.leftJoin(lessonsTable, ...)` in getCourseProgress
