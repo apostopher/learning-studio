@@ -86,7 +86,7 @@ export async function getCourseCountsForLessons(
 }
 
 /**
- * Midpoint rank between two neighbours, matching `reorderModule`'s scheme:
+ * Midpoint rank between two neighbours, matching `moveLesson`'s scheme:
  * halve to go first, +1 to go last, 1 into an empty module. Computed in SQL so
  * Postgres `numeric` does the arithmetic and no precision is lost in JS.
  */
@@ -137,9 +137,14 @@ async function getModuleIdsForCourse(courseId: number): Promise<number[]> {
 /**
  * Place an existing library lesson into a module.
  *
- * Returns `'duplicate'` rather than throwing when the target course already
- * teaches this lesson: one placement per course keeps completion unambiguous,
- * and the caller turns this into an explanation rather than an error.
+ * Returns `null` when `moduleId` doesn't resolve to a course — the module
+ * doesn't exist. Returns `'duplicate'` when it does, but the target course
+ * already teaches this lesson: one placement per course keeps completion
+ * unambiguous, and the caller turns this into an explanation rather than an
+ * error. These two must stay distinguishable: Task 9 maps `null` to a 404
+ * ("no such module") and `'duplicate'` to a 409 ("already in this course") —
+ * collapsing them back into one sentinel would report 409 for a dangling
+ * module id, which is a lie.
  *
  * The unique index only covers (module_id, lesson_id), so the course-level rule
  * is checked here. A denormalised course_id on module_lessons would make it a
@@ -150,9 +155,9 @@ export async function linkLesson(input: {
   lessonId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
-}): Promise<Placement | 'duplicate'> {
+}): Promise<Placement | 'duplicate' | null> {
   const targetCourseId = await getCourseIdForModuleId(input.moduleId);
-  if (targetCourseId === null) return 'duplicate';
+  if (targetCourseId === null) return null;
 
   const existing = await getCourseIdsForLesson(input.lessonId);
   if (existing.includes(targetCourseId)) return 'duplicate';
@@ -203,9 +208,8 @@ export async function unlinkLesson(
 
 /**
  * Move a placement within its course — to another module, or to another slot
- * in the same one. Cross-COURSE moves are forbidden by the UI's drag
- * whitelist and are not expressible here: the placement row keeps its
- * identity and only its module and rank change.
+ * in the same one. The placement row keeps its identity; only its module and
+ * rank change.
  *
  * IMPORTANT: a lesson has one placement per COURSE, but it can have many
  * placements ACROSS courses — that's the entire point of the shared library.

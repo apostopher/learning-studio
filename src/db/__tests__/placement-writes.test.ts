@@ -27,6 +27,39 @@ function makeChain(result: unknown) {
   return p;
 }
 
+/**
+ * Recursively collect every column name and literal parameter value out of a
+ * real drizzle query-builder value: an `SQL` condition tree (`eq`/`and`/
+ * `inArray`), or a raw `sql\`...\`` fragment (as `rankBetween` builds). Real
+ * drizzle objects, not stubs, are what the implementation passes to
+ * `.where()`/`.set()` — walking them is how these tests prove what columns
+ * and values were actually referenced, rather than trusting the
+ * implementation's own description of itself.
+ *
+ * `eq`/`inArray` wrap their parameters in a `Param` object exposing `.value`,
+ * but a raw `sql\`...${x}...\`` fragment embeds a primitive `x` directly as a
+ * bare queryChunk entry with no wrapper — hence the explicit primitive
+ * handling below, verified against real drizzle output for both shapes.
+ */
+function collectSqlTokens(node: unknown, out: string[] = []): string[] {
+  if (node == null) return out;
+  if (typeof node === 'number' || typeof node === 'string') {
+    out.push(String(node));
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectSqlTokens(child, out);
+    return out;
+  }
+  if (typeof node === 'object') {
+    const record = node as Record<string, unknown>;
+    if (typeof record.name === 'string') out.push(record.name);
+    if ('value' in record) out.push(String(record.value));
+    if ('queryChunks' in record) collectSqlTokens(record.queryChunks, out);
+  }
+  return out;
+}
+
 const db = vi.hoisted(() => ({
   select: vi.fn(),
   insert: vi.fn(),
@@ -58,6 +91,24 @@ beforeEach(() => {
 });
 
 describe('linkLesson', () => {
+  it('returns null when the target module does not exist', async () => {
+    // Distinguished from 'duplicate': Task 9 maps this to a 404 ("no such
+    // module"), 'duplicate' to a 409 ("already in this course"). Collapsing
+    // them would report 409 for a dangling module id, which is false.
+    getCourseIdForModuleId.mockResolvedValueOnce(null);
+
+    const result = await linkLesson({
+      moduleId: 999,
+      lessonId: 9,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    expect(result).toBeNull();
+    expect(db.select).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it('refuses a second placement in a course that already teaches the lesson', async () => {
     // The lesson is already in course 3; the target module is also course 3.
     db.select.mockReturnValueOnce(makeChain([{ courseId: 3 }]));
@@ -73,14 +124,15 @@ describe('linkLesson', () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it('inserts a placement when the course does not yet teach the lesson', async () => {
+  it('inserts a placement carrying the right module, lesson and rank', async () => {
     db.select.mockReturnValueOnce(makeChain([{ courseId: 7 }]));
     const returning = vi
       .fn()
       .mockResolvedValue([
         { id: 1, moduleId: 40, lessonId: 9, rank: '1', dependsOn: [] },
       ]);
-    db.insert.mockReturnValue({ values: () => ({ returning }) });
+    const values = vi.fn().mockReturnValue({ returning });
+    db.insert.mockReturnValue({ values });
 
     const result = await linkLesson({
       moduleId: 40,
@@ -89,6 +141,22 @@ describe('linkLesson', () => {
       nextLessonId: null,
     });
 
+    // Consumer-side proof, not just the (stubbed) return value: the INSERT
+    // must actually have been built with this module, this lesson, an empty
+    // dependsOn, and — since both neighbours are null — the "empty module"
+    // rank of 1.
+    expect(db.insert).toHaveBeenCalledWith(moduleLessonsTable);
+    const inserted = values.mock.calls[0][0] as {
+      moduleId: number;
+      lessonId: number;
+      dependsOn: unknown[];
+      rank: unknown;
+    };
+    expect(inserted.moduleId).toBe(40);
+    expect(inserted.lessonId).toBe(9);
+    expect(inserted.dependsOn).toEqual([]);
+    expect(collectSqlTokens(inserted.rank)).toEqual(['1']);
+
     expect(result).toEqual({
       id: 1,
       moduleId: 40,
@@ -96,6 +164,81 @@ describe('linkLesson', () => {
       rank: 1,
       dependsOn: [],
     });
+  });
+
+  it('computes a halved rank when only a following lesson is given (insert-first)', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+    const returning = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, moduleId: 40, lessonId: 9, rank: '2', dependsOn: [] },
+      ]);
+    const values = vi.fn().mockReturnValue({ returning });
+    db.insert.mockReturnValue({ values });
+
+    await linkLesson({
+      moduleId: 40,
+      lessonId: 9,
+      prevLessonId: null,
+      nextLessonId: 4,
+    });
+
+    const tokens = collectSqlTokens(
+      (values.mock.calls[0][0] as { rank: unknown }).rank,
+    );
+    expect(tokens).toContain('4'); // the next lesson's id, looked up by rank
+    expect(tokens).toContain(' / 2');
+    expect(tokens).not.toContain(' + 1');
+  });
+
+  it('computes rank +1 when only a preceding lesson is given (insert-last)', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+    const returning = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, moduleId: 40, lessonId: 9, rank: '4', dependsOn: [] },
+      ]);
+    const values = vi.fn().mockReturnValue({ returning });
+    db.insert.mockReturnValue({ values });
+
+    await linkLesson({
+      moduleId: 40,
+      lessonId: 9,
+      prevLessonId: 3,
+      nextLessonId: null,
+    });
+
+    const tokens = collectSqlTokens(
+      (values.mock.calls[0][0] as { rank: unknown }).rank,
+    );
+    expect(tokens).toContain('3'); // the previous lesson's id
+    expect(tokens).toContain(' + 1');
+    expect(tokens).not.toContain(' / 2');
+  });
+
+  it('computes a midpoint rank when placed between two lessons', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+    const returning = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, moduleId: 40, lessonId: 9, rank: '3.5', dependsOn: [] },
+      ]);
+    const values = vi.fn().mockReturnValue({ returning });
+    db.insert.mockReturnValue({ values });
+
+    await linkLesson({
+      moduleId: 40,
+      lessonId: 9,
+      prevLessonId: 3,
+      nextLessonId: 4,
+    });
+
+    const tokens = collectSqlTokens(
+      (values.mock.calls[0][0] as { rank: unknown }).rank,
+    );
+    expect(tokens).toContain('3');
+    expect(tokens).toContain('4');
+    expect(tokens).toContain(') / 2');
   });
 
   it('invalidates the target course cache so learners see the new lesson', async () => {
@@ -117,6 +260,10 @@ describe('linkLesson', () => {
       nextLessonId: null,
     });
 
+    // Not just that the cache got the right slug (the stub returns
+    // 'a-course' no matter what it's asked), but that the lookup was asked
+    // about the right module in the first place.
+    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(40);
     expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
   });
 });
@@ -129,38 +276,30 @@ describe('unlinkLesson', () => {
     expect(await unlinkLesson(40, 9)).toBe(false);
   });
 
-  it('reports true and invalidates the course cache when one was removed', async () => {
-    db.delete.mockReturnValue({
-      where: () => ({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) }),
+  it('scopes the DELETE to this module AND this lesson, and invalidates the right course cache', async () => {
+    // The destructive write: a bare eq(lessonId) WHERE (same defect class as
+    // the movePlacement bug) would delete this lesson's placement out of
+    // every course teaching it, not just module 40's. Capturing what
+    // `.where()` was actually called with (not a stub that discards it)
+    // proves the DELETE is scoped to both moduleId and lessonId.
+    const where = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: 1 }]),
     });
+    db.delete.mockReturnValue({ where });
 
     expect(await unlinkLesson(40, 9)).toBe(true);
+
+    expect(db.delete).toHaveBeenCalledWith(moduleLessonsTable);
+    const tokens = collectSqlTokens(where.mock.calls[0][0]);
+    expect(tokens).toContain('module_id');
+    expect(tokens).toContain('40');
+    expect(tokens).toContain('lesson_id');
+    expect(tokens).toContain('9');
+
+    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(40);
     expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
   });
 });
-
-/**
- * Recursively collect every column name and literal parameter value out of a
- * drizzle `SQL` condition tree (as built by `eq`/`and`/`inArray`/etc). Real
- * drizzle objects, not stubs, are what `movePlacement` builds and passes to
- * `.where()` — walking them is how the cross-course test below proves what
- * columns and values the compiled WHERE clause actually references, rather
- * than trusting the implementation's own description of itself.
- */
-function collectSqlTokens(node: unknown, out: string[] = []): string[] {
-  if (node == null) return out;
-  if (Array.isArray(node)) {
-    for (const child of node) collectSqlTokens(child, out);
-    return out;
-  }
-  if (typeof node === 'object') {
-    const record = node as Record<string, unknown>;
-    if (typeof record.name === 'string') out.push(record.name);
-    if ('value' in record) out.push(String(record.value));
-    if ('queryChunks' in record) collectSqlTokens(record.queryChunks, out);
-  }
-  return out;
-}
 
 describe('movePlacement', () => {
   it('updates the placement rather than the lesson', async () => {
@@ -196,11 +335,60 @@ describe('movePlacement', () => {
     // course 3) must scope the UPDATE's WHERE to course 3's modules only —
     // a bare `eq(lessonId, 9)` WHERE (the brief's original code) would also
     // match the course-7 placement in module 90 and silently corrupt it.
-    //
-    // getCourseIdForModuleId(41) resolves to 3 via the default mock. The
-    // next db.select call is the lookup of course 3's own module ids,
-    // which this test controls: it returns only [40, 41] — module 90 is
-    // never even fetched, because it belongs to a different course.
+    const returning = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, moduleId: 41, lessonId: 9, rank: '1.5', dependsOn: [] },
+      ]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    db.update.mockReturnValue({ set });
+
+    // The module-id-for-course lookup itself, captured (not discarded) so
+    // this test can prove it was scoped to course 3 — the target module's
+    // OWN course — rather than merely asserting on a stub-controlled result
+    // that no implementation could contradict.
+    const moduleLookupWhere = vi
+      .fn()
+      .mockReturnValue(makeChain([{ id: 40 }, { id: 41 }]));
+    const moduleLookupFrom = vi
+      .fn()
+      .mockReturnValue({ where: moduleLookupWhere });
+    db.select.mockReturnValueOnce({ from: moduleLookupFrom });
+
+    await movePlacement({
+      lessonId: 9,
+      targetModuleId: 41,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    // getCourseIdForModuleId was asked about the TARGET module, not some
+    // other one.
+    expect(getCourseIdForModuleId).toHaveBeenCalledWith(41);
+    // The module-id lookup that feeds the UPDATE's allowlist was itself
+    // scoped to course 3 (getCourseIdForModuleId's resolved course for
+    // module 41) — this is the mechanism that keeps module 90 (course 7)
+    // out of the allowlist, not an assertion that merely repeats a value no
+    // stub ever produced.
+    const lookupTokens = collectSqlTokens(moduleLookupWhere.mock.calls[0][0]);
+    expect(lookupTokens).toContain('course_id');
+    expect(lookupTokens).toContain('3');
+
+    expect(where).toHaveBeenCalledTimes(1);
+    const tokens = collectSqlTokens(where.mock.calls[0][0]);
+    // The WHERE clause must reference module_id (proving it is scoped
+    // beyond a bare lessonId match) and must only ever mention the ids that
+    // were actually looked up for course 3.
+    expect(tokens).toContain('module_id');
+    expect(tokens).toContain('40');
+    expect(tokens).toContain('41');
+    // Documentation, not proof on its own (see the scoped assertions
+    // above): module 90 belongs to course 7 and is never fetched.
+    expect(tokens).not.toContain('90');
+  });
+
+  it('invalidates the target course cache so learners see the move', async () => {
     const returning = vi
       .fn()
       .mockResolvedValue([
@@ -218,16 +406,9 @@ describe('movePlacement', () => {
       nextLessonId: null,
     });
 
-    expect(where).toHaveBeenCalledTimes(1);
-    const tokens = collectSqlTokens(where.mock.calls[0][0]);
-
-    // The WHERE clause must reference module_id (proving it is scoped
-    // beyond a bare lessonId match) and must only ever mention the ids
-    // that were actually looked up for course 3 — never module 90, which
-    // belongs to course 7 and was never queried for.
-    expect(tokens).toContain('module_id');
-    expect(tokens).toContain('40');
-    expect(tokens).toContain('41');
-    expect(tokens).not.toContain('90');
+    // Precision: the slug lookup must be for the TARGET module (41), not
+    // some other one the stub would happily answer for anyway.
+    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(41);
+    expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
   });
 });
