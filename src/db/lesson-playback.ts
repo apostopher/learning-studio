@@ -35,6 +35,8 @@ async function resolveLessonPlaybackUncached(
     .select({
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
+      // `modules.course_id` is already the FK we need — joining `courses` just
+      // to re-read its own `id` back would be a pointless extra join.
       courseId: modulesTable.courseId,
     })
     .from(lessonsTable)

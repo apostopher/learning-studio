@@ -219,18 +219,29 @@ export async function unlinkLesson(
  * `targetModuleId`'s own course by resolving that course's module ids first
  * and requiring the placement's `moduleId` to be one of them.
  */
-export async function movePlacement(input: {
-  lessonId: number;
-  targetModuleId: number;
-  prevLessonId: number | null;
-  nextLessonId: number | null;
-}): Promise<Placement | null> {
+export async function movePlacement(
+  input: {
+    lessonId: number;
+    targetModuleId: number;
+    prevLessonId: number | null;
+    nextLessonId: number | null;
+  },
+  // Optional caller-supplied transaction, so `moveLesson` (admin.ts) can run
+  // this UPDATE in the SAME transaction as its own legacy `lessons.module_id`
+  // write — see that call site's comment on why "both succeed or neither"
+  // matters here. Only `.update` is threaded through: `getCourseIdForModuleId`
+  // and `getModuleIdsForCourse` below stay on the module-level `db` because
+  // they're plain reads of data this call never mutates (which course a
+  // module belongs to), so they don't need to share the caller's transaction
+  // for consistency.
+  tx: Pick<typeof db, 'update'> = db,
+): Promise<Placement | null> {
   const targetCourseId = await getCourseIdForModuleId(input.targetModuleId);
   if (targetCourseId === null) return null;
 
   const courseModuleIds = await getModuleIdsForCourse(targetCourseId);
 
-  const [updated] = await db
+  const [updated] = await tx
     .update(moduleLessonsTable)
     .set({
       moduleId: input.targetModuleId,

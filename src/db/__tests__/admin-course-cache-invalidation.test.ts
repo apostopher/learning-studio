@@ -3,6 +3,7 @@ import {
   boolean,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -48,6 +49,19 @@ const modulesTable = pgTable('modules', {
   rank: text('rank'),
   requiredSubscriptions: jsonb('required_subscriptions'),
   updatedAt: timestamp('updated_at'),
+});
+// Task 5a fix round 1: createLesson dual-writes into module_lessons (see its
+// doc comment in admin.ts) alongside the legacy lessons row, and moveLesson
+// dual-writes via movePlacement (mocked as a whole module below, not exercised
+// through real column objects) — but the schema mock still needs a real
+// pgTable here so `tx.insert(moduleLessonsTable)` in the real admin.ts code
+// has a table object to pass through the mocked `db`/`tx`.
+const moduleLessonsTable = pgTable('module_lessons', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
+  lessonId: integer('lesson_id'),
+  rank: numeric('rank'),
+  dependsOn: jsonb('depends_on'),
 });
 // deleteLesson strips the dead slug from every dependent's depends_on, so
 // this needs to be a real pgTable for the jsonb update to build.
@@ -132,6 +146,15 @@ const db = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
+  // createLesson dual-writes lessons + module_lessons in one
+  // `db.transaction`. Default impl (set in beforeEach) just runs the
+  // callback against `db` itself, so `tx.insert(...)` inside it routes
+  // through the same `db.insert` mock every other test already asserts on.
+  transaction: vi.fn(),
+}));
+const placements = vi.hoisted(() => ({
+  getPlacementsForCourse: vi.fn(),
+  movePlacement: vi.fn(),
 }));
 const lessonAccess = vi.hoisted(() => ({
   getCourseSlugsForLessonId: vi.fn(),
@@ -161,6 +184,7 @@ vi.mock('#/db/schema', () => ({
   courseOrgsTable,
   coursesTable,
   modulesTable,
+  moduleLessonsTable,
   lessonDependenciesTable,
   lessonsTable,
   courseVideoProvidersTable,
@@ -174,6 +198,8 @@ vi.mock('#/db/course', () => ({
   getCourseDetailsWithCache: Object.assign(vi.fn(), courseCache),
 }));
 vi.mock('#/db/lesson-access', () => lessonAccess);
+// moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
+vi.mock('#/db/placements', () => placements);
 // Same reasoning as `#/db/course` above: admin.ts calls
 // `getLessonPlayback.invalidate(slug)` only, never the reader itself. Without
 // this mock, importing admin.ts would drag in the REAL lesson-playback.ts —
@@ -213,6 +239,7 @@ const {
   updateCourse,
   updateCourseOnboarding,
   updateLessonConfig,
+  updateLessonDependencies,
   updateLessonName,
   updateModule,
 } = await import('#/db/admin');
@@ -223,6 +250,12 @@ beforeEach(() => {
   lessonPlaybackCache.invalidate.mockResolvedValue(undefined);
   synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
   blob.del.mockResolvedValue(undefined);
+  // Default: the transaction callback just runs against `db` itself, so
+  // `tx.insert(...)`/`tx.select(...)` inside createLesson route through the
+  // same `db.insert`/`db.select` mocks every other test already queues.
+  db.transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(db),
+  );
 });
 
 describe('course-details cache invalidation', () => {
@@ -312,41 +345,63 @@ describe('course-details cache invalidation', () => {
     db.select
       .mockReturnValueOnce(makeChain([]))
       .mockReturnValueOnce(makeChain([{ maxRank: null }]));
-    db.insert.mockReturnValueOnce(
-      makeChain([
-        {
-          id: 2,
-          name: 'Stall Recovery',
-          slug: 'stall-recovery',
-          rank: '1',
-          isAvailable: false,
-          hasDebrief: false,
-          needsVideoWatch: false,
-          requiredSubscriptions: [],
-          videoId: null,
-          videoProvider: null,
-          videoRef: null,
-        },
-      ]),
-    );
+    const lessonInsert = makeChain([
+      {
+        id: 2,
+        name: 'Stall Recovery',
+        slug: 'stall-recovery',
+        rank: '1',
+        isAvailable: false,
+        hasDebrief: false,
+        needsVideoWatch: false,
+        requiredSubscriptions: [],
+        videoId: null,
+        videoProvider: null,
+        videoRef: null,
+      },
+    ]);
+    const placementInsert = makeChain(undefined);
+    db.insert
+      .mockReturnValueOnce(lessonInsert)
+      .mockReturnValueOnce(placementInsert);
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
     await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
     expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(7);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    // Task 5a fix round 1 regression (Critical 2): a lesson created without
+    // a module_lessons row is invisible to every placement-based reader —
+    // the learner lesson page, playback, and all five admin lesson routes
+    // 404 on it. Asserted on what the dual-write insert actually received,
+    // not merely that `db.insert` was called a second time.
+    expect(db.insert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
+    expect(placementInsert.valuesArg).toEqual({
+      moduleId: 7,
+      lessonId: 2,
+      rank: '1',
+      dependsOn: [],
+    });
   });
 
-  it('setLessonVideo invalidates the owning course, resolved from lessonId', async () => {
+  it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, slug: 'stall-recovery' }]),
     );
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
+      'flight-basics',
+      'aerobatics',
+    ]);
 
     await setLessonVideo(9, 'mux', 'ref-123');
 
     expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    // Reverting to single-slug invalidation (the pre-Task-5a-fix-round-1
+    // shape) would still pass a bare `toHaveBeenCalledWith('flight-basics')`
+    // — asserting the full sorted set is what catches that regression.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['aerobatics', 'flight-basics']);
   });
 
   // Regression guard for the bug the final review caught: a stale
@@ -390,8 +445,22 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
-  it('moveLesson invalidates both the source and target course when they differ', async () => {
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['source-course']);
+  it('moveLesson invalidates every source course plus the target course when they differ', async () => {
+    // Task 5a fix round 1: moveLesson now dual-writes the placement via
+    // `movePlacement` BEFORE touching the legacy `lessons` row — a
+    // non-null return is the "placement move succeeded" signal the legacy
+    // update is gated on.
+    placements.movePlacement.mockResolvedValueOnce({
+      id: 1,
+      moduleId: 20,
+      lessonId: 9,
+      rank: 1,
+      dependsOn: [],
+    });
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
+      'source-course-a',
+      'source-course-b',
+    ]);
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
     );
@@ -404,16 +473,28 @@ describe('course-details cache invalidation', () => {
       nextLessonId: null,
     });
 
-    // Resolved BEFORE the update — the join would 404 against the lesson's
-    // new (post-move) moduleId otherwise.
+    // Resolved BEFORE `movePlacement` runs — once that repoints the
+    // placement at the target module/course, reading it after would already
+    // see the new course instead of the old one(s).
     expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
     expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(20);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('source-course');
-    expect(courseCache.invalidate).toHaveBeenCalledWith('target-course');
-    expect(courseCache.invalidate).toHaveBeenCalledTimes(2);
+    // Reverting to a single-slug "source" (the pre-fix-round-1 shape) would
+    // still pass a bare `toHaveBeenCalledWith` on either slug — asserting
+    // the full sorted set is what catches that regression.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['source-course-a', 'source-course-b', 'target-course']);
+    expect(courseCache.invalidate).toHaveBeenCalledTimes(3);
   });
 
   it('moveLesson invalidates only once when source and target course are the same', async () => {
+    placements.movePlacement.mockResolvedValueOnce({
+      id: 1,
+      moduleId: 20,
+      lessonId: 9,
+      rank: 1,
+      dependsOn: [],
+    });
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
@@ -431,6 +512,79 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
+  // Task 5a fix round 1 regression (Critical 1 closure): dual-write must be
+  // all-or-nothing. If the placement move fails, the legacy `lessons.module_id`
+  // must NOT move either — that divergence (placement says one course,
+  // `lessons.module_id` says another) is exactly what made a cross-course
+  // move 500 the learner lesson page.
+  it('moveLesson touches neither the legacy row nor the cache when the placement move fails', async () => {
+    placements.movePlacement.mockResolvedValueOnce(null);
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
+    // Deliberately NOT queuing a `db.update` return value: correct code
+    // never reaches it (the assertion below is what proves that), and a
+    // `mockReturnValueOnce` queued here but left unconsumed by correct code
+    // would leak into a LATER test's `db.update` call and corrupt it — `vi
+    // .clearAllMocks()` clears call history but not queued once-values. A
+    // regression that proceeds anyway will throw when it hits the real,
+    // un-queued `db.update(...)` call — still a legitimate red, tied
+    // directly to the mutant's behavior rather than an unrelated crash.
+
+    const result = await moveLesson({
+      lessonId: 9,
+      targetModuleId: 20,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    expect(result).toBeNull();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(courseCache.invalidate).not.toHaveBeenCalled();
+  });
+
+  // Task 5a fix round 1 regression (atomicity gap): the placement move and
+  // the legacy `lessons` update must run in the SAME database transaction,
+  // not two independent writes — otherwise the legacy column can commit
+  // while the placement write fails (or vice versa), which is the exact
+  // divergence this dual-write exists to prevent (see Critical 1). A plain
+  // "both succeeded" assertion can't tell the two writes were transactional
+  // together apart from them merely both succeeding independently, so this
+  // asserts `movePlacement` received the SAME `tx` object the legacy update
+  // ran against.
+  it('moveLesson runs the placement move and the legacy update in one transaction', async () => {
+    const txUpdate = vi
+      .fn()
+      .mockReturnValue(makeChain([{ id: 9, rank: '1', moduleId: 20 }]));
+    const tx = { update: txUpdate };
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
+    placements.movePlacement.mockResolvedValueOnce({
+      id: 1,
+      moduleId: 20,
+      lessonId: 9,
+      rank: 1,
+      dependsOn: [],
+    });
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+
+    await moveLesson({
+      lessonId: 9,
+      targetModuleId: 20,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    expect(placements.movePlacement).toHaveBeenCalledWith(
+      expect.objectContaining({ lessonId: 9, targetModuleId: 20 }),
+      tx,
+    );
+    expect(txUpdate).toHaveBeenCalledWith(lessonsTable);
+    // The module-level `db.update` must NOT be used for the legacy write —
+    // that would be a second, independent write outside the transaction.
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
   it('updateLessonName invalidates the owning course, resolved from lessonId', async () => {
     db.update.mockReturnValueOnce(makeChain([{ id: 9, name: 'New name' }]));
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
@@ -443,7 +597,7 @@ describe('course-details cache invalidation', () => {
   // This is the highest-stakes mutation: isAvailable/requiredSubscriptions
   // gate what students can see and unlock, so a stale cache here means an
   // admin publish or a subscription-tier change is invisible for up to 6h.
-  it('updateLessonConfig invalidates the owning course when isAvailable flips', async () => {
+  it('updateLessonConfig invalidates every course teaching the lesson when isAvailable flips', async () => {
     db.update.mockReturnValueOnce(
       makeChain([
         {
@@ -455,23 +609,40 @@ describe('course-details cache invalidation', () => {
         },
       ]),
     );
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
+      'flight-basics',
+      'aerobatics',
+      'instrument-rating',
+    ]);
 
     await updateLessonConfig(9, { isAvailable: true });
 
     expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    // Reverting to single-slug invalidation would still pass a bare
+    // `toHaveBeenCalledWith` on one of these — asserting the full sorted set
+    // is what catches that regression.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['aerobatics', 'flight-basics', 'instrument-rating']);
   });
 
-  it('deleteLesson invalidates the owning course, resolved before the row is gone', async () => {
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
+  it('deleteLesson invalidates every course teaching the lesson, resolved before the row is gone', async () => {
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
+      'flight-basics',
+      'aerobatics',
+    ]);
     db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
     db.update.mockReturnValueOnce(makeChain([]));
 
     const result = await deleteLesson(9);
 
     expect(result).toBe(true);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    // Reverting to single-slug invalidation would still pass a bare
+    // `toHaveBeenCalledWith` on one of these — asserting the full sorted set
+    // is what catches that regression.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['aerobatics', 'flight-basics']);
   });
 
   it('deleteLesson strips the dead slug from every dependent', async () => {
@@ -496,6 +667,28 @@ describe('course-details cache invalidation', () => {
 
     expect(result).toBe(false);
     expect(courseCache.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('updateLessonDependencies invalidates every course teaching the lesson', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([{ courseId: 3 }])) // owning course lookup
+      .mockReturnValueOnce(makeChain([])); // sibling lesson slugs in that course
+    db.delete.mockReturnValueOnce(makeChain(undefined));
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
+      'flight-basics',
+      'aerobatics',
+    ]);
+
+    const result = await updateLessonDependencies(9, []);
+
+    expect(result).toEqual({ ok: true, dependsOn: [] });
+    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
+    // Reverting to single-slug invalidation would still pass a bare
+    // `toHaveBeenCalledWith` on one of these — asserting the full sorted set
+    // is what catches that regression.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['aerobatics', 'flight-basics']);
   });
 
   it('updateModule invalidates the owning course, resolved from moduleId', async () => {

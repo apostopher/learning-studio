@@ -167,6 +167,64 @@ function makeOrderedChain(result: unknown, orderByCalls: unknown[]) {
   return chain;
 }
 
+/**
+ * Variant of `makeChain` that records every `(table, condition)` pair passed
+ * to `.innerJoin()`. Needed to prove `getCourseSlugsForLessonId` actually
+ * hops through `module_lessons` rather than the legacy `lessons.module_id`
+ * path: `makeChain` discards its arguments entirely (see its own doc comment
+ * above), so a mutant that put the OLD join back —
+ * `.innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))` —
+ * would satisfy every assertion built on plain `makeChain` or
+ * `makeOrderedChain`. Pair with `collectSqlTokens` below to inspect what a
+ * captured condition actually references.
+ */
+function makeJoinCapturingChain(
+  result: unknown,
+  joinCalls: Array<[table: unknown, condition: unknown]>,
+) {
+  const chain = {
+    from: () => chain,
+    innerJoin: (table: unknown, condition: unknown) => {
+      joinCalls.push([table, condition]);
+      return chain;
+    },
+    where: () => chain,
+    // biome-ignore lint/suspicious/noThenProperty: see makeChain above
+    then: (
+      resolve: (v: unknown) => unknown,
+      reject?: (e: unknown) => unknown,
+    ) => Promise.resolve(result).then(resolve, reject),
+  };
+  return chain;
+}
+
+/**
+ * Recursively collect every column/table name and literal value out of a
+ * real drizzle `SQL` condition (e.g. what `eq()` returns) — copied from
+ * `placement-writes.test.ts`. Real drizzle objects, not stubs, are what
+ * `getCourseSlugsForLessonId` passes to `.innerJoin()`'s second argument, so
+ * walking one is how a test proves what columns were actually referenced
+ * rather than trusting the implementation's own description of itself.
+ */
+function collectSqlTokens(node: unknown, out: string[] = []): string[] {
+  if (node == null) return out;
+  if (typeof node === 'number' || typeof node === 'string') {
+    out.push(String(node));
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectSqlTokens(child, out);
+    return out;
+  }
+  if (typeof node === 'object') {
+    const record = node as Record<string, unknown>;
+    if (typeof record.name === 'string') out.push(record.name);
+    if ('value' in record) out.push(String(record.value));
+    if ('queryChunks' in record) collectSqlTokens(record.queryChunks, out);
+  }
+  return out;
+}
+
 const db = vi.hoisted(() => ({
   select: vi.fn(),
   insert: vi.fn(),
@@ -217,9 +275,12 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
   getVideoThumbnailsWithCache: Object.assign(vi.fn(), synthesiaThumbnailsCache),
 }));
 
-const { getCourseSlugForLessonId, getCourseSlugsForLessonId } = await import(
-  '#/db/lesson-access'
-);
+const {
+  getCourseIdForLessonId,
+  getCourseSlugForLesson,
+  getCourseSlugForLessonId,
+  getCourseSlugsForLessonId,
+} = await import('#/db/lesson-access');
 const { updateLessonName } = await import('#/db/admin');
 
 beforeEach(() => {
@@ -253,6 +314,37 @@ describe('getCourseSlugsForLessonId', () => {
 
     expect(await getCourseSlugsForLessonId(9)).toEqual([]);
   });
+
+  // Mutant this catches: putting the OLD join back —
+  // `.innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))`
+  // instead of hopping through `module_lessons` — which every other test in
+  // this describe block would still pass, since `makeChain` ignores its
+  // arguments entirely (see its doc comment) and only cares that SOME chain
+  // of calls reaches `.where()`. This test captures the actual
+  // `(table, condition)` pairs passed to `.innerJoin()` and inspects them.
+  it('joins through module_lessons.lesson_id, not the legacy lessons.module_id path', async () => {
+    const joinCalls: Array<[unknown, unknown]> = [];
+    db.select.mockReturnValueOnce(
+      makeJoinCapturingChain([{ courseSlug: 'flight-basics' }], joinCalls),
+    );
+
+    await getCourseSlugsForLessonId(9);
+
+    // Direct reference equality on the table argument — the strongest proof
+    // available that this specific join targets `module_lessons` (the const
+    // object mocked in for `#/db/schema` above), not merely a table that
+    // happens to share a column name.
+    const moduleLessonsJoin = joinCalls.find(
+      ([table]) => table === moduleLessonsTable,
+    );
+    expect(moduleLessonsJoin).toBeDefined();
+    // And the condition on that join actually references `lesson_id` — the
+    // real column name is unique to `module_lessons` among every stub table
+    // in this file, so its presence pins the condition to
+    // `moduleLessonsTable.lessonId`, not some other column.
+    const tokens = collectSqlTokens(moduleLessonsJoin?.[1]);
+    expect(tokens).toContain('lesson_id');
+  });
 });
 
 describe('getCourseSlugForLessonId determinism', () => {
@@ -279,6 +371,63 @@ describe('getCourseSlugForLessonId determinism', () => {
 
     expect(first).toBe('flight-basics');
     expect(second).toBe('flight-basics');
+    expect(orderByCalls).toHaveLength(2);
+    for (const col of orderByCalls) {
+      expect((col as { name: string }).name).toBe('course_id');
+    }
+  });
+});
+
+describe('getCourseSlugForLesson determinism', () => {
+  // `getCourseSlugForLesson` decides what a learner may see (it backs
+  // `evaluateLessonGate` via `course-content.ts`), and until this test no
+  // real invocation of it was ever exercised — every gating test stubs it
+  // out with `vi.fn()`. Same mutant as `getCourseSlugForLessonId`'s
+  // determinism test: dropping `.orderBy(modulesTable.courseId)` is
+  // "correct-shaped" (still resolves *a* course, still type-checks) but
+  // would make which course comes back depend on Postgres's unspecified row
+  // order when a lesson is taught by several.
+  it('orders by course id and returns the same result across repeated calls', async () => {
+    const orderByCalls: unknown[] = [];
+    const row = {
+      courseSlug: 'flight-basics',
+      courseId: 3,
+      isAvailable: true,
+    };
+    db.select
+      .mockReturnValueOnce(makeOrderedChain([row], orderByCalls))
+      .mockReturnValueOnce(makeOrderedChain([row], orderByCalls));
+
+    const first = await getCourseSlugForLesson('stall-recovery');
+    const second = await getCourseSlugForLesson('stall-recovery');
+
+    expect(first).toEqual(row);
+    expect(second).toEqual(row);
+    expect(orderByCalls).toHaveLength(2);
+    for (const col of orderByCalls) {
+      expect((col as { name: string }).name).toBe('course_id');
+    }
+  });
+});
+
+describe('getCourseIdForLessonId determinism', () => {
+  // Same mutant and same rationale as the two determinism tests above.
+  // `getCourseIdForLessonId` backs the five admin lesson routes' permission
+  // guards (a later task replaces those guards; not in scope here — see the
+  // fix-round-1 report), but its determinism is still worth pinning now: an
+  // authorization check that answers differently across calls for the same
+  // lesson is its own kind of bug even before that guard is rewritten.
+  it('orders by course id and returns the same id across repeated calls', async () => {
+    const orderByCalls: unknown[] = [];
+    db.select
+      .mockReturnValueOnce(makeOrderedChain([{ courseId: 3 }], orderByCalls))
+      .mockReturnValueOnce(makeOrderedChain([{ courseId: 3 }], orderByCalls));
+
+    const first = await getCourseIdForLessonId(9);
+    const second = await getCourseIdForLessonId(9);
+
+    expect(first).toBe(3);
+    expect(second).toBe(3);
     expect(orderByCalls).toHaveLength(2);
     for (const col of orderByCalls) {
       expect((col as { name: string }).name).toBe('course_id');

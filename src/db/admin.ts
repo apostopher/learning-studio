@@ -21,7 +21,7 @@ import {
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { getLessonTranscript } from '#/db/lesson-transcript';
-import { getPlacementsForCourse } from '#/db/placements';
+import { getPlacementsForCourse, movePlacement } from '#/db/placements';
 import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
@@ -29,6 +29,7 @@ import {
   lessonDependenciesTable,
   lessonsTable,
   moduleDependenciesTable,
+  moduleLessonsTable,
   modulesTable,
   newsSourcesTable,
   videoProgressTable,
@@ -326,16 +327,43 @@ export async function createLesson(input: {
     .where(eq(lessonsTable.moduleId, input.moduleId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
 
-  const [created] = await db
-    .insert(lessonsTable)
-    .values({
+  // Transitional dual-write (Task 5a fix round 1): readers resolve a
+  // lesson's course through `module_lessons` now, but this insert still
+  // writes `lessons.module_id`/`lessons.rank` too, until
+  // `migrate-drop-lesson-module-id.ts` (named in
+  // `migrate-lesson-placements.ts`'s header comment, not yet written) drops
+  // those columns once every writer has moved. Without the `module_lessons`
+  // row, a freshly created lesson has NO placement, so every course-scoped
+  // reader — the learner lesson page, playback, the five admin lesson
+  // routes — resolves no course for it and 404s. Both inserts happen in one
+  // transaction: a lesson that exists in `lessons` but not in
+  // `module_lessons` (or vice versa) is exactly that bug.
+  const [created] = await db.transaction(async (tx) => {
+    const [insertedLesson] = await tx
+      .insert(lessonsTable)
+      .values({
+        moduleId: input.moduleId,
+        name: input.name,
+        slug,
+        requiredSubscriptions: [],
+        rank: String(rank),
+      })
+      .returning();
+
+    await tx.insert(moduleLessonsTable).values({
       moduleId: input.moduleId,
-      name: input.name,
-      slug,
-      requiredSubscriptions: [],
+      lessonId: insertedLesson.id,
+      // Reuses the same rank just computed for the legacy column, rather
+      // than an independent `rankBetween` midpoint calc (as `linkLesson`
+      // does) — both columns should agree on "last in the module" for a
+      // brand new lesson, and computing it twice by different means is how
+      // they'd quietly drift apart.
       rank: String(rank),
-    })
-    .returning();
+      dependsOn: [],
+    });
+
+    return [insertedLesson];
+  });
 
   await invalidateCourseDetailsCache(
     await getCourseSlugForModuleId(input.moduleId),
@@ -769,27 +797,51 @@ export async function moveLesson(input: {
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
   else rankExpr = sql`1`;
 
-  // Resolve every course currently teaching this lesson before the move — a
-  // cross-module drag can also be a cross-course drag, and after the update
-  // the lesson's moduleId (and therefore this join) would already point at
-  // the target. A lesson placed into several courses via `module_lessons`
-  // means this can be more than one slug now, and every one of them needs
-  // invalidating, not just an arbitrary single "source".
+  // Resolve every course currently teaching this lesson before touching
+  // anything below. `getCourseSlugsForLessonId` reads through
+  // `module_lessons` (Task 5a), and `movePlacement` next is about to
+  // repoint this lesson's placement at the target module/course — reading
+  // it AFTER that would already see the new course, not the old one, so the
+  // "source" side of the invalidation would silently vanish.
   const sourceCourseSlugs = await getCourseSlugsForLessonId(input.lessonId);
 
-  const [updated] = await db
-    .update(lessonsTable)
-    .set({
-      moduleId: input.targetModuleId,
-      rank: rankExpr,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(lessonsTable.id, input.lessonId))
-    .returning({
-      id: lessonsTable.id,
-      rank: lessonsTable.rank,
-      moduleId: lessonsTable.moduleId,
-    });
+  // Transitional dual-write (Task 5a fix round 1): `module_lessons` is what
+  // readers resolve a lesson's course from now, but `lessons.module_id`/
+  // `lessons.rank` are kept in sync until `migrate-drop-lesson-module-id.ts`
+  // (named in `migrate-lesson-placements.ts`'s header comment, not yet
+  // written) drops those columns. Both writes run in ONE transaction —
+  // `movePlacement` takes the transaction's `tx` instead of the
+  // module-level `db` — so a failure in either rolls back both: the legacy
+  // column can never end up moved while the placement (what every reader
+  // now trusts) stayed behind, or vice versa. That divergence is exactly
+  // what turned a cross-course move into a 500 on the learner lesson page.
+  const updated = await db.transaction(async (tx) => {
+    const movedPlacement = await movePlacement(
+      {
+        lessonId: input.lessonId,
+        targetModuleId: input.targetModuleId,
+        prevLessonId: input.prevLessonId,
+        nextLessonId: input.nextLessonId,
+      },
+      tx,
+    );
+    if (!movedPlacement) return null;
+
+    const [updatedLesson] = await tx
+      .update(lessonsTable)
+      .set({
+        moduleId: input.targetModuleId,
+        rank: rankExpr,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(lessonsTable.id, input.lessonId))
+      .returning({
+        id: lessonsTable.id,
+        rank: lessonsTable.rank,
+        moduleId: lessonsTable.moduleId,
+      });
+    return updatedLesson ?? null;
+  });
   if (!updated) return null;
 
   const targetCourseSlug = await getCourseSlugForModuleId(input.targetModuleId);
