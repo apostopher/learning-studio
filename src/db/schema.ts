@@ -135,15 +135,15 @@ export const disciplinesTable = pgTable('disciplines', {
 export const dbDisciplineSchema = createSelectSchema(disciplinesTable);
 export type DBDiscipline = z.infer<typeof dbDisciplineSchema>;
 
-export const disciplinesTableRelations = relations(disciplinesTable, ({ many }) => ({
-  lessons: many(lessonsTable),
-}));
+export const disciplinesTableRelations = relations(
+  disciplinesTable,
+  ({ many }) => ({
+    lessons: many(lessonsTable),
+  }),
+);
 
 export const lessonsTable = pgTable('lessons', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  moduleId: integer('module_id')
-    .notNull()
-    .references(() => modulesTable.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   otherVideoIds: jsonb('other_video_ids')
@@ -159,12 +159,12 @@ export const lessonsTable = pgTable('lessons', {
    * see a `['basic']` lesson.
    */
   levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
-  rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
   isAvailable: boolean('is_available').notNull().default(false),
   exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
   hasDebrief: boolean('has_debrief').notNull().default(true),
-  disciplineId: integer('discipline_id')
-    .references(() => disciplinesTable.id, { onDelete: 'no action' }),
+  disciplineId: integer('discipline_id').references(() => disciplinesTable.id, {
+    onDelete: 'no action',
+  }),
   /**
    * The org that owns this lesson. Lessons are org-level library items now,
    * so an UNPLACED lesson — new, or removed from every course — still has a
@@ -201,21 +201,14 @@ export const dbLessonSchema = createSelectSchema(lessonsTable, {
 });
 export type DBLesson = z.infer<typeof dbLessonSchema>;
 
-export const lessonsTableRelations = relations(
-  lessonsTable,
-  ({ one, many }) => ({
-    module: one(modulesTable, {
-      fields: [lessonsTable.moduleId],
-      references: [modulesTable.id],
-    }),
-    quizAnswers: many(lessonQuizAnswersTable),
-    material: many(lessonMaterialTable),
-    fileAssignments: many(blobFileAssignmentsTable),
-    favKeyPoints: many(favKeyPointsTable),
-    orgLessons: many(orgLessonsTable),
-    placements: many(moduleLessonsTable),
-  }),
-);
+export const lessonsTableRelations = relations(lessonsTable, ({ many }) => ({
+  quizAnswers: many(lessonQuizAnswersTable),
+  material: many(lessonMaterialTable),
+  fileAssignments: many(blobFileAssignmentsTable),
+  favKeyPoints: many(favKeyPointsTable),
+  orgLessons: many(orgLessonsTable),
+  placements: many(moduleLessonsTable),
+}));
 
 /**
  * Where a lesson sits inside a module — the join that lets ONE lesson row be
@@ -258,6 +251,11 @@ export const moduleLessonsTable = pgTable(
     ),
     index('module_lessons_module_id_idx').on(table.moduleId),
     index('module_lessons_lesson_id_idx').on(table.lessonId),
+    // Carried over from the old `lesson_dependencies` table's GIN index:
+    // `deleteLesson` strips a deleted lesson's slug from every placement via
+    // a jsonb containment predicate (`depends_on @> ...`), which would
+    // otherwise be a sequential scan of every placement per lesson delete.
+    index('module_lessons_depends_on_idx').using('gin', table.dependsOn),
   ],
 );
 
@@ -314,20 +312,6 @@ export const moduleDependenciesTable = pgTable(
   },
   (table) => [index('module_depends_on_idx').on(table.dependsOn)],
 );
-
-export const lessonDependenciesTable = pgTable('lesson_dependencies', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  lessonId: integer('lesson_id')
-    .unique()
-    .notNull()
-    .references(() => lessonsTable.id, { onDelete: 'cascade' }),
-  dependsOn: jsonb('depends_on')
-    .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
-    .notNull(),
-});
-
-// GIN index for JSONB depends_on field
-void sql`CREATE INDEX IF NOT EXISTS idx_lesson_dependencies_depends_on ON lesson_dependencies USING GIN (depends_on);`;
 
 export const videoProgressTable = pgTable(
   'videos_progress',

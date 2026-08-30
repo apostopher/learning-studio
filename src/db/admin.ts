@@ -342,37 +342,27 @@ export async function createLesson(input: {
     .where(eq(moduleLessonsTable.moduleId, input.moduleId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
 
-  // Transitional dual-write (Task 5a fix round 1): readers resolve a
-  // lesson's course through `module_lessons` now, but this insert still
-  // writes `lessons.module_id`/`lessons.rank` too, until
-  // `migrate-drop-lesson-module-id.ts` (named in
-  // `migrate-lesson-placements.ts`'s header comment, not yet written) drops
-  // those columns once every writer has moved. Without the `module_lessons`
-  // row, a freshly created lesson has NO placement, so every course-scoped
-  // reader — the learner lesson page, playback, the five admin lesson
-  // routes — resolves no course for it and 404s. Both inserts happen in one
-  // transaction: a lesson that exists in `lessons` but not in
-  // `module_lessons` (or vice versa) is exactly that bug.
+  // `module_lessons` is the only placement write now (the legacy
+  // `lessons.module_id`/`lessons.rank` dual-write was dropped along with
+  // those columns). Without the `module_lessons` row, a freshly created
+  // lesson has NO placement, so every course-scoped reader — the learner
+  // lesson page, playback, the five admin lesson routes — resolves no
+  // course for it and 404s. Both inserts still happen in one transaction: a
+  // lesson that exists in `lessons` but not in `module_lessons` is exactly
+  // that bug.
   const [created] = await db.transaction(async (tx) => {
     const [insertedLesson] = await tx
       .insert(lessonsTable)
       .values({
-        moduleId: input.moduleId,
         name: input.name,
         slug,
         requiredSubscriptions: [],
-        rank: String(rank),
       })
       .returning();
 
     await tx.insert(moduleLessonsTable).values({
       moduleId: input.moduleId,
       lessonId: insertedLesson.id,
-      // Reuses the same rank just computed for the legacy column, rather
-      // than an independent `rankBetween` midpoint calc (as `linkLesson`
-      // does) — both columns should agree on "last in the module" for a
-      // brand new lesson, and computing it twice by different means is how
-      // they'd quietly drift apart.
       rank: String(rank),
       dependsOn: [],
     });
@@ -388,7 +378,10 @@ export async function createLesson(input: {
     id: created.id,
     name: created.name,
     slug: created.slug,
-    rank: Number(created.rank),
+    // `created` (the `lessons` row) no longer carries `rank` — that's
+    // `module_lessons`' column now. Reuse the value already computed above
+    // for the placement insert rather than reading it back from `created`.
+    rank,
     isAvailable: created.isAvailable,
     hasDebrief: created.hasDebrief,
     needsVideoWatch: created.needsVideoWatch,
@@ -531,12 +524,12 @@ export async function getCourseBoard(
     });
     byModule.set(placement.moduleId, list);
   }
-  // Tiebreak on lesson id, same as the old SQL's `asc(lessonsTable.rank),
-  // asc(lessonsTable.id)`: `rankBetween` can hand two placements the same
-  // rank (two stale editor views both computing `prev + 1` / `next / 2` for
-  // the same slot), and without a tiebreak `Array#sort`'s stability would
-  // just preserve whatever arbitrary order Postgres returned the rows in —
-  // the board could then reorder between renders for no reason.
+  // Tiebreak on lesson id, same as the old query's ordering by rank then id:
+  // `rankBetween` can hand two placements the same rank (two stale editor
+  // views both computing `prev + 1` / `next / 2` for the same slot), and
+  // without a tiebreak `Array#sort`'s stability would just preserve
+  // whatever arbitrary order Postgres returned the rows in — the board
+  // could then reorder between renders for no reason.
   for (const list of byModule.values()) {
     list.sort((a, b) => a.rank - b.rank || a.id - b.id);
   }
@@ -843,19 +836,6 @@ export async function moveLesson(input: {
   prevLessonId: number | null;
   nextLessonId: number | null;
 }): Promise<{ id: number; rank: number; moduleId: number } | null> {
-  const prevRank = input.prevLessonId
-    ? sql`(select ${lessonsTable.rank} from ${lessonsTable} where ${lessonsTable.id} = ${input.prevLessonId})`
-    : null;
-  const nextRank = input.nextLessonId
-    ? sql`(select ${lessonsTable.rank} from ${lessonsTable} where ${lessonsTable.id} = ${input.nextLessonId})`
-    : null;
-
-  let rankExpr: SQL;
-  if (prevRank && nextRank) rankExpr = sql`(${prevRank} + ${nextRank}) / 2`;
-  else if (nextRank) rankExpr = sql`${nextRank} / 2`;
-  else if (prevRank) rankExpr = sql`${prevRank} + 1`;
-  else rankExpr = sql`1`;
-
   // Resolve every course currently teaching this lesson before touching
   // anything below. `getCourseSlugsForLessonId` reads through
   // `module_lessons` (Task 5a), and `movePlacement` next is about to
@@ -864,49 +844,19 @@ export async function moveLesson(input: {
   // "source" side of the invalidation would silently vanish.
   const sourceCourseSlugs = await getCourseSlugsForLessonId(input.lessonId);
 
-  // Transitional dual-write (Task 5a fix round 1): `module_lessons` is what
-  // readers resolve a lesson's course from now, but `lessons.module_id`/
-  // `lessons.rank` are kept in sync until `migrate-drop-lesson-module-id.ts`
-  // (named in `migrate-lesson-placements.ts`'s header comment, not yet
-  // written) drops those columns. Both writes run in ONE transaction —
-  // `movePlacement` takes the transaction's `tx` instead of the
-  // module-level `db` — so a failure in either rolls back both: the legacy
-  // column can never end up moved while the placement (what every reader
-  // now trusts) stayed behind, or vice versa. That divergence is exactly
-  // what turned a cross-course move into a 500 on the learner lesson page.
-  const updated = await db.transaction(async (tx) => {
-    const movedPlacement = await movePlacement(
-      {
-        lessonId: input.lessonId,
-        targetModuleId: input.targetModuleId,
-        prevLessonId: input.prevLessonId,
-        nextLessonId: input.nextLessonId,
-      },
-      tx,
-    );
-    if (!movedPlacement) return null;
-
-    const [updatedLesson] = await tx
-      .update(lessonsTable)
-      .set({
-        moduleId: input.targetModuleId,
-        rank: rankExpr,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(lessonsTable.id, input.lessonId))
-      // `moduleId` is NOT read back here: the caller's own `input
-      // .targetModuleId` — just written above — is authoritative, and
-      // reading it from `lessonsTable` would be a read of the legacy column
-      // this task is removing every OTHER read of.
-      .returning({
-        id: lessonsTable.id,
-        rank: lessonsTable.rank,
-      });
-    return updatedLesson
-      ? { ...updatedLesson, moduleId: input.targetModuleId }
-      : null;
+  // `module_lessons` is the only placement write now — the legacy
+  // lesson-row dual-write (and the transaction that existed solely to make
+  // both writes succeed-or-fail together) is gone with those columns.
+  // `movePlacement` computes its own rank from `module_lessons.rank`
+  // (`rankBetween`), so nothing is lost by no longer reading a rank off the
+  // lesson row here.
+  const movedPlacement = await movePlacement({
+    lessonId: input.lessonId,
+    targetModuleId: input.targetModuleId,
+    prevLessonId: input.prevLessonId,
+    nextLessonId: input.nextLessonId,
   });
-  if (!updated) return null;
+  if (!movedPlacement) return null;
 
   const targetCourseSlug = await getCourseSlugForModuleId(input.targetModuleId);
   // De-duplicated via Set so a reorder that lands back in a course already
@@ -918,9 +868,9 @@ export async function moveLesson(input: {
   );
 
   return {
-    id: updated.id,
-    rank: Number(updated.rank),
-    moduleId: updated.moduleId,
+    id: input.lessonId,
+    rank: movedPlacement.rank,
+    moduleId: movedPlacement.moduleId,
   };
 }
 
@@ -994,7 +944,7 @@ export async function deleteLesson(lessonId: number): Promise<boolean> {
   if (!deleted) return false;
 
   // Strip the dead slug from every dependent PLACEMENT's `dependsOn`
-  // (`module_lessons`, not the legacy `lesson_dependencies`), exactly as
+  // (`module_lessons`, the only place prerequisites live now), exactly as
   // deleteModule does with array_remove for modules. depends_on is JSONB
   // objects rather than a text array, so the equivalent is a filtered
   // re-aggregation. Not scoped to the deleted lesson's own (currently
@@ -1120,9 +1070,9 @@ export async function updateLessonDependencies(
   // lesson moves module — which is exactly how gates used to vanish silently.
   const rows = next.map((lessonSlug) => ({ lessonSlug }));
 
-  // No delete-vs-upsert branch needed here, unlike the old
-  // `lesson_dependencies` row (which could be absent entirely): every
-  // placement always has a `module_lessons` row with a `depends_on` column
+  // No delete-vs-upsert branch needed here, unlike the old per-lesson
+  // dependency row (which could be absent entirely): every placement
+  // always has a `module_lessons` row with a `depends_on` column
   // that defaults to `[]`, so "no explicit prerequisites" already has
   // exactly one representation — an empty array — with nothing else to
   // reconcile it against.

@@ -36,15 +36,14 @@ import type {
 } from '@/types';
 import { db } from '.';
 
-// `Omit<DBLesson, 'rank'>` rather than plain `DBLesson &`: `rank` here is
-// ALWAYS the placement's rank (see the `lessonMap.set(...)` override below),
-// never `lessons.rank`. Task 7 drops `lessons.rank` from the schema, which
-// would otherwise make `DBLesson` lose the field and turn the `rank:
-// placement.rank` literal below into an excess-property error, and would
-// stop `shapeModuleLessons`'s `ShapeableLesson` constraint (which needs a
-// `rank: string`) from being satisfied — pre-empting both by declaring the
-// field here independently of `DBLesson`.
-type LessonDetails = Omit<DBLesson, 'rank'> & {
+// Plain `DBLesson &` (no `Omit` needed): `rank` here is ALWAYS the
+// placement's rank (see the `lessonMap.set(...)` override below), never a
+// lesson-row rank — and now that Task 7 has dropped `lessons.rank` from the
+// schema, `DBLesson` no longer carries the field at all, so there is nothing
+// left to omit. Declared here independently of `DBLesson` so
+// `shapeModuleLessons`'s `ShapeableLesson` constraint (which needs a `rank:
+// string`) is satisfied.
+type LessonDetails = DBLesson & {
   rank: string;
   dependsOn: CourseLessonDependencies;
   /**
@@ -104,10 +103,10 @@ export async function getCourseDetails(slug: string) {
   // for it — so there is no "empty module vanishes" risk here to guard
   // against. `rank` and `dependsOn` come from the placement
   // (`module_lessons`), not the lesson row: a lesson can be third in one
-  // course and eighth in another, and `lessonDependenciesTable` (one global
-  // list per lesson) cannot express per-course prerequisites at all now that
-  // one lesson can be taught by several courses — see `module_lessons`' own
-  // doc comment in schema.ts.
+  // course and eighth in another, and the old per-lesson dependency table
+  // (one global list per lesson, dropped in Task 7) could never express
+  // per-course prerequisites now that one lesson can be taught by several
+  // courses — see `module_lessons`' own doc comment in schema.ts.
   //
   // One `module_lessons` row per (lesson, course) is an application-level
   // invariant enforced by `linkLesson` (src/db/placements.ts), not a DB
@@ -153,16 +152,13 @@ export async function getCourseDetails(slug: string) {
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
         ...lesson,
-        // Placement's rank and moduleId, not the lesson row's own — see the
-        // query comment above. Overriding `moduleId` too (not just `rank`)
-        // matters once a lesson can be authored under one module and placed
-        // in another course's different module: leaving `...lesson`'s legacy
-        // `lessons.module_id` in the cached payload would mean "the module
-        // this lesson was authored under" everywhere else in this object
-        // means "the module it sits in HERE" — no consumer reads it today,
-        // but it would be a trap for the first one that does.
+        // Placement's rank, not the lesson row's own — see the query
+        // comment above. `moduleId` isn't carried onto this object at all
+        // any more: `lessons.module_id` is gone (Task 7), and the placement
+        // itself is looked up by `moduleId` where it's needed (see
+        // `moduleMapWithDependencies.get(placement.moduleId)` below), so
+        // there is no "which module" ambiguity left to paper over here.
         rank: placement.rank,
-        moduleId: placement.moduleId,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
         levels: lesson.levels as UserLevel[],

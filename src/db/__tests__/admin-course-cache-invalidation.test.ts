@@ -445,7 +445,6 @@ describe('course-details cache invalidation', () => {
         id: 2,
         name: 'Stall Recovery',
         slug: 'stall-recovery',
-        rank: '4',
         isAvailable: false,
         hasDebrief: false,
         needsVideoWatch: false,
@@ -471,31 +470,80 @@ describe('course-details cache invalidation', () => {
     expect(render(maxRankCalls.where[0])).toBe(
       '"module_lessons"."module_id" = $1',
     );
-    // Important 4 (fix round 1): `created.rank` comes from the lesson
-    // INSERT's `.returning()`, which `makeChain` resolves to its canned
-    // array regardless of what `.values()` received — asserting on it
-    // proves nothing about what the max-rank query computed (setting
-    // `maxRank` to '99' above would still pass a `created.rank === 4`
-    // assertion, since the canned row hardcodes '4'). What actually proves
-    // "3 + 1 == 4, computed from the placements table's own rank" is that
-    // BOTH dual-write inserts — the legacy `lessons` row and its
-    // `module_lessons` placement — received that computed value as the
-    // argument to `.values()`. They must agree: a lesson whose legacy rank
-    // and placement rank disagree from the moment it's created is exactly
-    // the kind of drift this migration exists to stop.
-    expect(lessonInsert.valuesArg).toMatchObject({ rank: '4' });
+    // Task 7: `lessons.rank` is gone — the `module_lessons` placement insert
+    // is the ONLY write that carries the computed rank now. Mutant: read the
+    // canned `lessonInsert` row's own rank (there isn't one any more, but a
+    // stale reversion could reintroduce `rank: created.rank`) instead of the
+    // locally-computed `rank` variable — asserting on the placement insert's
+    // `.values()` argument (not on anything the lesson-row canned return
+    // says) is what proves the value actually came from "3 + 1", not a
+    // hardcoded fixture.
     expect(placementInsert.valuesArg).toMatchObject({ rank: '4' });
-    // Task 5e, Part 3b: a previous round deleted `expect(created.rank).toBe(4)`
-    // as tautological about `maxRank` (correctly — see the comment above),
-    // but its NUMBER-MAPPING coverage went with it. `admin.ts`'s
-    // `rank: Number(created.rank)` is what turns Postgres's `numeric`
-    // string ('4') into the `number` the returned `BoardLesson` promises —
-    // a mutant that returned `rank: created.rank` (the string '4') instead
-    // would still satisfy every `valuesArg` assertion above (those check the
-    // WRITE side, not what's returned) and now passes the whole file
-    // undetected. Verified RED against that mutant (`typeof result.rank`
-    // is `'string'`, not `'number'`).
+    // `admin.ts` returns the already-numeric `rank` local variable directly
+    // now (no `Number(created.rank)` round-trip through a Postgres `numeric`
+    // string) — a mutant that stringified it (`rank: String(rank)`) would
+    // still satisfy the placement-insert assertion above (that's the WRITE
+    // side) and only this catches it. Verified RED against that mutant
+    // (`typeof result.rank` is `'string'`, not `'number'`).
     expect(typeof result.rank).toBe('number');
+    expect(result.rank).toBe(4);
+  });
+
+  // Task 7, Addition 1: the transitional dual-write is gone — `createLesson`
+  // must no longer write `moduleId`/`rank` onto the `lessons` row itself
+  // (those columns don't exist post-migration), only onto its
+  // `module_lessons` placement.
+  it('createLesson writes only name/slug/requiredSubscriptions to lessonsTable — no moduleId or rank — and still places the lesson via module_lessons', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([])) // taken slugs
+      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
+    const lessonInsert = makeChain([
+      {
+        id: 2,
+        name: 'Stall Recovery',
+        slug: 'stall-recovery',
+        isAvailable: false,
+        hasDebrief: false,
+        needsVideoWatch: false,
+        requiredSubscriptions: [],
+        videoId: null,
+        videoProvider: null,
+        videoRef: null,
+      },
+    ]);
+    const placementInsert = makeChain(undefined);
+    const txInsert = vi
+      .fn()
+      .mockReturnValueOnce(lessonInsert)
+      .mockReturnValueOnce(placementInsert);
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ insert: txInsert }),
+    );
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+
+    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+
+    // Mutant: restore the legacy dual-write (`moduleId: input.moduleId,
+    // rank: String(rank)` back on the `lessonsTable` insert) — correct-
+    // shaped (both were real columns before this task, so this still
+    // compiles), wrong-behaving post-Task-7: an insert carrying them fails
+    // on the real database with a "column does not exist" error this
+    // canned-chain mock can't reproduce, so only asserting the exact
+    // `.values()` argument catches it here.
+    expect(txInsert).toHaveBeenNthCalledWith(1, lessonsTable);
+    expect(lessonInsert.valuesArg).toEqual({
+      name: 'Stall Recovery',
+      slug: 'stall-recovery',
+      requiredSubscriptions: [],
+    });
+    // The placement insert is still the (only) placement write.
+    expect(txInsert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
+    expect(placementInsert.valuesArg).toEqual({
+      moduleId: 7,
+      lessonId: 2,
+      rank: '1',
+      dependsOn: [],
+    });
   });
 
   it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
@@ -560,10 +608,9 @@ describe('course-details cache invalidation', () => {
   });
 
   it('moveLesson invalidates every source course plus the target course when they differ', async () => {
-    // Task 5a fix round 1: moveLesson now dual-writes the placement via
-    // `movePlacement` BEFORE touching the legacy `lessons` row — a
-    // non-null return is the "placement move succeeded" signal the legacy
-    // update is gated on.
+    // Task 7: `moveLesson`'s only write is `movePlacement` now — a non-null
+    // return is simply "the placement moved", nothing gates a second write
+    // any more.
     placements.movePlacement.mockResolvedValueOnce({
       id: 1,
       moduleId: 20,
@@ -575,9 +622,6 @@ describe('course-details cache invalidation', () => {
       'source-course-a',
       'source-course-b',
     ]);
-    db.update.mockReturnValueOnce(
-      makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
-    );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('target-course');
 
     await moveLesson({
@@ -619,9 +663,6 @@ describe('course-details cache invalidation', () => {
       dependsOn: [],
     });
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    db.update.mockReturnValueOnce(
-      makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
-    );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
     await moveLesson({
@@ -643,22 +684,9 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
-  // Task 5a fix round 1 regression (Critical 1 closure): dual-write must be
-  // all-or-nothing. If the placement move fails, the legacy `lessons.module_id`
-  // must NOT move either — that divergence (placement says one course,
-  // `lessons.module_id` says another) is exactly what made a cross-course
-  // move 500 the learner lesson page.
-  it('moveLesson touches neither the legacy row nor the cache when the placement move fails', async () => {
+  it('moveLesson touches neither db.update nor the cache when the placement move fails', async () => {
     placements.movePlacement.mockResolvedValueOnce(null);
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    // Deliberately NOT queuing a `db.update` return value: correct code
-    // never reaches it (the assertion below is what proves that), and a
-    // `mockReturnValueOnce` queued here but left unconsumed by correct code
-    // would leak into a LATER test's `db.update` call and corrupt it — `vi
-    // .clearAllMocks()` clears call history but not queued once-values. A
-    // regression that proceeds anyway will throw when it hits the real,
-    // un-queued `db.update(...)` call — still a legitimate red, tied
-    // directly to the mutant's behavior rather than an unrelated crash.
 
     const result = await moveLesson({
       lessonId: 9,
@@ -672,48 +700,52 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
-  // Task 5a fix round 1 regression (atomicity gap): the placement move and
-  // the legacy `lessons` update must run in the SAME database transaction,
-  // not two independent writes — otherwise the legacy column can commit
-  // while the placement write fails (or vice versa), which is the exact
-  // divergence this dual-write exists to prevent (see Critical 1). A plain
-  // "both succeeded" assertion can't tell the two writes were transactional
-  // together apart from them merely both succeeding independently, so this
-  // asserts `movePlacement` received the SAME `tx` object the legacy update
-  // ran against.
-  it('moveLesson runs the placement move and the legacy update in one transaction', async () => {
-    const txUpdate = vi
-      .fn()
-      .mockReturnValue(makeChain([{ id: 9, rank: '1', moduleId: 20 }]));
-    const tx = { update: txUpdate };
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn(tx),
-    );
+  // Task 7, Addition 1: the legacy `lessons.module_id`/`lessons.rank`
+  // dual-write — and the `db.transaction` wrapper that existed solely to run
+  // it atomically alongside the placement move — is gone. `movePlacement`
+  // (called directly against the module-level `db`, no transaction) is now
+  // the ONLY write `moveLesson` performs.
+  it('moveLesson performs exactly one write path — the placement — and never touches lessonsTable', async () => {
     placements.movePlacement.mockResolvedValueOnce({
       id: 1,
       moduleId: 20,
       lessonId: 9,
-      rank: 1,
+      rank: 3,
       dependsOn: [],
     });
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
-    await moveLesson({
+    const result = await moveLesson({
       lessonId: 9,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,
     });
 
-    expect(placements.movePlacement).toHaveBeenCalledWith(
-      expect.objectContaining({ lessonId: 9, targetModuleId: 20 }),
-      tx,
-    );
-    expect(txUpdate).toHaveBeenCalledWith(lessonsTable);
-    // The module-level `db.update` must NOT be used for the legacy write —
-    // that would be a second, independent write outside the transaction.
+    // Mutant: restore the legacy `tx.update(lessonsTable)` write (wrapped
+    // back in `db.transaction`) alongside the placement move — correct-
+    // shaped (both are real writes against real tables, and this is
+    // word-for-word what the code looked like before Task 7) but wrong-
+    // behaving post-Task-7: that UPDATE's SET clause would reference
+    // `moduleId`/`rank` columns that no longer exist and fail on the real
+    // database, which this canned-chain mock can't reproduce — only
+    // asserting `lessonsTable` is never the target of an update, and that no
+    // transaction wrapper is used at all, catches it here.
     expect(db.update).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
+    // No second (transaction) argument any more — `movePlacement` runs
+    // against the module-level `db` directly.
+    expect(placements.movePlacement).toHaveBeenCalledWith({
+      lessonId: 9,
+      targetModuleId: 20,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    // `id`/`rank`/`moduleId` in the result all now come straight from the
+    // placement (and the caller's own input for `id`) — never from a
+    // `lessonsTable` row.
+    expect(result).toEqual({ id: 9, rank: 3, moduleId: 20 });
   });
 
   it('updateLessonName invalidates the owning course, resolved from lessonId', async () => {
