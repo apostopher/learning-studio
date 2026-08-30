@@ -112,7 +112,6 @@ export const modulesTableRelations = relations(
       fields: [modulesTable.courseId],
       references: [coursesTable.id],
     }),
-    lessons: many(lessonsTable),
     fileAssignments: many(blobFileAssignmentsTable),
     placements: many(moduleLessonsTable),
   }),

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ execute: vi.fn() }));
+const db = vi.hoisted(() => ({ execute: vi.fn(), transaction: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
 
 const { migrateDropLessonModuleId } = await import(
@@ -29,6 +29,7 @@ function statements(): string[] {
   return db.execute.mock.calls.map((c) => textOf(c[0] as Query));
 }
 
+const COLUMN_PROBE_QUERY = 'information_schema.columns';
 const ORPHAN_COUNT_QUERY = 'left join "module_lessons"';
 
 /**
@@ -36,22 +37,42 @@ const ORPHAN_COUNT_QUERY = 'left join "module_lessons"';
  * the raw pg `QueryResult` (`{ rows, rowCount, ... }`), never a bare array.
  * An earlier task in this build read `result[0]` instead of `rows[0]` and
  * silently always saw `undefined` — the gate never fired. Every test below
- * that needs a specific orphan count goes through this helper so the
- * migration is only ever fed the shape the real driver actually returns.
+ * routes through this so the migration is only ever fed the shape the real
+ * driver actually returns, for BOTH queries the migration reads a count
+ * from: the `information_schema.columns` probe (does `module_id` still
+ * exist?) and the orphan-count join.
  */
+function mockExecute(
+  opts: { columnExists?: boolean; orphanCount?: number } = {},
+): void {
+  const { columnExists = true, orphanCount = 0 } = opts;
+  db.execute.mockImplementation((query: Query) => {
+    const text = textOf(query);
+    if (text.includes(COLUMN_PROBE_QUERY)) {
+      return Promise.resolve({ rows: [{ n: columnExists ? 1 : 0 }] });
+    }
+    if (text.includes(ORPHAN_COUNT_QUERY)) {
+      return Promise.resolve({ rows: [{ n: orphanCount }] });
+    }
+    return Promise.resolve({ rows: [] });
+  });
+}
+
+/** Same helper as before, now just `mockExecute` with `columnExists: true` (the default). */
 function resolveOrphanCount(n: number): void {
-  db.execute.mockImplementation((query: Query) =>
-    Promise.resolve(
-      textOf(query).includes(ORPHAN_COUNT_QUERY)
-        ? { rows: [{ n }] }
-        : { rows: [] },
-    ),
-  );
+  mockExecute({ orphanCount: n });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   db.execute.mockReset();
+  db.transaction.mockReset();
+  // Default: the transaction callback runs against `db` itself, so
+  // `tx.execute(...)` inside the migration routes through the same
+  // `db.execute` mock every other test in this file queues against.
+  db.transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) =>
+    fn(db),
+  );
   resolveOrphanCount(0);
 });
 
@@ -142,5 +163,90 @@ describe('migrateDropLessonModuleId', () => {
     expect(statements().join('\n')).toContain(
       'drop column if exists "module_id"',
     );
+  });
+
+  // Fix round 1, Critical 2: the orphan gate's own WHERE clause names
+  // `l."module_id"` — a column that no longer exists after a first
+  // successful run. Without probing first, a re-run (including recovery
+  // from a partial failure) issues that query against a real database and
+  // gets `column l.module_id does not exist`, exiting 1 forever. This test
+  // proves the probe actually gates the query, not just that the migration
+  // "still succeeds" (a mutant that always issues the orphan query but
+  // tolerates its error would also "succeed" on a canned mock — asserting
+  // the query was never ISSUED is what a canned-response mock CAN prove,
+  // and is exactly what the real database needs to be true).
+  //
+  // Mutant: delete the `information_schema.columns` probe and its
+  // `moduleIdStillExists` branch, always running the orphan-count query
+  // unconditionally (the pre-fix-round-1 shape). Correct-shaped (still a
+  // valid, syntactically fine query) but wrong-behaving the moment
+  // `lessons.module_id` is actually gone. Verified RED: with that mutant,
+  // `statements()` contains the orphan-count text even when `columnExists:
+  // false`, failing the first assertion below.
+  it('probes lessons.module_id first and skips the orphan gate entirely once it is already dropped (idempotent re-run)', async () => {
+    mockExecute({ columnExists: false });
+
+    await migrateDropLessonModuleId();
+
+    const all = statements();
+    expect(all.some((s) => s.includes(ORPHAN_COUNT_QUERY))).toBe(false);
+    // The rest of the migration (unrelated to module_id) still runs even
+    // when there's nothing left to drop on the lessons table — it's
+    // independently idempotent.
+    const joined = all.join('\n');
+    expect(joined).toContain('drop table if exists "lesson_dependencies"');
+    expect(joined).toContain(
+      'create index if not exists "module_lessons_depends_on_idx"',
+    );
+    // And critically: no attempt to drop columns that are already gone.
+    expect(joined).not.toContain('drop column');
+  });
+
+  it('still drops module_id/rank when the column probe reports it present (first run)', async () => {
+    mockExecute({ columnExists: true, orphanCount: 0 });
+
+    await migrateDropLessonModuleId();
+
+    const all = statements();
+    expect(all.some((s) => s.includes(ORPHAN_COUNT_QUERY))).toBe(true);
+    expect(all.join('\n')).toContain('drop column if exists "module_id"');
+  });
+
+  // Fix round 1, Critical 2 (part 2): every statement must run inside ONE
+  // `db.transaction`, since Postgres DDL is transactional and that's what
+  // turns "failed partway between the column drops and the new index" into
+  // a non-state instead of a half-migrated database a re-run then has to
+  // reconcile. Mutant: drop the `db.transaction(...)` wrapper and call
+  // `db.execute(...)` directly against the module-level `db` for every
+  // statement (the pre-fix-round-1 shape) — correct-shaped (every statement
+  // still runs, in the same order) but wrong-behaving: no atomicity across
+  // the whole set. Verified RED against that mutant (`db.transaction` is
+  // never called, and `db.execute` — the module-level mock, not `tx`'s — is
+  // called directly instead of the distinct `tx` this test supplies).
+  it('runs every statement inside db.transaction, never directly against the module-level db', async () => {
+    const txExecute = vi.fn((query: Query) => {
+      const text = textOf(query);
+      if (text.includes(COLUMN_PROBE_QUERY)) {
+        return Promise.resolve({ rows: [{ n: 1 }] });
+      }
+      if (text.includes(ORPHAN_COUNT_QUERY)) {
+        return Promise.resolve({ rows: [{ n: 0 }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+    const tx = { execute: txExecute };
+    db.transaction.mockImplementationOnce(
+      async (fn: (t: typeof tx) => unknown) => fn(tx),
+    );
+
+    await migrateDropLessonModuleId();
+
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(
+      txExecute.mock.calls.some((c) =>
+        textOf(c[0] as Query).includes('drop column if exists "module_id"'),
+      ),
+    ).toBe(true);
   });
 });

@@ -402,39 +402,12 @@ describe('movePlacement', () => {
     expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
   });
 
-  // Task 5a fix round 2 (Important 1): `movePlacement`'s optional `tx`
-  // parameter is what lets `moveLesson` (admin.ts) put this UPDATE and the
-  // legacy `lessons` update in ONE transaction — the entire fix for Critical
-  // 1's divergence window. Every other test in this file calls `movePlacement`
-  // with only one argument, exercising the `tx = db` default, so none of
-  // them can tell a `tx.update` call apart from a `db.update` call. Without
-  // THIS test, reverting `movePlacement`'s body from `tx.update(...)` back
-  // to `db.update(...)` — silently breaking the atomicity the parameter
-  // exists to provide — passes the entire suite.
-  it('runs its UPDATE against a caller-supplied transaction, not the module-level db', async () => {
-    const returning = vi
-      .fn()
-      .mockResolvedValue([
-        { id: 1, moduleId: 41, lessonId: 9, rank: '1.5', dependsOn: [] },
-      ]);
-    const where = vi.fn().mockReturnValue({ returning });
-    const set = vi.fn().mockReturnValue({ where });
-    const txUpdate = vi.fn().mockReturnValue({ set });
-    const fakeTx = { update: txUpdate };
-    db.select.mockReturnValueOnce(makeChain([{ id: 40 }, { id: 41 }]));
-
-    const result = await movePlacement(
-      {
-        lessonId: 9,
-        targetModuleId: 41,
-        prevLessonId: 3,
-        nextLessonId: 4,
-      },
-      fakeTx,
-    );
-
-    expect(txUpdate).toHaveBeenCalledWith(moduleLessonsTable);
-    expect(db.update).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ moduleId: 41, rank: 1.5 });
-  });
+  // The optional caller-supplied `tx` parameter this test used to cover
+  // (Task 5a fix round 2) went dead the moment Task 7 removed `moveLesson`'s
+  // transaction — `movePlacement` now always runs against the module-level
+  // `db`, so the parameter (and this test) were deleted rather than
+  // converted. Equivalent coverage lives in
+  // `admin-course-cache-invalidation.test.ts`'s "moveLesson performs exactly
+  // one write path" test, which asserts `movePlacement` is called with a
+  // single plain argument.
 });

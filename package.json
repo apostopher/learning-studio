@@ -23,6 +23,7 @@
     "db:migrate-staff-roles": "dotenv -e .env.local -- tsx src/db/migrate-staff-roles.ts",
     "db:migrate-discipline-staff": "dotenv -e .env.local -- tsx src/db/migrate-discipline-staff.ts",
     "db:migrate-lesson-placements": "dotenv -e .env.local -- tsx src/db/migrate-lesson-placements.ts",
+    "db:relax-lesson-module-id": "dotenv -e .env.local -- tsx src/db/migrate-relax-lesson-module-id.ts",
     "db:migrate-drop-lesson-module-id": "dotenv -e .env.local -- tsx src/db/migrate-drop-lesson-module-id.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
