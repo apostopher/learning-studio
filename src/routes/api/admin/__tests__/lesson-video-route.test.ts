@@ -10,7 +10,7 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
-    requireCoursePermission: vi.fn(),
+    requireAdmin: vi.fn(),
     absentResourceResponse: vi.fn(),
     getCourseIdForLessonId: vi.fn(),
     setLessonVideo: vi.fn(),
@@ -18,9 +18,9 @@ const m = vi.hoisted(() => {
 });
 vi.mock('#/lib/admin-functions.server', () => ({
   ForbiddenError: m.ForbiddenError,
+  requireAdmin: m.requireAdmin,
 }));
 vi.mock('#/lib/permissions.server', () => ({
-  requireCoursePermission: m.requireCoursePermission,
   absentResourceResponse: m.absentResourceResponse,
 }));
 vi.mock('#/db/lesson-access', () => ({
@@ -41,7 +41,7 @@ function req(body: unknown = { provider: 'mux', ref: 'abc123' }): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   m.getCourseIdForLessonId.mockResolvedValue(42);
-  m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
   // Stands in for the real helper (unit-tested in
   // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
   // the teaching side and a flat 403 to everyone else, so a missing row
@@ -53,14 +53,12 @@ beforeEach(() => {
 });
 
 describe('PUT /api/admin/lessons/:lessonId/video', () => {
-  it('asks for content:update scoped to the lesson’s course', async () => {
+  // Video is lesson content — org-owned, since a lesson can now be taught by
+  // several courses — so it is gated by `requireAdmin`, not a course's
+  // `content` permission.
+  it('calls requireAdmin', async () => {
     await putVideoHandler(req(), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'update',
-    );
+    expect(m.requireAdmin).toHaveBeenCalledWith(expect.anything());
   });
 
   /**
@@ -92,7 +90,7 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
     m.getCourseIdForLessonId.mockResolvedValue(null);
     const res = await putVideoHandler(req(), '999');
     expect(res.status).toBe(404);
-    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.requireAdmin).not.toHaveBeenCalled();
     expect(m.setLessonVideo).not.toHaveBeenCalled();
   });
 
@@ -102,8 +100,11 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
     expect(m.getCourseIdForLessonId).not.toHaveBeenCalled();
   });
 
-  it('403s a refused course manager (read-only on content) without writing', async () => {
-    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+  // Mutant: still calls the old course-scoped `content:update` guard instead
+  // of `requireAdmin`. Refusing only `requireAdmin` would then not stop the
+  // write — RED.
+  it('403s a refused admin without writing', async () => {
+    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await putVideoHandler(req(), '10');
     expect(res.status).toBe(403);
     expect(m.setLessonVideo).not.toHaveBeenCalled();

@@ -10,9 +10,11 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
+    requireAdmin: vi.fn(),
     requireCoursePermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     getCourseIdForLessonId: vi.fn(),
+    getCourseIdForModuleId: vi.fn(),
     deleteLesson: vi.fn(),
     moveLesson: vi.fn(),
     updateLessonConfig: vi.fn(),
@@ -22,6 +24,7 @@ const m = vi.hoisted(() => {
 });
 vi.mock('#/lib/admin-functions.server', () => ({
   ForbiddenError: m.ForbiddenError,
+  requireAdmin: m.requireAdmin,
 }));
 vi.mock('#/lib/permissions.server', () => ({
   requireCoursePermission: m.requireCoursePermission,
@@ -29,6 +32,7 @@ vi.mock('#/lib/permissions.server', () => ({
 }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForLessonId: m.getCourseIdForLessonId,
+  getCourseIdForModuleId: m.getCourseIdForModuleId,
 }));
 vi.mock('#/db/admin', () => ({
   deleteLesson: m.deleteLesson,
@@ -50,11 +54,17 @@ function req(body: unknown): Request {
 
 beforeEach(() => {
   // resetAllMocks, not clearAllMocks: several tests below chain
-  // .mockResolvedValueOnce()/.mockRejectedValueOnce() on
+  // .mockResolvedValueOnce()/.mockRejectedValueOnce() on requireAdmin /
   // requireCoursePermission, and clearAllMocks leaves an unconsumed queued
   // "once" sitting on the mock for the next test to accidentally inherit.
   vi.resetAllMocks();
-  m.getCourseIdForLessonId.mockResolvedValue(42);
+  // Lowest-id course this lesson happens to also be in — deliberately
+  // DIFFERENT from any course used as a guard target below, so a branch that
+  // regresses to guarding on this value (instead of the org, or instead of
+  // the move's real target course) fails loudly rather than by coincidence.
+  m.getCourseIdForLessonId.mockResolvedValue(3);
+  m.getCourseIdForModuleId.mockResolvedValue(7);
+  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
   m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
   // Stands in for the real helper (unit-tested in
   // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
@@ -67,6 +77,9 @@ beforeEach(() => {
   // through shows up as "the write happened" (200), not as an incidental
   // 404 from an unmocked falsy return.
   m.updateLessonConfig.mockResolvedValue({ id: 10 });
+  m.updateLessonName.mockResolvedValue({ id: 10, name: 'Renamed' });
+  m.moveLesson.mockResolvedValue({ id: 10, rank: 1, moduleId: 3 });
+  m.deleteLesson.mockResolvedValue(true);
 });
 
 /**
@@ -131,6 +144,7 @@ describe('patchLessonHandler — course resolution', () => {
     );
     expect(res.status).toBe(404);
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.requireAdmin).not.toHaveBeenCalled();
   });
 
   it('400s an invalid lesson id without resolving a course', async () => {
@@ -143,14 +157,11 @@ describe('patchLessonHandler — course resolution', () => {
   });
 });
 
-describe('patchLessonHandler — dependencies / rename / move (structure)', () => {
-  // Fix round 1 (Important 1/5): `courseId` in the dependency body is now
-  // the course actually being edited, wired all the way through to both the
-  // permission check and the write — NOT the top-level `courseId` this
-  // handler resolves from `getCourseIdForLessonId` for the earlier 404 check
-  // (mocked to 42 in beforeEach). Body deliberately uses a DIFFERENT id (7)
-  // so a regression back to the stale top-level `courseId` fails both
-  // assertions below instead of accidentally matching.
+// Requirement 7: `dependencies` still guards course-scoped on the
+// client-supplied `courseId`, pinned so this task cannot silently widen it
+// to `requireAdmin` along with the other structure/content branches — a
+// placement's prerequisite list affects only that one course.
+describe('patchLessonHandler — dependencies (still course-scoped, unchanged)', () => {
   it('guards and writes against the courseId the client sent, not the lesson-resolved one', async () => {
     m.updateLessonDependencies.mockResolvedValue({ ok: true, dependsOn: [] });
     await patchLessonHandler(req({ courseId: 7, dependsOn: ['a'] }), '10');
@@ -161,6 +172,8 @@ describe('patchLessonHandler — dependencies / rename / move (structure)', () =
       'update',
     );
     expect(m.updateLessonDependencies).toHaveBeenCalledWith(10, 7, ['a']);
+    // Never escalated to the org-wide admin guard.
+    expect(m.requireAdmin).not.toHaveBeenCalled();
   });
 
   it('403s a refused actor without writing dependencies', async () => {
@@ -172,187 +185,54 @@ describe('patchLessonHandler — dependencies / rename / move (structure)', () =
     expect(res.status).toBe(403);
     expect(m.updateLessonDependencies).not.toHaveBeenCalled();
   });
+});
 
-  it('asks for structure:update for a rename', async () => {
-    m.updateLessonName.mockResolvedValue({ id: 10, name: 'Renamed' });
-    await patchLessonHandler(req({ name: 'Renamed' }), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'structure',
-      'update',
-    );
-    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed');
-  });
-
-  it('403s a refused rename without writing', async () => {
-    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+// Requirements 1/2: rename is lesson content — org-owned — so it is gated by
+// `requireAdmin`, not any one course's `structure` permission.
+describe('patchLessonHandler — rename (org-owned content)', () => {
+  // Mutant: rename still calls `guardStructure(request, courseId, 'update')`
+  // (i.e. `requireCoursePermission`) instead of `requireAdmin`. That mutant
+  // makes this refusal check `requireCoursePermission` instead, which would
+  // pass here since only `requireAdmin` is made to reject — RED.
+  it('refuses a non-admin: 403, and updateLessonName is not called', async () => {
+    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await patchLessonHandler(req({ name: 'Renamed' }), '10');
     expect(res.status).toBe(403);
     expect(m.updateLessonName).not.toHaveBeenCalled();
+    expect(m.requireAdmin).toHaveBeenCalled();
   });
 
-  it('asks for structure:update for a move', async () => {
-    m.moveLesson.mockResolvedValue({ id: 10 });
-    await patchLessonHandler(
-      req({ targetModuleId: 3, prevLessonId: null, nextLessonId: null }),
-      '10',
-    );
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'structure',
-      'update',
-    );
+  it('allows an org admin: 200, and calls requireAdmin (not the course guard)', async () => {
+    const res = await patchLessonHandler(req({ name: 'Renamed' }), '10');
+    expect(res.status).toBe(200);
+    expect(m.requireAdmin).toHaveBeenCalledWith(expect.anything());
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed');
   });
+});
 
-  it('403s a refused move without writing', async () => {
-    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await patchLessonHandler(
-      req({ targetModuleId: 3, prevLessonId: null, nextLessonId: null }),
-      '10',
-    );
+// Requirement 3: config is org-owned content too (every field is a column on
+// the lesson row, written by lessonId alone — see `updateLessonConfig`).
+describe('patchLessonHandler — config (org-owned content)', () => {
+  // Mutant: config still calls the old field-split `guardConfig`
+  // (`requireCoursePermission` on 'structure'/'content') instead of
+  // `requireAdmin`. Refusing only `requireAdmin` would then not stop the
+  // write — RED.
+  it('refuses a non-admin: 403, and updateLessonConfig is not called', async () => {
+    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await patchLessonHandler(req({ levels: ['basic'] }), '10');
     expect(res.status).toBe(403);
-    expect(m.moveLesson).not.toHaveBeenCalled();
+    expect(m.updateLessonConfig).not.toHaveBeenCalled();
   });
-});
 
-describe('patchLessonHandler — config branch, every field lands in its entity', () => {
-  // Table-driven over ALL FIVE fields the config schema carries, not just the
-  // two ('levels', 'hasDebrief') the other tests happen to exercise. This is
-  // what actually closes the hole a hand-maintained field list leaves open:
-  // 'isAvailable', 'requiredSubscriptions' and 'needsVideoWatch' were
-  // previously untested and could each be moved to the wrong group (or land
-  // in neither) with a green suite.
-  const CONFIG_FIELD_CASES: Array<{
-    field: string;
-    body: Record<string, unknown>;
-    entity: 'structure' | 'content';
-  }> = [
-    { field: 'isAvailable', body: { isAvailable: false }, entity: 'structure' },
-    { field: 'levels', body: { levels: ['basic'] }, entity: 'structure' },
-    {
-      // `content`, not `structure`: spec §3 enumerates structure's fields and
-      // this is not among them — it is the paywall control, and filing it
-      // under structure hands the paywall to `course-manager`.
-      field: 'requiredSubscriptions',
-      body: { requiredSubscriptions: ['associate'] },
-      entity: 'content',
-    },
-    { field: 'hasDebrief', body: { hasDebrief: false }, entity: 'content' },
-    {
-      field: 'needsVideoWatch',
-      body: { needsVideoWatch: false },
-      entity: 'content',
-    },
-  ];
-  const OTHER_ENTITY: Record<'structure' | 'content', 'structure' | 'content'> =
-    { structure: 'content', content: 'structure' };
-
-  it.each(
-    CONFIG_FIELD_CASES,
-  )('$field alone asks only for $entity:update', async ({ body, entity }) => {
-    m.updateLessonConfig.mockResolvedValue({ id: 10 });
-    await patchLessonHandler(req(body), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      entity,
-      'update',
-    );
-    expect(m.requireCoursePermission).not.toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      OTHER_ENTITY[entity],
-      'update',
-    );
-  });
-});
-
-describe('patchLessonHandler — config branch, split by field group', () => {
-  it('lets a course manager set the level tag', async () => {
-    m.updateLessonConfig.mockResolvedValue({ id: 10, levels: ['basic'] });
-    await patchLessonHandler(req({ levels: ['basic'] }), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'structure',
-      'update',
-    );
-    expect(m.requireCoursePermission).not.toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'update',
-    );
+  it('allows an org admin: 200, and calls requireAdmin (not the course guard)', async () => {
+    const res = await patchLessonHandler(req({ levels: ['basic'] }), '10');
+    expect(res.status).toBe(200);
+    expect(m.requireAdmin).toHaveBeenCalledWith(expect.anything());
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.updateLessonConfig).toHaveBeenCalledWith(10, {
       levels: ['basic'],
     });
-  });
-
-  it('requires content:update to change the debrief flag', async () => {
-    m.updateLessonConfig.mockResolvedValue({ id: 10, hasDebrief: false });
-    await patchLessonHandler(req({ hasDebrief: false }), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'update',
-    );
-    expect(m.requireCoursePermission).not.toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'structure',
-      'update',
-    );
-  });
-
-  it('requires BOTH when a body mixes the two groups', async () => {
-    m.updateLessonConfig.mockResolvedValue({ id: 10 });
-    await patchLessonHandler(
-      req({ levels: ['basic'], hasDebrief: false }),
-      '10',
-    );
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'structure',
-      'update',
-    );
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'update',
-    );
-  });
-
-  // The single most important test in this file: a partial permission must
-  // not produce a partial write. Structure passes, content is refused — the
-  // whole request must 403 and updateLessonConfig must never run.
-  it('writes nothing when the content half is refused', async () => {
-    m.requireCoursePermission
-      .mockResolvedValueOnce({ userId: 'u1' }) // structure passes
-      .mockRejectedValueOnce(new m.ForbiddenError()); // content refused
-    const res = await patchLessonHandler(
-      req({ levels: ['basic'], hasDebrief: false }),
-      '10',
-    );
-    expect(res.status).toBe(403);
-    expect(m.updateLessonConfig).not.toHaveBeenCalled();
-  });
-
-  // And the mirror case, so the order of the two checks isn't load-bearing.
-  it('writes nothing when the structure half is refused', async () => {
-    m.requireCoursePermission
-      .mockRejectedValueOnce(new m.ForbiddenError()) // structure refused
-      .mockResolvedValueOnce({ userId: 'u1' }); // content would pass
-    const res = await patchLessonHandler(
-      req({ levels: ['basic'], hasDebrief: false }),
-      '10',
-    );
-    expect(res.status).toBe(403);
-    expect(m.updateLessonConfig).not.toHaveBeenCalled();
   });
 
   it('404s when the config write target has vanished', async () => {
@@ -362,37 +242,133 @@ describe('patchLessonHandler — config branch, split by field group', () => {
   });
 });
 
-describe('deleteLessonHandler', () => {
-  it('asks for structure:delete scoped to the lesson’s course', async () => {
-    m.deleteLesson.mockResolvedValue(true);
-    await deleteLessonHandler(new Request('http://test/x'), '10');
+// Requirements 4/5: move guards on the TARGET module's course — not the
+// lesson's lowest-id course, and not the wrong module's course.
+describe('patchLessonHandler — move (guards the target module’s course)', () => {
+  function moveReq() {
+    return req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null });
+  }
+
+  // Requirement 4, named mutant: guard the lesson's lowest course
+  // (`getCourseIdForLessonId` → 3) instead of the target module's course
+  // (`getCourseIdForModuleId(55)` → 7). `beforeEach` deliberately makes these
+  // two differ, so a mutant that guards on 3 fails this `toHaveBeenCalledWith`
+  // assertion for 7 — RED, not a crash (both are valid course ids).
+  it('guards on the TARGET module’s course, not the lesson’s lowest course', async () => {
+    await patchLessonHandler(moveReq(), '10');
+    expect(m.getCourseIdForModuleId).toHaveBeenCalledWith(55);
     expect(m.requireCoursePermission).toHaveBeenCalledWith(
       expect.anything(),
-      42,
+      7,
       'structure',
-      'delete',
+      'update',
     );
+    expect(m.requireCoursePermission).not.toHaveBeenCalledWith(
+      expect.anything(),
+      3,
+      'structure',
+      'update',
+    );
+    expect(m.moveLesson).toHaveBeenCalledWith({
+      lessonId: 10,
+      targetModuleId: 55,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+  });
+
+  it('403s a refused actor on the target course without moving', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await patchLessonHandler(moveReq(), '10');
+    expect(res.status).toBe(403);
+    expect(m.moveLesson).not.toHaveBeenCalled();
+  });
+
+  // Requirement 5, named mutant: skip the null check on
+  // `getCourseIdForModuleId` and guard on the lesson's lowest course as a
+  // fallback instead of 404ing. That mutant would call
+  // `requireCoursePermission` (RED: not called here) and would call
+  // `moveLesson` (RED: called here) instead of 404ing.
+  it('404s when the target module does not exist, and never calls moveLesson', async () => {
+    m.getCourseIdForModuleId.mockResolvedValue(null);
+    m.absentResourceResponse.mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
+
+    const res = await patchLessonHandler(moveReq(), '10');
+
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      'Target module not found',
+    );
+    expect(res.status).toBe(404);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.moveLesson).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteLessonHandler — org-owned (deletes from every course)', () => {
+  // Mutant: delete still calls `guardStructure(request, courseId, 'delete')`
+  // instead of `requireAdmin`. Refusing only `requireAdmin` would then not
+  // stop the delete — RED.
+  it('refuses a non-admin: 403, and deleteLesson is not called', async () => {
+    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
+    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
+    expect(res.status).toBe(403);
+    expect(m.deleteLesson).not.toHaveBeenCalled();
+  });
+
+  it('allows an org admin: 204, and calls requireAdmin (not the course guard)', async () => {
+    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
+    expect(res.status).toBe(204);
+    expect(m.requireAdmin).toHaveBeenCalledWith(expect.anything());
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.deleteLesson).toHaveBeenCalledWith(10);
   });
 
   it('404s a lesson that does not exist, before guarding', async () => {
     m.getCourseIdForLessonId.mockResolvedValue(null);
     const res = await deleteLessonHandler(new Request('http://test/x'), '999');
     expect(res.status).toBe(404);
-    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.requireAdmin).not.toHaveBeenCalled();
     expect(m.deleteLesson).not.toHaveBeenCalled();
   });
+});
 
-  it('403s a refused actor without deleting', async () => {
-    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
-    expect(res.status).toBe(403);
-    expect(m.deleteLesson).not.toHaveBeenCalled();
-  });
+// Requirement 6: a non-existent lesson still 404s (not 403) on every branch —
+// pinned across the full set of PATCH bodies plus DELETE, so no branch's
+// authorization change can accidentally reorder the existence check after
+// the guard.
+describe('non-existent lesson 404s (not 403) on every branch', () => {
+  const CASES: [string, () => Promise<Response>][] = [
+    [
+      'dependencies',
+      () => patchLessonHandler(req({ courseId: 1, dependsOn: [] }), '999'),
+    ],
+    ['rename', () => patchLessonHandler(req({ name: 'x' }), '999')],
+    [
+      'move',
+      () =>
+        patchLessonHandler(
+          req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null }),
+          '999',
+        ),
+    ],
+    ['config', () => patchLessonHandler(req({ levels: ['basic'] }), '999')],
+    ['delete', () => deleteLessonHandler(new Request('http://test/x'), '999')],
+  ];
 
-  it('deletes once permitted', async () => {
-    m.deleteLesson.mockResolvedValue(true);
-    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
-    expect(res.status).toBe(204);
-    expect(m.deleteLesson).toHaveBeenCalledWith(10);
+  it.each(
+    CASES,
+  )('%s: 404, not 403, for a missing lesson', async (_label, call) => {
+    m.getCourseIdForLessonId.mockResolvedValue(null);
+    // Even an actor who would otherwise be denied must see a 404 here, not a
+    // 403 — the existence check runs before any guard.
+    m.requireAdmin.mockRejectedValue(new m.ForbiddenError());
+    m.requireCoursePermission.mockRejectedValue(new m.ForbiddenError());
+
+    const res = await call();
+
+    expect(res.status).toBe(404);
   });
 });

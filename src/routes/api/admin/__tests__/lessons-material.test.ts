@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // internal #/-using modules). The route imports ForbiddenError from this same
 // mocked path, so this stub class is what `instanceof` checks against.
 const {
-  requireCoursePermission,
+  requireAdmin,
   absentResourceResponse,
   ForbiddenError,
   getCourseIdForLessonId,
@@ -19,7 +19,7 @@ const {
     }
   }
   return {
-    requireCoursePermission: vi.fn(),
+    requireAdmin: vi.fn(),
     absentResourceResponse: vi.fn(),
     ForbiddenError,
     getCourseIdForLessonId: vi.fn(),
@@ -27,11 +27,11 @@ const {
     upsertLessonMaterial: vi.fn(),
   };
 });
-vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
-vi.mock('#/lib/permissions.server', () => ({
-  requireCoursePermission,
-  absentResourceResponse,
+vi.mock('#/lib/admin-functions.server', () => ({
+  ForbiddenError,
+  requireAdmin,
 }));
+vi.mock('#/lib/permissions.server', () => ({ absentResourceResponse }));
 vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
@@ -58,7 +58,7 @@ function getReq(): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   getCourseIdForLessonId.mockResolvedValue(42);
-  requireCoursePermission.mockResolvedValue({ userId: 'u1' });
+  requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
   // Stands in for the real helper (unit-tested in
   // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
   // the teaching side and a flat 403 to everyone else, so a missing row
@@ -67,19 +67,20 @@ beforeEach(() => {
 });
 
 describe('lessons material route', () => {
-  it('GET asks for content:read scoped to the lesson’s course', async () => {
+  // Material is lesson content — org-owned, since a lesson can now be taught
+  // by several courses — so it is gated by `requireAdmin`, not a course's
+  // `content` permission.
+  it('GET calls requireAdmin', async () => {
     getLessonMaterialByLessonId.mockResolvedValueOnce(null);
     await getMaterialHandler(getReq(), '1');
-    expect(requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'read',
-    );
+    expect(requireAdmin).toHaveBeenCalledWith(expect.anything());
   });
 
-  it('GET returns 403 for a refused actor, without reading the material', async () => {
-    requireCoursePermission.mockRejectedValueOnce(new ForbiddenError());
+  // Mutant: GET still calls the old course-scoped `content:read` guard
+  // instead of `requireAdmin`. Refusing only `requireAdmin` would then not
+  // stop the read — RED.
+  it('GET returns 403 for a refused admin, without reading the material', async () => {
+    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
     const res = await getMaterialHandler(getReq(), '1');
     expect(res.status).toBe(403);
     expect(getLessonMaterialByLessonId).not.toHaveBeenCalled();
@@ -131,7 +132,7 @@ describe('lessons material route', () => {
     getCourseIdForLessonId.mockResolvedValueOnce(null);
     const res = await getMaterialHandler(getReq(), '999');
     expect(res.status).toBe(404);
-    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(requireAdmin).not.toHaveBeenCalled();
   });
 
   it('GET 400 on a bad lesson id', async () => {
@@ -147,19 +148,17 @@ describe('lessons material route', () => {
     expect(await res.json()).toBeNull();
   });
 
-  it('POST asks for content:update scoped to the lesson’s course', async () => {
+  it('POST calls requireAdmin', async () => {
     upsertLessonMaterial.mockResolvedValueOnce({ id: 7, ...material });
     await saveMaterialHandler(postReq(material), '1');
-    expect(requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      42,
-      'content',
-      'update',
-    );
+    expect(requireAdmin).toHaveBeenCalledWith(expect.anything());
   });
 
-  it('POST 403s a course manager (read-only on content) without writing', async () => {
-    requireCoursePermission.mockRejectedValueOnce(new ForbiddenError());
+  // Mutant: POST still calls the old course-scoped `content:update` guard
+  // instead of `requireAdmin`. Refusing only `requireAdmin` would then not
+  // stop the write — RED.
+  it('POST 403s a refused admin without writing', async () => {
+    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
     const res = await saveMaterialHandler(postReq(material), '1');
     expect(res.status).toBe(403);
     expect(upsertLessonMaterial).not.toHaveBeenCalled();
@@ -169,7 +168,7 @@ describe('lessons material route', () => {
     getCourseIdForLessonId.mockResolvedValueOnce(null);
     const res = await saveMaterialHandler(postReq(material), '999');
     expect(res.status).toBe(404);
-    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(requireAdmin).not.toHaveBeenCalled();
     expect(upsertLessonMaterial).not.toHaveBeenCalled();
   });
 

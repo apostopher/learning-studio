@@ -3,25 +3,18 @@ import { createFileRoute } from '@tanstack/react-router';
 // imported directly by its route test.
 import { setLessonVideo } from '#/db/admin';
 import { getCourseIdForLessonId } from '#/db/lesson-access';
-import { ForbiddenError } from '#/lib/admin-functions.server';
+import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import { setLessonVideoInputSchema } from '#/lib/admin-schemas';
-import {
-  absentResourceResponse,
-  requireCoursePermission,
-} from '#/lib/permissions.server';
+import { absentResourceResponse } from '#/lib/permissions.server';
 
-/** Video is content: only a subject expert may set it. */
-async function guard(
-  request: Request,
-  courseId: number,
-): Promise<Response | null> {
+/**
+ * Video is lesson content: it changes what EVERY course teaching this lesson
+ * plays, not just one. `lessons.org_id` makes it org-owned, so the guard
+ * follows ownership — org-level admin — rather than any one course's staff.
+ */
+async function guard(request: Request): Promise<Response | null> {
   try {
-    await requireCoursePermission(
-      request.headers,
-      courseId,
-      'content',
-      'update',
-    );
+    await requireAdmin(request.headers);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -44,15 +37,17 @@ export async function putVideoHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open.
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
+  // Existence check only — a lesson can now have several placements, so this
+  // is not "which course owns it", just "does the row exist". Resolved
+  // before guarding: guarding on a null course id would misreport "no such
+  // lesson" as "forbidden". The 404 is then answered only to someone on the
+  // teaching side — see `absentResourceResponse`, which closes the
+  // id-enumeration oracle this ordering would otherwise open.
+  const lessonExistsAt = await getCourseIdForLessonId(lessonId);
+  if (lessonExistsAt === null) {
     return absentResourceResponse(request.headers, 'Lesson not found');
   }
-  const denied = await guard(request, courseId);
+  const denied = await guard(request);
   if (denied) return denied;
 
   let body: unknown;
