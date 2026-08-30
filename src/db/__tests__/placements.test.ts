@@ -30,6 +30,18 @@ function makeChain(result: unknown) {
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({ moduleLessonsTable, modulesTable }));
+// placements.ts now also imports these for its write functions (linkLesson /
+// unlinkLesson / movePlacement, exercised in placement-writes.test.ts). This
+// file only exercises the read functions above, but the module-level imports
+// still run on `await import('#/db/placements')` below, so they're stubbed
+// here too — otherwise `#/db/course-cache` would drag in the real
+// `#/db/course`, which imports `@/db/schema` (unresolvable under vitest; see
+// memory: vitest can't resolve @/, use #/).
+vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache: vi.fn() }));
+vi.mock('#/db/lesson-access', () => ({
+  getCourseIdForModuleId: vi.fn(),
+  getCourseSlugForModuleId: vi.fn(),
+}));
 
 const {
   getPlacementsForCourse,

@@ -1,5 +1,10 @@
-import { countDistinct, eq, inArray } from 'drizzle-orm';
+import { and, countDistinct, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
+import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import {
+  getCourseIdForModuleId,
+  getCourseSlugForModuleId,
+} from '#/db/lesson-access';
 import { moduleLessonsTable, modulesTable } from '#/db/schema';
 import type { CourseLessonDependency } from '#/types';
 
@@ -78,4 +83,179 @@ export async function getCourseCountsForLessons(
     .groupBy(moduleLessonsTable.lessonId);
 
   return new Map(rows.map((r) => [r.lessonId, Number(r.n)]));
+}
+
+/**
+ * Midpoint rank between two neighbours, matching `reorderModule`'s scheme:
+ * halve to go first, +1 to go last, 1 into an empty module. Computed in SQL so
+ * Postgres `numeric` does the arithmetic and no precision is lost in JS.
+ */
+function rankBetween(
+  prevLessonId: number | null,
+  nextLessonId: number | null,
+  moduleId: number,
+): SQL {
+  const rankOf = (lessonId: number) =>
+    sql`(select ${moduleLessonsTable.rank} from ${moduleLessonsTable}
+         where ${moduleLessonsTable.lessonId} = ${lessonId}
+           and ${moduleLessonsTable.moduleId} = ${moduleId})`;
+
+  const prev = prevLessonId ? rankOf(prevLessonId) : null;
+  const next = nextLessonId ? rankOf(nextLessonId) : null;
+
+  if (prev && next) return sql`(${prev} + ${next}) / 2`;
+  if (next) return sql`${next} / 2`;
+  if (prev) return sql`${prev} + 1`;
+  return sql`1`;
+}
+
+function toPlacement(row: {
+  id: number;
+  moduleId: number;
+  lessonId: number;
+  rank: unknown;
+  dependsOn: unknown;
+}): Placement {
+  return {
+    id: row.id,
+    moduleId: row.moduleId,
+    lessonId: row.lessonId,
+    rank: Number(row.rank),
+    dependsOn: (row.dependsOn ?? []) as CourseLessonDependency[],
+  };
+}
+
+/** Every module id belonging to a course — used to scope a write to that course. */
+async function getModuleIdsForCourse(courseId: number): Promise<number[]> {
+  const rows = await db
+    .select({ id: modulesTable.id })
+    .from(modulesTable)
+    .where(eq(modulesTable.courseId, courseId));
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Place an existing library lesson into a module.
+ *
+ * Returns `'duplicate'` rather than throwing when the target course already
+ * teaches this lesson: one placement per course keeps completion unambiguous,
+ * and the caller turns this into an explanation rather than an error.
+ *
+ * The unique index only covers (module_id, lesson_id), so the course-level rule
+ * is checked here. A denormalised course_id on module_lessons would make it a
+ * DB guarantee; not worth it until this check proves insufficient.
+ */
+export async function linkLesson(input: {
+  moduleId: number;
+  lessonId: number;
+  prevLessonId: number | null;
+  nextLessonId: number | null;
+}): Promise<Placement | 'duplicate'> {
+  const targetCourseId = await getCourseIdForModuleId(input.moduleId);
+  if (targetCourseId === null) return 'duplicate';
+
+  const existing = await getCourseIdsForLesson(input.lessonId);
+  if (existing.includes(targetCourseId)) return 'duplicate';
+
+  const [created] = await db
+    .insert(moduleLessonsTable)
+    .values({
+      moduleId: input.moduleId,
+      lessonId: input.lessonId,
+      rank: rankBetween(input.prevLessonId, input.nextLessonId, input.moduleId),
+      dependsOn: [],
+    })
+    .returning({
+      id: moduleLessonsTable.id,
+      moduleId: moduleLessonsTable.moduleId,
+      lessonId: moduleLessonsTable.lessonId,
+      rank: moduleLessonsTable.rank,
+      dependsOn: moduleLessonsTable.dependsOn,
+    });
+
+  await invalidateCourseDetailsCache(
+    await getCourseSlugForModuleId(input.moduleId),
+  );
+
+  return toPlacement(created);
+}
+
+/** Remove a placement. The lesson itself survives, in the library and elsewhere. */
+export async function unlinkLesson(
+  moduleId: number,
+  lessonId: number,
+): Promise<boolean> {
+  const removed = await db
+    .delete(moduleLessonsTable)
+    .where(
+      and(
+        eq(moduleLessonsTable.moduleId, moduleId),
+        eq(moduleLessonsTable.lessonId, lessonId),
+      ),
+    )
+    .returning({ id: moduleLessonsTable.id });
+
+  if (removed.length === 0) return false;
+
+  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  return true;
+}
+
+/**
+ * Move a placement within its course — to another module, or to another slot
+ * in the same one. Cross-COURSE moves are forbidden by the UI's drag
+ * whitelist and are not expressible here: the placement row keeps its
+ * identity and only its module and rank change.
+ *
+ * IMPORTANT: a lesson has one placement per COURSE, but it can have many
+ * placements ACROSS courses — that's the entire point of the shared library.
+ * The UPDATE below must therefore never key off `lessonId` alone: doing so
+ * would match every course teaching this lesson and silently rewrite the
+ * module/rank of placements the caller never asked to touch. It is scoped to
+ * `targetModuleId`'s own course by resolving that course's module ids first
+ * and requiring the placement's `moduleId` to be one of them.
+ */
+export async function movePlacement(input: {
+  lessonId: number;
+  targetModuleId: number;
+  prevLessonId: number | null;
+  nextLessonId: number | null;
+}): Promise<Placement | null> {
+  const targetCourseId = await getCourseIdForModuleId(input.targetModuleId);
+  if (targetCourseId === null) return null;
+
+  const courseModuleIds = await getModuleIdsForCourse(targetCourseId);
+
+  const [updated] = await db
+    .update(moduleLessonsTable)
+    .set({
+      moduleId: input.targetModuleId,
+      rank: rankBetween(
+        input.prevLessonId,
+        input.nextLessonId,
+        input.targetModuleId,
+      ),
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(moduleLessonsTable.lessonId, input.lessonId),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds),
+      ),
+    )
+    .returning({
+      id: moduleLessonsTable.id,
+      moduleId: moduleLessonsTable.moduleId,
+      lessonId: moduleLessonsTable.lessonId,
+      rank: moduleLessonsTable.rank,
+      dependsOn: moduleLessonsTable.dependsOn,
+    });
+
+  if (!updated) return null;
+
+  await invalidateCourseDetailsCache(
+    await getCourseSlugForModuleId(input.targetModuleId),
+  );
+
+  return toPlacement(updated);
 }

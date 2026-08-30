@@ -12,7 +12,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import { getCourseDetailsWithCache } from '#/db/course';
+import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import {
   getCourseSlugForCourseId,
@@ -65,27 +65,6 @@ import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
 export type { AdminCourseSummary } from '#/lib/admin-schemas';
-
-/**
- * Evict the learner-facing `getCourseDetailsWithCache` entry for a course so
- * an admin save is visible immediately instead of waiting out the 6h TTL.
- *
- * Best-effort, same pattern as `deleteBlobs`/`deleteOrphanedBlob` elsewhere:
- * a Redis outage must not turn a successful admin write into a failed
- * response, so failures are logged and swallowed rather than thrown. `slug`
- * is `null` when the owning course couldn't be resolved (e.g. a dangling
- * id) — nothing to invalidate in that case.
- */
-async function invalidateCourseDetailsCache(
-  slug: string | null,
-): Promise<void> {
-  if (!slug) return;
-  try {
-    await getCourseDetailsWithCache.invalidate(slug);
-  } catch (error) {
-    console.error('Failed to invalidate course-details cache:', error);
-  }
-}
 
 /**
  * Evict the learner-facing `getLessonPlayback` cache entry for a lesson so an
