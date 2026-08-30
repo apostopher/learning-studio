@@ -16,13 +16,15 @@ afterEach(() => vi.restoreAllMocks());
 const material = { text: '<p>x</p>', keyPoints: [], proTips: '', quiz: [] };
 
 describe('useParseLessonMaterial', () => {
-  it('posts the file as multipart and returns parsed material', async () => {
+  it('posts the file and the lessonId as multipart, and returns parsed material', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
         new Response(JSON.stringify(material), { status: 200 }),
       );
-    const { result } = renderHook(() => useParseLessonMaterial(), { wrapper });
+    const { result } = renderHook(() => useParseLessonMaterial(42), {
+      wrapper,
+    });
 
     let returned: unknown;
     await act(async () => {
@@ -34,13 +36,20 @@ describe('useParseLessonMaterial', () => {
     expect(url).toBe('/api/admin/lesson-material/parse');
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
+    // The server guards this exactly the way it guards the save that
+    // follows — same lesson, same `requireLessonContentPermission` — so the
+    // lessonId must actually be on the wire, not merely known client-side.
+    const body = init?.body as FormData;
+    expect(body.get('lessonId')).toBe('42');
   });
 
   it('throws on a non-ok response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('nope', { status: 400 }),
     );
-    const { result } = renderHook(() => useParseLessonMaterial(), { wrapper });
+    const { result } = renderHook(() => useParseLessonMaterial(42), {
+      wrapper,
+    });
     await expect(
       result.current.mutateAsync(new File(['x'], 'a.docx')),
     ).rejects.toThrow(/400/);

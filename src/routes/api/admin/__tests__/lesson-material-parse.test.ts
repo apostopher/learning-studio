@@ -1,24 +1,40 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Fully stub these — the route imports auth/permission modules that pull in
+// Fully stub these — the route imports permission/db modules that pull in
 // real db/session wiring vitest can't resolve (@/ imports, side effects). `#/`
 // not `@/`: vitest cannot resolve the `@/` alias, and the route imports via
 // `#/`, so the mock specifiers must match exactly or the route gets the real
 // module instead of the stub.
 const {
-  getSession,
-  canParseLessonMaterial,
+  ForbiddenError,
+  getDisciplineIdForLessonId,
+  requireLessonContentPermission,
+  absentResourceResponse,
   wordToHtml,
   generateLessonMaterial,
-} = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  canParseLessonMaterial: vi.fn(),
-  wordToHtml: vi.fn(),
-  generateLessonMaterial: vi.fn(),
+} = vi.hoisted(() => {
+  class ForbiddenError extends Error {
+    constructor() {
+      super('Forbidden');
+      this.name = 'ForbiddenError';
+    }
+  }
+  return {
+    ForbiddenError,
+    getDisciplineIdForLessonId: vi.fn(),
+    requireLessonContentPermission: vi.fn(),
+    absentResourceResponse: vi.fn(),
+    wordToHtml: vi.fn(),
+    generateLessonMaterial: vi.fn(),
+  };
+});
+vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
+vi.mock('#/lib/permissions.server', () => ({
+  requireLessonContentPermission,
+  absentResourceResponse,
 }));
-vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
-vi.mock('#/lib/permissions.server', () => ({ canParseLessonMaterial }));
+vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
 vi.mock('#/lib/word-to-html.server', () => ({ wordToHtml }));
 vi.mock('#/ai/generate-lesson-material', () => ({ generateLessonMaterial }));
 
@@ -27,9 +43,13 @@ import { parseLessonMaterialHandler } from '../lesson-material.parse';
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function requestWith(file: File | null): Request {
+function requestWith(
+  file: File | null,
+  lessonId: string | null = '10',
+): Request {
   const form = new FormData();
   if (file) form.append('file', file);
+  if (lessonId !== null) form.append('lessonId', lessonId);
   return new Request('http://test/api/admin/lesson-material/parse', {
     method: 'POST',
     body: form,
@@ -45,67 +65,102 @@ const MATERIAL = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  getSession.mockResolvedValue({ user: { id: 'u1' } });
-  // The default actor holds the grant, so a test that means to exercise the
-  // parsing path is not silently 403'ing instead.
-  canParseLessonMaterial.mockResolvedValue(true);
+  // This lesson's discipline — a sentinel so a branch that forwards the wrong
+  // value fails a `toHaveBeenCalledWith` assertion rather than passing by
+  // coincidence.
+  getDisciplineIdForLessonId.mockResolvedValue({
+    found: true,
+    disciplineId: 7,
+  });
+  requireLessonContentPermission.mockResolvedValue(undefined);
+  // Stands in for the real helper (unit-tested in
+  // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
+  // the teaching side and a flat 403 to everyone else, so a missing row
+  // cannot be used to enumerate ids.
+  absentResourceResponse.mockResolvedValue(new Response(null, { status: 404 }));
 });
 
 describe('parseLessonMaterialHandler', () => {
-  it('returns 403 when there is no session, without calling the generator', async () => {
-    getSession.mockResolvedValueOnce(null);
-    const res = await parseLessonMaterialHandler(requestWith(null));
-    expect(res.status).toBe(403);
-    expect(canParseLessonMaterial).not.toHaveBeenCalled();
-    expect(generateLessonMaterial).not.toHaveBeenCalled();
-  });
-
   /**
-   * Guard on being someone who could go on to SAVE the result: an SME on any
-   * discipline, or an org admin (`canParseLessonMaterial`). This route has no
-   * lesson id of any kind to scope by — only a multipart file — so there is
-   * no discipline to resolve, and the course-less/discipline-less bound is
-   * the only honest one available.
+   * Important 3 (fix round 1): guard on the SAME lesson, with the SAME guard,
+   * as the save this parse feeds — `lessons.$lessonId.material.ts`'s POST.
+   * This is the exact pairing ("this person can save THIS lesson"), not the
+   * approximate one ("someone who could save something") the route used
+   * before: an SME on any discipline could parse a file for an "Untitled"
+   * lesson only an org admin could actually save.
    */
-  it('asks whether this user may parse lesson material at all', async () => {
+  it('resolves the lessonId sent in the form data and forwards its discipline with an update action', async () => {
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
 
-    await parseLessonMaterialHandler(requestWith(file));
+    await parseLessonMaterialHandler(requestWith(file, '10'));
 
-    expect(canParseLessonMaterial).toHaveBeenCalledWith('u1');
+    expect(getDisciplineIdForLessonId).toHaveBeenCalledWith(10);
+    expect(requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      7,
+      'update',
+    );
   });
 
-  /**
-   * A course manager holds `content:read` only, and neither an SME on an
-   * unrelated discipline nor a course manager may save an "Untitled" lesson's
-   * material. Refusing here also matters because generating it would
-   * otherwise burn LLM budget on material that
-   * `lessons.$lessonId.material.ts` — which requires the same discipline/admin
-   * split via `requireLessonContentPermission` — would then refuse to save.
-   */
-  it('returns 403 without generating when the grant is missing', async () => {
-    canParseLessonMaterial.mockResolvedValue(false);
+  // Mutant: guard ignores the resolved discipline (or the old
+  // `canParseLessonMaterial` course-less bound survives alongside it).
+  // Refusing only the mocked guard would then not stop generation — RED.
+  it('returns 403 without generating when the guard rejects', async () => {
+    requireLessonContentPermission.mockRejectedValueOnce(new ForbiddenError());
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
 
-    const res = await parseLessonMaterialHandler(requestWith(file));
+    const res = await parseLessonMaterialHandler(requestWith(file, '10'));
 
     expect(res.status).toBe(403);
     expect(wordToHtml).not.toHaveBeenCalled();
     expect(generateLessonMaterial).not.toHaveBeenCalled();
   });
 
-  it('allows a subject expert, who holds no global role at all', async () => {
-    getSession.mockResolvedValue({ user: { id: 'sme-1' } });
+  it('allows a discipline SME (simulated by the mocked guard resolving)', async () => {
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
 
-    const res = await parseLessonMaterialHandler(requestWith(file));
+    const res = await parseLessonMaterialHandler(requestWith(file, '10'));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(MATERIAL);
+  });
+
+  // The enumeration oracle, same as every other lesson-content route: a
+  // missing lessonId is handed to `absentResourceResponse`, which answers 404
+  // only to someone on the teaching side.
+  it('hands a non-existent lessonId to absentResourceResponse, without generating', async () => {
+    getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
+    absentResourceResponse.mockResolvedValueOnce(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
+
+    const res = await parseLessonMaterialHandler(requestWith(file, '999'));
+
+    expect(absentResourceResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      'Lesson not found',
+    );
+    expect(res.status).toBe(403);
+    expect(generateLessonMaterial).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when lessonId is missing, without resolving a discipline', async () => {
+    const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
+    const res = await parseLessonMaterialHandler(requestWith(file, null));
+    expect(res.status).toBe(400);
+    expect(getDisciplineIdForLessonId).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when lessonId is not a positive integer', async () => {
+    const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
+    const res = await parseLessonMaterialHandler(requestWith(file, 'abc'));
+    expect(res.status).toBe(400);
+    expect(getDisciplineIdForLessonId).not.toHaveBeenCalled();
   });
 
   it('returns 400 for a non-docx file', async () => {

@@ -14,13 +14,11 @@ vi.mock('#/lib/auth', () => ({
 vi.mock('#/db/user-roles', () => ({ getUserRoleNames: m.getUserRoleNames }));
 vi.mock('#/db/discipline-staff', () => ({
   getDisciplineRoleNames: m.getDisciplineRoleNames,
-  getStaffRoleNames: vi.fn(),
 }));
 vi.mock('#/db/course-staff', () => ({
   getCourseRoleNames: vi.fn(),
   getStaffCourseIds: vi.fn(),
   isAnyCourseStaff: vi.fn(),
-  getStaffRoleNames: vi.fn(),
 }));
 vi.mock('#/lib/admin-functions.server', () => ({
   ForbiddenError: class ForbiddenError extends Error {

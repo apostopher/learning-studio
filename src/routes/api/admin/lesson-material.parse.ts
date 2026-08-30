@@ -1,13 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { generateLessonMaterial } from '#/ai/generate-lesson-material';
-import { auth } from '#/lib/auth';
-import { canParseLessonMaterial } from '#/lib/permissions.server';
+import { getDisciplineIdForLessonId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
+import {
+  absentResourceResponse,
+  requireLessonContentPermission,
+} from '#/lib/permissions.server';
 import { wordToHtml } from '#/lib/word-to-html.server';
 
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 /** Vercel serverless request bodies cap at ~4.5 MB; stay under it. */
 const MAX_SIZE_BYTES = 4 * 1024 * 1024;
+
+function parseLessonId(raw: FormDataEntryValue | null): number | null {
+  if (typeof raw !== 'string') return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 /**
  * Parse an uploaded .docx into structured lesson material for admin review.
@@ -16,42 +26,52 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
-  // Guarded on being someone who could go on to SAVE the result: an SME on
-  // any discipline, or an org admin.
-  //
-  // This route takes a .docx and returns generated material. It persists
-  // nothing and receives no lesson id of any kind — only a multipart file —
-  // so there is no discipline to scope by, and `requireLessonContentPermission`
-  // has nothing to resolve against. `canParseLessonMaterial` is the
-  // course-less counterpart: an SME holding `content:create` on some
-  // discipline (mirrors the "is staff somewhere" bound this route used
-  // before discipline-scoping existed), OR'd with the org-admin fallback
-  // that saving to an "Untitled" (no-discipline) lesson requires — an admin
-  // holds no `content` grant of their own, but is still the one who may save
-  // material onto a lesson with no SME to ask.
-  //
-  // The grant, not merely "is staff somewhere": a course manager holds
-  // `content:read` only, and would otherwise burn LLM budget generating
-  // material that `lessons.$lessonId.material.ts` — which requires
-  // `content:update` via the same discipline/admin split — would refuse to
-  // save.
-  const session = await auth.api.getSession({ headers: request.headers });
-  const userId = session?.user?.id;
-  if (!userId) return new Response('Forbidden', { status: 403 });
-
-  if (!(await canParseLessonMaterial(userId))) {
-    return new Response('Forbidden', { status: 403 });
-  }
-
   let file: File | null;
+  let lessonId: number | null;
   try {
-    const value = (await request.formData()).get('file');
+    const form = await request.formData();
+    const value = form.get('file');
     file = value instanceof File ? value : null;
+    lessonId = parseLessonId(form.get('lessonId'));
   } catch {
     return Response.json(
       { error: 'Expected multipart form data.' },
       { status: 400 },
     );
+  }
+
+  if (lessonId === null) {
+    return Response.json(
+      { error: 'Missing or invalid lessonId' },
+      { status: 400 },
+    );
+  }
+
+  // Guarded on the SAME lesson, with the SAME guard, as the save this parse
+  // feeds: `lessons.$lessonId.material.ts`'s POST handler. This is the exact
+  // pairing — "this person can save THIS lesson" — not the approximate one
+  // ("someone who could save something") the previous version of this route
+  // used, which let an SME on any discipline parse a file for an "Untitled"
+  // lesson only an org admin could actually save. `getDisciplineIdForLessonId`
+  // resolves this lesson's discipline directly against `lessonsTable`, so a
+  // missing lesson id (invalid, or since deleted) 404s here exactly as it
+  // would on the save route, rather than wasting LLM budget generating
+  // material for a lesson that no longer exists.
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return absentResourceResponse(request.headers, 'Lesson not found');
+  }
+  try {
+    await requireLessonContentPermission(
+      request.headers,
+      lookup.disciplineId,
+      'update',
+    );
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    throw error;
   }
 
   if (!file || file.type !== DOCX_MIME) {

@@ -79,13 +79,20 @@ async function guardContent(
 }
 
 /**
- * Resolves the discipline `guardContent` needs to decide SME-vs-admin.
+ * The SOLE existence check for `rename`, `config`, and `deleteLessonHandler`
+ * — resolving the discipline `guardContent` needs to decide SME-vs-admin.
  *
- * Defensively re-checks existence rather than trusting the caller's earlier
- * `lessonExistsAt` check: that check runs once, before the body is even
- * parsed, and letting a not-found lookup here silently coerce to
- * `disciplineId: null` would misroute a lesson that vanished between the two
- * checks into the admin-only branch instead of a 404.
+ * Deliberately NOT `getCourseIdForLessonId` (the join-based check `move` and
+ * `dependencies` use): that check reads through `module_lessons`, so it
+ * reports "not found" for a lesson with zero course placements too — and
+ * `lessons.disciplineId`'s own doc comment makes that state a design goal
+ * of the knowledge library ("an UNPLACED lesson — new, or removed from
+ * every course — still has a home and still appears in the library"). A
+ * lesson content route 404ing an unplaced lesson for its own discipline SME
+ * would make it permanently unrenameable and undeletable the moment
+ * remove-from-course ships. `getDisciplineIdForLessonId` queries
+ * `lessonsTable` directly, so it answers "does the lesson exist" without
+ * going anywhere near its placements.
  */
 async function resolveLessonDiscipline(
   request: Request,
@@ -116,19 +123,6 @@ export async function patchLessonHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the lesson before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open.
-  //
-  // The returned course id is used ONLY as an existence check below (lessons
-  // can now have several placements, so "which course" has no single answer
-  // — see the branches themselves for how each derives the course that
-  // actually matters to it). Do not use this value to guard anything.
-  const lessonExistsAt = await getCourseIdForLessonId(lessonId);
-  if (lessonExistsAt === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
 
   let body: unknown;
   try {
@@ -142,15 +136,29 @@ export async function patchLessonHandler(
   // swallow a dependency write and silently drop it.
   const dependencies = updateLessonDependenciesInputSchema.safeParse(body);
   if (dependencies.success) {
+    // A prerequisite list is a property of a PLACEMENT — this lesson, in
+    // THIS course — so its existence check is join-based through
+    // `module_lessons`, same as the guard target below: a lesson with no
+    // placement in any course (an unplaced, library-only lesson) has no
+    // course-scoped dependency list to guard or write, and 404 is the
+    // honest answer for this branch specifically. That is NOT the same
+    // question as "does the lesson exist" — see `resolveLessonDiscipline`,
+    // which `rename`/`config`/`delete` use instead, precisely because they
+    // must NOT 404 an unplaced lesson.
+    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
+    if (lessonExistsAt === null) {
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
     // `dependencies.data.courseId` — the course the CLIENT is asking to
     // edit — not `lessonExistsAt` above (only ever "lesson exists, resolved
-    // to its lowest-id course" for the earlier 404 check). A lesson taught
-    // by several courses has several placements, each with its own
-    // prerequisite list; guarding and writing against any course other than
-    // the one actually being edited would be wrong even though it's a real
-    // course this lesson belongs to. `updateLessonDependencies` itself still
-    // rejects a courseId this lesson has no placement in (`not-found`), so a
-    // forged value can't write a placement that doesn't exist.
+    // to its lowest-id course" for the existence check just above). A
+    // lesson taught by several courses has several placements, each with
+    // its own prerequisite list; guarding and writing against any course
+    // other than the one actually being edited would be wrong even though
+    // it's a real course this lesson belongs to. `updateLessonDependencies`
+    // itself still rejects a courseId this lesson has no placement in
+    // (`not-found`), so a forged value can't write a placement that
+    // doesn't exist.
     const denied = await guardStructure(
       request,
       dependencies.data.courseId,
@@ -188,13 +196,23 @@ export async function patchLessonHandler(
 
   const move = moveLessonInputSchema.safeParse(body);
   if (move.success) {
-    // A move repoints this lesson's PLACEMENT at `targetModuleId` — that
-    // module's course is the one actually being written by `moveLesson`
-    // below, and it is not necessarily (or even usually) `lessonExistsAt`,
-    // the lesson's lowest-id course. Guarding on the wrong one is wrong in
-    // both directions: staff on the lesson's lowest course could move it
-    // into a course they have no authority over, and staff on the real
-    // target course could be refused for their own course.
+    // A move repositions an existing PLACEMENT — there is nothing to move
+    // for a lesson with no placement in any course (an unplaced,
+    // library-only lesson), so this existence check is join-based through
+    // `module_lessons`, same as `dependencies` above and for the same
+    // reason. This is NOT the same question as "does the lesson exist" —
+    // see `resolveLessonDiscipline`, used by `rename`/`config`/`delete`.
+    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
+    if (lessonExistsAt === null) {
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
+    // That module's course is the one actually being written by
+    // `moveLesson` below, and it is not necessarily (or even usually)
+    // `lessonExistsAt`, the lesson's lowest-id course. Guarding on the
+    // wrong one is wrong in both directions: staff on the lesson's lowest
+    // course could move it into a course they have no authority over, and
+    // staff on the real target course could be refused for their own
+    // course.
     const targetCourseId = await getCourseIdForModuleId(
       move.data.targetModuleId,
     );
@@ -242,14 +260,11 @@ export async function deleteLessonHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Existence check only — see the comment in `patchLessonHandler`. Deleting
-  // removes the lesson from EVERY course and cascades its progress rows, so
-  // this follows the lesson's DISCIPLINE same as rename/config: no single
-  // course's staff is the right authority for it. See `guardContent`.
-  const lessonExistsAt = await getCourseIdForLessonId(lessonId);
-  if (lessonExistsAt === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
+  // Deleting removes the lesson from EVERY course and cascades its progress
+  // rows, so this follows the lesson's DISCIPLINE same as rename/config: no
+  // single course's staff is the right authority for it, and an unplaced
+  // (library-only) lesson must still be deletable by its SME — see
+  // `resolveLessonDiscipline`, which is this handler's sole existence check.
   const resolved = await resolveLessonDiscipline(request, lessonId);
   if ('response' in resolved) return resolved.response;
   const denied = await guardContent(request, resolved.disciplineId, 'delete');

@@ -15,8 +15,6 @@ const m = vi.hoisted(() => {
     getUserPermissions: vi.fn(),
     getRoleNamesForProfile: vi.fn(),
     isAnyCourseStaff: vi.fn(),
-    getStaffRoleNames: vi.fn(),
-    getDisciplineStaffRoleNames: vi.fn(),
   };
 });
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -31,11 +29,9 @@ vi.mock('#/db/course-staff', () => ({
   getCourseRoleNames: vi.fn(),
   getStaffCourseIds: vi.fn(),
   isAnyCourseStaff: m.isAnyCourseStaff,
-  getStaffRoleNames: m.getStaffRoleNames,
 }));
 vi.mock('#/db/discipline-staff', () => ({
   getDisciplineRoleNames: vi.fn(),
-  getStaffRoleNames: m.getDisciplineStaffRoleNames,
 }));
 vi.mock('#/db/permissions', () => ({
   getUserPermissions: m.getUserPermissions,
@@ -49,9 +45,6 @@ vi.mock('#/db/permissions', () => ({
 import {
   absentResourceResponse,
   assertCanActOnProfile,
-  canParseLessonMaterial,
-  hasCoursePermissionAnywhere,
-  hasDisciplinePermissionAnywhere,
   isStaffAnywhere,
   requireOwner,
   requirePermission,
@@ -71,8 +64,6 @@ beforeEach(() => {
   m.getUserPermissions.mockResolvedValue(new Set<string>());
   m.getRoleNamesForProfile.mockResolvedValue([]);
   m.isAnyCourseStaff.mockResolvedValue(false);
-  m.getStaffRoleNames.mockResolvedValue([]);
-  m.getDisciplineStaffRoleNames.mockResolvedValue([]);
 });
 
 describe('requirePermission', () => {
@@ -291,136 +282,5 @@ describe('absentResourceResponse', () => {
 
     expect(res.status).toBe(403);
     expect(await res.text()).toBe('Forbidden');
-  });
-});
-
-describe('hasCoursePermissionAnywhere', () => {
-  it('unions global roles with every course_staff role before asking', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
-    m.getStaffRoleNames.mockResolvedValueOnce(['subject-expert']);
-    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:create']));
-
-    await expect(
-      hasCoursePermissionAnywhere('u1', 'content', 'create'),
-    ).resolves.toBe(true);
-    expect(m.getUserPermissions).toHaveBeenCalledWith([
-      'admin',
-      'subject-expert',
-    ]);
-  });
-
-  it('refuses a course manager, who holds content:read only', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce([]);
-    m.getStaffRoleNames.mockResolvedValueOnce(['course-manager']);
-    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:read']));
-
-    await expect(
-      hasCoursePermissionAnywhere('u1', 'content', 'create'),
-    ).resolves.toBe(false);
-  });
-
-  it('refuses an admin, who by design holds no content grant', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
-    m.getUserPermissions.mockResolvedValueOnce(
-      new Set(['course:create', 'staff:create']),
-    );
-
-    await expect(
-      hasCoursePermissionAnywhere('a1', 'content', 'create'),
-    ).resolves.toBe(false);
-  });
-
-  it('passes an owner on the wildcard', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce(['owner']);
-    m.getUserPermissions.mockResolvedValueOnce(new Set(['*']));
-
-    await expect(
-      hasCoursePermissionAnywhere('o1', 'content', 'create'),
-    ).resolves.toBe(true);
-  });
-
-  it('asks for no grants at all when the user holds no role anywhere', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce([]);
-
-    await expect(
-      hasCoursePermissionAnywhere('u1', 'content', 'create'),
-    ).resolves.toBe(false);
-    expect(m.getUserPermissions).not.toHaveBeenCalled();
-  });
-
-  it('de-duplicates a role held both globally and on a course', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce(['subject-expert']);
-    m.getStaffRoleNames.mockResolvedValueOnce(['subject-expert']);
-    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:create']));
-
-    await hasCoursePermissionAnywhere('u1', 'content', 'create');
-
-    expect(m.getUserPermissions).toHaveBeenCalledWith(['subject-expert']);
-  });
-});
-
-describe('hasDisciplinePermissionAnywhere', () => {
-  it('unions global roles with every discipline_staff role before asking', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce([]);
-    m.getDisciplineStaffRoleNames.mockResolvedValueOnce(['subject-expert']);
-    m.getUserPermissions.mockResolvedValueOnce(new Set(['content:create']));
-
-    await expect(
-      hasDisciplinePermissionAnywhere('u1', 'content', 'create'),
-    ).resolves.toBe(true);
-    expect(m.getUserPermissions).toHaveBeenCalledWith(['subject-expert']);
-  });
-
-  it('refuses an admin, who by design holds no content grant', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
-    m.getUserPermissions.mockResolvedValueOnce(
-      new Set(['course:create', 'staff:create']),
-    );
-
-    await expect(
-      hasDisciplinePermissionAnywhere('a1', 'content', 'create'),
-    ).resolves.toBe(false);
-  });
-
-  it('asks for no grants at all when the user holds no role anywhere', async () => {
-    m.getUserRoleNames.mockResolvedValueOnce([]);
-
-    await expect(
-      hasDisciplinePermissionAnywhere('u1', 'content', 'create'),
-    ).resolves.toBe(false);
-    expect(m.getUserPermissions).not.toHaveBeenCalled();
-  });
-});
-
-describe('canParseLessonMaterial', () => {
-  // The pairing this exists to preserve: `requireLessonContentPermission`'s
-  // null branch admits an org admin outright, so the parse step that feeds it
-  // must too — an admin holds no `content` grant of their own (by design),
-  // so `hasDisciplinePermissionAnywhere` alone would refuse them.
-  it('admits an org admin who holds no discipline SME row anywhere', async () => {
-    m.getUserRoleNames.mockResolvedValue(['admin']);
-    m.getUserPermissions.mockResolvedValue(new Set(['course:create']));
-
-    await expect(canParseLessonMaterial('admin-1')).resolves.toBe(true);
-  });
-
-  it('admits a discipline SME who holds no global role at all', async () => {
-    m.getUserRoleNames.mockResolvedValue([]);
-    m.getDisciplineStaffRoleNames.mockResolvedValue(['subject-expert']);
-    m.getUserPermissions.mockResolvedValue(new Set(['content:create']));
-
-    await expect(canParseLessonMaterial('sme-1')).resolves.toBe(true);
-  });
-
-  // Mutant: `canParseLessonMaterial` implemented as bare
-  // `hasDisciplinePermissionAnywhere` with no admin OR — refuses the admin
-  // case above (RED there) even though this one already exercises the SME
-  // half correctly either way, so both tests in this block matter together.
-  it('refuses a course manager, who holds content:read only and no discipline row', async () => {
-    m.getUserRoleNames.mockResolvedValue([]);
-    m.getDisciplineStaffRoleNames.mockResolvedValue([]);
-    m.getUserPermissions.mockResolvedValue(new Set(['content:read']));
-
-    await expect(canParseLessonMaterial('cm-1')).resolves.toBe(false);
   });
 });

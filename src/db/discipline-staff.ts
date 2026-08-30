@@ -29,26 +29,3 @@ export async function getDisciplineRoleNames(
     );
   return rows.map((r) => r.name);
 }
-
-/**
- * The distinct staff roles this person holds anywhere, across every
- * discipline.
- *
- * Mirrors `getStaffRoleNames` in `course-staff.ts`, and for the same reason:
- * its one caller (`hasDisciplinePermissionAnywhere`) answers a question that
- * has no discipline in it — "may this person do X on ANY discipline?" — and
- * grants are keyed on the role name alone in `role_permissions`. Returning
- * pairs would invite a caller to treat the set as authority on a specific
- * discipline, which it is not.
- */
-export async function getStaffRoleNames(userId: string): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ name: userRolesTable.name })
-    .from(disciplineStaffTable)
-    .innerJoin(
-      userRolesTable,
-      eq(userRolesTable.id, disciplineStaffTable.roleId),
-    )
-    .where(eq(disciplineStaffTable.userId, userId));
-  return rows.map((r) => r.name);
-}

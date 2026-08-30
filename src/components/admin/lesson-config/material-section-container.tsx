@@ -33,7 +33,7 @@ export const MaterialSectionContainer = ({
   lesson: BoardLesson;
 }) => {
   const existing = useLessonMaterial(lesson.id);
-  const parse = useParseLessonMaterial();
+  const parse = useParseLessonMaterial(lesson.id);
   const save = useSaveLessonMaterial(lesson.id);
 
   const form = useForm<LessonMaterialGeneration>({

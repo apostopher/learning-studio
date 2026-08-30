@@ -129,24 +129,6 @@ export async function getStaffCourseSlugs(userId: string): Promise<string[]> {
 }
 
 /**
- * The distinct staff roles this person holds anywhere, across every course.
- *
- * Deliberately drops the course each role came from: its one caller
- * (`hasCoursePermissionAnywhere`) is answering a question that has no course
- * in it — "may this person do X on ANY course?" — and grants are keyed on the
- * role name alone in `role_permissions`. Returning pairs would invite a caller
- * to treat the set as authority on a specific course, which it is not.
- */
-export async function getStaffRoleNames(userId: string): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ name: userRolesTable.name })
-    .from(courseStaffTable)
-    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
-    .where(eq(courseStaffTable.userId, userId));
-  return rows.map((r) => r.name);
-}
-
-/**
  * Staff on ANY course.
  *
  * Two callers, both of which genuinely have no course id to scope by:
