@@ -120,6 +120,24 @@ export const modulesTableRelations = relations(
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_modules_required_subs ON modules USING GIN (required_subscriptions);`;
 
+export const disciplinesTable = pgTable('disciplines', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  orgId: integer('org_id')
+    .notNull()
+    .references(() => orgsTable.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+});
+
+export const dbDisciplineSchema = createSelectSchema(disciplinesTable);
+export type DBDiscipline = z.infer<typeof dbDisciplineSchema>;
+
+export const disciplinesTableRelations = relations(disciplinesTable, ({ many }) => ({
+  lessons: many(lessonsTable),
+}));
+
 export const lessonsTable = pgTable('lessons', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   moduleId: integer('module_id')
@@ -144,6 +162,8 @@ export const lessonsTable = pgTable('lessons', {
   isAvailable: boolean('is_available').notNull().default(false),
   exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
   hasDebrief: boolean('has_debrief').notNull().default(true),
+  disciplineId: integer('discipline_id')
+    .references(() => disciplinesTable.id, { onDelete: 'no action' }),
   /**
    * PRESERVED FOR PARITY — no learner-side consumer yet.
    *
