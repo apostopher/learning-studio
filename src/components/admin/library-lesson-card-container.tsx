@@ -14,12 +14,20 @@ import { LibraryLessonCard } from './library-lesson-card';
  */
 export const LibraryLessonCardContainer = ({
   lesson,
+  disciplineId,
 }: {
   lesson: LibraryLesson;
+  /**
+   * The column this card came from. Carried in the drag data so collision
+   * detection can leave that one column out of the candidate set: releasing a
+   * card back where it started is "never mind", and answering it with a red
+   * refusal toast would make the universal cancel gesture look like an error.
+   */
+  disciplineId: number;
 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: libraryLessonDndId(lesson.id),
-    data: { type: 'library-lesson', lessonId: lesson.id },
+    data: { type: 'library-lesson', lessonId: lesson.id, disciplineId },
   });
 
   return (

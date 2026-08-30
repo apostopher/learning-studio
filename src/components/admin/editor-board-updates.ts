@@ -142,6 +142,45 @@ export function moduleNeighbours(
 }
 
 /**
+ * What to persist when `resolveDrop` answers `null` for a lesson drag that
+ * already moved something on screen.
+ *
+ * `null` normally means "dropped on nothing", and the right answer is to undo
+ * the preview. But `onDragOver` transfers a lesson into its target module
+ * live, and the transferred card is itself a droppable — so the release can
+ * land on the dragged lesson's own id. `resolveDrop` correctly calls that a
+ * self-drop and answers `null`, and rolling back there would silently undo a
+ * transfer the admin watched happen and released on deliberately.
+ *
+ * `transferApplied` is the whole distinction: without it every `null` would
+ * commit, and a genuine miss would persist a move nobody asked for. The
+ * target module is read from the board rather than remembered from the
+ * transfer, because a drag that wandered through three modules must persist
+ * where the lesson actually ended up.
+ *
+ * Returns the move to persist, or `null` to roll back.
+ */
+export function commitTransferredLesson(
+  board: OrgEditorBoard,
+  lessonId: number,
+  transferApplied: boolean,
+): {
+  targetModuleId: number;
+  prevLessonId: number | null;
+  nextLessonId: number | null;
+} | null {
+  if (!transferApplied) return null;
+  const holder = allModules(board).find((m) =>
+    m.lessons.some((l) => l.id === lessonId),
+  );
+  if (!holder) return null;
+  return {
+    targetModuleId: holder.id,
+    ...lessonNeighbours(board, holder.id, lessonId),
+  };
+}
+
+/**
  * The board card to show for a library lesson the instant it is dropped,
  * before the refetch brings the real placement back.
  *

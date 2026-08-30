@@ -8,6 +8,7 @@ import type {
 import { containerDndId, lessonDndId } from '#/lib/dnd-ids';
 import {
   boardLessonFromLibrary,
+  commitTransferredLesson,
   lessonNeighbours,
   linkLessonOnBoard,
   moduleNeighbours,
@@ -177,5 +178,50 @@ describe('boardLessonFromLibrary', () => {
     expect(card.slug).toBe('wake-turbulence');
     expect(card.isAvailable).toBe(false);
     expect(card.isConfigured).toBe(false);
+  });
+});
+
+describe('commitTransferredLesson', () => {
+  it('commits the transfer when the drop landed on the dragged lesson itself', () => {
+    // Round-1 review (Critical 1). `onDragOver` transfers the lesson into the
+    // target module live; the transferred card is then a droppable of its own,
+    // so the release can land on `active.id` — a self-drop, which resolveDrop
+    // correctly answers `null` for. The old path rolled back there, so a
+    // cross-module move the admin watched happen silently undid itself.
+    //
+    // Mutant seen RED: `return null;` as the first statement — exactly the
+    // rollback-always behaviour this replaces. Right return type, right
+    // shape, and the bug is invisible to any test that only checks the
+    // rollback branch.
+    const board = makeBoard();
+    const transferred = moveLessonOnBoard(board, 100, 11, containerDndId(11));
+
+    expect(commitTransferredLesson(transferred, 100, true)).toEqual({
+      targetModuleId: 11,
+      prevLessonId: 110,
+      nextLessonId: null,
+    });
+  });
+
+  it('rolls back instead when no transfer was applied during the drag', () => {
+    // Mutant seen RED: the `transferApplied` guard dropped. Every drop on
+    // nothing then persists a move — the opposite failure, and the reason the
+    // flag exists rather than "commit whenever the lesson is on the board".
+    expect(commitTransferredLesson(makeBoard(), 100, false)).toBeNull();
+  });
+
+  it('follows the lesson to where it actually ended up, not where it first went', () => {
+    // Mutant seen RED: the target module remembered from the transfer instead
+    // of read from the board — a drag that wanders into module 11 and back
+    // into module 10 would persist the wrong module.
+    const board = makeBoard();
+    const viaEleven = moveLessonOnBoard(board, 100, 11, containerDndId(11));
+    const backInTen = moveLessonOnBoard(viaEleven, 100, 10, containerDndId(10));
+
+    expect(commitTransferredLesson(backInTen, 100, true)).toEqual({
+      targetModuleId: 10,
+      prevLessonId: 102,
+      nextLessonId: null,
+    });
   });
 });

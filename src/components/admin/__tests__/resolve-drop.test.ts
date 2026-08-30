@@ -75,6 +75,10 @@ const courseBoard = (
  */
 const STALLS = 100;
 const GO_AROUND = 101;
+// Fundamentals holds TWO lessons on purpose: with one lesson per module a
+// same-module reorder cannot be expressed at all, and the whitelist row for it
+// would go untested while looking tested.
+const TAXIING = 102;
 const RADIO_CALLS = 200;
 const WAKE_TURBULENCE = 500;
 
@@ -84,7 +88,10 @@ const BASICS = 20;
 
 const board: OrgEditorBoard = [
   courseBoard(1, 'Two-Week Course', [
-    mod(FUNDAMENTALS, 'Fundamentals', [lesson(STALLS, 'Stalls')]),
+    mod(FUNDAMENTALS, 'Fundamentals', [
+      lesson(STALLS, 'Stalls'),
+      lesson(TAXIING, 'Taxiing'),
+    ]),
     mod(CIRCUITS, 'Circuits', [lesson(GO_AROUND, 'Go-around')]),
   ]),
   courseBoard(2, 'Mini Course', [
@@ -123,9 +130,11 @@ describe('resolveDrop — the allowed drops', () => {
     });
   });
 
-  it('reorders a placed lesson onto a slot in its own module', () => {
-    // A same-module drop is a `move` too — the over id names the slot, which
-    // is why `overId` is carried through rather than discarded.
+  it('moves a placed lesson onto a named slot in a sibling module', () => {
+    // Round-1 review (Important 1): this test used to claim it covered a
+    // same-module reorder, but STALLS is in Fundamentals and GO_AROUND is in
+    // Circuits — its own `moduleId: CIRCUITS` assertion proved it was a
+    // cross-module drop. The same-module row is now covered below.
     expect(
       resolveDrop(board, lessonDndId(STALLS), lessonDndId(GO_AROUND)),
     ).toEqual({
@@ -133,6 +142,24 @@ describe('resolveDrop — the allowed drops', () => {
       moduleId: CIRCUITS,
       lessonId: STALLS,
       overId: lessonDndId(GO_AROUND),
+    });
+  });
+
+  it('reorders a placed lesson onto a slot in its OWN module', () => {
+    // Whitelist row 3. Mutant seen RED:
+    // `if (to.module.id === from.module.id) return null;` — a same-module drop
+    // treated as a no-op, so a reorder within a module silently does nothing
+    // while every cross-module move keeps working.
+    //
+    // A same-module drop is a `move` too, not a fifth kind: the over id names
+    // the slot, which is why `overId` is carried through rather than dropped.
+    expect(
+      resolveDrop(board, lessonDndId(STALLS), lessonDndId(TAXIING)),
+    ).toEqual({
+      kind: 'move',
+      moduleId: FUNDAMENTALS,
+      lessonId: STALLS,
+      overId: lessonDndId(TAXIING),
     });
   });
 
@@ -184,6 +211,39 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     const reason = result?.kind === 'forbidden' ? result.reason : '';
     expect(reason).toContain('discipline');
     expect(reason).toContain('module');
+  });
+
+  it('refuses a module dragged into another course, naming both courses', () => {
+    // Round-1 review (Important 2): reachable — module drags keep every
+    // course's modules in the candidate set so this refusal can be stated at
+    // all — and previously untested. Mutant seen RED: the same-course guard
+    // removed, so the branch falls through to `reorder-module` and a module
+    // is dragged out of its own course into another one.
+    const result = resolveDrop(
+      board,
+      moduleDndId(FUNDAMENTALS),
+      moduleDndId(BASICS),
+    );
+
+    expect(result?.kind).toBe('forbidden');
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain('Fundamentals');
+    expect(reason).toContain('Two-Week Course');
+    expect(reason).toContain('Mini Course');
+  });
+
+  it('refuses a placed lesson dragged back to the library, and says what to do instead', () => {
+    // Round-1 review (Important 2): dragging a lesson out of a course and
+    // back to the library is a natural gesture, so it must answer with a
+    // sentence rather than a shrug. Mutant seen RED: `return null` for that
+    // branch — the drag springs back in silence.
+    const result = resolveDrop(board, lessonDndId(STALLS), disciplineDndId(7));
+
+    expect(result?.kind).toBe('forbidden');
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain('Stalls');
+    expect(reason).toContain('Fundamentals');
+    expect(reason).toContain('Remove');
   });
 
   it('refuses a library lesson a course already teaches, saying it is already there', () => {

@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai-family';
-import type { ProviderId } from '@/lib/admin-schemas';
-import type { UserLevel } from '@/types';
+import type { ProviderId } from '#/lib/admin-schemas';
+import type { UserLevel } from '#/types';
 
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);

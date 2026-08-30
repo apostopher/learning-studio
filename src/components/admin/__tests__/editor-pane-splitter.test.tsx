@@ -18,6 +18,24 @@ describe('EditorPaneSplitter', () => {
     expect(document.activeElement).toBe(handle);
   });
 
+  it('announces the range the container will actually let it reach', () => {
+    // Mutant: `aria-valuemin={0}` / `aria-valuemax={100}` hardcoded back onto
+    // the element. This fails against that mutant because the editor clamps
+    // the split to 20–80, and a screen reader told the range runs to 0 hears
+    // the handle stop responding with no explanation.
+    render(
+      <EditorPaneSplitter
+        onPointerDown={vi.fn()}
+        ariaValueNow={40}
+        ariaValueMin={20}
+        ariaValueMax={80}
+      />,
+    );
+    const handle = screen.getByRole('separator');
+    expect(handle.getAttribute('aria-valuemin')).toBe('20');
+    expect(handle.getAttribute('aria-valuemax')).toBe('80');
+  });
+
   it('relays onPointerDown to the caller', () => {
     // Mutant: the `onPointerDown` prop is accepted but never wired onto the
     // element. This assertion fails against that mutant because the spy

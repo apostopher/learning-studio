@@ -39,9 +39,16 @@ export function useMovePlacement() {
       });
       if (!res.ok) throw new Error(`Failed to move lesson (${res.status})`);
     },
-    // Settled, not success: after a failure the caller has rolled the cache
-    // back to its snapshot, and a refetch confirms that guess against what the
-    // server actually kept.
+    // Settled, not success — deliberately unlike `useLinkLesson`, which
+    // invalidates on success only. A failed link created nothing, so undoing
+    // it is exact. A failed move happens after the drag has already rewritten
+    // the cached board (`onDragOver` transfers the lesson live), so the
+    // caller's rollback is a guess at what the server kept, and the refetch is
+    // what confirms it. `useMoveLesson`, which this mirrors, settles for the
+    // same reason.
+    //
+    // Not `orgLibrary()`: moving a placement between modules of one course
+    // leaves every "in N courses" badge exactly as it was.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
     },

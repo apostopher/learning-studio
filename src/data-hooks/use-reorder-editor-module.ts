@@ -30,6 +30,9 @@ export function useReorderEditorModule() {
       });
       if (!res.ok) throw new Error(`Failed to reorder module (${res.status})`);
     },
+    // Settled, not success, and not `orgLibrary()` — same reasoning as
+    // `useMovePlacement`, which see. Module order changes no lesson placement,
+    // so no library badge can have moved.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
     },

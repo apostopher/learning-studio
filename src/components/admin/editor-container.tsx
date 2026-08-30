@@ -49,6 +49,7 @@ import {
 import { DragRefusalNote } from './drag-refusal-note';
 import {
   boardLessonFromLibrary,
+  commitTransferredLesson,
   lessonNeighbours,
   linkLessonOnBoard,
   moduleNeighbours,
@@ -65,6 +66,13 @@ import { resolveDrop } from './resolve-drop';
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
+/**
+ * How far outside a target still counts as aiming at it. Measured edge to
+ * pointer, not centre to centre: a tall module's centre can be 200px from its
+ * own bottom edge, so a centre-distance threshold would call a drop just below
+ * it a miss while calling a drop across the pane a hit.
+ */
+const DROP_SLOP_PX = 24;
 /** The library pane never shrinks or grows past these, as a % of the editor. */
 const MIN_SPLIT_PERCENT = 20;
 const MAX_SPLIT_PERCENT = 80;
@@ -113,6 +121,14 @@ export const EditorContainer = () => {
    * worse than one that never looked like it worked.
    */
   const snapshotRef = useRef<OrgEditorBoard | null>(null);
+  /**
+   * Set once `onDragOver` has transferred the dragged lesson into another
+   * module. The transferred card becomes a droppable of its own, so the
+   * release can land on the dragged lesson's own id — a self-drop, which
+   * `resolveDrop` answers `null` for. Without this flag that `null` would roll
+   * the transfer back and the drag would appear to have done nothing.
+   */
+  const transferAppliedRef = useRef(false);
   /** The pending auto-expand, so a drag that moves on cancels it. */
   const expandTimerRef = useRef<{
     moduleId: number;
@@ -138,28 +154,53 @@ export const EditorContainer = () => {
    * spring back in silence, and a refusal that says nothing is the thing this
    * editor is not allowed to do. They reach `resolveDrop`, which refuses them
    * by name.
+   *
+   * What IS filtered out is the drop that means nothing: `closestCenter` and
+   * `closestCorners` answer with the nearest candidate at ANY distance, so
+   * without a miss gate there is no such thing as releasing over nothing.
+   * Every "never mind" would snap to whatever happened to be closest — a
+   * module let go over the library pane would quietly reorder itself, and a
+   * card let go in blank space would raise a red toast. Escape must not be
+   * the only way to cancel a drag.
    */
   const collisionDetection: CollisionDetection = (args) => {
-    const activeType = args.active.data.current?.type as DndType | undefined;
+    const activeData = args.active.data.current;
+    const activeType = activeData?.type as DndType | undefined;
+    const pointer = args.pointerCoordinates;
+    const missed = (candidates: typeof args.droppableContainers) =>
+      pointer != null &&
+      !candidates.some((c) =>
+        pointerIsNear(args.droppableRects.get(c.id), pointer),
+      );
 
     if (activeType === 'module') {
       // A module only ever lands on another module — including one in another
       // course, which `resolveDrop` then refuses with both course names.
-      return closestCenter({
-        ...args,
-        droppableContainers: args.droppableContainers.filter(
-          (c) => c.data.current?.type === 'module',
-        ),
-      });
+      const modules = args.droppableContainers.filter(
+        (c) => c.data.current?.type === 'module',
+      );
+      if (missed(modules)) return [];
+      return closestCenter({ ...args, droppableContainers: modules });
     }
 
     const targets = args.droppableContainers.filter((c) => {
       const type = c.data.current?.type;
-      return type === 'lesson' || type === 'container' || type === 'discipline';
+      if (type === 'discipline') {
+        // A library card released back on the column it came from is "never
+        // mind", not a mistake — the same reasoning that makes a self-drop
+        // `null` rather than `forbidden` in `resolveDrop`. Dropping it on a
+        // DIFFERENT discipline column is a real attempt at something this
+        // pane does not do, so that one stays a target and gets its reason.
+        return !(
+          activeType === 'library-lesson' &&
+          c.data.current?.disciplineId === activeData?.disciplineId
+        );
+      }
+      return type === 'lesson' || type === 'container';
     });
     // Keyboard dragging has no pointer, so the two-stage narrowing below has
     // nothing to narrow with; fall back to plain geometry over every target.
-    if (!args.pointerCoordinates) {
+    if (!pointer) {
       return closestCorners({ ...args, droppableContainers: targets });
     }
 
@@ -171,6 +212,7 @@ export const EditorContainer = () => {
       const type = c.data.current?.type;
       return type === 'container' || type === 'discipline';
     });
+    if (missed(areas)) return [];
     const hovered = pointerWithin({ ...args, droppableContainers: areas });
     const first = hovered[0];
     if (!first) {
@@ -228,6 +270,7 @@ export const EditorContainer = () => {
   };
 
   const clearActive = () => {
+    transferAppliedRef.current = false;
     setActiveModuleId(null);
     setActiveLessonId(null);
     setActiveLibraryLessonId(null);
@@ -239,6 +282,7 @@ export const EditorContainer = () => {
     const parsed = parseDndId(event.active.id);
     if (!parsed) return;
     setRefusal(null);
+    transferAppliedRef.current = false;
     // Snapshot for every kind of drag, module reorders included: they all
     // write optimistically into the same cached board.
     snapshotRef.current = readBoard();
@@ -291,24 +335,57 @@ export const EditorContainer = () => {
             over.id,
           ),
         );
+        transferAppliedRef.current = true;
       }
     }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    // Read before `clearActive`, which resets it.
+    const transferApplied = transferAppliedRef.current;
     clearActive();
 
     const current = readBoard();
     if (!over || !current) {
+      // A genuine miss — released over no target at all. That is the "never
+      // mind" gesture, so it cancels: undo the preview, say nothing.
       rollback();
       return;
     }
 
+    const activeParsed = parseDndId(active.id);
     const resolution = resolveDrop(current, active.id, over.id);
     if (!resolution) {
-      // Dropped on nothing recognisable. Undo whatever the drag previewed;
-      // there is nothing to explain, because nothing was refused.
+      // `null` is "no drop target", which is usually a rollback. The one
+      // exception is a lesson released on ITSELF after `onDragOver` already
+      // carried it into another module: the transferred card is a droppable,
+      // so it can win the collision, and undoing there would throw away a
+      // move the admin watched happen and released on deliberately.
+      if (activeParsed?.type === 'lesson') {
+        const commit = commitTransferredLesson(
+          current,
+          activeParsed.id,
+          transferApplied,
+        );
+        if (commit) {
+          movePlacement.mutate(
+            {
+              lessonId: activeParsed.id,
+              targetModuleId: commit.targetModuleId,
+              prevLessonId: commit.prevLessonId,
+              nextLessonId: commit.nextLessonId,
+            },
+            {
+              onError: (error) => {
+                rollback();
+                toast.error(error.message);
+              },
+            },
+          );
+          return;
+        }
+      }
       rollback();
       return;
     }
@@ -545,6 +622,11 @@ export const EditorContainer = () => {
           <EditorPaneSplitter
             onPointerDown={onSplitterPointerDown}
             ariaValueNow={Math.round(splitPercent)}
+            // The clamp lives here, so the announced range does too — 0–100
+            // told a screen reader about positions the handle refuses to move
+            // to.
+            ariaValueMin={MIN_SPLIT_PERCENT}
+            ariaValueMax={MAX_SPLIT_PERCENT}
           />
         </div>
 
@@ -581,6 +663,22 @@ export const EditorContainer = () => {
     </DndContext>
   );
 };
+
+/** Whether the pointer is inside a droppable's rect, or within `DROP_SLOP_PX` of it. */
+function pointerIsNear(
+  rect:
+    | { top: number; left: number; width: number; height: number }
+    | undefined,
+  pointer: { x: number; y: number },
+): boolean {
+  if (!rect) return false;
+  return (
+    pointer.x >= rect.left - DROP_SLOP_PX &&
+    pointer.x <= rect.left + rect.width + DROP_SLOP_PX &&
+    pointer.y >= rect.top - DROP_SLOP_PX &&
+    pointer.y <= rect.top + rect.height + DROP_SLOP_PX
+  );
+}
 
 /** The library card for a lesson id, across disciplines and the untitled column. */
 function findLibraryLesson(

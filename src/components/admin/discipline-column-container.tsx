@@ -53,7 +53,11 @@ export const DisciplineColumnContainer = ({
           </p>
         ) : (
           lessons.map((lesson) => (
-            <LibraryLessonCardContainer key={lesson.id} lesson={lesson} />
+            <LibraryLessonCardContainer
+              key={lesson.id}
+              lesson={lesson}
+              disciplineId={disciplineId}
+            />
           ))
         )}
       </DisciplineColumn>
