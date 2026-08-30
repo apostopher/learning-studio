@@ -29,7 +29,14 @@ function statements(): string[] {
   return db.execute.mock.calls.map((c) => textOf(c[0] as Query));
 }
 
-const COLUMN_PROBE_QUERY = 'information_schema.columns';
+// Fix round 2, Minor: matches the migration's ACTUAL predicate
+// (`table_schema = 'public' and table_name = 'lessons' and column_name =
+// 'module_id'`), not just the bare substring `information_schema.columns`
+// — a mutant that probed the wrong table/column/schema would otherwise
+// still be "recognized" as the column probe by this mock and pass every
+// test in this file.
+const COLUMN_PROBE_QUERY =
+  "table_schema = 'public' and table_name = 'lessons' and column_name = 'module_id'";
 const ORPHAN_COUNT_QUERY = 'left join "module_lessons"';
 
 /**
@@ -198,8 +205,17 @@ describe('migrateDropLessonModuleId', () => {
     expect(joined).toContain(
       'create index if not exists "module_lessons_depends_on_idx"',
     );
-    // And critically: no attempt to drop columns that are already gone.
-    expect(joined).not.toContain('drop column');
+    // No attempt to drop a column that's already gone…
+    expect(joined).not.toContain('drop column if exists "module_id"');
+    // …but `rank` is a SEPARATE, independently `if exists`-guarded
+    // statement (fix round 2, Minor: hoisted out of the `module_id` branch)
+    // — it still runs even when `module_id` alone is already dropped, which
+    // is exactly the scenario this test used to get wrong by asserting
+    // `not.toContain('drop column')` for BOTH columns at once. A database
+    // with `module_id` gone but `rank` still present (achievable if a prior
+    // run partially completed before this fix) must still get `rank`
+    // dropped here, not silently skipped.
+    expect(joined).toContain('drop column if exists "rank"');
   });
 
   it('still drops module_id/rank when the column probe reports it present (first run)', async () => {
@@ -209,7 +225,9 @@ describe('migrateDropLessonModuleId', () => {
 
     const all = statements();
     expect(all.some((s) => s.includes(ORPHAN_COUNT_QUERY))).toBe(true);
-    expect(all.join('\n')).toContain('drop column if exists "module_id"');
+    const joined = all.join('\n');
+    expect(joined).toContain('drop column if exists "module_id"');
+    expect(joined).toContain('drop column if exists "rank"');
   });
 
   // Fix round 1, Critical 2 (part 2): every statement must run inside ONE

@@ -13,10 +13,11 @@ The code in this deploy (`createLesson`/`moveLesson` no longer writing
 columns (`migrate-drop-lesson-module-id.ts`) have a hazard in **both**
 directions:
 
-- **Deploy the code first.** `lessons.module_id` is still `NOT NULL` (the
-  migration hasn't run yet) but the new code stops supplying it on insert.
-  Every `createLesson` call fails outright with a NOT NULL violation until
-  the migration runs.
+- **Deploy the code first.** `lessons.module_id` AND `lessons.rank` are
+  still `NOT NULL` (the migration hasn't run yet) but the new code stops
+  supplying either on insert. Every `createLesson` call fails outright with
+  a NOT NULL violation on whichever of the two columns Postgres checks
+  first, until the migration runs.
 - **Run the migration first.** The columns are gone, but the OLD code is
   still live (deploy hasn't finished/rolled out yet) and still writes
   `moduleId`/`rank` on every `createLesson`/`moveLesson` call. Those same two
@@ -27,20 +28,30 @@ Landing them "together" doesn't remove this — it only makes the window
 small. There is no atomic way to deploy an app and run a database migration
 as one operation here.
 
+(`lessons.org_id` is ALSO `NOT NULL`, but is not part of this hazard —
+`createLesson` resolves and writes a real `org_id` on every insert as of
+this deploy, so there is nothing for a relax step to cover there. Verified
+against every column in `lessonsTable`: `module_id` and `rank` are the
+whole set the OLD code wrote that the NEW code stops writing.)
+
 ## The actual fix: relax before either side moves
 
-`pnpm db:relax-lesson-module-id` (`migrate-relax-lesson-module-id.ts`) drops
-`lessons.module_id`'s `NOT NULL` constraint. That's compatible with **both**
-the old code (still writes the column — a nullable column is happy to
-receive a real value) and the new code (stops writing it — a nullable column
-doesn't require one). Once it has run, there is no bad order left: the code
-deploy and the contract migration can happen in either order, or days apart,
-without a live window where an admin write 500s.
+`pnpm db:relax-lesson-columns` (`migrate-relax-lesson-columns.ts`) drops the
+`NOT NULL` constraint from BOTH `lessons.module_id` and `lessons.rank`.
+That's compatible with **both** the old code (still writes both columns — a
+nullable column is happy to receive a real value) and the new code (stops
+writing either — a nullable column doesn't require one). Once it has run,
+there is no bad order left: the code deploy and the contract migration can
+happen in either order, or days apart, without a live window where an admin
+write 500s.
 
 ## The order
 
-1. **`pnpm db:relax-lesson-module-id`** — makes `module_id` nullable.
-   Idempotent; safe to re-run.
+1. **`pnpm db:relax-lesson-columns`** — makes `module_id` and `rank`
+   nullable. Idempotent, including after step 3: it probes
+   `information_schema.columns` for each column first and relaxes only the
+   ones still present, so running it again once the contract migration has
+   already dropped them both is a clean no-op, not an error.
 2. **Deploy this code** (the build with the dual-write removed).
    Confirm the deploy is healthy — creating and moving a lesson both work.
 3. **`pnpm db:migrate-drop-lesson-module-id`** — drops `module_id`, `rank`,

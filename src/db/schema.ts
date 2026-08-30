@@ -173,9 +173,11 @@ export const lessonsTable = pgTable('lessons', {
    * several orgs, so the backfill takes the lowest. If genuine cross-org
    * sharing arrives it becomes a join table, not a rework of this column.
    */
-  orgId: integer('org_id').references(() => orgsTable.id, {
-    onDelete: 'cascade',
-  }),
+  orgId: integer('org_id')
+    .notNull()
+    .references(() => orgsTable.id, {
+      onDelete: 'cascade',
+    }),
   /**
    * PRESERVED FOR PARITY — no learner-side consumer yet.
    *

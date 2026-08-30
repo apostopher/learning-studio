@@ -381,7 +381,14 @@ describe('course-details cache invalidation', () => {
       .fn()
       .mockReturnValueOnce(lessonInsert)
       .mockReturnValueOnce(placementInsert);
-    const tx = { insert: txInsert };
+    // Fix round 2, Critical 1: `createLesson` now resolves the new lesson's
+    // `orgId` via a `tx.select(...)` (module -> course -> course_orgs)
+    // BEFORE either insert — the fake `tx` needs a `.select` too, or the
+    // real code crashes calling a method the old fake didn't have.
+    const tx = {
+      select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
+      insert: txInsert,
+    };
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn(tx),
     );
@@ -460,7 +467,10 @@ describe('course-details cache invalidation', () => {
       .mockReturnValueOnce(lessonInsert)
       .mockReturnValueOnce(placementInsert);
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ insert: txInsert }),
+      fn({
+        select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
+        insert: txInsert,
+      }),
     );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
@@ -493,7 +503,7 @@ describe('course-details cache invalidation', () => {
   // must no longer write `moduleId`/`rank` onto the `lessons` row itself
   // (those columns don't exist post-migration), only onto its
   // `module_lessons` placement.
-  it('createLesson writes only name/slug/requiredSubscriptions to lessonsTable — no moduleId or rank — and still places the lesson via module_lessons', async () => {
+  it('createLesson writes only name/slug/requiredSubscriptions/orgId to lessonsTable — no moduleId or rank — and still places the lesson via module_lessons', async () => {
     db.select
       .mockReturnValueOnce(makeChain([])) // taken slugs
       .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
@@ -517,7 +527,10 @@ describe('course-details cache invalidation', () => {
       .mockReturnValueOnce(lessonInsert)
       .mockReturnValueOnce(placementInsert);
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ insert: txInsert }),
+      fn({
+        select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
+        insert: txInsert,
+      }),
     );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
@@ -535,6 +548,7 @@ describe('course-details cache invalidation', () => {
       name: 'Stall Recovery',
       slug: 'stall-recovery',
       requiredSubscriptions: [],
+      orgId: 9,
     });
     // The placement insert is still the (only) placement write.
     expect(txInsert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
@@ -544,6 +558,108 @@ describe('course-details cache invalidation', () => {
       rank: '1',
       dependsOn: [],
     });
+  });
+
+  // Fix round 2, Critical 1: `lessons.org_id` is NOT NULL (Task 5/6), and
+  // `createLesson`'s insert wrote nothing for it — every lesson-create
+  // 500s the moment `migrate-lesson-placements.ts` (which sets that
+  // constraint) has run. Resolved the same way that migration's own
+  // backfill did: module -> course -> `course_orgs`, MIN(org_id) when a
+  // course belongs to several. Mutant: read `orgId` from anywhere else (a
+  // hardcoded default, `input`, `undefined`) instead of this query's
+  // result — correct-shaped (still an integer, still compiles) but
+  // wrong-behaving the instant a course belongs to an org other than
+  // whatever was hardcoded. Verified RED: asserting the exact join/where
+  // this query builds, and that the resolved value reaches the INSERT's
+  // `.values()`, both fail against that mutant.
+  it("createLesson resolves the new lesson's orgId via module → course → course_orgs (MIN org id)", async () => {
+    const orgLookupCalls: {
+      from: unknown[];
+      innerJoin: [unknown, SQL][];
+      where: SQL[];
+    } = { from: [], innerJoin: [], where: [] };
+    const orgLookupChain = {
+      from: (table: unknown) => {
+        orgLookupCalls.from.push(table);
+        return orgLookupChain;
+      },
+      innerJoin: (table: unknown, condition: SQL) => {
+        orgLookupCalls.innerJoin.push([table, condition]);
+        return orgLookupChain;
+      },
+      where: (condition: SQL) => {
+        orgLookupCalls.where.push(condition);
+        return orgLookupChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([{ orgId: 4 }]).then(resolve, reject),
+    };
+    db.select
+      .mockReturnValueOnce(makeChain([])) // taken slugs
+      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
+    const lessonInsert = makeChain([
+      {
+        id: 2,
+        name: 'Stall Recovery',
+        slug: 'stall-recovery',
+        isAvailable: false,
+        hasDebrief: false,
+        needsVideoWatch: false,
+        requiredSubscriptions: [],
+        videoId: null,
+        videoProvider: null,
+        videoRef: null,
+      },
+    ]);
+    const placementInsert = makeChain(undefined);
+    const txInsert = vi
+      .fn()
+      .mockReturnValueOnce(lessonInsert)
+      .mockReturnValueOnce(placementInsert);
+    const txSelect = vi.fn().mockReturnValue(orgLookupChain);
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ select: txSelect, insert: txInsert }),
+    );
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+
+    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+
+    expect(orgLookupCalls.from[0]).toBe(modulesTable);
+    expect(orgLookupCalls.innerJoin[0][0]).toBe(courseOrgsTable);
+    expect(render(orgLookupCalls.innerJoin[0][1])).toBe(
+      '"course_orgs"."course_id" = "modules"."course_id"',
+    );
+    expect(render(orgLookupCalls.where[0])).toBe('"modules"."id" = $1');
+    expect(renderSqlParams(orgLookupCalls.where[0])).toEqual([7]);
+    // The value this query resolved is what actually reaches the INSERT —
+    // not some other source.
+    expect(lessonInsert.valuesArg).toMatchObject({ orgId: 4 });
+  });
+
+  // Fix round 2, Critical 1: a module whose course has no `course_orgs`
+  // row would otherwise have to insert `orgId: null` — impossible now that
+  // the column is NOT NULL, so it would 500 on the database anyway, but
+  // silently and with no indication of WHY. Failing loudly first, before
+  // any insert, names the module so whoever's debugging doesn't have to
+  // reverse-engineer a bare constraint-violation error.
+  it('createLesson fails loudly, before any insert, when the module’s course has no course_orgs row', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([])) // taken slugs
+      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
+    const txInsert = vi.fn();
+    const txSelect = vi.fn().mockReturnValue(makeChain([])); // no course_orgs row
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ select: txSelect, insert: txInsert }),
+    );
+
+    await expect(
+      createLesson({ moduleId: 7, name: 'Stall Recovery' }),
+    ).rejects.toThrow(/module 7/i);
+    expect(txInsert).not.toHaveBeenCalled();
+    expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
   it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {

@@ -24,6 +24,7 @@ import { getLessonTranscript } from '#/db/lesson-transcript';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
 import type { DBCourse } from '#/db/schema';
 import {
+  courseOrgsTable,
   coursesTable,
   courseVideoProvidersTable,
   lessonsTable,
@@ -351,12 +352,40 @@ export async function createLesson(input: {
   // lesson that exists in `lessons` but not in `module_lessons` is exactly
   // that bug.
   const [created] = await db.transaction(async (tx) => {
+    // `lessons.org_id` is NOT NULL (Task 5/6). Resolved the same way
+    // `migrate-lesson-placements.ts`'s backfill did — module → course →
+    // `course_orgs`, taking the LOWEST org id when a course belongs to
+    // several — so a freshly created lesson agrees with every lesson the
+    // backfill already stamped, rather than picking independently. Inside
+    // the transaction so a course with no `course_orgs` row aborts the
+    // whole create rather than leaving an inconsistent partial write.
+    const [orgRow] = await tx
+      .select({ orgId: sql<number | null>`min(${courseOrgsTable.orgId})` })
+      .from(modulesTable)
+      .innerJoin(
+        courseOrgsTable,
+        eq(courseOrgsTable.courseId, modulesTable.courseId),
+      )
+      .where(eq(modulesTable.id, input.moduleId));
+    const orgId = orgRow?.orgId ?? null;
+    if (orgId === null) {
+      // No org would have to be invented, so refuse rather than insert a
+      // lesson nothing in the library can attribute to an org — same
+      // philosophy as the backfill's own NOT NULL gate.
+      throw new Error(
+        `Module ${input.moduleId}'s course has no course_orgs row — cannot ` +
+          `resolve an owning org for the new lesson. Link the course to an ` +
+          `org first.`,
+      );
+    }
+
     const [insertedLesson] = await tx
       .insert(lessonsTable)
       .values({
         name: input.name,
         slug,
         requiredSubscriptions: [],
+        orgId,
       })
       .returning();
 

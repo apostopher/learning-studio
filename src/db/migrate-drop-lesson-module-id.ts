@@ -17,13 +17,13 @@
  * DEPLOYMENT ORDERING: relax first, then deploy, then run this. See
  * `docs/deploy-lessons-module-id-drop.md` for the full runbook and why
  * there is no ordering that skips the relax step — `migrate-relax-lesson
- * -module-id.ts` (`pnpm db:relax-lesson-module-id`) drops the column's
- * `NOT NULL` constraint ahead of the code deploy, which is what actually
- * closes the window (deploying the code first, or running this contract
- * migration first, both 500 on a live admin action until the other half
- * lands — relaxing the constraint is backward-compatible with both the old
- * and new code, so it's the one step that removes the window rather than
- * just choosing which side gets to fail).
+ * -columns.ts` (`pnpm db:relax-lesson-columns`) drops the `NOT NULL`
+ * constraint on `module_id` AND `rank` ahead of the code deploy, which is
+ * what actually closes the window (deploying the code first, or running
+ * this contract migration first, both 500 on a live admin action until the
+ * other half lands — relaxing both constraints is backward-compatible with
+ * both the old and new code, so it's the one step that removes the window
+ * rather than just choosing which side gets to fail).
  *
  * Run: pnpm db:migrate-drop-lesson-module-id
  */
@@ -40,7 +40,8 @@ export async function migrateDropLessonModuleId(): Promise<void> {
     const { rows: cols } = await tx.execute<{ n: number }>(sql`
       select count(*)::int as "n"
       from information_schema.columns
-      where table_name = 'lessons' and column_name = 'module_id';
+      where table_schema = 'public' and table_name = 'lessons'
+        and column_name = 'module_id';
     `);
     const moduleIdStillExists = (cols[0]?.n ?? 0) > 0;
 
@@ -63,16 +64,24 @@ export async function migrateDropLessonModuleId(): Promise<void> {
         );
       }
 
-      console.info('Dropping lessons.module_id and lessons.rank…');
+      console.info('Dropping lessons.module_id…');
       await tx.execute(
         sql`alter table "lessons" drop column if exists "module_id";`,
-      );
-      await tx.execute(
-        sql`alter table "lessons" drop column if exists "rank";`,
       );
     } else {
       console.info('lessons.module_id already dropped — orphan gate skipped.');
     }
+
+    // Deliberately OUTSIDE the branch above: `module_id` and `rank` are two
+    // independently `if exists`-guarded statements that never needed to be
+    // coupled. Nested inside the `moduleIdStillExists` branch (fix round 1's
+    // shape), a database with `module_id` already gone but `rank` still
+    // present would silently skip dropping `rank` too — the run would still
+    // report "Done" while `createLesson` (which stopped writing `rank`
+    // alongside `module_id`) stays broken against a column that's still
+    // NOT NULL.
+    console.info('Dropping lessons.rank…');
+    await tx.execute(sql`alter table "lessons" drop column if exists "rank";`);
 
     console.info('Dropping the old lesson_dependencies GIN index and table…');
     await tx.execute(

@@ -65,6 +65,44 @@ const newQ = async <T = Record<string, unknown>>(
   params: unknown[] = [],
 ): Promise<T[]> => (await newDb.query(sql, params)).rows as T[];
 
+/**
+ * Run `fn` against ONE checked-out connection wrapped in `begin`/`commit` —
+ * `newQ` above goes through the pool, which hands out a different
+ * connection per call, so two `newQ` calls can never share a transaction.
+ *
+ * Used for the one pair of writes in this script that must be atomic: a
+ * `lessons` row and its `module_lessons` placement (fix round 2, Important
+ * 4). Under the pre-Task-7 schema `lessons.module_id` was `NOT NULL`, so an
+ * unplaced lesson was unrepresentable and this couldn't happen; post-
+ * contract it can, and the migration's orphan gate — which only counts
+ * rows with a non-null `module_id`, a column that no longer exists by
+ * then — cannot detect it. A crash between the two writes without this
+ * wrapper would leave exactly that: a lesson with no placement at all.
+ */
+async function withNewTx<T>(
+  fn: (q: <U = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ) => Promise<U[]>) => Promise<T>,
+): Promise<T> {
+  const client = await newDb.connect();
+  const txQ = async <U = Record<string, unknown>>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<U[]> => (await client.query(sql, params)).rows as U[];
+  try {
+    await client.query('begin');
+    const result = await fn(txQ);
+    await client.query('commit');
+    return result;
+  } catch (err) {
+    await client.query('rollback').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 const sha = (v: string) => createHash('sha256').update(v, 'utf8').digest('hex');
 
 type Counter = { inserted: number; updated: number; skipped: number };
@@ -167,6 +205,12 @@ async function main() {
   }
   report('modules', mc);
 
+  // Every module id belonging to THIS course, per Important 3 (fix round
+  // 2): scopes the placement lookup below to "does this lesson already
+  // have a placement IN THIS COURSE", the same scoping `movePlacement`
+  // (`src/db/placements.ts`) uses for its own UPDATE.
+  const courseModuleIds = [...moduleIdBySlug.values()];
+
   // --------------------------------------------------------------- lessons
   const oldLessons = await oldQ(
     `select l.id, l.module_id, l.name, l.slug, l.video_id, l.other_video_ids,
@@ -227,78 +271,109 @@ async function main() {
     const videoRef = row.video_id ?? null;
     const otherVideoIds = JSON.stringify(row.other_video_ids ?? []);
 
-    const [existing] = await newQ<{ id: number }>(
-      `select id from lessons where slug = $1`,
-      [row.slug],
-    );
     // `lessons.module_id`/`lessons.rank` are gone (Task 7, contract
     // migration) — a lesson's course/position is its `module_lessons`
     // placement now, upserted below for BOTH branches, never a column on
-    // this row.
-    if (existing) {
-      await newQ(
-        `update lessons set name=$2, other_video_ids=$3::jsonb,
-           video_provider=$4, video_ref=$5, required_subscriptions=$6,
-           is_available=$7, exclusive_per_day=$8, has_debrief=$9, needs_video_watch=$10,
-           updated_at=$11
-         where id=$1`,
-        [
-          existing.id,
-          row.name,
-          otherVideoIds,
-          videoProvider,
-          videoRef,
-          row.required_subscriptions,
-          row.is_available,
-          row.exclusive_per_day,
-          row.has_debrief,
-          row.needs_video_watch,
-          row.updated_at,
-        ],
+    // this row. The lesson write and its placement write run on ONE
+    // connection inside ONE transaction (Important 4, fix round 2): a crash
+    // between them would otherwise leave a lesson with no placement at
+    // all, which the contract migration's orphan gate cannot detect (it
+    // only counts rows with a non-null `module_id` — a column that no
+    // longer exists by the time this script runs against a migrated
+    // database).
+    const placedLessonId = await withNewTx(async (txQ) => {
+      const [existing] = await txQ<{ id: number }>(
+        `select id from lessons where slug = $1`,
+        [row.slug],
       );
-      lessonIdBySlug.set(row.slug, existing.id);
-      lc.updated++;
-    } else {
-      const [ins] = await newQ<{ id: number }>(
-        `insert into lessons (name, slug, other_video_ids, video_provider,
-           video_ref, required_subscriptions, is_available, exclusive_per_day,
-           has_debrief, needs_video_watch, created_at, updated_at)
-         values ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
-        [
-          row.name,
-          row.slug,
-          otherVideoIds,
-          videoProvider,
-          videoRef,
-          row.required_subscriptions,
-          row.is_available,
-          row.exclusive_per_day,
-          row.has_debrief,
-          row.needs_video_watch,
-          row.created_at,
-          row.updated_at,
-        ],
-      );
-      if (ins) lessonIdBySlug.set(row.slug, ins.id);
-      lc.inserted++;
-    }
+      let lessonId: number;
+      if (existing) {
+        await txQ(
+          `update lessons set name=$2, other_video_ids=$3::jsonb,
+             video_provider=$4, video_ref=$5, required_subscriptions=$6,
+             is_available=$7, exclusive_per_day=$8, has_debrief=$9, needs_video_watch=$10,
+             updated_at=$11
+           where id=$1`,
+          [
+            existing.id,
+            row.name,
+            otherVideoIds,
+            videoProvider,
+            videoRef,
+            row.required_subscriptions,
+            row.is_available,
+            row.exclusive_per_day,
+            row.has_debrief,
+            row.needs_video_watch,
+            row.updated_at,
+          ],
+        );
+        lessonId = existing.id;
+        lc.updated++;
+      } else {
+        const [ins] = await txQ<{ id: number }>(
+          `insert into lessons (name, slug, other_video_ids, video_provider,
+             video_ref, required_subscriptions, is_available, exclusive_per_day,
+             has_debrief, needs_video_watch, created_at, updated_at)
+           values ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
+          [
+            row.name,
+            row.slug,
+            otherVideoIds,
+            videoProvider,
+            videoRef,
+            row.required_subscriptions,
+            row.is_available,
+            row.exclusive_per_day,
+            row.has_debrief,
+            row.needs_video_watch,
+            row.created_at,
+            row.updated_at,
+          ],
+        );
+        if (!ins) throw new Error(`insert into lessons returned no row for slug ${row.slug}`);
+        lessonId = ins.id;
+        lc.inserted++;
+      }
 
-    // Placement: upsert the `module_lessons` row this lesson lives in. On
-    // conflict (module_id, lesson_id already exists), only rank moves —
-    // `depends_on` is deliberately left alone here so a re-run of THIS loop
-    // never clobbers whatever the lesson_dependencies loop below already
-    // wrote for it.
-    const placedLessonId = lessonIdBySlug.get(row.slug);
-    if (placedLessonId === undefined) {
-      throw new Error(`no lesson id resolved for slug ${row.slug}`);
-    }
-    await newQ(
-      `insert into module_lessons (module_id, lesson_id, rank, depends_on)
-         values ($1,$2,$3,'[]'::jsonb)
-       on conflict (module_id, lesson_id)
-         do update set rank = excluded.rank, updated_at = now()`,
-      [moduleId, placedLessonId, row.rank],
-    );
+      // Placement: MOVE the placement that already exists for this lesson
+      // IN THIS COURSE, else insert a fresh one (Important 3, fix round 2).
+      // `on conflict (module_id, lesson_id)` alone is not enough: if this
+      // lesson's existing placement sits under a DIFFERENT module than
+      // `moduleId` (an admin moved it, or module slugs remapped between
+      // runs), that upsert would INSERT a second row rather than move the
+      // first — the same lesson would then have two placements in one
+      // course, which `movePlacement` (src/db/placements.ts) assumes can
+      // never happen; its own UPDATE would then hit both rows and collide
+      // with the unique index. The lookup is scoped to `courseModuleIds`
+      // (every module in THIS course), matching how `movePlacement` itself
+      // scopes a move.
+      const [existingPlacement] = await txQ<{ id: number }>(
+        `select id from module_lessons
+           where lesson_id = $1 and module_id = any($2::int[])`,
+        [lessonId, courseModuleIds],
+      );
+      if (existingPlacement) {
+        // `depends_on` is deliberately left alone here — set once by the
+        // lesson_dependencies loop below, and must survive a re-run of
+        // THIS loop untouched.
+        await txQ(
+          `update module_lessons set module_id=$2, rank=$3, updated_at=now()
+             where id=$1`,
+          [existingPlacement.id, moduleId, row.rank],
+        );
+      } else {
+        await txQ(
+          `insert into module_lessons (module_id, lesson_id, rank, depends_on)
+             values ($1,$2,$3,'[]'::jsonb)`,
+          [moduleId, lessonId, row.rank],
+        );
+      }
+
+      return lessonId;
+    });
+
+    lessonIdBySlug.set(row.slug, placedLessonId);
     lessonModuleIdBySlug.set(row.slug, moduleId);
   }
   report('lessons', lc);
