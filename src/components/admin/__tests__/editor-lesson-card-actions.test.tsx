@@ -54,6 +54,7 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { EditorLessonCardContainer } from '../editor-lesson-card-container';
+import { removeLessonLabel } from '../lesson-card-labels';
 
 const LESSON_ID = 10;
 const MODULE_ID = 3;
@@ -198,6 +199,9 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
       id: LESSON_ID,
       name: 'Stalls',
       courseCount: 3,
+      // This surface HAS a remove control, so the confirmation is told its
+      // exact label and can point at it.
+      removeControlLabel: removeLessonLabel('Stalls', 'Fundamentals'),
     });
   });
 

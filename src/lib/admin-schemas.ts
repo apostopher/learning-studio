@@ -830,6 +830,50 @@ export const orgLibrarySchema = z.object({
 });
 export type OrgLibrary = z.infer<typeof orgLibrarySchema>;
 
+/**
+ * The editor board's lesson: `boardLessonSchema` MINUS every video-identifying
+ * field.
+ *
+ * `/api/admin/editor` returns every course in the org to every caller with
+ * standing on the teaching side — a discipline SME staffing no course
+ * included. `videoRef` must not ride along: a bare Mux ref is directly
+ * streamable (`https://stream.mux.com/{ref}.m3u8`) unless every asset is
+ * signed-policy-only, which is an operator setting in the Mux console this
+ * code cannot verify. `src/routes/api/course/details.ts` strips the same
+ * fields from the learner payload for exactly that reason; this is that rule
+ * applied to the org-wide admin payload the widened guard created.
+ *
+ * Nothing in the editor reads either field — the pane needs names, ranks and
+ * placements, and `isConfigured` already answers "does this lesson have a
+ * video". `boardLessonFromLibrary` has always synthesised a linked card
+ * without them.
+ *
+ * Omitted rather than nulled, so nothing downstream can start reading them
+ * again: the fields are gone from the type, and this parse strips them from
+ * any payload that still carries one, so a ref cannot reach the query cache
+ * even if the server regresses. The response body is stripped server-side —
+ * `toEditorCourseBoard` in `#/db/editor` — which is the half that actually
+ * keeps it off the wire; this half keeps it out of the client.
+ */
+export const editorBoardLessonSchema = boardLessonSchema.omit({
+  videoProvider: true,
+  videoRef: true,
+});
+export type EditorBoardLesson = z.infer<typeof editorBoardLessonSchema>;
+
+/** A module on the editor board, holding the narrowed lessons. */
+export const editorBoardModuleSchema = boardModuleSchema.extend({
+  lessons: z.array(editorBoardLessonSchema),
+});
+export type EditorBoardModule = z.infer<typeof editorBoardModuleSchema>;
+
+/** One course's board as the editor sees it. */
+export const editorCourseBoardSchema = z.object({
+  course: boardCourseSchema,
+  modules: z.array(editorBoardModuleSchema),
+});
+export type EditorCourseBoard = z.infer<typeof editorCourseBoardSchema>;
+
 /** The horizontal rail of course boards shown beside the library. */
-export const orgEditorBoardSchema = z.array(courseBoardSchema);
+export const orgEditorBoardSchema = z.array(editorCourseBoardSchema);
 export type OrgEditorBoard = z.infer<typeof orgEditorBoardSchema>;

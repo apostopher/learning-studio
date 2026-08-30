@@ -257,6 +257,81 @@ describe('getOrgEditorBoard', () => {
     expect(boards).toEqual([]);
   });
 
+  /**
+   * This route hands EVERY course in the org to EVERY caller with standing on
+   * the teaching side — a discipline SME staffing none of them included. A
+   * bare Mux `videoRef` is directly streamable
+   * (`https://stream.mux.com/{ref}.m3u8`) unless every asset is
+   * signed-policy-only, an operator setting this code cannot verify, which is
+   * why `api/course/details.ts` strips the same fields from the learner
+   * payload. Nothing in the editor reads either field.
+   *
+   * Mutant seen RED: `toEditorCourseBoard` reduced to the identity function
+   * (i.e. the pre-round-2 code, `boards.filter(...)` with no `.map`) — the
+   * board still has the right courses, modules and lessons, and every other
+   * assertion in this file still passes.
+   */
+  it('carries no video-identifying field for any lesson in any course', async () => {
+    db.select.mockReturnValueOnce(makeChain([{ courseId: 11 }]));
+    mockGetCourseBoard.mockResolvedValue({
+      course: {
+        id: 11,
+        name: 'Two-Week',
+        slug: 'two-week',
+        description: null,
+        imageUrlAvif: null,
+        imageUrlWebp: null,
+      },
+      modules: [
+        {
+          id: 40,
+          name: 'Fundamentals',
+          slug: 'fundamentals',
+          imageUrlAvif: null,
+          imageUrlWebp: null,
+          rank: 1,
+          requiredSubscriptions: [],
+          dependsOn: [],
+          sequentialLessons: false,
+          learnerCount: 0,
+          lessons: [
+            {
+              id: 9,
+              name: 'Stalls',
+              slug: 'stalls',
+              rank: 1,
+              isAvailable: true,
+              hasDebrief: false,
+              needsVideoWatch: false,
+              requiredSubscriptions: [],
+              levels: [],
+              isConfigured: true,
+              quizQuestionCount: 0,
+              dependsOn: [],
+              videoProvider: 'mux',
+              videoRef: 'SECRET-PLAYBACK-ID',
+            },
+          ],
+        },
+      ],
+    });
+
+    const boards = await getOrgEditorBoard(3);
+
+    const lesson = boards[0].modules[0].lessons[0] as Record<string, unknown>;
+    expect(Object.hasOwn(lesson, 'videoRef')).toBe(false);
+    expect(Object.hasOwn(lesson, 'videoProvider')).toBe(false);
+    // Serialising is what actually reaches the browser, so assert there too:
+    // a non-enumerable or prototype-shadowed field would pass the check above.
+    expect(JSON.stringify(boards)).not.toContain('SECRET-PLAYBACK-ID');
+    // And the editor still gets everything it DOES need.
+    expect(lesson.name).toBe('Stalls');
+    expect(lesson.rank).toBe(1);
+    // `isConfigured` is how the card knows a lesson has a video at all — it
+    // must survive, or the narrowing has taken something real with it.
+    expect(lesson.isConfigured).toBe(true);
+  });
+
   it('scopes the course_orgs lookup to this org, not every org', async () => {
     const whereCalls: SQL[] = [];
     db.select.mockReturnValueOnce(makeCapturingChain([], whereCalls));

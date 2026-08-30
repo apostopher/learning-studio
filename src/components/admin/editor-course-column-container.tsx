@@ -6,7 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
 import { expandedEditorModuleIdsAtom } from '#/atoms/admin';
-import type { CourseBoard } from '#/lib/admin-schemas';
+import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { CourseColumn } from './course-column';
 import { EditorModuleContainer } from './editor-module-container';
@@ -25,7 +25,7 @@ import { EditorModuleContainer } from './editor-module-container';
 export const EditorCourseColumnContainer = ({
   courseBoard,
 }: {
-  courseBoard: CourseBoard;
+  courseBoard: EditorCourseBoard;
 }) => {
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedEditorModuleIdsAtom,

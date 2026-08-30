@@ -5,8 +5,17 @@ import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
+/**
+ * Only the fields this component reads. Not `BoardModule`, for the same
+ * reason `LessonCardLesson` is not `BoardLesson`: the editor's board carries
+ * narrowed lessons, and this component only ever counts them.
+ */
+type ModuleAccordionModule = Pick<BoardModule, 'id' | 'name'> & {
+  lessons: readonly unknown[];
+};
+
 interface ModuleAccordionItemProps {
-  module: BoardModule;
+  module: ModuleAccordionModule;
   /** Spread onto the drag handle button (e.g. dnd-kit's `listeners`/`attributes`). */
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
   onAddLesson?: () => void;

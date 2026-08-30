@@ -1,9 +1,9 @@
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its test.
 import type {
-  BoardLesson,
-  BoardModule,
-  CourseBoard,
+  EditorBoardLesson,
+  EditorBoardModule,
+  EditorCourseBoard,
   OrgEditorBoard,
 } from '#/lib/admin-schemas';
 import { parseDndId } from '#/lib/dnd-ids';
@@ -45,13 +45,13 @@ export type DropResolution =
 
 /** A module found on the board, with the course board that owns it. */
 interface LocatedModule {
-  courseBoard: CourseBoard;
-  module: BoardModule;
+  courseBoard: EditorCourseBoard;
+  module: EditorBoardModule;
 }
 
 /** A placed lesson found on the board, with its module and course board. */
 interface LocatedLesson extends LocatedModule {
-  lesson: BoardLesson;
+  lesson: EditorBoardLesson;
 }
 
 function findModule(
@@ -98,7 +98,10 @@ function resolveOverModule(
 }
 
 /** Whether any module of this course already teaches the lesson. */
-function courseTeaches(courseBoard: CourseBoard, lessonId: number): boolean {
+function courseTeaches(
+  courseBoard: EditorCourseBoard,
+  lessonId: number,
+): boolean {
   return courseBoard.modules.some((m) =>
     m.lessons.some((l) => l.id === lessonId),
   );

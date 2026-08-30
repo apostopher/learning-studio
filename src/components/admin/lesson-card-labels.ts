@@ -47,3 +47,13 @@ export function findLibraryCourseCount(
   ].find((l) => l.id === lessonId);
   return card?.courseCount ?? null;
 }
+
+/**
+ * Why the delete control is inert while the org library is still loading.
+ *
+ * Shared by both surfaces' cards. The blast radius is the confirmation's
+ * whole point, so the control cannot open until the count is known — but it
+ * must say that rather than simply not being there.
+ */
+export const DELETE_UNAVAILABLE_REASON =
+  'Checking how many courses teach this lesson — deleting is unavailable until that count arrives';

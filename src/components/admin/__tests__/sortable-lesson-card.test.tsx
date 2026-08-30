@@ -43,6 +43,7 @@ vi.mock('../lesson-card', () => ({
   },
 }));
 
+import { DELETE_UNAVAILABLE_REASON } from '../lesson-card-labels';
 import { SortableLessonCard } from '../sortable-lesson-card';
 
 const lesson: BoardLesson = {
@@ -152,6 +153,10 @@ describe('SortableLessonCard', () => {
       id: 10,
       name: 'Crosswind landings',
       courseCount: 3,
+      // This board has NO remove control, and the confirmation is told so —
+      // otherwise its copy would send the reader hunting for a button that is
+      // nowhere on this screen.
+      removeControlLabel: null,
     });
   });
 
@@ -160,9 +165,44 @@ describe('SortableLessonCard', () => {
    * then offers a delete whose confirmation understates (indeed denies) the
    * blast radius while the library is still loading.
    */
-  it('offers no delete control while the course count is unknown', () => {
+  it('opens no confirmation while the course count is unknown', () => {
     renderCard();
 
     expect(cardProps.mock.calls[0][0].onDelete).toBeUndefined();
+  });
+
+  /**
+   * Withholding the control is right; withholding it silently is not. Every
+   * locked or unavailable control in this project states its reason, visibly
+   * and in its accessible name.
+   *
+   * Mutant seen RED: `deleteUnavailableReason` not passed — the button simply
+   * disappears while the library loads and reappears with no explanation.
+   */
+  it('says why deleting is unavailable rather than vanishing', () => {
+    renderCard();
+
+    const reason = cardProps.mock.calls[0][0].deleteUnavailableReason;
+    expect(reason).toBe(DELETE_UNAVAILABLE_REASON);
+    expect(reason).toMatch(/how many courses/i);
+  });
+
+  /**
+   * This board never removes a placement — that is the editor's job — so the
+   * confirmation must not describe a control it does not have.
+   *
+   * Mutant seen RED: `removeControlLabel: removeLessonLabel(lesson.name,
+   * mod.name)` passed here, copying the editor card. It compiles, and the
+   * dialog then quotes a button nobody on this screen can find.
+   */
+  it('tells the confirmation this surface has no remove control', async () => {
+    const { store } = renderCard(LIBRARY);
+    const onDelete = cardProps.mock.calls[0][0].onDelete as () => void;
+
+    await act(async () => {
+      onDelete();
+    });
+
+    expect(store.get(deleteLessonAtom)?.removeControlLabel).toBeNull();
   });
 });

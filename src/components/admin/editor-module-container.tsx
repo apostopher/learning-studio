@@ -6,7 +6,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useCallback } from 'react';
-import type { BoardModule } from '#/lib/admin-schemas';
+import type { EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { containerDndId, lessonDndId, moduleDndId } from '#/lib/dnd-ids';
 import { EditorLessonCardContainer } from './editor-lesson-card-container';
@@ -28,7 +28,7 @@ export const EditorModuleContainer = ({
   module: mod,
   courseId,
 }: {
-  module: BoardModule;
+  module: EditorBoardModule;
   courseId: number;
 }) => {
   const {

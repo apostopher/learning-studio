@@ -11,7 +11,10 @@ import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
-import { findLibraryCourseCount } from './lesson-card-labels';
+import {
+  DELETE_UNAVAILABLE_REASON,
+  findLibraryCourseCount,
+} from './lesson-card-labels';
 import { LessonQuickshotContainer } from './lesson-quickshot-container';
 
 export const SortableLessonCard = ({
@@ -83,8 +86,17 @@ export const SortableLessonCard = ({
                   id: lesson.id,
                   name: lesson.name,
                   courseCount,
+                  // `null`: this board has no remove control — a lesson's
+                  // placement is undone in the knowledge library editor. The
+                  // confirmation says so rather than naming a button that is
+                  // nowhere on this screen.
+                  removeControlLabel: null,
                 })
         }
+        // Inert-with-a-reason rather than absent while the count loads: a
+        // control that vanishes without explanation is the locked state this
+        // project does not ship.
+        deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
         onPlay={
           lesson.isConfigured ? () => setPlayLessonId(lesson.id) : undefined
         }

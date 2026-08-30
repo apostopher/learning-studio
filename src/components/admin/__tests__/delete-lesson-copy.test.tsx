@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-
 import { DeleteLessonWarning } from '../delete-lesson-warning';
+import { removeLessonLabel } from '../lesson-card-labels';
+
+/** The label the knowledge editor's remove control actually wears. */
+const REMOVE_LABEL = removeLessonLabel('Intro', 'Fundamentals');
 
 /**
  * The copy in front of an irreversible, org-wide destructive action.
@@ -20,7 +23,11 @@ describe('delete-lesson confirmation copy', () => {
    */
   it('names how many courses lose the lesson', () => {
     const { container } = render(
-      <DeleteLessonWarning name="Intro" courseCount={3} />,
+      <DeleteLessonWarning
+        name="Intro"
+        courseCount={3}
+        removeControlLabel={REMOVE_LABEL}
+      />,
     );
 
     expect(container.textContent).toMatch(/taught by 3 courses/i);
@@ -33,7 +40,11 @@ describe('delete-lesson confirmation copy', () => {
    */
   it('reads naturally in the singular for one course', () => {
     const { container } = render(
-      <DeleteLessonWarning name="Intro" courseCount={1} />,
+      <DeleteLessonWarning
+        name="Intro"
+        courseCount={1}
+        removeControlLabel={REMOVE_LABEL}
+      />,
     );
 
     expect(container.textContent).toMatch(/taught by 1 course\b/i);
@@ -51,11 +62,45 @@ describe('delete-lesson confirmation copy', () => {
    */
   it('says the act is permanent and points at the reversible one by name', () => {
     const { container } = render(
-      <DeleteLessonWarning name="Intro" courseCount={3} />,
+      <DeleteLessonWarning
+        name="Intro"
+        courseCount={3}
+        removeControlLabel={REMOVE_LABEL}
+      />,
     );
 
     expect(container.textContent).toMatch(/permanently/i);
-    expect(container.textContent).toContain('Remove from module');
+    // The exact label the control wears, built from the same function the
+    // control is built from — not a phrase hand-written here or there.
+    expect(container.textContent).toContain(`“${REMOVE_LABEL}”`);
+  });
+
+  /**
+   * The per-course board's card has no remove control at all, so on that
+   * surface the sentence above would send the reader hunting for a button
+   * that is nowhere on their screen. It names the screen that does have one
+   * instead.
+   *
+   * Mutant seen RED: the `removeControlLabel === null` branch deleted, so the
+   * quoted-label form runs everywhere — which is the defect this round was
+   * opened for, restored verbatim.
+   */
+  it('names the editor, not a button, on a surface with no remove control', () => {
+    const { container } = render(
+      <DeleteLessonWarning
+        name="Intro"
+        courseCount={3}
+        removeControlLabel={null}
+      />,
+    );
+
+    expect(container.textContent).toMatch(/knowledge library editor/i);
+    // And claims no control on the screen the reader is actually looking at.
+    expect(container.textContent).not.toMatch(/on its card/i);
+    expect(container.textContent).not.toMatch(/remove from module/i);
+    // The blast radius is still stated, and it is still permanent.
+    expect(container.textContent).toMatch(/taught by 3 courses/i);
+    expect(container.textContent).toMatch(/permanently/i);
   });
 
   /**
@@ -68,12 +113,16 @@ describe('delete-lesson confirmation copy', () => {
    */
   it('does not invent a blast radius for a lesson no course teaches', () => {
     const { container } = render(
-      <DeleteLessonWarning name="Intro" courseCount={0} />,
+      <DeleteLessonWarning
+        name="Intro"
+        courseCount={0}
+        removeControlLabel={REMOVE_LABEL}
+      />,
     );
 
     expect(container.textContent).toMatch(/not in any course/i);
     expect(container.textContent).not.toMatch(/0 courses/i);
-    expect(container.textContent).not.toContain('Remove from module');
+    expect(container.textContent).not.toContain(REMOVE_LABEL);
     // Still says what it destroys, and that it cannot be taken back.
     expect(container.textContent).toMatch(/permanently/i);
   });

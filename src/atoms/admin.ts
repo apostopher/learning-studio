@@ -30,6 +30,18 @@ export const deleteLessonAtom = atom<{
   id: number;
   name: string;
   courseCount: number;
+  /**
+   * The exact accessible name of the "remove from module" control on the
+   * surface that opened this dialog, or `null` when that surface has none.
+   *
+   * Carried because the confirmation's job is to point at the reversible act,
+   * and the two surfaces differ: the knowledge editor's card has a remove
+   * control (labelled by `removeLessonLabel`), the per-course board's card
+   * does not. A sentence naming a button that is nowhere on the reader's
+   * screen sends them hunting for it — worse than saying nothing — so the
+   * copy branches on this rather than quoting one hard-coded phrase.
+   */
+  removeControlLabel: string | null;
 } | null>(null);
 
 /** Id of the lesson whose configure modal is open, or null when closed. */

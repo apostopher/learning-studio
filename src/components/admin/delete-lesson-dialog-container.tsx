@@ -60,6 +60,7 @@ export const DeleteLessonDialogContainer = () => {
                 <DeleteLessonWarning
                   name={target?.name ?? ''}
                   courseCount={target?.courseCount ?? 0}
+                  removeControlLabel={target?.removeControlLabel ?? null}
                 />
               }
               submitLabel="Delete lesson"

@@ -5,19 +5,32 @@ import { ClampedText } from '../clamped-text';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
 
+/**
+ * Only the fields this card actually reads.
+ *
+ * Deliberately not `BoardLesson`: the same card renders on the per-course
+ * board and in the knowledge editor, and the editor's board carries strictly
+ * less (no `videoProvider`/`videoRef` — see `editorBoardLessonSchema`). Asking
+ * for the full type here would have forced the editor's payload to keep a
+ * directly-streamable Mux ref it never reads.
+ */
+export type LessonCardLesson = Pick<
+  BoardLesson,
+  'name' | 'isAvailable' | 'isConfigured'
+>;
+
 export const LessonCard = ({
   lesson,
   posterUrl,
   dragHandleProps,
   onEdit,
-  onRemove,
-  removeLabel,
-  isRemoving,
+  remove,
   onDelete,
+  deleteUnavailableReason,
   onPlay,
   quickshotSlot,
 }: {
-  lesson: BoardLesson;
+  lesson: LessonCardLesson;
   /** Poster frame for this lesson's video, when its provider exposes one. */
   posterUrl?: string | null;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
@@ -27,22 +40,32 @@ export const LessonCard = ({
    * deleted, the lesson survives. A different act from `onDelete`, which is
    * why it gets its own icon, its own (neutral, not danger) colour and its
    * own wording rather than a second red bin.
+   *
+   * One object rather than three loose props so that `label` cannot be
+   * forgotten: it is the control's whole accessible name, other copy quotes
+   * it verbatim (`removeLessonLabel`), and the default this replaced —
+   * "Remove from module" — was a phrase no button ever actually wore, which
+   * two other messages then went on to quote.
    */
-  onRemove?: () => void;
-  /**
-   * Accessible name and tooltip for the remove control. Must name the module,
-   * because "Remove" sitting next to "Delete lesson" says nothing about what
-   * it removes the lesson FROM. Falls back to a generic phrase for a caller
-   * that has no module name to hand.
-   */
-  removeLabel?: string;
-  /** Whether the removal is in flight; disables the control and says so. */
-  isRemoving?: boolean;
+  remove?: {
+    /** Exact accessible name and tooltip. Must name the module. */
+    label: string;
+    onClick: () => void;
+    /** Removal in flight: the control goes inert and says so. */
+    isPending?: boolean;
+  };
   /**
    * Delete the lesson itself, everywhere. High stakes and irreversible —
    * always behind a confirmation that names how many courses lose it.
    */
   onDelete?: () => void;
+  /**
+   * Why deleting is unavailable right now, when it is. Renders an inert
+   * control carrying this as its accessible name instead of rendering
+   * nothing: a control that silently vanishes is the locked-state-without-a-
+   * reason this project does not ship. Ignored when `onDelete` is given.
+   */
+  deleteUnavailableReason?: string;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
   onPlay?: () => void;
   /**
@@ -81,27 +104,30 @@ export const LessonCard = ({
               <Pencil className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
-          {onRemove && (
+          {remove && (
             <TooltipIconButton
               // A disabled control has to say why it is disabled, not just
               // grey out.
               label={
-                isRemoving
-                  ? `Removing ${lesson.name}…`
-                  : (removeLabel ?? 'Remove from module')
+                remove.isPending ? `Removing ${lesson.name}…` : remove.label
               }
-              onClick={onRemove}
-              disabled={isRemoving}
+              onClick={remove.onClick}
+              disabled={remove.isPending}
             >
               <CircleMinus className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
-          {onDelete && (
+          {(onDelete || deleteUnavailableReason) && (
             <TooltipIconButton
               // Not "Delete": the word alone reads as a synonym of the remove
               // control beside it. This one ends the lesson everywhere.
-              label="Delete lesson everywhere"
+              label={
+                onDelete
+                  ? 'Delete lesson everywhere'
+                  : (deleteUnavailableReason as string)
+              }
               onClick={onDelete}
+              disabled={!onDelete}
               variant="danger"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />

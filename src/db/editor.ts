@@ -5,6 +5,7 @@ import { getCourseCountsForLessons } from '#/db/placements';
 import { courseOrgsTable, disciplinesTable, lessonsTable } from '#/db/schema';
 import type {
   CourseBoard,
+  EditorCourseBoard,
   LibraryDiscipline,
   LibraryLesson,
   OrgLibrary,
@@ -91,7 +92,9 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
  * accepted at this scale; see the task report for the exact count on a
  * 4-course org.
  */
-export async function getOrgEditorBoard(orgId: number): Promise<CourseBoard[]> {
+export async function getOrgEditorBoard(
+  orgId: number,
+): Promise<EditorCourseBoard[]> {
   const rows = await db
     .select({ courseId: courseOrgsTable.courseId })
     .from(courseOrgsTable)
@@ -102,5 +105,34 @@ export async function getOrgEditorBoard(orgId: number): Promise<CourseBoard[]> {
   // `getCourseBoard` returns null only when the course id it's given doesn't
   // resolve — shouldn't happen for an id `course_orgs` just gave us (its FK
   // cascades on course delete), but the return type promises no nulls.
-  return boards.filter((b): b is CourseBoard => b !== null);
+  return boards
+    .filter((b): b is CourseBoard => b !== null)
+    .map(toEditorCourseBoard);
+}
+
+/**
+ * Drop every video-identifying field from a course board.
+ *
+ * This route hands EVERY course in the org to EVERY caller with standing on
+ * the teaching side, so it must carry strictly less than the per-course board
+ * does. `videoRef` is the field that matters: a bare Mux ref is directly
+ * streamable unless every asset is signed-policy-only — an operator setting
+ * this code cannot verify — which is why `api/course/details.ts` strips the
+ * same fields from the learner payload. `videoProvider` goes with it because
+ * nothing reads it either and half a pair is a trap for the next reader.
+ *
+ * Deleted by destructuring rather than by building a new object field by
+ * field: a column added to `boardLessonSchema` later then flows through here
+ * automatically, and only the two named fields are ever dropped.
+ */
+function toEditorCourseBoard(board: CourseBoard): EditorCourseBoard {
+  return {
+    ...board,
+    modules: board.modules.map((mod) => ({
+      ...mod,
+      lessons: mod.lessons.map(
+        ({ videoProvider: _p, videoRef: _r, ...lesson }) => lesson,
+      ),
+    })),
+  };
 }

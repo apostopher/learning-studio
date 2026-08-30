@@ -5,11 +5,12 @@ import { toast } from 'sonner';
 import { deleteLessonAtom } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
-import type { BoardLesson } from '#/lib/admin-schemas';
+import type { EditorBoardLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
 import {
+  DELETE_UNAVAILABLE_REASON,
   findLibraryCourseCount,
   removeLessonLabel,
 } from './lesson-card-labels';
@@ -35,7 +36,7 @@ export const EditorLessonCardContainer = ({
   moduleName,
   courseId,
 }: {
-  lesson: BoardLesson;
+  lesson: EditorBoardLesson;
   moduleId: number;
   /** Named in the remove control's accessible name — see `LessonCard`. */
   moduleName: string;
@@ -81,18 +82,20 @@ export const EditorLessonCardContainer = ({
       <LessonCard
         lesson={lesson}
         dragHandleProps={{ ...attributes, ...listeners }}
-        onRemove={() =>
-          unlinkLesson.mutate(
-            { moduleId, lessonId: lesson.id },
-            { onError: (error) => toast.error(error.message) },
-          )
-        }
-        removeLabel={removeLessonLabel(lesson.name, moduleName)}
-        isRemoving={unlinkLesson.isPending}
+        remove={{
+          label: removeLessonLabel(lesson.name, moduleName),
+          onClick: () =>
+            unlinkLesson.mutate(
+              { moduleId, lessonId: lesson.id },
+              { onError: (error) => toast.error(error.message) },
+            ),
+          isPending: unlinkLesson.isPending,
+        }}
         // Offered only once the count is known. The confirmation's whole job
         // is to state the blast radius, and a dialog that guessed at it —
         // or fell back to "1 course" for a lesson taught by five — would be
-        // worse than no button.
+        // worse than no button. Until then the control is inert and says why,
+        // rather than silently not being there.
         onDelete={
           courseCount == null
             ? undefined
@@ -101,8 +104,15 @@ export const EditorLessonCardContainer = ({
                   id: lesson.id,
                   name: lesson.name,
                   courseCount,
+                  // This card HAS a remove control, so the confirmation may
+                  // point at it — by the same name the button wears.
+                  removeControlLabel: removeLessonLabel(
+                    lesson.name,
+                    moduleName,
+                  ),
                 })
         }
+        deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
       />
     </div>
   );

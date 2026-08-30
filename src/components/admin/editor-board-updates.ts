@@ -2,7 +2,7 @@
 // its test imports directly; keeping the alias consistent avoids a resolution
 // trap the moment a test reaches for either.
 import type {
-  BoardLesson,
+  EditorBoardLesson,
   LibraryLesson,
   OrgEditorBoard,
 } from '#/lib/admin-schemas';
@@ -27,7 +27,10 @@ function allModules(board: OrgEditorBoard) {
  * out of it — that is what makes a same-module downward move land in the slot
  * under the pointer rather than one above it.
  */
-function overIndexIn(lessons: BoardLesson[], overId: string | number): number {
+function overIndexIn(
+  lessons: EditorBoardLesson[],
+  overId: string | number,
+): number {
   const over = parseDndId(overId);
   if (over?.type === 'lesson') {
     const at = lessons.findIndex((l) => l.id === over.id);
@@ -38,7 +41,7 @@ function overIndexIn(lessons: BoardLesson[], overId: string | number): number {
 
 function insertAt(
   board: OrgEditorBoard,
-  lesson: BoardLesson,
+  lesson: EditorBoardLesson,
   targetModuleId: number,
   index: number,
 ): OrgEditorBoard {
@@ -64,7 +67,7 @@ export function moveLessonOnBoard(
   if (!target) return board;
   const index = overIndexIn(target.lessons, overId);
 
-  let moved: BoardLesson | undefined;
+  let moved: EditorBoardLesson | undefined;
   const stripped = board.map((cb) => ({
     ...cb,
     modules: cb.modules.map((m) => {
@@ -82,7 +85,7 @@ export function moveLessonOnBoard(
 /** Append a newly linked library lesson to the end of a module. */
 export function linkLessonOnBoard(
   board: OrgEditorBoard,
-  lesson: BoardLesson,
+  lesson: EditorBoardLesson,
   targetModuleId: number,
 ): OrgEditorBoard {
   const target = allModules(board).find((m) => m.id === targetModuleId);
@@ -190,7 +193,9 @@ export function commitTransferredLesson(
  * one look the same. Anything else would flicker into a different card a
  * moment later.
  */
-export function boardLessonFromLibrary(lesson: LibraryLesson): BoardLesson {
+export function boardLessonFromLibrary(
+  lesson: LibraryLesson,
+): EditorBoardLesson {
   return {
     id: lesson.id,
     name: lesson.name,
@@ -204,7 +209,5 @@ export function boardLessonFromLibrary(lesson: LibraryLesson): BoardLesson {
     levels: [],
     quizQuestionCount: 0,
     dependsOn: [],
-    videoProvider: null,
-    videoRef: null,
   };
 }
