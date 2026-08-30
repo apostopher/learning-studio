@@ -42,12 +42,30 @@ const LIBRARY_URL_PATTERN = '%/library-%';
  * every course teaching it, not just the one named by the now-legacy
  * `lessons.module_id`. That is correct — the file belongs to the lesson, not
  * to a single course — but it is a real change from "one course, one file
- * list" to "every teaching course gets the file". It does not produce
- * duplicate rows for a single course's list: `linkLesson` enforces one
- * placement per course per lesson, so at most one `module_lessons` row can
- * satisfy `eq(lessonModule.courseId, courseId)` for a given lesson, even
- * though the join fans a multiply-placed lesson out to several rows before
- * that filter is applied.
+ * list" to "every teaching course gets the file".
+ *
+ * The reverse is also newly possible: `lessons.module_id` was `NOT NULL`, so
+ * every lesson-linked assignment used to resolve exactly one course. A lesson
+ * with no `module_lessons` row at all (not yet backfilled, or removed from
+ * every course) now resolves to NONE — its files vanish from every course's
+ * library, and `getCourseSlugsForLibraryFile` returns `[]` for them, which
+ * the download route turns into a hard 403. Arguably correct for a lesson no
+ * course actually teaches, but it is a new failure mode that depends on
+ * backfill completeness, not a pre-existing one.
+ *
+ * It does not produce duplicate ROWS for a single course's list: `linkLesson`
+ * (`src/db/placements.ts`) checks-then-inserts to keep one placement per
+ * course per lesson, so at most one `module_lessons` row normally satisfies
+ * `eq(lessonModule.courseId, courseId)` for a given lesson. That check is
+ * application-level, not a database constraint — the unique index is on
+ * `(module_id, lesson_id)`, i.e. per MODULE, and `admin.ts`'s `createLesson`
+ * is a second, independent writer — so it is not a guarantee. If it were ever
+ * violated, the resulting duplicate rows would be harmless here rather than
+ * merely rare: both would carry the identical `moduleSlug` (read from the
+ * assignment's own stored module, not from the placement) and `lessonSlug`,
+ * and `resolveLibraryFiles` (`src/lib/library-gating.ts`) is idempotent under
+ * duplicate assignments — an any-satisfies check plus an earliest-position
+ * `reduce` — so a second identical row changes nothing it returns.
  */
 export async function getLibraryForCourse(
   courseId: number,

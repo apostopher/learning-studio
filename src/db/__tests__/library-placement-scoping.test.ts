@@ -1,14 +1,15 @@
 // @vitest-environment node
+import type { SQL } from 'drizzle-orm';
 import {
   integer,
   jsonb,
   numeric,
+  PgDialect,
   pgTable,
   text,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 // Task 5b moves the STUDENT-facing library scoping (`#/db/library.ts`) onto
 // placements: a lesson's course is now reached through `module_lessons`
@@ -54,10 +55,9 @@ const blobFileAssignmentsTable = pgTable('blob_file_assignments', {
 /**
  * Chainable stub for a single drizzle query, ignoring its arguments — house
  * pattern from `placements.test.ts`. Fine for driving control flow and
- * checking what the CALLER receives back, but (per the dispatch's warning,
- * confirmed against `lesson-course-resolution.test.ts`'s own doc comment) it
- * cannot catch a wrong join or a wrong WHERE target, since every builder
- * method returns the same object no matter what it was called with.
+ * checking what the CALLER receives back, but it cannot catch a wrong join or
+ * a wrong WHERE target, since every builder method returns the same object no
+ * matter what it was called with.
  */
 function makeChain(result: unknown) {
   const chain = {
@@ -75,32 +75,31 @@ function makeChain(result: unknown) {
 }
 
 type JoinCalls = {
-  innerJoin: Array<[table: unknown, condition: unknown]>;
-  leftJoin: Array<[table: unknown, condition: unknown]>;
-  where: unknown[];
+  innerJoin: Array<[table: unknown, condition: SQL]>;
+  leftJoin: Array<[table: unknown, condition: SQL]>;
+  where: SQL[];
 };
 
 /**
  * Variant of `makeChain` that records every `(table, condition)` pair passed
- * to `.innerJoin()`/`.leftJoin()`, and every condition passed to `.where()`.
- * This is what actually proves the join rewrite happened: `makeChain` above
- * discards its arguments entirely, so a mutant that never touched the join at
- * all — still hopping `lessons.module_id` straight to the module — would
- * satisfy every assertion built on plain `makeChain`. Modelled on
- * `makeJoinCapturingChain` in `lesson-course-resolution.test.ts`.
+ * to `.innerJoin()`/`.leftJoin()`, in call order, and every condition passed
+ * to `.where()`. Plain `makeChain` discards its arguments entirely, so a
+ * mutant that never touched the join at all would satisfy every assertion
+ * built on it. Modelled on `makeJoinCapturingChain` in
+ * `lesson-course-resolution.test.ts`.
  */
 function makeCapturingChain(result: unknown, calls: JoinCalls) {
   const chain = {
     from: () => chain,
-    innerJoin: (table: unknown, condition: unknown) => {
+    innerJoin: (table: unknown, condition: SQL) => {
       calls.innerJoin.push([table, condition]);
       return chain;
     },
-    leftJoin: (table: unknown, condition: unknown) => {
+    leftJoin: (table: unknown, condition: SQL) => {
       calls.leftJoin.push([table, condition]);
       return chain;
     },
-    where: (condition: unknown) => {
+    where: (condition: SQL) => {
       calls.where.push(condition);
       return chain;
     },
@@ -113,41 +112,24 @@ function makeCapturingChain(result: unknown, calls: JoinCalls) {
   return chain;
 }
 
-type ColumnChunk = { name: string; table: unknown };
+const dialect = new PgDialect();
 
 /**
- * Recursively collect every real drizzle Column reference (an object exposing
- * both `.name` — the db column name — and `.table` — the table it actually
- * belongs to) out of a condition tree. `collectSqlTokens` (shared, used
- * elsewhere in this file) only gives back name/value STRINGS, which can't
- * tell `lessons.module_id` apart from `module_lessons.module_id` — both are
- * named `module_id`. Keeping `.table` by reference is what lets a test prove
- * WHICH table a condition actually reads from, which is the entire content of
- * the Task 5b join rewrite: `lessonModule` (the aliased `modules` row a
- * lesson lives in) used to be reached via `lessons.module_id` and is now
- * reached via `module_lessons.module_id`. Both shapes produce identical
- * `collectSqlTokens` output (`['module_id']`), so only this reference-based
- * check can tell them apart.
+ * Render a captured drizzle condition to its exact parameterized SQL text —
+ * no database needed. Fix round 1 replaced a hand-rolled tree-walk
+ * (`collectColumnChunks`, keeping columns by `.table` reference) with this:
+ * the walk could prove a column belonged to the right TABLE, but flattened
+ * every join's condition into one bag before asserting, so it could not tell
+ * "module_lessons.module_id and lesson_module.id both appear somewhere" apart
+ * from "module_lessons.module_id is correctly PAIRED with lesson_module.id on
+ * THIS join" — the actual content of the rewrite. Exact SQL text pins the
+ * pairing, the boolean shape (`and` vs `or`, `is null` vs `is not null`), and
+ * incidentally the join order (a reordered join renders a different string at
+ * the position under test). Verified against this repo's installed
+ * `drizzle-orm` (`^0.45.1`) — see fix-round-1 report for the probe output.
  */
-function collectColumnChunks(
-  node: unknown,
-  out: ColumnChunk[] = [],
-): ColumnChunk[] {
-  if (node == null) return out;
-  if (Array.isArray(node)) {
-    for (const child of node) collectColumnChunks(child, out);
-    return out;
-  }
-  if (typeof node === 'object') {
-    const record = node as Record<string, unknown>;
-    if (typeof record.name === 'string' && 'table' in record) {
-      out.push({ name: record.name, table: record.table });
-    }
-    if ('queryChunks' in record) {
-      collectColumnChunks(record.queryChunks, out);
-    }
-  }
-  return out;
+function render(condition: SQL): string {
+  return dialect.sqlToQuery(condition).sql;
 }
 
 const db = vi.hoisted(() => ({ select: vi.fn(), selectDistinct: vi.fn() }));
@@ -170,47 +152,35 @@ beforeEach(() => {
 });
 
 describe('getLibraryForCourse', () => {
-  // Mutant this catches: reverting to the pre-Task-5b join —
-  // `.leftJoin(lessonModule, eq(lessonsTable.moduleId, lessonModule.id))` —
-  // which never touches `module_lessons` at all. `makeChain`-based tests
-  // can't see this (they ignore join arguments entirely); this test captures
-  // the real `(table, condition)` pairs.
-  it('joins module_lessons on lesson_id to reach a placed lesson, not the legacy lessons.module_id path', async () => {
+  // Fix round 1, Critical 2: the original two tests here flattened every
+  // leftJoin condition into one bag before asserting, so they could not tell
+  // "both tables appear somewhere" from "module_lessons.module_id is actually
+  // paired with lesson_module.id ON THIS JOIN" — `eq(lessonModule.courseId,
+  // moduleLessonsTable.moduleId)` (wrong column on the alias side) satisfied
+  // them. They also used `.find`/`.some`, so reordering the two joins (which
+  // produces invalid SQL at runtime — module_lessons.module_id referenced
+  // before module_lessons is in scope) passed too. This single test asserts
+  // per-join, in order: `module_lessons` must appear, its own condition must
+  // render exactly `module_lessons.lesson_id = lessons.id`, and the VERY NEXT
+  // leftJoin must render exactly `lesson_module.id = module_lessons.module_id`.
+  it('joins module_lessons then the aliased placed module, in that order, with lesson_id and module_id correctly paired', async () => {
     const calls: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
     await getLibraryForCourse(3);
 
-    const moduleLessonsJoin = calls.leftJoin.find(
-      ([table]) => table === moduleLessonsTable,
+    const joinedTables = calls.leftJoin.map(([table]) => table);
+    const moduleLessonsIndex = joinedTables.indexOf(moduleLessonsTable);
+    expect(moduleLessonsIndex).toBeGreaterThanOrEqual(0);
+    expect(render(calls.leftJoin[moduleLessonsIndex][1])).toBe(
+      '"module_lessons"."lesson_id" = "lessons"."id"',
     );
-    expect(moduleLessonsJoin).toBeDefined();
-    const tokens = collectSqlTokens(moduleLessonsJoin?.[1]);
-    expect(tokens).toContain('lesson_id');
-  });
 
-  // Mutant this catches: a "half revert" that keeps a join to
-  // `module_lessons` in the chain (so the test above still passes) but wires
-  // the lesson's module back from `lessons.module_id` instead of
-  // `module_lessons.module_id` — e.g. leaving
-  // `eq(lessonsTable.moduleId, lessonModule.id)` in place. Both shapes are
-  // named `module_id`, so only checking the owning TABLE by reference (not
-  // the column name) can tell them apart.
-  it('sources the placed module from module_lessons.module_id, never from lessons.module_id', async () => {
-    const calls: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
-    db.select.mockReturnValueOnce(makeCapturingChain([], calls));
-
-    await getLibraryForCourse(3);
-
-    const chunks = collectColumnChunks(calls.leftJoin.map(([, c]) => c));
-    const legacyModuleId = chunks.find(
-      (c) => c.name === 'module_id' && c.table === lessonsTable,
+    const nextJoin = calls.leftJoin[moduleLessonsIndex + 1];
+    expect(nextJoin).toBeDefined();
+    expect(render(nextJoin[1])).toBe(
+      '"lesson_module"."id" = "module_lessons"."module_id"',
     );
-    const placementModuleId = chunks.find(
-      (c) => c.name === 'module_id' && c.table === moduleLessonsTable,
-    );
-    expect(legacyModuleId).toBeUndefined();
-    expect(placementModuleId).toBeDefined();
   });
 
   // Mutant this catches: swapping either `.leftJoin(lessonsTable, ...)` or
@@ -236,15 +206,18 @@ describe('getLibraryForCourse', () => {
     ).toBe(false);
   });
 
-  // Mutant this catches: "simplifying" the WHERE while doing the join
-  // rewrite so the first OR branch scopes by the assignment's own STORED
-  // module (`eq(modulesTable.courseId, courseId)`) instead of the lesson's
-  // PLACED module (`eq(lessonModule.courseId, courseId)`) — which is exactly
-  // the D8 bug the doc comment warns about: three rows name a module their
-  // lesson doesn't live in, and this would file them under the wrong course.
-  // Both branches project a column literally named `course_id`, so — same as
-  // the test above — only checking the owning table by reference (not the
-  // name) can tell "the lesson's placement" apart from "the stored module".
+  // Fix round 1, Critical 1: the original version of this test counted
+  // `course_id`/`id` column chunks and checked which TABLE each belonged to,
+  // but never checked the boolean OPERATORS connecting them — so it could not
+  // fail for the rule it claimed to guard. Three mutants slipped through it:
+  // scoping the lesson branch by the raw assignment's own stored course
+  // (`blob_file_assignments.course_id`, null on every imported row — this
+  // would make every lesson-scoped file vanish from every course), swapping
+  // the fallback's `and` for `or` (the actual D8 bug: re-admits the three
+  // mismatched rows under the wrong course), and flipping `is null` to
+  // `is not null` (drops all 11 module-only rows). Exact SQL text catches all
+  // three because each changes the rendered string, not just which table a
+  // chunk points at.
   it("keeps the lesson's placement winning over the assignment's stored module", async () => {
     const calls: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
@@ -252,26 +225,18 @@ describe('getLibraryForCourse', () => {
     await getLibraryForCourse(7);
 
     expect(calls.where).toHaveLength(1);
-    const chunks = collectColumnChunks(calls.where[0]);
-    const courseIdChunks = chunks.filter((c) => c.name === 'course_id');
-    expect(courseIdChunks).toHaveLength(2);
-    // First branch: the lesson's placement — never the raw stored module.
-    expect(courseIdChunks[0]?.table).not.toBe(modulesTable);
-    // Fallback branch: explicitly the assignment's own stored module, and
-    // only reachable when there is no lesson at all.
-    expect(courseIdChunks[1]?.table).toBe(modulesTable);
-    const idChunks = chunks.filter(
-      (c) => c.name === 'id' && c.table === lessonsTable,
+    expect(render(calls.where[0])).toBe(
+      '("blob_files"."url" like $1 and ("lesson_module"."course_id" = $2 or ("lessons"."id" is null and "modules"."course_id" = $3)))',
     );
-    expect(idChunks.length).toBeGreaterThan(0);
   });
 
-  // Mutant this catches: the courseId argument getting dropped or hardcoded
-  // partway through a refactor (e.g. reusing a closed-over value instead of
-  // the function's own parameter) — which would make every call scope
-  // against the same course regardless of which one was actually asked for,
-  // silently breaking the "a lesson taught by two courses answers to both"
-  // guarantee the placements migration exists to provide.
+  // Not itself a proof of the join rewrite (a courseId-parameterization bug
+  // is a defect this refactor could not introduce — the parameter has always
+  // been threaded straight from the function argument into the WHERE). Kept
+  // as a narrow, independent safety net: the placements migration's whole
+  // point is that the SAME query shape must answer correctly for whichever
+  // course is asked, so this pins that the bound parameter is actually the
+  // caller's own courseId and not some closed-over or hardcoded value.
   it('parameterizes the placement scope by whichever course is actually queried', async () => {
     const callsA: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     const callsB: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
@@ -282,42 +247,43 @@ describe('getLibraryForCourse', () => {
     await getLibraryForCourse(101);
     await getLibraryForCourse(202);
 
-    const tokensA = collectSqlTokens(callsA.where[0]);
-    const tokensB = collectSqlTokens(callsB.where[0]);
-    expect(tokensA).toContain('101');
-    expect(tokensA).not.toContain('202');
-    expect(tokensB).toContain('202');
-    expect(tokensB).not.toContain('101');
+    expect(dialect.sqlToQuery(callsA.where[0]).params).toEqual([
+      '%/library-%',
+      101,
+      101,
+    ]);
+    expect(dialect.sqlToQuery(callsB.where[0]).params).toEqual([
+      '%/library-%',
+      202,
+      202,
+    ]);
   });
 });
 
 describe('getCourseSlugsForLibraryFile', () => {
-  // Mirrors the getLibraryForCourse join tests above — same mutant, same
-  // reasoning, different function. `#/db/library.ts` builds this query with
-  // its own separate alias chain, so the rewrite has to be verified here
+  // Mirrors the getLibraryForCourse join-pairing test above — same mutants,
+  // same reasoning, different function. `#/db/library.ts` builds this query
+  // with its own separate alias chain, so the rewrite has to be verified here
   // independently; fixing one function's join is not evidence the other one
   // was touched.
-  it('joins module_lessons on lesson_id, never sourcing the placed module from lessons.module_id', async () => {
+  it('joins module_lessons then the aliased placed module, in that order, with lesson_id and module_id correctly paired', async () => {
     const calls: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     db.selectDistinct.mockReturnValueOnce(makeCapturingChain([], calls));
 
     await getCourseSlugsForLibraryFile(9);
 
-    const moduleLessonsJoin = calls.leftJoin.find(
-      ([table]) => table === moduleLessonsTable,
+    const joinedTables = calls.leftJoin.map(([table]) => table);
+    const moduleLessonsIndex = joinedTables.indexOf(moduleLessonsTable);
+    expect(moduleLessonsIndex).toBeGreaterThanOrEqual(0);
+    expect(render(calls.leftJoin[moduleLessonsIndex][1])).toBe(
+      '"module_lessons"."lesson_id" = "lessons"."id"',
     );
-    expect(moduleLessonsJoin).toBeDefined();
-    expect(collectSqlTokens(moduleLessonsJoin?.[1])).toContain('lesson_id');
 
-    const chunks = collectColumnChunks(calls.leftJoin.map(([, c]) => c));
-    expect(
-      chunks.some((c) => c.name === 'module_id' && c.table === lessonsTable),
-    ).toBe(false);
-    expect(
-      chunks.some(
-        (c) => c.name === 'module_id' && c.table === moduleLessonsTable,
-      ),
-    ).toBe(true);
+    const nextJoin = calls.leftJoin[moduleLessonsIndex + 1];
+    expect(nextJoin).toBeDefined();
+    expect(render(nextJoin[1])).toBe(
+      '"lesson_module"."id" = "module_lessons"."module_id"',
+    );
   });
 
   // Mutant this catches: joining lessonsTable with `.innerJoin` instead of
@@ -335,10 +301,14 @@ describe('getCourseSlugsForLibraryFile', () => {
     );
   });
 
-  // The 11 module-only rows: no lesson at all, so `viaLesson` is null and the
-  // fallback `viaModule` must carry the slug through. Mutant this catches: a
-  // refactor that requires `viaLesson` unconditionally (e.g. `row.viaLesson!`
-  // or filtering out rows where it's null) instead of the `??` fallback.
+  // Fix round 1, Minor 5: this and the two tests below exercise the `??`
+  // fallback and the `Set` dedup loop in `getCourseSlugsForLibraryFile`'s JS
+  // body — code this task did NOT change (only the join above changed) and
+  // that would have passed against the pre-Task-5b implementation too, given
+  // the same canned rows. Kept as honest characterization tests of that
+  // logic, not as evidence the SQL rewrite works — that evidence is the join
+  // test above. The 11 module-only rows: no lesson at all, so `viaLesson` is
+  // null and `viaModule` must carry the slug through.
   it('resolves a module-only assignment (no lesson) via its module', async () => {
     db.selectDistinct.mockReturnValueOnce(
       makeChain([{ viaModule: 'safety-briefings', viaLesson: null }]),
@@ -347,10 +317,9 @@ describe('getCourseSlugsForLibraryFile', () => {
     expect(await getCourseSlugsForLibraryFile(9)).toEqual(['safety-briefings']);
   });
 
-  // Mutant this catches: flipping the fallback to `row.viaModule ??
-  // row.viaLesson`, which would file a mismatched row (module names one
-  // course, the row's own lesson lives in another) under the WRONG course —
-  // exactly the D8 bug this codebase has already hit once.
+  // Characterization test, not a join-rewrite proof — see the comment on the
+  // test above. Documents that `row.viaLesson ?? row.viaModule` (unchanged by
+  // this task) is what makes the D8 rule hold once rows reach the JS layer.
   it("prefers the lesson's course over the stored module's when a row resolves both", async () => {
     db.selectDistinct.mockReturnValueOnce(
       makeChain([{ viaModule: 'wrong-course', viaLesson: 'right-course' }]),
@@ -359,14 +328,11 @@ describe('getCourseSlugsForLibraryFile', () => {
     expect(await getCourseSlugsForLibraryFile(9)).toEqual(['right-course']);
   });
 
-  // The behaviour change Task 5b is FOR: a lesson placed in two courses now
-  // produces two distinct rows (one `module_lessons` join match per course),
-  // and both slugs must survive into the returned list. Mutant this catches:
-  // taking only the first resolved slug (e.g. `rows[0]?.viaLesson ??
-  // rows[0]?.viaModule` or an early `return`) instead of accumulating into
-  // the `Set` and returning every member — under the old single-valued
-  // `lessons.module_id` join this scenario could never even arise, since a
-  // lesson could only ever resolve to one course.
+  // Characterization test, not a join-rewrite proof — see the comment two
+  // tests up. Documents that the pre-existing `Set`-based accumulation
+  // (unchanged by this task) is what lets the NEW row shape the placements
+  // join can now produce (one row per teaching course for the same lesson)
+  // come out as every distinct slug rather than just the first.
   it('returns every course teaching the lesson, deduplicated', async () => {
     db.selectDistinct.mockReturnValueOnce(
       makeChain([
