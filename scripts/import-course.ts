@@ -35,16 +35,26 @@
  * resolving `courseId` and before the modules/lessons loops, the same
  * invariant `createCourse` (`src/db/admin.ts`) enforces for courses created
  * through the admin UI ("whatever this deployment administers, it owns
- * what it creates/imports"). A fresh `import → run` needs no extra step.
- * The org actually stamped on each lesson is then read back via the same
- * MIN(org_id) rule `migrate-lesson-placements.ts`'s backfill used, so it
- * agrees with a course that already belonged to some OTHER org too — not
- * necessarily the active one.
+ * what it creates/imports"). A fresh `import → run` needs no extra step —
+ * PROVIDED the course doesn't already belong to some OTHER org: linking is
+ * NOT unconditional (fix round 4, Important 2). `resolveCourseOrgId`
+ * (`./resolve-course-org-link.ts`) reads the course's existing
+ * `course_orgs` rows FIRST and REFUSES — throwing, before any write —
+ * if any exist and the active org isn't already one of them, since
+ * inserting anyway would silently change what `MIN(org_id)` resolves to
+ * for every lesson this import writes from then on (a permanently
+ * mixed-org lesson set inside one course). Only once that's ruled out does
+ * it link (or confirm the existing link) and log which org id it did — see
+ * that file for the full reasoning. `resolveCourseOrgId` also validates
+ * `ACTIVE_ORG_ID` needs to have already been read (`getActiveOrgId()`,
+ * hoisted to the very top of `main()`, fix round 4's Minor 8) so a
+ * misconfigured deployment fails before any write, including a dry run.
  */
 import { createHash } from 'node:crypto';
 import { put } from '@vercel/blob';
 import { Pool } from 'pg';
 import { getActiveOrgId } from '#/lib/active-org.server';
+import { healDuplicatePlacements } from './heal-duplicate-placements';
 import { resolveCourseOrgId } from './resolve-course-org-link';
 
 const OLD_COURSE_SLUG = '3d-airmanship';
@@ -174,11 +184,14 @@ async function main() {
 
   // Whatever this deployment administers, it owns what it imports — same
   // invariant `createCourse` (src/db/admin.ts) enforces via `linkCourseToOrg`
-  // when a course is created through the admin UI. Doing this HERE, before
-  // the lessons loop below, means a fresh import never needs a separate
-  // `pnpm db:seed-org-links` run in between — see the header note. Split
-  // into `resolveCourseOrgId` (./resolve-course-org-link.ts) so it can be
-  // unit-tested without a real `pg.Pool`.
+  // — PROVIDED the course doesn't already belong to a DIFFERENT org (see
+  // `resolveCourseOrgId`'s own doc comment for the refusal this now does
+  // before linking, and why). Doing this HERE, before the lessons loop
+  // below, means a fresh import never needs a separate
+  // `pnpm db:seed-org-links` run in between, in the common case — see the
+  // header note. Split into `resolveCourseOrgId`
+  // (./resolve-course-org-link.ts) so it can be unit-tested without a real
+  // `pg.Pool`.
   const lessonOrgId = await resolveCourseOrgId(
     newQ,
     courseId,
@@ -402,39 +415,26 @@ async function main() {
       // never happen; its own UPDATE would then hit both rows and collide
       // with the unique index. The lookup is scoped to `courseModuleIds`
       // (every module in THIS course), matching how `movePlacement` itself
-      // scopes a move.
-      //
-      // Fix round 4, Important 1 (secondary): ordered and NOT limited to
-      // one row, because a PRE-EXISTING duplicate pair — created by the
-      // bug above before this fix landed — is healed here rather than left
-      // for whichever row an unordered read happened to return first.
-      // Kept: the lowest-id row (the original placement). Deleted: every
-      // other one, logged so a healed duplicate is visible in the script's
-      // own output rather than silently repaired.
-      const existingPlacements = await txQ<{ id: number }>(
-        `select id from module_lessons
-           where lesson_id = $1 and module_id = any($2::int[])
-           order by id`,
-        [lessonId, courseModuleIds],
+      // scopes a move. `healDuplicatePlacements` (fix round 4's Important 1
+      // secondary, extracted and made recoverable in round 5's Minor 1)
+      // also heals a PRE-EXISTING duplicate pair if one is found, and
+      // returns the survivor's id (or `null`) — the delete inside it runs
+      // BEFORE the move below, which is what keeps this UPDATE's target
+      // from ever colliding with a row that's still there.
+      const existingPlacementId = await healDuplicatePlacements(
+        txQ,
+        lessonId,
+        courseModuleIds,
+        row.slug,
       );
-      if (existingPlacements.length > 1) {
-        const [, ...extras] = existingPlacements;
-        await txQ(`delete from module_lessons where id = any($1::int[])`, [
-          extras.map((e) => e.id),
-        ]);
-        console.log(
-          `    healed duplicate placement(s) for "${row.slug}": kept id=${existingPlacements[0].id}, deleted [${extras.map((e) => e.id).join(', ')}]`,
-        );
-      }
-      const [existingPlacement] = existingPlacements;
-      if (existingPlacement) {
+      if (existingPlacementId !== null) {
         // `depends_on` is deliberately left alone here — set once by the
         // lesson_dependencies loop below, and must survive a re-run of
         // THIS loop untouched.
         await txQ(
           `update module_lessons set module_id=$2, rank=$3, updated_at=now()
              where id=$1`,
-          [existingPlacement.id, moduleId, row.rank],
+          [existingPlacementId, moduleId, row.rank],
         );
       } else {
         await txQ(

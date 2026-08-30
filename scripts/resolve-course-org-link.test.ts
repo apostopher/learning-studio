@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveCourseOrgId } from './resolve-course-org-link';
 
 /**
@@ -65,6 +65,32 @@ describe('resolveCourseOrgId', () => {
     const orgId = await resolveCourseOrgId(q, 42, 'itps-uas-remote', 4);
 
     expect(orgId).toBe(2);
+  });
+
+  // Fix round 5, Minor 3: `resolveCourseOrgId` used to log only
+  // `activeOrgId` ("linked to org 4") even when the MIN it actually
+  // returns (and stamps on every lesson) is a DIFFERENT, lower org — the
+  // log would then say "org 4" while every row gets org 2. Mutant: log
+  // only `activeOrgId`, dropping the resolved `orgId` from the message —
+  // correct-shaped (still logs something plausible-sounding) but
+  // wrong-behaving the moment they differ. Verified RED: with existing
+  // links `[2, 4]` and active org `4`, the resolved value is `2`, and this
+  // test's assertion that "2" appears in the log fails against that
+  // mutant.
+  it('logs the resolved MIN — the value actually stamped on lessons — not just the active org', async () => {
+    const { q } = fakeQ({ existingOrgIds: [2, 4], resolvedOrgId: 2 });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await resolveCourseOrgId(q, 42, 'itps-uas-remote', 4);
+
+    const logged = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    // Precise substrings, not bare digits — `courseId` (42) itself contains
+    // a "2", so a bare `toContain('2')` would pass even against the mutant
+    // that never logs the resolved MIN at all.
+    expect(logged).toContain('linked to active org 4');
+    expect(logged).toContain('stamped with org 2');
+
+    logSpy.mockRestore();
   });
 
   // Fix round 4, Important 2: the hazard this test exists to catch. If the

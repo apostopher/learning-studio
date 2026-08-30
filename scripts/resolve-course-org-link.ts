@@ -72,9 +72,6 @@ export async function resolveCourseOrgId(
        on conflict (course_id, org_id) do nothing`,
     [courseId, activeOrgId],
   );
-  console.log(
-    `    course "${courseSlug}" (id ${courseId}) linked to org ${activeOrgId}`,
-  );
 
   const [orgRow] = await q<{ org_id: number }>(
     `select min(org_id)::int as org_id from course_orgs where course_id = $1`,
@@ -87,5 +84,18 @@ export async function resolveCourseOrgId(
         `Seed those links (pnpm db:seed-org-links) and re-run.`,
     );
   }
+
+  // Fix round 5, Minor 3: logs BOTH values, labeled — `activeOrgId` (what
+  // was just linked/confirmed) and `orgId` (the MIN, what actually lands
+  // on every lesson this import writes). They can legitimately differ: a
+  // course already linked to org 2 as well as the active org 4 resolves
+  // lessons to 2, not 4 — logging only `activeOrgId` there would read as
+  // "org 4" while every row actually gets 2.
+  console.log(
+    `    course "${courseSlug}" (id ${courseId}): linked to active org ` +
+      `${activeOrgId}; lessons will be stamped with org ${orgId} (MIN of ` +
+      `all its course_orgs links).`,
+  );
+
   return orgId;
 }

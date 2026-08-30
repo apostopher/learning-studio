@@ -17,6 +17,8 @@ ordering here has no safe shortcut.
   hasn't been seeded yet, step 2's own "creating a lesson works" health
   check is the first thing that tells you, which is late to find out.
   Remedy either gap: `pnpm db:seed-org-links`.
+- **Take a database backup/snapshot before step 3.** Step 3 is
+  irreversible — see the warning on that step below.
 
 ## Why there is no ordering that "just works"
 
@@ -75,8 +77,44 @@ write 500s.
    `module_id` but no `module_lessons` placement — re-run
    `pnpm db:migrate-lesson-placements` first if it does.
 
+   **This step is IRREVERSIBLE.** Dropped columns and the dropped
+   `lesson_dependencies` table are gone — there is no `db:*` script that
+   restores them. Restoring after a mistake here means restoring the
+   pre-step-3 backup/snapshot named in "Preconditions" above, not re-running
+   anything in this repo.
+
 Steps 1 and 3 are two different scripts on purpose: step 1 must run before
 step 2, and step 3 must run after — collapsing them into one script would
 put a step that has to run post-deploy directly next to one that has to run
 pre-deploy, which is exactly the ordering mistake this doc exists to
 prevent.
+
+## Verifying step 3
+
+Capture the lesson count **before** running step 3:
+
+```sql
+select count(*) from lessons;
+```
+
+After step 3 completes, run all three:
+
+1. **The columns and table are actually gone:**
+   ```sql
+   select column_name from information_schema.columns
+     where table_name = 'lessons' and column_name in ('module_id', 'rank');
+   -- expect: 0 rows
+   select to_regclass('lesson_dependencies');
+   -- expect: NULL
+   ```
+2. **`module_lessons` accounts for every lesson** — the orphan gate already
+   checked this immediately before dropping anything, but re-checking post-
+   drop confirms nothing slipped between the gate and the migration
+   actually landing:
+   ```sql
+   select count(distinct lesson_id) from module_lessons;
+   -- expect: equals the "before step 3" lesson count captured above
+   ```
+3. **Creating a lesson still works** — same manual check as step 2's health
+   check, repeated here because step 3 changed the schema those writes hit
+   (create AND move a lesson through the admin UI).

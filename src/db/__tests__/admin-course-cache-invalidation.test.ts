@@ -638,17 +638,18 @@ describe('course-details cache invalidation', () => {
     );
     expect(render(orgLookupCalls.where[0])).toBe('"modules"."id" = $1');
     expect(renderSqlParams(orgLookupCalls.where[0])).toEqual([7]);
-    // Fix round 4, Minor 3: pins the PROJECTION too, not just the join/where
-    // — `.select({ orgId: courseOrgsTable.orgId })` (an arbitrary row, no
-    // aggregate at all) would satisfy every assertion above unchanged,
-    // since the fake chain answers `[{ orgId: 4 }]` regardless of what was
-    // actually asked for. Only rendering the captured projection catches
-    // that divergence — exactly what fix round 4's own hazard (a course
-    // with several orgs resolving to the wrong one) depends on this being
-    // `min(...)`, not a bare column.
-    expect(render(orgLookupCalls.select[0].orgId)).toContain('min(');
-    expect(render(orgLookupCalls.select[0].orgId)).toContain(
-      '"course_orgs"."org_id"',
+    // Fix round 4, Minor 3 (tightened in round 5, Minor 4 — the house rule
+    // in render-sql.ts is `toBe` on the full string, never `toContain`):
+    // pins the PROJECTION too, not just the join/where — `.select({ orgId:
+    // courseOrgsTable.orgId })` (an arbitrary row, no aggregate at all)
+    // would satisfy every assertion above unchanged, since the fake chain
+    // answers `[{ orgId: 4 }]` regardless of what was actually asked for.
+    // Only rendering the captured projection catches that divergence —
+    // exactly what fix round 4's own hazard (a course with several orgs
+    // resolving to the wrong one) depends on this being `min(...)`, not a
+    // bare column.
+    expect(render(orgLookupCalls.select[0].orgId)).toBe(
+      'min("course_orgs"."org_id")',
     );
     // The value this query resolved is what actually reaches the INSERT —
     // not some other source.
@@ -671,9 +672,20 @@ describe('course-details cache invalidation', () => {
       fn({ select: txSelect, insert: txInsert }),
     );
 
-    await expect(
-      createLesson({ moduleId: 7, name: 'Stall Recovery' }),
-    ).rejects.toThrow(/module 7/i);
+    let error: Error | undefined;
+    try {
+      await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error?.message).toMatch(/module 7/i);
+    // Fix round 5, Minor 5: also pins the REMEDY, not just that a course/
+    // module is named — the importer side (resolve-course-org-link.ts)
+    // already asserts this; this was the one path left where the wording
+    // could be reverted (e.g. back to the vaguer "Link the course to an
+    // org first.") and nothing would go red.
+    expect(error?.message).toMatch(/db:seed-org-links/);
     expect(txInsert).not.toHaveBeenCalled();
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
