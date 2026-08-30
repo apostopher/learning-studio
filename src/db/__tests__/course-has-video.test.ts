@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { boolean, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  text,
+} from 'drizzle-orm/pg-core';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -48,8 +55,11 @@ const lessonsTable = pgTable('lessons', {
   videoProvider: text('video_provider'),
   videoRef: text('video_ref'),
 });
-const lessonDependenciesTable = pgTable('lesson_dependencies', {
+const moduleLessonsTable = pgTable('module_lessons', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
   lessonId: integer('lesson_id'),
+  rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
 const moduleDependenciesTable = pgTable('module_dependencies', {
@@ -88,7 +98,7 @@ vi.mock('@/db/schema', () => ({
   coursesTable,
   modulesTable,
   lessonsTable,
-  lessonDependenciesTable,
+  moduleLessonsTable,
   moduleDependenciesTable,
   orgLessonsTable,
   orgsTable,
@@ -150,7 +160,13 @@ const lessonRow = (lesson: {
     videoProvider: lesson.videoProvider,
     videoRef: lesson.videoRef,
   },
-  lessonDep: null,
+  placement: {
+    id: lesson.id,
+    moduleId: 10,
+    lessonId: lesson.id,
+    rank: '1',
+    dependsOn: [],
+  },
   moduleDep: null,
   orgLesson: null,
   org: null,
@@ -199,7 +215,7 @@ describe('getCourseDetails — hasVideo derivation', () => {
           }),
         ]),
       )
-      // The `inArray(lessonsTable.moduleId, db.select(...)...)` subquery
+      // The `inArray(moduleLessonsTable.moduleId, db.select(...)...)` subquery
       // embedded in the lessonData query's `.where()` — constructed but
       // never awaited on its own, so its content is irrelevant.
       .mockReturnValueOnce(makeChain([]));

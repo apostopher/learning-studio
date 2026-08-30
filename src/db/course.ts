@@ -19,10 +19,10 @@ import type { DBLesson, DBModule } from '@/db/schema';
 import {
   courseSubscriptionsTable,
   coursesTable,
-  lessonDependenciesTable,
   lessonMaterialProgressTable,
   lessonsTable,
   moduleDependenciesTable,
+  moduleLessonsTable,
   modulesTable,
   orgLessonsTable,
   orgsTable,
@@ -85,28 +85,49 @@ export async function getCourseDetails(slug: string) {
     });
   });
 
+  // Driven from `lessons` INNER JOINed to `module_lessons`, scoped to this
+  // course's own modules — this is the membership test itself, not a stray
+  // WIP filter, so it is a real INNER join rather than the LEFT-join-in-JOIN
+  // pattern used elsewhere in this file: a lesson with no placement in this
+  // course must not appear at all. Empty modules do not depend on this query
+  // to survive — `moduleMapWithDependencies` above is seeded from every
+  // module of the course independent of whether any lesson data comes back
+  // for it — so there is no "empty module vanishes" risk here to guard
+  // against. `rank` and `dependsOn` come from the placement
+  // (`module_lessons`), not the lesson row: a lesson can be third in one
+  // course and eighth in another, and `lessonDependenciesTable` (one global
+  // list per lesson) cannot express per-course prerequisites at all now that
+  // one lesson can be taught by several courses — see `module_lessons`' own
+  // doc comment in schema.ts.
+  //
+  // One `module_lessons` row per (lesson, course) is an application-level
+  // invariant enforced by `linkLesson` (src/db/placements.ts), not a DB
+  // constraint — the unique index is per (module_id, lesson_id). Given that
+  // invariant, the INNER JOIN below can add at most one row per lesson for
+  // this course's module subquery, so `lessonData` cannot emit the same
+  // lesson twice.
   const lessonData = await db
     .select({
       lesson: lessonsTable,
-      lessonDep: lessonDependenciesTable,
+      placement: moduleLessonsTable,
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,
       org: orgsTable,
     })
     .from(lessonsTable)
-    .leftJoin(
-      lessonDependenciesTable,
-      eq(lessonsTable.id, lessonDependenciesTable.lessonId),
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
     .leftJoin(
       moduleDependenciesTable,
-      eq(lessonsTable.moduleId, moduleDependenciesTable.moduleId),
+      eq(moduleLessonsTable.moduleId, moduleDependenciesTable.moduleId),
     )
     .leftJoin(orgLessonsTable, eq(lessonsTable.id, orgLessonsTable.lessonId))
     .leftJoin(orgsTable, eq(orgLessonsTable.orgId, orgsTable.id))
     .where(
       inArray(
-        lessonsTable.moduleId,
+        moduleLessonsTable.moduleId,
         db
           .select({ id: modulesTable.id })
           .from(modulesTable)
@@ -118,11 +139,14 @@ export async function getCourseDetails(slug: string) {
 
   const lessonMap = new Map<number, LessonDetails>();
 
-  for (const { lesson, lessonDep, moduleDep, orgLesson, org } of lessonData) {
+  for (const { lesson, placement, moduleDep, orgLesson, org } of lessonData) {
     // group lessons
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
         ...lesson,
+        // Placement's rank, not the lesson row's own — see the query comment
+        // above.
+        rank: placement.rank,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
         levels: lesson.levels as UserLevel[],
@@ -132,8 +156,8 @@ export async function getCourseDetails(slug: string) {
         organizations: [],
       });
     }
-    if (lessonDep?.dependsOn) {
-      lessonMap.get(lesson.id)?.dependsOn.push(...lessonDep.dependsOn);
+    if (placement.dependsOn.length > 0) {
+      lessonMap.get(lesson.id)?.dependsOn.push(...placement.dependsOn);
     }
 
     // Add organization information if it exists
@@ -150,7 +174,7 @@ export async function getCourseDetails(slug: string) {
       }
     }
 
-    const mod = moduleMapWithDependencies.get(lesson.moduleId);
+    const mod = moduleMapWithDependencies.get(placement.moduleId);
 
     if (moduleDep?.dependsOn && mod) {
       moduleDep.dependsOn.forEach((dep) => {
@@ -169,8 +193,8 @@ export async function getCourseDetails(slug: string) {
   }
 
   // Drop WIP lessons and order by rank. Gating is enforced against the real
-  // lesson_dependencies rows only — the synthetic "chain every lesson in
-  // module ids 2..5" block that used to live here was demo scaffolding.
+  // module_lessons.depends_on rows only — the synthetic "chain every lesson
+  // in module ids 2..5" block that used to live here was demo scaffolding.
   shapeModuleLessons(moduleMapWithDependencies.values());
 
   return {
@@ -257,13 +281,22 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       eq(coursesTable.id, courseSubscriptionsTable.courseId),
     )
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    // WIP lessons excluded in the JOIN, never the WHERE — in the WHERE, a
-    // course whose lessons are all unavailable would drop out of this result
-    // entirely and its card would vanish from /app rather than read 0%.
+    // Two LEFT joins, both deliberate: a module with no placements at all
+    // must still carry its module row through to `lessonsTable`'s join (so
+    // module_lessons is LEFT, not INNER), and a placed-but-unavailable lesson
+    // must still leave the module row standing (so the WIP filter sits
+    // inside `lessonsTable`'s join condition, never the WHERE). Either one
+    // becoming an inner join, or the WIP check moving to WHERE, would drop a
+    // course whose lessons are all unavailable out of this result entirely —
+    // its card would vanish from /app instead of reading 0%.
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.moduleId, modulesTable.id),
+    )
     .leftJoin(
       lessonsTable,
       and(
-        eq(lessonsTable.moduleId, modulesTable.id),
+        eq(lessonsTable.id, moduleLessonsTable.lessonId),
         eq(lessonsTable.isAvailable, true),
       ),
     )
@@ -293,17 +326,20 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       coursesTable.imageUrlWebp,
       modulesTable.id,
       modulesTable.rank,
+      moduleLessonsTable.id,
       lessonsTable.id,
-      lessonsTable.rank,
       ...progressComponentGroupBy,
     )
     // courseId as an explicit tiebreak keeps each course's rows contiguous
     // in the result, which the first-seen-wins loop below relies on.
+    // `moduleLessonsTable.id` in GROUP BY above makes `.rank` functionally
+    // dependent, the same way `lessonsTable.id` already did for
+    // `lessonsTable.rank`.
     .orderBy(
       asc(coursesTable.name),
       asc(coursesTable.id),
       asc(modulesTable.rank),
-      asc(lessonsTable.rank),
+      asc(moduleLessonsTable.rank),
     );
 
   // Resolved up front because BOTH the percentage and the card's destination

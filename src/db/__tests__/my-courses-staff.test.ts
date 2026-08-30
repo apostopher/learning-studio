@@ -41,6 +41,7 @@ vi.mock('@/db/schema', () => ({
   lessonMaterialProgressTable: {},
   lessonsTable: {},
   moduleDependenciesTable: {},
+  moduleLessonsTable: {},
   modulesTable: {},
   orgLessonsTable: {},
   orgsTable: {},
