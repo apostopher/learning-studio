@@ -15,6 +15,7 @@ const m = vi.hoisted(() => {
     getUserPermissions: vi.fn(),
     getRoleNamesForProfile: vi.fn(),
     isAnyCourseStaff: vi.fn(),
+    isAnyDisciplineStaff: vi.fn(),
   };
 });
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -32,6 +33,7 @@ vi.mock('#/db/course-staff', () => ({
 }));
 vi.mock('#/db/discipline-staff', () => ({
   getDisciplineRoleNames: vi.fn(),
+  isAnyDisciplineStaff: m.isAnyDisciplineStaff,
 }));
 vi.mock('#/db/permissions', () => ({
   getUserPermissions: m.getUserPermissions,
@@ -64,6 +66,7 @@ beforeEach(() => {
   m.getUserPermissions.mockResolvedValue(new Set<string>());
   m.getRoleNamesForProfile.mockResolvedValue([]);
   m.isAnyCourseStaff.mockResolvedValue(false);
+  m.isAnyDisciplineStaff.mockResolvedValue(false);
 });
 
 describe('requirePermission', () => {
@@ -223,9 +226,10 @@ describe('assertCanActOnProfile with course-scoped roles', () => {
 });
 
 describe('isStaffAnywhere', () => {
-  it('is true for an admin, without a course_staff lookup', async () => {
+  it('is true for an admin, without a course_staff or discipline_staff lookup', async () => {
     await expect(isStaffAnywhere(HEADERS)).resolves.toBe(true);
     expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
+    expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
   });
 
   it('is true for a professor holding no global role at all', async () => {
@@ -235,7 +239,30 @@ describe('isStaffAnywhere', () => {
     await expect(isStaffAnywhere(HEADERS)).resolves.toBe(true);
   });
 
-  it('is false for an ordinary learner', async () => {
+  /**
+   * Fix round 3: `course_staff` and `discipline_staff` are deliberately
+   * independent (no backfill — see `migrate-discipline-staff.ts`), so an SME
+   * can hold a `discipline_staff` row and ZERO `course_staff` rows. Before
+   * this round, `isStaffAnywhere` checked only `isAnyCourseStaff` and would
+   * read such an SME as a stranger — refused at the `/admin` shell's entry
+   * guard and the docx-parse route's floor, even though
+   * `requireLessonContentPermission` would correctly admit them once a
+   * lesson id resolved their discipline.
+   *
+   * Mutant: revert to `hasAdminAccess(roles) || (await isAnyCourseStaff(userId))`
+   * (this function's shape immediately before this round). RED: with no
+   * global role and no course_staff row, that version returns `false` for
+   * exactly this actor.
+   */
+  it('is true for a discipline-only SME holding zero course_staff rows', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce([]);
+    m.isAnyCourseStaff.mockResolvedValueOnce(false);
+    m.isAnyDisciplineStaff.mockResolvedValueOnce(true);
+
+    await expect(isStaffAnywhere(HEADERS)).resolves.toBe(true);
+  });
+
+  it('is false for an ordinary learner holding neither kind of staff row', async () => {
     m.getUserRoleNames.mockResolvedValueOnce([]);
 
     await expect(isStaffAnywhere(HEADERS)).resolves.toBe(false);
@@ -251,6 +278,8 @@ describe('isStaffAnywhere', () => {
 
     await expect(isStaffAnywhere(HEADERS)).resolves.toBe(false);
     expect(m.getUserRoleNames).not.toHaveBeenCalled();
+    expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
+    expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
   });
 });
 

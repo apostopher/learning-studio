@@ -68,9 +68,12 @@ const MATERIAL = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  // The default actor is staff somewhere, so a test that means to exercise
-  // anything past the floor is not silently 403'ing instead.
-  isStaffAnywhere.mockResolvedValue(true);
+  // Deliberately NOT defaulted here (fix round 3): `isStaffAnywhere` now
+  // covers both `course_staff` and `discipline_staff`, and the gap this
+  // round closes was hidden by exactly this kind of blanket default —
+  // nothing exercised the floor against a real refusal. Each test below
+  // sets it explicitly, matching what that test means to exercise.
+  //
   // This lesson's discipline — a sentinel so a branch that forwards the wrong
   // value fails a `toHaveBeenCalledWith` assertion rather than passing by
   // coincidence.
@@ -127,6 +130,7 @@ describe('parseLessonMaterialHandler', () => {
    * lesson only an org admin could actually save.
    */
   it('resolves the lessonId sent in the form data and forwards its discipline with an update action', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
@@ -145,6 +149,7 @@ describe('parseLessonMaterialHandler', () => {
   // `canParseLessonMaterial` course-less bound survives alongside it).
   // Refusing only the mocked guard would then not stop generation — RED.
   it('returns 403 without generating when the guard rejects', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     requireLessonContentPermission.mockRejectedValueOnce(new ForbiddenError());
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
 
@@ -155,7 +160,20 @@ describe('parseLessonMaterialHandler', () => {
     expect(generateLessonMaterial).not.toHaveBeenCalled();
   });
 
-  it('allows a discipline SME (simulated by the mocked guard resolving)', async () => {
+  /**
+   * Fix round 3: the floor (`isStaffAnywhere`) and the per-lesson guard
+   * (`requireLessonContentPermission`) are separate mocks at this layer, so
+   * this is the discipline-only-SME case at the route's own black-box level
+   * — an actor who is staff ONLY via `discipline_staff` (floor resolves
+   * `true`) and holds no course_staff row at all reaches and passes the
+   * per-lesson guard exactly the same as any other admitted actor. The
+   * real distinguishing logic — that `isStaffAnywhere` itself checks
+   * `discipline_staff`, not just `course_staff` — is unit-tested directly in
+   * lib/__tests__/permissions-server.test.ts ("is true for a discipline-only
+   * SME holding zero course_staff rows").
+   */
+  it('allows a discipline-only SME once the floor and the per-lesson guard both resolve', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
@@ -170,6 +188,7 @@ describe('parseLessonMaterialHandler', () => {
   // missing lessonId is handed to `absentResourceResponse`, which answers 404
   // only to someone on the teaching side.
   it('hands a non-existent lessonId to absentResourceResponse, without generating', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
     absentResourceResponse.mockResolvedValueOnce(
       new Response('Forbidden', { status: 403 }),
@@ -187,6 +206,7 @@ describe('parseLessonMaterialHandler', () => {
   });
 
   it('returns 400 when lessonId is missing, without resolving a discipline', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
     const res = await parseLessonMaterialHandler(requestWith(file, null));
     expect(res.status).toBe(400);
@@ -194,6 +214,7 @@ describe('parseLessonMaterialHandler', () => {
   });
 
   it('returns 400 when lessonId is not a positive integer', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
     const res = await parseLessonMaterialHandler(requestWith(file, 'abc'));
     expect(res.status).toBe(400);
@@ -201,6 +222,7 @@ describe('parseLessonMaterialHandler', () => {
   });
 
   it('returns 400 for a non-docx file', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     const file = new File(['hi'], 'notes.txt', { type: 'text/plain' });
     expect((await parseLessonMaterialHandler(requestWith(file))).status).toBe(
       400,
@@ -208,12 +230,14 @@ describe('parseLessonMaterialHandler', () => {
   });
 
   it('returns 400 when no file is provided', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     expect((await parseLessonMaterialHandler(requestWith(null))).status).toBe(
       400,
     );
   });
 
   it('converts, generates, and returns parsed material', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
@@ -225,6 +249,7 @@ describe('parseLessonMaterialHandler', () => {
   });
 
   it('returns 500 when generation throws', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(true);
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockRejectedValueOnce(new Error('model down'));
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });

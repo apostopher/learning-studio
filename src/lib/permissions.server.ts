@@ -3,7 +3,10 @@ import {
   getStaffCourseIds,
   isAnyCourseStaff,
 } from '#/db/course-staff';
-import { getDisciplineRoleNames } from '#/db/discipline-staff';
+import {
+  getDisciplineRoleNames,
+  isAnyDisciplineStaff,
+} from '#/db/discipline-staff';
 import {
   getRoleNamesForProfile,
   getUserPermissions,
@@ -282,14 +285,24 @@ export async function getStaffScopedCourseIds(
 
 /**
  * Is this caller staff ANYWHERE — admin or owner globally, or holding any
- * `course_staff` row at all?
+ * `course_staff` OR `discipline_staff` row at all?
  *
  * The honest bound for a route that has no course id to scope by. It grants
- * nothing on any particular course; it answers only "is this person part of
- * the teaching side of the deployment, or a stranger?" Two kinds of caller
- * need that: the blob-upload token endpoint (a blob pathname carries no course
- * id) and the lesson/module routes deciding whether a missing row may be
- * reported as a 404 rather than a flat 403.
+ * nothing on any particular course or discipline; it answers only "is this
+ * person part of the teaching side of the deployment, or a stranger?" Three
+ * kinds of caller need that: the blob-upload token endpoint (a blob pathname
+ * carries no course id), the lesson/module routes deciding whether a missing
+ * row may be reported as a 404 rather than a flat 403, and the docx-parse
+ * route's pre-body-parsing floor.
+ *
+ * Checks `discipline_staff` as well as `course_staff`, not either alone: the
+ * two tables are deliberately independent (see `migrate-discipline-staff.ts`
+ * — no backfill, because there is no source of truth linking them), so a
+ * discipline-only SME can hold zero `course_staff` rows. Checking only
+ * `course_staff` here would read that SME as a stranger at every "is staff
+ * somewhere" gate — the `/admin` shell's entry guard and the docx-parse
+ * floor among them — even though `requireLessonContentPermission` would
+ * correctly admit them the moment a lesson id resolves their discipline.
  *
  * False for an anonymous request, and it never throws for one: the session
  * lookup is optional-chained, so nothing downstream runs without a user id.
@@ -299,7 +312,11 @@ export async function isStaffAnywhere(headers: Headers): Promise<boolean> {
   const userId = session?.user?.id;
   if (!userId) return false;
   const roles = await getUserRoleNames(userId);
-  return hasAdminAccess(roles) || (await isAnyCourseStaff(userId));
+  return (
+    hasAdminAccess(roles) ||
+    (await isAnyCourseStaff(userId)) ||
+    (await isAnyDisciplineStaff(userId))
+  );
 }
 
 /**

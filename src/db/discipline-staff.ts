@@ -29,3 +29,29 @@ export async function getDisciplineRoleNames(
     );
   return rows.map((r) => r.name);
 }
+
+/**
+ * Staff on ANY discipline.
+ *
+ * Mirrors `isAnyCourseStaff` exactly, scoped to `discipline_staff` instead of
+ * `course_staff`. Its one caller is `isStaffAnywhere`: a user can legitimately
+ * hold a `discipline_staff` row and zero `course_staff` rows (the two tables
+ * are deliberately independent — see `migrate-discipline-staff.ts`'s doc
+ * comment on why there is no backfill linking them), so `isStaffAnywhere`
+ * must check both or a discipline-only SME reads as a stranger everywhere it
+ * is asked: refused at any route gated on "is staff somewhere" (the
+ * docx-parse floor, the `/admin` shell) even though `requireLessonContentPermission`
+ * would correctly admit them once a lesson id resolves their discipline.
+ *
+ * NOT for anything that turns on a specific GRANT — same caveat as
+ * `isAnyCourseStaff`. Resolve that with `requireDisciplinePermission` for a
+ * known discipline.
+ */
+export async function isAnyDisciplineStaff(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: disciplineStaffTable.id })
+    .from(disciplineStaffTable)
+    .where(eq(disciplineStaffTable.userId, userId))
+    .limit(1);
+  return row !== undefined;
+}
