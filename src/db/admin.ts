@@ -395,28 +395,31 @@ export async function getCourseBoard(
     .where(eq(coursesTable.id, courseId));
   if (!course) return null;
 
-  const modules = await db
-    .select({
-      id: modulesTable.id,
-      name: modulesTable.name,
-      slug: modulesTable.slug,
-      imageUrlAvif: modulesTable.imageUrlAvif,
-      imageUrlWebp: modulesTable.imageUrlWebp,
-      rank: modulesTable.rank,
-      requiredSubscriptions: modulesTable.requiredSubscriptions,
-      sequentialLessons: modulesTable.sequentialLessons,
-    })
-    .from(modulesTable)
-    .where(eq(modulesTable.courseId, courseId))
-    .orderBy(asc(modulesTable.rank), asc(modulesTable.id));
-
-  const moduleIds = modules.map((m) => m.id);
-
   // Placements — not `lessons.module_id` — decide which lessons belong to
   // this course, which module each sits in, and what order: a lesson can
   // sit third in one course and eighth in another, so `lessons.rank` cannot
   // decide this. The lesson row still supplies name, video and every gate.
-  const placements = await getPlacementsForCourse(courseId);
+  // Fetched alongside `modules` rather than after: it depends only on
+  // `courseId`, not on the module rows, so there is nothing to sequence.
+  const [modules, placements] = await Promise.all([
+    db
+      .select({
+        id: modulesTable.id,
+        name: modulesTable.name,
+        slug: modulesTable.slug,
+        imageUrlAvif: modulesTable.imageUrlAvif,
+        imageUrlWebp: modulesTable.imageUrlWebp,
+        rank: modulesTable.rank,
+        requiredSubscriptions: modulesTable.requiredSubscriptions,
+        sequentialLessons: modulesTable.sequentialLessons,
+      })
+      .from(modulesTable)
+      .where(eq(modulesTable.courseId, courseId))
+      .orderBy(asc(modulesTable.rank), asc(modulesTable.id)),
+    getPlacementsForCourse(courseId),
+  ]);
+
+  const moduleIds = modules.map((m) => m.id);
   const lessonIds = [...new Set(placements.map((p) => p.lessonId))];
   const lessonRows = lessonIds.length
     ? await db
@@ -464,7 +467,15 @@ export async function getCourseBoard(
     });
     byModule.set(placement.moduleId, list);
   }
-  for (const list of byModule.values()) list.sort((a, b) => a.rank - b.rank);
+  // Tiebreak on lesson id, same as the old SQL's `asc(lessonsTable.rank),
+  // asc(lessonsTable.id)`: `rankBetween` can hand two placements the same
+  // rank (two stale editor views both computing `prev + 1` / `next / 2` for
+  // the same slot), and without a tiebreak `Array#sort`'s stability would
+  // just preserve whatever arbitrary order Postgres returned the rows in —
+  // the board could then reorder between renders for no reason.
+  for (const list of byModule.values()) {
+    list.sort((a, b) => a.rank - b.rank || a.id - b.id);
+  }
 
   const [dependencies, learnerCounts] = moduleIds.length
     ? await Promise.all([

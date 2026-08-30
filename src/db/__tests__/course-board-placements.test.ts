@@ -153,12 +153,17 @@ describe('getCourseBoard', () => {
   it('orders a module’s lessons by PLACEMENT rank, not lesson rank', async () => {
     // Lesson 9 ranks 1 on the lesson row but 2 in this course; lesson 10 the
     // reverse. If the board still read lessons.rank the order would invert.
+    // Placements are supplied OUT of rank order (9 before 10) so that
+    // iteration order alone can't produce [10, 9] — only an explicit sort by
+    // placement rank can. (Fix round 1: the original fixture supplied
+    // placements already in rank order, so deleting the sort in admin.ts
+    // left this test green.)
     db.select
       .mockReturnValueOnce(makeChain([{ id: 3, name: 'Course', slug: 'c' }])) // course
       .mockReturnValueOnce(makeChain([{ id: 4, name: 'Module', slug: 'm' }])); // modules
     getPlacementsForCourse.mockResolvedValue([
-      { id: 1, moduleId: 4, lessonId: 10, rank: 1, dependsOn: [] },
       { id: 2, moduleId: 4, lessonId: 9, rank: 2, dependsOn: [] },
+      { id: 1, moduleId: 4, lessonId: 10, rank: 1, dependsOn: [] },
     ]);
     db.select
       .mockReturnValueOnce(
@@ -175,12 +180,48 @@ describe('getCourseBoard', () => {
     expect(board?.modules[0].lessons.map((l) => l.id)).toEqual([10, 9]);
   });
 
+  // Equal placement ranks are reachable, not theoretical: rankBetween
+  // computes prev+1 / next/2 from client-supplied neighbour ids, so two
+  // drags to the same slot from two stale editor views collide exactly.
+  // Without a tiebreak, Array#sort's stability just preserves whatever
+  // arbitrary order the (mocked) DB handed back — here, descending id — so
+  // the board would render lessons in an order that isn't derived from
+  // anything the admin chose.
+  it('breaks a placement-rank tie by lesson id, same as the old SQL tiebreak', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([{ id: 3, name: 'Course', slug: 'c' }]))
+      .mockReturnValueOnce(makeChain([{ id: 4, name: 'Module', slug: 'm' }]));
+    getPlacementsForCourse.mockResolvedValue([
+      { id: 1, moduleId: 4, lessonId: 10, rank: 1, dependsOn: [] },
+      { id: 2, moduleId: 4, lessonId: 9, rank: 1, dependsOn: [] },
+    ]);
+    db.select
+      .mockReturnValueOnce(
+        makeChain([
+          { id: 10, name: 'Lesson 10', slug: 'l10', rank: '1' },
+          { id: 9, name: 'Lesson 9', slug: 'l9', rank: '1' },
+        ]),
+      )
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([]));
+
+    const board = await getCourseBoard(3);
+
+    expect(board?.modules[0].lessons.map((l) => l.id)).toEqual([9, 10]);
+  });
+
   it('takes dependsOn from the placement, so two courses can differ', async () => {
     db.select
       .mockReturnValueOnce(makeChain([{ id: 3, name: 'Course', slug: 'c' }]))
       .mockReturnValueOnce(makeChain([{ id: 4, name: 'Module', slug: 'm' }]));
     getPlacementsForCourse.mockResolvedValue([
-      { id: 1, moduleId: 4, lessonId: 9, rank: 1, dependsOn: ['intro'] },
+      {
+        id: 1,
+        moduleId: 4,
+        lessonId: 9,
+        rank: 1,
+        dependsOn: [{ lessonSlug: 'intro' }],
+      },
     ]);
     db.select
       .mockReturnValueOnce(
@@ -191,20 +232,38 @@ describe('getCourseBoard', () => {
 
     const board = await getCourseBoard(3);
 
-    expect(board?.modules[0].lessons[0].dependsOn).toEqual(['intro']);
+    expect(board?.modules[0].lessons[0].dependsOn).toEqual([
+      { lessonSlug: 'intro' },
+    ]);
   });
 
+  // The lesson query resolves rows for BOTH lesson 9 and lesson 10 — a
+  // module_id join would have picked up either or both, since membership
+  // there comes from the lesson row, not the placement. Only one placement
+  // (lesson 10) exists in this course, so a placement-driven implementation
+  // must drop lesson 9 even though its row was right there in the result
+  // set. (Fix round 1: the original fixture resolved `[]` from the lessons
+  // query, so any implementation — module_id-based or not — returned no
+  // lessons; the assertion never discriminated between them.)
   it('omits a lesson that has no placement in this course', async () => {
     db.select
       .mockReturnValueOnce(makeChain([{ id: 3, name: 'Course', slug: 'c' }]))
       .mockReturnValueOnce(makeChain([{ id: 4, name: 'Module', slug: 'm' }]));
-    getPlacementsForCourse.mockResolvedValue([]);
+    getPlacementsForCourse.mockResolvedValue([
+      { id: 1, moduleId: 4, lessonId: 10, rank: 1, dependsOn: [] },
+    ]);
     db.select
+      .mockReturnValueOnce(
+        makeChain([
+          { id: 9, name: 'Lesson 9', slug: 'l9', rank: '1' },
+          { id: 10, name: 'Lesson 10', slug: 'l10', rank: '1' },
+        ]),
+      )
       .mockReturnValueOnce(makeChain([])) // module dependencies
       .mockReturnValueOnce(makeChain([])); // learner counts
 
     const board = await getCourseBoard(3);
 
-    expect(board?.modules[0].lessons).toEqual([]);
+    expect(board?.modules[0].lessons.map((l) => l.id)).toEqual([10]);
   });
 });
