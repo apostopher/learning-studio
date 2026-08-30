@@ -26,22 +26,55 @@ interface MyRouterContext {
   /** `entity:action` strings; `['*']` for an owner. */
   permissions: string[];
   /**
-   * Whether this person holds a `course_staff` row on any course.
+   * Whether this person is staff ANYWHERE: an admin or owner globally, or the
+   * holder of a `course_staff` row on any course, or of a `discipline_staff`
+   * row on any discipline.
    *
-   * Course-scoped authority is invisible to `roles` and `permissions`, which
-   * are both global — so this is the only thing `/admin`'s guard can read to
-   * tell a professor from a learner. It answers "may they enter at all", never
-   * "what may they do here": every per-course decision stays server-side in
-   * `requireCoursePermission`.
+   * Scoped authority is invisible to `roles` and `permissions`, which are both
+   * global — so this is the only thing `/admin`'s entry guard can read to tell
+   * a professor or a subject expert from a learner. It must be the union of
+   * all three: the two staff tables are deliberately independent (no backfill
+   * links them — see `db/migrate-discipline-staff.ts`), so a discipline-only
+   * SME with authority over lesson content can hold zero `course_staff` rows,
+   * and a course-only check would lock them out of the shell that is the only
+   * route to their own work.
+   *
+   * It answers "may they enter at all", never "what may they do here": every
+   * per-course and per-discipline decision stays server-side, in
+   * `requireCoursePermission` and `requireLessonContentPermission`.
    */
   isStaffAnywhere: boolean;
+  /**
+   * Whether this person holds a `course_staff` row on any course — that table
+   * alone, and no global role.
+   *
+   * The narrower question, for UI that is about courses specifically rather
+   * than about admin access. `/admin`'s Courses nav link is the reader: the
+   * course index shows an actor their staffed courses even without a
+   * `course:read` grant, so course staffing is what makes that page non-empty
+   * for them. A discipline-only SME would find nothing there, and offering a
+   * link to an empty list is the sort of dead end this codebase treats as a
+   * defect.
+   */
+  isCourseStaffAnywhere: boolean;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: async () => {
-    const { session, roles, permissions, isStaffAnywhere } =
-      await getAuthContext();
-    return { session, roles, permissions, isStaffAnywhere };
+    const {
+      session,
+      roles,
+      permissions,
+      isStaffAnywhere,
+      isCourseStaffAnywhere,
+    } = await getAuthContext();
+    return {
+      session,
+      roles,
+      permissions,
+      isStaffAnywhere,
+      isCourseStaffAnywhere,
+    };
   },
   head: () => ({
     meta: [

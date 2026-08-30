@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   getUserRoleNames: vi.fn(),
   getUserPermissions: vi.fn(),
   isAnyCourseStaff: vi.fn(),
+  isAnyDisciplineStaff: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
 vi.mock('#/db/user-profile', () => ({
@@ -18,6 +19,9 @@ vi.mock('#/db/permissions', () => ({
 }));
 vi.mock('#/db/course-staff', () => ({
   isAnyCourseStaff: m.isAnyCourseStaff,
+}));
+vi.mock('#/db/discipline-staff', () => ({
+  isAnyDisciplineStaff: m.isAnyDisciplineStaff,
 }));
 
 import { resolveAuthContext } from '#/lib/auth-context.server';
@@ -33,6 +37,7 @@ beforeEach(() => {
   m.getUserRoleNames.mockResolvedValue([]);
   m.getUserPermissions.mockResolvedValue(new Set<string>());
   m.isAnyCourseStaff.mockResolvedValue(false);
+  m.isAnyDisciplineStaff.mockResolvedValue(false);
 });
 
 /**
@@ -77,11 +82,13 @@ describe('resolveAuthContext', () => {
     expect(m.ensureUserProfile).not.toHaveBeenCalled();
     expect(m.getUserRoleNames).not.toHaveBeenCalled();
     expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
+    expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
     expect(result).toEqual({
       session: null,
       roles: [],
       permissions: [],
       isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
     });
   });
 
@@ -134,26 +141,61 @@ describe('resolveAuthContext', () => {
   });
 
   /**
-   * `/admin`'s route guard reads `isStaffAnywhere` and nothing else can tell it
+   * `/admin`'s entry guard reads `isStaffAnywhere` and nothing else can tell it
    * a subject expert apart from a learner — `roles` and `permissions` are both
-   * global, and a course-scoped role appears in neither.
+   * global, and a scoped role appears in neither. The Courses nav link reads
+   * `isCourseStaffAnywhere` instead, so the two must be produced separately
+   * and must be allowed to disagree.
    */
-  it("reports course staff, asking about THIS session's user", async () => {
+  it("reports course staff on both fields, asking about THIS session's user", async () => {
     m.isAnyCourseStaff.mockResolvedValueOnce(true);
 
     const result = await resolveAuthContext(HEADERS);
 
     expect(m.isAnyCourseStaff).toHaveBeenCalledWith('user-1');
+    // A course_staff row satisfies both questions: they are staff somewhere,
+    // and the course index has their courses in it.
     expect(result.isStaffAnywhere).toBe(true);
+    expect(result.isCourseStaffAnywhere).toBe(true);
   });
 
-  it('reports no staffing for someone with no course_staff row', async () => {
+  it('reports a discipline-only SME as staff, but not as course staff', async () => {
+    m.isAnyDisciplineStaff.mockResolvedValueOnce(true);
+
+    const result = await resolveAuthContext(HEADERS);
+
+    // The two staff tables are deliberately independent — no backfill links
+    // them (see `migrate-discipline-staff.ts`) — so an SME with authority over
+    // a discipline's lesson content can hold zero `course_staff` rows. Reading
+    // only `course_staff` here shut them out of `/admin`, the only route to
+    // the work they own.
+    expect(m.isAnyDisciplineStaff).toHaveBeenCalledWith('user-1');
+    expect(result.isStaffAnywhere).toBe(true);
+    // And they still get no Courses link: they staff no course, so that index
+    // would be empty for them.
+    expect(result.isCourseStaffAnywhere).toBe(false);
+  });
+
+  it('does not ask about discipline_staff once course_staff has answered', async () => {
+    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+
+    await resolveAuthContext(HEADERS);
+
+    // The union short-circuits in the same order `permissions.server.ts`'s
+    // `isStaffAnywhere` does. This runs on every authenticated page load, so a
+    // second index lookup that cannot change the answer is one nobody should
+    // pay for.
+    expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
+  });
+
+  it('reports no staffing for someone with no staff row in either table', async () => {
     const result = await resolveAuthContext(HEADERS);
 
     expect(result.isStaffAnywhere).toBe(false);
+    expect(result.isCourseStaffAnywhere).toBe(false);
   });
 
-  it('degrades to not-staff if the staff lookup fails', async () => {
+  it('degrades to not-staff if the course staff lookup fails', async () => {
     m.isAnyCourseStaff.mockRejectedValueOnce(new Error('db down'));
 
     const result = await resolveAuthContext(HEADERS);
@@ -161,6 +203,32 @@ describe('resolveAuthContext', () => {
     // Failing closed, like the two lookups beside it: a transient error must
     // shut the admin console, never open it.
     expect(result.isStaffAnywhere).toBe(false);
+    expect(result.isCourseStaffAnywhere).toBe(false);
+  });
+
+  it('degrades to not-staff if the discipline staff lookup fails', async () => {
+    m.isAnyDisciplineStaff.mockRejectedValueOnce(new Error('db down'));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(result.isStaffAnywhere).toBe(false);
+  });
+
+  /**
+   * An admin with no staff row anywhere is staff (globally), but is not course
+   * staff: `isCourseStaffAnywhere` names one table and must keep meaning that
+   * table, or it becomes a second copy of the union it was split out from. The
+   * Courses link they do see comes from their `course:read` grant.
+   */
+  it('reports an admin as staff anywhere without claiming course staffing', async () => {
+    m.getUserRoleNames.mockResolvedValueOnce(['admin']);
+
+    const result = await resolveAuthContext(HEADERS);
+
+    expect(result.isStaffAnywhere).toBe(true);
+    expect(result.isCourseStaffAnywhere).toBe(false);
+    // Admin satisfies the union first, so the discipline lookup is skipped.
+    expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
   });
 
   /**
@@ -178,6 +246,7 @@ describe('resolveAuthContext', () => {
       roles: ['admin'],
       permissions: ['course:read'],
       isStaffAnywhere: true,
+      isCourseStaffAnywhere: true,
     });
   });
 });
