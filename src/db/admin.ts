@@ -21,6 +21,7 @@ import {
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { getLessonTranscript } from '#/db/lesson-transcript';
+import { getPlacementsForCourse } from '#/db/placements';
 import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
@@ -60,7 +61,12 @@ import {
   resolvePlayback,
   validateCredentials,
 } from '#/lib/video-providers/resolve.server';
-import type { OnboardingQuestions, SubscriptionType, UserLevel } from '#/types';
+import type {
+  CourseLessonDependency,
+  OnboardingQuestions,
+  SubscriptionType,
+  UserLevel,
+} from '#/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -405,14 +411,19 @@ export async function getCourseBoard(
     .orderBy(asc(modulesTable.rank), asc(modulesTable.id));
 
   const moduleIds = modules.map((m) => m.id);
-  const lessons = moduleIds.length
+
+  // Placements — not `lessons.module_id` — decide which lessons belong to
+  // this course, which module each sits in, and what order: a lesson can
+  // sit third in one course and eighth in another, so `lessons.rank` cannot
+  // decide this. The lesson row still supplies name, video and every gate.
+  const placements = await getPlacementsForCourse(courseId);
+  const lessonIds = [...new Set(placements.map((p) => p.lessonId))];
+  const lessonRows = lessonIds.length
     ? await db
         .select({
           id: lessonsTable.id,
-          moduleId: lessonsTable.moduleId,
           name: lessonsTable.name,
           slug: lessonsTable.slug,
-          rank: lessonsTable.rank,
           isAvailable: lessonsTable.isAvailable,
           hasDebrief: lessonsTable.hasDebrief,
           needsVideoWatch: lessonsTable.needsVideoWatch,
@@ -429,19 +440,33 @@ export async function getCourseBoard(
           ), 0)`,
         })
         .from(lessonsTable)
-        .where(inArray(lessonsTable.moduleId, moduleIds))
-        .orderBy(asc(lessonsTable.rank), asc(lessonsTable.id))
+        .where(inArray(lessonsTable.id, lessonIds))
     : [];
+  const lessonById = new Map(lessonRows.map((l) => [l.id, l]));
 
-  const byModule = new Map<number, typeof lessons>();
-  for (const lesson of lessons) {
-    const list = byModule.get(lesson.moduleId) ?? [];
-    list.push(lesson);
-    byModule.set(lesson.moduleId, list);
+  const byModule = new Map<
+    number,
+    Array<
+      (typeof lessonRows)[number] & {
+        rank: number;
+        dependsOn: CourseLessonDependency[];
+      }
+    >
+  >();
+  for (const placement of placements) {
+    const lesson = lessonById.get(placement.lessonId);
+    if (!lesson) continue;
+    const list = byModule.get(placement.moduleId) ?? [];
+    list.push({
+      ...lesson,
+      rank: placement.rank,
+      dependsOn: placement.dependsOn,
+    });
+    byModule.set(placement.moduleId, list);
   }
+  for (const list of byModule.values()) list.sort((a, b) => a.rank - b.rank);
 
-  const lessonIds = lessons.map((l) => l.id);
-  const [dependencies, learnerCounts, lessonDependencies] = moduleIds.length
+  const [dependencies, learnerCounts] = moduleIds.length
     ? await Promise.all([
         db
           .select({
@@ -451,23 +476,11 @@ export async function getCourseBoard(
           .from(moduleDependenciesTable)
           .where(inArray(moduleDependenciesTable.moduleId, moduleIds)),
         countLearnersByModule(moduleIds),
-        lessonIds.length
-          ? db
-              .select({
-                lessonId: lessonDependenciesTable.lessonId,
-                dependsOn: lessonDependenciesTable.dependsOn,
-              })
-              .from(lessonDependenciesTable)
-              .where(inArray(lessonDependenciesTable.lessonId, lessonIds))
-          : Promise.resolve([]),
       ])
-    : [[], new Map<number, number>(), []];
+    : [[], new Map<number, number>()];
 
   const dependsOnByModule = new Map(
     dependencies.map((d) => [d.moduleId, d.dependsOn]),
-  );
-  const dependsOnByLesson = new Map(
-    lessonDependencies.map((d) => [d.lessonId, d.dependsOn]),
   );
 
   return {
@@ -487,7 +500,7 @@ export async function getCourseBoard(
         id: l.id,
         name: l.name,
         slug: l.slug,
-        rank: Number(l.rank),
+        rank: l.rank,
         isAvailable: l.isAvailable,
         hasDebrief: l.hasDebrief,
         needsVideoWatch: l.needsVideoWatch,
@@ -495,7 +508,7 @@ export async function getCourseBoard(
         levels: l.levels as UserLevel[],
         isConfigured: l.videoRef !== null,
         quizQuestionCount: Number(l.quizQuestionCount),
-        dependsOn: dependsOnByLesson.get(l.id) ?? [],
+        dependsOn: l.dependsOn,
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
       })),
