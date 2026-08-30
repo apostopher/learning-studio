@@ -86,6 +86,7 @@ export const EditorModuleContainer = ({
                   key={lesson.id}
                   lesson={lesson}
                   moduleId={mod.id}
+                  moduleName={mod.name}
                   courseId={courseId}
                 />
               ))

@@ -19,10 +19,13 @@ import { AppHeaderContainer } from '../app-header-container';
 export const AdminShellLayout = ({
   canSeePeople,
   canSeeCourses,
+  canSeeEditor,
   children,
 }: {
   canSeePeople: boolean;
   canSeeCourses: boolean;
+  /** Whether the org-level knowledge library editor has anything to show. */
+  canSeeEditor: boolean;
   children: ReactNode;
 }) => (
   // The whole layout is now capped to the viewport so a full-height child
@@ -41,8 +44,14 @@ export const AdminShellLayout = ({
     >
       <div className="content flex gap-1 py-2">
         {canSeeCourses && <AdminNavLink to="/admin">Courses</AdminNavLink>}
+        {canSeeEditor && (
+          // Not "Library": the editor's own left pane is already called that,
+          // and a nav item sharing the name would read as a link to the pane
+          // rather than to the screen holding it.
+          <AdminNavLink to="/admin/editor">Knowledge library</AdminNavLink>
+        )}
         {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
-        {!canSeeCourses && !canSeePeople && (
+        {!canSeeCourses && !canSeeEditor && !canSeePeople && (
           // Not a bare strip: an actor with no section at all is told why,
           // in text a screen reader reaches like any other nav content.
           <p className="px-3 py-1.5 text-secondary text-sm">

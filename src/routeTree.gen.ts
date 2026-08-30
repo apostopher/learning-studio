@@ -46,6 +46,7 @@ import { Route as ApiAdminEditorRouteImport } from './routes/api/admin/editor'
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
+import { Route as AuthedAdminEditorRouteImport } from './routes/_authed/admin.editor'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
 import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
@@ -278,6 +279,11 @@ const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
 const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminEditorRoute = AuthedAdminEditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
 const AuthedCourseCourseSlugIndexRoute =
@@ -561,6 +567,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -645,6 +652,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/editor': typeof ApiAdminEditorRoute
@@ -731,6 +739,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
+  '/_authed/admin/editor': typeof AuthedAdminEditorRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -818,6 +827,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/admin/editor'
     | '/admin/users'
     | '/course/$courseSlug'
     | '/api/admin/courses'
@@ -902,6 +912,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/admin/editor'
     | '/admin/users'
     | '/api/admin/courses'
     | '/api/admin/editor'
@@ -987,6 +998,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
+    | '/_authed/admin/editor'
     | '/_authed/admin/users'
     | '/_authed/course/$courseSlug'
     | '/api/admin/courses'
@@ -1373,6 +1385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminUsersRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/editor': {
+      id: '/_authed/admin/editor'
+      path: '/editor'
+      fullPath: '/admin/editor'
+      preLoaderRoute: typeof AuthedAdminEditorRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/course/$courseSlug/': {
       id: '/_authed/course/$courseSlug/'
       path: '/'
@@ -1706,12 +1725,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteChildren {
+  AuthedAdminEditorRoute: typeof AuthedAdminEditorRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedAdminCourseIdEditorRoute: typeof AuthedAdminCourseIdEditorRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminEditorRoute: AuthedAdminEditorRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedAdminCourseIdEditorRoute: AuthedAdminCourseIdEditorRoute,

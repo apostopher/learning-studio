@@ -1,31 +1,21 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { CourseBoardContainer } from '@/components/admin/course-board-container';
-import { hasAdminAccess, hasPermissionKey } from '@/lib/admin-schemas';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
+/**
+ * The per-course module board used to live here. It is now one pane of the
+ * org-level knowledge library editor, which shows every course at once, so
+ * this URL has nothing course-specific left to render.
+ *
+ * Kept as a redirect rather than deleted: `/admin` still links here from every
+ * course tile, and anyone who bookmarked a course's editor should land
+ * somewhere useful rather than on a 404. The `courseId` is deliberately
+ * dropped — the destination is org-wide and takes no course.
+ *
+ * `beforeLoad`, not the component: redirecting during the load phase means the
+ * old board's route never renders, so there is no flash of a screen that no
+ * longer exists.
+ */
 export const Route = createFileRoute('/_authed/admin/$courseId/editor')({
-  component: EditorPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/admin/editor' });
+  },
 });
-
-function EditorPage() {
-  const { courseId } = Route.useParams();
-  const { permissions, roles } = Route.useRouteContext();
-  const id = Number(courseId);
-  if (!Number.isInteger(id) || id <= 0) {
-    return <div className="p-6 text-sm text-secondary">Course not found.</div>;
-  }
-  return (
-    <CourseBoardContainer
-      courseId={id}
-      // Read here because the route is the only place holding global
-      // permissions. All three are org-level with no course-scoped fallback,
-      // so the staff this route now admits hold none of them.
-      capabilities={{
-        canEditCourse: hasPermissionKey(permissions, 'course', 'update'),
-        canDeleteCourse: hasPermissionKey(permissions, 'course', 'delete'),
-        // The RAG corpus is guarded by `requireAdmin`, not by a permission
-        // key, so the client-side mirror is the admin floor itself.
-        canTrainCourse: hasAdminAccess(roles),
-      }}
-    />
-  );
-}

@@ -3,17 +3,24 @@ import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { deleteLessonAtom } from '@/atoms/admin';
-import { useDeleteLesson } from '@/data-hooks/use-delete-lesson';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { deleteLessonAtom } from '#/atoms/admin';
+import { useDeleteLesson } from '#/data-hooks/use-delete-lesson';
 import { DeleteConfirmForm } from './delete-confirm-form';
+import { DeleteLessonWarning } from './delete-lesson-warning';
 
-export const DeleteLessonDialogContainer = ({
-  courseId,
-}: {
-  courseId: number;
-}) => {
+/**
+ * The confirmation for deleting a lesson outright.
+ *
+ * Takes no `courseId`: a lesson is org-owned and can be taught by several
+ * courses, so there is no one course this dialog belongs to. Everything it
+ * needs — including how many courses lose the lesson — rides on
+ * `deleteLessonAtom`, set by whichever card opened it.
+ */
+export const DeleteLessonDialogContainer = () => {
   const [target, setTarget] = useAtom(deleteLessonAtom);
-  const deleteLesson = useDeleteLesson(courseId);
+  const deleteLesson = useDeleteLesson();
   const form = useForm<{ confirm: string }>({
     defaultValues: { confirm: '' },
     mode: 'onChange',
@@ -45,28 +52,29 @@ export const DeleteLessonDialogContainer = ({
         <Dialog.Backdrop className="fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
         <Dialog.Popup className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
           <Dialog.Title className="text-lg font-semibold text-primary">
-            Delete lesson
+            Delete lesson everywhere
           </Dialog.Title>
           <div className="mt-4">
             <DeleteConfirmForm
               warning={
-                <>
-                  Deleting{' '}
-                  <span className="font-medium text-primary">
-                    {target?.name ?? ''}
-                  </span>{' '}
-                  will permanently delete this lesson. This can't be undone.
-                </>
+                <DeleteLessonWarning
+                  name={target?.name ?? ''}
+                  courseCount={target?.courseCount ?? 0}
+                />
               }
               submitLabel="Delete lesson"
               onSubmit={handleSubmit}
               registerConfirm={form.register('confirm')}
               canSubmit={canSubmit}
               isPending={deleteLesson.isPending}
+              // The hook's own message, not a generic one: a refusal and a
+              // transient failure need different sentences, and only the hook
+              // knows which happened.
               serverError={
-                deleteLesson.isError
+                deleteLesson.error?.message ??
+                (deleteLesson.isError
                   ? 'Could not delete. Please try again.'
-                  : undefined
+                  : undefined)
               }
               onCancel={() => onOpenChange(false)}
             />

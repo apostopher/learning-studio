@@ -24,7 +24,11 @@ vi.mock('../../../styles/theme.generated', () => ({
   logoDark: { kind: 'url', src: '/logo.png' },
 }));
 
-const renderAdmin = async (canSeePeople: boolean, canSeeCourses = true) => {
+const renderAdmin = async (
+  canSeePeople: boolean,
+  canSeeCourses = true,
+  canSeeEditor = false,
+) => {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const homeRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -36,6 +40,11 @@ const renderAdmin = async (canSeePeople: boolean, canSeeCourses = true) => {
     path: '/admin/users',
     component: () => null,
   });
+  const editorRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin/editor',
+    component: () => null,
+  });
   const adminRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin',
@@ -43,6 +52,7 @@ const renderAdmin = async (canSeePeople: boolean, canSeeCourses = true) => {
       <AdminShellLayout
         canSeePeople={canSeePeople}
         canSeeCourses={canSeeCourses}
+        canSeeEditor={canSeeEditor}
       >
         <p>Course list</p>
       </AdminShellLayout>
@@ -50,7 +60,12 @@ const renderAdmin = async (canSeePeople: boolean, canSeeCourses = true) => {
   });
 
   const router = createRouter({
-    routeTree: rootRoute.addChildren([homeRoute, usersRoute, adminRoute]),
+    routeTree: rootRoute.addChildren([
+      homeRoute,
+      usersRoute,
+      editorRoute,
+      adminRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: ['/admin'] }),
   });
 
@@ -142,6 +157,36 @@ describe('AdminShellLayout', () => {
         'No admin sections are available with your current permissions.',
       ),
     ).toBeDefined();
+  });
+
+  /**
+   * The knowledge library editor is its own destination with its own gate, so
+   * it must survive the loss of the other two — the same independence bug the
+   * Courses/People pair was fixed for. Named "Knowledge library", not
+   * "Library": the editor's own left-hand pane already carries that word.
+   */
+  it('shows the Knowledge library link on its own gate alone', async () => {
+    await renderAdmin(false, false, true);
+
+    expect(
+      screen.getByRole('link', { name: 'Knowledge library' }),
+    ).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'People' })).toBeNull();
+    // And an actor who has one section is not told they have none.
+    expect(
+      screen.queryByText(
+        'No admin sections are available with your current permissions.',
+      ),
+    ).toBeNull();
+  });
+
+  it('hides the Knowledge library link when its gate is closed', async () => {
+    await renderAdmin(true, true, false);
+
+    expect(
+      screen.queryByRole('link', { name: 'Knowledge library' }),
+    ).toBeNull();
   });
 
   it('says nothing about permissions when a section is available', async () => {

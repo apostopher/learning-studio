@@ -11,7 +11,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  * fields are near-identical booleans; a test that re-derived `canSeeCourses`
  * would happily agree with a component reading the wrong one.
  */
-type NavProps = { canSeePeople: boolean; canSeeCourses: boolean };
+type NavProps = {
+  canSeePeople: boolean;
+  canSeeCourses: boolean;
+  canSeeEditor: boolean;
+};
 let received: NavProps | null = null;
 /**
  * Read the recorded props back through a call, so TypeScript sees the declared
@@ -23,10 +27,12 @@ vi.mock('#/components/admin/admin-shell-layout', () => ({
   AdminShellLayout: (props: {
     canSeePeople: boolean;
     canSeeCourses: boolean;
+    canSeeEditor: boolean;
   }) => {
     received = {
       canSeePeople: props.canSeePeople,
       canSeeCourses: props.canSeeCourses,
+      canSeeEditor: props.canSeeEditor,
     };
     return <div data-testid="admin-shell" />;
   },
@@ -35,6 +41,7 @@ vi.mock('#/components/admin/admin-shell-layout', () => ({
 import { Route } from '../admin';
 
 type Ctx = {
+  roles: string[];
   permissions: string[];
   isStaffAnywhere: boolean;
   isCourseStaffAnywhere: boolean;
@@ -89,6 +96,7 @@ describe('/admin shell nav', () => {
    */
   it('hides Courses from a discipline-only SME who is inside the shell', async () => {
     const props = await navProps({
+      roles: [],
       permissions: [],
       isStaffAnywhere: true,
       isCourseStaffAnywhere: false,
@@ -99,6 +107,7 @@ describe('/admin shell nav', () => {
 
   it('shows Courses to course staff holding no course:read grant', async () => {
     const props = await navProps({
+      roles: [],
       permissions: [],
       isStaffAnywhere: true,
       isCourseStaffAnywhere: true,
@@ -111,6 +120,7 @@ describe('/admin shell nav', () => {
 
   it('shows Courses to a course:read holder who staffs no course', async () => {
     const props = await navProps({
+      roles: [],
       permissions: ['course:read'],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
@@ -123,6 +133,7 @@ describe('/admin shell nav', () => {
 
   it('hides Courses from someone with neither', async () => {
     const props = await navProps({
+      roles: [],
       permissions: ['user:read'],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
@@ -131,13 +142,47 @@ describe('/admin shell nav', () => {
     expect(props.canSeeCourses).toBe(false);
   });
 
+  /**
+   * The knowledge library editor's two endpoints (`/api/admin/library`,
+   * `/api/admin/editor`) self-guard with `requireAdmin`, so the link has to
+   * follow the admin floor and nothing looser. A discipline-only SME is the
+   * person that screen is FOR, and is nonetheless the person it currently
+   * 403s — linking them there would be the same dead end
+   * `isCourseStaffAnywhere` exists to avoid, one screen further along.
+   */
+  it('hides the editor from a discipline-only SME the endpoints would 403', async () => {
+    const props = await navProps({
+      roles: [],
+      permissions: [],
+      isStaffAnywhere: true,
+      isCourseStaffAnywhere: true,
+    });
+
+    expect(props.canSeeEditor).toBe(false);
+  });
+
+  it('shows the editor to an admin holding no grants and staffing nothing', async () => {
+    const props = await navProps({
+      roles: ['admin'],
+      permissions: [],
+      isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
+    });
+
+    // `requireAdmin` is the endpoints' floor, and it reads roles, not grants
+    // — an admin with an empty `role_permissions` set still gets both.
+    expect(props.canSeeEditor).toBe(true);
+  });
+
   it('gates People on user:read alone, never on staffing', async () => {
     const granted = await navProps({
+      roles: [],
       permissions: ['user:read'],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
     });
     const staffOnly = await navProps({
+      roles: [],
       permissions: [],
       isStaffAnywhere: true,
       isCourseStaffAnywhere: true,

@@ -150,7 +150,7 @@ export function resolveDrop(
     if (over.type === 'discipline' || over.type === 'library-lesson') {
       return {
         kind: 'forbidden',
-        reason: `The library already holds "${from.lesson.name}" — dragging it back changes nothing. Remove it from ${from.module.name} to stop ${from.courseBoard.course.name} teaching it.`,
+        reason: `The library already holds "${from.lesson.name}" — dragging it back changes nothing. Use "Remove from module" on its card to take it out of ${from.module.name} and stop ${from.courseBoard.course.name} teaching it.`,
       };
     }
 

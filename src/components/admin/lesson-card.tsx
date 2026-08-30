@@ -1,4 +1,4 @@
-import { GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { CircleMinus, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
@@ -10,6 +10,9 @@ export const LessonCard = ({
   posterUrl,
   dragHandleProps,
   onEdit,
+  onRemove,
+  removeLabel,
+  isRemoving,
   onDelete,
   onPlay,
   quickshotSlot,
@@ -19,6 +22,26 @@ export const LessonCard = ({
   posterUrl?: string | null;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
   onEdit?: () => void;
+  /**
+   * Take this lesson out of the module it is sitting in — a placement is
+   * deleted, the lesson survives. A different act from `onDelete`, which is
+   * why it gets its own icon, its own (neutral, not danger) colour and its
+   * own wording rather than a second red bin.
+   */
+  onRemove?: () => void;
+  /**
+   * Accessible name and tooltip for the remove control. Must name the module,
+   * because "Remove" sitting next to "Delete lesson" says nothing about what
+   * it removes the lesson FROM. Falls back to a generic phrase for a caller
+   * that has no module name to hand.
+   */
+  removeLabel?: string;
+  /** Whether the removal is in flight; disables the control and says so. */
+  isRemoving?: boolean;
+  /**
+   * Delete the lesson itself, everywhere. High stakes and irreversible —
+   * always behind a confirmation that names how many courses lose it.
+   */
   onDelete?: () => void;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
   onPlay?: () => void;
@@ -58,9 +81,26 @@ export const LessonCard = ({
               <Pencil className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
+          {onRemove && (
+            <TooltipIconButton
+              // A disabled control has to say why it is disabled, not just
+              // grey out.
+              label={
+                isRemoving
+                  ? `Removing ${lesson.name}…`
+                  : (removeLabel ?? 'Remove from module')
+              }
+              onClick={onRemove}
+              disabled={isRemoving}
+            >
+              <CircleMinus className="h-4 w-4" aria-hidden="true" />
+            </TooltipIconButton>
+          )}
           {onDelete && (
             <TooltipIconButton
-              label="Delete lesson"
+              // Not "Delete": the word alone reads as a synonym of the remove
+              // control beside it. This one ends the lesson everywhere.
+              label="Delete lesson everywhere"
               onClick={onDelete}
               variant="danger"
             >

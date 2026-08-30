@@ -29,7 +29,7 @@ export const Route = createFileRoute('/_authed/admin')({
 });
 
 function AdminShell() {
-  const { permissions, isCourseStaffAnywhere } = Route.useRouteContext();
+  const { roles, permissions, isCourseStaffAnywhere } = Route.useRouteContext();
   // Both links are rendered only when the destination will actually show the
   // actor something — a link to a page that redirects or 403s straight back is
   // worse than no link, and each route guards itself regardless.
@@ -43,9 +43,22 @@ function AdminShell() {
   // the index would come back empty for them and the link would be a dead end.
   const canSeeCourses =
     hasPermissionKey(permissions, 'course', 'read') || isCourseStaffAnywhere;
+  // The knowledge library editor is gated on the admin floor and NOT on any
+  // staffing boolean, because both endpoints it lives on
+  // (`/api/admin/library`, `/api/admin/editor`) self-guard with
+  // `requireAdmin`. A discipline-scoped SME is arguably the person who most
+  // needs that screen, but as those routes stand today they answer them with
+  // 403 — so linking them there would be exactly the dead end the two
+  // staffing booleans exist to prevent, one screen further along. Widen the
+  // endpoint guards first and this condition follows; not before.
+  const canSeeEditor = hasAdminAccess(roles);
 
   return (
-    <AdminShellLayout canSeePeople={canSeePeople} canSeeCourses={canSeeCourses}>
+    <AdminShellLayout
+      canSeePeople={canSeePeople}
+      canSeeCourses={canSeeCourses}
+      canSeeEditor={canSeeEditor}
+    >
       <Outlet />
     </AdminShellLayout>
   );

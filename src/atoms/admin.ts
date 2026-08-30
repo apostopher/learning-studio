@@ -15,8 +15,22 @@ export const activeDragModuleIdAtom = atom<number | null>(null);
 /** Id of the lesson currently being dragged, or null. */
 export const activeDragLessonIdAtom = atom<number | null>(null);
 
-/** The lesson pending deletion (id + name), or null when closed. */
-export const deleteLessonAtom = atom<{ id: number; name: string } | null>(null);
+/**
+ * The lesson pending deletion, or null when closed.
+ *
+ * Carries `courseCount` — how many courses currently teach the lesson —
+ * because deleting is not the same act as removing a placement: it takes the
+ * lesson out of every course at once and cascades its progress rows, and the
+ * confirmation is not allowed to ask "are you sure?" without naming that
+ * blast radius. The count is only ever computed in one place
+ * (`LibraryLesson.courseCount`, from the org library query), so whoever opens
+ * this dialog reads it from there rather than deriving a second answer.
+ */
+export const deleteLessonAtom = atom<{
+  id: number;
+  name: string;
+  courseCount: number;
+} | null>(null);
 
 /** Id of the lesson whose configure modal is open, or null when closed. */
 export const configureLessonIdAtom = atom<number | null>(null);

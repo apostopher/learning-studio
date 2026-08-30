@@ -42,6 +42,7 @@ import type { LibraryLesson, OrgEditorBoard } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { inlineDirSign } from '#/lib/inline-direction';
 import { CourseRail } from './course-rail';
+import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import {
   DisciplineColumnContainer,
   UNTITLED_DISCIPLINE_ID,
@@ -660,6 +661,14 @@ export const EditorContainer = () => {
         ) : null}
         {refusal && <DragRefusalNote reason={refusal} />}
       </DragOverlay>
+
+      {/*
+        Mounted once for the whole editor, not once per course: a lesson is
+        org-owned, so the confirmation is not scoped to any one course. Which
+        lesson it is about — and how many courses lose it — arrives on
+        `deleteLessonAtom` from whichever card was clicked.
+      */}
+      <DeleteLessonDialogContainer />
     </DndContext>
   );
 };
