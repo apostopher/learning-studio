@@ -28,11 +28,16 @@ function statements(): string[] {
   return db.execute.mock.calls.map((c) => textOf(c[0] as Query));
 }
 
-// Matches the migration's ACTUAL probe predicate — a mutant that probed the
-// wrong table/schema/columns would not be "recognized" here and would fall
+// Matches the migration's ACTUAL probe predicate — fix round 4, Minor 7
+// switched this from `information_schema.columns where table_schema =
+// 'public'` to `to_regclass('lessons')` + `pg_attribute`, resolving the
+// same unqualified name the sibling DDL (`alter table "lessons" ...`) does,
+// through `search_path`, rather than hardcoding a schema the DDL never
+// names. A mutant that probed the wrong table/column, or reverted to the
+// schema-hardcoded form, would not be "recognized" here and would fall
 // through to the empty-rows default, which every test below can detect.
 const COLUMN_PROBE_QUERY =
-  "table_schema = 'public' and table_name = 'lessons' and column_name in ('module_id', 'rank')";
+  "attrelid = to_regclass('lessons') and attname in ('module_id', 'rank') and not attisdropped";
 
 /** Which of `module_id`/`rank` the probe reports still present. */
 function resolvePresentColumns(present: Array<'module_id' | 'rank'>): void {

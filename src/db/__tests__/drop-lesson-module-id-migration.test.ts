@@ -29,14 +29,17 @@ function statements(): string[] {
   return db.execute.mock.calls.map((c) => textOf(c[0] as Query));
 }
 
-// Fix round 2, Minor: matches the migration's ACTUAL predicate
-// (`table_schema = 'public' and table_name = 'lessons' and column_name =
-// 'module_id'`), not just the bare substring `information_schema.columns`
-// — a mutant that probed the wrong table/column/schema would otherwise
-// still be "recognized" as the column probe by this mock and pass every
-// test in this file.
+// Matches the migration's ACTUAL predicate — fix round 4, Minor 7 switched
+// this from `information_schema.columns where table_schema = 'public' and
+// table_name = 'lessons'` (a hardcoded schema the DDL below never
+// qualifies) to `to_regclass('lessons')` + `pg_attribute`, so the probe
+// resolves `lessons` the same `search_path`-based way the unqualified
+// `alter table "lessons" ...` DDL does. A mutant that probed the wrong
+// table/column, or reverted to the schema-hardcoded form, would not be
+// "recognized" as the column probe by this mock and would fall through to
+// an empty result — exactly what every test below needs to catch that.
 const COLUMN_PROBE_QUERY =
-  "table_schema = 'public' and table_name = 'lessons' and column_name = 'module_id'";
+  "attrelid = to_regclass('lessons') and attname = 'module_id' and not attisdropped";
 const ORPHAN_COUNT_QUERY = 'left join "module_lessons"';
 
 /**

@@ -134,6 +134,13 @@ async function main() {
     `\n=== Import "${NEW_COURSE_NAME}" ${dryRun ? '(DRY RUN — no writes)' : ''}\n`,
   );
 
+  // Fix round 4, Minor 8: read (and validate) BEFORE any write and before
+  // the dry-run early-exit below — previously this ran after the course
+  // INSERT, so a missing/invalid `ACTIVE_ORG_ID` aborted having already
+  // created the course, and a `--dry-run` never validated it at all despite
+  // dry-run's whole point being to catch what WOULD fail.
+  const activeOrgId = getActiveOrgId();
+
   const [oldCourse] = await oldQ<{ id: number; name: string }>(
     `select id, name from courses where slug = $1`,
     [OLD_COURSE_SLUG],
@@ -176,7 +183,7 @@ async function main() {
     newQ,
     courseId,
     NEW_COURSE_SLUG,
-    getActiveOrgId(),
+    activeOrgId,
   );
 
   // --------------------------------------------------------------- modules
@@ -235,11 +242,28 @@ async function main() {
   }
   report('modules', mc);
 
-  // Every module id belonging to THIS course, per Important 3 (fix round
-  // 2): scopes the placement lookup below to "does this lesson already
-  // have a placement IN THIS COURSE", the same scoping `movePlacement`
-  // (`src/db/placements.ts`) uses for its own UPDATE.
-  const courseModuleIds = [...moduleIdBySlug.values()];
+  // Every module id belonging to THIS course IN THE DESTINATION, per
+  // Important 3 (fix round 2) — scopes the placement lookup below to "does
+  // this lesson already have a placement IN THIS COURSE", the same scoping
+  // `movePlacement` (`src/db/placements.ts`) uses for its own UPDATE via
+  // `getModuleIdsForCourse` (a live `select id from modules where
+  // course_id = $1` against the real database).
+  //
+  // Fix round 4, Important 1: this used to be `[...moduleIdBySlug.values
+  // ()]` — every module the OLD SOURCE has for this course, not the
+  // destination. A module that exists only in the destination (an admin
+  // created one, or renamed a slug so the source/destination sets no
+  // longer line up 1:1) was invisible to that lookup, so a lesson already
+  // placed under it would be missed: the insert branch below would run
+  // instead of the move branch, creating the second placement in one
+  // course this whole fix exists to prevent. Queried fresh AFTER the
+  // modules loop above, so it includes modules this run just inserted too.
+  const courseModuleIds = (
+    await newQ<{ id: number }>(
+      `select id from modules where course_id = $1`,
+      [courseId],
+    )
+  ).map((r) => r.id);
 
   // --------------------------------------------------------------- lessons
   const oldLessons = await oldQ(
@@ -379,11 +403,30 @@ async function main() {
       // with the unique index. The lookup is scoped to `courseModuleIds`
       // (every module in THIS course), matching how `movePlacement` itself
       // scopes a move.
-      const [existingPlacement] = await txQ<{ id: number }>(
+      //
+      // Fix round 4, Important 1 (secondary): ordered and NOT limited to
+      // one row, because a PRE-EXISTING duplicate pair — created by the
+      // bug above before this fix landed — is healed here rather than left
+      // for whichever row an unordered read happened to return first.
+      // Kept: the lowest-id row (the original placement). Deleted: every
+      // other one, logged so a healed duplicate is visible in the script's
+      // own output rather than silently repaired.
+      const existingPlacements = await txQ<{ id: number }>(
         `select id from module_lessons
-           where lesson_id = $1 and module_id = any($2::int[])`,
+           where lesson_id = $1 and module_id = any($2::int[])
+           order by id`,
         [lessonId, courseModuleIds],
       );
+      if (existingPlacements.length > 1) {
+        const [, ...extras] = existingPlacements;
+        await txQ(`delete from module_lessons where id = any($1::int[])`, [
+          extras.map((e) => e.id),
+        ]);
+        console.log(
+          `    healed duplicate placement(s) for "${row.slug}": kept id=${existingPlacements[0].id}, deleted [${extras.map((e) => e.id).join(', ')}]`,
+        );
+      }
+      const [existingPlacement] = existingPlacements;
       if (existingPlacement) {
         // `depends_on` is deliberately left alone here — set once by the
         // lesson_dependencies loop below, and must survive a re-run of

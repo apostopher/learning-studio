@@ -7,12 +7,23 @@
  * Hand-written rather than generated: `drizzle-kit push` diffs the whole
  * schema and offers to truncate `docs` (6917 embedding rows) over unrelated
  * pre-existing drift. Every statement here is safe to re-run — including
- * the orphan gate itself: it probes `information_schema.columns` for
- * `lessons.module_id` FIRST, since (unlike the DDL below, which all uses
- * `if exists`) a `where l."module_id" is not null` on a database that has
- * already had the column dropped isn't something `if exists` can guard —
- * Postgres raises `column l.module_id does not exist` and the whole script
- * would exit 1 on a second run otherwise.
+ * the orphan gate itself: it probes for `lessons.module_id` FIRST, since
+ * (unlike the DDL below, which all uses `if exists`) a `where l."module_id"
+ * is not null` on a database that has already had the column dropped isn't
+ * something `if exists` can guard — Postgres raises `column l.module_id
+ * does not exist` and the whole script would exit 1 on a second run
+ * otherwise.
+ *
+ * The probe resolves `lessons` via `to_regclass('lessons')` — the same
+ * unqualified name, resolved the same way (through `search_path`), as the
+ * DDL below's own unqualified `alter table "lessons" ...`. Fix round 4,
+ * Minor 7: an earlier version probed `information_schema.columns where
+ * table_schema = 'public' and table_name = 'lessons'`, hardcoding a schema
+ * the DDL never named — on a database whose `search_path` resolves
+ * `lessons` to some OTHER schema, that probe would report the column
+ * absent (skipping the orphan gate) while the DDL below still ran against
+ * the `search_path`-resolved table, silently reintroducing the exact
+ * disagreement this fix closes.
  *
  * DEPLOYMENT ORDERING: relax first, then deploy, then run this. See
  * `docs/deploy-lessons-module-id-drop.md` for the full runbook and why
@@ -39,9 +50,10 @@ export async function migrateDropLessonModuleId(): Promise<void> {
     // clean states this function already knows how to handle.
     const { rows: cols } = await tx.execute<{ n: number }>(sql`
       select count(*)::int as "n"
-      from information_schema.columns
-      where table_schema = 'public' and table_name = 'lessons'
-        and column_name = 'module_id';
+      from pg_attribute
+      where attrelid = to_regclass('lessons')
+        and attname = 'module_id'
+        and not attisdropped;
     `);
     const moduleIdStillExists = (cols[0]?.n ?? 0) > 0;
 

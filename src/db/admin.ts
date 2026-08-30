@@ -371,11 +371,15 @@ export async function createLesson(input: {
     if (orgId === null) {
       // No org would have to be invented, so refuse rather than insert a
       // lesson nothing in the library can attribute to an org — same
-      // philosophy as the backfill's own NOT NULL gate.
+      // philosophy as the backfill's own NOT NULL gate. Names the same
+      // remedy `migrate-lesson-placements.ts`'s own gate and
+      // `resolve-course-org-link.ts` (scripts/import-course.ts) do, so an
+      // operator hitting any of the three sees one consistent instruction
+      // (fix round 4, Minor 6).
       throw new Error(
         `Module ${input.moduleId}'s course has no course_orgs row — cannot ` +
-          `resolve an owning org for the new lesson. Link the course to an ` +
-          `org first.`,
+          `resolve an owning org for the new lesson. Seed those links ` +
+          `(pnpm db:seed-org-links) and try again.`,
       );
     }
 

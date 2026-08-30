@@ -38,11 +38,18 @@
  * `lessonsTable`).
  *
  * Idempotent, including PAST the point the contract migration has already
- * run: probes `information_schema.columns` for each of `module_id`/`rank`
- * first (unlike `if exists`, `alter column ... drop not null` has no
- * existence-guarded form — the column simply must exist or Postgres raises
- * `column does not exist`), and relaxes only the ones still present. Once
- * the contract migration has dropped both, this is a no-op.
+ * run: probes for each of `module_id`/`rank` first (unlike `if exists`,
+ * `alter column ... drop not null` has no existence-guarded form — the
+ * column simply must exist or Postgres raises `column does not exist`),
+ * and relaxes only the ones still present. Once the contract migration has
+ * dropped both, this is a no-op.
+ *
+ * The probe resolves `lessons` via `to_regclass('lessons')` — the same
+ * unqualified name, resolved the same way (through `search_path`), as the
+ * `alter table "lessons" ...` DDL below (fix round 4, Minor 7 — see
+ * `migrate-drop-lesson-module-id.ts`'s header for the full reasoning;
+ * hardcoding `table_schema = 'public'` here would let the two disagree on
+ * a database whose `search_path` resolves `lessons` to a different schema).
  *
  * Run: pnpm db:relax-lesson-columns
  */
@@ -51,10 +58,11 @@ import { db } from '#/db';
 
 export async function migrateRelaxLessonColumns(): Promise<void> {
   const { rows } = await db.execute<{ column_name: string }>(sql`
-    select column_name
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'lessons'
-      and column_name in ('module_id', 'rank');
+    select attname as column_name
+    from pg_attribute
+    where attrelid = to_regclass('lessons')
+      and attname in ('module_id', 'rank')
+      and not attisdropped;
   `);
   const present = new Set(rows.map((r) => r.column_name));
 

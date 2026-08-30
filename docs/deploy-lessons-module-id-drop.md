@@ -6,6 +6,18 @@ is run manually, on the honor system of whoever is deploying reading its
 header comment. This doc is the runbook that comment points at, because the
 ordering here has no safe shortcut.
 
+## Preconditions (before ANY step below)
+
+- **`pnpm db:migrate-lesson-placements` must already have run.** It is what
+  adds `lessons.org_id` and `module_lessons` in the first place. Step 2
+  below (deploying the code) needs `lessons.org_id` to already exist as a
+  column — `createLesson` writes to it on every insert.
+- **Every course needs a `course_orgs` row.** `createLesson` refuses (throws,
+  before inserting anything) when a lesson's course has none — if that
+  hasn't been seeded yet, step 2's own "creating a lesson works" health
+  check is the first thing that tells you, which is late to find out.
+  Remedy either gap: `pnpm db:seed-org-links`.
+
 ## Why there is no ordering that "just works"
 
 The code in this deploy (`createLesson`/`moveLesson` no longer writing
@@ -30,9 +42,10 @@ as one operation here.
 
 (`lessons.org_id` is ALSO `NOT NULL`, but is not part of this hazard —
 `createLesson` resolves and writes a real `org_id` on every insert as of
-this deploy, so there is nothing for a relax step to cover there. Verified
-against every column in `lessonsTable`: `module_id` and `rank` are the
-whole set the OLD code wrote that the NEW code stops writing.)
+this deploy, so there is nothing for a relax step to cover there — provided
+the preconditions above are met. Verified against every column in
+`lessonsTable`: `module_id` and `rank` are the whole set the OLD code wrote
+that the NEW code stops writing.)
 
 ## The actual fix: relax before either side moves
 
@@ -48,10 +61,12 @@ write 500s.
 ## The order
 
 1. **`pnpm db:relax-lesson-columns`** — makes `module_id` and `rank`
-   nullable. Idempotent, including after step 3: it probes
-   `information_schema.columns` for each column first and relaxes only the
-   ones still present, so running it again once the contract migration has
-   already dropped them both is a clean no-op, not an error.
+   nullable. Idempotent, including after step 3: it probes for each column
+   (via `to_regclass('lessons')`, resolved the same `search_path`-based way
+   the DDL itself resolves the unqualified `"lessons"` it alters) first and
+   relaxes only the ones still present, so running it again once the
+   contract migration has already dropped them both is a clean no-op, not
+   an error.
 2. **Deploy this code** (the build with the dual-write removed).
    Confirm the deploy is healthy — creating and moving a lesson both work.
 3. **`pnpm db:migrate-drop-lesson-module-id`** — drops `module_id`, `rank`,

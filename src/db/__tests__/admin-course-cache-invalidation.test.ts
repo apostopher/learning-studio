@@ -574,10 +574,11 @@ describe('course-details cache invalidation', () => {
   // `.values()`, both fail against that mutant.
   it("createLesson resolves the new lesson's orgId via module → course → course_orgs (MIN org id)", async () => {
     const orgLookupCalls: {
+      select: Record<string, SQL>[];
       from: unknown[];
       innerJoin: [unknown, SQL][];
       where: SQL[];
-    } = { from: [], innerJoin: [], where: [] };
+    } = { select: [], from: [], innerJoin: [], where: [] };
     const orgLookupChain = {
       from: (table: unknown) => {
         orgLookupCalls.from.push(table);
@@ -619,7 +620,10 @@ describe('course-details cache invalidation', () => {
       .fn()
       .mockReturnValueOnce(lessonInsert)
       .mockReturnValueOnce(placementInsert);
-    const txSelect = vi.fn().mockReturnValue(orgLookupChain);
+    const txSelect = vi.fn((projection: Record<string, SQL>) => {
+      orgLookupCalls.select.push(projection);
+      return orgLookupChain;
+    });
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn({ select: txSelect, insert: txInsert }),
     );
@@ -634,6 +638,18 @@ describe('course-details cache invalidation', () => {
     );
     expect(render(orgLookupCalls.where[0])).toBe('"modules"."id" = $1');
     expect(renderSqlParams(orgLookupCalls.where[0])).toEqual([7]);
+    // Fix round 4, Minor 3: pins the PROJECTION too, not just the join/where
+    // — `.select({ orgId: courseOrgsTable.orgId })` (an arbitrary row, no
+    // aggregate at all) would satisfy every assertion above unchanged,
+    // since the fake chain answers `[{ orgId: 4 }]` regardless of what was
+    // actually asked for. Only rendering the captured projection catches
+    // that divergence — exactly what fix round 4's own hazard (a course
+    // with several orgs resolving to the wrong one) depends on this being
+    // `min(...)`, not a bare column.
+    expect(render(orgLookupCalls.select[0].orgId)).toContain('min(');
+    expect(render(orgLookupCalls.select[0].orgId)).toContain(
+      '"course_orgs"."org_id"',
+    );
     // The value this query resolved is what actually reaches the INSERT —
     // not some other source.
     expect(lessonInsert.valuesArg).toMatchObject({ orgId: 4 });
