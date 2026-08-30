@@ -4,6 +4,7 @@ import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   absentResourceResponse,
+  isStaffAnywhere,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
 import { wordToHtml } from '#/lib/word-to-html.server';
@@ -26,6 +27,18 @@ function parseLessonId(raw: FormDataEntryValue | null): number | null {
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
+  // Cheap authenticated-and-staff floor, BEFORE any work: without this, an
+  // anonymous caller could make the server buffer and parse a multipart body
+  // up to the platform limit and issue a DB query, per request, before ever
+  // being refused. `isStaffAnywhere` already treats "no session" as false
+  // rather than throwing, so this one call covers both. The precise
+  // per-lesson authority is still `requireLessonContentPermission`, below,
+  // once the lesson id is known — this is only the floor every admin route
+  // needs, same as `uploads.ts`'s `requireUploadAccess`.
+  if (!(await isStaffAnywhere(request.headers))) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   let file: File | null;
   let lessonId: number | null;
   try {

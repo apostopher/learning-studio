@@ -143,10 +143,14 @@ export async function getStaffCourseSlugs(userId: string): Promise<string[]> {
  *   lesson/module routes deciding whether an absent row may be reported as a
  *   404 at all.
  *
- * NOT for anything that turns on a specific GRANT — that is
- * `hasCoursePermissionAnywhere`, which resolves the roles rather than merely
- * counting rows. Holding a `course_staff` row says nothing about which of
- * `structure`/`content`/`staff` the role behind it was given.
+ * NOT for anything that turns on a specific GRANT. Holding a `course_staff`
+ * row says nothing about which of `structure`/`content`/`staff` the role
+ * behind it was given — resolve that with `getUserPermissions`/`hasPermission`
+ * in `permissions.server.ts` against a real role list: `requireCoursePermission`
+ * for a known course, or `getCourseRoleNames` unioned across every course a
+ * user is staffed on if a future caller genuinely needs "any course, any
+ * grant" (the last function that answered that, `hasCoursePermissionAnywhere`,
+ * was deleted as dead code once its one caller stopped needing it).
  */
 export async function isAnyCourseStaff(userId: string): Promise<boolean> {
   const [row] = await db

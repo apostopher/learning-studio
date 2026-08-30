@@ -11,6 +11,7 @@ const {
   getDisciplineIdForLessonId,
   requireLessonContentPermission,
   absentResourceResponse,
+  isStaffAnywhere,
   wordToHtml,
   generateLessonMaterial,
 } = vi.hoisted(() => {
@@ -25,6 +26,7 @@ const {
     getDisciplineIdForLessonId: vi.fn(),
     requireLessonContentPermission: vi.fn(),
     absentResourceResponse: vi.fn(),
+    isStaffAnywhere: vi.fn(),
     wordToHtml: vi.fn(),
     generateLessonMaterial: vi.fn(),
   };
@@ -33,6 +35,7 @@ vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
 vi.mock('#/lib/permissions.server', () => ({
   requireLessonContentPermission,
   absentResourceResponse,
+  isStaffAnywhere,
 }));
 vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
 vi.mock('#/lib/word-to-html.server', () => ({ wordToHtml }));
@@ -65,6 +68,9 @@ const MATERIAL = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // The default actor is staff somewhere, so a test that means to exercise
+  // anything past the floor is not silently 403'ing instead.
+  isStaffAnywhere.mockResolvedValue(true);
   // This lesson's discipline — a sentinel so a branch that forwards the wrong
   // value fails a `toHaveBeenCalledWith` assertion rather than passing by
   // coincidence.
@@ -81,6 +87,37 @@ beforeEach(() => {
 });
 
 describe('parseLessonMaterialHandler', () => {
+  /**
+   * Minor 1 (fix round 2): this route now does real work — buffering and
+   * parsing a multipart body, then a DB query — before the lesson id is even
+   * known. Without a floor, an anonymous caller could force both, per
+   * request, before ever being refused. `isStaffAnywhere` is the same cheap
+   * floor `uploads.ts`'s `requireUploadAccess` uses; the precise per-lesson
+   * authority is still `requireLessonContentPermission`, once the lesson id
+   * is known.
+   *
+   * Asserting `request.formData` was never called is the assertion that
+   * actually pins the ORDERING — a status-only check would pass even if the
+   * floor ran after the body was already parsed.
+   *
+   * Mutant: move the `isStaffAnywhere` check to AFTER `request.formData()`
+   * (restoring this round's regression). RED: `formData` spy is called
+   * before the floor ever runs.
+   */
+  it('refuses a non-staff/anonymous caller before ever reading the body', async () => {
+    isStaffAnywhere.mockResolvedValueOnce(false);
+    const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
+    const request = requestWith(file, '10');
+    const formDataSpy = vi.spyOn(request, 'formData');
+
+    const res = await parseLessonMaterialHandler(request);
+
+    expect(res.status).toBe(403);
+    expect(formDataSpy).not.toHaveBeenCalled();
+    expect(getDisciplineIdForLessonId).not.toHaveBeenCalled();
+    expect(generateLessonMaterial).not.toHaveBeenCalled();
+  });
+
   /**
    * Important 3 (fix round 1): guard on the SAME lesson, with the SAME guard,
    * as the save this parse feeds — `lessons.$lessonId.material.ts`'s POST.
