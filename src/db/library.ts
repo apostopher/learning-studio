@@ -6,6 +6,7 @@ import {
   blobFilesTable,
   coursesTable,
   lessonsTable,
+  moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
 import type { LibraryAssignment, LibraryFileInput } from '#/lib/library-gating';
@@ -29,17 +30,31 @@ const LIBRARY_URL_PATTERN = '%/library-%';
  * layer take an id→slug map it would only ever use one way.
  *
  * Scoping is derived, not stored: `blob_file_assignments.course_id` is null on
- * every imported row, so a row belongs to this course when its LESSON's module
- * points here, or — for the 11 module-only rows — when its module does. The
- * lesson's own module wins where both exist, which is the same D8 rule the
- * pure layer applies: three rows name a module their lesson does not live in,
- * and scoping by the stored module would file them under the wrong course.
+ * every imported row, so a row belongs to this course when its LESSON is
+ * PLACED here (via `module_lessons`), or — for the 11 module-only rows — when
+ * its module does. The lesson's own placement wins where both exist, which is
+ * the same D8 rule the pure layer applies: three rows name a module their
+ * lesson does not live in, and scoping by the stored module would file them
+ * under the wrong course.
+ *
+ * Behaviour change from the pre-placements join: a lesson can now be taught by
+ * several courses (one `module_lessons` row each), so its files show up in
+ * every course teaching it, not just the one named by the now-legacy
+ * `lessons.module_id`. That is correct — the file belongs to the lesson, not
+ * to a single course — but it is a real change from "one course, one file
+ * list" to "every teaching course gets the file". It does not produce
+ * duplicate rows for a single course's list: `linkLesson` enforces one
+ * placement per course per lesson, so at most one `module_lessons` row can
+ * satisfy `eq(lessonModule.courseId, courseId)` for a given lesson, even
+ * though the join fans a multiply-placed lesson out to several rows before
+ * that filter is applied.
  */
 export async function getLibraryForCourse(
   courseId: number,
 ): Promise<{ files: LibraryFileInput[]; assignments: LibraryAssignment[] }> {
-  // The lesson's real module, reached through lessons.module_id. Aliased
-  // because `modulesTable` is already joined for the module-only rows.
+  // The course-in-context module a placed lesson lives in, reached through
+  // module_lessons. Aliased because `modulesTable` is already joined for the
+  // module-only rows.
   const lessonModule = alias(modulesTable, 'lesson_module');
 
   const rows = await db
@@ -64,7 +79,11 @@ export async function getLibraryForCourse(
       lessonsTable,
       eq(blobFileAssignmentsTable.lessonId, lessonsTable.id),
     )
-    .leftJoin(lessonModule, eq(lessonsTable.moduleId, lessonModule.id))
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .leftJoin(lessonModule, eq(lessonModule.id, moduleLessonsTable.moduleId))
     .where(
       and(
         like(blobFilesTable.url, LIBRARY_URL_PATTERN),
@@ -108,10 +127,12 @@ export async function getLibraryForCourse(
  *
  * The download route holds only a file id — the client never learns a course
  * slug for a file — so the gate has to be told which course to evaluate
- * against. Returns a list, not one slug, because nothing in the schema stops a
- * file being assigned in two courses; today none are, so this is one row and
- * one gate evaluation, but a shared checklist attached to both courses would
- * otherwise be downloadable from only whichever course happened to sort first.
+ * against. Returns a list, not one slug, because a lesson can be placed in
+ * several courses via `module_lessons`: a lesson-linked file now genuinely
+ * returns one slug per course teaching that lesson (previously at most one,
+ * via the single `lessons.module_id`), and a shared checklist attached to
+ * several courses would otherwise be downloadable from only whichever course
+ * happened to sort first.
  */
 export async function getCourseSlugsForLibraryFile(
   fileId: number,
@@ -135,7 +156,11 @@ export async function getCourseSlugsForLibraryFile(
       lessonsTable,
       eq(blobFileAssignmentsTable.lessonId, lessonsTable.id),
     )
-    .leftJoin(lessonModule, eq(lessonsTable.moduleId, lessonModule.id))
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .leftJoin(lessonModule, eq(lessonModule.id, moduleLessonsTable.moduleId))
     .leftJoin(lessonCourse, eq(lessonModule.courseId, lessonCourse.id))
     .where(eq(blobFileAssignmentsTable.fileId, fileId));
 
