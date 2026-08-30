@@ -97,18 +97,47 @@ describe('GET /api/admin/editor', () => {
     expect(await res.json()).toEqual(boards);
   });
 
-  // Round-1 review (Minor 7): the constraint from the task-9 dispatch is
-  // that this route accepts NO course filter of any kind — its
-  // `course_orgs` join is the only tenant-isolation boundary
-  // (`getCourseBoard` performs no org check on the id it's handed). This is
-  // a structural fact about the handler today (it never reads
-  // `request.url`), but nothing pinned it as a regression guard — a future
-  // edit that started reading a `courseId` query param and threading it
-  // through would have nothing to catch it.
+  // Round-1 review (Minor 7), narrowed per round-2: the constraint from the
+  // task-9 dispatch is that this route accepts NO course filter of any kind
+  // — its `course_orgs` join is the only tenant-isolation boundary
+  // (`getCourseBoard` performs no org check on the id it's handed). Checking
+  // only the argument `getOrgEditorBoard` received would let a mutant call
+  // it correctly with the active org and then filter the RESULT in JS by
+  // `?courseId=99` — passing the argument assertion while still leaking a
+  // course-scoped filter through the back door. So this asserts both: the
+  // query resolved via the active org, AND the response carries every board
+  // the query returned, including ones whose course id doesn't match the
+  // query string at all.
   it('ignores a courseId query param and still resolves via the active org alone', async () => {
+    const boards = [
+      {
+        course: {
+          id: 2,
+          name: 'A',
+          slug: 'a',
+          description: null,
+          imageUrlAvif: null,
+          imageUrlWebp: null,
+        },
+        modules: [],
+      },
+      {
+        course: {
+          id: 5,
+          name: 'B',
+          slug: 'b',
+          description: null,
+          imageUrlAvif: null,
+          imageUrlWebp: null,
+        },
+        modules: [],
+      },
+    ];
+    m.getOrgEditorBoard.mockResolvedValueOnce(boards);
     const withQuery = new Request('http://test/api/admin/editor?courseId=99');
-    await getEditorBoardHandler(withQuery);
+    const res = await getEditorBoardHandler(withQuery);
     expect(m.getOrgEditorBoard).toHaveBeenCalledWith(7);
     expect(m.getOrgEditorBoard).not.toHaveBeenCalledWith(99);
+    expect(await res.json()).toEqual(boards);
   });
 });

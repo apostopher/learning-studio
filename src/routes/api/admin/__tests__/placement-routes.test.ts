@@ -302,13 +302,13 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
 
   // Round-1 review (Minor 8).
   it('400s an invalid module or lesson id without resolving a course', async () => {
-    const res = await patchPlacementHandler(
-      patchReq({ targetModuleId: 41, prevLessonId: null, nextLessonId: null }),
-      'abc',
-      '9',
-    );
+    const body = { targetModuleId: 41, prevLessonId: null, nextLessonId: null };
+    const res = await patchPlacementHandler(patchReq(body), 'abc', '9');
     expect(res.status).toBe(400);
     expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
+    const res2 = await patchPlacementHandler(patchReq(body), '40', 'xyz');
+    expect(res2.status).toBe(400);
+    expect(m.movePlacement).not.toHaveBeenCalled();
   });
 
   // Round-1 review, Critical 1: the guard used to check `courseId` (the URL's
@@ -363,6 +363,7 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
     });
     const res = await patchPlacementHandler(req, '999', '9');
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.movePlacement).not.toHaveBeenCalled();
     expect(res.status).toBe(404);
     expect(m.absentResourceResponse).toHaveBeenCalledWith(
       req.headers,

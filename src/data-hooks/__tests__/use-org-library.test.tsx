@@ -38,11 +38,14 @@ const LIBRARY = {
 };
 
 describe('useOrgLibrary', () => {
-  // Mutant this kills: a queryFn that parses with the wrong schema (e.g.
-  // orgEditorBoardSchema, or no parsing at all) — LIBRARY's shape (grouped
-  // disciplines with nested lessons) would either fail to parse (going red
-  // via isSuccess never becoming true) or `data` would come back reshaped,
-  // failing the `toEqual` below.
+  // Round-2 review: narrowed to what this test actually proves. A queryFn
+  // that returns the raw JSON with NO parsing at all would still pass this
+  // test — LIBRARY round-trips through `toEqual` unchanged either way, and
+  // the third test below (not this one) is what catches that. What THIS
+  // test does kill: a queryFn parsing with the WRONG schema (e.g.
+  // `orgEditorBoardSchema`, which expects a bare array) — LIBRARY's actual
+  // shape (grouped disciplines with nested lessons) would fail that parse
+  // and `isSuccess` would never become true.
   it('fetches /api/admin/library and parses the response through the schema', async () => {
     vi.stubGlobal(
       'fetch',
