@@ -78,7 +78,18 @@ const PLACEMENT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.getCourseIdForModuleId.mockResolvedValue(3);
+  // Module 40 and module 41 both belong to course 3 (the ordinary case:
+  // moving a lesson between two modules of the SAME course). Module 77
+  // belongs to course 7 — a DIFFERENT course, used by the cross-course PATCH
+  // test below. Module 999 doesn't resolve at all. A single shared course id
+  // for every module (the fixture this replaced) made module 40 and module
+  // 41 indistinguishable, so a guard on the wrong one of the two could never
+  // fail a test — see Critical 2 in the round-1 review.
+  m.getCourseIdForModuleId.mockImplementation(async (id: number) => {
+    if (id === 999) return null;
+    if (id === 77) return 7;
+    return 3;
+  });
   m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
   m.absentResourceResponse.mockResolvedValue(
     new Response('Forbidden', { status: 403 }),
@@ -123,6 +134,21 @@ describe('POST /api/admin/modules/:moduleId/lessons — linking', () => {
     expect(m.createLesson).not.toHaveBeenCalled();
   });
 
+  // Round-1 review (Important 4): pins `.strict()` on BOTH union branches.
+  // Without it, `{ name, lessonId }` would parse as the `name` branch (the
+  // first alternative z.union tries) and silently create a new lesson while
+  // discarding the caller's `lessonId` — the empty-body test above cannot
+  // catch this, since `{}` still fails both branches either way.
+  it('rejects a body carrying BOTH name and lessonId, rather than picking one', async () => {
+    const res = await postLessonHandler(
+      postReq({ name: 'Intro', lessonId: 9 }),
+      '40',
+    );
+    expect(res.status).toBe(400);
+    expect(m.createLesson).not.toHaveBeenCalled();
+    expect(m.linkLesson).not.toHaveBeenCalled();
+  });
+
   // Mutant this kills: collapsing `'duplicate'` and `null` into a single
   // "falsy means 409" check — that would answer 409 for a dangling module id
   // too, which is a lie ("already in this course" when there is no course).
@@ -140,8 +166,16 @@ describe('POST /api/admin/modules/:moduleId/lessons — linking', () => {
     m.absentResourceResponse.mockResolvedValueOnce(
       new Response(null, { status: 404 }),
     );
-    const res = await postLessonHandler(postReq({ lessonId: 9 }), '40');
+    const req = postReq({ lessonId: 9 });
+    const res = await postLessonHandler(req, '40');
     expect(res.status).toBe(404);
+    // Not just the status: a bare `new Response(null, {status: 404})` in
+    // place of `absentResourceResponse` would pass a status-only check too,
+    // reopening the id-enumeration oracle that helper exists to close.
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      req.headers,
+      'Module not found',
+    );
   });
 
   it('refuses without structure:create on the target course, and never links', async () => {
@@ -173,15 +207,28 @@ describe('DELETE /api/admin/modules/:moduleId/lessons/:lessonId', () => {
     expect(res.status).toBe(404);
   });
 
+  // Round-1 review (Minor 8): POST already has this test; DELETE didn't.
+  it('400s an invalid module or lesson id without resolving a course', async () => {
+    const res = await deletePlacementHandler(deleteReq(), 'abc', '9');
+    expect(res.status).toBe(400);
+    expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
+    const res2 = await deletePlacementHandler(deleteReq(), '40', 'xyz');
+    expect(res2.status).toBe(400);
+  });
+
   it('resolves the course from the module id before guarding', async () => {
-    m.getCourseIdForModuleId.mockResolvedValueOnce(null);
     m.absentResourceResponse.mockResolvedValueOnce(
       new Response(null, { status: 404 }),
     );
-    const res = await deletePlacementHandler(deleteReq(), '999', '9');
+    const req = deleteReq();
+    const res = await deletePlacementHandler(req, '999', '9');
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(m.unlinkLesson).not.toHaveBeenCalled();
     expect(res.status).toBe(404);
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      req.headers,
+      'Module not found',
+    );
   });
 
   it('asks for structure:delete scoped to the module’s course', async () => {
@@ -253,6 +300,47 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
     expect(m.movePlacement).not.toHaveBeenCalled();
   });
 
+  // Round-1 review (Minor 8).
+  it('400s an invalid module or lesson id without resolving a course', async () => {
+    const res = await patchPlacementHandler(
+      patchReq({ targetModuleId: 41, prevLessonId: null, nextLessonId: null }),
+      'abc',
+      '9',
+    );
+    expect(res.status).toBe(400);
+    expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
+  });
+
+  // Round-1 review, Critical 1: the guard used to check `courseId` (the URL's
+  // module — course 3) and stop there, while `movePlacement` writes whatever
+  // course `targetModuleId` resolves to. Module 77 (from the fixture above)
+  // belongs to course 7, a DIFFERENT course than module 40's course 3 — an
+  // SME holding `structure:update` on course 3 only must not be able to
+  // relocate course 7's placement by pointing `targetModuleId` at one of
+  // its modules. Verified RED against the pre-fix handler (see task-9-report
+  // for the exact revert-and-rerun): with the old `guard(request, courseId,
+  // 'update')` check alone, this request passed the guard (course 3, which
+  // the actor holds) and called `movePlacement` with `targetModuleId: 77`
+  // regardless — this assertion is what would have caught it.
+  it('refuses a target module in a DIFFERENT course than the URL module, and never moves', async () => {
+    m.absentResourceResponse.mockResolvedValueOnce(
+      new Response(null, { status: 404 }),
+    );
+    const req = patchReq({
+      targetModuleId: 77,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    const res = await patchPlacementHandler(req, '40', '9');
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.movePlacement).not.toHaveBeenCalled();
+    expect(res.status).toBe(404);
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      req.headers,
+      'Target module not found',
+    );
+  });
+
   it('refuses without structure:update on the course, and never moves', async () => {
     m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await patchPlacementHandler(
@@ -265,16 +353,20 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
   });
 
   it('resolves the course from the module id before guarding', async () => {
-    m.getCourseIdForModuleId.mockResolvedValueOnce(null);
     m.absentResourceResponse.mockResolvedValueOnce(
       new Response(null, { status: 404 }),
     );
-    const res = await patchPlacementHandler(
-      patchReq({ targetModuleId: 41, prevLessonId: null, nextLessonId: null }),
-      '999',
-      '9',
-    );
+    const req = patchReq({
+      targetModuleId: 41,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    const res = await patchPlacementHandler(req, '999', '9');
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
     expect(res.status).toBe(404);
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      req.headers,
+      'Module not found',
+    );
   });
 });

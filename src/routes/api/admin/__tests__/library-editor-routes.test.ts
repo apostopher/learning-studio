@@ -96,4 +96,19 @@ describe('GET /api/admin/editor', () => {
     const res = await getEditorBoardHandler(req());
     expect(await res.json()).toEqual(boards);
   });
+
+  // Round-1 review (Minor 7): the constraint from the task-9 dispatch is
+  // that this route accepts NO course filter of any kind — its
+  // `course_orgs` join is the only tenant-isolation boundary
+  // (`getCourseBoard` performs no org check on the id it's handed). This is
+  // a structural fact about the handler today (it never reads
+  // `request.url`), but nothing pinned it as a regression guard — a future
+  // edit that started reading a `courseId` query param and threading it
+  // through would have nothing to catch it.
+  it('ignores a courseId query param and still resolves via the active org alone', async () => {
+    const withQuery = new Request('http://test/api/admin/editor?courseId=99');
+    await getEditorBoardHandler(withQuery);
+    expect(m.getOrgEditorBoard).toHaveBeenCalledWith(7);
+    expect(m.getOrgEditorBoard).not.toHaveBeenCalledWith(99);
+  });
 });

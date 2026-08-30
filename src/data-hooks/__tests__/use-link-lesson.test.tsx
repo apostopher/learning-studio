@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
@@ -58,6 +58,54 @@ describe('useLinkLesson', () => {
     );
     expect(invalidatedKeys).toContainEqual(dataKeys.editorBoard());
     expect(invalidatedKeys).toContainEqual(dataKeys.orgLibrary());
+  });
+
+  // Round-1 review (Minor 5): the hook used to hardcode this sentence,
+  // duplicating the route's own `{error}` body. Mutant this kills: a
+  // hardcoded string that no longer matches what the route actually says.
+  it("surfaces the server's own 409 message rather than a hardcoded one", async () => {
+    const { wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'This course already teaches this lesson (from server)',
+        }),
+        { status: 409 },
+      ),
+    );
+    const { result } = renderHook(() => useLinkLesson(), { wrapper });
+
+    await act(async () => {
+      await result.current
+        .mutateAsync({ moduleId: 40, lessonId: 9 })
+        .catch(() => {});
+    });
+
+    await waitFor(() =>
+      expect(result.current.error?.message).toBe(
+        'This course already teaches this lesson (from server)',
+      ),
+    );
+  });
+
+  it('falls back to a fixed message if the 409 body has no error field', async () => {
+    const { wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('not json', { status: 409 }),
+    );
+    const { result } = renderHook(() => useLinkLesson(), { wrapper });
+
+    await act(async () => {
+      await result.current
+        .mutateAsync({ moduleId: 40, lessonId: 9 })
+        .catch(() => {});
+    });
+
+    await waitFor(() =>
+      expect(result.current.error?.message).toBe(
+        'This course already teaches this lesson',
+      ),
+    );
   });
 
   it('does not invalidate on failure', async () => {

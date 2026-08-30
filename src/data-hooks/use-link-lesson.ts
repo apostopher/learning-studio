@@ -21,7 +21,17 @@ export function useLinkLesson() {
         body: JSON.stringify({ lessonId: vars.lessonId }),
       });
       if (res.status === 409) {
-        throw new Error('This course already teaches this lesson');
+        // Read the route's own explanation rather than duplicating its
+        // string here — two copies of the same sentence drift the moment
+        // either one is edited.
+        const body = (await res.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        const message =
+          typeof body?.error === 'string'
+            ? body.error
+            : 'This course already teaches this lesson';
+        throw new Error(message);
       }
       if (!res.ok) throw new Error(`Failed to link lesson (${res.status})`);
       return res.json();

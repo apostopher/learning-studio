@@ -16,10 +16,10 @@ function parseId(raw: string): number | null {
 }
 
 /**
- * Guards both handlers below against the course derived from `moduleId` in
- * the URL — a placement is addressed by (module, lesson), and the course a
- * caller must hold `structure` authority on is the one that module belongs
- * to, never the lesson's (a lesson can be taught by many courses now).
+ * Shared `structure` permission check. DELETE guards the course derived from
+ * the URL's `moduleId` (the placement being removed lives there, full stop).
+ * PATCH guards the DESTINATION course instead — see `patchPlacementHandler`
+ * for why guarding on the URL module alone is not enough there.
  */
 async function guard(
   request: Request,
@@ -82,12 +82,15 @@ export async function patchPlacementHandler(
   if (moduleId === null || lessonId === null) {
     return Response.json({ error: 'Invalid id' }, { status: 400 });
   }
+  // Resolved for the 404 (a bad URL module answers before the body is even
+  // read) AND to check the destination against below — NOT guarded on yet.
+  // `movePlacement` writes whichever course `targetModuleId` (from the body)
+  // resolves to; guarding on this course alone would authorize a write to a
+  // course chosen entirely by the client. See the mismatch check below.
   const courseId = await getCourseIdForModuleId(moduleId);
   if (courseId === null) {
     return absentResourceResponse(request.headers, 'Module not found');
   }
-  const denied = await guard(request, courseId, 'update');
-  if (denied) return denied;
 
   let body: unknown;
   try {
@@ -100,18 +103,38 @@ export async function patchPlacementHandler(
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Guard the DESTINATION, not the URL module. `movePlacement` below scopes
+  // its UPDATE to the modules of whatever course `targetModuleId` resolves
+  // to — chosen entirely by the request body. Guarding on `courseId` (the
+  // URL's course) and stopping there, as this route used to, would let staff
+  // on course A relocate course B's placement by pointing `targetModuleId`
+  // at one of B's modules: the guard checks A, the write lands in B. This is
+  // the same hazard already fixed on the sibling `move` branch in
+  // `lessons.$lessonId.ts` — read its doc comment, it states the identical
+  // reasoning. Requiring the target to resolve to the SAME course as the URL
+  // makes `moduleId` load-bearing rather than decorative, and folds "target
+  // is in a different course" into the enumeration-safe
+  // `absentResourceResponse` rather than a 403 — telling a caller "that
+  // module is in a course you can't see" would itself be a disclosure.
+  const targetCourseId = await getCourseIdForModuleId(
+    parsed.data.targetModuleId,
+  );
+  if (targetCourseId === null || targetCourseId !== courseId) {
+    return absentResourceResponse(request.headers, 'Target module not found');
+  }
+  const denied = await guard(request, targetCourseId, 'update');
+  if (denied) return denied;
+
   const moved = await movePlacement({
     lessonId,
     targetModuleId: parsed.data.targetModuleId,
     prevLessonId: parsed.data.prevLessonId,
     nextLessonId: parsed.data.nextLessonId,
   });
-  // `movePlacement` answers null both for a dangling target module and for a
-  // target module that resolves to a DIFFERENT course than `moduleId` above
-  // (its own scoping refuses to move a placement out of its course) — both
-  // are "this request has no placement to act on" from here, and the caller
-  // already cleared this course's `structure:update`, so a plain 404 is
-  // right rather than the enumeration-safe `absentResourceResponse`.
+  // Only reachable now for a placement that doesn't currently exist for this
+  // lesson in this (now-confirmed-same) course — the cross-course case is
+  // already refused above. A plain 404 is right: the caller already cleared
+  // `structure:update` on this exact course.
   if (!moved) return new Response('Not found', { status: 404 });
   return Response.json(moved);
 }

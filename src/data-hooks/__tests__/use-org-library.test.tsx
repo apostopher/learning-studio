@@ -38,6 +38,11 @@ const LIBRARY = {
 };
 
 describe('useOrgLibrary', () => {
+  // Mutant this kills: a queryFn that parses with the wrong schema (e.g.
+  // orgEditorBoardSchema, or no parsing at all) — LIBRARY's shape (grouped
+  // disciplines with nested lessons) would either fail to parse (going red
+  // via isSuccess never becoming true) or `data` would come back reshaped,
+  // failing the `toEqual` below.
   it('fetches /api/admin/library and parses the response through the schema', async () => {
     vi.stubGlobal(
       'fetch',
@@ -56,15 +61,39 @@ describe('useOrgLibrary', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/admin/library');
   });
 
-  // Mutant this kills: a queryFn that parses with the wrong schema (e.g.
-  // orgEditorBoardSchema, an array) — a shape mismatch here would throw
-  // instead of resolving, and this assertion would go red.
+  // Round-1 review (Minor 6): the previous version of this test stubbed
+  // `ok: false`, so the queryFn's `!res.ok` check throws before the schema
+  // ever runs — it was actually killing a mutant that drops the `!res.ok`
+  // check (a queryFn that never throws on failure and resolves with `{}`
+  // instead), not the schema mutant its old comment claimed. Mutant THIS
+  // test kills: removing the `if (!res.ok) throw ...` guard entirely.
   it('throws on a genuine failure rather than resolving with garbage', async () => {
     vi.stubGlobal(
       'fetch',
       vi
         .fn()
         .mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }),
+    );
+    const { result } = renderHook(() => useOrgLibrary(), {
+      wrapper: wrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  // The actual schema-mismatch case: a 200 whose body doesn't match
+  // `orgLibrarySchema` at all (an array, `orgEditorBoardSchema`'s shape).
+  // Mutant this kills: a queryFn that returns the raw JSON instead of
+  // `orgLibrarySchema.parse(...)`'d data — this would resolve successfully
+  // with the garbage body instead of throwing.
+  it('throws when the 200 body does not match the library schema', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [{ not: 'a library' }],
+      }),
     );
     const { result } = renderHook(() => useOrgLibrary(), {
       wrapper: wrapper(),
