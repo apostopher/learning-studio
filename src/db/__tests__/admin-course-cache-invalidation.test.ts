@@ -134,7 +134,7 @@ const db = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 const lessonAccess = vi.hoisted(() => ({
-  getCourseSlugForLessonId: vi.fn(),
+  getCourseSlugsForLessonId: vi.fn(),
   getCourseSlugForModuleId: vi.fn(),
   getCourseSlugForCourseId: vi.fn(),
 }));
@@ -341,11 +341,11 @@ describe('course-details cache invalidation', () => {
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, slug: 'stall-recovery' }]),
     );
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
 
     await setLessonVideo(9, 'mux', 'ref-123');
 
-    expect(lessonAccess.getCourseSlugForLessonId).toHaveBeenCalledWith(9);
+    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
@@ -360,7 +360,7 @@ describe('course-details cache invalidation', () => {
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, slug: 'stall-recovery' }]),
     );
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
 
     await setLessonVideo(9, 'mux', 'ref-123');
 
@@ -375,7 +375,7 @@ describe('course-details cache invalidation', () => {
     const result = await setLessonVideo(999, 'mux', 'ref-123');
 
     expect(result).toBeNull();
-    expect(lessonAccess.getCourseSlugForLessonId).not.toHaveBeenCalled();
+    expect(lessonAccess.getCourseSlugsForLessonId).not.toHaveBeenCalled();
     expect(courseCache.invalidate).not.toHaveBeenCalled();
     expect(lessonPlaybackCache.invalidate).not.toHaveBeenCalled();
   });
@@ -391,7 +391,7 @@ describe('course-details cache invalidation', () => {
   });
 
   it('moveLesson invalidates both the source and target course when they differ', async () => {
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('source-course');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['source-course']);
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
     );
@@ -406,7 +406,7 @@ describe('course-details cache invalidation', () => {
 
     // Resolved BEFORE the update — the join would 404 against the lesson's
     // new (post-move) moduleId otherwise.
-    expect(lessonAccess.getCourseSlugForLessonId).toHaveBeenCalledWith(9);
+    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
     expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(20);
     expect(courseCache.invalidate).toHaveBeenCalledWith('source-course');
     expect(courseCache.invalidate).toHaveBeenCalledWith('target-course');
@@ -414,7 +414,7 @@ describe('course-details cache invalidation', () => {
   });
 
   it('moveLesson invalidates only once when source and target course are the same', async () => {
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.update.mockReturnValueOnce(
       makeChain([{ id: 9, rank: '1', moduleId: 20 }]),
     );
@@ -433,7 +433,7 @@ describe('course-details cache invalidation', () => {
 
   it('updateLessonName invalidates the owning course, resolved from lessonId', async () => {
     db.update.mockReturnValueOnce(makeChain([{ id: 9, name: 'New name' }]));
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
 
     await updateLessonName(9, 'New name');
 
@@ -455,16 +455,16 @@ describe('course-details cache invalidation', () => {
         },
       ]),
     );
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
 
     await updateLessonConfig(9, { isAvailable: true });
 
-    expect(lessonAccess.getCourseSlugForLessonId).toHaveBeenCalledWith(9);
+    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
   it('deleteLesson invalidates the owning course, resolved before the row is gone', async () => {
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
     db.update.mockReturnValueOnce(makeChain([]));
 
@@ -479,7 +479,7 @@ describe('course-details cache invalidation', () => {
     // dependents keep an edge to a lesson that no longer exists and the admin
     // UI renders a chip for a prerequisite that is not there. deleteModule has
     // done this since it shipped; lessons never did.
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
     db.update.mockReturnValueOnce(makeChain([]));
 
@@ -489,7 +489,7 @@ describe('course-details cache invalidation', () => {
   });
 
   it('deleteLesson skips invalidation when nothing was deleted', async () => {
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.delete.mockReturnValueOnce(makeChain([]));
 
     const result = await deleteLesson(999);
@@ -595,7 +595,7 @@ describe('course-details cache invalidation', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
     db.update.mockReturnValueOnce(makeChain([{ id: 9 }]));
-    lessonAccess.getCourseSlugForLessonId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     courseCache.invalidate.mockRejectedValueOnce(new Error('redis down'));
 
     await expect(setLessonVideo(9, 'mux', 'ref-123')).resolves.toEqual({

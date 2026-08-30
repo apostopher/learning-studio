@@ -16,8 +16,8 @@ import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import {
   getCourseSlugForCourseId,
-  getCourseSlugForLessonId,
   getCourseSlugForModuleId,
+  getCourseSlugsForLessonId,
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { getLessonTranscript } from '#/db/lesson-transcript';
@@ -99,6 +99,22 @@ async function invalidateLessonPlaybackCache(
   } catch (error) {
     console.error('Failed to invalidate lesson-playback cache:', error);
   }
+}
+
+/**
+ * Evict the learner-facing course-details cache for EVERY course that
+ * teaches this lesson.
+ *
+ * A lesson can now be placed into several courses via `module_lessons`, so an
+ * admin edit to one lesson can change what several courses show. Invalidating
+ * only one slug (the bug this closes) would leave the others serving stale
+ * content until the 6h TTL expires. `invalidateCourseDetailsCache` is itself
+ * best-effort per slug, so a failure on one course doesn't stop the others
+ * from being invalidated.
+ */
+async function invalidateAllCoursesForLesson(lessonId: number): Promise<void> {
+  const slugs = await getCourseSlugsForLessonId(lessonId);
+  await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
 }
 
 /**
@@ -621,11 +637,10 @@ export async function setLessonVideo(
     .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
   if (!updated) return null;
 
-  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
-  // Evicted by slug (not `getCourseSlugForLessonId`'s course slug above) —
-  // `getLessonPlayback` is keyed per-lesson, not per-course, so an unrelated
-  // course-details invalidation would leave this lesson's stale playback
-  // entry untouched.
+  await invalidateAllCoursesForLesson(lessonId);
+  // Evicted by slug (not the course slugs above) — `getLessonPlayback` is
+  // keyed per-lesson, not per-course, so an unrelated course-details
+  // invalidation would leave this lesson's stale playback entry untouched.
   await invalidateLessonPlaybackCache(updated.slug);
 
   return { id: updated.id };
@@ -754,10 +769,13 @@ export async function moveLesson(input: {
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
   else rankExpr = sql`1`;
 
-  // Resolve the lesson's *current* course before the move — a cross-module
-  // drag can also be a cross-course drag, and after the update the lesson's
-  // moduleId (and therefore this join) would already point at the target.
-  const sourceCourseSlug = await getCourseSlugForLessonId(input.lessonId);
+  // Resolve every course currently teaching this lesson before the move — a
+  // cross-module drag can also be a cross-course drag, and after the update
+  // the lesson's moduleId (and therefore this join) would already point at
+  // the target. A lesson placed into several courses via `module_lessons`
+  // means this can be more than one slug now, and every one of them needs
+  // invalidating, not just an arbitrary single "source".
+  const sourceCourseSlugs = await getCourseSlugsForLessonId(input.lessonId);
 
   const [updated] = await db
     .update(lessonsTable)
@@ -775,10 +793,13 @@ export async function moveLesson(input: {
   if (!updated) return null;
 
   const targetCourseSlug = await getCourseSlugForModuleId(input.targetModuleId);
-  await invalidateCourseDetailsCache(sourceCourseSlug);
-  if (targetCourseSlug !== sourceCourseSlug) {
-    await invalidateCourseDetailsCache(targetCourseSlug);
-  }
+  // De-duplicated via Set so a reorder that lands back in a course already
+  // covered by `sourceCourseSlugs` doesn't invalidate that slug twice.
+  const slugsToInvalidate = new Set(sourceCourseSlugs);
+  if (targetCourseSlug) slugsToInvalidate.add(targetCourseSlug);
+  await Promise.all(
+    [...slugsToInvalidate].map((slug) => invalidateCourseDetailsCache(slug)),
+  );
 
   return {
     id: updated.id,
@@ -798,7 +819,7 @@ export async function updateLessonName(
     .returning({ id: lessonsTable.id, name: lessonsTable.name });
   if (!updated) return null;
 
-  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+  await invalidateAllCoursesForLesson(lessonId);
 
   return updated;
 }
@@ -834,7 +855,7 @@ export async function updateLessonConfig(
     });
   if (!updated) return null;
 
-  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+  await invalidateAllCoursesForLesson(lessonId);
 
   return {
     ...updated,
@@ -845,8 +866,10 @@ export async function updateLessonConfig(
 
 export async function deleteLesson(lessonId: number): Promise<boolean> {
   // Resolve before the delete — once the row is gone, the module/course join
-  // used to find the owning slug has nothing to join against.
-  const courseSlug = await getCourseSlugForLessonId(lessonId);
+  // used to find the owning slug(s) has nothing to join against. A lesson
+  // placed into several courses via `module_lessons` means several courses
+  // can be losing this lesson at once, and every one needs invalidating.
+  const courseSlugs = await getCourseSlugsForLessonId(lessonId);
 
   const [deleted] = await db
     .delete(lessonsTable)
@@ -873,7 +896,9 @@ export async function deleteLesson(lessonId: number): Promise<boolean> {
       sql`${lessonDependenciesTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: deleted.slug }])}::jsonb`,
     );
 
-  await invalidateCourseDetailsCache(courseSlug);
+  await Promise.all(
+    courseSlugs.map((slug) => invalidateCourseDetailsCache(slug)),
+  );
   return true;
 }
 
@@ -945,7 +970,7 @@ export async function updateLessonDependencies(
       });
   }
 
-  await invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId));
+  await invalidateAllCoursesForLesson(lessonId);
   return { ok: true, dependsOn: rows };
 }
 
