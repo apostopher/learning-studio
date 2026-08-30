@@ -1,23 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const m = vi.hoisted(() => {
-  class ForbiddenError extends Error {
-    constructor() {
-      super('Forbidden');
-      this.name = 'ForbiddenError';
-    }
-  }
-  return {
-    ForbiddenError,
-    requireAdmin: vi.fn(),
-    getOrgLibrary: vi.fn(),
-    getOrgEditorBoard: vi.fn(),
-  };
-});
-vi.mock('#/lib/admin-functions.server', () => ({
-  requireAdmin: m.requireAdmin,
-  ForbiddenError: m.ForbiddenError,
+const m = vi.hoisted(() => ({
+  isStaffAnywhere: vi.fn(),
+  getOrgLibrary: vi.fn(),
+  getOrgEditorBoard: vi.fn(),
+}));
+vi.mock('#/lib/permissions.server', () => ({
+  isStaffAnywhere: m.isStaffAnywhere,
 }));
 vi.mock('#/db/editor', () => ({
   getOrgLibrary: m.getOrgLibrary,
@@ -36,19 +26,78 @@ function req(): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
+  m.isStaffAnywhere.mockResolvedValue(true);
   m.getOrgLibrary.mockResolvedValue({ disciplines: [], untitled: [] });
   m.getOrgEditorBoard.mockResolvedValue([]);
 });
 
-describe('GET /api/admin/library', () => {
-  it('self-guards with requireAdmin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await getLibraryHandler(req());
-    expect(res.status).toBe(403);
-    expect(m.getOrgLibrary).not.toHaveBeenCalled();
+/**
+ * Both handlers gate on `isStaffAnywhere` and NOT on `requireAdmin`.
+ *
+ * The whole point of the knowledge library is the discipline-scoped subject
+ * expert built in Task 6r, and an admin-only floor 403s exactly that role.
+ * `isStaffAnywhere` is the union that fits: admin/owner, any `course_staff`
+ * row, any `discipline_staff` row — "has standing somewhere on the teaching
+ * side". Course staff are in deliberately, because the editor's right-hand
+ * pane is course composition, which is their work.
+ *
+ * This gates OPENING the screen only. Editing a lesson still needs
+ * `requireLessonContentPermission` on that lesson's discipline; every
+ * placement write still needs `requireCoursePermission(courseId, 'structure',
+ * …)`. Neither changed.
+ */
+describe.each([
+  [
+    'GET /api/admin/library',
+    () => getLibraryHandler(req()),
+    () => m.getOrgLibrary,
+  ],
+  [
+    'GET /api/admin/editor',
+    () => getEditorBoardHandler(req()),
+    () => m.getOrgEditorBoard,
+  ],
+] as const)('%s — who may open the editor', (_name, call, query) => {
+  /**
+   * Mutant seen RED: `requireAdmin` restored in place of `isStaffAnywhere`.
+   * With `isStaffAnywhere` mocked true and `requireAdmin` unmocked the handler
+   * would throw or 403; either way this fails.
+   */
+  it('admits a discipline-SME-only caller', async () => {
+    // What `isStaffAnywhere` answers for an SME with zero course_staff rows —
+    // its own derivation is covered in permissions-server.test.ts.
+    m.isStaffAnywhere.mockResolvedValueOnce(true);
+
+    const res = await call();
+
+    expect(res.status).toBe(200);
+    expect(query()).toHaveBeenCalledWith(7);
   });
 
+  /**
+   * Mutant seen RED: the guard inverted or dropped (`if (false)` / no check).
+   * Asserting the DB function was never called is what makes this a real
+   * refusal test — a handler that queries and then discards the rows would
+   * still return 403 and would still have read the org's whole curriculum.
+   */
+  it('refuses an anonymous caller without touching the database', async () => {
+    m.isStaffAnywhere.mockResolvedValueOnce(false);
+
+    const res = await call();
+
+    expect(res.status).toBe(403);
+    expect(query()).not.toHaveBeenCalled();
+  });
+
+  /** The guard reads the request's own headers, not an ambient session. */
+  it('passes the request headers to the guard', async () => {
+    await call();
+
+    expect(m.isStaffAnywhere).toHaveBeenCalledWith(expect.any(Headers));
+  });
+});
+
+describe('GET /api/admin/library', () => {
   it('resolves the active org and passes it through to getOrgLibrary', async () => {
     await getLibraryHandler(req());
     expect(m.getOrgLibrary).toHaveBeenCalledWith(7);
@@ -66,13 +115,6 @@ describe('GET /api/admin/library', () => {
 });
 
 describe('GET /api/admin/editor', () => {
-  it('self-guards with requireAdmin', async () => {
-    m.requireAdmin.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await getEditorBoardHandler(req());
-    expect(res.status).toBe(403);
-    expect(m.getOrgEditorBoard).not.toHaveBeenCalled();
-  });
-
   it('resolves the active org and passes it through to getOrgEditorBoard', async () => {
     await getEditorBoardHandler(req());
     expect(m.getOrgEditorBoard).toHaveBeenCalledWith(7);

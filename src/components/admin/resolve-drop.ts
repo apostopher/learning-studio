@@ -7,6 +7,7 @@ import type {
   OrgEditorBoard,
 } from '#/lib/admin-schemas';
 import { parseDndId } from '#/lib/dnd-ids';
+import { removeLessonLabel } from './lesson-card-labels';
 
 /**
  * The knowledge editor's drag whitelist, as a pure function.
@@ -150,7 +151,11 @@ export function resolveDrop(
     if (over.type === 'discipline' || over.type === 'library-lesson') {
       return {
         kind: 'forbidden',
-        reason: `The library already holds "${from.lesson.name}" — dragging it back changes nothing. Use "Remove from module" on its card to take it out of ${from.module.name} and stop ${from.courseBoard.course.name} teaching it.`,
+        // Names the control by the EXACT accessible name it wears, built from
+        // the same function the control itself uses. Pointing at a label that
+        // does not exist sends the reader hunting for a button that isn't
+        // there, which is worse than saying nothing.
+        reason: `The library already holds "${from.lesson.name}" — dragging it back changes nothing. Use the "${removeLessonLabel(from.lesson.name, from.module.name)}" control on its card to stop ${from.courseBoard.course.name} teaching it.`,
       };
     }
 

@@ -143,14 +143,36 @@ describe('/admin shell nav', () => {
   });
 
   /**
-   * The knowledge library editor's two endpoints (`/api/admin/library`,
-   * `/api/admin/editor`) self-guard with `requireAdmin`, so the link has to
-   * follow the admin floor and nothing looser. A discipline-only SME is the
-   * person that screen is FOR, and is nonetheless the person it currently
-   * 403s — linking them there would be the same dead end
-   * `isCourseStaffAnywhere` exists to avoid, one screen further along.
+   * The knowledge library is the screen the discipline-scoped SME exists for,
+   * and its two endpoints (`/api/admin/library`, `/api/admin/editor`) gate on
+   * `isStaffAnywhere` — so this link must too. This is the case that makes
+   * `canSeeEditor` and `canSeeCourses` read DIFFERENT staffing booleans: the
+   * same actor gets the library and not the course index, because the index
+   * would come back empty for them and the library comes back full.
+   *
+   * Mutant seen RED: `canSeeEditor = hasAdminAccess(roles) || isCourseStaffAnywhere`
+   * (the Courses link's condition, copied) — the SME loses the one screen
+   * built for them while every endpoint behind it serves them happily.
    */
-  it('hides the editor from a discipline-only SME the endpoints would 403', async () => {
+  it('shows the editor to a discipline-only SME who staffs no course', async () => {
+    const props = await navProps({
+      roles: [],
+      permissions: [],
+      isStaffAnywhere: true,
+      isCourseStaffAnywhere: false,
+    });
+
+    expect(props.canSeeEditor).toBe(true);
+    // And the pairing that makes it worth two booleans.
+    expect(props.canSeeCourses).toBe(false);
+  });
+
+  /**
+   * Mutant seen RED: `canSeeEditor = hasAdminAccess(roles)` — the admin-only
+   * floor this round widened, which locks course staff out of a pane whose
+   * whole right-hand side is course composition.
+   */
+  it('shows the editor to course staff holding no global role', async () => {
     const props = await navProps({
       roles: [],
       permissions: [],
@@ -158,7 +180,7 @@ describe('/admin shell nav', () => {
       isCourseStaffAnywhere: true,
     });
 
-    expect(props.canSeeEditor).toBe(false);
+    expect(props.canSeeEditor).toBe(true);
   });
 
   it('shows the editor to an admin holding no grants and staffing nothing', async () => {
@@ -169,9 +191,28 @@ describe('/admin shell nav', () => {
       isCourseStaffAnywhere: false,
     });
 
-    // `requireAdmin` is the endpoints' floor, and it reads roles, not grants
-    // — an admin with an empty `role_permissions` set still gets both.
+    // `hasAdminAccess` reads roles, not grants — an admin with an empty
+    // `role_permissions` set still gets the editor.
     expect(props.canSeeEditor).toBe(true);
+  });
+
+  /**
+   * A learner has no standing on the teaching side at all. (They never reach
+   * this shell either — `beforeLoad` turns them away — but the link's own
+   * condition must not be the thing that would have let them through.)
+   *
+   * Mutant seen RED: `canSeeEditor = true` — a constant, which every
+   * positive case above would happily pass.
+   */
+  it('hides the editor from a learner with no standing anywhere', async () => {
+    const props = await navProps({
+      roles: ['associate'],
+      permissions: [],
+      isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
+    });
+
+    expect(props.canSeeEditor).toBe(false);
   });
 
   it('gates People on user:read alone, never on staffing', async () => {

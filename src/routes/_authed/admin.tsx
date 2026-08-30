@@ -29,7 +29,8 @@ export const Route = createFileRoute('/_authed/admin')({
 });
 
 function AdminShell() {
-  const { roles, permissions, isCourseStaffAnywhere } = Route.useRouteContext();
+  const { roles, permissions, isStaffAnywhere, isCourseStaffAnywhere } =
+    Route.useRouteContext();
   // Both links are rendered only when the destination will actually show the
   // actor something — a link to a page that redirects or 403s straight back is
   // worse than no link, and each route guards itself regardless.
@@ -43,15 +44,20 @@ function AdminShell() {
   // the index would come back empty for them and the link would be a dead end.
   const canSeeCourses =
     hasPermissionKey(permissions, 'course', 'read') || isCourseStaffAnywhere;
-  // The knowledge library editor is gated on the admin floor and NOT on any
-  // staffing boolean, because both endpoints it lives on
-  // (`/api/admin/library`, `/api/admin/editor`) self-guard with
-  // `requireAdmin`. A discipline-scoped SME is arguably the person who most
-  // needs that screen, but as those routes stand today they answer them with
-  // 403 — so linking them there would be exactly the dead end the two
-  // staffing booleans exist to prevent, one screen further along. Widen the
-  // endpoint guards first and this condition follows; not before.
-  const canSeeEditor = hasAdminAccess(roles);
+  // The knowledge library editor's two endpoints (`/api/admin/library`,
+  // `/api/admin/editor`) guard on `isStaffAnywhere`, so this link mirrors that
+  // union exactly: admin/owner, any course staffing, any discipline staffing.
+  //
+  // `isStaffAnywhere` and NOT `isCourseStaffAnywhere` — the opposite of the
+  // Courses link above, and the whole reason the context carries both. A
+  // discipline-only SME staffs no course, so the course index would come back
+  // empty for them; the library is the screen built FOR them and comes back
+  // full. Course staff are included too: the editor's right-hand pane is
+  // course composition, which is their work.
+  //
+  // Identical to the condition `beforeLoad` above uses to admit anyone to this
+  // shell at all, which is why `/admin/editor` carries no gate of its own.
+  const canSeeEditor = hasAdminAccess(roles) || isStaffAnywhere;
 
   return (
     <AdminShellLayout

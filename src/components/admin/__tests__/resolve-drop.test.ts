@@ -12,6 +12,7 @@ import {
   libraryLessonDndId,
   moduleDndId,
 } from '#/lib/dnd-ids';
+import { removeLessonLabel } from '../lesson-card-labels';
 import { resolveDrop } from '../resolve-drop';
 
 const lesson = (id: number, name: string): BoardLesson => ({
@@ -244,6 +245,26 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     expect(reason).toContain('Stalls');
     expect(reason).toContain('Fundamentals');
     expect(reason).toContain('Remove');
+  });
+
+  /**
+   * The sentence above tells the reader to go and use a control, so it has to
+   * name that control by the label the control actually wears. Both sides
+   * build it from `removeLessonLabel`, and this asserts they agree —
+   * hand-writing the phrase in either place is the drift this catches.
+   *
+   * Mutant seen RED: the refusal inlines `Use "Remove from module" on its
+   * card` (this task's own first draft) — plausible, readable, and naming a
+   * label no button in the editor carries, so the reader hunts for a control
+   * that is not there.
+   */
+  it('names the remove control by the exact label the card renders', () => {
+    const result = resolveDrop(board, lessonDndId(STALLS), disciplineDndId(7));
+
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain(
+      `"${removeLessonLabel('Stalls', 'Fundamentals')}"`,
+    );
   });
 
   it('refuses a library lesson a course already teaches, saying it is already there', () => {

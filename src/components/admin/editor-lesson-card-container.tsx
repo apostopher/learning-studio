@@ -5,10 +5,14 @@ import { toast } from 'sonner';
 import { deleteLessonAtom } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
-import type { BoardLesson, OrgLibrary } from '#/lib/admin-schemas';
+import type { BoardLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
+import {
+  findLibraryCourseCount,
+  removeLessonLabel,
+} from './lesson-card-labels';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
@@ -60,7 +64,7 @@ export const EditorLessonCardContainer = ({
    * here and there would otherwise carry a prop neither of them uses.
    */
   const { data: library } = useOrgLibrary();
-  const courseCount = findCourseCount(library, lesson.id);
+  const courseCount = findLibraryCourseCount(library, lesson.id);
 
   return (
     <div
@@ -83,7 +87,7 @@ export const EditorLessonCardContainer = ({
             { onError: (error) => toast.error(error.message) },
           )
         }
-        removeLabel={`Remove ${lesson.name} from ${moduleName}`}
+        removeLabel={removeLessonLabel(lesson.name, moduleName)}
         isRemoving={unlinkLesson.isPending}
         // Offered only once the count is known. The confirmation's whole job
         // is to state the blast radius, and a dialog that guessed at it —
@@ -103,16 +107,3 @@ export const EditorLessonCardContainer = ({
     </div>
   );
 };
-
-/** How many courses teach this lesson, per the library, or null if unknown. */
-function findCourseCount(
-  library: OrgLibrary | undefined,
-  lessonId: number,
-): number | null {
-  if (!library) return null;
-  const card = [
-    ...library.untitled,
-    ...library.disciplines.flatMap((d) => d.lessons),
-  ].find((l) => l.id === lessonId);
-  return card?.courseCount ?? null;
-}

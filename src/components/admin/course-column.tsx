@@ -18,12 +18,19 @@ export const CourseColumn = ({
   course,
   children,
   onEditCourse,
+  configureSlot,
   expandedModuleIds,
   onExpandedModuleIdsChange,
 }: {
   course: BoardCourse;
   children: ReactNode;
   onEditCourse?: () => void;
+  /**
+   * A link to this course's own configure surface, supplied as a node rather
+   * than a URL so this component stays router-free (and its render test stays
+   * free of a `RouterProvider`). Omitted where there is nowhere to go.
+   */
+  configureSlot?: ReactNode;
   /**
    * Which modules are open, when the caller drives the accordion.
    *
@@ -49,6 +56,7 @@ export const CourseColumn = ({
           <Pencil className="h-4 w-4" aria-hidden="true" />
         </TooltipIconButton>
       )}
+      {configureSlot}
     </header>
 
     <ScrollArea
