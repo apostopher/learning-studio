@@ -9,6 +9,10 @@ vi.mock('#/components/admin/admin-shell-layout', () => ({
 
 import { Route } from '../admin';
 
+// Only what `beforeLoad` reads. The shell's OTHER context field,
+// `isCourseStaffAnywhere`, is never consulted here — it drives the Courses nav
+// link, and `admin-shell-nav.test.tsx` covers that derivation by mounting the
+// component and reading the props the layout was handed.
 type Ctx = { roles: string[]; isStaffAnywhere: boolean };
 
 /**

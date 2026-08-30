@@ -133,11 +133,16 @@ export async function getStaffCourseSlugs(userId: string): Promise<string[]> {
  *
  * Two callers, both of which genuinely have no course id to scope by:
  *
- * - `resolveAuthContext`, which answers `/admin`'s route guard. Entering the
- *   admin console is not a per-course question — which course is decided,
- *   per request, by `requireCoursePermission`. A boolean is all the router
- *   may hold; a list of ids would be a second copy of course-scoped
- *   authority living on the client.
+ * - `resolveAuthContext`, where it becomes the router context's
+ *   `isCourseStaffAnywhere` — the field behind `/admin`'s Courses nav link,
+ *   which asks whether the course index has anything in it for this actor.
+ *   (Shell ENTRY is answered by the neighbouring `isStaffAnywhere` field,
+ *   which unions this with `discipline_staff` and the global admin roles; a
+ *   discipline-only SME enters the shell but gets no Courses link.) Neither
+ *   is a per-course question — which course is decided, per request, by
+ *   `requireCoursePermission`. A boolean is all the router may hold; a list
+ *   of ids would be a second copy of course-scoped authority living on the
+ *   client.
  * - `isStaffAnywhere`, which answers "teaching side or stranger?" for the
  *   blob-upload token endpoint (a blob key carries no course id) and for the
  *   lesson/module routes deciding whether an absent row may be reported as a
