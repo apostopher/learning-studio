@@ -9,7 +9,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSql } from '#/db/__tests__/render-sql';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 // Task 5a moves "which course does this lesson belong to" onto placements
@@ -185,10 +185,20 @@ function makeOrderedChain(result: unknown, orderByCalls: unknown[]) {
  * for `getCourseSlugForLesson`/`getCourseSlugForLessonId`/
  * `getCourseIdForLessonId`, which all call `.orderBy().limit(1)` after
  * `.where()` — see the per-join rendered-SQL tests below (Task 5e, Part 2a).
+ *
+ * `whereCalls` (fix round 1, 2a): optional, defaults to a throwaway array —
+ * before this parameter existed, `.where()` was a bare no-op here, so no
+ * test in this file asserted what any of these three functions' `.where()`
+ * actually scoped by. A mutant swapping the WHERE's column (e.g.
+ * `eq(moduleLessonsTable.lessonId, lessonId)` instead of `eq(lessonsTable.id,
+ * lessonId)`) is "correct-shaped" — still an integer equality on a real
+ * column — but silently changes which rows the query can even match, and
+ * passed the whole file undetected.
  */
 function makeJoinCapturingChain(
   result: unknown,
   joinCalls: Array<[table: unknown, condition: unknown]>,
+  whereCalls: unknown[] = [],
 ) {
   const chain = {
     from: () => chain,
@@ -196,7 +206,10 @@ function makeJoinCapturingChain(
       joinCalls.push([table, condition]);
       return chain;
     },
-    where: () => chain,
+    where: (condition: unknown) => {
+      whereCalls.push(condition);
+      return chain;
+    },
     orderBy: () => chain,
     limit: () => chain,
     // biome-ignore lint/suspicious/noThenProperty: see makeChain above
@@ -463,42 +476,67 @@ describe('join argument pinning: lessons -> module_lessons -> modules -> courses
   // `"modules"."id" = "lessons"."module_id"` instead).
   it('getCourseSlugForLesson joins module_lessons, then modules, then courses, each correctly paired', async () => {
     const joinCalls: Array<[unknown, unknown]> = [];
+    const whereCalls: unknown[] = [];
     db.select.mockReturnValueOnce(
       makeJoinCapturingChain(
         [{ courseSlug: 'flight-basics', courseId: 3, isAvailable: true }],
         joinCalls,
+        whereCalls,
       ),
     );
 
     await getCourseSlugForLesson('stall-recovery');
 
     expectedJoinChain(joinCalls);
+    // Fix round 1, Part 2a: `.where()` was a bare no-op in this chain until
+    // now, so nothing here proved which column scoped the lookup. Mutant:
+    // `eq(moduleLessonsTable.lessonId, lessonSlug)` (wrong table, and a
+    // string compared against an integer column) or any other column swap —
+    // "correct-shaped" (still an equality on a real column) but matches an
+    // entirely different row set. Verified RED (rendered WHERE differs).
+    expect(whereCalls).toHaveLength(1);
+    expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."slug" = $1');
+    expect(renderSqlParams(whereCalls[0] as never)).toEqual(['stall-recovery']);
   });
 
   // Mutant: same partial revert, applied to getCourseSlugForLessonId's
   // second join instead.
   it('getCourseSlugForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
     const joinCalls: Array<[unknown, unknown]> = [];
+    const whereCalls: unknown[] = [];
     db.select.mockReturnValueOnce(
-      makeJoinCapturingChain([{ courseSlug: 'flight-basics' }], joinCalls),
+      makeJoinCapturingChain(
+        [{ courseSlug: 'flight-basics' }],
+        joinCalls,
+        whereCalls,
+      ),
     );
 
     await getCourseSlugForLessonId(9);
 
     expectedJoinChain(joinCalls);
+    // Same rationale as getCourseSlugForLesson's WHERE assertion above.
+    expect(whereCalls).toHaveLength(1);
+    expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."id" = $1');
+    expect(renderSqlParams(whereCalls[0] as never)).toEqual([9]);
   });
 
   // Mutant: same partial revert, applied to getCourseIdForLessonId's second
   // join instead.
   it('getCourseIdForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
     const joinCalls: Array<[unknown, unknown]> = [];
+    const whereCalls: unknown[] = [];
     db.select.mockReturnValueOnce(
-      makeJoinCapturingChain([{ courseId: 3 }], joinCalls),
+      makeJoinCapturingChain([{ courseId: 3 }], joinCalls, whereCalls),
     );
 
     await getCourseIdForLessonId(9);
 
     expectedJoinChain(joinCalls);
+    // Same rationale as getCourseSlugForLesson's WHERE assertion above.
+    expect(whereCalls).toHaveLength(1);
+    expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."id" = $1');
+    expect(renderSqlParams(whereCalls[0] as never)).toEqual([9]);
   });
 });
 

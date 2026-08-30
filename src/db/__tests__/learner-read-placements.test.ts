@@ -9,7 +9,7 @@ import {
   text,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSql } from '#/db/__tests__/render-sql';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 /**
  * Task 5c moves the LEARNER-FACING read path onto placements
@@ -499,6 +499,14 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     expect(render(calls.leftJoin[2][1])).toBe(
       '("lessons"."id" = "module_lessons"."lesson_id" and "lessons"."is_available" = $1)',
     );
+    // Fix round 1, Part 2c: `eq(lessonsTable.isAvailable, true)` and its
+    // inverse `eq(lessonsTable.isAvailable, false)` render to the exact same
+    // SQL TEXT (`"lessons"."is_available" = $1`) — only the bound parameter
+    // differs. That flip is the WIP filter itself: it would silently invert
+    // which lessons count toward `/app`'s percentages (every available
+    // lesson dropped, every WIP lesson counted), and the string-only
+    // assertion above could not have caught it.
+    expect(renderSqlParams(calls.leftJoin[2][1])).toEqual([true]);
   });
 
   // Mutant: change `.leftJoin(lessonsTable, ...)` in getCourseProgress
@@ -534,27 +542,44 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
   // available ones) would drop out of the agent's corpus rows entirely
   // instead of surviving as a module-only row that keeps its heading.
   // Verified RED the same way.
-  it('getCourseContentForAgent left-joins module_lessons then lessons, never inner', async () => {
+  //
+  // Fix round 1 extension: same treatment as `getMyCourses` above (Task 5e,
+  // Part 2c) — `indexOf(moduleLessonsTable)` proves lessons is joined
+  // immediately off module_lessons, but says nothing about `modulesTable`'s
+  // OWN join two lines earlier in course-content.ts. A mutant flipping THAT
+  // join to `.innerJoin` would drop a course with zero modules out of the
+  // agent's corpus entirely, and passed undetected under the old
+  // `indexOf`-only version of this test. Pinning the full ordered join list
+  // (fixed indices, `innerJoin` asserted empty) closes that gap the same way
+  // it did for `getMyCourses`.
+  it('getCourseContentForAgent left-joins courses -> modules -> module_lessons -> lessons -> lesson_material, never inner', async () => {
     const calls = newJoinCalls();
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
     await getCourseContentForAgent('flight-basics', { userId: 'u1' });
 
-    const joinedTables = calls.leftJoin.map(([table]) => table);
-    const moduleLessonsIndex = joinedTables.indexOf(moduleLessonsTable);
-    expect(moduleLessonsIndex).toBeGreaterThanOrEqual(0);
-    expect(render(calls.leftJoin[moduleLessonsIndex][1])).toBe(
+    // This query has no INNER joins at all — every hop off `courses` must be
+    // LEFT, so a course with zero modules (or a module with zero placements,
+    // or a placement with zero available lessons) still surfaces its own row
+    // instead of vanishing from the agent's corpus.
+    expect(calls.innerJoin).toHaveLength(0);
+
+    expect(calls.leftJoin[0][0]).toBe(modulesTable);
+    expect(render(calls.leftJoin[0][1])).toBe(
+      '"modules"."course_id" = "courses"."id"',
+    );
+    expect(calls.leftJoin[1][0]).toBe(moduleLessonsTable);
+    expect(render(calls.leftJoin[1][1])).toBe(
       '"module_lessons"."module_id" = "modules"."id"',
     );
-
-    const nextJoin = calls.leftJoin[moduleLessonsIndex + 1];
-    expect(nextJoin?.[0]).toBe(lessonsTable);
-    expect(render(nextJoin[1])).toBe(
+    expect(calls.leftJoin[2][0]).toBe(lessonsTable);
+    expect(render(calls.leftJoin[2][1])).toBe(
       '"lessons"."id" = "module_lessons"."lesson_id"',
     );
-
-    expect(calls.innerJoin.some(([t]) => t === moduleLessonsTable)).toBe(false);
-    expect(calls.innerJoin.some(([t]) => t === lessonsTable)).toBe(false);
+    expect(calls.leftJoin[3][0]).toBe(lessonMaterialTable);
+    expect(render(calls.leftJoin[3][1])).toBe(
+      '"lesson_material"."lesson_slug" = "lessons"."slug"',
+    );
   });
 
   // Mutant: in getCourseContentForAgent's `.orderBy(...)`, keep

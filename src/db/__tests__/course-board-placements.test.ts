@@ -10,7 +10,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSql } from '#/db/__tests__/render-sql';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 import { watchedMilestones } from '#/lib/course-milestones';
 
 // admin.ts drags in a long tail of server-only modules (crypto.server,
@@ -402,10 +402,25 @@ describe('getCourseBoard', () => {
         ) as never,
       ),
     );
+    // Fix round 1, Part 2d: comparing two RENDERINGS (both producing
+    // `"module_lessons"."module_id" in ($1)`) never looks at what's actually
+    // inside the array — a mutant passing the wrong id array at
+    // `admin.ts:553` would still render an identical placeholder count and
+    // pass. Asserting params directly closes that.
+    expect(renderSqlParams(learnerCountCalls.innerJoin[0][1] as never)).toEqual(
+      renderSqlParams(
+        and(
+          eq(videoProgressTable.lessonId, moduleLessonsTable.lessonId),
+          inArray(videoProgressTable.progress, watchedMilestones),
+        ) as never,
+      ),
+    );
 
     expect(renderSql(learnerCountCalls.where[0] as never)).toBe(
       renderSql(inArray(moduleLessonsTable.moduleId, [4]) as never),
     );
+    // Same rationale as the join's params assertion above.
+    expect(renderSqlParams(learnerCountCalls.where[0] as never)).toEqual([4]);
 
     expect(learnerCountCalls.groupBy[0]).toBe(moduleLessonsTable.moduleId);
 

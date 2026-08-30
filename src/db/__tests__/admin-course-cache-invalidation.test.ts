@@ -10,7 +10,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSql } from '#/db/__tests__/render-sql';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 // Renders a captured drizzle condition/expression to exact parameterized SQL
 // text — shared house pattern, see `render-sql.ts`'s doc comment. Needed here
@@ -1099,6 +1099,14 @@ describe('resolveLessonPlayback course scoping', () => {
   // the lessonId check) would still resolve videoProvider/videoRef from
   // WHICHEVER course a join happened to return first, silently reintroducing
   // the exact bug fix round 1 closed, undetected by anything in this file.
+  //
+  // Fix round 1 (Important 1): rendered SQL text alone shows column names,
+  // not bound values — `and(eq(lessonsTable.id, courseId), eq(modulesTable
+  // .courseId, lessonId))` (the two integer arguments swapped) renders to
+  // the exact same string, since both are still `$1`/`$2` placeholders in
+  // the same two slots. That swap is exactly the "two integers threaded
+  // through a two-arg function" defect this function's own doc comment
+  // warns about. `renderSqlParams` closes it.
   it('scopes the lesson lookup by BOTH lessonId and the caller-supplied courseId', async () => {
     const whereCalls: SQL[] = [];
     const lessonLookupChain = {
@@ -1132,19 +1140,29 @@ describe('resolveLessonPlayback course scoping', () => {
     expect(render(whereCalls[0])).toBe(
       '("lessons"."id" = $1 and "modules"."course_id" = $2)',
     );
+    expect(renderSqlParams(whereCalls[0])).toEqual([9, 3]);
   });
 
   // Task 5e, Part 3a (production regression): the unique index on
   // module_lessons only covers (module_id, lesson_id), per MODULE — nothing
   // in the DB stops the same lesson from having two placements inside this
   // one course, in two different modules. Before this fix, `resolveLesson
-  // Playback` destructured `[lesson]` from an UNBOUNDED, unordered result:
-  // with two matching rows, which one's videoProvider/videoRef "won" was
-  // arbitrary and could differ between calls, flapping playback. Fixed by
-  // adding `.orderBy(moduleLessonsTable.moduleId).limit(1)`, matching the
+  // Playback` destructured `[lesson]` from an UNBOUNDED, unordered result.
+  // Fix round 1 (Minor): both selected columns (`videoProvider`/`videoRef`)
+  // come from `lessonsTable`, and the WHERE already pins `lessons.id` to one
+  // exact lesson, so every duplicate row carries IDENTICAL provider/ref — the
+  // old code was already value-deterministic and never "flapped" playback.
+  // The actual bug was pure join fan-out: two matching rows instead of one,
+  // an unbounded result shape the code's own `const [lesson] = ...`
+  // destructuring assumed away. `.limit(1)` is a correctness-of-shape and
+  // cost fix (exactly one row fetched, matching what the code always assumed
+  // it was getting), not a value-flapping fix. Fixed by adding
+  // `.orderBy(moduleLessonsTable.moduleId).limit(1)`, matching the
   // "deterministic tie-break" shape `lesson-access.ts` uses for the same
   // class of ambiguity (there, across courses; here, across modules within
-  // one fixed course). Verified RED against dropping both calls: with no
+  // one fixed course — `module_lessons.module_id` is a stable non-null
+  // integer and the right remaining ambiguity axis once `courseId` is
+  // fixed). Verified RED against dropping both calls: with no
   // `.orderBy()`/`.limit()` in the chain, `await db.select()...where(...)`
   // resolves to the (non-array) chain object itself, and destructuring
   // `[lesson]` off it throws instead of returning a lesson.
@@ -1181,7 +1199,15 @@ describe('resolveLessonPlayback course scoping', () => {
     const result = await resolveLessonPlayback(9, 3);
 
     expect(orderByCalls).toHaveLength(1);
-    expect((orderByCalls[0] as { name: string }).name).toBe('module_id');
+    // Fix round 1 (Important 2): asserting by `.name` ('module_id') rather
+    // than by object identity let a mutant ordering by the LEGACY column —
+    // `.orderBy(lessonsTable.moduleId)` — pass undetected: `lessonsTable` is
+    // already in scope as the FROM table, it still has a `module_id` column,
+    // and that column's `.name` is also `'module_id'`. Reverting to the
+    // legacy column for the tie-break is exactly the defect class this whole
+    // migration guards against, so identity is the only check that actually
+    // proves which TABLE's column was used.
+    expect(orderByCalls[0]).toBe(moduleLessonsTable.moduleId);
     expect(limitCalls).toEqual([1]);
     expect(result?.status).toBe('ready');
   });
