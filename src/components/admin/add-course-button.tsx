@@ -1,6 +1,6 @@
 import { Button } from '@base-ui/react/button';
 import { Plus } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 
 /** Styled "Add course" button. Used directly, or as a Base UI Dialog trigger via `render`. */
 export const AddCourseButton = (props: React.ComponentProps<typeof Button>) => {

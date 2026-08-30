@@ -211,3 +211,41 @@ export const addUserEmailAtom = atom('');
  * to store.
  */
 export const addPersonCourseIdsAtom = atom<number[]>([]);
+
+/**
+ * Id of the LIBRARY lesson currently being dragged, or null.
+ *
+ * Separate from `activeDragLessonIdAtom`: that one holds a lesson already
+ * placed in a module, and the two drags mean different things (this one
+ * creates a placement, that one moves an existing one). One atom for both
+ * would make the drag overlay unable to tell which card to draw, and the
+ * whitelist unable to tell a `link` from a `move`.
+ */
+export const activeDragLibraryLessonIdAtom = atom<number | null>(null);
+
+/**
+ * Module ids whose accordion panel is open in the knowledge editor.
+ *
+ * Lifted out of `CourseColumn`'s accordion because a collapsed panel is
+ * `hidden`, so its droppable measures 0×0 and cannot receive a lesson. The
+ * editor auto-expands whatever module a drag hovers, which is only possible
+ * from outside the accordion. Module ids are unique across the org, so one
+ * flat list covers every course in the rail.
+ */
+export const expandedEditorModuleIdsAtom = atom<number[]>([]);
+
+/**
+ * Why the editor is refusing the drop currently under the pointer, or null.
+ *
+ * A refused drag must say why — a silent spring-back reads as broken
+ * software. This drives the note attached to the drag overlay; the same
+ * sentence is announced to screen readers through the DndContext's
+ * accessibility announcements and, on an actual drop, raised as a toast.
+ */
+export const editorDragRefusalAtom = atom<string | null>(null);
+
+/**
+ * The library pane's inline size as a percentage of the editor, moved by the
+ * pane splitter. Clamped by the splitter's handlers, not here.
+ */
+export const editorSplitPercentAtom = atom(40);

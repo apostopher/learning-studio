@@ -68,7 +68,11 @@ export const LibraryLessonCard = ({
           )}
           <button
             type="button"
-            aria-label="Drag to reorder lesson"
+            // Not "drag to reorder": the library has no order to change.
+            // Dragging one of these cards places the lesson in a course, and
+            // the accessible name is the only thing that says so to anyone
+            // who cannot see the two panes side by side.
+            aria-label={`Drag ${lesson.name} into a course module`}
             {...dragHandleProps}
             className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
           >

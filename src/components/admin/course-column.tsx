@@ -18,10 +18,24 @@ export const CourseColumn = ({
   course,
   children,
   onEditCourse,
+  expandedModuleIds,
+  onExpandedModuleIdsChange,
 }: {
   course: BoardCourse;
   children: ReactNode;
   onEditCourse?: () => void;
+  /**
+   * Which modules are open, when the caller drives the accordion.
+   *
+   * Lifted out of the accordion for one reason: a closed `Accordion.Panel` is
+   * `hidden`, so the droppable inside it measures 0×0 and a dragged lesson
+   * can never hit it. The editor has to open the module a drag is hovering,
+   * which it can only do from outside. Omit both props and the accordion
+   * stays uncontrolled — Base UI reads `value={undefined}` as uncontrolled,
+   * so a caller with no interest in drag never has to manage this state.
+   */
+  expandedModuleIds?: number[];
+  onExpandedModuleIdsChange?: (moduleIds: number[]) => void;
 }) => (
   <section className="flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
     <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
@@ -42,7 +56,12 @@ export const CourseColumn = ({
       className="flex-1"
       viewportClassName="h-full"
     >
-      <Accordion.Root multiple className="flex flex-col">
+      <Accordion.Root
+        multiple
+        value={expandedModuleIds}
+        onValueChange={onExpandedModuleIdsChange}
+        className="flex flex-col"
+      >
         {children}
       </Accordion.Root>
     </ScrollArea>
