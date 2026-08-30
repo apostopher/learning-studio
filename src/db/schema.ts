@@ -114,6 +114,7 @@ export const modulesTableRelations = relations(
     }),
     lessons: many(lessonsTable),
     fileAssignments: many(blobFileAssignmentsTable),
+    placements: many(moduleLessonsTable),
   }),
 );
 
@@ -165,6 +166,18 @@ export const lessonsTable = pgTable('lessons', {
   disciplineId: integer('discipline_id')
     .references(() => disciplinesTable.id, { onDelete: 'no action' }),
   /**
+   * The org that owns this lesson. Lessons are org-level library items now,
+   * so an UNPLACED lesson — new, or removed from every course — still has a
+   * home and still appears in the library.
+   *
+   * One owner, deliberately. `course_orgs` allows a course to belong to
+   * several orgs, so the backfill takes the lowest. If genuine cross-org
+   * sharing arrives it becomes a join table, not a rework of this column.
+   */
+  orgId: integer('org_id').references(() => orgsTable.id, {
+    onDelete: 'cascade',
+  }),
+  /**
    * PRESERVED FOR PARITY — no learner-side consumer yet.
    *
    * Re-added so the `iTPS UAS Remote` import could carry the old platform's
@@ -200,6 +213,68 @@ export const lessonsTableRelations = relations(
     fileAssignments: many(blobFileAssignmentsTable),
     favKeyPoints: many(favKeyPointsTable),
     orgLessons: many(orgLessonsTable),
+    placements: many(moduleLessonsTable),
+  }),
+);
+
+/**
+ * Where a lesson sits inside a module — the join that lets ONE lesson row be
+ * taught by many courses.
+ *
+ * `rank` and `dependsOn` live here rather than on the lesson because both are
+ * properties of the placement: a lesson is third in the 2-Week and eighth in
+ * the 16-Week, and its prerequisites can only name lessons the *containing*
+ * course actually holds. The gates (`levels`, `requiredSubscriptions`,
+ * `hasDebrief`, `needsVideoWatch`, `isAvailable`) deliberately stay on the
+ * lesson — see the design doc's "Deferred" section.
+ */
+export const moduleLessonsTable = pgTable(
+  'module_lessons',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    moduleId: integer('module_id')
+      .notNull()
+      .references(() => modulesTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    /**
+     * Explicit prerequisites for this lesson IN THIS COURSE. Moved off
+     * `lesson_dependencies`, whose `lesson_id` was `.unique()` — one global
+     * list per lesson cannot survive a lesson being taught by two courses.
+     */
+    dependsOn: jsonb('depends_on')
+      .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('module_lessons_module_lesson_idx').on(
+      table.moduleId,
+      table.lessonId,
+    ),
+    index('module_lessons_module_id_idx').on(table.moduleId),
+    index('module_lessons_lesson_id_idx').on(table.lessonId),
+  ],
+);
+
+export const dbModuleLessonSchema = createSelectSchema(moduleLessonsTable);
+export type DBModuleLesson = z.infer<typeof dbModuleLessonSchema>;
+
+export const moduleLessonsTableRelations = relations(
+  moduleLessonsTable,
+  ({ one }) => ({
+    module: one(modulesTable, {
+      fields: [moduleLessonsTable.moduleId],
+      references: [modulesTable.id],
+    }),
+    lesson: one(lessonsTable, {
+      fields: [moduleLessonsTable.lessonId],
+      references: [lessonsTable.id],
+    }),
   }),
 );
 
