@@ -155,11 +155,24 @@ export async function patchLessonHandler(
   // swallow a dependency write and silently drop it.
   const dependencies = updateLessonDependenciesInputSchema.safeParse(body);
   if (dependencies.success) {
-    const denied = await guardStructure(request, courseId, 'update');
+    // `dependencies.data.courseId` — the course the CLIENT is asking to
+    // edit — not the top-level `courseId` above (only ever "lesson exists,
+    // resolved to its lowest-id course" for the earlier 404 check). A lesson
+    // taught by several courses has several placements, each with its own
+    // prerequisite list; guarding and writing against any course other than
+    // the one actually being edited would be wrong even though it's a real
+    // course this lesson belongs to. `updateLessonDependencies` itself still
+    // rejects a courseId this lesson has no placement in (`not-found`), so a
+    // forged value can't write a placement that doesn't exist.
+    const denied = await guardStructure(
+      request,
+      dependencies.data.courseId,
+      'update',
+    );
     if (denied) return denied;
     const result = await updateLessonDependencies(
       lessonId,
-      courseId,
+      dependencies.data.courseId,
       dependencies.data.dependsOn,
     );
     if (result.ok) return Response.json(result);

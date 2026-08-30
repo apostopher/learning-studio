@@ -177,9 +177,10 @@ export async function listAdminCourses(
     // Membership now comes from the placement, not `lessons.module_id`: a
     // lesson joins through `module_lessons` scoped to THIS course's own
     // modules, so `countDistinct(lessonsTable.id)` cannot double-count —
-    // `linkLesson` (placements.ts) enforces at most one placement per
-    // (course, lesson), so a lesson never appears twice under the same
-    // course's modules here.
+    // by CONVENTION at most one placement per (course, lesson) (`linkLesson`
+    // in placements.ts checks-then-inserts; the DB's own unique index is
+    // only per module_id+lesson_id, not per course), so a lesson never
+    // appears twice under the same course's modules here.
     .leftJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.moduleId, modulesTable.id),
@@ -695,19 +696,20 @@ export async function setLessonVideo(
 
 export async function resolveLessonPlayback(
   lessonId: number,
+  courseId: number,
 ): Promise<PlaybackResult | null> {
-  // No `courseId` argument here — the route (`lessons.$lessonId.video-
-  // playback.ts`) resolves one only to guard the request, never passes it
-  // through. A lesson can now have several placements, each in a different
-  // course with its own video-provider credential, so "the" course is
-  // genuinely ambiguous. Resolved the same deterministic way `lesson-
-  // access.ts`'s single-course helpers do it: lowest course id, so the
-  // answer is stable across calls rather than depending on row order.
+  // `courseId` is the course the route already resolved (and guarded on) —
+  // fix round 1: previously this ran its own independent "lowest course id"
+  // lookup, which happened to match the route's guard only because both used
+  // the same tie-break, and once a lesson has provider credentials that
+  // differ per course, an independently-resolved course can name one with no
+  // credential at all even though the course actually being viewed has one.
+  // Threading the caller's own courseId makes the permission check and the
+  // credential lookup agree by construction instead of by coincidence.
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
-      courseId: modulesTable.courseId,
     })
     .from(lessonsTable)
     .innerJoin(
@@ -715,12 +717,12 @@ export async function resolveLessonPlayback(
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
     .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .where(eq(lessonsTable.id, lessonId))
-    .orderBy(asc(modulesTable.courseId))
-    .limit(1);
+    .where(
+      and(eq(lessonsTable.id, lessonId), eq(modulesTable.courseId, courseId)),
+    );
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
   const provider = lesson.videoProvider as ProviderId;
-  const creds = await resolveCourseProvider(lesson.courseId, provider);
+  const creds = await resolveCourseProvider(courseId, provider);
   // See resolveLessonPlaybackUncached: a missing credential is an admin
   // misconfiguration, not "no video", and must not collapse into the same
   // 404 the board reads as "nothing assigned".
@@ -744,9 +746,11 @@ export async function getCourseLessonPosters(
   // Scoped by placement to THIS course, not the lesson's legacy module_id:
   // a shared-library lesson's own column can name a module in a different
   // course, which would either miss this course's poster entirely or (via a
-  // stale legacy pointer) leak a poster into the wrong course. `linkLesson`
-  // guarantees at most one placement per (course, lesson), so this join adds
-  // no more than one row per lesson — no dedup needed downstream.
+  // stale legacy pointer) leak a poster into the wrong course. By CONVENTION
+  // at most one placement per (course, lesson) — `linkLesson`'s check-then-
+  // insert, not a DB constraint (the unique index is per module_id+lesson_id,
+  // not per course) — so this join adds no more than one row per lesson in
+  // practice; no dedup needed downstream.
   const rows = await db
     .select({
       id: lessonsTable.id,
@@ -980,13 +984,23 @@ export async function deleteLesson(lessonId: number): Promise<boolean> {
   // (`module_lessons`, not the legacy `lesson_dependencies`), exactly as
   // deleteModule does with array_remove for modules. depends_on is JSONB
   // objects rather than a text array, so the equivalent is a filtered
-  // re-aggregation. Every placement in every course is in scope here — not
-  // just the deleted lesson's own courses — because ANY course's lesson can
-  // list this slug as a prerequisite, not only ones that themselves taught
-  // the deleted lesson. Without this, dependents keep an edge to a lesson
-  // that no longer exists: the gate tolerates it (unresolvable edges are
-  // skipped) but the admin UI would render a chip for a prerequisite that
-  // isn't there, and it accumulates forever.
+  // re-aggregation. Not scoped to the deleted lesson's own (currently
+  // teaching) courses — deliberately broader than the invalidation below,
+  // which IS scoped to `courseSlugs`. Today the two sets are actually equal:
+  // `updateLessonDependencies` only ever lets a lesson depend on a SIBLING
+  // in the same course, validated against that course's placements at write
+  // time, and `linkLesson`/`unlinkLesson` (placements.ts) have zero callers
+  // — so a lesson has exactly one placement for its whole life and no path
+  // exists yet to leave a dangling cross-course reference. This unscoped
+  // WHERE is defence in depth against the day `unlinkLesson` gets a caller:
+  // unlinking a lesson from a course does not (and per that function's own
+  // doc comment, should not) retroactively strip that course's OTHER
+  // lessons' now-stale references to it, so a slug could then survive in a
+  // course that no longer teaches it — this delete-time sweep is the
+  // backstop for exactly that leftover. Without this, dependents keep an
+  // edge to a lesson that no longer exists: the gate tolerates it
+  // (unresolvable edges are skipped) but the admin UI would render a chip
+  // for a prerequisite that isn't there, and it accumulates forever.
   await db
     .update(moduleLessonsTable)
     .set({
@@ -1022,13 +1036,16 @@ export type UpdateLessonDependenciesResult =
  * `courseId`; it must never fan out to every course teaching this lesson,
  * or an edit meant for one course's chain would silently rewrite another's.
  *
- * `courseId` is the course the caller resolved to guard this request (see
- * `patchLessonHandler`) — the same "which course" the permission check
- * already committed to. The route itself has no independent notion yet of
- * "which of this lesson's several placements is being edited"; until that
- * exists, targeting the guard's own course is the closest match to intent
- * and keeps single-placement lessons (the overwhelming majority) behaving
- * exactly as before.
+ * `courseId` is the course the CLIENT is asking to edit — sent explicitly in
+ * the request body (`updateLessonDependenciesInputSchema`), not derived from
+ * the lesson alone. Fix round 1: it was previously the lowest-id course the
+ * route resolved purely to guard the request, which was only ever correct
+ * because `linkLesson` had zero callers and a lesson therefore had exactly
+ * one placement — that justification expires the moment linking ships. A
+ * forged or stale `courseId` can't do damage beyond its own scope: the
+ * `not-found` branch below rejects any courseId this lesson has no placement
+ * in, so the write can only ever land on a real placement, never invent or
+ * hijack one.
  *
  * Prerequisites are confined to the same course: a foreign slug resolves to
  * nothing under `evaluateLessonLock`, which only ever searches the course it

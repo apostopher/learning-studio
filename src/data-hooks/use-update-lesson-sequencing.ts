@@ -84,7 +84,7 @@ export function useUpdateLessonDependencies(courseId: number) {
       const res = await fetch(`/api/admin/lessons/${input.lessonId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dependsOn: input.dependsOn }),
+        body: JSON.stringify({ courseId, dependsOn: input.dependsOn }),
       });
       if (!res.ok) {
         throw new Error(`Failed to update prerequisites (${res.status})`);

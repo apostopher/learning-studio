@@ -452,23 +452,36 @@ describe('course-details cache invalidation', () => {
         videoRef: null,
       },
     ]);
+    const placementInsert = makeChain(undefined);
     const txInsert = vi
       .fn()
       .mockReturnValueOnce(lessonInsert)
-      .mockReturnValueOnce(makeChain(undefined));
+      .mockReturnValueOnce(placementInsert);
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn({ insert: txInsert }),
     );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
-    const created = await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
     expect(maxRankCalls.from[0]).toBe(moduleLessonsTable);
     expect(render(maxRankCalls.where[0])).toBe(
       '"module_lessons"."module_id" = $1',
     );
-    // maxRank '3' + 1 == 4, computed from the placements table's own rank.
-    expect(created.rank).toBe(4);
+    // Important 4 (fix round 1): `created.rank` comes from the lesson
+    // INSERT's `.returning()`, which `makeChain` resolves to its canned
+    // array regardless of what `.values()` received — asserting on it
+    // proves nothing about what the max-rank query computed (setting
+    // `maxRank` to '99' above would still pass a `created.rank === 4`
+    // assertion, since the canned row hardcodes '4'). What actually proves
+    // "3 + 1 == 4, computed from the placements table's own rank" is that
+    // BOTH dual-write inserts — the legacy `lessons` row and its
+    // `module_lessons` placement — received that computed value as the
+    // argument to `.values()`. They must agree: a lesson whose legacy rank
+    // and placement rank disagree from the moment it's created is exactly
+    // the kind of drift this migration exists to stop.
+    expect(lessonInsert.valuesArg).toMatchObject({ rank: '4' });
+    expect(placementInsert.valuesArg).toMatchObject({ rank: '4' });
   });
 
   it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
@@ -758,22 +771,48 @@ describe('course-details cache invalidation', () => {
   // any more, so this mutant needs the old import restored too; still
   // correct-shaped SQL, wrong-behaving (writes a table nothing reads).
   // Verified RED against that mutant.
+  // Important 3 (fix round 1): `toHaveBeenCalledWith(moduleLessonsTable)`
+  // alone proves the TABLE, not the SCOPE — a mutant that adds
+  // `and(eq(moduleLessonsTable.lessonId, lessonId), ...)` (exactly the
+  // regression this requirement names: silently confining the strip to the
+  // deleted lesson's OWN placements instead of every placement) still
+  // targets `moduleLessonsTable` and passes that assertion untouched.
+  // Capturing the actual `.where()` condition and rendering it to exact SQL
+  // pins that the WHERE is nothing but the jsonb-containment check — no
+  // lessonId, no courseId, no join at all.
   it("deleteLesson strips the dead slug from every dependent PLACEMENT's dependsOn, across every course", async () => {
     // Asserts the UPDATE was issued against module_lessons, not that a row
     // changed: without it, dependents keep an edge to a lesson that no
     // longer exists and the admin UI renders a chip for a prerequisite that
     // is not there. deleteModule has done this since it shipped; lessons
     // never did. No course/lesson scoping is added to the WHERE (only a
-    // jsonb-containment check on the dead slug) — deliberately: the deleted
-    // lesson can be a prerequisite for lessons in OTHER courses that never
-    // taught it themselves, and those placements must be reached too.
+    // jsonb-containment check on the dead slug) — deliberately broader than
+    // strictly needed today (see admin.ts's doc comment on this strip): it's
+    // defence in depth against `unlinkLesson` (zero callers currently)
+    // leaving a dangling cross-course reference once it gets one.
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
-    db.update.mockReturnValueOnce(makeChain([]));
+    const whereCalls: SQL[] = [];
+    const updateChain = {
+      set: () => updateChain,
+      where: (condition: SQL) => {
+        whereCalls.push(condition);
+        return updateChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([]).then(resolve, reject),
+    };
+    db.update.mockReturnValueOnce(updateChain);
 
     await deleteLesson(9);
 
     expect(db.update).toHaveBeenCalledWith(moduleLessonsTable);
+    expect(render(whereCalls[0])).toBe(
+      '"module_lessons"."depends_on" @> $1::jsonb',
+    );
   });
 
   it('deleteLesson skips invalidation when nothing was deleted', async () => {
@@ -836,10 +875,61 @@ describe('course-details cache invalidation', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
+  // Important 2 (fix round 1): the (lessonId, courseId) placement lookup and
+  // the sibling-slug lookup are what make this a per-COURSE write at all — a
+  // canned-row mock like `makeChain` discards `.where()` entirely, so
+  // dropping `eq(modulesTable.courseId, courseId)` from either query's
+  // condition (silently reverting to "whichever placement/sibling set comes
+  // back first") would satisfy every OTHER assertion in this describe block
+  // unchanged. Captures both queries' `.where()` conditions and renders them
+  // to exact SQL text instead of trusting the canned rows.
+  it('scopes both the placement lookup and the sibling-slug validation to the given courseId', async () => {
+    const placementWhereCalls: SQL[] = [];
+    const siblingWhereCalls: SQL[] = [];
+    const placementChain = {
+      from: () => placementChain,
+      innerJoin: () => placementChain,
+      where: (condition: SQL) => {
+        placementWhereCalls.push(condition);
+        return placementChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([{ placementId: 55 }]).then(resolve, reject),
+    };
+    const siblingChain = {
+      from: () => siblingChain,
+      innerJoin: () => siblingChain,
+      where: (condition: SQL) => {
+        siblingWhereCalls.push(condition);
+        return siblingChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([{ slug: 'intro' }]).then(resolve, reject),
+    };
+    db.select
+      .mockReturnValueOnce(placementChain)
+      .mockReturnValueOnce(siblingChain);
+    db.update.mockReturnValueOnce(makeChain(undefined));
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
+
+    await updateLessonDependencies(9, 3, ['intro']);
+
+    expect(render(placementWhereCalls[0])).toBe(
+      '("module_lessons"."lesson_id" = $1 and "modules"."course_id" = $2)',
+    );
+    expect(render(siblingWhereCalls[0])).toBe('"modules"."course_id" = $1');
+  });
+
   // Prerequisites are now per-PLACEMENT: this write only ever targets the one
-  // course it was asked to edit (`courseId`, threaded from the route's own
-  // permission-guard resolution — see admin.ts's doc comment on this
-  // function). Mutant: revert to `invalidateAllCoursesForLesson(lessonId)` —
+  // course it was asked to edit (`courseId`, sent by the client — see
+  // admin.ts's doc comment on this function). Mutant: revert to
+  // `invalidateAllCoursesForLesson(lessonId)` —
   // correct-shaped (still invalidates something real), wrong-behaving: it
   // would bust the cache for every OTHER course teaching this lesson even
   // though their own placement's dependsOn was never touched. Verified RED

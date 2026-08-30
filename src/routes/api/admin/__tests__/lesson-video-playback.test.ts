@@ -67,6 +67,23 @@ describe('getVideoPlaybackHandler', () => {
     );
   });
 
+  // Fix round 1 (Minor 1): resolveLessonPlayback previously re-derived its
+  // own course independently of the guard above, via its own "lowest course
+  // id" query — the two happened to agree only because both used the same
+  // tie-break, an invisible coincidence that breaks the moment a lesson's
+  // placements' provider credentials genuinely differ per course. Now the
+  // guard's own resolved courseId is threaded straight through, so a
+  // regression back to an independent lookup can't silently reintroduce
+  // that mismatch.
+  it("threads the guard's own resolved courseId through to resolveLessonPlayback", async () => {
+    getCourseIdForLessonId.mockResolvedValue(99);
+    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+
+    await getVideoPlaybackHandler(req(), '1');
+
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99);
+  });
+
   it('returns a resolved playback the client schema can actually parse', async () => {
     const playback: PlaybackResult = {
       status: 'ready',

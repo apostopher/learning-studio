@@ -203,9 +203,18 @@ export type UpdateModuleSequentialInput = z.infer<
  * Replace a lesson's explicit prerequisites. Slugs only — `moduleSlug` is not
  * accepted or stored, because lesson slugs are globally unique and a stored
  * module goes stale the moment the lesson moves.
+ *
+ * `courseId` names WHICH placement's prerequisites this is: prerequisites
+ * live on the placement (`module_lessons`), not the lesson, and a lesson can
+ * be taught by several courses at once — see admin.ts's `updateLessonDependencies`
+ * doc comment. Required, not derived server-side from the lesson alone,
+ * because a shared-library lesson has no single "the" course to fall back to.
  */
 export const updateLessonDependenciesInputSchema = z
-  .object({ dependsOn: z.array(z.string().min(1)).max(100) })
+  .object({
+    courseId: z.number().int().positive(),
+    dependsOn: z.array(z.string().min(1)).max(100),
+  })
   .strict();
 export type UpdateLessonDependenciesInput = z.infer<
   typeof updateLessonDependenciesInputSchema

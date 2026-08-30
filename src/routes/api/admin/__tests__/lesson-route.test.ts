@@ -135,20 +135,31 @@ describe('patchLessonHandler — course resolution', () => {
 });
 
 describe('patchLessonHandler — dependencies / rename / move (structure)', () => {
-  it('asks for structure:update for a dependency edit', async () => {
+  // Fix round 1 (Important 1/5): `courseId` in the dependency body is now
+  // the course actually being edited, wired all the way through to both the
+  // permission check and the write — NOT the top-level `courseId` this
+  // handler resolves from `getCourseIdForLessonId` for the earlier 404 check
+  // (mocked to 42 in beforeEach). Body deliberately uses a DIFFERENT id (7)
+  // so a regression back to the stale top-level `courseId` fails both
+  // assertions below instead of accidentally matching.
+  it('guards and writes against the courseId the client sent, not the lesson-resolved one', async () => {
     m.updateLessonDependencies.mockResolvedValue({ ok: true, dependsOn: [] });
-    await patchLessonHandler(req({ dependsOn: ['a'] }), '10');
+    await patchLessonHandler(req({ courseId: 7, dependsOn: ['a'] }), '10');
     expect(m.requireCoursePermission).toHaveBeenCalledWith(
       expect.anything(),
-      42,
+      7,
       'structure',
       'update',
     );
+    expect(m.updateLessonDependencies).toHaveBeenCalledWith(10, 7, ['a']);
   });
 
   it('403s a refused actor without writing dependencies', async () => {
     m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
-    const res = await patchLessonHandler(req({ dependsOn: ['a'] }), '10');
+    const res = await patchLessonHandler(
+      req({ courseId: 7, dependsOn: ['a'] }),
+      '10',
+    );
     expect(res.status).toBe(403);
     expect(m.updateLessonDependencies).not.toHaveBeenCalled();
   });
