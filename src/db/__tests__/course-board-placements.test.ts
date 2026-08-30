@@ -3,6 +3,7 @@ import {
   boolean,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -50,6 +51,16 @@ const lessonsTable = pgTable('lessons', {
 const moduleDependenciesTable = pgTable('module_dependencies', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
+  dependsOn: jsonb('depends_on'),
+});
+// countLearnersByModule (Task 5d) now attributes learners through the
+// PLACEMENT's own module_id column, not the lesson's legacy one — needs a
+// real pgTable so its select's column reference can be checked by identity.
+const moduleLessonsTable = pgTable('module_lessons', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
+  lessonId: integer('lesson_id'),
+  rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
 const lessonDependenciesTable = pgTable('lesson_dependencies', {
@@ -111,6 +122,7 @@ vi.mock('#/db/schema', () => ({
   coursesTable,
   modulesTable,
   lessonsTable,
+  moduleLessonsTable,
   moduleDependenciesTable,
   lessonDependenciesTable,
   videoProgressTable,
@@ -265,5 +277,53 @@ describe('getCourseBoard', () => {
     const board = await getCourseBoard(3);
 
     expect(board?.modules[0].lessons.map((l) => l.id)).toEqual([10]);
+  });
+
+  // Task 5d: countLearnersByModule must attribute learners by the
+  // PLACEMENT's module (module_lessons.module_id), not the lesson's own
+  // legacy module_id — a shared-library lesson's legacy column can name a
+  // module in a completely different course. This mocked db returns canned
+  // rows regardless of the query built, so a canned-row assertion alone
+  // cannot tell "grouped by the right column" from "grouped by the wrong
+  // one" — the fixture instead inspects the actual selection object
+  // countLearnersByModule builds (db.select's own call argument), checking
+  // BY REFERENCE which table's `.moduleId` column it names. Mutant: revert
+  // the select's `moduleId` field (and its `.where`/`.groupBy`) back to
+  // `lessonsTable.moduleId` — correct-shaped (still an integer column,
+  // still compiles), wrong-behaving (attributes this course's learners to
+  // whichever module the lesson's own row happens to claim). Verified RED:
+  // the mutant's captured column is `lessonsTable.moduleId`, which fails
+  // `toBe(moduleLessonsTable.moduleId)`.
+  it("countLearnersByModule attributes a learner to the placement's module, not the lesson's legacy module", async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([{ id: 3, name: 'Course', slug: 'c' }])) // course
+      .mockReturnValueOnce(makeChain([{ id: 4, name: 'Module', slug: 'm' }])); // modules
+    getPlacementsForCourse.mockResolvedValue([
+      { id: 1, moduleId: 4, lessonId: 9, rank: 1, dependsOn: [] },
+    ]);
+    db.select
+      .mockReturnValueOnce(
+        // The lesson's own (legacy) module_id claims module 99 — a module
+        // this course does not even have — while its placement (above)
+        // says module 4. Correct code never reads this column at all for
+        // learner attribution.
+        makeChain([
+          { id: 9, moduleId: 99, name: 'Lesson 9', slug: 'l9', rank: '1' },
+        ]),
+      ) // lessons
+      .mockReturnValueOnce(makeChain([])) // module dependencies
+      .mockReturnValueOnce(makeChain([{ moduleId: 4, learners: '2' }])); // learner counts
+
+    const board = await getCourseBoard(3);
+
+    // The 5th db.select call is countLearnersByModule's own query.
+    const learnerCountsCallArg = db.select.mock.calls[4]?.[0] as {
+      moduleId: unknown;
+    };
+    expect(learnerCountsCallArg.moduleId).toBe(moduleLessonsTable.moduleId);
+    // Sanity check on the JS-layer mapping this query result feeds: the
+    // canned row's moduleId (4, the placement's module) is what the board
+    // must report the learner count under.
+    expect(board?.modules[0].learnerCount).toBe(2);
   });
 });

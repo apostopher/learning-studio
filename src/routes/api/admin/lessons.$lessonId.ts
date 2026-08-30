@@ -159,6 +159,7 @@ export async function patchLessonHandler(
     if (denied) return denied;
     const result = await updateLessonDependencies(
       lessonId,
+      courseId,
       dependencies.data.dependsOn,
     );
     if (result.ok) return Response.json(result);

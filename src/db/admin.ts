@@ -26,7 +26,6 @@ import type { DBCourse } from '#/db/schema';
 import {
   coursesTable,
   courseVideoProvidersTable,
-  lessonDependenciesTable,
   lessonsTable,
   moduleDependenciesTable,
   moduleLessonsTable,
@@ -175,7 +174,17 @@ export async function listAdminCourses(
     })
     .from(coursesTable)
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
+    // Membership now comes from the placement, not `lessons.module_id`: a
+    // lesson joins through `module_lessons` scoped to THIS course's own
+    // modules, so `countDistinct(lessonsTable.id)` cannot double-count —
+    // `linkLesson` (placements.ts) enforces at most one placement per
+    // (course, lesson), so a lesson never appears twice under the same
+    // course's modules here.
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.moduleId, modulesTable.id),
+    )
+    .leftJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
     .where(courseIds ? inArray(coursesTable.id, courseIds) : undefined)
     .groupBy(coursesTable.id)
     .orderBy(desc(coursesTable.updatedAt), desc(coursesTable.id));
@@ -321,10 +330,15 @@ export async function createLesson(input: {
   let slug = base;
   for (let n = 2; takenSet.has(slug); n++) slug = `${base}-${n}`;
 
+  // Scoped by placement, not `lessons.module_id`: `linkLesson`/`movePlacement`
+  // never touch the legacy column, so the max rank among lessons whose legacy
+  // `module_id` names this module can already disagree with what
+  // `module_lessons` actually holds for it — that staleness is the exact bug
+  // this scoping fixes.
   const [{ maxRank }] = await db
-    .select({ maxRank: sql<string | null>`max(${lessonsTable.rank})` })
-    .from(lessonsTable)
-    .where(eq(lessonsTable.moduleId, input.moduleId));
+    .select({ maxRank: sql<string | null>`max(${moduleLessonsTable.rank})` })
+    .from(moduleLessonsTable)
+    .where(eq(moduleLessonsTable.moduleId, input.moduleId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
 
   // Transitional dual-write (Task 5a fix round 1): readers resolve a
@@ -396,29 +410,34 @@ export async function createLesson(input: {
  * people out mid-module on their next page load, with no grandfathering, so
  * the count has to be on screen while the decision is made.
  *
- * Joined directly on `videos_progress.lesson_id = lessons.id` — both
- * integers, no cast needed now that progress is keyed on lesson id rather
- * than the Synthesia video id. Only modules with progress appear in the
- * result; callers default the rest to zero.
+ * Joined directly on `videos_progress.lesson_id = module_lessons.lesson_id` —
+ * both integers, no cast needed now that progress is keyed on lesson id
+ * rather than the Synthesia video id. Attributed by the PLACEMENT's module
+ * (`module_lessons.module_id`), not the lesson's legacy `module_id`: a
+ * shared-library lesson's own column can name a module in a DIFFERENT
+ * course entirely, which would attribute its learners to the wrong module
+ * (or one outside `moduleIds` altogether, silently dropping them). Only
+ * modules with progress appear in the result; callers default the rest to
+ * zero.
  */
 async function countLearnersByModule(
   moduleIds: number[],
 ): Promise<Map<number, number>> {
   const rows = await db
     .select({
-      moduleId: lessonsTable.moduleId,
+      moduleId: moduleLessonsTable.moduleId,
       learners: countDistinct(videoProgressTable.userId),
     })
-    .from(lessonsTable)
+    .from(moduleLessonsTable)
     .innerJoin(
       videoProgressTable,
       and(
-        eq(videoProgressTable.lessonId, lessonsTable.id),
+        eq(videoProgressTable.lessonId, moduleLessonsTable.lessonId),
         inArray(videoProgressTable.progress, watchedMilestones),
       ),
     )
-    .where(inArray(lessonsTable.moduleId, moduleIds))
-    .groupBy(lessonsTable.moduleId);
+    .where(inArray(moduleLessonsTable.moduleId, moduleIds))
+    .groupBy(moduleLessonsTable.moduleId);
 
   return new Map(rows.map((r) => [r.moduleId, Number(r.learners)]));
 }
@@ -677,6 +696,13 @@ export async function setLessonVideo(
 export async function resolveLessonPlayback(
   lessonId: number,
 ): Promise<PlaybackResult | null> {
+  // No `courseId` argument here — the route (`lessons.$lessonId.video-
+  // playback.ts`) resolves one only to guard the request, never passes it
+  // through. A lesson can now have several placements, each in a different
+  // course with its own video-provider credential, so "the" course is
+  // genuinely ambiguous. Resolved the same deterministic way `lesson-
+  // access.ts`'s single-course helpers do it: lowest course id, so the
+  // answer is stable across calls rather than depending on row order.
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
@@ -684,8 +710,14 @@ export async function resolveLessonPlayback(
       courseId: modulesTable.courseId,
     })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
-    .where(eq(lessonsTable.id, lessonId));
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .where(eq(lessonsTable.id, lessonId))
+    .orderBy(asc(modulesTable.courseId))
+    .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
   const provider = lesson.videoProvider as ProviderId;
   const creds = await resolveCourseProvider(lesson.courseId, provider);
@@ -709,6 +741,12 @@ export async function resolveLessonPlayback(
 export async function getCourseLessonPosters(
   courseId: number,
 ): Promise<Record<number, string>> {
+  // Scoped by placement to THIS course, not the lesson's legacy module_id:
+  // a shared-library lesson's own column can name a module in a different
+  // course, which would either miss this course's poster entirely or (via a
+  // stale legacy pointer) leak a poster into the wrong course. `linkLesson`
+  // guarantees at most one placement per (course, lesson), so this join adds
+  // no more than one row per lesson — no dedup needed downstream.
   const rows = await db
     .select({
       id: lessonsTable.id,
@@ -716,7 +754,11 @@ export async function getCourseLessonPosters(
       ref: lessonsTable.videoRef,
     })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .where(
       and(
         eq(modulesTable.courseId, courseId),
@@ -835,12 +877,17 @@ export async function moveLesson(input: {
         updatedAt: sql`now()`,
       })
       .where(eq(lessonsTable.id, input.lessonId))
+      // `moduleId` is NOT read back here: the caller's own `input
+      // .targetModuleId` — just written above — is authoritative, and
+      // reading it from `lessonsTable` would be a read of the legacy column
+      // this task is removing every OTHER read of.
       .returning({
         id: lessonsTable.id,
         rank: lessonsTable.rank,
-        moduleId: lessonsTable.moduleId,
       });
-    return updatedLesson ?? null;
+    return updatedLesson
+      ? { ...updatedLesson, moduleId: input.targetModuleId }
+      : null;
   });
   if (!updated) return null;
 
@@ -929,23 +976,29 @@ export async function deleteLesson(lessonId: number): Promise<boolean> {
     .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
   if (!deleted) return false;
 
-  // Strip the dead slug from every dependent, exactly as deleteModule does
-  // with array_remove. depends_on is JSONB objects rather than a text array,
-  // so the equivalent is a filtered re-aggregation. Without this, dependents
-  // keep an edge to a lesson that no longer exists: the gate tolerates it
-  // (unresolvable edges are skipped) but the admin UI would render a chip for
-  // a prerequisite that isn't there, and it accumulates forever.
+  // Strip the dead slug from every dependent PLACEMENT's `dependsOn`
+  // (`module_lessons`, not the legacy `lesson_dependencies`), exactly as
+  // deleteModule does with array_remove for modules. depends_on is JSONB
+  // objects rather than a text array, so the equivalent is a filtered
+  // re-aggregation. Every placement in every course is in scope here — not
+  // just the deleted lesson's own courses — because ANY course's lesson can
+  // list this slug as a prerequisite, not only ones that themselves taught
+  // the deleted lesson. Without this, dependents keep an edge to a lesson
+  // that no longer exists: the gate tolerates it (unresolvable edges are
+  // skipped) but the admin UI would render a chip for a prerequisite that
+  // isn't there, and it accumulates forever.
   await db
-    .update(lessonDependenciesTable)
+    .update(moduleLessonsTable)
     .set({
       dependsOn: sql`coalesce((
         select jsonb_agg(entry)
-        from jsonb_array_elements(${lessonDependenciesTable.dependsOn}) entry
+        from jsonb_array_elements(${moduleLessonsTable.dependsOn}) entry
         where entry->>'lessonSlug' <> ${deleted.slug}
       ), '[]'::jsonb)`,
+      updatedAt: sql`now()`,
     })
     .where(
-      sql`${lessonDependenciesTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: deleted.slug }])}::jsonb`,
+      sql`${moduleLessonsTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: deleted.slug }])}::jsonb`,
     );
 
   await Promise.all(
@@ -960,7 +1013,22 @@ export type UpdateLessonDependenciesResult =
   | { ok: false; reason: 'unknown-lessons'; slugs: string[] };
 
 /**
- * Replace one lesson's explicit prerequisites.
+ * Replace one lesson's explicit prerequisites, IN ONE COURSE.
+ *
+ * Prerequisites now live on the placement (`module_lessons.depends_on`), not
+ * on the lesson itself — see that table's doc comment in schema.ts. A lesson
+ * shared by several courses can therefore have a DIFFERENT prerequisite list
+ * per course, and this write only ever touches the one placement named by
+ * `courseId`; it must never fan out to every course teaching this lesson,
+ * or an edit meant for one course's chain would silently rewrite another's.
+ *
+ * `courseId` is the course the caller resolved to guard this request (see
+ * `patchLessonHandler`) — the same "which course" the permission check
+ * already committed to. The route itself has no independent notion yet of
+ * "which of this lesson's several placements is being edited"; until that
+ * exists, targeting the guard's own course is the closest match to intent
+ * and keeps single-placement lessons (the overwhelming majority) behaving
+ * exactly as before.
  *
  * Prerequisites are confined to the same course: a foreign slug resolves to
  * nothing under `evaluateLessonLock`, which only ever searches the course it
@@ -975,24 +1043,42 @@ export type UpdateLessonDependenciesResult =
  */
 export async function updateLessonDependencies(
   lessonId: number,
+  courseId: number,
   dependsOn: string[],
 ): Promise<UpdateLessonDependenciesResult> {
+  // The placement this write targets: THIS lesson, placed in THIS course.
+  // `not-found` covers both "no such lesson" and "this lesson isn't taught
+  // by this course" — the caller (patchLessonHandler) already 404s before
+  // resolving a courseId at all when the lesson doesn't exist, so in
+  // practice this branch fires for the latter.
   const [target] = await db
-    .select({ courseId: modulesTable.courseId })
-    .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
-    .where(eq(lessonsTable.id, lessonId));
+    .select({ placementId: moduleLessonsTable.id })
+    .from(moduleLessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .where(
+      and(
+        eq(moduleLessonsTable.lessonId, lessonId),
+        eq(modulesTable.courseId, courseId),
+      ),
+    );
   if (!target) return { ok: false, reason: 'not-found' };
 
   // Order-preserving dedupe: a duplicated slug is a client bug, not a reason
   // to fail the write, but it must not reach a column the UI renders as chips.
   const next = [...new Set(dependsOn)];
 
+  // Siblings are every lesson placed in THIS course — reached through the
+  // placement, not the lessons' own (legacy) module_id, for the same reason
+  // as everywhere else in this file.
   const siblings = await db
     .select({ slug: lessonsTable.slug })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
-    .where(eq(modulesTable.courseId, target.courseId));
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .where(eq(modulesTable.courseId, courseId));
   const known = new Set(siblings.map((s) => s.slug));
   const unknown = next.filter((slug) => !known.has(slug));
   if (unknown.length > 0) {
@@ -1004,25 +1090,21 @@ export async function updateLessonDependencies(
   // lesson moves module — which is exactly how gates used to vanish silently.
   const rows = next.map((lessonSlug) => ({ lessonSlug }));
 
-  // Clearing every prerequisite deletes the row rather than storing an empty
-  // array, so "no explicit prerequisites" has one representation instead of
-  // two — and an empty array would otherwise read as "off the chain", which
-  // is the opposite of what clearing means.
-  if (rows.length === 0) {
-    await db
-      .delete(lessonDependenciesTable)
-      .where(eq(lessonDependenciesTable.lessonId, lessonId));
-  } else {
-    await db
-      .insert(lessonDependenciesTable)
-      .values({ lessonId, dependsOn: rows })
-      .onConflictDoUpdate({
-        target: lessonDependenciesTable.lessonId,
-        set: { dependsOn: rows },
-      });
-  }
+  // No delete-vs-upsert branch needed here, unlike the old
+  // `lesson_dependencies` row (which could be absent entirely): every
+  // placement always has a `module_lessons` row with a `depends_on` column
+  // that defaults to `[]`, so "no explicit prerequisites" already has
+  // exactly one representation — an empty array — with nothing else to
+  // reconcile it against.
+  await db
+    .update(moduleLessonsTable)
+    .set({ dependsOn: rows, updatedAt: sql`now()` })
+    .where(eq(moduleLessonsTable.id, target.placementId));
 
-  await invalidateAllCoursesForLesson(lessonId);
+  // Only THIS course's cache needs invalidating — the write touched exactly
+  // one placement, so every other course teaching this lesson still shows
+  // its own, unaffected, prerequisite chain.
+  await invalidateCourseDetailsCache(await getCourseSlugForCourseId(courseId));
   return { ok: true, dependsOn: rows };
 }
 

@@ -1,14 +1,28 @@
 // @vitest-environment node
+import type { SQL } from 'drizzle-orm';
 import {
   boolean,
   integer,
   jsonb,
   numeric,
+  PgDialect,
   pgTable,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Renders a captured drizzle condition/expression to exact parameterized SQL
+// text — house pattern from library-placement-scoping.test.ts /
+// learner-read-placements.test.ts. Needed here (Task 5d) to prove a query
+// reads/writes through `module_lessons`/its own column rather than the
+// legacy `lessons.module_id`/`lesson_dependencies` — a canned-row mock
+// returns whatever it's told regardless of which table was actually queried,
+// so only rendering the real condition tree can catch that class of mutant.
+const dialect = new PgDialect();
+function render(condition: SQL): string {
+  return dialect.sqlToQuery(condition).sql;
+}
 
 // admin.ts pulls in real drizzle table objects, `#/lib/crypto.server` (which
 // reads CREDENTIALS_ENCRYPTION_KEY off `#/env` at import time), and
@@ -63,14 +77,6 @@ const moduleLessonsTable = pgTable('module_lessons', {
   rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
-// deleteLesson strips the dead slug from every dependent's depends_on, so
-// this needs to be a real pgTable for the jsonb update to build.
-const lessonDependenciesTable = pgTable('lesson_dependencies', {
-  id: integer('id').primaryKey(),
-  lessonId: integer('lesson_id'),
-  dependsOn: jsonb('depends_on'),
-});
-
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -185,7 +191,6 @@ vi.mock('#/db/schema', () => ({
   coursesTable,
   modulesTable,
   moduleLessonsTable,
-  lessonDependenciesTable,
   lessonsTable,
   courseVideoProvidersTable,
   userProfileRolesTable,
@@ -397,6 +402,73 @@ describe('course-details cache invalidation', () => {
       rank: '1',
       dependsOn: [],
     });
+  });
+
+  // Task 5d: `linkLesson`/`movePlacement` never touch `lessons.module_id`, so
+  // the max rank among lessons whose LEGACY module_id names this module can
+  // already disagree with what `module_lessons` actually holds — a fresh
+  // lesson computed off the stale column could collide with an existing
+  // placement's rank, or leave a gap. Mutant: revert the max-rank query back
+  // to `.from(lessonsTable).where(eq(lessonsTable.moduleId, ...))` —
+  // correct-shaped (still an integer FK, still compiles), wrong-behaving
+  // (silently reads the wrong table the moment a placement and its lesson's
+  // legacy module_id diverge). Verified RED: rendering that mutant's WHERE
+  // produces `"lessons"."module_id" = $1`, not the module_lessons text below.
+  it("createLesson's new-lesson rank is computed from placements in the target module, not legacy lessons.rank", async () => {
+    const maxRankCalls: { from: unknown[]; where: SQL[] } = {
+      from: [],
+      where: [],
+    };
+    const maxRankChain = {
+      from: (table: unknown) => {
+        maxRankCalls.from.push(table);
+        return maxRankChain;
+      },
+      where: (condition: SQL) => {
+        maxRankCalls.where.push(condition);
+        return maxRankChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([{ maxRank: '3' }]).then(resolve, reject),
+    };
+    db.select
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(maxRankChain);
+    const lessonInsert = makeChain([
+      {
+        id: 2,
+        name: 'Stall Recovery',
+        slug: 'stall-recovery',
+        rank: '4',
+        isAvailable: false,
+        hasDebrief: false,
+        needsVideoWatch: false,
+        requiredSubscriptions: [],
+        videoId: null,
+        videoProvider: null,
+        videoRef: null,
+      },
+    ]);
+    const txInsert = vi
+      .fn()
+      .mockReturnValueOnce(lessonInsert)
+      .mockReturnValueOnce(makeChain(undefined));
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ insert: txInsert }),
+    );
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+
+    const created = await createLesson({ moduleId: 7, name: 'Stall Recovery' });
+
+    expect(maxRankCalls.from[0]).toBe(moduleLessonsTable);
+    expect(render(maxRankCalls.where[0])).toBe(
+      '"module_lessons"."module_id" = $1',
+    );
+    // maxRank '3' + 1 == 4, computed from the placements table's own rank.
+    expect(created.rank).toBe(4);
   });
 
   it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
@@ -677,18 +749,31 @@ describe('course-details cache invalidation', () => {
     ).toEqual(['aerobatics', 'flight-basics']);
   });
 
-  it('deleteLesson strips the dead slug from every dependent', async () => {
-    // Asserts the UPDATE was issued, not that a row changed: without it,
-    // dependents keep an edge to a lesson that no longer exists and the admin
-    // UI renders a chip for a prerequisite that is not there. deleteModule has
-    // done this since it shipped; lessons never did.
+  // Task 5d: prerequisites now live on the PLACEMENT (`module_lessons
+  // .depends_on`), not the legacy per-lesson `lesson_dependencies` row — the
+  // board reads placement dependsOn, so stripping the old table left this a
+  // silent no-op (the dead slug's chip never actually disappeared). Mutant:
+  // revert `db.update(moduleLessonsTable)` back to `db.update
+  // (lessonDependenciesTable)` — that table isn't even imported by admin.ts
+  // any more, so this mutant needs the old import restored too; still
+  // correct-shaped SQL, wrong-behaving (writes a table nothing reads).
+  // Verified RED against that mutant.
+  it("deleteLesson strips the dead slug from every dependent PLACEMENT's dependsOn, across every course", async () => {
+    // Asserts the UPDATE was issued against module_lessons, not that a row
+    // changed: without it, dependents keep an edge to a lesson that no
+    // longer exists and the admin UI renders a chip for a prerequisite that
+    // is not there. deleteModule has done this since it shipped; lessons
+    // never did. No course/lesson scoping is added to the WHERE (only a
+    // jsonb-containment check on the dead slug) — deliberately: the deleted
+    // lesson can be a prerequisite for lessons in OTHER courses that never
+    // taught it themselves, and those placements must be reached too.
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
     db.update.mockReturnValueOnce(makeChain([]));
 
     await deleteLesson(9);
 
-    expect(db.update).toHaveBeenCalledWith(lessonDependenciesTable);
+    expect(db.update).toHaveBeenCalledWith(moduleLessonsTable);
   });
 
   it('deleteLesson skips invalidation when nothing was deleted', async () => {
@@ -701,26 +786,94 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
-  it('updateLessonDependencies invalidates every course teaching the lesson', async () => {
+  // Task 5d: this was a SILENT NO-OP bug, not a refactor — the function
+  // wrote `lesson_dependencies` while the board (and everything else) reads
+  // `module_lessons.depends_on`. An admin saving prerequisites got a 200 and
+  // a cache invalidation, and the chips never changed. Mutant: revert the
+  // write back to `db.insert(lessonDependenciesTable)`/`db.delete
+  // (lessonDependenciesTable)` — that table isn't imported by admin.ts any
+  // more, so restoring the mutant needs the import back too; the write
+  // still "succeeds" (200, `{ ok: true, ... }`), just against a table
+  // nothing downstream reads. Verified RED against that mutant (`db.update`
+  // is never called with `moduleLessonsTable`, and `db.insert`/`db.delete`
+  // fire instead).
+  it('updateLessonDependencies writes module_lessons.dependsOn for the placement in the given course, never lesson_dependencies', async () => {
     db.select
-      .mockReturnValueOnce(makeChain([{ courseId: 3 }])) // owning course lookup
-      .mockReturnValueOnce(makeChain([])); // sibling lesson slugs in that course
-    db.delete.mockReturnValueOnce(makeChain(undefined));
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
-      'flight-basics',
-      'aerobatics',
-    ]);
+      .mockReturnValueOnce(makeChain([{ placementId: 55 }])) // this lesson's placement in courseId 3
+      .mockReturnValueOnce(makeChain([{ slug: 'intro' }])); // sibling lesson slugs in that course
+    const setCalls: unknown[] = [];
+    const whereCalls: SQL[] = [];
+    const updateChain = {
+      set: (v: unknown) => {
+        setCalls.push(v);
+        return updateChain;
+      },
+      where: (condition: SQL) => {
+        whereCalls.push(condition);
+        return updateChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve(undefined).then(resolve, reject),
+    };
+    db.update.mockReturnValueOnce(updateChain);
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
 
-    const result = await updateLessonDependencies(9, []);
+    const result = await updateLessonDependencies(9, 3, ['intro']);
 
-    expect(result).toEqual({ ok: true, dependsOn: [] });
-    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
-    // Reverting to single-slug invalidation would still pass a bare
-    // `toHaveBeenCalledWith` on one of these — asserting the full sorted set
-    // is what catches that regression.
-    expect(
-      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
-    ).toEqual(['aerobatics', 'flight-basics']);
+    expect(result).toEqual({
+      ok: true,
+      dependsOn: [{ lessonSlug: 'intro' }],
+    });
+    expect(db.update).toHaveBeenCalledWith(moduleLessonsTable);
+    expect(setCalls[0]).toMatchObject({
+      dependsOn: [{ lessonSlug: 'intro' }],
+    });
+    expect(render(whereCalls[0])).toBe('"module_lessons"."id" = $1');
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  // Prerequisites are now per-PLACEMENT: this write only ever targets the one
+  // course it was asked to edit (`courseId`, threaded from the route's own
+  // permission-guard resolution — see admin.ts's doc comment on this
+  // function). Mutant: revert to `invalidateAllCoursesForLesson(lessonId)` —
+  // correct-shaped (still invalidates something real), wrong-behaving: it
+  // would bust the cache for every OTHER course teaching this lesson even
+  // though their own placement's dependsOn was never touched. Verified RED
+  // (that mutant calls `getCourseSlugsForLessonId`, which this test never
+  // stubs to resolve — the assertions below want `getCourseSlugForCourseId`
+  // instead).
+  it('updateLessonDependencies invalidates only the course it was asked to edit', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([{ placementId: 55 }]))
+      .mockReturnValueOnce(makeChain([]));
+    db.update.mockReturnValueOnce(makeChain(undefined));
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
+    // Stubbed even though correct code never calls it: without this, the
+    // regression mutant this test guards against (falling back to
+    // `invalidateAllCoursesForLesson`) crashes on an unmocked resolved
+    // value instead of failing the assertions below on its own terms.
+    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['aerobatics']);
+
+    await updateLessonDependencies(9, 3, []);
+
+    expect(lessonAccess.getCourseSlugForCourseId).toHaveBeenCalledWith(3);
+    expect(courseCache.invalidate).toHaveBeenCalledTimes(1);
+    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    expect(lessonAccess.getCourseSlugsForLessonId).not.toHaveBeenCalled();
+  });
+
+  it('updateLessonDependencies reports not-found when the lesson has no placement in that course', async () => {
+    db.select.mockReturnValueOnce(makeChain([])); // no matching placement
+
+    const result = await updateLessonDependencies(9, 3, []);
+
+    expect(result).toEqual({ ok: false, reason: 'not-found' });
+    expect(db.update).not.toHaveBeenCalled();
+    expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
   it('updateModule invalidates the owning course, resolved from moduleId', async () => {
