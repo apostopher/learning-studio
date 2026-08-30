@@ -757,3 +757,52 @@ export function hasPermissionKey(
     permissions.includes(permissionKey(entity, action))
   );
 }
+
+/**
+ * A lesson as the org library shows it. Deliberately carries none of a
+ * lesson's gates (`levels`, `requiredSubscriptions`, `hasDebrief`) — those
+ * are edited on the lesson's own config screen, not shown on a library card.
+ */
+export const libraryLessonSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  /** A lesson counts as configured once it has a video — same rule as `boardLessonSchema`. */
+  isConfigured: z.boolean(),
+  isAvailable: z.boolean(),
+  /**
+   * How many distinct courses teach this lesson. Drives the "in N courses"
+   * badge — a cross-reference, not a status, so it never dims the card: a
+   * lesson can be in the 2-Week and not the Mini.
+   */
+  courseCount: z.number(),
+});
+export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
+
+/** One discipline column of the library, with the lessons grouped under it. */
+export const libraryDisciplineSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  lessons: z.array(libraryLessonSchema),
+});
+export type LibraryDiscipline = z.infer<typeof libraryDisciplineSchema>;
+
+/**
+ * The whole org's library: one column per discipline, plus a leftmost
+ * "Untitled" column for lessons with no discipline assigned yet.
+ */
+export const orgLibrarySchema = z.object({
+  disciplines: z.array(libraryDisciplineSchema),
+  /**
+   * Lessons with `disciplineId IS NULL`, rendered as the leftmost "Untitled"
+   * column — not a synthetic discipline row, so it never collides with a
+   * real discipline named "Untitled".
+   */
+  untitled: z.array(libraryLessonSchema),
+});
+export type OrgLibrary = z.infer<typeof orgLibrarySchema>;
+
+/** The horizontal rail of course boards shown beside the library. */
+export const orgEditorBoardSchema = z.array(courseBoardSchema);
+export type OrgEditorBoard = z.infer<typeof orgEditorBoardSchema>;
