@@ -5,15 +5,20 @@ import {
   isAnyCourseStaff,
 } from '#/db/course-staff';
 import {
+  getDisciplineRoleNames,
+  getStaffRoleNames as getDisciplineStaffRoleNames,
+} from '#/db/discipline-staff';
+import {
   getRoleNamesForProfile,
   getUserPermissions,
   hasPermission,
 } from '#/db/permissions';
 import { getUserRoleNames } from '#/db/user-roles';
-import { ForbiddenError } from '#/lib/admin-functions.server';
+import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import {
   hasAdminAccess,
   isCourseScopedEntity,
+  isDisciplineScopedEntity,
   OWNER_ROLE,
   type PermissionAction,
   type PermissionEntity,
@@ -143,6 +148,99 @@ export async function requireCoursePermission(
 }
 
 /**
+ * Guard for the one per-DISCIPLINE entity: `content`.
+ *
+ * Mirrors `requireCoursePermission` in shape and failure mode — same
+ * `ForbiddenError`, same union-of-global-and-scoped-roles resolution, same
+ * tripwire against a caller asking the wrong guard — scoped to
+ * `discipline_staff` instead of `course_staff`.
+ *
+ * Deliberately has NO admin floor, for the same reason `requireCoursePermission`
+ * has none: `admin` is deliberately NOT granted `content` (see
+ * `migrate-staff-roles.ts:76-80`) — senior staff administer the university
+ * and do not author its syllabi. An admin who needs a discipline's authority
+ * assigns themselves as a subject-expert, which leaves a record in
+ * `discipline_staff.assigned_by`.
+ *
+ * Returns void rather than an actor (contrast `requireCoursePermission`,
+ * which returns `CourseActor`): its one caller,
+ * `requireLessonContentPermission`, has no further use for the resolved role
+ * list. Widen this the day a caller does.
+ */
+export async function requireDisciplinePermission(
+  headers: Headers,
+  disciplineId: number,
+  entity: PermissionEntity,
+  action: PermissionAction,
+): Promise<void> {
+  // Same tripwire as `requireCoursePermission`: a caller reaching this guard
+  // with an entity `discipline_staff` has nothing to say about is a wiring
+  // mistake, not a denied request, so it surfaces as an uncaught 500 rather
+  // than a `ForbiddenError` dressed up as a working refusal.
+  if (!isDisciplineScopedEntity(entity)) {
+    throw new Error(
+      `requireDisciplinePermission called with '${entity}', which is not discipline-scoped`,
+    );
+  }
+
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) throw new ForbiddenError();
+
+  const [globalRoles, disciplineRoles] = await Promise.all([
+    getUserRoleNames(userId),
+    getDisciplineRoleNames(userId, disciplineId),
+  ]);
+
+  // No role anywhere — globally or on this discipline — is no authority at
+  // all. See `requireCoursePermission` for why this is checked explicitly
+  // rather than letting an empty role list fall through to the grants query.
+  const roles = [...globalRoles, ...disciplineRoles];
+  if (roles.length === 0) throw new ForbiddenError();
+
+  const permissions = await getUserPermissions(roles);
+  if (!hasPermission(permissions, entity, action)) throw new ForbiddenError();
+}
+
+/**
+ * THE lesson-content guard. Authority follows the lesson's DISCIPLINE, not
+ * any one course teaching it: once several courses can teach the same lesson
+ * via `module_lessons`, "who may edit it" has to have exactly one answer, and
+ * a lesson has exactly one discipline (or none).
+ *
+ * `disciplineId === null` is the one case with no SME to ask — an "Untitled"
+ * lesson, which is a triage queue — so authority falls back to org-level
+ * `requireAdmin`.
+ *
+ * This null-branch is encoded in exactly ONE place on purpose. The prior
+ * incident on this exact branch (commit d4f767d, reverted) came from every
+ * lesson-content route independently deciding "org-owned, so `requireAdmin`
+ * unconditionally" — which took authorship away from Subject Experts on
+ * every disciplined lesson, not only the Untitled ones, and broke the
+ * docx→material workflow because the parse step required `content:create`,
+ * which admins do not hold. Every lesson-content route must call this
+ * function rather than hand-rolling the null check again.
+ *
+ * Takes an already-RESOLVED `disciplineId`, not a `lessonId`: resolving one
+ * (and telling "no such lesson" apart from "lesson has no discipline" — they
+ * get different answers, 404 vs admin-only) is
+ * `getDisciplineIdForLessonId`'s job in `db/lesson-access.ts`. The caller
+ * must turn a not-found lookup into a 404 (via `absentResourceResponse`)
+ * BEFORE ever reaching this function.
+ */
+export async function requireLessonContentPermission(
+  headers: Headers,
+  disciplineId: number | null,
+  action: PermissionAction,
+): Promise<void> {
+  if (disciplineId === null) {
+    await requireAdmin(headers);
+    return;
+  }
+  await requireDisciplinePermission(headers, disciplineId, 'content', action);
+}
+
+/**
  * The courses this actor is staffed on. Empty for everyone else, and for a
  * request with no session at all.
  *
@@ -238,6 +336,50 @@ export async function hasCoursePermissionAnywhere(
   const roles = [...new Set([...globalRoles, ...staffRoles])];
   if (roles.length === 0) return false;
   return hasPermission(await getUserPermissions(roles), entity, action);
+}
+
+/**
+ * Does this person hold `entity:action` on ANY discipline?
+ *
+ * The discipline-scoped counterpart of `hasCoursePermissionAnywhere`, for the
+ * same shape of caller: `lesson-material.parse.ts` receives a .docx and
+ * returns generated material, persisting nothing and holding no lesson (hence
+ * no discipline) to scope by. Its one caller, `canParseLessonMaterial`, unions
+ * this with the org-admin fallback the null-discipline rule requires.
+ */
+export async function hasDisciplinePermissionAnywhere(
+  userId: string,
+  entity: PermissionEntity,
+  action: PermissionAction,
+): Promise<boolean> {
+  const [globalRoles, disciplineRoles] = await Promise.all([
+    getUserRoleNames(userId),
+    getDisciplineStaffRoleNames(userId),
+  ]);
+  const roles = [...new Set([...globalRoles, ...disciplineRoles])];
+  if (roles.length === 0) return false;
+  return hasPermission(await getUserPermissions(roles), entity, action);
+}
+
+/**
+ * Whether this person may generate lesson material for at least one lesson
+ * they could go on to save.
+ *
+ * Pairs with `requireLessonContentPermission`'s two branches: an SME on some
+ * discipline (holds `content:create` there), or an org admin — who authors
+ * Untitled lessons, the only ones with no SME to ask. `hasDisciplinePermissionAnywhere`
+ * alone would refuse an admin (by design, `admin` holds no `content` grant of
+ * its own — see `migrate-staff-roles.ts:76-80`), yet the material they parse
+ * could still be saved onto a lesson with no discipline, which only they may
+ * edit. Refusing either side here would burn LLM budget generating material
+ * that `lessons.$lessonId.material.ts` would then refuse to save.
+ */
+export async function canParseLessonMaterial(userId: string): Promise<boolean> {
+  const [roles, disciplineGrant] = await Promise.all([
+    getUserRoleNames(userId),
+    hasDisciplinePermissionAnywhere(userId, 'content', 'create'),
+  ]);
+  return hasAdminAccess(roles) || disciplineGrant;
 }
 
 /** Owner-only guard, for role assignment and permission editing. */

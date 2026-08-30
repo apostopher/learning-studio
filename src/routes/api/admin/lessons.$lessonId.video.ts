@@ -2,19 +2,39 @@ import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { setLessonVideo } from '#/db/admin';
-import { getCourseIdForLessonId } from '#/db/lesson-access';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { getDisciplineIdForLessonId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
 import { setLessonVideoInputSchema } from '#/lib/admin-schemas';
-import { absentResourceResponse } from '#/lib/permissions.server';
+import {
+  absentResourceResponse,
+  requireLessonContentPermission,
+} from '#/lib/permissions.server';
 
 /**
  * Video is lesson content: it changes what EVERY course teaching this lesson
- * plays, not just one. `lessons.org_id` makes it org-owned, so the guard
- * follows ownership — org-level admin — rather than any one course's staff.
+ * plays, not just one. Authority follows the lesson's DISCIPLINE — the SME
+ * who owns it — falling back to org-level admin only when the lesson has
+ * none ("Untitled"). See `requireLessonContentPermission`.
+ *
+ * Also serves as the existence check: `getDisciplineIdForLessonId` resolves
+ * the lesson directly against `lessonsTable`, so "no such lesson" (404, via
+ * `absentResourceResponse`) is told apart from "lesson exists with no
+ * discipline" (admin-only) here, before any guard runs.
  */
-async function guard(request: Request): Promise<Response | null> {
+async function guard(
+  request: Request,
+  lessonId: number,
+): Promise<Response | null> {
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return absentResourceResponse(request.headers, 'Lesson not found');
+  }
   try {
-    await requireAdmin(request.headers);
+    await requireLessonContentPermission(
+      request.headers,
+      lookup.disciplineId,
+      'update',
+    );
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -37,17 +57,7 @@ export async function putVideoHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Existence check only — a lesson can now have several placements, so this
-  // is not "which course owns it", just "does the row exist". Resolved
-  // before guarding: guarding on a null course id would misreport "no such
-  // lesson" as "forbidden". The 404 is then answered only to someone on the
-  // teaching side — see `absentResourceResponse`, which closes the
-  // id-enumeration oracle this ordering would otherwise open.
-  const lessonExistsAt = await getCourseIdForLessonId(lessonId);
-  if (lessonExistsAt === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
-  const denied = await guard(request);
+  const denied = await guard(request, lessonId);
   if (denied) return denied;
 
   let body: unknown;

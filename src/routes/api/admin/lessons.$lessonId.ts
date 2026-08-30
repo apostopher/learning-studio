@@ -11,8 +11,9 @@ import {
 import {
   getCourseIdForLessonId,
   getCourseIdForModuleId,
+  getDisciplineIdForLessonId,
 } from '#/db/lesson-access';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
   renameLessonInputSchema,
@@ -22,6 +23,7 @@ import {
 import {
   absentResourceResponse,
   requireCoursePermission,
+  requireLessonContentPermission,
 } from '#/lib/permissions.server';
 
 /**
@@ -52,15 +54,21 @@ async function guardStructure(
 }
 
 /**
- * Org-level guard for the branches that edit the LESSON itself — its name,
- * its config/gates, or deleting it outright. `lessons.org_id` makes a lesson
- * org-owned: once several courses can teach the same lesson, no single course
- * is the authority over what the lesson says or whether it exists at all, so
- * the guard follows ownership (org admin) rather than any one course's staff.
+ * Guard for the branches that edit the LESSON itself — its name, its
+ * config/gates, or deleting it outright. Authority follows the lesson's
+ * DISCIPLINE, not any one course teaching it: once several courses can teach
+ * the same lesson, no single course's staff is the authority over what the
+ * lesson says or whether it exists at all, and a lesson has exactly one
+ * discipline (or none). See `requireLessonContentPermission` for the
+ * discipline/admin split this delegates to.
  */
-async function guardAdmin(request: Request): Promise<Response | null> {
+async function guardContent(
+  request: Request,
+  disciplineId: number | null,
+  action: 'update' | 'delete',
+): Promise<Response | null> {
   try {
-    await requireAdmin(request.headers);
+    await requireLessonContentPermission(request.headers, disciplineId, action);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -68,6 +76,31 @@ async function guardAdmin(request: Request): Promise<Response | null> {
     }
     throw error;
   }
+}
+
+/**
+ * Resolves the discipline `guardContent` needs to decide SME-vs-admin.
+ *
+ * Defensively re-checks existence rather than trusting the caller's earlier
+ * `lessonExistsAt` check: that check runs once, before the body is even
+ * parsed, and letting a not-found lookup here silently coerce to
+ * `disciplineId: null` would misroute a lesson that vanished between the two
+ * checks into the admin-only branch instead of a 404.
+ */
+async function resolveLessonDiscipline(
+  request: Request,
+  lessonId: number,
+): Promise<{ disciplineId: number | null } | { response: Response }> {
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return {
+      response: await absentResourceResponse(
+        request.headers,
+        'Lesson not found',
+      ),
+    };
+  }
+  return { disciplineId: lookup.disciplineId };
 }
 
 function parseLessonId(raw: string): number | null {
@@ -141,9 +174,12 @@ export async function patchLessonHandler(
 
   const rename = renameLessonInputSchema.safeParse(body);
   if (rename.success) {
-    // A rename changes what EVERY course teaching this lesson shows —
-    // org-owned content, so the guard follows the org, not any one course.
-    const denied = await guardAdmin(request);
+    // A rename changes what EVERY course teaching this lesson shows — its
+    // authority follows the lesson's DISCIPLINE (or org admin, if it has
+    // none), not any one course. See `guardContent`.
+    const resolved = await resolveLessonDiscipline(request, lessonId);
+    if ('response' in resolved) return resolved.response;
+    const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
     const updated = await updateLessonName(lessonId, rename.data.name);
     if (!updated) return new Response('Not found', { status: 404 });
@@ -180,11 +216,15 @@ export async function patchLessonHandler(
   const config = updateLessonConfigInputSchema.safeParse(body);
   if (config.success) {
     // Every config field — availability, level tags, the paywall list, the
-    // debrief/video-watch gates — is a column on the org-owned lesson row
+    // debrief/video-watch gates — is a column on the lesson row
     // (`updateLessonConfig` writes `lessonsTable` by `lessonId` alone, with
     // no course in sight, and invalidates every course teaching this lesson).
-    // There is no course-scoped half left to split by field group.
-    const denied = await guardAdmin(request);
+    // There is no course-scoped half left to split by field group — its
+    // authority follows the lesson's DISCIPLINE, same as rename. See
+    // `guardContent`.
+    const resolved = await resolveLessonDiscipline(request, lessonId);
+    if ('response' in resolved) return resolved.response;
+    const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
     const updated = await updateLessonConfig(lessonId, config.data);
     if (!updated) return new Response('Not found', { status: 404 });
@@ -204,13 +244,15 @@ export async function deleteLessonHandler(
   }
   // Existence check only — see the comment in `patchLessonHandler`. Deleting
   // removes the lesson from EVERY course and cascades its progress rows, so
-  // this is org-owned same as rename/config: no single course's staff is the
-  // right authority for it.
+  // this follows the lesson's DISCIPLINE same as rename/config: no single
+  // course's staff is the right authority for it. See `guardContent`.
   const lessonExistsAt = await getCourseIdForLessonId(lessonId);
   if (lessonExistsAt === null) {
     return absentResourceResponse(request.headers, 'Lesson not found');
   }
-  const denied = await guardAdmin(request);
+  const resolved = await resolveLessonDiscipline(request, lessonId);
+  if ('response' in resolved) return resolved.response;
+  const denied = await guardContent(request, resolved.disciplineId, 'delete');
   if (denied) return denied;
   const deleted = await deleteLesson(lessonId);
   if (!deleted) return new Response('Not found', { status: 404 });

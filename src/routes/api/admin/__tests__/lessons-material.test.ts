@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // internal #/-using modules). The route imports ForbiddenError from this same
 // mocked path, so this stub class is what `instanceof` checks against.
 const {
-  requireAdmin,
+  requireLessonContentPermission,
   absentResourceResponse,
   ForbiddenError,
-  getCourseIdForLessonId,
+  getDisciplineIdForLessonId,
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
 } = vi.hoisted(() => {
@@ -19,20 +19,20 @@ const {
     }
   }
   return {
-    requireAdmin: vi.fn(),
+    requireLessonContentPermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     ForbiddenError,
-    getCourseIdForLessonId: vi.fn(),
+    getDisciplineIdForLessonId: vi.fn(),
     getLessonMaterialByLessonId: vi.fn(),
     upsertLessonMaterial: vi.fn(),
   };
 });
-vi.mock('#/lib/admin-functions.server', () => ({
-  ForbiddenError,
-  requireAdmin,
+vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
+vi.mock('#/lib/permissions.server', () => ({
+  requireLessonContentPermission,
+  absentResourceResponse,
 }));
-vi.mock('#/lib/permissions.server', () => ({ absentResourceResponse }));
-vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
+vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
@@ -57,8 +57,14 @@ function getReq(): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getCourseIdForLessonId.mockResolvedValue(42);
-  requireAdmin.mockResolvedValue({ userId: 'u1', roles: ['admin'] });
+  // This lesson's discipline — a sentinel so a branch that forwards the wrong
+  // value (e.g. a course id, or a hardcoded constant) fails a
+  // `toHaveBeenCalledWith` assertion rather than passing by coincidence.
+  getDisciplineIdForLessonId.mockResolvedValue({
+    found: true,
+    disciplineId: 7,
+  });
+  requireLessonContentPermission.mockResolvedValue(undefined);
   // Stands in for the real helper (unit-tested in
   // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
   // the teaching side and a flat 403 to everyone else, so a missing row
@@ -67,20 +73,26 @@ beforeEach(() => {
 });
 
 describe('lessons material route', () => {
-  // Material is lesson content — org-owned, since a lesson can now be taught
-  // by several courses — so it is gated by `requireAdmin`, not a course's
-  // `content` permission.
-  it('GET calls requireAdmin', async () => {
+  // Requirement 6: material GET allow/refuse pair. Authority follows the
+  // lesson's DISCIPLINE (or org admin, if it has none) — see
+  // `requireLessonContentPermission`, unit-tested at the permission layer.
+  it('GET resolves the discipline and forwards it with a read action', async () => {
     getLessonMaterialByLessonId.mockResolvedValueOnce(null);
     await getMaterialHandler(getReq(), '1');
-    expect(requireAdmin).toHaveBeenCalledWith(expect.anything());
+    expect(getDisciplineIdForLessonId).toHaveBeenCalledWith(1);
+    expect(requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      7,
+      'read',
+    );
   });
 
-  // Mutant: GET still calls the old course-scoped `content:read` guard
-  // instead of `requireAdmin`. Refusing only `requireAdmin` would then not
-  // stop the read — RED.
-  it('GET returns 403 for a refused admin, without reading the material', async () => {
-    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
+  // Mutant: GET still calls the old course-scoped `content:read` guard (or
+  // ignores the resolved discipline entirely) instead of
+  // `requireLessonContentPermission`. Refusing only the mocked guard would
+  // then not stop the read — RED.
+  it('GET returns 403 for a refused guard, without reading the material', async () => {
+    requireLessonContentPermission.mockRejectedValueOnce(new ForbiddenError());
     const res = await getMaterialHandler(getReq(), '1');
     expect(res.status).toBe(403);
     expect(getLessonMaterialByLessonId).not.toHaveBeenCalled();
@@ -89,13 +101,13 @@ describe('lessons material route', () => {
   /**
    * The enumeration oracle. This handler resolves the row BEFORE guarding, so
    * an unauthenticated caller could walk sequential integer ids and read the
-   * id space off the status code — 404 absent, 403 present. The absent branch
-   * is delegated to `absentResourceResponse`, which answers 404 only to
-   * someone on the teaching side (unit-tested in
+   * id space off the status code — 404 absent, 403 present. The absent
+   * branch is delegated to `absentResourceResponse`, which answers 404 only
+   * to someone on the teaching side (unit-tested in
    * lib/__tests__/permissions-server.test.ts).
    */
   it('GET hands an absent lesson to absentResourceResponse and returns its answer', async () => {
-    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
     absentResourceResponse.mockResolvedValueOnce(
       new Response('Forbidden', { status: 403 }),
     );
@@ -112,7 +124,7 @@ describe('lessons material route', () => {
   });
 
   it('POST hands an absent lesson to absentResourceResponse and returns its answer', async () => {
-    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
     absentResourceResponse.mockResolvedValueOnce(
       new Response('Forbidden', { status: 403 }),
     );
@@ -129,16 +141,16 @@ describe('lessons material route', () => {
   });
 
   it('GET 404s a lesson that does not exist, before guarding', async () => {
-    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
     const res = await getMaterialHandler(getReq(), '999');
     expect(res.status).toBe(404);
-    expect(requireAdmin).not.toHaveBeenCalled();
+    expect(requireLessonContentPermission).not.toHaveBeenCalled();
   });
 
   it('GET 400 on a bad lesson id', async () => {
     const res = await getMaterialHandler(getReq(), 'abc');
     expect(res.status).toBe(400);
-    expect(getCourseIdForLessonId).not.toHaveBeenCalled();
+    expect(getDisciplineIdForLessonId).not.toHaveBeenCalled();
   });
 
   it('GET returns the material row (or null)', async () => {
@@ -148,27 +160,31 @@ describe('lessons material route', () => {
     expect(await res.json()).toBeNull();
   });
 
-  it('POST calls requireAdmin', async () => {
+  it('POST resolves the discipline and forwards it with an update action', async () => {
     upsertLessonMaterial.mockResolvedValueOnce({ id: 7, ...material });
     await saveMaterialHandler(postReq(material), '1');
-    expect(requireAdmin).toHaveBeenCalledWith(expect.anything());
+    expect(requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      7,
+      'update',
+    );
   });
 
   // Mutant: POST still calls the old course-scoped `content:update` guard
-  // instead of `requireAdmin`. Refusing only `requireAdmin` would then not
-  // stop the write — RED.
-  it('POST 403s a refused admin without writing', async () => {
-    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
+  // instead of `requireLessonContentPermission`. Refusing only the mocked
+  // guard would then not stop the write — RED.
+  it('POST 403s a refused guard without writing', async () => {
+    requireLessonContentPermission.mockRejectedValueOnce(new ForbiddenError());
     const res = await saveMaterialHandler(postReq(material), '1');
     expect(res.status).toBe(403);
     expect(upsertLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('POST 404s a lesson that does not exist, before guarding or parsing the body', async () => {
-    getCourseIdForLessonId.mockResolvedValueOnce(null);
+    getDisciplineIdForLessonId.mockResolvedValueOnce({ found: false });
     const res = await saveMaterialHandler(postReq(material), '999');
     expect(res.status).toBe(404);
-    expect(requireAdmin).not.toHaveBeenCalled();
+    expect(requireLessonContentPermission).not.toHaveBeenCalled();
     expect(upsertLessonMaterial).not.toHaveBeenCalled();
   });
 
@@ -198,6 +214,31 @@ describe('lessons material route', () => {
     upsertLessonMaterial.mockRejectedValueOnce(new Error('db down'));
     expect((await saveMaterialHandler(postReq(material), '1')).status).toBe(
       500,
+    );
+  });
+
+  // Requirement 4 (route half): a null-discipline ("Untitled") lesson
+  // forwards `null` through untouched — the admin-admits/SME-refuses split
+  // itself is pinned at the permission layer.
+  it('forwards a null discipline ("Untitled") through untouched on GET and POST', async () => {
+    getDisciplineIdForLessonId.mockResolvedValue({
+      found: true,
+      disciplineId: null,
+    });
+    getLessonMaterialByLessonId.mockResolvedValueOnce(null);
+    await getMaterialHandler(getReq(), '1');
+    expect(requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      'read',
+    );
+
+    upsertLessonMaterial.mockResolvedValueOnce({ id: 7, ...material });
+    await saveMaterialHandler(postReq(material), '1');
+    expect(requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      'update',
     );
   });
 });

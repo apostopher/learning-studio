@@ -920,6 +920,72 @@ export const courseStaffRelations = relations(courseStaffTable, ({ one }) => ({
 }));
 
 /**
+ * Which DISCIPLINES a person is staff on, and in what capacity.
+ *
+ * The sibling of `course_staff`, not a replacement for it: a lesson has
+ * exactly one discipline (or none), and once several courses can teach the
+ * same lesson via `module_lessons`, authorship of that lesson's content
+ * follows its discipline's SME rather than any one course's staff. Course
+ * staff still assemble an offering (add/remove/reorder a lesson, set its
+ * prerequisites) — the two tables answer different questions and neither one
+ * grants the other's authority.
+ *
+ * Reuses the existing `subject-expert` role rather than a new one: the same
+ * `role_permissions` grants (content:create/read/update/delete) already
+ * describe what an SME may do to a lesson's content, whether the row that
+ * names them lives in `course_staff` or here.
+ *
+ * `assignedBy` is a plain id rather than an FK, matching `course_staff`.
+ */
+export const disciplineStaffTable = pgTable(
+  'discipline_staff',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    disciplineId: integer('discipline_id')
+      .notNull()
+      .references(() => disciplinesTable.id, { onDelete: 'cascade' }),
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => userRolesTable.id, { onDelete: 'restrict' }),
+    /** Acting admin's or SME's user id. */
+    assignedBy: varchar('assigned_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('discipline_staff_user_discipline_role_idx').on(
+      table.userId,
+      table.disciplineId,
+      table.roleId,
+    ),
+    index('discipline_staff_user_discipline_idx').on(
+      table.userId,
+      table.disciplineId,
+    ),
+    index('discipline_staff_discipline_idx').on(table.disciplineId),
+  ],
+);
+
+export const dbDisciplineStaffSchema = createSelectSchema(disciplineStaffTable);
+export type DBDisciplineStaff = z.infer<typeof dbDisciplineStaffSchema>;
+
+export const disciplineStaffRelations = relations(
+  disciplineStaffTable,
+  ({ one }) => ({
+    discipline: one(disciplinesTable, {
+      fields: [disciplineStaffTable.disciplineId],
+      references: [disciplinesTable.id],
+    }),
+    role: one(userRolesTable, {
+      fields: [disciplineStaffTable.roleId],
+      references: [userRolesTable.id],
+    }),
+  }),
+);
+
+/**
  * News sources are sandboxed per course: a row belongs to exactly one course,
  * and the same outlet tracked by two courses is two independent rows. There is
  * deliberately no "global" source — `course_id` is NOT NULL, so every row is

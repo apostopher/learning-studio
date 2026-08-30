@@ -8,17 +8,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // module instead of the stub.
 const {
   getSession,
-  hasCoursePermissionAnywhere,
+  canParseLessonMaterial,
   wordToHtml,
   generateLessonMaterial,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
-  hasCoursePermissionAnywhere: vi.fn(),
+  canParseLessonMaterial: vi.fn(),
   wordToHtml: vi.fn(),
   generateLessonMaterial: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
-vi.mock('#/lib/permissions.server', () => ({ hasCoursePermissionAnywhere }));
+vi.mock('#/lib/permissions.server', () => ({ canParseLessonMaterial }));
 vi.mock('#/lib/word-to-html.server', () => ({ wordToHtml }));
 vi.mock('#/ai/generate-lesson-material', () => ({ generateLessonMaterial }));
 
@@ -48,7 +48,7 @@ beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1' } });
   // The default actor holds the grant, so a test that means to exercise the
   // parsing path is not silently 403'ing instead.
-  hasCoursePermissionAnywhere.mockResolvedValue(true);
+  canParseLessonMaterial.mockResolvedValue(true);
 });
 
 describe('parseLessonMaterialHandler', () => {
@@ -56,38 +56,37 @@ describe('parseLessonMaterialHandler', () => {
     getSession.mockResolvedValueOnce(null);
     const res = await parseLessonMaterialHandler(requestWith(null));
     expect(res.status).toBe(403);
-    expect(hasCoursePermissionAnywhere).not.toHaveBeenCalled();
+    expect(canParseLessonMaterial).not.toHaveBeenCalled();
     expect(generateLessonMaterial).not.toHaveBeenCalled();
   });
 
   /**
-   * Spec §9b.2: guard on holding `content:create` on ANY course, not on
-   * merely being staff somewhere. This route has no identifier of any kind to
-   * scope by, so the grant is the only honest bound available.
+   * Guard on being someone who could go on to SAVE the result: an SME on any
+   * discipline, or an org admin (`canParseLessonMaterial`). This route has no
+   * lesson id of any kind to scope by — only a multipart file — so there is
+   * no discipline to resolve, and the course-less/discipline-less bound is
+   * the only honest one available.
    */
-  it('asks whether this user holds content:create anywhere', async () => {
+  it('asks whether this user may parse lesson material at all', async () => {
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
     wordToHtml.mockResolvedValueOnce('<p>Body</p>');
     generateLessonMaterial.mockResolvedValueOnce(MATERIAL);
 
     await parseLessonMaterialHandler(requestWith(file));
 
-    expect(hasCoursePermissionAnywhere).toHaveBeenCalledWith(
-      'u1',
-      'content',
-      'create',
-    );
+    expect(canParseLessonMaterial).toHaveBeenCalledWith('u1');
   });
 
   /**
-   * A course manager holds `content:read` only, and an admin by design holds
-   * no `content` grant at all. Both used to pass the old "staff anywhere" /
-   * "admin" bound and burn LLM budget generating material that
-   * `lessons.$lessonId.material.ts` — which requires `content:update` — would
-   * then refuse to save.
+   * A course manager holds `content:read` only, and neither an SME on an
+   * unrelated discipline nor a course manager may save an "Untitled" lesson's
+   * material. Refusing here also matters because generating it would
+   * otherwise burn LLM budget on material that
+   * `lessons.$lessonId.material.ts` — which requires the same discipline/admin
+   * split via `requireLessonContentPermission` — would then refuse to save.
    */
   it('returns 403 without generating when the grant is missing', async () => {
-    hasCoursePermissionAnywhere.mockResolvedValue(false);
+    canParseLessonMaterial.mockResolvedValue(false);
     const file = new File(['bytes'], 'lesson.docx', { type: DOCX_MIME });
 
     const res = await parseLessonMaterialHandler(requestWith(file));

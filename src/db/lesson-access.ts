@@ -151,6 +151,32 @@ export async function getCourseIdForLessonId(
 }
 
 /**
+ * A lesson's discipline, distinguishing "no such lesson" from "lesson exists
+ * with no discipline" — the two cases the lesson-content guard
+ * (`requireLessonContentPermission`) answers differently: a missing lesson is
+ * a 404, a discipline-less ("Untitled") one is admin-only. A bare
+ * `number | null` return cannot express both — its one `null` would have to
+ * mean either "doesn't exist" or "exists, no discipline", collapsing exactly
+ * the distinction the caller needs — so this returns a discriminated union
+ * instead.
+ */
+export type LessonDisciplineLookup =
+  | { found: false }
+  | { found: true; disciplineId: number | null };
+
+export async function getDisciplineIdForLessonId(
+  lessonId: number,
+): Promise<LessonDisciplineLookup> {
+  const [row] = await db
+    .select({ disciplineId: lessonsTable.disciplineId })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId))
+    .limit(1);
+  if (!row) return { found: false };
+  return { found: true, disciplineId: row.disciplineId };
+}
+
+/**
  * The course id a module belongs to. Returns null (never throws) when the
  * module doesn't exist — see `getCourseIdForLessonId` for why.
  */

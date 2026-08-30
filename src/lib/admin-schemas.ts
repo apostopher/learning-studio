@@ -616,6 +616,23 @@ export function isCourseScopedEntity(
   return (COURSE_SCOPED_ENTITIES as readonly string[]).includes(entity);
 }
 
+/**
+ * Entities resolved against `discipline_staff` rather than a global role or
+ * `course_staff`. Only `content`: a lesson's discipline is the one dimension
+ * its authorship follows (see `requireDisciplinePermission`); a course's
+ * `structure` and `staff` remain assembly concerns, scoped to the course
+ * doing the assembling, not to any lesson's discipline.
+ */
+export const DISCIPLINE_SCOPED_ENTITIES = ['content'] as const;
+export type DisciplineScopedEntity =
+  (typeof DISCIPLINE_SCOPED_ENTITIES)[number];
+
+export function isDisciplineScopedEntity(
+  entity: PermissionEntity,
+): entity is DisciplineScopedEntity {
+  return (DISCIPLINE_SCOPED_ENTITIES as readonly string[]).includes(entity);
+}
+
 export const permissionSchema = z.object({
   entity: z.enum(PERMISSION_ENTITIES),
   action: z.enum(PERMISSION_ACTIONS),

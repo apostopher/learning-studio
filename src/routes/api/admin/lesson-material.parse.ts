@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { generateLessonMaterial } from '#/ai/generate-lesson-material';
 import { auth } from '#/lib/auth';
-import { hasCoursePermissionAnywhere } from '#/lib/permissions.server';
+import { canParseLessonMaterial } from '#/lib/permissions.server';
 import { wordToHtml } from '#/lib/word-to-html.server';
 
 const DOCX_MIME =
@@ -16,24 +16,30 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
-  // Guarded on holding `content:create` on ANY course (spec §9b.2).
+  // Guarded on being someone who could go on to SAVE the result: an SME on
+  // any discipline, or an org admin.
   //
   // This route takes a .docx and returns generated material. It persists
-  // nothing and receives no course, module or lesson id of any kind — only a
-  // multipart file, so `requireCoursePermission` has no course id to work
-  // with and course-scoping it would mean inventing an identifier the client
-  // does not have.
+  // nothing and receives no lesson id of any kind — only a multipart file —
+  // so there is no discipline to scope by, and `requireLessonContentPermission`
+  // has nothing to resolve against. `canParseLessonMaterial` is the
+  // course-less counterpart: an SME holding `content:create` on some
+  // discipline (mirrors the "is staff somewhere" bound this route used
+  // before discipline-scoping existed), OR'd with the org-admin fallback
+  // that saving to an "Untitled" (no-discipline) lesson requires — an admin
+  // holds no `content` grant of their own, but is still the one who may save
+  // material onto a lesson with no SME to ask.
   //
   // The grant, not merely "is staff somewhere": a course manager holds
-  // `content:read` only and an admin by design holds no `content` grant at
-  // all, and both would otherwise burn LLM budget generating material that
-  // `lessons.$lessonId.material.ts` — which correctly requires
-  // `content:update` — would refuse to save.
+  // `content:read` only, and would otherwise burn LLM budget generating
+  // material that `lessons.$lessonId.material.ts` — which requires
+  // `content:update` via the same discipline/admin split — would refuse to
+  // save.
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
   if (!userId) return new Response('Forbidden', { status: 403 });
 
-  if (!(await hasCoursePermissionAnywhere(userId, 'content', 'create'))) {
+  if (!(await canParseLessonMaterial(userId))) {
     return new Response('Forbidden', { status: 403 });
   }
 
