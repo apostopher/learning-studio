@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { integer, jsonb, numeric, pgTable } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 const moduleLessonsTable = pgTable('module_lessons', {
   id: integer('id').primaryKey(),
@@ -25,39 +26,6 @@ function makeChain(result: unknown) {
     groupBy: () => p,
   });
   return p;
-}
-
-/**
- * Recursively collect every column name and literal parameter value out of a
- * real drizzle query-builder value: an `SQL` condition tree (`eq`/`and`/
- * `inArray`), or a raw `sql\`...\`` fragment (as `rankBetween` builds). Real
- * drizzle objects, not stubs, are what the implementation passes to
- * `.where()`/`.set()` — walking them is how these tests prove what columns
- * and values were actually referenced, rather than trusting the
- * implementation's own description of itself.
- *
- * `eq`/`inArray` wrap their parameters in a `Param` object exposing `.value`,
- * but a raw `sql\`...${x}...\`` fragment embeds a primitive `x` directly as a
- * bare queryChunk entry with no wrapper — hence the explicit primitive
- * handling below, verified against real drizzle output for both shapes.
- */
-function collectSqlTokens(node: unknown, out: string[] = []): string[] {
-  if (node == null) return out;
-  if (typeof node === 'number' || typeof node === 'string') {
-    out.push(String(node));
-    return out;
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) collectSqlTokens(child, out);
-    return out;
-  }
-  if (typeof node === 'object') {
-    const record = node as Record<string, unknown>;
-    if (typeof record.name === 'string') out.push(record.name);
-    if ('value' in record) out.push(String(record.value));
-    if ('queryChunks' in record) collectSqlTokens(record.queryChunks, out);
-  }
-  return out;
 }
 
 const db = vi.hoisted(() => ({
@@ -410,5 +378,41 @@ describe('movePlacement', () => {
     // some other one the stub would happily answer for anyway.
     expect(getCourseSlugForModuleId).toHaveBeenCalledWith(41);
     expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
+  });
+
+  // Task 5a fix round 2 (Important 1): `movePlacement`'s optional `tx`
+  // parameter is what lets `moveLesson` (admin.ts) put this UPDATE and the
+  // legacy `lessons` update in ONE transaction — the entire fix for Critical
+  // 1's divergence window. Every other test in this file calls `movePlacement`
+  // with only one argument, exercising the `tx = db` default, so none of
+  // them can tell a `tx.update` call apart from a `db.update` call. Without
+  // THIS test, reverting `movePlacement`'s body from `tx.update(...)` back
+  // to `db.update(...)` — silently breaking the atomicity the parameter
+  // exists to provide — passes the entire suite.
+  it('runs its UPDATE against a caller-supplied transaction, not the module-level db', async () => {
+    const returning = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, moduleId: 41, lessonId: 9, rank: '1.5', dependsOn: [] },
+      ]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    const txUpdate = vi.fn().mockReturnValue({ set });
+    const fakeTx = { update: txUpdate };
+    db.select.mockReturnValueOnce(makeChain([{ id: 40 }, { id: 41 }]));
+
+    const result = await movePlacement(
+      {
+        lessonId: 9,
+        targetModuleId: 41,
+        prevLessonId: 3,
+        nextLessonId: 4,
+      },
+      fakeTx,
+    );
+
+    expect(txUpdate).toHaveBeenCalledWith(moduleLessonsTable);
+    expect(db.update).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ moduleId: 41, rank: 1.5 });
   });
 });

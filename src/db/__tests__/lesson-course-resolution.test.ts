@@ -9,6 +9,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { collectSqlTokens } from '#/db/__tests__/sql-tokens';
 
 // Task 5a moves "which course does this lesson belong to" onto placements
 // (`module_lessons`) instead of the legacy `lessons.module_id`. This file
@@ -196,33 +197,6 @@ function makeJoinCapturingChain(
     ) => Promise.resolve(result).then(resolve, reject),
   };
   return chain;
-}
-
-/**
- * Recursively collect every column/table name and literal value out of a
- * real drizzle `SQL` condition (e.g. what `eq()` returns) — copied from
- * `placement-writes.test.ts`. Real drizzle objects, not stubs, are what
- * `getCourseSlugsForLessonId` passes to `.innerJoin()`'s second argument, so
- * walking one is how a test proves what columns were actually referenced
- * rather than trusting the implementation's own description of itself.
- */
-function collectSqlTokens(node: unknown, out: string[] = []): string[] {
-  if (node == null) return out;
-  if (typeof node === 'number' || typeof node === 'string') {
-    out.push(String(node));
-    return out;
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) collectSqlTokens(child, out);
-    return out;
-  }
-  if (typeof node === 'object') {
-    const record = node as Record<string, unknown>;
-    if (typeof record.name === 'string') out.push(record.name);
-    if ('value' in record) out.push(String(record.value));
-    if ('queryChunks' in record) collectSqlTokens(record.queryChunks, out);
-  }
-  return out;
 }
 
 const db = vi.hoisted(() => ({

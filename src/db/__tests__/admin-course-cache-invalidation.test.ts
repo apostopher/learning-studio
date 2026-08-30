@@ -361,9 +361,22 @@ describe('course-details cache invalidation', () => {
       },
     ]);
     const placementInsert = makeChain(undefined);
-    db.insert
+    // Task 5a fix round 2 (Important 2): the file's default `db.transaction`
+    // mock (below, in `beforeEach`) hands the callback `db` itself, so a
+    // mutant that deletes the transaction wrapper and issues two
+    // independent `db.insert(...)` calls would satisfy every assertion
+    // built on the module-level `db.insert` queue. This test instead
+    // supplies a DISTINCT `tx` object with its own `insert` spy, so the
+    // assertions below can tell "went through the transaction" apart from
+    // "went through `db` directly and merely looks the same".
+    const txInsert = vi
+      .fn()
       .mockReturnValueOnce(lessonInsert)
       .mockReturnValueOnce(placementInsert);
+    const tx = { insert: txInsert };
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
     await createLesson({ moduleId: 7, name: 'Stall Recovery' });
@@ -375,7 +388,9 @@ describe('course-details cache invalidation', () => {
     // the learner lesson page, playback, and all five admin lesson routes
     // 404 on it. Asserted on what the dual-write insert actually received,
     // not merely that `db.insert` was called a second time.
-    expect(db.insert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
+    expect(txInsert).toHaveBeenNthCalledWith(1, lessonsTable);
+    expect(txInsert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
+    expect(db.insert).not.toHaveBeenCalled();
     expect(placementInsert.valuesArg).toEqual({
       moduleId: 7,
       lessonId: 2,
@@ -480,11 +495,20 @@ describe('course-details cache invalidation', () => {
     expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(20);
     // Reverting to a single-slug "source" (the pre-fix-round-1 shape) would
     // still pass a bare `toHaveBeenCalledWith` on either slug — asserting
-    // the full sorted set is what catches that regression.
+    // the full sorted set is what catches that regression. No separate
+    // `toHaveBeenCalledTimes` here: the array length already IS the call
+    // count, and — unlike a bare count — it can't hold "by accident" if a
+    // call target ever moved or duplicated. (This asserts only the
+    // invalidation loop `moveLesson` itself runs. `#/db/placements` is fully
+    // mocked in this file, so `movePlacement`'s OWN
+    // `invalidateCourseDetailsCache('target-course')` call — real in
+    // production — never fires here; production therefore invalidates
+    // 'target-course' twice, once from each of the two functions, which is
+    // redundant but harmless. See placement-writes.test.ts for movePlacement's
+    // own invalidation coverage.)
     expect(
       courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
     ).toEqual(['source-course-a', 'source-course-b', 'target-course']);
-    expect(courseCache.invalidate).toHaveBeenCalledTimes(3);
   });
 
   it('moveLesson invalidates only once when source and target course are the same', async () => {
@@ -508,6 +532,14 @@ describe('course-details cache invalidation', () => {
       nextLessonId: null,
     });
 
+    // Same caveat as the "differ" test above: this counts only
+    // `moveLesson`'s OWN invalidation loop. `movePlacement` is fully mocked
+    // in this file, so its real `invalidateCourseDetailsCache('flight-basics')`
+    // call never fires here — production invalidates 'flight-basics' twice
+    // (once from each function) even in the same-course case this test
+    // covers, not once. The `1` below is testing `moveLesson`'s own Set
+    // dedup (source and target collapse to one slug), not the total
+    // invalidation count a real call would produce.
     expect(courseCache.invalidate).toHaveBeenCalledTimes(1);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
