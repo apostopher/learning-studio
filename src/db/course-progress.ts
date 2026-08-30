@@ -96,6 +96,7 @@ export async function getCourseProgress({
       modulesTable.id,
       modulesTable.rank,
       moduleLessonsTable.id,
+      moduleLessonsTable.rank,
       lessonsTable.id,
       ...progressComponentGroupBy,
     )

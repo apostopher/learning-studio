@@ -257,10 +257,21 @@ const lessonRow = (opts: {
   lessonRank: string;
   placementRank: string;
   dependsOn?: { lessonSlug: string }[];
+  /**
+   * The lesson row's OWN (legacy) `module_id` — defaults to 10, same as the
+   * placement's, so existing rank/dependsOn-focused tests don't have to
+   * think about module attribution at all. Fix round 1, Important 1: a test
+   * needs this to genuinely DIFFER from the placement's `moduleId` (a
+   * "foreign" value) to prove the lesson is grouped by the PLACEMENT's
+   * module, not this legacy column — with both defaulted to the same value,
+   * a mutant reading `lesson.moduleId` instead of `placement.moduleId`
+   * passes every test in this file undetected.
+   */
+  lessonModuleId?: number;
 }) => ({
   lesson: {
     id: opts.id,
-    moduleId: 10,
+    moduleId: opts.lessonModuleId ?? 10,
     name: opts.slug,
     slug: opts.slug,
     rank: opts.lessonRank,
@@ -348,6 +359,41 @@ describe('getCourseDetails — placement is the source of truth (site 1)', () =>
     expect(lesson?.dependsOn).toEqual([{ lessonSlug: 'prereq' }]);
   });
 
+  // Fix round 1, Important 1: pins that a lesson is grouped under the
+  // PLACEMENT's module, not whatever module its own (legacy) `module_id`
+  // column happens to name. The lesson row here claims module 99 — a module
+  // this course does not even have — while its placement says module 10 (the
+  // course's only module). If module attribution followed the legacy column,
+  // `moduleMapWithDependencies.get(99)` would be `undefined` and the lesson
+  // would be silently dropped from the course entirely — the exact bug this
+  // migration exists to make impossible for a library lesson shared across
+  // courses. Mutant: revert `moduleMapWithDependencies.get(placement
+  // .moduleId)` (course.ts) to `.get(lesson.moduleId)`. Correct-shaped (still
+  // compiles, still a map lookup), wrong-behaving: the lesson vanishes.
+  // Verified RED against that mutant.
+  it('attributes a lesson to the module its PLACEMENT names, not its own (legacy) module_id', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([courseWithModuleRow]))
+      .mockReturnValueOnce(
+        makeChain([
+          lessonRow({
+            id: 100,
+            slug: 'a',
+            lessonRank: '1',
+            placementRank: '1',
+            lessonModuleId: 99, // foreign — this course has no module 99
+          }),
+        ]),
+      )
+      .mockReturnValueOnce(makeChain([]));
+
+    const details = await getCourseDetails('flight-basics');
+
+    expect(details?.modules).toHaveLength(1);
+    expect(details?.modules[0]?.id).toBe(10);
+    expect(details?.modules[0]?.lessons.map((l) => l.slug)).toEqual(['a']);
+  });
+
   // Mutant: in the lessonData query's `.where()`, scope the `inArray(...)`
   // by `lessonsTable.moduleId` (the legacy column) instead of
   // `moduleLessonsTable.moduleId` — a "half migrated" query that still adds
@@ -375,6 +421,31 @@ describe('getCourseDetails — placement is the source of truth (site 1)', () =>
 
     expect(calls.where).toHaveLength(1);
     expect(render(calls.where[0])).toBe('"module_lessons"."module_id" in $1');
+  });
+
+  // Fix round 1, Important 1: pins that module_dependencies is keyed off the
+  // PLACEMENT's moduleId, not the legacy `lessons.module_id`. Mutant: revert
+  // the join condition to `eq(lessonsTable.moduleId, moduleDependenciesTable
+  // .moduleId)`. Correct-shaped (both are integer columns), wrong-behaving:
+  // for a lesson whose legacy module_id differs from where it is actually
+  // placed, this would silently attach a DIFFERENT module's prerequisites.
+  // Verified RED against that mutant (the rendered join condition differs).
+  it('keys module_dependencies off the placement moduleId, not the legacy lessons.module_id column', async () => {
+    const calls = newJoinCalls();
+    db.select
+      .mockReturnValueOnce(makeChain([courseWithModuleRow]))
+      .mockReturnValueOnce(makeCapturingChain([], calls))
+      .mockReturnValueOnce(makeChain([]));
+
+    await getCourseDetails('flight-basics');
+
+    const moduleDepIndex = calls.leftJoin.findIndex(
+      ([table]) => table === moduleDependenciesTable,
+    );
+    expect(moduleDepIndex).toBeGreaterThanOrEqual(0);
+    expect(render(calls.leftJoin[moduleDepIndex][1])).toBe(
+      '"module_lessons"."module_id" = "module_dependencies"."module_id"',
+    );
   });
 });
 

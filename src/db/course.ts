@@ -36,7 +36,16 @@ import type {
 } from '@/types';
 import { db } from '.';
 
-type LessonDetails = DBLesson & {
+// `Omit<DBLesson, 'rank'>` rather than plain `DBLesson &`: `rank` here is
+// ALWAYS the placement's rank (see the `lessonMap.set(...)` override below),
+// never `lessons.rank`. Task 7 drops `lessons.rank` from the schema, which
+// would otherwise make `DBLesson` lose the field and turn the `rank:
+// placement.rank` literal below into an excess-property error, and would
+// stop `shapeModuleLessons`'s `ShapeableLesson` constraint (which needs a
+// `rank: string`) from being satisfied — pre-empting both by declaring the
+// field here independently of `DBLesson`.
+type LessonDetails = Omit<DBLesson, 'rank'> & {
+  rank: string;
   dependsOn: CourseLessonDependencies;
   /**
    * Whether the lesson has a video assigned, derived from the same two
@@ -144,9 +153,16 @@ export async function getCourseDetails(slug: string) {
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
         ...lesson,
-        // Placement's rank, not the lesson row's own — see the query comment
-        // above.
+        // Placement's rank and moduleId, not the lesson row's own — see the
+        // query comment above. Overriding `moduleId` too (not just `rank`)
+        // matters once a lesson can be authored under one module and placed
+        // in another course's different module: leaving `...lesson`'s legacy
+        // `lessons.module_id` in the cached payload would mean "the module
+        // this lesson was authored under" everywhere else in this object
+        // means "the module it sits in HERE" — no consumer reads it today,
+        // but it would be a trap for the first one that does.
         rank: placement.rank,
+        moduleId: placement.moduleId,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
         levels: lesson.levels as UserLevel[],
@@ -327,14 +343,12 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       modulesTable.id,
       modulesTable.rank,
       moduleLessonsTable.id,
+      moduleLessonsTable.rank,
       lessonsTable.id,
       ...progressComponentGroupBy,
     )
     // courseId as an explicit tiebreak keeps each course's rows contiguous
     // in the result, which the first-seen-wins loop below relies on.
-    // `moduleLessonsTable.id` in GROUP BY above makes `.rank` functionally
-    // dependent, the same way `lessonsTable.id` already did for
-    // `lessonsTable.rank`.
     .orderBy(
       asc(coursesTable.name),
       asc(coursesTable.id),
