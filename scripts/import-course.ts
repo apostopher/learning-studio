@@ -26,10 +26,26 @@
  * (`OLD_DATABASE_URL`, read via `oldQ`) still has the pre-contract shape and
  * is read as such throughout — only the writes against `DATABASE_URL` (via
  * `newQ`) changed.
+ *
+ * **`lessons.org_id` is also NOT NULL** (Task 5/6). Rather than requiring a
+ * separate `pnpm db:seed-org-links` run between "create the course" and
+ * "import its lessons" — a real sequencing constraint that would otherwise
+ * belong in `docs/deploy-lessons-module-id-drop.md` — this script links the
+ * course to the active org (`getActiveOrgId()`) itself, right after
+ * resolving `courseId` and before the modules/lessons loops, the same
+ * invariant `createCourse` (`src/db/admin.ts`) enforces for courses created
+ * through the admin UI ("whatever this deployment administers, it owns
+ * what it creates/imports"). A fresh `import → run` needs no extra step.
+ * The org actually stamped on each lesson is then read back via the same
+ * MIN(org_id) rule `migrate-lesson-placements.ts`'s backfill used, so it
+ * agrees with a course that already belonged to some OTHER org too — not
+ * necessarily the active one.
  */
 import { createHash } from 'node:crypto';
 import { put } from '@vercel/blob';
 import { Pool } from 'pg';
+import { getActiveOrgId } from '#/lib/active-org.server';
+import { resolveCourseOrgId } from './resolve-course-org-link';
 
 const OLD_COURSE_SLUG = '3d-airmanship';
 const NEW_COURSE_NAME = 'iTPS UAS Remote';
@@ -148,6 +164,20 @@ async function main() {
   }
   const courseId = course?.id;
   if (courseId === undefined) throw new Error('no course id');
+
+  // Whatever this deployment administers, it owns what it imports — same
+  // invariant `createCourse` (src/db/admin.ts) enforces via `linkCourseToOrg`
+  // when a course is created through the admin UI. Doing this HERE, before
+  // the lessons loop below, means a fresh import never needs a separate
+  // `pnpm db:seed-org-links` run in between — see the header note. Split
+  // into `resolveCourseOrgId` (./resolve-course-org-link.ts) so it can be
+  // unit-tested without a real `pg.Pool`.
+  const lessonOrgId = await resolveCourseOrgId(
+    newQ,
+    courseId,
+    NEW_COURSE_SLUG,
+    getActiveOrgId(),
+  );
 
   // --------------------------------------------------------------- modules
   const oldModules = await oldQ(
@@ -314,8 +344,8 @@ async function main() {
         const [ins] = await txQ<{ id: number }>(
           `insert into lessons (name, slug, other_video_ids, video_provider,
              video_ref, required_subscriptions, is_available, exclusive_per_day,
-             has_debrief, needs_video_watch, created_at, updated_at)
-           values ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
+             has_debrief, needs_video_watch, org_id, created_at, updated_at)
+           values ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
           [
             row.name,
             row.slug,
@@ -327,6 +357,7 @@ async function main() {
             row.exclusive_per_day,
             row.has_debrief,
             row.needs_video_watch,
+            lessonOrgId,
             row.created_at,
             row.updated_at,
           ],
