@@ -71,10 +71,37 @@ export const updateModuleInputSchema = z.object({
 });
 export type UpdateModuleInput = z.infer<typeof updateModuleInputSchema>;
 
+/**
+ * Left untouched, still `{ name }` only: `create-lesson-dialog-container.tsx`
+ * types its whole react-hook-form with `CreateLessonInput` and calls
+ * `form.register('name')` — a union with `{ lessonId }` would leave `name`
+ * absent from one branch and break that form's typing. The library-linking
+ * shape lives in `addModuleLessonInputSchema` below instead.
+ */
 export const createLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
 });
 export type CreateLessonInput = z.infer<typeof createLessonInputSchema>;
+
+/** Link an existing library lesson into a module — the other half of `POST /api/admin/modules/:moduleId/lessons`. */
+export const linkLessonInputSchema = z
+  .object({ lessonId: z.number().int().positive() })
+  .strict();
+export type LinkLessonInput = z.infer<typeof linkLessonInputSchema>;
+
+/**
+ * The actual body `POST /api/admin/modules/:moduleId/lessons` accepts:
+ * author a brand new lesson (`name`), or link an existing library lesson into
+ * this module (`lessonId`). A `z.union` of two `.strict()` object schemas
+ * rather than one object with both fields optional — an object with both
+ * optional would accept `{}` and silently mean neither, which is exactly the
+ * empty body this shape exists to reject.
+ */
+export const addModuleLessonInputSchema = z.union([
+  createLessonInputSchema.strict(),
+  linkLessonInputSchema,
+]);
+export type AddModuleLessonInput = z.infer<typeof addModuleLessonInputSchema>;
 
 export const renameLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),

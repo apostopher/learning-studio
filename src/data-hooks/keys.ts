@@ -60,4 +60,12 @@ export const dataKeys = {
     ['user', 'lesson-quiz-result', lessonSlug] as const,
   library: (courseSlug: string) => ['course', 'library', courseSlug] as const,
   courseNews: (courseSlug: string) => ['course', 'news', courseSlug] as const,
+  /**
+   * The org-wide knowledge library (admin lesson catalog), not to be confused
+   * with `library` above — that key is the unrelated, course-scoped learner
+   * file library keyed by `courseSlug`. This one is org-scoped with no
+   * parameter, so it cannot reuse that name without colliding.
+   */
+  orgLibrary: () => ['admin', 'library'] as const,
+  editorBoard: () => ['admin', 'editor-board'] as const,
 } as const;
