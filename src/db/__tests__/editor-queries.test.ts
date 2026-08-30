@@ -153,7 +153,7 @@ describe('getOrgLibrary', () => {
     expect(lib.disciplines[0].lessons.map((l) => l.id)).toEqual([4]);
   });
 
-  it("carries the course count each card shows", async () => {
+  it('carries the course count each card shows', async () => {
     db.select.mockReturnValueOnce(
       makeChain([
         {
@@ -219,12 +219,19 @@ describe('getOrgLibrary', () => {
 });
 
 describe('getOrgEditorBoard', () => {
-  it("returns one board per course the org has via course_orgs", async () => {
+  it('returns one board per course the org has via course_orgs', async () => {
     db.select.mockReturnValueOnce(
       makeChain([{ courseId: 11 }, { courseId: 22 }]),
     );
     const boardFor = (courseId: number) => ({
-      course: { id: courseId, name: `Course ${courseId}`, slug: `c${courseId}`, description: null, imageUrlAvif: null, imageUrlWebp: null },
+      course: {
+        id: courseId,
+        name: `Course ${courseId}`,
+        slug: `c${courseId}`,
+        description: null,
+        imageUrlAvif: null,
+        imageUrlWebp: null,
+      },
       modules: [],
     });
     mockGetCourseBoard.mockImplementation(async (courseId: number) =>
@@ -248,5 +255,22 @@ describe('getOrgEditorBoard', () => {
     const boards = await getOrgEditorBoard(3);
 
     expect(boards).toEqual([]);
+  });
+
+  it('scopes the course_orgs lookup to this org, not every org', async () => {
+    const whereCalls: SQL[] = [];
+    db.select.mockReturnValueOnce(makeCapturingChain([], whereCalls));
+
+    await getOrgEditorBoard(9);
+
+    expect(whereCalls).toHaveLength(1);
+    // Mutant this catches: `eq(courseOrgsTable.courseId, orgId)` — right
+    // shape (a single equality on this table), wrong column — which would
+    // otherwise let one org's editor board list courses through by
+    // coincidence of id rather than actual org membership. Every other
+    // test in this file stubs `where` with plain `makeChain`, which
+    // discards the condition entirely, so none of them can catch this.
+    expect(renderSql(whereCalls[0])).toBe('"course_orgs"."org_id" = $1');
+    expect(renderSqlParams(whereCalls[0])).toEqual([9]);
   });
 });

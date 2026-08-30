@@ -97,9 +97,7 @@ export async function getOrgEditorBoard(orgId: number): Promise<CourseBoard[]> {
     .from(courseOrgsTable)
     .where(eq(courseOrgsTable.orgId, orgId));
 
-  const boards = await Promise.all(
-    rows.map((r) => getCourseBoard(r.courseId)),
-  );
+  const boards = await Promise.all(rows.map((r) => getCourseBoard(r.courseId)));
 
   // `getCourseBoard` returns null only when the course id it's given doesn't
   // resolve — shouldn't happen for an id `course_orgs` just gave us (its FK
