@@ -451,7 +451,7 @@ export const UsersTable = ({
                   })}
                   <th
                     scope="col"
-                    className="border-gray-6 border-b px-4 py-2.5"
+                    className="w-px border-gray-6 border-b px-4 py-2.5"
                   >
                     <span className="sr-only">Actions</span>
                   </th>
@@ -505,11 +505,20 @@ export const UsersTable = ({
                         )}
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-end">
+                    {/* `w-px` is the shrink-to-fit idiom for a table column:
+                        auto-layout treats it as "as narrow as the content
+                        allows", so the actions column takes exactly its
+                        button and leaves the rest of the width to the columns
+                        that carry text. */}
+                    <td className="w-px px-4 py-3 text-end">
                       <button
                         type="button"
                         onClick={() => onOpenRow(row.original)}
-                        className="rounded-lg border border-gray-6 px-3 py-1.5 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                        // The label is one word and is the control's name —
+                        // it never wraps, whatever the column does. See the
+                        // `button { overflow-wrap: normal }` base rule for
+                        // the underlying cause this guards against locally.
+                        className="whitespace-nowrap rounded-lg border border-gray-6 px-3 py-1.5 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
                       >
                         {row.original.kind === 'pending' ? 'View' : 'Manage'}
                       </button>

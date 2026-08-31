@@ -28,6 +28,23 @@
 
 /* https://x.com/csswizardry/status/1717841334462005661 */
 @layer base {
+  /* `<body>` carries `wrap-anywhere` (`overflow-wrap: anywhere`) so that a long
+     unbroken string — an email address, a URL — wraps instead of overflowing
+     its column. That is right for CONTENT and wrong for a control: a button's
+     label is its name, and a name broken mid-word is not one.
+
+     It also does real layout damage. Table auto-layout sizes a column to its
+     min-content width, and under `anywhere` the min-content width of "Manage"
+     is one character — so the actions column of `/admin/users` collapsed and
+     the label wrapped onto two lines. `normal` restores the whole word as the
+     minimum, which is what the browser then makes room for.
+
+     This only stops breaking INSIDE a word. A multi-word label still wraps at
+     its spaces, because that is `white-space`, which this does not touch. */
+  button {
+    overflow-wrap: normal;
+  }
+
   html {
     /* Dark-only app: renders scrollbars, form controls and browser chrome
        dark. Previously set imperatively as `root.style.colorScheme` by the
