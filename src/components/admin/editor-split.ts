@@ -1,10 +1,9 @@
 /**
  * How far the editor's splitter may travel.
  *
- * The two panes are not interchangeable, and neither is a percentage: the
- * library holds `w-80` discipline columns and the rail holds `w-96` course
- * columns, so "20% of the editor" is a usable library on a wide monitor and
- * half a column on a laptop. The floor for each side is therefore ONE of its
+ * Neither pane's floor is a percentage: both hold `w-96` columns, so "20% of
+ * the editor" is a usable library on a wide monitor and half a column on a
+ * laptop. The floor for each side is therefore ONE of its
  * own columns plus the gutter its row already puts on both sides — drag past
  * that and the column is clipped, which is the state these bounds exist to
  * make unreachable.
@@ -12,12 +11,16 @@
  * The numbers are duplicated from Tailwind classes that live on the column
  * components, which no test can read from here. `editor-split.test.ts`
  * therefore renders those components and asserts the classes still match, so
- * changing `w-80` on `DisciplineColumn` fails a test that names this file
- * rather than silently drifting.
+ * changing the width on either column fails a test that names this file
+ * rather than silently drifting. That guard has already earned itself once:
+ * it caught this constant when `DisciplineColumn` went from `w-80` to `w-96`.
  */
 
-/** `w-80` on `DisciplineColumn`. */
-export const LIBRARY_COLUMN_WIDTH_PX = 320;
+/**
+ * `w-96` on `DisciplineColumn` — the same width as a course column, so the
+ * two panes read as one system rather than two sizes of card.
+ */
+export const LIBRARY_COLUMN_WIDTH_PX = 384;
 /** `w-96` on `CourseColumn`. */
 export const COURSE_COLUMN_WIDTH_PX = 384;
 /** `p-4` on each pane's columns row — one gutter at each edge. */

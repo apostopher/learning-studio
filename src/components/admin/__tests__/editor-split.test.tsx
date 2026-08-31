@@ -54,12 +54,18 @@ describe('splitBounds', () => {
     );
   });
 
-  it('gives the wider column the larger floor', () => {
-    // A course column is wider than a discipline column, so the rail's floor
-    // must be the larger of the two. Mutant this catches: the two constants
-    // swapped — every other test here would still pass, and the panes would
-    // each be floored at the other's width.
-    expect(COURSE_RAIL_MIN_WIDTH_PX).toBeGreaterThan(LIBRARY_MIN_WIDTH_PX);
+  it('floors both panes at the same width, because both columns are', () => {
+    // REPLACES a test asserting the rail's floor was the LARGER of the two,
+    // which held while the library used `w-80`. The two columns are now
+    // deliberately the same size so the panes read as one system, which makes
+    // that older property false — and makes "the constants got swapped" a
+    // no-op rather than a bug worth catching.
+    //
+    // What is worth catching now: one column resized without the other.
+    // Mutant this catches: `w-96` changed on one component alone, which the
+    // two class-pinning tests below would report as a constant mismatch while
+    // this one names the design rule that was broken.
+    expect(LIBRARY_MIN_WIDTH_PX).toBe(COURSE_RAIL_MIN_WIDTH_PX);
   });
 
   it('freezes the handle when the row cannot fit both floors', () => {
@@ -110,14 +116,14 @@ describe('clampSplit', () => {
  * from the column it is supposed to protect.
  */
 describe('the widths those constants stand for', () => {
-  it('DisciplineColumn is still w-80 (320px)', () => {
+  it('DisciplineColumn is still w-96 (384px)', () => {
     const { container } = render(
       <DisciplineColumn name="UAS" lessonCount={0}>
         <span />
       </DisciplineColumn>,
     );
-    expect(container.firstElementChild?.className).toContain('w-80');
-    expect(LIBRARY_COLUMN_WIDTH_PX).toBe(320);
+    expect(container.firstElementChild?.className).toContain('w-96');
+    expect(LIBRARY_COLUMN_WIDTH_PX).toBe(384);
   });
 
   it('CourseColumn is still w-96 (384px)', () => {

@@ -2,7 +2,6 @@ import { GripVertical, Pencil } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
-import { chipClassName } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
 
@@ -13,6 +12,14 @@ import { LessonVideoTile } from './lesson-video-tile';
  * own config screen, not shown here — and it has no delete or play affordance:
  * the library is a source list to drag from, not a place to manage or
  * preview a lesson.
+ *
+ * It also carries NO "in N courses" badge, though `courseCount` is on the
+ * type and other things still read it (the delete confirmation names the
+ * count, since deleting takes the lesson out of every course at once). The
+ * column is 320px wide and the name is the thing being scanned for; a
+ * cross-reference that repeats on nearly every card earned none of that
+ * width. Where a lesson is taught is a question the course rail answers by
+ * being on screen beside this one.
  */
 export const LibraryLessonCard = ({
   lesson,
@@ -23,8 +30,6 @@ export const LibraryLessonCard = ({
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
   onEdit?: () => void;
 }) => {
-  const courseNoun = lesson.courseCount === 1 ? 'course' : 'courses';
-
   return (
     <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary">
       <LessonVideoTile
@@ -37,28 +42,6 @@ export const LibraryLessonCard = ({
           {!lesson.isAvailable && (
             <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
               Draft
-            </span>
-          )}
-          {/*
-            "Used" isn't a boolean — a lesson can be in the 2-week course and
-            not the mini — so there is nothing here to grey out or disable.
-            This badge is the only signal a card carries for that, and it is
-            never rendered for an unused lesson (courseCount === 0) rather
-            than rendered as a dimmed "in 0 courses".
-            `apple` (navy), not `accent` (gold): this states a cross-reference
-            to other courses, not a status of this lesson.
-          */}
-          {lesson.courseCount > 0 && (
-            // `role="img"` is the same trick `Logo` and `LessonVideoTile` use
-            // for a chunk of UI that needs one accessible name distinct from
-            // (here, fuller than) its visible text — a bare `<span>` has no
-            // implicit role, so `aria-label` on it is invalid ARIA-in-HTML.
-            <span
-              role="img"
-              aria-label={`In ${lesson.courseCount} ${courseNoun}`}
-              className={chipClassName('soft-apple', 'normal-case')}
-            >
-              In {lesson.courseCount} {courseNoun}
             </span>
           )}
           {onEdit && (

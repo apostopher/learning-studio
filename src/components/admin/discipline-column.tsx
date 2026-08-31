@@ -30,7 +30,7 @@ export const DisciplineColumn = ({
   const lessonNoun = lessonCount === 1 ? 'lesson' : 'lessons';
 
   return (
-    <section className="flex h-full w-80 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
+    <section className="flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-semibold text-primary text-sm">
           {name}
