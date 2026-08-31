@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { z } from 'zod';
 import {
   type AddPendingEnrolmentInput,
@@ -28,9 +33,18 @@ async function readError(res: Response, fallback: string): Promise<never> {
   throw new AdminUsersError(message, res.status);
 }
 
-/** Accounts and never-signed-in invitees in one payload. */
-export function useAdminUsers() {
-  return useQuery({
+/**
+ * Accounts and never-signed-in invitees in one payload.
+ *
+ * A `queryOptions` factory rather than an inline object so the ROUTE can
+ * prime it too: `/admin/users` calls `ensureQueryData` with exactly this, and
+ * the router's `defaultPreload: 'intent'` then starts the request when the nav
+ * link is hovered instead of when the page mounts. Both callers must use the
+ * same key AND the same `queryFn`, or the loader would fill a cache entry the
+ * component never reads.
+ */
+export function adminUsersQueryOptions() {
+  return queryOptions({
     queryKey: dataKeys.adminUsers(),
     queryFn: async () => {
       const res = await fetch('/api/admin/users');
@@ -39,6 +53,10 @@ export function useAdminUsers() {
     },
     staleTime: 30_000,
   });
+}
+
+export function useAdminUsers() {
+  return useQuery(adminUsersQueryOptions());
 }
 
 const rolePermissionsResponseSchema = z.object({

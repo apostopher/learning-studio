@@ -1521,3 +1521,49 @@
     scale: 1;
   }
 }
+
+/* Cross-fade between admin sections.
+   ------------------------------------------------------------------
+   The browser's default view transition already cross-fades the whole page,
+   but at its own pace and with a `blend` that double-exposes text mid-way.
+   These name the timing explicitly and let the outgoing snapshot leave a
+   little faster than the incoming one arrives, so the two never sit at full
+   opacity together.
+
+   `::view-transition-old/new(root)` is the whole-document snapshot pair —
+   TanStack Router drives the transition (see `AdminNavLink`), and nothing
+   here assigns per-element `view-transition-name`s, so `root` is the only
+   pair in play. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: view-fade-out var(--duration-view-transition-out)
+      var(--ease-standard) both;
+  }
+
+  ::view-transition-new(root) {
+    animation: view-fade-in var(--duration-view-transition-in)
+      var(--ease-standard) both;
+  }
+}
+
+/* Reduced motion gets NO transition rather than a gentler one. A view
+   transition is a full-page cross-fade — there is no movement to soften, so
+   the honest reduction is to skip it and let the new page appear. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+@keyframes view-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
+}

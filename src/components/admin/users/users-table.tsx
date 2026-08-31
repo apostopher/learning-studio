@@ -11,6 +11,7 @@ import { cn } from '#/lib/cn';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import { USER_LEVELS, type UserLevel } from '#/types';
 import { UserAvatar } from './user-avatar';
+import { UsersTableSkeleton } from './users-table-skeleton';
 
 /**
  * Why the table came back empty, in the pilot's own terms.
@@ -399,6 +400,15 @@ export const UsersTable = ({
         </p>
       )}
 
+      {/* The skeleton rows are `aria-hidden` — eight rows of decorative
+          boxes are noise to a screen reader. This is what it hears instead,
+          and it replaces the "Loading people…" cell the skeleton took over
+          from: dropping that text without putting the announcement somewhere
+          would have made the wait silent. */}
+      <output aria-live="polite" className="sr-only">
+        {isLoading ? 'Loading people…' : ''}
+      </output>
+
       <div className="overflow-hidden rounded-xl border border-gray-6">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -466,14 +476,7 @@ export const UsersTable = ({
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={columns.length + 1}
-                    className="px-4 py-10 text-center text-secondary text-sm"
-                  >
-                    Loading people…
-                  </td>
-                </tr>
+                <UsersTableSkeleton columnCount={columns.length} />
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + 1} className="px-4 py-12">

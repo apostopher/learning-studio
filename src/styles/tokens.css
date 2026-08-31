@@ -227,6 +227,12 @@
      appear to leap across the screen. */
   --scale-dialog-collapsed: 0.9;
 
+  /* page view transition (admin sections) — out is shorter than in, so the
+     two snapshots never sit at full opacity together and text cannot
+     double-expose mid-crossfade. */
+  --duration-view-transition-out: 90ms;
+  --duration-view-transition-in: 180ms;
+
   /* scroll area shape + color */
   --size-scroll-area-thumb: calc(var(--spacing) * 1.5);
   --spacing-scroll-area-thumb-inset: 2px;

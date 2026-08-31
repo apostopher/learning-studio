@@ -83,6 +83,19 @@ const AdminNavLink = ({
 }) => (
   <Link
     to={to}
+    // A cross-fade between admin sections, via the browser's own
+    // `startViewTransition` (TanStack Router calls it; React's
+    // `<ViewTransition>` is canary-only and this app is on stable 19.2).
+    //
+    // A FADE, not a directional slide. These four sections are lateral — no
+    // one of them is "deeper" than another — and a slide would imply a spatial
+    // relationship that does not exist. Slides are for list-to-detail.
+    //
+    // Per-link rather than `defaultViewTransition` on the router, so it
+    // applies where it means something instead of to every navigation in the
+    // app, including redirects and back-button restores.
+    viewTransition
+    preload="intent"
     // `exact` on /admin only, so /admin/users doesn't light both links up.
     activeOptions={{ exact: to === '/admin' }}
     className="rounded-lg px-3 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 data-[status=active]:bg-gray-4 data-[status=active]:text-primary"
