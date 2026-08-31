@@ -81,6 +81,17 @@ export const createModuleTargetAtom = atom<{
   name: string;
 } | null>(null);
 
+/**
+ * The measured inline size of the editor's two-pane row, in px.
+ *
+ * State rather than a read-on-demand measurement because the splitter's
+ * announced range (`aria-valuemin`/`max`) depends on it, and those are render
+ * output — a handler that measured on interaction would leave a screen reader
+ * being told about positions the handle refuses to move to. Zero until the
+ * observer first reports.
+ */
+export const editorPaneRowWidthAtom = atom(0);
+
 /** Whether the create-module dialog is open. */
 export const createModuleDialogOpenAtom = atom(false);
 

@@ -29,6 +29,7 @@ import {
   activeDragLibraryLessonIdAtom,
   activeDragModuleIdAtom,
   editorDragRefusalAtom,
+  editorPaneRowWidthAtom,
   editorSplitPercentAtom,
   expandedEditorModuleIdsAtom,
 } from '#/atoms/admin';
@@ -66,6 +67,7 @@ import {
 import { EditorCourseColumnContainer } from './editor-course-column-container';
 import { EditorCreateModuleDialogContainer } from './editor-create-module-dialog-container';
 import { EditorPaneSplitter } from './editor-pane-splitter';
+import { clampSplit, splitBounds } from './editor-split';
 import { LessonCard } from './lesson-card';
 import { LessonLibrary } from './lesson-library';
 import { LessonVideoModalContainer } from './lesson-video-modal-container';
@@ -84,13 +86,7 @@ const AUTO_EXPAND_DELAY_MS = 400;
  * it a miss while calling a drop across the pane a hit.
  */
 const DROP_SLOP_PX = 24;
-/** The library pane never shrinks or grows past these, as a % of the editor. */
-const MIN_SPLIT_PERCENT = 20;
-const MAX_SPLIT_PERCENT = 80;
 const SPLIT_KEYBOARD_STEP = 2;
-
-const clampSplit = (percent: number) =>
-  Math.min(MAX_SPLIT_PERCENT, Math.max(MIN_SPLIT_PERCENT, percent));
 
 /**
  * The knowledge library editor: the org's lessons on one side, every course's
@@ -193,6 +189,7 @@ export const EditorContainer = ({
   } | null>(null);
   /** The pane row, measured live so the splitter works at any window size. */
   const paneRowRef = useRef<HTMLDivElement>(null);
+  const [paneRowWidth, setPaneRowWidth] = useAtom(editorPaneRowWidthAtom);
 
   const readBoard = () =>
     queryClient.getQueryData<OrgEditorBoard>(boardKey) ?? null;
@@ -611,6 +608,34 @@ export const EditorContainer = ({
     onDragCancel: () => 'Drag cancelled, nothing moved.',
   };
 
+  /**
+   * The splitter's bounds are pixel floors — one column plus its gutters on
+   * each side — so they move with the row. Observed rather than measured on
+   * interaction because `aria-valuemin`/`max` are render output: a range
+   * computed only while dragging would leave a screen reader being told about
+   * positions the handle refuses to reach.
+   */
+  useEffect(() => {
+    const row = paneRowRef.current;
+    if (!row) return;
+    setPaneRowWidth(row.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPaneRowWidth(entry.contentRect.width);
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [setPaneRowWidth]);
+
+  const bounds = splitBounds(paneRowWidth);
+  /**
+   * What the pane actually gets, which is not always what the atom holds: the
+   * split is persisted across sessions and across window sizes, so a width
+   * saved on a wide monitor can be below the floor on a laptop. Clamping at
+   * READ time rather than writing the atom back keeps the wide-monitor
+   * preference intact for when that monitor comes back.
+   */
+  const effectiveSplit = clampSplit(splitPercent, bounds);
+
   const onSplitterPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const row = paneRowRef.current;
@@ -627,7 +652,9 @@ export const EditorContainer = ({
         inlineDirSign() === 1
           ? moveEvent.clientX - rect.left
           : rect.right - moveEvent.clientX;
-      setSplitPercent(clampSplit((fromStart / rect.width) * 100));
+      setSplitPercent(
+        clampSplit((fromStart / rect.width) * 100, splitBounds(rect.width)),
+      );
     };
     const onUp = () => {
       handle.releasePointerCapture(event.pointerId);
@@ -642,11 +669,15 @@ export const EditorContainer = ({
 
   const onSplitterKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const step = SPLIT_KEYBOARD_STEP * inlineDirSign();
-    if (event.key === 'ArrowLeft') setSplitPercent((p) => clampSplit(p - step));
+    // Stepping from `effectiveSplit`, not the stored value: a persisted split
+    // below this row's floor would otherwise need several presses before the
+    // handle moved at all, since each one would clamp back to the same place.
+    if (event.key === 'ArrowLeft')
+      setSplitPercent(clampSplit(effectiveSplit - step, bounds));
     else if (event.key === 'ArrowRight')
-      setSplitPercent((p) => clampSplit(p + step));
-    else if (event.key === 'Home') setSplitPercent(MIN_SPLIT_PERCENT);
-    else if (event.key === 'End') setSplitPercent(MAX_SPLIT_PERCENT);
+      setSplitPercent(clampSplit(effectiveSplit + step, bounds));
+    else if (event.key === 'Home') setSplitPercent(bounds.min);
+    else if (event.key === 'End') setSplitPercent(bounds.max);
     else return;
     event.preventDefault();
   };
@@ -692,7 +723,7 @@ export const EditorContainer = ({
       <div ref={paneRowRef} className="flex h-full min-h-0 w-full">
         <div
           className="min-w-0 overflow-hidden"
-          style={{ flexBasis: `${splitPercent}%` }}
+          style={{ flexBasis: `${effectiveSplit}%` }}
         >
           <LessonLibrary
             headerAction={
@@ -733,12 +764,13 @@ export const EditorContainer = ({
         <div className="contents" onKeyDown={onSplitterKeyDown}>
           <EditorPaneSplitter
             onPointerDown={onSplitterPointerDown}
-            ariaValueNow={Math.round(splitPercent)}
+            ariaValueNow={Math.round(effectiveSplit)}
             // The clamp lives here, so the announced range does too — 0–100
             // told a screen reader about positions the handle refuses to move
-            // to.
-            ariaValueMin={MIN_SPLIT_PERCENT}
-            ariaValueMax={MAX_SPLIT_PERCENT}
+            // to. These now move with the row, because the floors are one
+            // column wide rather than a fixed share of it.
+            ariaValueMin={Math.round(bounds.min)}
+            ariaValueMax={Math.round(bounds.max)}
           />
         </div>
 
