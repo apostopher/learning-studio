@@ -20,12 +20,20 @@ export const AdminShellLayout = ({
   canSeePeople,
   canSeeCourses,
   canSeeEditor,
+  canSeeDisciplines,
   children,
 }: {
   canSeePeople: boolean;
   canSeeCourses: boolean;
   /** Whether the org-level knowledge library editor has anything to show. */
   canSeeEditor: boolean;
+  /**
+   * Whether to offer the disciplines screen — creating disciplines and
+   * appointing their Subject Experts. Admin-or-owner alone: every endpoint
+   * behind it is `requireAdmin`, deliberately, so that a Subject Expert cannot
+   * appoint a peer (or themselves) to the discipline they already hold.
+   */
+  canSeeDisciplines: boolean;
   children: ReactNode;
 }) => (
   // The whole layout is now capped to the viewport so a full-height child
@@ -50,14 +58,20 @@ export const AdminShellLayout = ({
           // rather than to the screen holding it.
           <AdminNavLink to="/admin/editor">Knowledge library</AdminNavLink>
         )}
-        {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
-        {!canSeeCourses && !canSeeEditor && !canSeePeople && (
-          // Not a bare strip: an actor with no section at all is told why,
-          // in text a screen reader reaches like any other nav content.
-          <p className="px-3 py-1.5 text-secondary text-sm">
-            No admin sections are available with your current permissions.
-          </p>
+        {canSeeDisciplines && (
+          <AdminNavLink to="/admin/disciplines">Disciplines</AdminNavLink>
         )}
+        {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
+        {!canSeeCourses &&
+          !canSeeEditor &&
+          !canSeeDisciplines &&
+          !canSeePeople && (
+            // Not a bare strip: an actor with no section at all is told why,
+            // in text a screen reader reaches like any other nav content.
+            <p className="px-3 py-1.5 text-secondary text-sm">
+              No admin sections are available with your current permissions.
+            </p>
+          )}
       </div>
     </nav>
     <div className="flex min-h-0 flex-1 flex-col">{children}</div>

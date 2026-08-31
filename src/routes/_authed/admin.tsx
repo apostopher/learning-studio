@@ -58,12 +58,26 @@ function AdminShell() {
   // Identical to the condition `beforeLoad` above uses to admit anyone to this
   // shell at all, which is why `/admin/editor` carries no gate of its own.
   const canSeeEditor = hasAdminAccess(roles) || isStaffAnywhere;
+  // Roles, NOT `isStaffAnywhere` — and this is the one link in the bar where
+  // that distinction is the whole point. `/admin/disciplines` administers WHO
+  // may author: creating a discipline, destroying one, and appointing its
+  // Subject Experts. Every endpoint behind it is `requireAdmin` precisely so
+  // that an SME cannot appoint a peer (or re-appoint themselves) on the
+  // discipline they already hold — role assignment would otherwise be
+  // self-propagating. `hasAdminAccess` is the same predicate `requireAdmin`
+  // uses, so the link and the route can never disagree.
+  //
+  // Not gated on a `role_permissions` grant either: `requireAdmin` reads roles
+  // and consults no grant, so a permission-keyed link would hide the page from
+  // admins the endpoints happily serve.
+  const canSeeDisciplines = hasAdminAccess(roles);
 
   return (
     <AdminShellLayout
       canSeePeople={canSeePeople}
       canSeeCourses={canSeeCourses}
       canSeeEditor={canSeeEditor}
+      canSeeDisciplines={canSeeDisciplines}
     >
       <Outlet />
     </AdminShellLayout>
