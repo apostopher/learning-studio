@@ -226,6 +226,45 @@ describe('PUT /api/admin/users/:id/roles — owner only', () => {
     expect((await res.json()).error).toMatch(/last owner/i);
   });
 
+  it('refuses subject-expert, which has no global form', async () => {
+    const res = await putUserRoleHandler(
+      req({ role: 'subject-expert', granted: true }),
+      '5',
+    );
+
+    // A subject expert holds DISCIPLINES. Granting the role globally used to
+    // union into `requireScopedPermission` and hand them content:* over every
+    // discipline and every course at once — the opposite of "expert of this
+    // subject". Mutant this catches: the check removed, which reads as
+    // harmless because the read side now ignores such rows anyway; it is not,
+    // because the checkbox would come back and appear to do something.
+    expect(res.status).toBe(400);
+    expect(m.setUserRole).not.toHaveBeenCalled();
+  });
+
+  it('names where the authority actually comes from when it refuses', async () => {
+    const res = await putUserRoleHandler(
+      req({ role: 'subject-expert', granted: true }),
+      '5',
+    );
+
+    // A bare "not allowed" leaves an owner with no idea how to appoint one.
+    expect((await res.json()).error).toMatch(/discipline/i);
+  });
+
+  it('still assigns a role that does have a global form', async () => {
+    m.setUserRole.mockResolvedValueOnce({ ok: true });
+    const res = await putUserRoleHandler(
+      req({ role: 'course-manager', granted: true }),
+      '5',
+    );
+
+    // The refusal is scoped to `SCOPE_ONLY_ROLES`, not a blanket block.
+    // `course-manager` is deliberately not in that list.
+    expect(res.status).toBe(204);
+    expect(m.setUserRole).toHaveBeenCalled();
+  });
+
   it('records the acting owner as the assigner', async () => {
     m.setUserRole.mockResolvedValueOnce({ ok: true });
     await putUserRoleHandler(req({ role: 'admin', granted: true }), '5');

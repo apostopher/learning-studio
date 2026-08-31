@@ -114,6 +114,40 @@ describe('requireDisciplinePermission', () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  /**
+   * A subject expert holds DISCIPLINES, never a global role — see
+   * `SCOPE_ONLY_ROLES`. The role was assignable globally before, so accounts
+   * carrying one may still exist; the filter is what makes the rule true for
+   * them rather than only for accounts touched since.
+   */
+  it('grants nothing to a subject-expert role held globally', async () => {
+    // Exactly the shape that used to work: the role in `user_roles`, no
+    // discipline row, and `getUserPermissions` answering as it does for that
+    // role's grants. Mutant this catches: dropping the filter in
+    // `requireScopedPermission` — this person would hold content:* over EVERY
+    // discipline in the org, and the roster they are not on would be
+    // decorative.
+    m.getUserRoleNames.mockResolvedValue(['subject-expert']);
+    m.getDisciplineRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['content:update']));
+
+    await expect(
+      requireDisciplinePermission(HEADERS, 7, 'content', 'update'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('still admits the same person on a discipline they DO hold', async () => {
+    // The other half, and the one that makes the filter a narrowing rather
+    // than a removal: the authority is real, it just comes from the scope row.
+    m.getUserRoleNames.mockResolvedValue(['subject-expert']);
+    m.getDisciplineRoleNames.mockResolvedValue(['subject-expert']);
+    m.getUserPermissions.mockResolvedValue(new Set(['content:update']));
+
+    await expect(
+      requireDisciplinePermission(HEADERS, 7, 'content', 'update'),
+    ).resolves.toBeUndefined();
+  });
+
   it('admits an owner anywhere via the wildcard', async () => {
     m.getUserRoleNames.mockResolvedValue(['owner']);
     m.getUserPermissions.mockResolvedValue(new Set(['*']));

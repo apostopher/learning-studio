@@ -534,6 +534,32 @@ export const COURSE_SCOPED_ROLES = [
 ] as const;
 export type CourseScopedRole = (typeof COURSE_SCOPED_ROLES)[number];
 
+/**
+ * Roles that mean NOTHING when held globally.
+ *
+ * A subject expert's authority comes from the discipline they were appointed
+ * to, never from a row in `user_roles`. Held globally the role would union
+ * into `requireScopedPermission` and grant `content:*` on every discipline and
+ * every course at once — the exact opposite of "an expert of this subject",
+ * and it would make the discipline roster decorative for anyone holding it.
+ *
+ * Enforced in two places, on purpose. `putUserRoleHandler` refuses to assign
+ * one, so no new global row can appear; and `requireScopedPermission` filters
+ * them out of the global list, so any row that already exists grants nothing.
+ * The second is what makes the invariant true rather than merely intended —
+ * without it the rule would hold only for accounts touched after this change.
+ *
+ * `course-manager` is deliberately NOT here. It is course-scoped in the same
+ * way, but nothing has asked for that to change and removing its global
+ * meaning would silently withdraw structure authority from anyone holding it
+ * today.
+ */
+export const SCOPE_ONLY_ROLES = [SUBJECT_EXPERT_ROLE] as const;
+
+export function isScopeOnlyRole(name: string): boolean {
+  return (SCOPE_ONLY_ROLES as readonly string[]).includes(name);
+}
+
 export function isCourseScopedRole(name: string): name is CourseScopedRole {
   return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
 }

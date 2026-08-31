@@ -168,6 +168,32 @@ describe('requireCoursePermission', () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  it('grants nothing to a subject-expert role held globally', async () => {
+    // The same rule reaches courses: a global `subject-expert` used to carry
+    // structure:* and content:* onto EVERY course, not just the ones it was
+    // staffed on. Mutant this catches: filtering scope-only roles in the
+    // discipline guard alone and forgetting this one — both wrappers share
+    // `requireScopedPermission`, and a filter applied in only one of them
+    // would leave the course half wide open.
+    m.getUserRoleNames.mockResolvedValue(['subject-expert']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['structure:update']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('still admits a subject expert staffed on THIS course', async () => {
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.getCourseRoleNames.mockResolvedValue(['subject-expert']);
+    m.getUserPermissions.mockResolvedValue(new Set(['structure:update']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
+    ).resolves.toMatchObject({ userId: 'u1' });
+  });
+
   it('admits an owner anywhere via the wildcard', async () => {
     m.getUserRoleNames.mockResolvedValue(['owner']);
     m.getUserPermissions.mockResolvedValue(new Set(['*']));

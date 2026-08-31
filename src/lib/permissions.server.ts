@@ -19,6 +19,7 @@ import {
   hasAdminAccess,
   isCourseScopedEntity,
   isDisciplineScopedEntity,
+  isScopeOnlyRole,
   OWNER_ROLE,
   type PermissionAction,
   type PermissionEntity,
@@ -143,7 +144,13 @@ async function requireScopedPermission(
   // Refusing here rather than asking for the grants of an empty role list keeps
   // the join off the path of every ordinary learner, and fails closed if a
   // permission lookup ever starts answering generously for `[]`.
-  const roles = [...globalRoles, ...scopedRoles];
+  // A scope-only role held globally grants nothing — see `SCOPE_ONLY_ROLES`.
+  // Filtering here rather than trusting the write guard is what makes the rule
+  // true for rows that already exist: `subject-expert` was assignable as a
+  // global role before this, and any account still carrying one would
+  // otherwise hold `content:*` over every discipline in the org.
+  const usableGlobalRoles = globalRoles.filter((r) => !isScopeOnlyRole(r));
+  const roles = [...usableGlobalRoles, ...scopedRoles];
   if (roles.length === 0) throw new ForbiddenError();
 
   const permissions = await getUserPermissions(roles);

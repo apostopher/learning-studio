@@ -29,8 +29,8 @@ import {
 import {
   hasAdminAccess,
   hasPermissionKey,
+  isScopeOnlyRole,
   OWNER_ROLE,
-  SUBJECT_EXPERT_ROLE,
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
 import type { UserLevel } from '#/types';
@@ -385,22 +385,29 @@ export const UsersPageContainer = ({
         isSavingProfile={updateProfile.isPending}
         profileError={errorOf(updateProfile.error)}
         isOwner={isOwner}
-        // Shown only for someone who actually holds the role: which
-        // disciplines a course manager is an expert of is not a question, and
-        // an empty picker on every profile is noise.
+        // Shown for every real person, not only those already holding the
+        // role — because picking a discipline is now what MAKES someone a
+        // subject expert. `subject-expert` has no global form to tick first
+        // (see `SCOPE_ONLY_ROLES`), so gating this on holding it would leave
+        // no way to appoint anyone from this screen at all.
         //
         // `hasAdminAccess`, NOT `isOwner` — staffing a discipline is
         // `requireAdmin` on the server while assigning a ROLE is owner-only,
         // so this section is offered to a strictly wider audience than the
         // Roles section below it, and deliberately.
         disciplinesSlot={
-          openRow?.userId &&
-          openRow.roles.includes(SUBJECT_EXPERT_ROLE) &&
-          hasAdminAccess(roles) ? (
+          openRow?.userId && hasAdminAccess(roles) ? (
             <UserDisciplinesContainer userId={openRow.userId} />
           ) : undefined
         }
-        assignableRoles={(rolePermissions.data?.roles ?? []).map((r) => r.name)}
+        // A scope-only role is not assignable here and the server refuses it
+        // anyway (`putUserRoleHandler`). Withheld rather than shown disabled:
+        // there is no state in which ticking it would be right, and the
+        // control that DOES appoint a subject expert is the disciplines
+        // picker directly above.
+        assignableRoles={(rolePermissions.data?.roles ?? [])
+          .map((r) => r.name)
+          .filter((name) => !isScopeOnlyRole(name))}
         onToggleRole={(role, granted) =>
           setUserRole.mutate(
             { role, granted },
