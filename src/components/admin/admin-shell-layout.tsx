@@ -47,9 +47,12 @@ export const AdminShellLayout = ({
     <AppHeaderContainer />
     <nav
       aria-label="Admin sections"
-      className="content-grid border-gray-6 border-b bg-gray-2"
+      // Edge to edge on the same 1rem rail as the header above and the
+      // editor's own column gutters below — see `AppHeader` for why the
+      // chrome stopped using `content-grid`.
+      className="border-gray-6 border-b bg-gray-2"
     >
-      <div className="content flex gap-1 py-2">
+      <div className="flex gap-1 px-4 py-2">
         {canSeeCourses && <AdminNavLink to="/admin">Courses</AdminNavLink>}
         {canSeeEditor && (
           // Not "Library": the editor's own left pane is already called that,
