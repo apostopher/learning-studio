@@ -67,6 +67,20 @@ export const deleteDisciplineTargetAtom = atom<{
  */
 export const editLibraryLessonIdAtom = atom<number | null>(null);
 
+/**
+ * The course whose "create module" dialog is open on the ORG editor's rail, or
+ * null.
+ *
+ * The rail shows many courses at once, which is why this carries a target
+ * rather than being the boolean `createModuleDialogOpenAtom` beside it: one
+ * shared boolean would open every column's dialog at the same time. The name
+ * rides along so the dialog can say which course the module is going into.
+ */
+export const createModuleTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
 /** Whether the create-module dialog is open. */
 export const createModuleDialogOpenAtom = atom(false);
 

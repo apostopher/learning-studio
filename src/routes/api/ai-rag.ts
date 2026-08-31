@@ -1,21 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { del } from '@vercel/blob';
-import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
-import {
-  aiRagPostSchema,
-  aiRagDeleteSchema,
-  parseCourseIdParam,
-} from '#/lib/ai-rag-schemas';
 import { generateHTMLEmbeddings } from '#/ai/embeddings';
-import { convertWordToHtml, convertPdfToHtml } from '#/common/html-converters';
+import { convertPdfToHtml, convertWordToHtml } from '#/common/html-converters';
 import {
   courseExists,
-  listDocsBySource,
   deleteDocsBySource,
-  getDocUrls,
   deleteDocUrls,
+  getDocUrls,
+  listDocsBySource,
   upsertDocUrl,
 } from '#/db/docs';
+import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
+import {
+  aiRagDeleteSchema,
+  aiRagPostSchema,
+  parseCourseIdParam,
+} from '#/lib/ai-rag-schemas';
 
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -46,7 +46,9 @@ async function guard(request: Request): Promise<Response | null> {
   }
 }
 
-export async function addEmbeddingsHandler(request: Request): Promise<Response> {
+export async function addEmbeddingsHandler(
+  request: Request,
+): Promise<Response> {
   const denied = await guard(request);
   if (denied) return denied;
 
@@ -97,7 +99,11 @@ export async function addEmbeddingsHandler(request: Request): Promise<Response> 
       sourcePath = `file-${input.fileName}`;
     }
 
-    const { chunks } = await generateHTMLEmbeddings({ courseId, sourcePath, html });
+    const { chunks } = await generateHTMLEmbeddings({
+      courseId,
+      sourcePath,
+      html,
+    });
 
     if (chunks === 0) {
       if (input.mode === 'file') {
@@ -126,7 +132,9 @@ export async function addEmbeddingsHandler(request: Request): Promise<Response> 
   }
 }
 
-export async function listEmbeddingsHandler(request: Request): Promise<Response> {
+export async function listEmbeddingsHandler(
+  request: Request,
+): Promise<Response> {
   const denied = await guard(request);
   if (denied) return denied;
 

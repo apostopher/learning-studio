@@ -158,6 +158,12 @@ describe('/admin/editor — the composing surface', () => {
       canCreateDiscipline: true,
       canManageDisciplines: false,
       canCreateCourse: true,
+      // Creating an offering and EDITING one are separate rules: rule 5 named
+      // course managers for creation alone. Mutant this catches: reusing the
+      // create union for edit/delete, handing every course manager the
+      // delete-course button.
+      canEditCourse: false,
+      canDeleteCourse: false,
     });
   });
 
@@ -181,13 +187,15 @@ describe('/admin/editor — the composing surface', () => {
       canCreateDiscipline: true,
       canManageDisciplines: false,
       canCreateCourse: false,
+      canEditCourse: false,
+      canDeleteCourse: false,
     });
   });
 
   it('gives an admin every action, including the two staffing flags cannot grant', async () => {
     vi.spyOn(EditorRoute, 'useRouteContext').mockReturnValue({
       roles: ['admin'],
-      permissions: ['course:create'],
+      permissions: ['course:create', 'course:update', 'course:delete'],
       isStaffAnywhere: false,
       isCourseManagerAnywhere: false,
     } as never);
@@ -202,6 +210,29 @@ describe('/admin/editor — the composing surface', () => {
       canCreateDiscipline: true,
       canManageDisciplines: true,
       canCreateCourse: true,
+      canEditCourse: true,
+      canDeleteCourse: true,
+    });
+  });
+
+  it('reads edit and delete off their own permission keys', async () => {
+    vi.spyOn(EditorRoute, 'useRouteContext').mockReturnValue({
+      roles: [],
+      permissions: ['course:update'],
+      isStaffAnywhere: false,
+      isCourseManagerAnywhere: false,
+    } as never);
+
+    await mount(EditorRoute, '/admin/editor');
+    await screen.findByTestId('org-editor');
+
+    // Mutant this catches: both reading `course:update` (or both `delete`) —
+    // a plausible copy-paste that every other test here would still pass,
+    // and that would put a delete-course button in front of someone holding
+    // only the right to rename one.
+    expect(m.editor.mock.calls[0][0].capabilities).toMatchObject({
+      canEditCourse: true,
+      canDeleteCourse: false,
     });
   });
 
@@ -222,6 +253,8 @@ describe('/admin/editor — the composing surface', () => {
       canCreateDiscipline: false,
       canManageDisciplines: false,
       canCreateCourse: false,
+      canEditCourse: false,
+      canDeleteCourse: false,
     });
   });
 

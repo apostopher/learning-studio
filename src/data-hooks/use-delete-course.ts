@@ -13,6 +13,10 @@ export function useDeleteCourse() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.adminCourses() });
+      // The org editor's rail draws the same courses. Without this its column
+      // keeps the old name (or keeps a deleted course) until the board's own
+      // staleTime elapses.
+      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
     },
   });
 }

@@ -1,9 +1,9 @@
-import { atom } from "jotai";
-import { atomFamily } from "jotai-family";
-import { atomWithQuery } from "jotai-tanstack-query";
-import type { AITest, AIEvaluationResult } from "#/ai/schemas";
-import type { LessonTestResultsSelect } from "#/db/schema";
-import { queryKeys } from "#/hooks/data/keys";
+import { atom } from 'jotai';
+import { atomFamily } from 'jotai-family';
+import { atomWithQuery } from 'jotai-tanstack-query';
+import type { AIEvaluationResult, AITest } from '#/ai/schemas';
+import type { LessonTestResultsSelect } from '#/db/schema';
+import { queryKeys } from '#/hooks/data/keys';
 
 // Writable atoms for test session state
 export const currentTestAtom = atom<AITest | null>(null);
@@ -27,7 +27,7 @@ export const totalScoreAtom = atom((get) => {
   return Math.round(sum / evaluations.length);
 });
 
-export const activeTabAtom = atom("keyPoints");
+export const activeTabAtom = atom('keyPoints');
 
 export const lessonMaterialRef = { current: null as HTMLDivElement | null };
 
@@ -40,7 +40,7 @@ export const testResultsAtomFamily = atomFamily((lessonSlug: string) =>
         `/api/lesson/ai-test/results?lessonSlug=${encodeURIComponent(lessonSlug)}`,
       );
       if (!response.ok) {
-        throw new Error("Failed to fetch test results");
+        throw new Error('Failed to fetch test results');
       }
       return (await response.json()) as LessonTestResultsSelect[];
     },

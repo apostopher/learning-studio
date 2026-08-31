@@ -49,15 +49,36 @@ describe('CourseColumn', () => {
     expect(screen.getByText('Module One')).toBeTruthy();
   });
 
-  it('shows the edit action only when onEditCourse is supplied', () => {
-    // Mutant: the edit button is rendered unconditionally, ignoring whether
-    // `onEditCourse` was passed. This assertion fails against that mutant
-    // because `queryByLabelText('Edit course')` would then resolve.
+  it('renders no action bar at all when it is given none', () => {
+    // The header's own edit pencil is gone: course actions live in the
+    // subheader now, and they are the caller's to supply. Mutant this
+    // catches: the shell rendering its own default actions, which would put
+    // edit and delete in front of an actor the caller deliberately withheld
+    // them from.
     render(
       <CourseColumn course={course()}>
         <div>Module One</div>
       </CourseColumn>,
     );
-    expect(screen.queryByLabelText('Edit course')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('puts its actions in the subheader, not adrift among the modules', () => {
+    // Mutant: `actions` rendered inside the ScrollArea alongside the module
+    // accordion, where they would scroll away with it. Asserting only that
+    // the action is somewhere in the document cannot see this.
+    render(
+      <CourseColumn
+        course={course()}
+        actions={<button type="button">Delete 2 Week Intensive</button>}
+      >
+        <div data-testid="module">Module One</div>
+      </CourseColumn>,
+    );
+    const action = screen.getByRole('button', {
+      name: 'Delete 2 Week Intensive',
+    });
+    const module_ = screen.getByTestId('module');
+    expect(module_.parentElement?.contains(action)).toBe(false);
   });
 });

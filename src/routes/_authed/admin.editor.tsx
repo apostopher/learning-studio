@@ -62,6 +62,11 @@ function EditorPage() {
         canCreateCourse:
           hasPermissionKey(permissions, 'course', 'create') ||
           isCourseManagerAnywhere,
+        // Editing and deleting a course are org-level and admin-floored — no
+        // course-manager union, unlike creation above: rule 5 named course
+        // managers for creating offerings and nothing else.
+        canEditCourse: hasPermissionKey(permissions, 'course', 'update'),
+        canDeleteCourse: hasPermissionKey(permissions, 'course', 'delete'),
       }}
     />
   );

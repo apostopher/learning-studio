@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   class ForbiddenError extends Error {
@@ -29,7 +29,9 @@ vi.mock('#/lib/admin-functions.server', () => ({
   requireAdmin: mocks.requireAdmin,
   ForbiddenError: mocks.ForbiddenError,
 }));
-vi.mock('#/ai/embeddings', () => ({ generateHTMLEmbeddings: mocks.generateHTMLEmbeddings }));
+vi.mock('#/ai/embeddings', () => ({
+  generateHTMLEmbeddings: mocks.generateHTMLEmbeddings,
+}));
 vi.mock('#/common/html-converters', () => ({
   convertWordToHtml: mocks.convertWordToHtml,
   convertPdfToHtml: mocks.convertPdfToHtml,
@@ -46,8 +48,8 @@ vi.mock('@vercel/blob', () => ({ del: mocks.del }));
 
 import {
   addEmbeddingsHandler,
-  listEmbeddingsHandler,
   deleteEmbeddingsHandler,
+  listEmbeddingsHandler,
 } from '../ai-rag';
 
 const LONG = 'x'.repeat(40);
@@ -70,7 +72,9 @@ beforeEach(() => {
 describe('addEmbeddingsHandler (POST)', () => {
   it('403 when not admin', async () => {
     mocks.requireAdmin.mockRejectedValueOnce(new mocks.ForbiddenError());
-    const res = await addEmbeddingsHandler(post({ mode: 'text', sourcePath: 'd', html: LONG }));
+    const res = await addEmbeddingsHandler(
+      post({ mode: 'text', sourcePath: 'd', html: LONG }),
+    );
     expect(res.status).toBe(403);
     expect(mocks.generateHTMLEmbeddings).not.toHaveBeenCalled();
   });
@@ -85,7 +89,9 @@ describe('addEmbeddingsHandler (POST)', () => {
   });
 
   it('400 on schema failure', async () => {
-    expect((await addEmbeddingsHandler(post({ mode: 'text' }))).status).toBe(400);
+    expect((await addEmbeddingsHandler(post({ mode: 'text' }))).status).toBe(
+      400,
+    );
   });
 
   it('400 when courseId does not exist', async () => {
@@ -102,7 +108,11 @@ describe('addEmbeddingsHandler (POST)', () => {
       post({ mode: 'text', courseId: 2, sourcePath: 'doc-1', html: LONG }),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true, sourcePath: 'doc-1', chunks: 3 });
+    expect(await res.json()).toEqual({
+      success: true,
+      sourcePath: 'doc-1',
+      chunks: 3,
+    });
     expect(mocks.generateHTMLEmbeddings).toHaveBeenCalledWith({
       courseId: 2,
       sourcePath: 'doc-1',
@@ -182,7 +192,9 @@ describe('addEmbeddingsHandler (POST)', () => {
       }),
     );
     expect(res.status).toBe(400);
-    expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.del).toHaveBeenCalledWith(
+      'https://blob.vercel-storage.com/x.pdf',
+    );
     expect(mocks.upsertDocUrl).not.toHaveBeenCalled();
   });
 
@@ -203,7 +215,9 @@ describe('addEmbeddingsHandler (POST)', () => {
       }),
     );
     expect(res.status).toBe(500);
-    expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.del).toHaveBeenCalledWith(
+      'https://blob.vercel-storage.com/x.pdf',
+    );
     expect(mocks.upsertDocUrl).not.toHaveBeenCalled();
   });
 
@@ -236,7 +250,9 @@ describe('addEmbeddingsHandler (POST)', () => {
 describe('listEmbeddingsHandler (GET)', () => {
   it('403 when not admin', async () => {
     mocks.requireAdmin.mockRejectedValueOnce(new mocks.ForbiddenError());
-    const res = await listEmbeddingsHandler(new Request('http://test/api/ai-rag'));
+    const res = await listEmbeddingsHandler(
+      new Request('http://test/api/ai-rag'),
+    );
     expect(res.status).toBe(403);
   });
 
@@ -249,9 +265,13 @@ describe('listEmbeddingsHandler (GET)', () => {
 
   it('returns docs grouped by source (org-wide when omitted)', async () => {
     mocks.listDocsBySource.mockResolvedValue([{ sourcePath: 'd', count: 5 }]);
-    const res = await listEmbeddingsHandler(new Request('http://test/api/ai-rag'));
+    const res = await listEmbeddingsHandler(
+      new Request('http://test/api/ai-rag'),
+    );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ docsBySource: [{ sourcePath: 'd', count: 5 }] });
+    expect(await res.json()).toEqual({
+      docsBySource: [{ sourcePath: 'd', count: 5 }],
+    });
     expect(mocks.listDocsBySource).toHaveBeenCalledWith(null);
   });
 });
@@ -291,7 +311,9 @@ describe('deleteEmbeddingsHandler (DELETE)', () => {
     expect(res.status).toBe(200);
     expect(mocks.deleteDocsBySource).toHaveBeenCalledWith(2, 'file-x.pdf');
     expect(mocks.del).toHaveBeenCalledTimes(1); // only the vercel blob url
-    expect(mocks.del).toHaveBeenCalledWith('https://blob.vercel-storage.com/x.pdf');
+    expect(mocks.del).toHaveBeenCalledWith(
+      'https://blob.vercel-storage.com/x.pdf',
+    );
     expect(mocks.deleteDocUrls).toHaveBeenCalledWith(2, 'file-x.pdf');
   });
 

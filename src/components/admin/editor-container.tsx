@@ -45,6 +45,7 @@ import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
 import { CreateLibraryLessonDialogContainer } from './create-library-lesson-dialog-container';
+import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { DeleteDisciplineDialogContainer } from './delete-discipline-dialog-container';
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import {
@@ -52,6 +53,7 @@ import {
   UNTITLED_DISCIPLINE_ID,
 } from './discipline-column-container';
 import { DragRefusalNote } from './drag-refusal-note';
+import { EditCourseDialogContainer } from './edit-course-dialog-container';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
@@ -62,6 +64,7 @@ import {
   reorderModulesOnBoard,
 } from './editor-board-updates';
 import { EditorCourseColumnContainer } from './editor-course-column-container';
+import { EditorCreateModuleDialogContainer } from './editor-create-module-dialog-container';
 import { EditorPaneSplitter } from './editor-pane-splitter';
 import { LessonCard } from './lesson-card';
 import { LessonLibrary } from './lesson-library';
@@ -132,6 +135,14 @@ export interface EditorCapabilities {
   canManageDisciplines: boolean;
   /** RBAC rule 5 — a course manager or an admin. Mirrors `requireCourseCreation`. */
   canCreateCourse: boolean;
+  /**
+   * `course:update` and `course:delete`. Both org-level with no course-scoped
+   * fallback, which is why the route can answer them for the whole rail at
+   * once — unlike adding a MODULE, which is course-scoped `structure` work and
+   * is therefore offered to everyone and refused by the server if it must be.
+   */
+  canEditCourse: boolean;
+  canDeleteCourse: boolean;
 }
 
 export const EditorContainer = ({
@@ -743,6 +754,8 @@ export const EditorContainer = ({
               <EditorCourseColumnContainer
                 key={courseBoard.course.id}
                 courseBoard={courseBoard}
+                canEditCourse={capabilities.canEditCourse}
+                canDeleteCourse={capabilities.canDeleteCourse}
               />
             ))}
           </CourseRail>
@@ -801,6 +814,18 @@ export const EditorContainer = ({
         several courses at once — unlike the per-course board, which passes
         only its own.
       */}
+      {/*
+        The three course-level dialogs, mounted once for the rail rather than
+        once per column — each is driven by an atom naming the course that
+        opened it.
+
+        `navigateAfterDelete={false}`: the per-course board leaves for /admin
+        when its whole subject is deleted, but here the deleted course was one
+        column of several and the rest are still there to work on.
+      */}
+      <EditorCreateModuleDialogContainer />
+      <EditCourseDialogContainer />
+      <DeleteCourseDialogContainer navigateAfterDelete={false} />
       <LessonVideoModalContainer
         modules={board.flatMap((courseBoard) => courseBoard.modules)}
       />

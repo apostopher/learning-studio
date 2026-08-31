@@ -34,7 +34,12 @@ describe('saveJson', () => {
       .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
-    await saveJson({ url: '/x', method: 'POST', body: {}, fireAndForget: true });
+    await saveJson({
+      url: '/x',
+      method: 'POST',
+      body: {},
+      fireAndForget: true,
+    });
 
     const [, init] = fetchMock.mock.calls[0];
     expect(init.method).toBe('POST');
@@ -60,7 +65,10 @@ describe('saveJson', () => {
   });
 
   it('throws on a non-ok response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+    );
     await expect(
       saveJson({ url: '/x', method: 'POST', body: {} }),
     ).rejects.toThrow(/500/);
@@ -74,7 +82,12 @@ describe('saveJson', () => {
       .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
-    await saveJson({ url: '/x', method: 'POST', body: {}, fireAndForget: true });
+    await saveJson({
+      url: '/x',
+      method: 'POST',
+      body: {},
+      fireAndForget: true,
+    });
 
     expect(beacon).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];

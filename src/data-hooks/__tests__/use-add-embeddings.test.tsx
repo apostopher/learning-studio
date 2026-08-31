@@ -20,7 +20,11 @@ describe('useAddEmbeddings', () => {
   it('posts file-mode payload with courseId and returns result', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, sourcePath: 'file-x.pdf', chunks: 9 }),
+      json: async () => ({
+        success: true,
+        sourcePath: 'file-x.pdf',
+        chunks: 9,
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -43,6 +47,9 @@ describe('useAddEmbeddings', () => {
       fileName: 'x.pdf',
       mimeType: 'application/pdf',
     });
-    expect(result.current.data).toEqual({ sourcePath: 'file-x.pdf', chunks: 9 });
+    expect(result.current.data).toEqual({
+      sourcePath: 'file-x.pdf',
+      chunks: 9,
+    });
   });
 });

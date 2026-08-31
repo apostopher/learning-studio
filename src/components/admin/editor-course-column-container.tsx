@@ -3,13 +3,19 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { Link } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
-import { expandedEditorModuleIdsAtom } from '#/atoms/admin';
+import {
+  createModuleTargetAtom,
+  deleteCourseAtom,
+  editCourseAtom,
+  expandedEditorModuleIdsAtom,
+} from '#/atoms/admin';
 import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { CourseColumn } from './course-column';
+import { CourseColumnActions } from './course-column-actions';
 import { EditorModuleContainer } from './editor-module-container';
 
 /**
@@ -25,8 +31,14 @@ import { EditorModuleContainer } from './editor-module-container';
  */
 export const EditorCourseColumnContainer = ({
   courseBoard,
+  canEditCourse = false,
+  canDeleteCourse = false,
 }: {
   courseBoard: EditorCourseBoard;
+  /** `course:update` — org-level, so the route can answer it. */
+  canEditCourse?: boolean;
+  /** `course:delete` — likewise. */
+  canDeleteCourse?: boolean;
 }) => {
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedEditorModuleIdsAtom,
@@ -46,10 +58,27 @@ export const EditorCourseColumnContainer = ({
    * existed. A poster is decoration; nothing about the card depends on it.
    */
   const { data: posters } = useLessonPosters(course.id);
+  const openCreateModule = useSetAtom(createModuleTargetAtom);
+  const openEditCourse = useSetAtom(editCourseAtom);
+  const openDeleteCourse = useSetAtom(deleteCourseAtom);
 
   return (
     <CourseColumn
       course={course}
+      actions={
+        <CourseColumnActions
+          courseName={course.name}
+          canEditCourse={canEditCourse}
+          canDeleteCourse={canDeleteCourse}
+          onAddModule={() =>
+            openCreateModule({ id: course.id, name: course.name })
+          }
+          onEditCourse={() => openEditCourse(course)}
+          onDeleteCourse={() =>
+            openDeleteCourse({ id: course.id, name: course.name })
+          }
+        />
+      }
       // The way across to the other half of the product. This pane composes
       // courses out of existing lessons; what a lesson IS — video, material,
       // quiz, gates — and a course's own modules, staff, persona and news are
