@@ -108,6 +108,40 @@ export async function listDisciplines(
 }
 
 /**
+ * Does this org own this discipline? The row, or null.
+ *
+ * THE single definition of "this deployment administers that discipline",
+ * shared by every write that needs it: `deleteDiscipline` here, and both staff
+ * writes in `discipline-staff.ts`. One definition on purpose — an ownership
+ * predicate copied per call site is a predicate that gets tightened in three
+ * places and forgotten in a fourth.
+ *
+ * It answers a question the id alone cannot: `disciplines.id` is a global
+ * serial and `user_profiles` has no org column, so without this check any
+ * user is grantable on any discipline in the database, and a `disciplineId`
+ * that exists nowhere reaches the INSERT and raises an uncaught foreign-key
+ * violation — a bad request body reading as a 500. Both are the failure
+ * `assignDisciplineStaff` already refuses for an unknown `userId`; this is the
+ * same rule applied to the other id in the same body.
+ */
+export async function findDisciplineInOrg(
+  orgId: number,
+  disciplineId: number,
+): Promise<{ id: number } | null> {
+  const [row] = await db
+    .select({ id: disciplinesTable.id })
+    .from(disciplinesTable)
+    .where(
+      and(
+        eq(disciplinesTable.id, disciplineId),
+        eq(disciplinesTable.orgId, orgId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Lessons currently filed under this discipline.
  *
  * Deliberately not org-scoped — see `DisciplineSummary.lessonCount`. This is
@@ -225,6 +259,17 @@ export async function deleteDiscipline(
   orgId: number,
   disciplineId: number,
 ): Promise<DisciplineDeleteResult> {
+  // Ownership BEFORE the count, and this ordering is the whole point of the
+  // two being separate queries. `countLessonsInDiscipline` is deliberately not
+  // org-scoped (it has to match what the foreign key will act on), so counting
+  // first and reporting `has-lessons` would answer a caller who named ANOTHER
+  // org's discipline with that discipline's exact lesson count — a 409
+  // disclosing the size of a curriculum this deployment does not administer,
+  // where an unowned id must read as "not found".
+  if ((await findDisciplineInOrg(orgId, disciplineId)) === null) {
+    return { ok: false, reason: 'not-found' };
+  }
+
   const lessonCount = await countLessonsInDiscipline(disciplineId);
   if (lessonCount > 0) return { ok: false, reason: 'has-lessons', lessonCount };
 
@@ -238,6 +283,9 @@ export async function deleteDiscipline(
         ),
       )
       .returning({ id: disciplinesTable.id });
+    // Still scoped by org as well as id even though ownership was just
+    // resolved: the two reads are not one transaction, and a WHERE that says
+    // what the caller is entitled to is cheaper than reasoning about the gap.
     return deleted.length > 0
       ? { ok: true }
       : { ok: false, reason: 'not-found' };

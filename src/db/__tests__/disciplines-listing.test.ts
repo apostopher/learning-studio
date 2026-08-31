@@ -69,7 +69,9 @@ const db = vi.hoisted(() => ({ select: vi.fn(), delete: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({ disciplinesTable, lessonsTable }));
 
-const { deleteDiscipline, listDisciplines } = await import('#/db/disciplines');
+const { deleteDiscipline, findDisciplineInOrg, listDisciplines } = await import(
+  '#/db/disciplines'
+);
 
 let capture: Capture;
 
@@ -205,7 +207,7 @@ describe('deleteDiscipline — refusing while lessons remain', () => {
    * afterwards returns the same object.
    */
   it('refuses with the count, and issues no delete', async () => {
-    queueSelects([{ value: 12 }]);
+    queueSelects([{ id: 3 }], [{ value: 12 }]);
     db.delete.mockImplementation(() => {
       throw new Error('delete must not be issued');
     });
@@ -227,12 +229,13 @@ describe('deleteDiscipline — refusing while lessons remain', () => {
    * promised and then not delivered.
    */
   it('counts every lesson pointing at the discipline, whatever org it is in', async () => {
-    queueSelects([{ value: 1 }]);
+    queueSelects([{ id: 3 }], [{ value: 1 }]);
 
     await deleteDiscipline(7, 3);
 
-    expect(renderSql(capture.wheres[0])).toBe('"lessons"."discipline_id" = $1');
-    expect(renderSqlParams(capture.wheres[0])).toEqual([3]);
+    // `wheres[1]`, not `[0]`: the org-ownership resolution queries first.
+    expect(renderSql(capture.wheres[1])).toBe('"lessons"."discipline_id" = $1');
+    expect(renderSqlParams(capture.wheres[1])).toEqual([3]);
   });
 
   /**
@@ -240,7 +243,7 @@ describe('deleteDiscipline — refusing while lessons remain', () => {
    * another org would then be deleted rather than reported missing.
    */
   it('deletes an empty discipline, scoped to the org', async () => {
-    queueSelects([{ value: 0 }]);
+    queueSelects([{ id: 3 }], [{ value: 0 }]);
     let where: SQL | undefined;
     db.delete.mockImplementation(() => ({
       where: (condition: SQL) => {
@@ -259,8 +262,8 @@ describe('deleteDiscipline — refusing while lessons remain', () => {
     expect(renderSqlParams(where)).toEqual([7, 3]);
   });
 
-  it('reports an id this org does not own as not found', async () => {
-    queueSelects([{ value: 0 }]);
+  it('reports a row the delete did not match as not found', async () => {
+    queueSelects([{ id: 3 }], [{ value: 0 }]);
     db.delete.mockImplementation(() => ({
       where: () => ({ returning: () => Promise.resolve([]) }),
     }));
@@ -269,5 +272,63 @@ describe('deleteDiscipline — refusing while lessons remain', () => {
       ok: false,
       reason: 'not-found',
     });
+  });
+
+  /**
+   * The count is deliberately NOT org-scoped, because it has to match what the
+   * foreign key will act on. The side effect, before this gate existed, was
+   * that deleting another org's discipline answered 409 naming that org's
+   * exact lesson count — a curriculum's size disclosed to an admin who does
+   * not administer it, where an unowned id must read as "not found".
+   *
+   * Mutant seen RED: the ownership resolution moved to AFTER the count (or
+   * removed). The count query then runs and `has-lessons` comes back with the
+   * number in it, so both assertions fail.
+   */
+  it("reports another org's discipline as not found, without counting its lessons", async () => {
+    queueSelects([]);
+    db.delete.mockImplementation(() => {
+      throw new Error('delete must not be issued');
+    });
+
+    const result = await deleteDiscipline(7, 3);
+
+    expect(result).toEqual({ ok: false, reason: 'not-found' });
+    // One query only — the ownership check. No lesson count was taken, so no
+    // count could leak into a refusal message.
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('findDisciplineInOrg — the ownership gate', () => {
+  /**
+   * The single definition of "this deployment administers that discipline",
+   * shared by `deleteDiscipline` and both staff writes.
+   *
+   * Mutant seen RED: `eq(disciplinesTable.orgId, disciplineId)` paired with
+   * `eq(disciplinesTable.id, orgId)` — the two arguments swapped. Both are
+   * integers, it type-checks, and the rendered SQL is IDENTICAL; only the
+   * bound params tell them apart, which is why this asserts both.
+   */
+  it('matches on id AND org_id, in that pairing', async () => {
+    queueSelects([{ id: 3 }]);
+
+    expect(await findDisciplineInOrg(7, 3)).toEqual({ id: 3 });
+    expect(renderSql(capture.wheres[0])).toBe(
+      '("disciplines"."id" = $1 and "disciplines"."org_id" = $2)',
+    );
+    expect(renderSqlParams(capture.wheres[0])).toEqual([3, 7]);
+  });
+
+  /**
+   * Mutant seen RED: `return row ?? { id: disciplineId }` — a fabricated row
+   * for an id nobody owns, which reopens every gate built on this function at
+   * once.
+   */
+  it('returns null for a discipline this org does not own', async () => {
+    queueSelects([]);
+
+    expect(await findDisciplineInOrg(7, 999)).toBeNull();
   });
 });

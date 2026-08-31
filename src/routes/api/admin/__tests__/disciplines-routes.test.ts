@@ -105,7 +105,7 @@ beforeEach(() => {
   });
   m.deleteDiscipline.mockResolvedValue({ ok: true });
   m.assignDisciplineStaff.mockResolvedValue({ ok: true });
-  m.removeDisciplineStaff.mockResolvedValue(undefined);
+  m.removeDisciplineStaff.mockResolvedValue({ ok: true });
   m.searchStaffCandidates.mockResolvedValue([]);
 });
 
@@ -225,6 +225,10 @@ describe('PUT /api/admin/disciplines/:id/staff', () => {
       userId: 'sme-1',
       disciplineId: 4,
       roleName: 'subject-expert',
+      // The org this deployment administers, from `getActiveOrgId()` — not
+      // anything the caller supplied. Without it the write is unscoped and a
+      // `disciplineId` from another org is just an integer.
+      orgId: 7,
       assignedBy: 'admin-1',
     });
   });
@@ -266,6 +270,34 @@ describe('PUT /api/admin/disciplines/:id/staff', () => {
     expect(m.assignDisciplineStaff).not.toHaveBeenCalled();
   });
 
+  /**
+   * The grant used to take no org at all: `disciplines.org_id` is a real column
+   * and `user_profiles` has none, so any user was grantable on any discipline
+   * in the database — another org's included. An id that exists NOWHERE was
+   * worse: it reached the INSERT and raised an uncaught foreign-key violation,
+   * i.e. a 500, which is exactly the failure this handler already refuses to
+   * give for an unknown `userId`.
+   *
+   * Mutant seen RED: the `unknown-discipline` branch dropped, so the reason
+   * falls through to the final `Role not found` 404 — same status, wrong
+   * sentence — or, with the db-layer gate removed too, a 204 for a write into
+   * another org.
+   */
+  it('404s a discipline this org does not own', async () => {
+    m.assignDisciplineStaff.mockResolvedValueOnce({
+      ok: false,
+      reason: 'unknown-discipline',
+    });
+
+    const res = await putDisciplineStaffHandler(
+      req({ userId: 'sme-1', role: 'subject-expert' }, 'PUT'),
+      '999',
+    );
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('Discipline not found');
+  });
+
   it('404s an appointee the directory does not know, rather than 500ing', async () => {
     m.assignDisciplineStaff.mockResolvedValueOnce({
       ok: false,
@@ -296,11 +328,35 @@ describe('DELETE /api/admin/disciplines/:id/staff', () => {
 
     expect(res.status).toBe(204);
     expect(m.removeDisciplineStaff).toHaveBeenCalledTimes(1);
-    expect(m.removeDisciplineStaff).toHaveBeenCalledWith(
-      'sme-1',
-      4,
-      'subject-expert',
+    expect(m.removeDisciplineStaff).toHaveBeenCalledWith({
+      userId: 'sme-1',
+      disciplineId: 4,
+      roleName: 'subject-expert',
+      orgId: 7,
+    });
+  });
+
+  /**
+   * A revocation is destructive and immediate, so an unowned id must be
+   * refused rather than silently unseating another org's subject expert.
+   *
+   * Mutant seen RED: the result of `removeDisciplineStaff` ignored and 204
+   * returned unconditionally — which is precisely what this handler did before
+   * the write became org-scoped.
+   */
+  it('404s a discipline this org does not own', async () => {
+    m.removeDisciplineStaff.mockResolvedValueOnce({
+      ok: false,
+      reason: 'unknown-discipline',
+    });
+
+    const res = await deleteDisciplineStaffHandler(
+      req({ userId: 'sme-1', role: 'subject-expert' }, 'DELETE'),
+      '999',
     );
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('Discipline not found');
   });
 
   it('rejects a non-numeric discipline id before touching the database', async () => {
@@ -361,6 +417,29 @@ describe('DELETE /api/admin/disciplines/:id', () => {
 
     expect(body.error).toContain('1 lesson.');
     expect(body.error).not.toContain('1 lessons');
+  });
+
+  /**
+   * `countLessonsInDiscipline` is deliberately un-scoped, so before ownership
+   * was resolved first this route answered a foreign-org id with a 409 naming
+   * that org's exact lesson count. An id this deployment does not administer
+   * must read as "not found" and disclose nothing.
+   *
+   * Mutant seen RED: `deleteDiscipline` counting before resolving ownership —
+   * the db layer then returns `has-lessons` and this handler faithfully
+   * reports 409 with the number in it.
+   */
+  it("404s another org's discipline instead of naming its lesson count", async () => {
+    m.deleteDiscipline.mockResolvedValueOnce({
+      ok: false,
+      reason: 'not-found',
+    });
+
+    const res = await deleteDisciplineHandler(req(undefined, 'DELETE'), '999');
+    const body = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(body.lessonCount).toBeUndefined();
   });
 
   it('deletes an empty discipline in the active org', async () => {

@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '#/db';
+import { findDisciplineInOrg } from '#/db/disciplines';
 import {
   disciplineStaffTable,
   disciplinesTable,
@@ -75,12 +76,32 @@ export type DisciplineStaffMember = {
   roles: string[];
 };
 
-export type AssignDisciplineStaffInput = {
+export type DisciplineStaffWriteInput = {
   userId: string;
   disciplineId: number;
   roleName: string;
+  /**
+   * The org this deployment administers. Both staff writes are scoped by it —
+   * see `findDisciplineInOrg`. Without it a `disciplineId` from another org
+   * (or from nowhere) is just an integer, and the row is written anyway.
+   */
+  orgId: number;
+};
+
+export type AssignDisciplineStaffInput = DisciplineStaffWriteInput & {
   assignedBy: string;
 };
+
+export type DisciplineStaffWriteResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'not-found'
+        | 'not-assignable'
+        | 'unknown-user'
+        | 'unknown-discipline';
+    };
 
 /**
  * Everyone staffed on any discipline in the org, grouped by discipline id.
@@ -165,12 +186,16 @@ export async function listDisciplineStaffByOrg(
  */
 export async function assignDisciplineStaff(
   input: AssignDisciplineStaffInput,
-): Promise<
-  | { ok: true }
-  | { ok: false; reason: 'not-found' | 'not-assignable' | 'unknown-user' }
-> {
+): Promise<DisciplineStaffWriteResult> {
   if (!isDisciplineScopedRole(input.roleName)) {
     return { ok: false, reason: 'not-assignable' };
+  }
+
+  // The FIRST query, before the role and profile lookups, so a caller naming a
+  // discipline this deployment does not administer learns nothing further —
+  // not whether the role exists, not whether the user does.
+  if ((await findDisciplineInOrg(input.orgId, input.disciplineId)) === null) {
+    return { ok: false, reason: 'unknown-discipline' };
   }
 
   const [role] = await db
@@ -218,24 +243,39 @@ export async function assignDisciplineStaff(
  * for, and each of which is unrecoverable.
  */
 export async function removeDisciplineStaff(
-  userId: string,
-  disciplineId: number,
-  roleName: string,
-): Promise<void> {
+  input: DisciplineStaffWriteInput,
+): Promise<DisciplineStaffWriteResult> {
+  // Same org gate as the grant, and for the sharper reason: a revocation is
+  // destructive and immediate. Without it, `DELETE .../disciplines/<id in
+  // another org>/staff` silently unseats that org's subject expert.
+  //
+  // Resolved as a separate read rather than joined into the DELETE because
+  // Postgres `delete ... using` has no drizzle builder here, and because the
+  // caller needs to tell "no such discipline" (404) from "no such row"
+  // (a silent, idempotent no-op) — one statement cannot answer both.
+  if ((await findDisciplineInOrg(input.orgId, input.disciplineId)) === null) {
+    return { ok: false, reason: 'unknown-discipline' };
+  }
+
   const [role] = await db
     .select({ id: userRolesTable.id })
     .from(userRolesTable)
-    .where(eq(userRolesTable.name, roleName))
+    .where(eq(userRolesTable.name, input.roleName))
     .limit(1);
-  if (!role) return;
+  // A role name the `user_roles` table does not know cannot name a row that
+  // exists, so there is nothing to delete and nothing to report — the same
+  // silence `removeCourseStaff` keeps. Crucially it must NOT fall through to
+  // the DELETE: `roleId: undefined` binds as null and matches on a whim.
+  if (!role) return { ok: true };
 
   await db
     .delete(disciplineStaffTable)
     .where(
       and(
-        eq(disciplineStaffTable.userId, userId),
-        eq(disciplineStaffTable.disciplineId, disciplineId),
+        eq(disciplineStaffTable.userId, input.userId),
+        eq(disciplineStaffTable.disciplineId, input.disciplineId),
         eq(disciplineStaffTable.roleId, role.id),
       ),
     );
+  return { ok: true };
 }

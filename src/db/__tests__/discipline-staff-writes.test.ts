@@ -46,6 +46,15 @@ const db = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 vi.mock('#/db', () => ({ db }));
+/**
+ * The org gate both writes now run first. Mocked rather than exercised for
+ * real, so these tests can assert on the arguments it RECEIVED — the two ids
+ * are both integers and a swapped pair renders identically. Its own SQL (the
+ * `id AND org_id` pairing) is pinned in `disciplines-listing.test.ts`, where
+ * the real function runs.
+ */
+const findDisciplineInOrg = vi.hoisted(() => vi.fn());
+vi.mock('#/db/disciplines', () => ({ findDisciplineInOrg }));
 vi.mock('#/db/schema', () => ({
   disciplineStaffTable,
   disciplinesTable,
@@ -92,6 +101,9 @@ function captureInsert() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: the discipline belongs to this org. The refusal path is asserted
+  // explicitly below.
+  findDisciplineInOrg.mockResolvedValue({ id: 42 });
 });
 
 describe('assignDisciplineStaff — the grant', () => {
@@ -111,6 +123,7 @@ describe('assignDisciplineStaff — the grant', () => {
       userId: 'expert-1',
       disciplineId: 42,
       roleName: 'subject-expert',
+      orgId: 7,
       assignedBy: 'admin-1',
     });
 
@@ -140,6 +153,7 @@ describe('assignDisciplineStaff — the grant', () => {
       userId: 'expert-1',
       disciplineId: 42,
       roleName: 'subject-expert',
+      orgId: 7,
       assignedBy: 'admin-1',
     });
 
@@ -168,12 +182,67 @@ describe('assignDisciplineStaff — the grant', () => {
       userId: 'expert-1',
       disciplineId: 42,
       roleName,
+      orgId: 7,
       assignedBy: 'admin-1',
     });
 
     expect(result).toEqual({ ok: false, reason: 'not-assignable' });
     expect(db.select).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
+    // Not even the org gate: a role nobody may ever hold is refused on the
+    // argument alone, before this function asks the database anything.
+    expect(findDisciplineInOrg).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The grant was the only write in this family that was not org-scoped.
+   * `disciplines.org_id` is a real column and `user_profiles` has none, so
+   * without this gate any user is grantable on ANY discipline in the database
+   * — including one this deployment does not administer.
+   *
+   * Mutant seen RED: the `findDisciplineInOrg` check removed. `db.select`
+   * (role, then profile) and `db.insert` all run, so all three assertions
+   * fail. Asserting the INSERT never happened is what makes this a refusal
+   * test — a function that writes the row and then returns
+   * `unknown-discipline` would satisfy the returned value alone.
+   */
+  it('refuses a discipline this org does not own, and writes nothing', async () => {
+    findDisciplineInOrg.mockResolvedValueOnce(null);
+    captureInsert();
+
+    const result = await assignDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 999,
+      roleName: 'subject-expert',
+      orgId: 7,
+      assignedBy: 'admin-1',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'unknown-discipline' });
+    expect(db.insert).not.toHaveBeenCalled();
+    // Nothing further is learned either — not whether the role exists, not
+    // whether the user does.
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Mutant seen RED: `findDisciplineInOrg(input.disciplineId, input.orgId)` —
+   * the two arguments swapped. Both are integers, both positions type-check,
+   * and the resolver would then look for a discipline whose id is the org id.
+   */
+  it('asks the org gate about this discipline in this org', async () => {
+    selectReturning([{ id: 3 }], [{ id: 12 }]);
+    captureInsert();
+
+    await assignDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 42,
+      roleName: 'subject-expert',
+      orgId: 7,
+      assignedBy: 'admin-1',
+    });
+
+    expect(findDisciplineInOrg).toHaveBeenCalledWith(7, 42);
   });
 
   it('reports an unknown appointee instead of letting the foreign key raise', async () => {
@@ -185,6 +254,7 @@ describe('assignDisciplineStaff — the grant', () => {
       userId: 'nobody',
       disciplineId: 42,
       roleName: 'subject-expert',
+      orgId: 7,
       assignedBy: 'admin-1',
     });
 
@@ -213,7 +283,12 @@ describe('removeDisciplineStaff — the revocation', () => {
       },
     }));
 
-    await removeDisciplineStaff('expert-1', 42, 'subject-expert');
+    await removeDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 42,
+      roleName: 'subject-expert',
+      orgId: 7,
+    });
 
     expect(db.delete).toHaveBeenCalledWith(disciplineStaffTable);
     if (!where) throw new Error('no WHERE was issued');
@@ -228,11 +303,40 @@ describe('removeDisciplineStaff — the revocation', () => {
    * with `roleId: undefined`, which drizzle renders as a bound null and which
    * matches no row on a good day and every row on a bad one.
    */
+  /**
+   * A revocation is destructive and immediate, so the org gate matters more
+   * here than on the grant: without it, `DELETE .../disciplines/<id in another
+   * org>/staff` silently unseats that org's subject expert.
+   *
+   * Mutant seen RED: the `findDisciplineInOrg` check removed — the role lookup
+   * and the DELETE both run.
+   */
+  it('refuses a discipline this org does not own, and deletes nothing', async () => {
+    findDisciplineInOrg.mockResolvedValueOnce(null);
+    db.delete.mockImplementation(() => ({ where: () => Promise.resolve() }));
+
+    const result = await removeDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 999,
+      roleName: 'subject-expert',
+      orgId: 7,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'unknown-discipline' });
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it('issues no delete when the role name is unknown', async () => {
     selectReturning([]);
     db.delete.mockImplementation(() => ({ where: () => Promise.resolve() }));
 
-    await removeDisciplineStaff('expert-1', 42, 'not-a-role');
+    await removeDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 42,
+      roleName: 'not-a-role',
+      orgId: 7,
+    });
 
     expect(db.delete).not.toHaveBeenCalled();
   });

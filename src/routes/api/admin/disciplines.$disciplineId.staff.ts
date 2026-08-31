@@ -5,6 +5,7 @@ import {
   assignDisciplineStaff,
   removeDisciplineStaff,
 } from '#/db/discipline-staff';
+import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import { setDisciplineStaffInputSchema } from '#/lib/discipline-schemas';
 
@@ -104,9 +105,23 @@ export async function putDisciplineStaffHandler(
     userId: body.userId,
     disciplineId,
     roleName: body.role,
+    // The org this deployment administers, not anything the caller chose.
+    // Without it, a `disciplineId` belonging to another org — or to no
+    // discipline at all — is just an integer, and the row is written anyway.
+    orgId: getActiveOrgId(),
     assignedBy: actor.userId,
   });
   if (!result.ok) {
+    if (result.reason === 'unknown-discipline') {
+      // 404 and NOT a 403, matching how the rest of this family answers an id
+      // this org does not own (`renameDiscipline`, `deleteDiscipline`). The
+      // caller is a verified admin of THIS org; the id is simply not one of
+      // theirs. It is also the answer for an id that exists nowhere, which
+      // would otherwise reach the INSERT and raise an uncaught foreign-key
+      // violation — the 500 this route already refuses to give for an
+      // unknown `userId`.
+      return Response.json({ error: 'Discipline not found' }, { status: 404 });
+    }
     if (result.reason === 'not-assignable') {
       return Response.json(
         { error: 'Role is not discipline-assignable' },
@@ -126,6 +141,9 @@ export async function putDisciplineStaffHandler(
 
 /**
  * Revoke `subject-expert` on this discipline.
+ *
+ * Org-scoped like the grant: an id belonging to another org is refused before
+ * anything is deleted, because a revocation is destructive and immediate.
  *
  * No self-removal exemption, unlike `deleteCourseStaffHandler`. That exemption
  * exists so a professor can resign without an admin, and it is safe there
@@ -149,7 +167,17 @@ export async function deleteDisciplineStaffHandler(
   const body = await parseBody(request);
   if (!body.ok) return body.res;
 
-  await removeDisciplineStaff(body.userId, disciplineId, body.role);
+  const result = await removeDisciplineStaff({
+    userId: body.userId,
+    disciplineId,
+    roleName: body.role,
+    orgId: getActiveOrgId(),
+  });
+  if (!result.ok) {
+    // The only reason this write reports: an id this org does not own. A row
+    // that was already gone is a silent success, exactly as before.
+    return Response.json({ error: 'Discipline not found' }, { status: 404 });
+  }
   return new Response(null, { status: 204 });
 }
 
