@@ -20,20 +20,19 @@ export const AdminShellLayout = ({
   canSeePeople,
   canSeeCourses,
   canSeeEditor,
-  canSeeDisciplines,
   children,
 }: {
   canSeePeople: boolean;
   canSeeCourses: boolean;
-  /** Whether the org-level knowledge library editor has anything to show. */
-  canSeeEditor: boolean;
   /**
-   * Whether to offer the disciplines screen — creating disciplines and
-   * appointing their Subject Experts. Admin-or-owner alone: every endpoint
-   * behind it is `requireAdmin`, deliberately, so that a Subject Expert cannot
-   * appoint a peer (or themselves) to the discipline they already hold.
+   * Whether the org-level knowledge library editor has anything to show.
+   *
+   * There is no separate Disciplines link: a discipline IS a column of that
+   * editor's library pane, and it is created, renamed, staffed and deleted
+   * from the column itself. A second screen listing the same rows without the
+   * lessons in them was the worse of the two places to do it.
    */
-  canSeeDisciplines: boolean;
+  canSeeEditor: boolean;
   children: ReactNode;
 }) => (
   // The whole layout is now capped to the viewport so a full-height child
@@ -58,20 +57,14 @@ export const AdminShellLayout = ({
           // rather than to the screen holding it.
           <AdminNavLink to="/admin/editor">Knowledge library</AdminNavLink>
         )}
-        {canSeeDisciplines && (
-          <AdminNavLink to="/admin/disciplines">Disciplines</AdminNavLink>
-        )}
         {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
-        {!canSeeCourses &&
-          !canSeeEditor &&
-          !canSeeDisciplines &&
-          !canSeePeople && (
-            // Not a bare strip: an actor with no section at all is told why,
-            // in text a screen reader reaches like any other nav content.
-            <p className="px-3 py-1.5 text-secondary text-sm">
-              No admin sections are available with your current permissions.
-            </p>
-          )}
+        {!canSeeCourses && !canSeeEditor && !canSeePeople && (
+          // Not a bare strip: an actor with no section at all is told why,
+          // in text a screen reader reaches like any other nav content.
+          <p className="px-3 py-1.5 text-secondary text-sm">
+            No admin sections are available with your current permissions.
+          </p>
+        )}
       </div>
     </nav>
     <div className="flex min-h-0 flex-1 flex-col">{children}</div>

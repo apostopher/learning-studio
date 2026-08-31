@@ -82,14 +82,21 @@ describe('requireLessonContentPermission', () => {
     ).rejects.toBeInstanceOf(m.ForbiddenError);
   });
 
-  it('refuses an org admin who holds no discipline SME row — pins the reverted d4f767d policy', async () => {
+  // RBAC rule 3. REPLACES the test that pinned the reverted d4f767d policy
+  // (admin refused on a disciplined lesson). The shape that incident produced
+  // is still forbidden and is still pinned below: `requireAdmin` must NOT be
+  // called for a lesson that HAS a discipline, because routing a disciplined
+  // lesson through the org-level guard is what took authorship away from every
+  // SME. The admin is admitted by the scoped guard's own bypass instead, which
+  // leaves the SME's path untouched.
+  it('admits an org admin who holds no discipline SME row, without falling back to requireAdmin', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
     m.getDisciplineRoleNames.mockResolvedValue([]);
     m.getUserPermissions.mockResolvedValue(new Set(['course:update']));
 
     await expect(
       requireLessonContentPermission(HEADERS, 7, 'update'),
-    ).rejects.toBeInstanceOf(m.ForbiddenError);
+    ).resolves.toBeUndefined();
     expect(m.requireAdmin).not.toHaveBeenCalled();
   });
 

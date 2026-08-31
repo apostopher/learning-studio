@@ -6,6 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
 import { expandedEditorModuleIdsAtom } from '#/atoms/admin';
+import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { CourseColumn } from './course-column';
@@ -32,6 +33,19 @@ export const EditorCourseColumnContainer = ({
   );
   const { course, modules } = courseBoard;
   const ownIds = new Set(modules.map((m) => m.id));
+  /**
+   * One posters request per COURSE column, not per lesson card — the endpoint
+   * answers for a whole course at once, and a card-level query would be an
+   * N+1 across the rail.
+   *
+   * `/api/admin/courses/:id/lesson-posters` is guarded by
+   * `requireCoursePermission(courseId, 'structure', 'read')`, which a
+   * discipline-only SME does not hold. That is a soft failure by design: the
+   * query errors, `posters` stays undefined, and `LessonVideoTile` falls back
+   * to its own background — the same tile the board drew before posters
+   * existed. A poster is decoration; nothing about the card depends on it.
+   */
+  const { data: posters } = useLessonPosters(course.id);
 
   return (
     <CourseColumn
@@ -70,6 +84,7 @@ export const EditorCourseColumnContainer = ({
             key={mod.id}
             module={mod}
             courseId={course.id}
+            posters={posters}
           />
         ))}
       </SortableContext>

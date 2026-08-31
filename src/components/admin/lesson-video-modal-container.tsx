@@ -3,7 +3,7 @@ import { useAtom } from 'jotai';
 import { Video, X } from 'lucide-react';
 import { playLessonIdAtom } from '@/atoms/admin';
 import { useLessonVideoPlayback } from '@/data-hooks/use-lesson-video-playback';
-import type { BoardModule } from '@/lib/admin-schemas';
+import type { EditorBoardModule } from '@/lib/admin-schemas';
 import { computeVideoModalState } from './compute-video-modal-state';
 import { VideoPreview } from './lesson-config/video-preview';
 
@@ -44,7 +44,14 @@ const MESSAGES: Record<
 export const LessonVideoModalContainer = ({
   modules,
 }: {
-  modules: BoardModule[];
+  /**
+   * The editor's narrower module type, so this modal serves BOTH boards. It
+   * only ever looks a lesson up by id and reads its name — never
+   * `videoProvider`/`videoRef`, which the org editor's payload omits and
+   * which playback resolves server-side from the lesson id anyway. A full
+   * `BoardModule[]` still satisfies it.
+   */
+  modules: EditorBoardModule[];
 }) => {
   const [lessonId, setLessonId] = useAtom(playLessonIdAtom);
   const lesson =
@@ -68,8 +75,8 @@ export const LessonVideoModalContainer = ({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/70" />
-        <Dialog.Popup className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 w-[min(56rem,90vw)] focus:outline-none">
+        <Dialog.Backdrop className="dialog-backdrop fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Popup className="dialog-popup -translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 w-[min(56rem,90vw)] focus:outline-none">
           {/* Named for screen readers even though nothing is drawn: a dialog
               with no accessible name announces as an unlabelled group. */}
           <Dialog.Title className="sr-only">

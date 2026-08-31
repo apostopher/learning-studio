@@ -1,8 +1,15 @@
 import { useDroppable } from '@dnd-kit/core';
+import { useSetAtom } from 'jotai';
+import {
+  createLibraryLessonTargetAtom,
+  deleteDisciplineTargetAtom,
+  renameDisciplineTargetAtom,
+} from '#/atoms/admin';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { disciplineDndId } from '#/lib/dnd-ids';
 import { DisciplineColumn } from './discipline-column';
+import { DisciplineColumnActions } from './discipline-column-actions';
 import { LibraryLessonCardContainer } from './library-lesson-card-container';
 
 /**
@@ -26,15 +33,31 @@ export const DisciplineColumnContainer = ({
   disciplineId,
   name,
   lessons,
+  canManageDisciplines = false,
 }: {
   disciplineId: number;
   name: string;
   lessons: LibraryLesson[];
+  /**
+   * Whether this actor may rename or delete a discipline — both `requireAdmin`
+   * on the server. Add-lesson is not gated here: authority over a lesson
+   * follows its discipline, which the router context cannot answer, so the
+   * control is offered and the server refuses if it must.
+   */
+  canManageDisciplines?: boolean;
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: disciplineDndId(disciplineId),
     data: { type: 'discipline', disciplineId },
   });
+  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
+  const openRename = useSetAtom(renameDisciplineTargetAtom);
+  const openDelete = useSetAtom(deleteDisciplineTargetAtom);
+
+  // The "Untitled" column is not a discipline: there is nothing to rename or
+  // delete, and a lesson filed under nothing is a triage-queue entry rather
+  // than something to create on purpose. It gets no action row at all.
+  const isUntitled = disciplineId === UNTITLED_DISCIPLINE_ID;
 
   return (
     <div
@@ -46,7 +69,27 @@ export const DisciplineColumnContainer = ({
         isOver && 'ring-2 ring-error-9/40',
       )}
     >
-      <DisciplineColumn name={name} lessonCount={lessons.length}>
+      <DisciplineColumn
+        name={name}
+        lessonCount={lessons.length}
+        actions={
+          isUntitled ? undefined : (
+            <DisciplineColumnActions
+              disciplineName={name}
+              canManage={canManageDisciplines}
+              onAddLesson={() => openAddLesson({ id: disciplineId, name })}
+              onRename={() => openRename({ id: disciplineId, name })}
+              onDelete={() =>
+                openDelete({
+                  id: disciplineId,
+                  name,
+                  lessonCount: lessons.length,
+                })
+              }
+            />
+          )
+        }
+      >
         {lessons.length === 0 ? (
           <p className="px-1 py-4 text-center text-tertiary text-xs">
             No lessons

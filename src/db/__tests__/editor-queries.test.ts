@@ -43,6 +43,7 @@ function makeChain(result: unknown) {
     from: () => p,
     leftJoin: () => p,
     where: () => p,
+    orderBy: () => p,
   });
   return p;
 }
@@ -62,6 +63,7 @@ function makeCapturingChain(result: unknown, whereCalls: SQL[]) {
       whereCalls.push(condition);
       return chain;
     },
+    orderBy: () => chain,
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
     then: (
       resolve: (v: unknown) => unknown,
@@ -93,6 +95,11 @@ beforeEach(() => {
   // Default: no lesson is in any course, so a test that doesn't care about
   // course counts still gets a defined map back rather than undefined.
   mockGetCourseCounts.mockResolvedValue(new Map());
+  // `getOrgLibrary` issues TWO selects — the lesson rows, then the org's
+  // disciplines. A test that only queues the first would otherwise get
+  // `undefined` back for the second and die on `.from` before asserting
+  // anything. Queued `mockReturnValueOnce` values still take precedence.
+  db.select.mockReturnValue(makeChain([]));
 });
 
 describe('getOrgLibrary', () => {
@@ -214,6 +221,103 @@ describe('getOrgLibrary', () => {
     // "look" org-scoped), or dropping the WHERE and returning every org's
     // library.
     expect(renderSql(whereCalls[0])).toBe('"lessons"."org_id" = $1');
+    expect(renderSqlParams(whereCalls[0])).toEqual([9]);
+  });
+
+  it('gives a discipline holding no lessons a column of its own', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+    db.select.mockReturnValueOnce(
+      makeChain([{ id: 7, name: 'Aerobatics', slug: 'aerobatics' }]),
+    );
+
+    const lib = await getOrgLibrary(1);
+
+    // Mutant this catches: building the discipline map from the lesson rows
+    // alone (the original implementation). A discipline created a moment ago
+    // has no lessons joined to it, so it would be absent here — and the
+    // screen that just created it would show nothing new.
+    expect(lib.disciplines).toEqual([
+      { id: 7, name: 'Aerobatics', slug: 'aerobatics', lessons: [] },
+    ]);
+  });
+
+  it('orders columns by the disciplines query, not by the order lessons arrive', async () => {
+    db.select.mockReturnValueOnce(
+      makeChain([
+        {
+          id: 4,
+          name: 'Loops',
+          slug: 'loops',
+          isAvailable: true,
+          videoRef: 'ref',
+          disciplineId: 9,
+          disciplineName: 'Weather',
+          disciplineSlug: 'weather',
+        },
+      ]),
+    );
+    db.select.mockReturnValueOnce(
+      makeChain([
+        { id: 7, name: 'Aerobatics', slug: 'aerobatics' },
+        { id: 9, name: 'Weather', slug: 'weather' },
+      ]),
+    );
+
+    const lib = await getOrgLibrary(1);
+
+    // Mutant this catches: seeding the map only for disciplines that already
+    // have lessons, or appending seeded rows AFTER the lesson pass — either
+    // way 'Weather' (the one with a lesson) leads and the column order stops
+    // being the alphabetical order the query asked for.
+    expect(lib.disciplines.map((d) => d.name)).toEqual([
+      'Aerobatics',
+      'Weather',
+    ]);
+    expect(lib.disciplines[1].lessons.map((l) => l.id)).toEqual([4]);
+  });
+
+  it('still shows a lesson whose discipline the seed did not return', async () => {
+    db.select.mockReturnValueOnce(
+      makeChain([
+        {
+          id: 4,
+          name: 'Loops',
+          slug: 'loops',
+          isAvailable: true,
+          videoRef: 'ref',
+          disciplineId: 7,
+          disciplineName: 'Aerobatics',
+          disciplineSlug: 'aerobatics',
+        },
+      ]),
+    );
+    db.select.mockReturnValueOnce(makeChain([]));
+
+    const lib = await getOrgLibrary(1);
+
+    // Mutant this catches: dropping the "create the discipline if the seed
+    // has no entry" branch once the seed exists — the lesson would vanish
+    // from the board entirely, or land in `untitled` under a name that is
+    // not its own.
+    expect(lib.untitled).toEqual([]);
+    expect(lib.disciplines).toHaveLength(1);
+    expect(lib.disciplines[0].name).toBe('Aerobatics');
+    expect(lib.disciplines[0].lessons.map((l) => l.id)).toEqual([4]);
+  });
+
+  it('scopes the disciplines seed to this org too', async () => {
+    const whereCalls: SQL[] = [];
+    db.select.mockReturnValueOnce(makeChain([]));
+    db.select.mockReturnValueOnce(makeCapturingChain([], whereCalls));
+
+    await getOrgLibrary(9);
+
+    // Mutant this catches: seeding from EVERY org's disciplines. The library
+    // would then advertise another tenant's subject list as empty columns —
+    // a disclosure that no lesson-level scoping can undo, because the columns
+    // carry no lessons to be scoped.
+    expect(whereCalls).toHaveLength(1);
+    expect(renderSql(whereCalls[0])).toBe('"disciplines"."org_id" = $1');
     expect(renderSqlParams(whereCalls[0])).toEqual([9]);
   });
 });

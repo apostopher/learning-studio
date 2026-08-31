@@ -41,7 +41,11 @@ export function isDisciplineScopedRole(
 }
 
 /** Trimmed, non-empty, and short enough to render in a column header. */
-const disciplineName = z.string().trim().min(1).max(120);
+const disciplineName = z
+  .string()
+  .trim()
+  .min(1, 'Give the discipline a name')
+  .max(120, 'Keep the name under 120 characters');
 
 export const createDisciplineInputSchema = z.object({ name: disciplineName });
 export type CreateDisciplineInput = z.infer<typeof createDisciplineInputSchema>;
@@ -64,3 +68,48 @@ export const setDisciplineStaffInputSchema = z.object({
 export type SetDisciplineStaffInput = z.infer<
   typeof setDisciplineStaffInputSchema
 >;
+
+/**
+ * One person the create-discipline form has picked as a subject expert.
+ *
+ * The label travels with the id because the picker's chips outlive the search
+ * that produced them: type "ann", pick Ann, then type "bob" and the candidate
+ * list no longer contains Ann at all. Carrying only the id would leave the
+ * form holding a chip it could not name.
+ */
+export const disciplineExpertPickSchema = z.object({
+  userId: z.string().min(1),
+  label: z.string().min(1),
+});
+export type DisciplineExpertPick = z.infer<typeof disciplineExpertPickSchema>;
+
+/**
+ * The create-discipline dialog's form, which is NOT the wire shape.
+ *
+ * Creating a discipline with experts is two writes against two endpoints —
+ * `POST /api/admin/disciplines` then one `PUT …/staff` per expert — because
+ * the create route takes a name and nothing else. This schema is what the one
+ * form collects; `useCreateDisciplineWithExperts` is what splits it.
+ */
+export const createDisciplineFormSchema = z.object({
+  name: disciplineName,
+  experts: z.array(disciplineExpertPickSchema),
+});
+export type CreateDisciplineFormValues = z.infer<
+  typeof createDisciplineFormSchema
+>;
+
+/**
+ * The edit-discipline dialog's form: the name, plus the roster the picker
+ * currently holds.
+ *
+ * `experts` is the DESIRED set, not a list of changes — the multi-select
+ * produces a set, and `useSetDisciplineExperts` diffs it against what the
+ * server last reported. Same shape as `createDisciplineFormSchema`, which is
+ * why both dialogs can share one picker.
+ */
+export const editDisciplineFormSchema = z.object({
+  name: disciplineName,
+  experts: z.array(disciplineExpertPickSchema),
+});
+export type EditDisciplineFormValues = z.infer<typeof editDisciplineFormSchema>;

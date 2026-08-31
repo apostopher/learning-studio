@@ -212,6 +212,21 @@
   --block-size-sidebar-skeleton-module: calc(var(--spacing) * 9);
   --block-size-sidebar-skeleton-lesson: calc(var(--spacing) * 7);
 
+  /* dialog enter/exit — see `.dialog-popup` in styles.css.
+     Exit is shorter than enter and eases IN rather than out: closing should
+     get out of the way, opening should arrive. */
+  --duration-dialog-enter: 220ms;
+  --duration-dialog-exit: 150ms;
+  --ease-dialog-enter: var(--ease-standard);
+  /* An ease-IN literal, not a var() onto the --ease-in-* ramp in styles.css:
+     those live outside this file and `tokens.test.ts` requires every var()
+     here to resolve within the token layer or the generated primitives. */
+  --ease-dialog-exit: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  /* How small the popup starts. Small enough that the growth reads as coming
+     FROM the click point, large enough that a 1280px config modal does not
+     appear to leap across the screen. */
+  --scale-dialog-collapsed: 0.9;
+
   /* scroll area shape + color */
   --size-scroll-area-thumb: calc(var(--spacing) * 1.5);
   --spacing-scroll-area-thumb-inset: 2px;

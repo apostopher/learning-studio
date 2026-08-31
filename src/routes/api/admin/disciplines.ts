@@ -6,6 +6,7 @@ import { createDiscipline, listDisciplines } from '#/db/disciplines';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import { createDisciplineInputSchema } from '#/lib/discipline-schemas';
+import { requireDisciplineCreation } from '#/lib/permissions.server';
 
 /**
  * `requireAdmin`, and deliberately NOT `requireDisciplinePermission`.
@@ -76,12 +77,32 @@ export async function getDisciplinesHandler(
   });
 }
 
-/** Create a discipline in the active org. */
+/**
+ * Create a discipline in the active org.
+ *
+ * The one handler in this file that is NOT `requireAdmin` — RBAC rule 1 admits
+ * a course manager and a subject expert here too. Naming a new subject is
+ * cheap and reversible by its author, so it does not need the org-level floor
+ * that the rest of this family keeps.
+ *
+ * Everything else stays admin-only, and the split is deliberate: the response
+ * carries `staff: []` because appointing experts is a separate,
+ * `requireAdmin` write (`disciplines.$disciplineId.staff.ts`). A non-admin can
+ * therefore name a discipline but cannot staff it — including cannot staff
+ * themselves onto it, which is what stops discipline creation from becoming a
+ * back door to authoring authority.
+ */
 export async function postDisciplineHandler(
   request: Request,
 ): Promise<Response> {
-  const actor = await guard(request);
-  if (actor instanceof Response) return actor;
+  try {
+    await requireDisciplineCreation(request.headers);
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    throw error;
+  }
 
   let body: unknown;
   try {

@@ -20,6 +20,7 @@ import {
   getCourseSlugsForLessonId,
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
+import { nextAvailableLessonSlug } from '#/db/lesson-slug';
 import { getLessonTranscript } from '#/db/lesson-transcript';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
 import type { DBCourse } from '#/db/schema';
@@ -321,16 +322,7 @@ export async function createLesson(input: {
   moduleId: number;
   name: string;
 }): Promise<BoardLesson> {
-  const base = slugify(input.name) || 'lesson';
-  const taken = await db
-    .select({ slug: lessonsTable.slug })
-    .from(lessonsTable)
-    .where(
-      or(eq(lessonsTable.slug, base), like(lessonsTable.slug, `${base}-%`)),
-    );
-  const takenSet = new Set(taken.map((r) => r.slug));
-  let slug = base;
-  for (let n = 2; takenSet.has(slug); n++) slug = `${base}-${n}`;
+  const slug = await nextAvailableLessonSlug(input.name);
 
   // Scoped by placement, not `lessons.module_id`: `linkLesson`/`movePlacement`
   // never touch the legacy column, so the max rank among lessons whose legacy

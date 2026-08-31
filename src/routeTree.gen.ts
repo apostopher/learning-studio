@@ -49,7 +49,6 @@ import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
 import { Route as AuthedAdminEditorRouteImport } from './routes/_authed/admin.editor'
-import { Route as AuthedAdminDisciplinesRouteImport } from './routes/_authed/admin.disciplines'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
 import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
@@ -86,6 +85,7 @@ import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './rout
 import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
 import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
 import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
+import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
 import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
 import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
 import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
@@ -302,11 +302,6 @@ const AuthedAdminEditorRoute = AuthedAdminEditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
-const AuthedAdminDisciplinesRoute = AuthedAdminDisciplinesRouteImport.update({
-  id: '/disciplines',
-  path: '/disciplines',
-  getParentRoute: () => AuthedAdminRoute,
-} as any)
 const AuthedCourseCourseSlugIndexRoute =
   AuthedCourseCourseSlugIndexRouteImport.update({
     id: '/',
@@ -513,6 +508,12 @@ const ApiAdminDisciplinesDisciplineIdStaffRoute =
     path: '/staff',
     getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
   } as any)
+const ApiAdminDisciplinesDisciplineIdLessonsRoute =
+  ApiAdminDisciplinesDisciplineIdLessonsRouteImport.update({
+    id: '/lessons',
+    path: '/lessons',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdStaffRoute =
   ApiAdminCoursesCourseIdStaffRouteImport.update({
     id: '/staff',
@@ -600,7 +601,6 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
-  '/admin/disciplines': typeof AuthedAdminDisciplinesRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
@@ -665,6 +665,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -690,7 +691,6 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
-  '/admin/disciplines': typeof AuthedAdminDisciplinesRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -754,6 +754,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -782,7 +783,6 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
-  '/_authed/admin/disciplines': typeof AuthedAdminDisciplinesRoute
   '/_authed/admin/editor': typeof AuthedAdminEditorRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
@@ -847,6 +847,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
@@ -875,7 +876,6 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
-    | '/admin/disciplines'
     | '/admin/editor'
     | '/admin/users'
     | '/course/$courseSlug'
@@ -940,6 +940,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -965,7 +966,6 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
-    | '/admin/disciplines'
     | '/admin/editor'
     | '/admin/users'
     | '/api/admin/courses'
@@ -1029,6 +1029,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -1056,7 +1057,6 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/api/chats'
     | '/auth/login'
-    | '/_authed/admin/disciplines'
     | '/_authed/admin/editor'
     | '/_authed/admin/users'
     | '/_authed/course/$courseSlug'
@@ -1121,6 +1121,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
@@ -1471,13 +1472,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminEditorRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
-    '/_authed/admin/disciplines': {
-      id: '/_authed/admin/disciplines'
-      path: '/disciplines'
-      fullPath: '/admin/disciplines'
-      preLoaderRoute: typeof AuthedAdminDisciplinesRouteImport
-      parentRoute: typeof AuthedAdminRoute
-    }
     '/_authed/course/$courseSlug/': {
       id: '/_authed/course/$courseSlug/'
       path: '/'
@@ -1730,6 +1724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRouteImport
       parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
     }
+    '/api/admin/disciplines/$disciplineId/lessons': {
+      id: '/api/admin/disciplines/$disciplineId/lessons'
+      path: '/lessons'
+      fullPath: '/api/admin/disciplines/$disciplineId/lessons'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
     '/api/admin/courses/$courseId/staff': {
       id: '/api/admin/courses/$courseId/staff'
       path: '/staff'
@@ -1825,7 +1826,6 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteChildren {
-  AuthedAdminDisciplinesRoute: typeof AuthedAdminDisciplinesRoute
   AuthedAdminEditorRoute: typeof AuthedAdminEditorRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
@@ -1833,7 +1833,6 @@ interface AuthedAdminRouteChildren {
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
-  AuthedAdminDisciplinesRoute: AuthedAdminDisciplinesRoute,
   AuthedAdminEditorRoute: AuthedAdminEditorRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
@@ -1999,11 +1998,14 @@ const ApiAdminCoursesRouteWithChildren = ApiAdminCoursesRoute._addFileChildren(
 )
 
 interface ApiAdminDisciplinesDisciplineIdRouteChildren {
+  ApiAdminDisciplinesDisciplineIdLessonsRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   ApiAdminDisciplinesDisciplineIdStaffRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRoute
 }
 
 const ApiAdminDisciplinesDisciplineIdRouteChildren: ApiAdminDisciplinesDisciplineIdRouteChildren =
   {
+    ApiAdminDisciplinesDisciplineIdLessonsRoute:
+      ApiAdminDisciplinesDisciplineIdLessonsRoute,
     ApiAdminDisciplinesDisciplineIdStaffRoute:
       ApiAdminDisciplinesDisciplineIdStaffRoute,
   }

@@ -78,4 +78,12 @@ export const dataKeys = {
    */
   orgLibrary: () => ['admin', 'library'] as const,
   editorBoard: () => ['admin', 'editor-board'] as const,
+  /**
+   * Mutation key for the org editor's quickshot chips. Separate from
+   * `updateLessonConfig`, which is keyed per course: this board is not, and
+   * sharing the key would make one board's in-flight count decide when the
+   * other's optimistic values are reconciled.
+   */
+  updateEditorLessonConfig: () =>
+    ['admin', 'editor-board', 'lesson-config'] as const,
 } as const;

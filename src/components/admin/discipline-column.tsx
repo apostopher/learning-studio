@@ -8,14 +8,23 @@ import { ScrollArea } from '../scroll-area';
  * leftmost "Untitled" column (lessons with no discipline assigned) — this
  * component doesn't know the difference, it only renders whatever `name` and
  * `children` it's given.
+ *
+ * `actions` is an optional SUBHEADER, below the name row rather than beside
+ * it: the name is truncated to fit and three icon buttons on the same line
+ * would eat the width that truncation is already fighting for. It is optional
+ * because the "Untitled" column has nothing to act on — there is no discipline
+ * there to rename or delete, and a lesson filed under nothing is a triage
+ * queue entry, not something to add to on purpose.
  */
 export const DisciplineColumn = ({
   name,
   lessonCount,
+  actions,
   children,
 }: {
   name: string;
   lessonCount: number;
+  actions?: ReactNode;
   children: ReactNode;
 }) => {
   const lessonNoun = lessonCount === 1 ? 'lesson' : 'lessons';
@@ -30,6 +39,14 @@ export const DisciplineColumn = ({
           {lessonCount} {lessonNoun}
         </span>
       </header>
+      {actions && (
+        // A sibling of the header, outside the ScrollArea — so it stays put
+        // while the lessons scroll, without needing `sticky` (the column
+        // itself never scrolls; only the ScrollArea below does).
+        <div className="flex items-center justify-end gap-1 border-gray-6 border-b bg-gray-2 px-2 py-1">
+          {actions}
+        </div>
+      )}
       <ScrollArea
         orientation="vertical"
         className="flex-1"

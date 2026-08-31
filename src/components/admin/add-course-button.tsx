@@ -1,19 +1,18 @@
-import { Button } from '@base-ui/react/button';
-import { Plus } from 'lucide-react';
-import { cn } from '#/lib/cn';
+import type { Button } from '@base-ui/react/button';
+import { PaneActionButton } from './pane-action-button';
 
-/** Styled "Add course" button. Used directly, or as a Base UI Dialog trigger via `render`. */
-export const AddCourseButton = (props: React.ComponentProps<typeof Button>) => {
-  return (
-    <Button
-      {...props}
-      className={cn(
-        'inline-flex items-center gap-2 rounded-lg bg-apple-9 px-4 py-2.5 text-sm font-medium text-apple-contrast transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2',
-        props.className,
-      )}
-    >
-      <Plus className="h-4 w-4" aria-hidden="true" />
-      Add course
-    </Button>
-  );
-};
+/**
+ * Styled "Add course" button. Used directly, or as a Base UI Dialog trigger
+ * via `render`.
+ *
+ * The label is a prop because the editor's course rail calls the same thing an
+ * "offering" — a variant of a course (two-week, mini, full) that a learner
+ * actually buys. Offering is an alias of course, not a second table, so the
+ * two surfaces share this button and differ only in what they call it.
+ */
+export const AddCourseButton = ({
+  label = 'Add course',
+  ...props
+}: React.ComponentProps<typeof Button> & { label?: string }) => (
+  <PaneActionButton {...props} label={label} />
+);

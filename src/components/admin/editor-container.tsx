@@ -42,6 +42,10 @@ import type { LibraryLesson, OrgEditorBoard } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { inlineDirSign } from '#/lib/inline-direction';
 import { CourseRail } from './course-rail';
+import { CreateCourseDialogContainer } from './create-course-dialog-container';
+import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
+import { CreateLibraryLessonDialogContainer } from './create-library-lesson-dialog-container';
+import { DeleteDisciplineDialogContainer } from './delete-discipline-dialog-container';
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import {
   DisciplineColumnContainer,
@@ -61,8 +65,11 @@ import { EditorCourseColumnContainer } from './editor-course-column-container';
 import { EditorPaneSplitter } from './editor-pane-splitter';
 import { LessonCard } from './lesson-card';
 import { LessonLibrary } from './lesson-library';
+import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { LibraryLessonCard } from './library-lesson-card';
+import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dialog-container';
 import { ModuleAccordionItem } from './module-accordion-item';
+import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { resolveDrop } from './resolve-drop';
 
 /** How long a lesson must hover a collapsed module before it opens. */
@@ -93,7 +100,45 @@ const clampSplit = (percent: number) =>
  * refusal says why, out loud, three ways: a note under the cursor, an
  * announcement to screen readers, and a toast if the drop actually lands.
  */
-export const EditorContainer = () => {
+/**
+ * What this actor may CREATE from the editor, read off the route context —
+ * the only place holding global permissions.
+ *
+ * Both actions are org-level and neither has a course- or discipline-scoped
+ * fallback, which is why they are booleans rather than per-column flags:
+ * `POST /api/admin/disciplines` is `requireAdmin` (an admin hires the
+ * experts; an expert authors and does not administer), and creating a course
+ * is the `course:create` permission. The screen itself admits a wider
+ * population than either — course staff and discipline SMEs read it too — so
+ * a caller holding neither gets no button rather than a disabled one.
+ */
+export interface EditorCapabilities {
+  /**
+   * RBAC rule 1 — may CREATE a discipline: a course manager, a subject expert
+   * or an admin. Mirrors `requireDisciplineCreation`.
+   */
+  canCreateDiscipline: boolean;
+  /**
+   * May RENAME or DELETE a discipline — admin only, and a separate flag from
+   * creation precisely because the two rules differ. Both carry the same
+   * server guard (`requireAdmin`), so one flag covers both.
+   *
+   * Adding a LESSON to a discipline is deliberately NOT covered by either:
+   * that is authoring, guarded by `requireLessonContentPermission`, and
+   * whether this actor holds it for a PARTICULAR discipline is a question the
+   * router context cannot answer. The control is offered and the server
+   * refuses if it must.
+   */
+  canManageDisciplines: boolean;
+  /** RBAC rule 5 — a course manager or an admin. Mirrors `requireCourseCreation`. */
+  canCreateCourse: boolean;
+}
+
+export const EditorContainer = ({
+  capabilities,
+}: {
+  capabilities: EditorCapabilities;
+}) => {
   const queryClient = useQueryClient();
   const boardKey = dataKeys.editorBoard();
 
@@ -635,7 +680,15 @@ export const EditorContainer = () => {
           className="min-w-0 overflow-hidden"
           style={{ flexBasis: `${splitPercent}%` }}
         >
-          <LessonLibrary>
+          <LessonLibrary
+            headerAction={
+              capabilities.canCreateDiscipline ? (
+                <CreateDisciplineDialogContainer
+                  canAppointExperts={capabilities.canManageDisciplines}
+                />
+              ) : undefined
+            }
+          >
             {library.untitled.length > 0 && (
               <DisciplineColumnContainer
                 disciplineId={UNTITLED_DISCIPLINE_ID}
@@ -649,6 +702,7 @@ export const EditorContainer = () => {
                 disciplineId={discipline.id}
                 name={discipline.name}
                 lessons={discipline.lessons}
+                canManageDisciplines={capabilities.canManageDisciplines}
               />
             ))}
           </LessonLibrary>
@@ -675,7 +729,16 @@ export const EditorContainer = () => {
         </div>
 
         <div className="min-w-0 flex-1 overflow-hidden">
-          <CourseRail>
+          <CourseRail
+            headerAction={
+              capabilities.canCreateCourse ? (
+                <CreateCourseDialogContainer
+                  triggerLabel="New offering"
+                  noun="offering"
+                />
+              ) : undefined
+            }
+          >
             {board.map((courseBoard) => (
               <EditorCourseColumnContainer
                 key={courseBoard.course.id}
@@ -712,6 +775,37 @@ export const EditorContainer = () => {
         `deleteLessonAtom` from whichever card was clicked.
       */}
       <DeleteLessonDialogContainer />
+
+      {/*
+        The three discipline-column dialogs, mounted once for the same reason
+        — each is driven by an atom naming the column that opened it, so eight
+        columns share one dialog rather than mounting eight.
+
+        Rename and delete render unconditionally even for an actor who cannot
+        manage disciplines: the buttons that set their atoms are already
+        withheld from that actor, so these can never be opened, and gating the
+        mount as well would be a second copy of the same condition to keep in
+        step. Both endpoints re-check `requireAdmin` regardless.
+      */}
+      <CreateLibraryLessonDialogContainer />
+      {/*
+        Editing what a lesson IS — name, availability, written content — from
+        either pane. Lesson-level, not course-level: see the container's note
+        for the split against `LessonConfigDialogContainer`, and for why video
+        is not here.
+      */}
+      <LibraryLessonConfigDialogContainer />
+      {/*
+        The preview the play tile opens. Handed every module on the rail
+        flattened, because it looks a lesson up by id and this board holds
+        several courses at once — unlike the per-course board, which passes
+        only its own.
+      */}
+      <LessonVideoModalContainer
+        modules={board.flatMap((courseBoard) => courseBoard.modules)}
+      />
+      <RenameDisciplineDialogContainer />
+      <DeleteDisciplineDialogContainer />
     </DndContext>
   );
 };

@@ -83,14 +83,31 @@ describe('requireDisciplinePermission', () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  // Pins the reverted d4f767d policy: `admin` is deliberately NOT granted
-  // `content` (migrate-staff-roles.ts:76-80). An admin holding no discipline
-  // row must be refused, or this guard degenerates back into org-wide
-  // authorship.
-  it('refuses an admin authoring content — they administer, they do not author', async () => {
+  // RBAC rule 3: an admin may CRUD every lesson. This REPLACES the older test
+  // that pinned the opposite (admin refused, per the reverted d4f767d note and
+  // migrate-staff-roles.ts:78, which withheld `content` from admin so senior
+  // staff would administer rather than author). That policy was superseded by
+  // an explicit ruling; the admin is admitted by BYPASS, holding no `content`
+  // grant at all — which is exactly what makes the bypass load-bearing rather
+  // than decorative.
+  it('admits an admin who holds no content grant — RBAC rule 3', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
     m.getDisciplineRoleNames.mockResolvedValue([]);
     m.getUserPermissions.mockResolvedValue(new Set(['course:update']));
+
+    await expect(
+      requireDisciplinePermission(HEADERS, 7, 'content', 'update'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('still refuses a signed-in non-admin with no grant and no discipline row', async () => {
+    // The bypass must widen, not open. Mutant this catches: replacing the
+    // permission check with `return` outright, or reading the union of global
+    // AND scoped roles for admin-ness — a `discipline_staff` row naming a role
+    // called `admin` would then mint org-wide authority from a scoped grant.
+    m.getUserRoleNames.mockResolvedValue(['course-manager']);
+    m.getDisciplineRoleNames.mockResolvedValue(['admin']);
+    m.getUserPermissions.mockResolvedValue(new Set(['structure:update']));
 
     await expect(
       requireDisciplinePermission(HEADERS, 7, 'content', 'update'),

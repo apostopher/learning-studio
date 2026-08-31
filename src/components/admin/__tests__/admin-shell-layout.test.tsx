@@ -28,7 +28,6 @@ const renderAdmin = async (
   canSeePeople: boolean,
   canSeeCourses = true,
   canSeeEditor = false,
-  canSeeDisciplines = false,
 ) => {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const homeRoute = createRoute({
@@ -46,11 +45,6 @@ const renderAdmin = async (
     path: '/admin/editor',
     component: () => null,
   });
-  const disciplinesRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/admin/disciplines',
-    component: () => null,
-  });
   const adminRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin',
@@ -59,7 +53,6 @@ const renderAdmin = async (
         canSeePeople={canSeePeople}
         canSeeCourses={canSeeCourses}
         canSeeEditor={canSeeEditor}
-        canSeeDisciplines={canSeeDisciplines}
       >
         <p>Course list</p>
       </AdminShellLayout>
@@ -71,7 +64,6 @@ const renderAdmin = async (
       homeRoute,
       usersRoute,
       editorRoute,
-      disciplinesRoute,
       adminRoute,
     ]),
     history: createMemoryHistory({ initialEntries: ['/admin'] }),
@@ -198,37 +190,23 @@ describe('AdminShellLayout', () => {
   });
 
   /**
-   * Disciplines is admin-only — every endpoint behind it is `requireAdmin`, so
-   * that a Subject Expert cannot appoint a peer to their own discipline. Like
-   * the other three it stands on its own gate: an admin who holds no grant at
-   * all still administers the org's disciplines.
+   * There is no Disciplines link, and its absence is a decision rather than an
+   * omission. Disciplines are created, renamed, staffed and deleted from the
+   * columns of the knowledge library editor — a discipline IS a column there.
+   * The separate `/admin/disciplines` screen listed the same rows without the
+   * lessons in them and has been removed.
    *
-   * Mutant seen RED: the link rendered inside the `canSeeEditor` block (the
-   * obvious "they're both new admin screens" merge) — a discipline-only SME
-   * would then be handed a link to a page every one of whose endpoints refuses
-   * them.
+   * Mutant this catches: the link being restored (to a route that no longer
+   * exists) as part of "adding back" a nav item someone assumes went missing.
    */
-  it('shows the Disciplines link on its own gate alone', async () => {
-    await renderAdmin(false, false, false, true);
-
-    expect(screen.getByRole('link', { name: 'Disciplines' })).toBeDefined();
-    expect(
-      screen.queryByRole('link', { name: 'Knowledge library' }),
-    ).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'People' })).toBeNull();
-    // And an actor who has one section is not told they have none.
-    expect(
-      screen.queryByText(
-        'No admin sections are available with your current permissions.',
-      ),
-    ).toBeNull();
-  });
-
-  it('hides the Disciplines link when its gate is closed', async () => {
-    await renderAdmin(true, true, true, false);
+  it('offers no Disciplines link — that screen is gone', async () => {
+    await renderAdmin(true, true, true);
 
     expect(screen.queryByRole('link', { name: 'Disciplines' })).toBeNull();
+    // The editor is where that work happens now, and it is still offered.
+    expect(
+      screen.getByRole('link', { name: 'Knowledge library' }),
+    ).toBeDefined();
   });
 
   it('says nothing about permissions when a section is available', async () => {

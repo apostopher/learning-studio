@@ -11,6 +11,7 @@ const m = vi.hoisted(() => {
   return {
     ForbiddenError,
     requirePermission: vi.fn(),
+    requireCourseCreation: vi.fn(),
     getStaffScopedCourseIds: vi.fn(),
     listAdminCourses: vi.fn(),
     createCourse: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 }));
 vi.mock('#/lib/permissions.server', () => ({
   requirePermission: m.requirePermission,
+  requireCourseCreation: m.requireCourseCreation,
   getStaffScopedCourseIds: m.getStaffScopedCourseIds,
 }));
 vi.mock('#/db/admin', () => ({
@@ -125,13 +127,23 @@ describe('listAdminCoursesHandler', () => {
 });
 
 describe('createCourseHandler', () => {
-  it('asks for course:create — org-level, not per-course', async () => {
+  /**
+   * RBAC rule 5: a course manager or an admin may create an offering.
+   *
+   * The guard is `requireCourseCreation`, NOT `requirePermission('course',
+   * 'create')`. That distinction is the test: `requirePermission` carries an
+   * admin floor, refusing anyone who is not admin or owner before it looks at
+   * a grant, so a course manager could never pass it however the grants were
+   * configured. The union guard is where the course-manager branch lives.
+   *
+   * Mutant this catches: reverting to `guard(request, 'create')`, which still
+   * type-checks, still 201s for an admin, and silently locks out every course
+   * manager.
+   */
+  it('guards creation with the course-manager union, not the admin-floored permission check', async () => {
     await createCourseHandler(postReq());
-    expect(m.requirePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      'course',
-      'create',
-    );
+    expect(m.requireCourseCreation).toHaveBeenCalledTimes(1);
+    expect(m.requirePermission).not.toHaveBeenCalled();
   });
 
   it('creates the course on success', async () => {
@@ -142,19 +154,20 @@ describe('createCourseHandler', () => {
   });
 
   it('403s when refused, without creating a course', async () => {
-    m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    m.requireCourseCreation.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await createCourseHandler(postReq());
     expect(res.status).toBe(403);
     expect(m.createCourse).not.toHaveBeenCalled();
   });
 
   /**
-   * Founding a course is org-level and has no staff fallback: a subject expert
-   * authors inside a course, they do not create one. The read path's fallback
-   * must not leak across.
+   * Founding a course still has no `course_staff`-scoped fallback: a subject
+   * expert authors inside a course, they do not decide which courses exist.
+   * Rule 5 admits course managers by ROLE, inside `requireCourseCreation` —
+   * the read path's course-id fallback must not leak across into create.
    */
   it('offers no staff fallback on create', async () => {
-    m.requirePermission.mockRejectedValueOnce(new m.ForbiddenError());
+    m.requireCourseCreation.mockRejectedValueOnce(new m.ForbiddenError());
     m.getStaffScopedCourseIds.mockResolvedValueOnce([4]);
     const res = await createCourseHandler(postReq());
     expect(res.status).toBe(403);

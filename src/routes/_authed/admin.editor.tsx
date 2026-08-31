@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { EditorContainer } from '#/components/admin/editor-container';
+import { hasAdminAccess, hasPermissionKey } from '#/lib/admin-schemas';
 
 /**
  * The knowledge library editor: every lesson the org owns on the left, every
@@ -25,19 +26,43 @@ import { EditorContainer } from '#/components/admin/editor-container';
  * the first to drift; the nav link's gate mirrors the same union, and
  * `admin-shell-nav.test.tsx` pins it.
  *
- * It also reads no capability flags out of the route context, unlike the
- * per-course route. Neither of the two things those flags fed survives here:
- * the course toolbar has no home on a rail of many courses, and authority over
- * deleting a LESSON follows the lesson's discipline
- * (`requireLessonContentPermission`), which the router context — global roles
- * and permissions plus two org-wide staffing booleans — cannot answer for any
- * particular lesson. The card offers the control, the server refuses it if it
- * must, and `useDeleteLesson` turns that 403 into a sentence saying so.
+ * It reads three capability flags out of the route context, all org-level
+ * questions the context can actually answer, and each mirroring the guard on
+ * the endpoint behind it (RBAC rules 1, 3 and 5). Nothing else is threaded: the course toolbar
+ * has no home on a rail of many courses, and authority over deleting a LESSON
+ * follows the lesson's discipline (`requireLessonContentPermission`), which
+ * the router context — global roles and permissions plus two org-wide staffing
+ * booleans — cannot answer for any particular lesson. The card offers the
+ * control, the server refuses it if it must, and `useDeleteLesson` turns that
+ * 403 into a sentence saying so.
  */
 export const Route = createFileRoute('/_authed/admin/editor')({
   component: EditorPage,
 });
 
 function EditorPage() {
-  return <EditorContainer />;
+  const { permissions, roles, isStaffAnywhere, isCourseManagerAnywhere } =
+    Route.useRouteContext();
+  return (
+    <EditorContainer
+      capabilities={{
+        // RBAC rule 1 — a course manager, a subject expert or an admin may
+        // CREATE a discipline. Mirrors `requireDisciplineCreation`, which is
+        // the guard form of this same union.
+        canCreateDiscipline: hasAdminAccess(roles) || isStaffAnywhere,
+        // Rule 3 — renaming and deleting a discipline stay admin-only, as does
+        // appointing its experts. Naming a new subject is cheap and reversible
+        // by its author; handing out authority over one is not, and letting an
+        // SME do it would make expert assignment self-propagating.
+        canManageDisciplines: hasAdminAccess(roles),
+        // Rule 5 — a course manager or an admin may create a new offering. A
+        // subject expert is deliberately absent: they author lessons, they do
+        // not decide which courses the org sells. Mirrors
+        // `requireCourseCreation`.
+        canCreateCourse:
+          hasPermissionKey(permissions, 'course', 'create') ||
+          isCourseManagerAnywhere,
+      }}
+    />
+  );
 }

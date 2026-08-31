@@ -1,5 +1,5 @@
 import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
-import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
+import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
 import { LessonQuickshot } from './lesson-quickshot';
 
 /**
@@ -18,9 +18,9 @@ import { LessonQuickshot } from './lesson-quickshot';
  */
 interface LessonQuickshotContainerProps {
   courseId: number;
-  lesson: BoardLesson;
+  lesson: EditorBoardLesson;
   /** The lesson's own module: access depends on what the module allows. */
-  module: BoardModule;
+  module: EditorBoardModule;
   disabled?: boolean;
 }
 

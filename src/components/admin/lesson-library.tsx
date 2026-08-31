@@ -7,13 +7,28 @@ import { ScrollArea } from '../scroll-area';
  * its own lessons vertically. This component only lays out whatever columns
  * it's handed as `children` — building the columns themselves, the
  * "Untitled" grouping, and the drag context are a container's job.
+ *
+ * `headerAction` is a node rather than a callback because the action it holds
+ * ("Add discipline") is a dialog trigger that must sit inside its own
+ * `Dialog.Root`. Passing a click handler instead would put the dialog's open
+ * state in this presentational shell. It is optional: not everyone who can
+ * read the library may create a discipline, and a caller who cannot passes
+ * nothing rather than a disabled button — the whole surface is hidden from
+ * them, so there is no locked control needing a reason.
  */
-export const LessonLibrary = ({ children }: { children: ReactNode }) => (
+export const LessonLibrary = ({
+  headerAction,
+  children,
+}: {
+  headerAction?: ReactNode;
+  children: ReactNode;
+}) => (
   <section className="flex h-full flex-col bg-gray-2">
-    <header className="border-b border-gray-6 bg-gray-1 px-4 py-3">
+    <header className="flex items-center justify-between gap-2 border-gray-6 border-b bg-gray-1 px-4 py-3">
       <h2 className="font-semibold text-primary text-sm uppercase tracking-wide">
         Library
       </h2>
+      {headerAction}
     </header>
     <ScrollArea
       orientation="horizontal"

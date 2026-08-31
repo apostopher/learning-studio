@@ -11,6 +11,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router';
 import { Toaster } from 'sonner';
 import { ChatWidget } from '../components/chat-widget/chat-widget';
+import { PointerOriginTracker } from '../components/pointer-origin-tracker';
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools';
 import TanstackQueryProvider from '../integrations/tanstack-query/root-provider';
 import { getAuthContext, type getSession } from '../lib/auth-functions';
@@ -57,6 +58,15 @@ interface MyRouterContext {
    * defect.
    */
   isCourseStaffAnywhere: boolean;
+  /**
+   * Whether this person holds the COURSE-MANAGER role on any course.
+   *
+   * Narrower than `isCourseStaffAnywhere`, which a subject expert staffed on a
+   * course also satisfies. It exists for one question — RBAC rule 5, who may
+   * create a new offering — and mirrors `requireCourseCreation` exactly, so
+   * the button and the endpoint behind it cannot disagree.
+   */
+  isCourseManagerAnywhere: boolean;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
@@ -67,6 +77,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       permissions,
       isStaffAnywhere,
       isCourseStaffAnywhere,
+      isCourseManagerAnywhere,
     } = await getAuthContext();
     return {
       session,
@@ -74,6 +85,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       permissions,
       isStaffAnywhere,
       isCourseStaffAnywhere,
+      isCourseManagerAnywhere,
     };
   },
   head: () => ({
@@ -136,6 +148,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <NuqsAdapter>
           <TanstackQueryProvider client={queryClient}>
             <Tooltip.Provider delay={0}>
+              {/*
+                Publishes the last click position so every dialog can grow out
+                of the control that opened it. Renders nothing; mounted here
+                because a dialog can be opened from any route.
+              */}
+              <PointerOriginTracker />
               {children}
               <ChatWidget />
             </Tooltip.Provider>

@@ -31,6 +31,7 @@ const m = vi.hoisted(() => {
     // the guard and every "not called" assertion would fail.
     requireDisciplinePermission: vi.fn(),
     isStaffAnywhere: vi.fn(),
+    requireDisciplineCreation: vi.fn(),
     listDisciplines: vi.fn(),
     createDiscipline: vi.fn(),
     renameDiscipline: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('#/lib/admin-functions.server', () => ({
 vi.mock('#/lib/permissions.server', () => ({
   requireDisciplinePermission: m.requireDisciplinePermission,
   isStaffAnywhere: m.isStaffAnywhere,
+  requireDisciplineCreation: m.requireDisciplineCreation,
 }));
 vi.mock('#/db/disciplines', () => ({
   listDisciplines: m.listDisciplines,
@@ -110,9 +112,16 @@ beforeEach(() => {
 });
 
 /**
- * Test 1. Every route refuses a non-admin — a discipline SME acting on their
- * OWN discipline included, which is the escalation this guard exists to
+ * Test 1. Every route here refuses a non-admin — a discipline SME acting on
+ * their OWN discipline included, which is the escalation this guard exists to
  * prevent.
+ *
+ * `POST /disciplines` is DELIBERATELY ABSENT from this table, and its absence
+ * is a policy statement rather than an oversight: RBAC rule 1 admits a course
+ * manager and a subject expert to discipline CREATION. It has its own describe
+ * below. Everything else in the family stays admin-floored — above all the two
+ * staff writes, because letting an SME appoint a peer would make expert
+ * assignment self-propagating.
  *
  * An SME holds no global `admin` or `owner` role, so `requireAdmin` throws for
  * them exactly as it does for a learner — that rejection IS the SME case, and
@@ -129,11 +138,6 @@ const CASES: [
     'GET /disciplines',
     () => getDisciplinesHandler(req(undefined, 'GET')),
     () => m.listDisciplines,
-  ],
-  [
-    'POST /disciplines',
-    () => postDisciplineHandler(req({ name: 'Aerodynamics' })),
-    () => m.createDiscipline,
   ],
   [
     'PATCH /disciplines/:id',
@@ -201,6 +205,54 @@ describe.each(CASES)('%s — the admin floor', (_label, call, query) => {
 
     expect(m.requireAdmin).toHaveBeenCalledTimes(1);
     expect(m.requireDisciplinePermission).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Test 1b. `POST /disciplines` is the one widened route — RBAC rule 1: a
+ * course manager, a subject expert, or an admin may create a discipline.
+ */
+describe('POST /disciplines — the staff floor', () => {
+  it('admits anyone staffed anywhere, without ever asking requireAdmin', async () => {
+    const res = await postDisciplineHandler(req({ name: 'Aerodynamics' }));
+
+    expect(res.status).toBe(201);
+    // Mutant this catches: reverting the guard to `requireAdmin`. It would
+    // still 201 for an admin — every other test in this file runs as one —
+    // while refusing the course managers and subject experts rule 1 admits.
+    expect(m.requireDisciplineCreation).toHaveBeenCalledTimes(1);
+    expect(m.requireAdmin).not.toHaveBeenCalled();
+  });
+
+  it('refuses someone staffed nowhere, and writes nothing', async () => {
+    m.requireDisciplineCreation.mockRejectedValueOnce(new m.ForbiddenError());
+
+    const res = await postDisciplineHandler(req({ name: 'Aerodynamics' }));
+
+    expect(res.status).toBe(403);
+    // A handler that created the discipline and then returned 403 would pass
+    // on status alone, and would still have created it.
+    expect(m.createDiscipline).not.toHaveBeenCalled();
+  });
+
+  it('lets an outage escape rather than reporting it as a refusal', async () => {
+    m.requireDisciplineCreation.mockRejectedValueOnce(new Error('db down'));
+
+    await expect(
+      postDisciplineHandler(req({ name: 'Aerodynamics' })),
+    ).rejects.toThrow('db down');
+    expect(m.createDiscipline).not.toHaveBeenCalled();
+  });
+
+  it('returns an unstaffed discipline, so creating one grants its creator nothing', async () => {
+    const res = await postDisciplineHandler(req({ name: 'Aerodynamics' }));
+
+    // The security argument for widening creation at all: appointing experts
+    // is a separate, still-admin-only write. A course manager who creates a
+    // discipline does not become its expert, so creation cannot be used as a
+    // back door to authoring authority.
+    await expect(res.json()).resolves.toMatchObject({ staff: [] });
+    expect(m.assignDisciplineStaff).not.toHaveBeenCalled();
   });
 });
 

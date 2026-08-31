@@ -15,6 +15,7 @@ export function getRouter() {
       permissions: [],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
+      isCourseManagerAnywhere: false,
     },
     scrollRestoration: true,
     defaultPreload: 'intent',

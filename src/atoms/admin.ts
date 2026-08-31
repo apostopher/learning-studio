@@ -6,6 +6,67 @@ import type { UserLevel } from '#/types';
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);
 
+/**
+ * Whether the create-discipline dialog is open.
+ *
+ * Lives beside `createCourseDialogOpenAtom` rather than inside the dialog as
+ * `useState`: the editor's library header owns the trigger while the dialog
+ * itself renders further down the tree, and the two only ever meet through
+ * this atom.
+ */
+export const createDisciplineDialogOpenAtom = atom(false);
+
+/**
+ * The search term in the create-discipline dialog's subject-expert picker.
+ *
+ * Separate from the form: it is what the picker is *searching for*, not what
+ * the form will submit. React Query keys the candidate request on it, so
+ * retyping a prefix is answered from cache.
+ */
+export const disciplineExpertQueryAtom = atom('');
+
+/**
+ * The discipline whose "add lesson" dialog is open, or null.
+ *
+ * Carries the NAME as well as the id because the dialog says which discipline
+ * the lesson is being filed under, and re-deriving that from the library cache
+ * inside the dialog would make it read a query it otherwise has no interest
+ * in. Same reason `deleteModuleAtom` carries a name.
+ */
+export const createLibraryLessonTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/** The discipline being renamed from the library column, or null. */
+export const renameDisciplineTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/**
+ * The discipline pending deletion from the library column, or null.
+ *
+ * `lessonCount` rides along because it is the whole reason a delete is
+ * refused: the dialog states the block and the number in plain text rather
+ * than letting the user press a button that will 409.
+ */
+export const deleteDisciplineTargetAtom = atom<{
+  id: number;
+  name: string;
+  lessonCount: number;
+} | null>(null);
+
+/**
+ * The library lesson being edited from `/admin/editor`, or null.
+ *
+ * Distinct from `configureLessonIdAtom`, which drives the per-course configure
+ * modal: that one edits how ONE course teaches a lesson (gates, sequencing,
+ * video credentials) and needs a course to mean anything. This one edits what
+ * the lesson IS, which is the same answer in every course teaching it.
+ */
+export const editLibraryLessonIdAtom = atom<number | null>(null);
+
 /** Whether the create-module dialog is open. */
 export const createModuleDialogOpenAtom = atom(false);
 

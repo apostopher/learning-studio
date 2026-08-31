@@ -2,6 +2,7 @@ import {
   getCourseRoleNames,
   getStaffCourseIds,
   isAnyCourseStaff,
+  isCourseManagerAnywhere,
 } from '#/db/course-staff';
 import {
   getDisciplineRoleNames,
@@ -146,7 +147,34 @@ async function requireScopedPermission(
   if (roles.length === 0) throw new ForbiddenError();
 
   const permissions = await getUserPermissions(roles);
-  if (!hasPermission(permissions, entity, action)) throw new ForbiddenError();
+  // RBAC rule 3: an admin may CRUD every lesson and every course's structure.
+  //
+  // A BYPASS, not a floor — the distinction matters and the two are easy to
+  // confuse. A floor (as in `requirePermission`) REQUIRES admin and would make
+  // the two scoped roles inert. This admits an admin in ADDITION to whoever
+  // the grant lets through, so a subject expert with no global role still
+  // passes on their `discipline_staff` row and a course manager on their
+  // `course_staff` row, exactly as before.
+  //
+  // It exists because `admin` holds no `structure` or `content` grant at all
+  // (`migrate-staff-roles.ts:78`, which withheld them so that senior staff
+  // would administer rather than author). That rule has been superseded: an
+  // admin who cannot drag a lesson into a course or fix a typo in one is not
+  // an administrator of this system in any useful sense. The audit trail
+  // argument the old note made — "an admin who needs a course's authority
+  // assigns themselves, leaving a record in course_staff.assigned_by" — was
+  // never enforcement, only bookkeeping, and it cost the admin every ordinary
+  // corrective action in the product.
+  //
+  // `globalRoles`, never `roles`: admin is a global role, and reading the
+  // union would let a `course_staff` row naming a role called `admin` mint
+  // org-wide authority from a course-scoped grant.
+  if (
+    !hasAdminAccess(globalRoles) &&
+    !hasPermission(permissions, entity, action)
+  ) {
+    throw new ForbiddenError();
+  }
 
   return { userId, globalRoles, scopedRoles, permissions };
 }
@@ -154,11 +182,15 @@ async function requireScopedPermission(
 /**
  * Guard for the per-course entities: `structure`, `content`, `staff`.
  *
- * Deliberately has NO admin floor. `requirePermission`'s floor exists because
+ * Deliberately has NO admin FLOOR. `requirePermission`'s floor exists because
  * its entities refine what an admin may do; these entities are held by people
  * who are not admins at all — a subject expert is staff on one course and
  * nothing anywhere else. Requiring admin here would make the two new roles
  * inert, which is the failure this whole design exists to avoid.
+ *
+ * It does carry an admin BYPASS, which is the opposite arrangement: see
+ * `requireScopedPermission`. An admin passes on top of, never instead of, the
+ * scoped roles.
  *
  * Authority is the union of the actor's global roles and their roles on THIS
  * course, so an owner (wildcard) passes, and an admin passes only for entities
@@ -200,12 +232,16 @@ export async function requireCoursePermission(
  * `discipline_staff` instead of `course_staff`. Both share their resolution
  * via `requireScopedPermission`; this wrapper supplies only what differs.
  *
- * Deliberately has NO admin floor, for the same reason `requireCoursePermission`
- * has none: `admin` is deliberately NOT granted `content` (see
- * `migrate-staff-roles.ts:76-80`) — senior staff administer the university
- * and do not author its syllabi. An admin who needs a discipline's authority
- * assigns themselves as a subject-expert, which leaves a record in
- * `discipline_staff.assigned_by`.
+ * Deliberately has NO admin FLOOR, for the same reason `requireCoursePermission`
+ * has none: requiring admin would make the subject-expert role inert.
+ *
+ * It DOES admit an admin by bypass (see `requireScopedPermission`), which is
+ * RBAC rule 3 — an admin may CRUD every lesson. That supersedes the older
+ * arrangement in which `admin` was withheld `content` entirely and an admin
+ * needing a discipline's authority appointed themselves a subject-expert to
+ * leave a record in `discipline_staff.assigned_by`. Appointment still leaves
+ * that record and is still how a NON-admin gains authority; it is simply no
+ * longer the only way an admin can fix a lesson.
  *
  * Returns void rather than an actor (contrast `requireCoursePermission`,
  * which returns `CourseActor`): its one caller,
@@ -342,6 +378,60 @@ export async function absentResourceResponse(
     return Response.json({ error }, { status: 404 });
   }
   return new Response('Forbidden', { status: 403 });
+}
+
+/**
+ * RBAC rule 1: a course manager, a subject expert, or an admin may CREATE a
+ * discipline.
+ *
+ * The guard form of `isStaffAnywhere`, and it is exactly that union — admin or
+ * owner globally, any `course_staff` row, any `discipline_staff` row — because
+ * `course_staff` can only ever name a course manager or a subject expert
+ * (`COURSE_SCOPED_ROLES`) and `discipline_staff` only a subject expert
+ * (`DISCIPLINE_SCOPED_ROLES`). "Staff anywhere" and "one of those three
+ * populations" are the same set, enforced at both write sites.
+ *
+ * Creating a discipline is widened; renaming, deleting, and appointing its
+ * experts are NOT — those stay `requireAdmin`. Naming a new subject is
+ * cheap and reversible by its author. Appointing experts is the act that
+ * hands out authority, and letting an SME do it would make expert assignment
+ * self-propagating: the "an admin hires the experts" rule would hold exactly
+ * until the first hire.
+ */
+export async function requireDisciplineCreation(
+  headers: Headers,
+): Promise<void> {
+  if (!(await isStaffAnywhere(headers))) throw new ForbiddenError();
+}
+
+/**
+ * RBAC rule 5: a course manager or an admin may create a new offering.
+ *
+ * Not `requirePermission(headers, 'course', 'create')` alone, which carries an
+ * ADMIN FLOOR — it refuses anyone who is not admin or owner before it ever
+ * looks at a grant, so a course manager could never pass it however the grants
+ * were configured. The union adds the course-manager role and nothing else; a
+ * subject expert is deliberately absent, authoring lessons rather than
+ * deciding which courses the org sells.
+ *
+ * `isCourseManagerAnywhere` and not `isAnyCourseStaff`: the latter is also
+ * true of a subject expert staffed on a course, which would admit exactly the
+ * population this rule leaves out.
+ */
+export async function requireCourseCreation(headers: Headers): Promise<void> {
+  try {
+    await requirePermission(headers, 'course', 'create');
+    return;
+  } catch (error) {
+    // Only a refusal falls through. Anything else is an outage, and reporting
+    // it as "not an admin" would hide it behind a second failing question.
+    if (!(error instanceof ForbiddenError)) throw error;
+  }
+
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) throw new ForbiddenError();
+  if (!(await isCourseManagerAnywhere(userId))) throw new ForbiddenError();
 }
 
 /** Owner-only guard, for role assignment and permission editing. */

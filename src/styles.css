@@ -1426,3 +1426,81 @@
   position: relative;
   z-index: 1;
 }
+
+@layer components {
+  /* Dialogs grow out of the point that opened them.
+     ------------------------------------------------------------------
+     `PointerOriginTracker` publishes the last click as `--pointer-x` /
+     `--pointer-y` in viewport pixels. Every popup in this app is centred the
+     same way (`fixed inset-0 m-auto`), so its own left edge sits at
+     `(100vw - width) / 2` — which means the click, expressed inside the
+     popup's own box, is:
+
+         pointer-x - (100vw - width)/2  ==  pointer-x - 50vw + width/2
+
+     and in `transform-origin`, `50%` already MEANS width/2 of this element.
+     That is why no JavaScript measures anything: the arithmetic below is
+     exact for a centred popup of any size, and it is resolved by the browser
+     at paint time rather than by a layout read that would have to happen
+     before the first frame.
+
+     The fallback of `50vw`/`50vh` puts the origin at the viewport centre, so
+     a dialog opened without a known origin simply scales from the middle.
+
+     Written with the INDEPENDENT `scale` property rather than `transform`, so
+     a popup that also carries a Tailwind `transform` utility cannot have it
+     silently overwritten. */
+  .dialog-popup {
+    transform-origin: calc(var(--pointer-x, 50vw) - 50vw + 50%)
+      calc(var(--pointer-y, 50vh) - 50vh + 50%);
+    opacity: 1;
+    scale: 1;
+    transition:
+      opacity var(--duration-dialog-enter) var(--ease-dialog-enter),
+      scale var(--duration-dialog-enter) var(--ease-dialog-enter);
+  }
+
+  /* Base UI puts `data-starting-style` on the first painted frame and
+     `data-ending-style` while closing, and holds the unmount until the
+     transition finishes — so one collapsed state serves as both the state it
+     grows out of and the state it shrinks back into. */
+  .dialog-popup[data-starting-style],
+  .dialog-popup[data-ending-style] {
+    opacity: 0;
+    scale: var(--scale-dialog-collapsed);
+  }
+
+  .dialog-popup[data-ending-style] {
+    transition-duration: var(--duration-dialog-exit);
+    transition-timing-function: var(--ease-dialog-exit);
+  }
+
+  /* The backdrop only fades. It has no origin — it is the whole viewport —
+     and scaling it would tear the blur. */
+  .dialog-backdrop {
+    opacity: 1;
+    transition: opacity var(--duration-dialog-enter) var(--ease-dialog-enter);
+  }
+
+  .dialog-backdrop[data-starting-style],
+  .dialog-backdrop[data-ending-style] {
+    opacity: 0;
+  }
+
+  .dialog-backdrop[data-ending-style] {
+    transition-duration: var(--duration-dialog-exit);
+    transition-timing-function: var(--ease-dialog-exit);
+  }
+}
+
+/* Reduced motion keeps the fade and drops the movement — gentler, not none.
+   The dialog must still take a non-zero time to leave: Base UI waits for the
+   transition to finish before unmounting, and `transition: none` would make
+   the popup vanish on the same frame the backdrop starts fading. */
+@media (prefers-reduced-motion: reduce) {
+  .dialog-popup,
+  .dialog-popup[data-starting-style],
+  .dialog-popup[data-ending-style] {
+    scale: 1;
+  }
+}

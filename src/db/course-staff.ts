@@ -6,7 +6,7 @@ import {
   userProfileTable,
   userRolesTable,
 } from '#/db/schema';
-import { isCourseScopedRole } from '#/lib/admin-schemas';
+import { COURSE_MANAGER_ROLE, isCourseScopedRole } from '#/lib/admin-schemas';
 
 export type CourseStaffMember = {
   userId: string;
@@ -163,6 +163,36 @@ export async function isAnyCourseStaff(userId: string): Promise<boolean> {
     .select({ id: courseStaffTable.id })
     .from(courseStaffTable)
     .where(eq(courseStaffTable.userId, userId))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Does this person hold the COURSE-MANAGER role on any course at all?
+ *
+ * Narrower than `isAnyCourseStaff`, and the narrowness is the point: that
+ * function answers "is staff", which a subject expert also satisfies, while
+ * this one answers the RBAC question "may they create a new offering". Rule 5
+ * lists course managers and admins, not subject experts — an SME authors
+ * lessons and does not decide which courses the org sells.
+ *
+ * Role-scoped rather than course-scoped because creating a course has no
+ * course to scope to. Holding the role on one course is what makes someone a
+ * course manager in this org; there is no other place that fact is recorded.
+ */
+export async function isCourseManagerAnywhere(
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: courseStaffTable.id })
+    .from(courseStaffTable)
+    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(userRolesTable.name, COURSE_MANAGER_ROLE),
+      ),
+    )
     .limit(1);
   return row !== undefined;
 }

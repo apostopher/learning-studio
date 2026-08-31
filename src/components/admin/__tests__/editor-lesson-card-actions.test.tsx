@@ -49,6 +49,12 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
       {children}
     </button>
   ),
+  // The quickshot chips this card now draws reach for the shared tooltip
+  // popup and the shared class helper. Stubbed rather than added to the
+  // component graph: this suite is about remove-versus-delete, and a real
+  // Base UI tooltip needs a provider it has no reason to mount.
+  IconButtonTooltip: ({ label }: { label: string }) => <span>{label}</span>,
+  iconButtonClass: () => '',
 }));
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -58,6 +64,25 @@ import { removeLessonLabel } from '../lesson-card-labels';
 
 const LESSON_ID = 10;
 const MODULE_ID = 3;
+
+/**
+ * The card now takes the whole module, not an id and a name: the quickshot
+ * chips it draws read `module.requiredSubscriptions` to decide whether the
+ * access chip is editable, the same way the per-course board's card does.
+ */
+const MODULE = {
+  id: MODULE_ID,
+  name: 'Fundamentals',
+  slug: 'fundamentals',
+  rank: 1,
+  requiredSubscriptions: [],
+  sequentialLessons: false,
+  imageUrlAvif: null,
+  imageUrlWebp: null,
+  dependsOn: [],
+  learnerCount: 0,
+  lessons: [],
+};
 
 const lesson: BoardLesson = {
   id: LESSON_ID,
@@ -111,8 +136,7 @@ function renderCard() {
       <Provider store={store}>
         <EditorLessonCardContainer
           lesson={lesson}
-          moduleId={MODULE_ID}
-          moduleName="Fundamentals"
+          module={MODULE}
           courseId={7}
         />
       </Provider>

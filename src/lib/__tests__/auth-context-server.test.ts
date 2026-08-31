@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   getUserRoleNames: vi.fn(),
   getUserPermissions: vi.fn(),
   isAnyCourseStaff: vi.fn(),
+  isCourseManagerAnywhere: vi.fn(),
   isAnyDisciplineStaff: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -19,6 +20,7 @@ vi.mock('#/db/permissions', () => ({
 }));
 vi.mock('#/db/course-staff', () => ({
   isAnyCourseStaff: m.isAnyCourseStaff,
+  isCourseManagerAnywhere: m.isCourseManagerAnywhere,
 }));
 vi.mock('#/db/discipline-staff', () => ({
   isAnyDisciplineStaff: m.isAnyDisciplineStaff,
@@ -37,6 +39,7 @@ beforeEach(() => {
   m.getUserRoleNames.mockResolvedValue([]);
   m.getUserPermissions.mockResolvedValue(new Set<string>());
   m.isAnyCourseStaff.mockResolvedValue(false);
+  m.isCourseManagerAnywhere.mockResolvedValue(false);
   m.isAnyDisciplineStaff.mockResolvedValue(false);
 });
 
@@ -83,12 +86,14 @@ describe('resolveAuthContext', () => {
     expect(m.getUserRoleNames).not.toHaveBeenCalled();
     expect(m.isAnyCourseStaff).not.toHaveBeenCalled();
     expect(m.isAnyDisciplineStaff).not.toHaveBeenCalled();
+    expect(m.isCourseManagerAnywhere).not.toHaveBeenCalled();
     expect(result).toEqual({
       session: null,
       roles: [],
       permissions: [],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
+      isCourseManagerAnywhere: false,
     });
   });
 
@@ -159,6 +164,43 @@ describe('resolveAuthContext', () => {
     expect(result.isCourseStaffAnywhere).toBe(true);
   });
 
+  it('separates a course MANAGER from a subject expert staffed on a course', async () => {
+    // Both hold a `course_staff` row, so `isCourseStaffAnywhere` cannot tell
+    // them apart — and RBAC rule 5 must: a course manager may create an
+    // offering, a subject expert may not.
+    m.isAnyCourseStaff.mockResolvedValue(true);
+    m.isCourseManagerAnywhere.mockResolvedValueOnce(false);
+
+    const expert = await resolveAuthContext(HEADERS);
+    expect(expert.isCourseStaffAnywhere).toBe(true);
+    expect(expert.isCourseManagerAnywhere).toBe(false);
+
+    m.isCourseManagerAnywhere.mockResolvedValueOnce(true);
+    const manager = await resolveAuthContext(HEADERS);
+    expect(manager.isCourseManagerAnywhere).toBe(true);
+    expect(m.isCourseManagerAnywhere).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not ask about the course-manager role for someone staffing no course', async () => {
+    await resolveAuthContext(HEADERS);
+
+    // The role query joins `user_roles`; there is nothing for it to find when
+    // `course_staff` holds no row at all, and this runs on every
+    // authenticated page load.
+    expect(m.isCourseManagerAnywhere).not.toHaveBeenCalled();
+  });
+
+  it('degrades to not-a-course-manager if that lookup fails', async () => {
+    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+    m.isCourseManagerAnywhere.mockRejectedValueOnce(new Error('db down'));
+
+    const result = await resolveAuthContext(HEADERS);
+
+    // Fails closed like every lookup beside it: a transient error must not
+    // hand someone the create-offering button.
+    expect(result.isCourseManagerAnywhere).toBe(false);
+  });
+
   it('reports a discipline-only SME as staff, but not as course staff', async () => {
     m.isAnyDisciplineStaff.mockResolvedValueOnce(true);
 
@@ -177,7 +219,7 @@ describe('resolveAuthContext', () => {
   });
 
   it('does not ask about discipline_staff once course_staff has answered', async () => {
-    m.isAnyCourseStaff.mockResolvedValueOnce(true);
+    m.isAnyCourseStaff.mockResolvedValue(true);
 
     await resolveAuthContext(HEADERS);
 
@@ -247,6 +289,7 @@ describe('resolveAuthContext', () => {
       permissions: ['course:read'],
       isStaffAnywhere: true,
       isCourseStaffAnywhere: true,
+      isCourseManagerAnywhere: false,
     });
   });
 });

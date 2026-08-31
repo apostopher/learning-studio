@@ -116,8 +116,8 @@ export const UserDetailModal = ({
       onOpenChange={(next) => !next && onClose()}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-gray-1/70 backdrop-blur-sm" />
-        <Dialog.Popup className="fixed inset-0 z-40 m-auto grid h-[80vh] max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-[640px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl">
+        <Dialog.Backdrop className="dialog-backdrop fixed inset-0 z-40 bg-gray-1/70 backdrop-blur-sm" />
+        <Dialog.Popup className="dialog-popup fixed inset-0 z-40 m-auto grid h-[80vh] max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-[640px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl">
           <div className="flex items-center justify-between gap-4 border-gray-6 border-b px-6 py-4">
             <div className="flex min-w-0 flex-col">
               <Dialog.Title className="truncate font-semibold text-lg text-primary">

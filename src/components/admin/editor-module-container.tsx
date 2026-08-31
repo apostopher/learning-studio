@@ -27,9 +27,12 @@ import { ModuleAccordionItem } from './module-accordion-item';
 export const EditorModuleContainer = ({
   module: mod,
   courseId,
+  posters,
 }: {
   module: EditorBoardModule;
   courseId: number;
+  /** Poster frames by lesson id, fetched once per course by the column. */
+  posters?: Record<number, string | null>;
 }) => {
   const {
     attributes,
@@ -85,9 +88,9 @@ export const EditorModuleContainer = ({
                 <EditorLessonCardContainer
                   key={lesson.id}
                   lesson={lesson}
-                  moduleId={mod.id}
-                  moduleName={mod.name}
+                  module={mod}
                   courseId={courseId}
+                  posterUrl={posters?.[lesson.id]}
                 />
               ))
             )}

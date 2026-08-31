@@ -1,4 +1,7 @@
-import { isAnyCourseStaff } from '#/db/course-staff';
+import {
+  isCourseManagerAnywhere as holdsCourseManagerRole,
+  isAnyCourseStaff,
+} from '#/db/course-staff';
 import { isAnyDisciplineStaff } from '#/db/discipline-staff';
 import { getUserPermissions } from '#/db/permissions';
 import { ensureUserProfile } from '#/db/user-profile';
@@ -51,6 +54,7 @@ export async function resolveAuthContext(headers: Headers) {
       permissions: [] as string[],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
+      isCourseManagerAnywhere: false,
     };
   }
 
@@ -72,7 +76,7 @@ export async function resolveAuthContext(headers: Headers) {
 }
 
 /**
- * The two staffing booleans the router context carries, resolved together.
+ * The three staffing booleans the router context carries, resolved together.
  *
  * Mirrors `permissions.server.ts`'s `isStaffAnywhere` for the union — same
  * three sources, same short-circuit order (admin, then `course_staff`, then
@@ -88,13 +92,24 @@ export async function resolveAuthContext(headers: Headers) {
  * union it exists to be distinguished from. The nav link it drives is already
  * shown to an admin by their `course:read` grant.
  *
+ * `isCourseManagerAnywhere` is narrower still — the course-manager ROLE on any
+ * course, which a subject expert staffed on a course does not satisfy. It
+ * mirrors `requireCourseCreation` (RBAC rule 5), so the "New offering" button
+ * and the endpoint behind it can never disagree about who may press it. It is
+ * skipped entirely for an admin, who is admitted by their `course:create`
+ * grant and needs no second reason.
+ *
  * Every lookup fails closed, exactly like the roles and permissions lookups
  * beside it: a transient error must hide the admin console, never open it.
  */
 async function resolveStaffing(
   roles: string[],
   userId: string,
-): Promise<{ isStaffAnywhere: boolean; isCourseStaffAnywhere: boolean }> {
+): Promise<{
+  isStaffAnywhere: boolean;
+  isCourseStaffAnywhere: boolean;
+  isCourseManagerAnywhere: boolean;
+}> {
   const isCourseStaffAnywhere = await isAnyCourseStaff(userId).catch(
     () => false,
   );
@@ -102,5 +117,8 @@ async function resolveStaffing(
     hasAdminAccess(roles) ||
     isCourseStaffAnywhere ||
     (await isAnyDisciplineStaff(userId).catch(() => false));
-  return { isStaffAnywhere, isCourseStaffAnywhere };
+  const isCourseManagerAnywhere =
+    isCourseStaffAnywhere &&
+    (await holdsCourseManagerRole(userId).catch(() => false));
+  return { isStaffAnywhere, isCourseStaffAnywhere, isCourseManagerAnywhere };
 }

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { getCourseBoard } from '#/db/admin';
 import { getCourseCountsForLessons } from '#/db/placements';
@@ -20,25 +20,46 @@ import type {
  * vanish from the board. Grouping happens in JS off one flat row set rather
  * than one query per discipline, since the row set is already scoped and
  * small at this org's scale.
+ *
+ * The org's disciplines are read SEPARATELY and seed the grouping, so a
+ * discipline holding no lessons is still a column. Derived from the lesson
+ * rows alone it would not be: a discipline created a moment ago has nothing
+ * joined to it, so the screen that just created it would show nothing new and
+ * the create button would look broken. Seeding also fixes the column ORDER,
+ * which was previously whatever sequence the lesson rows happened to arrive
+ * in. A lesson pointing at a discipline the seed did not return still gets a
+ * column of its own from the join — misfiled data stays visible rather than
+ * silently falling into `untitled`.
  */
 export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
-  const rows = await db
-    .select({
-      id: lessonsTable.id,
-      name: lessonsTable.name,
-      slug: lessonsTable.slug,
-      isAvailable: lessonsTable.isAvailable,
-      videoRef: lessonsTable.videoRef,
-      disciplineId: disciplinesTable.id,
-      disciplineName: disciplinesTable.name,
-      disciplineSlug: disciplinesTable.slug,
-    })
-    .from(lessonsTable)
-    .leftJoin(
-      disciplinesTable,
-      eq(lessonsTable.disciplineId, disciplinesTable.id),
-    )
-    .where(eq(lessonsTable.orgId, orgId));
+  const [rows, disciplineRows] = await Promise.all([
+    db
+      .select({
+        id: lessonsTable.id,
+        name: lessonsTable.name,
+        slug: lessonsTable.slug,
+        isAvailable: lessonsTable.isAvailable,
+        videoRef: lessonsTable.videoRef,
+        disciplineId: disciplinesTable.id,
+        disciplineName: disciplinesTable.name,
+        disciplineSlug: disciplinesTable.slug,
+      })
+      .from(lessonsTable)
+      .leftJoin(
+        disciplinesTable,
+        eq(lessonsTable.disciplineId, disciplinesTable.id),
+      )
+      .where(eq(lessonsTable.orgId, orgId)),
+    db
+      .select({
+        id: disciplinesTable.id,
+        name: disciplinesTable.name,
+        slug: disciplinesTable.slug,
+      })
+      .from(disciplinesTable)
+      .where(eq(disciplinesTable.orgId, orgId))
+      .orderBy(asc(disciplinesTable.name)),
+  ]);
 
   // One shared count query for every lesson on the board, rather than one
   // per lesson: `getCourseCountsForLessons` returns a `Map` with no entry at
@@ -46,7 +67,15 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
   // 0 here rather than the lesson being dropped.
   const counts = await getCourseCountsForLessons(rows.map((r) => r.id));
 
-  const disciplinesById = new Map<number, LibraryDiscipline>();
+  // Seeded from the disciplines table, in name order, BEFORE any lesson is
+  // read — so the map's insertion order is the column order and an empty
+  // discipline already has its column by the time lessons are filed into it.
+  const disciplinesById = new Map<number, LibraryDiscipline>(
+    disciplineRows.map((d) => [
+      d.id,
+      { id: d.id, name: d.name, slug: d.slug, lessons: [] },
+    ]),
+  );
   const untitled: LibraryLesson[] = [];
 
   for (const row of rows) {
