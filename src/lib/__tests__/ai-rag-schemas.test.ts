@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  aiRagPostSchema,
   aiRagDeleteSchema,
+  aiRagPostSchema,
   parseCourseIdParam,
 } from '#/lib/ai-rag-schemas';
 

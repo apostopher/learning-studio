@@ -20,6 +20,10 @@ import { removeLessonLabel } from './lesson-card-labels';
  * guard nobody can test. It lives here instead: no React, no DOM, no hooks.
  *
  * The four allowed drops:
+ * A drop on a COURSE column itself — the target an empty course carries — is
+ * always `forbidden`, never `link`: a lesson lives inside a module, and this
+ * function does not invent one.
+ *
  *   library lesson  → a module            = `link`   (place it in that course)
  *   placed lesson   → a module, same course = `move` (re-place or reorder)
  *   module          → a module, same course = `reorder-module`
@@ -42,6 +46,29 @@ export type DropResolution =
   | { kind: 'reorder-module'; moduleId: number; overModuleId: number }
   | { kind: 'forbidden'; reason: string }
   | null;
+
+/** The course a `course` drop target names, or null if it left the board. */
+function findCourse(
+  board: OrgEditorBoard,
+  courseId: number,
+): EditorCourseBoard | null {
+  return board.find((cb) => cb.course.id === courseId) ?? null;
+}
+
+/**
+ * Why a drop on a COURSE column itself is refused.
+ *
+ * That target only exists while a course has no modules — see
+ * `EditorCourseEmptyContainer` — but this does not assume it: a course found
+ * with modules gets the sentence that points at them instead. The reason has
+ * to name the remedy, because "you cannot drop here" alone leaves the reader
+ * with a lesson in hand and nowhere to put it.
+ */
+function courseDropRefusal(courseBoard: EditorCourseBoard): string {
+  return courseBoard.modules.length === 0
+    ? `${courseBoard.course.name} has no modules yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.`
+    : `Drop the lesson on one of ${courseBoard.course.name}'s modules — a lesson sits inside a module, not loose in the course.`;
+}
 
 /** A module found on the board, with the course board that owns it. */
 interface LocatedModule {
@@ -131,6 +158,15 @@ export function resolveDrop(
       };
     }
 
+    if (over.type === 'course') {
+      const courseBoard = findCourse(board, over.id);
+      if (!courseBoard) return null;
+      return {
+        kind: 'forbidden',
+        reason: `"${from.module.name}" belongs to ${from.courseBoard.course.name}, and modules are only reordered within their own course — they cannot be moved into ${courseBoard.course.name}.`,
+      };
+    }
+
     const to = resolveOverModule(board, overId);
     if (!to) return null;
     if (to.module.id === from.module.id) return null;
@@ -162,6 +198,21 @@ export function resolveDrop(
       };
     }
 
+    if (over.type === 'course') {
+      const courseBoard = findCourse(board, over.id);
+      if (!courseBoard) return null;
+      // A placed lesson dropped on an EMPTY course is the cross-course move
+      // that is always refused, so it gets that reason rather than the
+      // create-a-module one — the module is not what is missing.
+      return {
+        kind: 'forbidden',
+        reason:
+          courseBoard.course.id === from.courseBoard.course.id
+            ? courseDropRefusal(courseBoard)
+            : `"${from.lesson.name}" is placed in ${from.courseBoard.course.name}, and a placed lesson only moves between modules of its own course. Drag it from the library to add it to ${courseBoard.course.name} as well.`,
+      };
+    }
+
     const to = resolveOverModule(board, overId);
     if (!to) return null;
     if (to.courseBoard.course.id !== from.courseBoard.course.id) {
@@ -189,6 +240,11 @@ export function resolveDrop(
     // Library cards are draggable but never droppable, so one landing on
     // another is not a target the editor offers, not a rule it enforces.
     if (over.type === 'library-lesson') return null;
+    if (over.type === 'course') {
+      const courseBoard = findCourse(board, over.id);
+      if (!courseBoard) return null;
+      return { kind: 'forbidden', reason: courseDropRefusal(courseBoard) };
+    }
 
     const to = resolveOverModule(board, overId);
     if (!to) return null;

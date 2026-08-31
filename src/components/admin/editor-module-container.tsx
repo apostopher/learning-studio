@@ -9,6 +9,7 @@ import { useCallback } from 'react';
 import type { EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { containerDndId, lessonDndId, moduleDndId } from '#/lib/dnd-ids';
+import { DropZoneEmpty } from './drop-zone-empty';
 import { EditorLessonCardContainer } from './editor-lesson-card-container';
 import { ModuleAccordionItem } from './module-accordion-item';
 
@@ -80,9 +81,14 @@ export const EditorModuleContainer = ({
             strategy={verticalListSortingStrategy}
           >
             {mod.lessons.length === 0 ? (
-              <p className="px-1 py-4 text-center text-tertiary text-xs">
-                No lessons yet — drag one over from the library.
-              </p>
+              // A real region rather than a line of text: the module's own
+              // droppable already covers this area, so what was missing was
+              // somewhere visible to aim at. `isOver` comes from that same
+              // droppable, so the outline lights up under a dragged lesson.
+              <DropZoneEmpty
+                message={`No lessons yet. Drag one from the library into ${mod.name}.`}
+                isOver={isOver}
+              />
             ) : (
               mod.lessons.map((lesson) => (
                 <EditorLessonCardContainer

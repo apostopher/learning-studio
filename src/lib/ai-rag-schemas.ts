@@ -12,18 +12,24 @@ const textMode = z.object({
 const fileMode = z.object({
   mode: z.literal('file'),
   courseId,
-  url: z.string().url().refine((url) => {
-    try {
-      return new URL(url).hostname.endsWith('.vercel-storage.com');
-    } catch {
-      return false;
-    }
-  }, 'File url must be hosted on Vercel Blob (*.vercel-storage.com)'),
+  url: z
+    .string()
+    .url()
+    .refine((url) => {
+      try {
+        return new URL(url).hostname.endsWith('.vercel-storage.com');
+      } catch {
+        return false;
+      }
+    }, 'File url must be hosted on Vercel Blob (*.vercel-storage.com)'),
   fileName: z.string().min(1),
   mimeType: z.string().min(1),
 });
 
-export const aiRagPostSchema = z.discriminatedUnion('mode', [textMode, fileMode]);
+export const aiRagPostSchema = z.discriminatedUnion('mode', [
+  textMode,
+  fileMode,
+]);
 export type AiRagPostInput = z.infer<typeof aiRagPostSchema>;
 
 export const aiRagDeleteSchema = z.object({

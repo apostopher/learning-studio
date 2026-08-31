@@ -1,8 +1,12 @@
-import { env } from "../../env";
-import { getResendClient } from "./client";
-import { otpEmailTemplate } from "./templates/otp-email";
+import { env } from '../../env';
+import { getResendClient } from './client';
+import { otpEmailTemplate } from './templates/otp-email';
 
-type OtpEmailType = "sign-in" | "email-verification" | "forget-password" | "change-email";
+type OtpEmailType =
+  | 'sign-in'
+  | 'email-verification'
+  | 'forget-password'
+  | 'change-email';
 
 interface SendOtpEmailParams {
   email: string;

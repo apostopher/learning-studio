@@ -7,6 +7,7 @@ import type {
 } from '#/lib/admin-schemas';
 import {
   containerDndId,
+  courseDndId,
   disciplineDndId,
   lessonDndId,
   libraryLessonDndId,
@@ -98,6 +99,9 @@ const board: OrgEditorBoard = [
   courseBoard(2, 'Mini Course', [
     mod(BASICS, 'Basics', [lesson(RADIO_CALLS, 'Radio Calls')]),
   ]),
+  // A course with NO modules — the only state in which the `course` drop
+  // target is rendered.
+  courseBoard(3, 'Weekend Refresher', []),
 ];
 
 describe('resolveDrop — the allowed drops', () => {
@@ -308,6 +312,99 @@ describe('resolveDrop — no target at all', () => {
     // Dropped back on itself.
     expect(
       resolveDrop(board, moduleDndId(FUNDAMENTALS), moduleDndId(FUNDAMENTALS)),
+    ).toBeNull();
+  });
+});
+
+/**
+ * The COURSE column itself is a drop target only while the course has no
+ * modules (`EditorCourseEmptyContainer`). It exists so that dragging a lesson
+ * onto an empty course is refused BY NAME instead of springing back in
+ * silence, which reads as a bug rather than a rule.
+ *
+ * Every case below is `forbidden`, never `link`: a lesson lives inside a
+ * module, and `resolveDrop` does not invent one.
+ */
+describe('resolveDrop — dropping on a course column itself', () => {
+  it('refuses a library lesson on an empty course, naming the remedy', () => {
+    const result = resolveDrop(
+      board,
+      libraryLessonDndId(WAKE_TURBULENCE),
+      courseDndId(3),
+    );
+
+    // Mutant this catches: returning `link` with a synthesised module id, or
+    // with the course id used as one — either would place the lesson
+    // somewhere that does not exist.
+    expect(result?.kind).toBe('forbidden');
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        'Weekend Refresher has no modules yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.',
+    });
+  });
+
+  it('points at the existing modules when the course has some', () => {
+    // The target is not rendered in this state, but the function does not
+    // assume that — and a reason telling someone to create a module when
+    // three are on screen would be worse than useless.
+    const result = resolveDrop(
+      board,
+      libraryLessonDndId(WAKE_TURBULENCE),
+      courseDndId(1),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        "Drop the lesson on one of Two-Week Course's modules — a lesson sits inside a module, not loose in the course.",
+    });
+  });
+
+  it('refuses a PLACED lesson from another course with the cross-course reason', () => {
+    // Mutant this catches: reusing the create-a-module sentence here. The
+    // module is not what is missing — this lesson may not cross courses at
+    // all, and telling the reader to create a module would send them to do
+    // something that still would not work.
+    const result = resolveDrop(board, lessonDndId(STALLS), courseDndId(3));
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Stalls" is placed in Two-Week Course, and a placed lesson only moves between modules of its own course. Drag it from the library to add it to Weekend Refresher as well.',
+    });
+  });
+
+  it('refuses a placed lesson dropped on its OWN course with the module reason', () => {
+    const result = resolveDrop(board, lessonDndId(STALLS), courseDndId(1));
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        "Drop the lesson on one of Two-Week Course's modules — a lesson sits inside a module, not loose in the course.",
+    });
+  });
+
+  it('refuses a module dropped on another course', () => {
+    const result = resolveDrop(
+      board,
+      moduleDndId(FUNDAMENTALS),
+      courseDndId(3),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Fundamentals" belongs to Two-Week Course, and modules are only reordered within their own course — they cannot be moved into Weekend Refresher.',
+    });
+  });
+
+  it('answers null for a course that is not on the board', () => {
+    // Mutant this catches: reading `.course.name` off the lookup without
+    // checking it, which throws instead of declining — a board that changed
+    // under an in-flight drag would take the whole editor down.
+    expect(
+      resolveDrop(board, libraryLessonDndId(WAKE_TURBULENCE), courseDndId(99)),
     ).toBeNull();
   });
 });

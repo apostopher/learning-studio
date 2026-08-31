@@ -16,6 +16,7 @@ import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { CourseColumn } from './course-column';
 import { CourseColumnActions } from './course-column-actions';
+import { EditorCourseEmptyContainer } from './editor-course-empty-container';
 import { EditorModuleContainer } from './editor-module-container';
 
 /**
@@ -95,6 +96,11 @@ export const EditorCourseColumnContainer = ({
         >
           <Settings2 className="h-4 w-4" aria-hidden="true" />
         </Link>
+      }
+      emptySlot={
+        modules.length === 0 ? (
+          <EditorCourseEmptyContainer course={course} />
+        ) : undefined
       }
       expandedModuleIds={expandedModuleIds.filter((id) => ownIds.has(id))}
       onExpandedModuleIdsChange={(next) => {

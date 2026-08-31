@@ -13,9 +13,9 @@ function setTokens(tokens: Record<string, string>) {
 
 describe('parseCubicBezierString', () => {
   it('parses a valid cubic-bezier() string into 4 numbers', () => {
-    expect(parseCubicBezierString('cubic-bezier(0.215, 0.61, 0.355, 1)')).toEqual([
-      0.215, 0.61, 0.355, 1,
-    ]);
+    expect(
+      parseCubicBezierString('cubic-bezier(0.215, 0.61, 0.355, 1)'),
+    ).toEqual([0.215, 0.61, 0.355, 1]);
   });
 
   it('returns null for an unparseable value', () => {

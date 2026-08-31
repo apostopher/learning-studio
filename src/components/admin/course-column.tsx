@@ -22,6 +22,7 @@ export const CourseColumn = ({
   course,
   children,
   actions,
+  emptySlot,
   configureSlot,
   expandedModuleIds,
   onExpandedModuleIdsChange,
@@ -34,6 +35,12 @@ export const CourseColumn = ({
    * than a row of dead controls.
    */
   actions?: ReactNode;
+  /**
+   * Shown in place of the modules when there are none. A slot rather than a
+   * built-in message because it carries a drop target and a create action,
+   * neither of which a presentational shell can own.
+   */
+  emptySlot?: ReactNode;
   /**
    * A link to this course's own configure surface, supplied as a node rather
    * than a URL so this component stays router-free (and its render test stays
@@ -83,6 +90,7 @@ export const CourseColumn = ({
       >
         {children}
       </Accordion.Root>
+      {emptySlot && <div className="p-3">{emptySlot}</div>}
     </ScrollArea>
   </section>
 );

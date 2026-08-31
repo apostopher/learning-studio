@@ -6,9 +6,9 @@ import {
 
 describe('newsSourceUrlSchema', () => {
   it('accepts https and http', () => {
-    expect(newsSourceUrlSchema.safeParse('https://www.avweb.com/').success).toBe(
-      true,
-    );
+    expect(
+      newsSourceUrlSchema.safeParse('https://www.avweb.com/').success,
+    ).toBe(true);
     expect(newsSourceUrlSchema.safeParse('http://www.avweb.com/').success).toBe(
       true,
     );
@@ -93,12 +93,14 @@ describe('createNewsSourceInputSchema', () => {
     ).toBe(true);
   });
 
-  it.each(['1B4D3E', '#12345', 'rebeccapurple', '#GGGGGG'])(
-    'rejects tint color %s',
-    (tintColor) => {
-      expect(
-        createNewsSourceInputSchema.safeParse({ ...valid, tintColor }).success,
-      ).toBe(false);
-    },
-  );
+  it.each([
+    '1B4D3E',
+    '#12345',
+    'rebeccapurple',
+    '#GGGGGG',
+  ])('rejects tint color %s', (tintColor) => {
+    expect(
+      createNewsSourceInputSchema.safeParse({ ...valid, tintColor }).success,
+    ).toBe(false);
+  });
 });

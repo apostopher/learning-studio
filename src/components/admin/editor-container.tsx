@@ -253,7 +253,10 @@ export const EditorContainer = ({
           c.data.current?.disciplineId === activeData?.disciplineId
         );
       }
-      return type === 'lesson' || type === 'container';
+      // `course` is the empty-course region. It is a target so the drop can
+      // be refused BY NAME rather than springing back silently — see
+      // `EditorCourseEmptyContainer`.
+      return type === 'lesson' || type === 'container' || type === 'course';
     });
     // Keyboard dragging has no pointer, so the two-stage narrowing below has
     // nothing to narrow with; fall back to plain geometry over every target.
@@ -267,7 +270,7 @@ export const EditorContainer = ({
     // every drop would append instead of landing in the slot under the cursor.
     const areas = targets.filter((c) => {
       const type = c.data.current?.type;
-      return type === 'container' || type === 'discipline';
+      return type === 'container' || type === 'discipline' || type === 'course';
     });
     if (missed(areas)) return [];
     const hovered = pointerWithin({ ...args, droppableContainers: areas });

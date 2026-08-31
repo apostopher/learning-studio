@@ -15,7 +15,8 @@ export type DndType =
   | 'lesson'
   | 'container'
   | 'library-lesson'
-  | 'discipline';
+  | 'discipline'
+  | 'course';
 
 export const moduleDndId = (id: number) => `module-${id}`;
 export const lessonDndId = (id: number) => `lesson-${id}`;
@@ -27,6 +28,10 @@ export const libraryLessonDndId = (id: number) => `library-lesson-${id}`;
  *  can be explicitly refused with a reason, rather than looking identical to
  *  a drop on nothing. */
 export const disciplineDndId = (id: number) => `discipline-${id}`;
+/** A course column with no modules — a real droppable so a lesson dropped on
+ *  an empty course can be refused with the reason (there is nowhere to put it
+ *  yet) rather than looking identical to a drop on nothing. */
+export const courseDndId = (id: number) => `course-${id}`;
 
 export function parseDndId(
   id: string | number,
@@ -46,5 +51,6 @@ export function parseDndId(
   if (prefix === 'container') return { type: 'container', id: num };
   if (prefix === 'library-lesson') return { type: 'library-lesson', id: num };
   if (prefix === 'discipline') return { type: 'discipline', id: num };
+  if (prefix === 'course') return { type: 'course', id: num };
   return null;
 }

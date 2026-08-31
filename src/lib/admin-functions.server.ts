@@ -1,6 +1,6 @@
 import { getUserRoleNames } from '#/db/user-roles';
-import { auth } from '#/lib/auth';
 import { hasAdminAccess } from '#/lib/admin-schemas';
+import { auth } from '#/lib/auth';
 
 export class ForbiddenError extends Error {
   constructor() {

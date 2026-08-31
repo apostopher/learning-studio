@@ -1,4 +1,8 @@
-type OtpEmailType = "sign-in" | "email-verification" | "forget-password" | "change-email";
+type OtpEmailType =
+  | 'sign-in'
+  | 'email-verification'
+  | 'forget-password'
+  | 'change-email';
 
 interface OtpEmailProps {
   otp: string;
@@ -6,30 +10,37 @@ interface OtpEmailProps {
   appName?: string;
 }
 
-const COPY: Record<OtpEmailType, { subject: string; heading: string; body: string }> = {
-  "change-email": {
-    subject: "Confirm your new email address",
-    heading: "Confirm your new email",
-    body: "Use the code below to confirm your new email address. It expires in 10 minutes.",
+const COPY: Record<
+  OtpEmailType,
+  { subject: string; heading: string; body: string }
+> = {
+  'change-email': {
+    subject: 'Confirm your new email address',
+    heading: 'Confirm your new email',
+    body: 'Use the code below to confirm your new email address. It expires in 10 minutes.',
   },
-  "sign-in": {
-    subject: "Your sign-in code",
-    heading: "Sign in to your account",
-    body: "Use the code below to sign in. It expires in 10 minutes.",
+  'sign-in': {
+    subject: 'Your sign-in code',
+    heading: 'Sign in to your account',
+    body: 'Use the code below to sign in. It expires in 10 minutes.',
   },
-  "email-verification": {
-    subject: "Verify your email address",
-    heading: "Verify your email",
-    body: "Use the code below to verify your email address. It expires in 10 minutes.",
+  'email-verification': {
+    subject: 'Verify your email address',
+    heading: 'Verify your email',
+    body: 'Use the code below to verify your email address. It expires in 10 minutes.',
   },
-  "forget-password": {
-    subject: "Reset your password",
-    heading: "Reset your password",
-    body: "Use the code below to reset your password. It expires in 10 minutes.",
+  'forget-password': {
+    subject: 'Reset your password',
+    heading: 'Reset your password',
+    body: 'Use the code below to reset your password. It expires in 10 minutes.',
   },
 };
 
-export function otpEmailTemplate({ otp, type, appName = "RMTP Studio" }: OtpEmailProps) {
+export function otpEmailTemplate({
+  otp,
+  type,
+  appName = 'RMTP Studio',
+}: OtpEmailProps) {
   const { subject, heading, body } = COPY[type];
 
   const html = `<!DOCTYPE html>
