@@ -341,6 +341,67 @@ export function useSetDisciplineExperts() {
   });
 }
 
+/**
+ * Bring ONE PERSON's subject-expert disciplines to a chosen set.
+ *
+ * The mirror of `useSetDisciplineExperts`, which does the same diff from the
+ * discipline's side. Both write the same table through the same two endpoints;
+ * which one you reach for is only a question of which side of the relationship
+ * the screen is showing.
+ *
+ * Sequential, and a failure stops the run: with several disciplines moving at
+ * once, "the third grant failed" is only actionable if the first two are known
+ * to have landed. `onSettled` invalidates either way, since a partial run
+ * still changed the roster.
+ */
+export function useSetUserDisciplines() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      disciplineIds,
+      current,
+    }: {
+      userId: string;
+      disciplineIds: number[];
+      /** The disciplines this person holds, as the server last reported them. */
+      current: number[];
+    }) => {
+      const wanted = new Set(disciplineIds);
+      const held = new Set(current);
+      const added = disciplineIds.filter((id) => !held.has(id));
+      const removed = current.filter((id) => !wanted.has(id));
+
+      for (const disciplineId of added) {
+        const res = await fetch(
+          `/api/admin/disciplines/${disciplineId}/staff`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: staffBody(userId),
+          },
+        );
+        if (!res.ok) await readError(res, 'Could not add that discipline');
+      }
+      for (const disciplineId of removed) {
+        const res = await fetch(
+          `/api/admin/disciplines/${disciplineId}/staff`,
+          {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: staffBody(userId),
+          },
+        );
+        if (!res.ok) await readError(res, 'Could not remove that discipline');
+      }
+      return { added: added.length, removed: removed.length };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: disciplineKeys.all() });
+    },
+  });
+}
+
 const staffCandidateSchema = z.object({
   userId: z.string(),
   email: z.string(),

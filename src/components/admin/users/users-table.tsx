@@ -63,6 +63,12 @@ const ALL_LEVELS = 'all';
  */
 export type UserRow = {
   kind: 'user' | 'pending';
+  /**
+   * The auth user id, which is what `discipline_staff` and `course_staff` key
+   * on. Null for a pending row: there is no auth user until they sign in, so
+   * there is nothing to staff.
+   */
+  userId: string | null;
   /** Null for a pending row — there is no profile until they sign in. */
   profileId: number | null;
   email: string;

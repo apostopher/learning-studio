@@ -27,8 +27,10 @@ import {
   useUserLevelHistory,
 } from '#/data-hooks/use-user-levels';
 import {
+  hasAdminAccess,
   hasPermissionKey,
   OWNER_ROLE,
+  SUBJECT_EXPERT_ROLE,
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
 import type { UserLevel } from '#/types';
@@ -36,6 +38,7 @@ import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
 import { SetLevelDialog } from './set-level-dialog';
 import { UserDetailModal } from './user-detail-modal';
+import { UserDisciplinesContainer } from './user-disciplines-container';
 import { resolveChangedByEmail } from './user-levels-helpers';
 import { type UserRow, UsersTable } from './users-table';
 
@@ -132,6 +135,7 @@ export const UsersPageContainer = ({
   const rows: UserRow[] = [
     ...(users.data?.users ?? []).map((u) => ({
       kind: 'user' as const,
+      userId: u.userId,
       profileId: u.profileId,
       email: u.email,
       name: [u.firstName, u.lastName].filter(Boolean).join(' '),
@@ -146,6 +150,7 @@ export const UsersPageContainer = ({
     })),
     ...(users.data?.pending ?? []).map((p) => ({
       kind: 'pending' as const,
+      userId: null,
       profileId: null,
       email: p.email,
       name: '',
@@ -380,6 +385,21 @@ export const UsersPageContainer = ({
         isSavingProfile={updateProfile.isPending}
         profileError={errorOf(updateProfile.error)}
         isOwner={isOwner}
+        // Shown only for someone who actually holds the role: which
+        // disciplines a course manager is an expert of is not a question, and
+        // an empty picker on every profile is noise.
+        //
+        // `hasAdminAccess`, NOT `isOwner` — staffing a discipline is
+        // `requireAdmin` on the server while assigning a ROLE is owner-only,
+        // so this section is offered to a strictly wider audience than the
+        // Roles section below it, and deliberately.
+        disciplinesSlot={
+          openRow?.userId &&
+          openRow.roles.includes(SUBJECT_EXPERT_ROLE) &&
+          hasAdminAccess(roles) ? (
+            <UserDisciplinesContainer userId={openRow.userId} />
+          ) : undefined
+        }
         assignableRoles={(rolePermissions.data?.roles ?? []).map((r) => r.name)}
         onToggleRole={(role, granted) =>
           setUserRole.mutate(

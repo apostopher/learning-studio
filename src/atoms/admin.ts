@@ -92,6 +92,19 @@ export const createModuleTargetAtom = atom<{
  */
 export const editorPaneRowWidthAtom = atom(0);
 
+/**
+ * The subject-expert disciplines being edited in the user detail modal, or
+ * `null` while untouched.
+ *
+ * `null` rather than an empty array is load-bearing: it is what lets the
+ * picker show the server's current answer without an effect copying it into
+ * state, and what lets a deliberate "remove them all" stay empty instead of
+ * snapping back to the server's list on the next render.
+ */
+export const userDisciplinePicksAtom = atom<
+  { value: string; label: string }[] | null
+>(null);
+
 /** Whether the create-module dialog is open. */
 export const createModuleDialogOpenAtom = atom(false);
 
@@ -276,6 +289,11 @@ export const newPersonaNameAtom = atom('');
 /** Person whose detail modal is open on /admin/users. */
 export const openUserRowAtom = atom<{
   kind: 'user' | 'pending';
+  /**
+   * The auth user id — what `discipline_staff` keys on. Null for a pending
+   * row: there is no auth user until they sign in, so nothing to staff.
+   */
+  userId: string | null;
   profileId: number | null;
   email: string;
   name: string;

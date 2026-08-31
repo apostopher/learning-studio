@@ -1,5 +1,6 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { Loader2, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
@@ -66,6 +67,16 @@ interface UserDetailModalProps {
   assignableRoles: string[];
   onToggleRole: (role: string, granted: boolean) => void;
   roleError?: string;
+  /**
+   * The subject-expert discipline picker (a `UserDisciplinesContainer`), when
+   * this person holds that role and the viewer may staff disciplines.
+   *
+   * A node because it owns a query and a mutation of its own, and this modal
+   * is presentational. Its own section rather than part of Roles above:
+   * assigning a ROLE is owner-only, while staffing a discipline is
+   * `requireAdmin`, so the two are not the same gate and must not share one.
+   */
+  disciplinesSlot?: ReactNode;
   isSavingRole: boolean;
 }
 
@@ -105,6 +116,7 @@ export const UserDetailModal = ({
   assignableRoles,
   onToggleRole,
   roleError,
+  disciplinesSlot,
   isSavingRole,
 }: UserDetailModalProps) => {
   const isPending = row?.kind === 'pending';
@@ -261,6 +273,15 @@ export const UserDetailModal = ({
                       Save profile
                     </button>
                   </div>
+                </section>
+              )}
+
+              {disciplinesSlot && !isPending && (
+                <section className="flex flex-col gap-3">
+                  <h3 className="font-medium text-primary text-sm">
+                    Subject expert for
+                  </h3>
+                  {disciplinesSlot}
                 </section>
               )}
 
