@@ -261,6 +261,42 @@ describe('assignDisciplineStaff — the grant', () => {
     expect(result).toEqual({ ok: false, reason: 'unknown-user' });
     expect(db.insert).not.toHaveBeenCalled();
   });
+
+  /**
+   * `findDisciplineInOrg` and the INSERT are two separate statements, not one
+   * transaction: a discipline deleted in that gap raises Postgres 23503 at
+   * the INSERT. `createDiscipline`/`deleteDiscipline` already catch and
+   * report their own constraint violations for exactly this shape of race;
+   * this pins the same treatment here.
+   *
+   * Mutant seen RED: the try/catch removed from around the INSERT — the
+   * rejection propagates out of `assignDisciplineStaff` instead of resolving
+   * to `{ ok: false, reason: 'unknown-discipline' }`, and this `await`
+   * rejects instead of returning.
+   */
+  it('reports unknown-discipline instead of 500ing when the discipline vanishes between the gate and the insert', async () => {
+    selectReturning([{ id: 3 }], [{ id: 12 }]);
+    db.insert.mockImplementation(() => ({
+      values: () => ({
+        onConflictDoNothing: () =>
+          Promise.reject(
+            Object.assign(new Error('insert or update on table violates fk'), {
+              code: '23503',
+            }),
+          ),
+      }),
+    }));
+
+    const result = await assignDisciplineStaff({
+      userId: 'expert-1',
+      disciplineId: 42,
+      roleName: 'subject-expert',
+      orgId: 7,
+      assignedBy: 'admin-1',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'unknown-discipline' });
+  });
 });
 
 describe('removeDisciplineStaff — the revocation', () => {

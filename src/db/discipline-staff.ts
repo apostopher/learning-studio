@@ -10,6 +10,27 @@ import {
 import { isDisciplineScopedRole } from '#/lib/discipline-schemas';
 
 /**
+ * Postgres foreign-key violation — matches `disciplines.ts`'s
+ * `isForeignKeyViolation` exactly (duplicated locally rather than imported,
+ * following this codebase's existing convention for this one-off check —
+ * see `isUniqueViolation` repeated in `disciplines.ts`, `news-sources.ts` and
+ * `persona.ts`). `discipline_staff.discipline_id` is the FK this catches: the
+ * ownership gate in `assignDisciplineStaff` and the INSERT are two separate
+ * statements, not one transaction, so a discipline deleted in the gap raises
+ * this at the INSERT.
+ */
+function isForeignKeyViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if ((error as { code?: unknown }).code === '23503') return true;
+  const cause = (error as { cause?: unknown }).cause;
+  return Boolean(
+    cause &&
+      typeof cause === 'object' &&
+      (cause as { code?: unknown }).code === '23503',
+  );
+}
+
+/**
  * The roles this person holds ON this discipline. Empty for everyone else.
  *
  * Mirrors `getCourseRoleNames` exactly, scoped to `discipline_staff` instead
@@ -102,6 +123,24 @@ export type DisciplineStaffWriteResult =
         | 'unknown-user'
         | 'unknown-discipline';
     };
+
+/**
+ * `removeDisciplineStaff`'s actual result shape — narrower than
+ * `DisciplineStaffWriteResult` on purpose. That type names four reasons
+ * because `assignDisciplineStaff` produces all four; `removeDisciplineStaff`
+ * only ever produces `unknown-discipline` (an unknown role name is a silent
+ * `{ ok: true }` no-op, matching `removeCourseStaff`). The route answered
+ * every `!result.ok` with the same "Discipline not found" 404 regardless of
+ * `reason`, which was only correct because the wider type's other three
+ * reasons could never actually appear here — true today, provable only by
+ * reading this function, and silently wrong the day a reason IS added here
+ * without the route being revisited. Narrowing the return type turns that
+ * into a compile error at the route (see the `never` check there) instead of
+ * a message that quietly answers the wrong question.
+ */
+export type DisciplineStaffRemoveResult =
+  | { ok: true }
+  | { ok: false; reason: 'unknown-discipline' };
 
 /**
  * Everyone staffed on any discipline in the org, grouped by discipline id.
@@ -212,24 +251,40 @@ export async function assignDisciplineStaff(
     .limit(1);
   if (!profile) return { ok: false, reason: 'unknown-user' };
 
-  await db
-    .insert(disciplineStaffTable)
-    .values({
-      userId: input.userId,
-      disciplineId: input.disciplineId,
-      roleId: role.id,
-      // The audit trail the schema comment asks for: who appointed this
-      // expert. Always the acting admin's own id from the resolved session,
-      // never anything the request body supplied.
-      assignedBy: input.assignedBy,
-    })
-    .onConflictDoNothing({
-      target: [
-        disciplineStaffTable.userId,
-        disciplineStaffTable.disciplineId,
-        disciplineStaffTable.roleId,
-      ],
-    });
+  // The ownership gate above and this INSERT are two separate statements, not
+  // one transaction: a discipline deleted in the gap between them would
+  // otherwise raise an uncaught foreign-key violation here — a 500 for a
+  // race, not a bad request. `createDiscipline`/`deleteDiscipline` already
+  // catch-and-report their own constraint violations for exactly this
+  // reason; this mirrors that pattern and answers with the SAME
+  // `unknown-discipline` the gate above returns, since a discipline gone by
+  // the time the INSERT runs is indistinguishable from one that was never
+  // this org's to begin with.
+  try {
+    await db
+      .insert(disciplineStaffTable)
+      .values({
+        userId: input.userId,
+        disciplineId: input.disciplineId,
+        roleId: role.id,
+        // The audit trail the schema comment asks for: who appointed this
+        // expert. Always the acting admin's own id from the resolved session,
+        // never anything the request body supplied.
+        assignedBy: input.assignedBy,
+      })
+      .onConflictDoNothing({
+        target: [
+          disciplineStaffTable.userId,
+          disciplineStaffTable.disciplineId,
+          disciplineStaffTable.roleId,
+        ],
+      });
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      return { ok: false, reason: 'unknown-discipline' };
+    }
+    throw error;
+  }
   return { ok: true };
 }
 
@@ -244,7 +299,7 @@ export async function assignDisciplineStaff(
  */
 export async function removeDisciplineStaff(
   input: DisciplineStaffWriteInput,
-): Promise<DisciplineStaffWriteResult> {
+): Promise<DisciplineStaffRemoveResult> {
   // Same org gate as the grant, and for the sharper reason: a revocation is
   // destructive and immediate. Without it, `DELETE .../disciplines/<id in
   // another org>/staff` silently unseats that org's subject expert.

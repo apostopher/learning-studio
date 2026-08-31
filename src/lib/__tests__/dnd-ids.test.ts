@@ -18,6 +18,23 @@ describe('dnd id builders', () => {
     expect(libraryLessonDndId(5)).toBe('library-lesson-5');
     expect(disciplineDndId(5)).toBe('discipline-5');
   });
+
+  // Mutant: a builder that ignores its argument entirely, e.g.
+  // `moduleDndId = () => 'module-5'`, passes every assertion above (they all
+  // happen to use the literal id 5). A second, distinct id per builder is
+  // what forces the argument to actually reach the output.
+  it('use the id passed in, not a hardcoded one', () => {
+    expect(moduleDndId(0)).toBe('module-0');
+    expect(moduleDndId(123)).toBe('module-123');
+    expect(lessonDndId(0)).toBe('lesson-0');
+    expect(lessonDndId(123)).toBe('lesson-123');
+    expect(containerDndId(0)).toBe('container-0');
+    expect(containerDndId(123)).toBe('container-123');
+    expect(libraryLessonDndId(0)).toBe('library-lesson-0');
+    expect(libraryLessonDndId(123)).toBe('library-lesson-123');
+    expect(disciplineDndId(0)).toBe('discipline-0');
+    expect(disciplineDndId(123)).toBe('discipline-123');
+  });
 });
 
 describe('parseDndId round-trips', () => {
@@ -58,11 +75,16 @@ describe('parseDndId round-trips', () => {
     expect(parsed).toEqual({ type: 'library-lesson', id: 5 });
   });
 
-  it('does not confuse a library-lesson id with a placed lesson id', () => {
-    // Mutant: a parser that maps any prefix containing 'lesson' to type
-    // 'lesson' (e.g. `prefix.endsWith('lesson') ? 'lesson' : ...`) would
-    // pass the previous test's shape check by coincidence if it also got the
-    // id right, but this pins the type is specifically NOT 'lesson'.
+  it('gives a library-lesson id the type "library-lesson", spelled out on its own', () => {
+    // This narrows in on one field of the previous test's `toEqual` result —
+    // it does NOT independently kill a mutant the previous test misses. In
+    // particular, the historical bug this file's header describes (first-hyphen
+    // split, `parseDndId('library-lesson-5')` returns `null`) already fails
+    // the previous `toEqual({ type: 'library-lesson', id: 5 })` assertion, so
+    // this `not.toBe('lesson')` check passes against that bug too (`undefined
+    // !== 'lesson'`) and adds no coverage of its own beyond restating the
+    // type half of the sibling assertion. It stays as a readable, named pin
+    // of that one field — not a claim of separate mutant coverage.
     const parsed = parseDndId('library-lesson-5');
     expect(parsed?.type).not.toBe('lesson');
   });
@@ -82,10 +104,21 @@ describe('parseDndId rejects invalid ids', () => {
   });
 
   it('returns null for an id with no hyphen at all', () => {
-    // Mutant: a parser using indexOf/split that treats a hyphen-less string
-    // as prefix === the whole string, rest === '' → Number('') is 0, an
-    // integer, so it would wrongly return { type: ..., id: 0 } if the
-    // no-hyphen case weren't guarded explicitly.
+    // NOT a live mutant for the `if (at === -1) return null` guard in the
+    // current implementation: with that guard removed, `at` stays -1, so
+    // `prefix = raw.slice(0, -1)` becomes 'lesso' (all but the last char) and
+    // `num = Number(raw.slice(0))` becomes `Number('lesson')`, which is NaN —
+    // the `Number.isInteger` guard below still catches it and returns null
+    // either way. (The only strings for which `raw.slice(0)` parses as an
+    // integer are all-numeric, and slicing the last char off an all-numeric
+    // string can never produce one of the whitelisted alphabetic prefixes, so
+    // there is no input that makes the two guards disagree here.) This
+    // assertion still pins the observable contract — "no hyphen → null" — it
+    // just does not, by itself, distinguish the explicit guard from the
+    // numeric one; that would need a parser shape where a hyphen-less string
+    // resolves to a *different* slice (e.g. one that treats the whole string
+    // as the prefix with an empty, zero-parsing suffix), which this
+    // implementation does not have.
     expect(parseDndId('lesson')).toBeNull();
   });
 

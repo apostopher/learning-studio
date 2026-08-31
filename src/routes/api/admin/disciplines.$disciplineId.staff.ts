@@ -174,9 +174,26 @@ export async function deleteDisciplineStaffHandler(
     orgId: getActiveOrgId(),
   });
   if (!result.ok) {
-    // The only reason this write reports: an id this org does not own. A row
-    // that was already gone is a silent success, exactly as before.
-    return Response.json({ error: 'Discipline not found' }, { status: 404 });
+    // `DisciplineStaffRemoveResult` names exactly one failure reason today,
+    // and this switch is what keeps that true: a future reason added to that
+    // type without also touching this handler fails `tsc` here (the
+    // exhaustiveness check below), rather than silently rendering "Discipline
+    // not found" for whatever the new reason actually was.
+    switch (result.reason) {
+      case 'unknown-discipline':
+        // The only reason this write reports: an id this org does not own. A
+        // row that was already gone is a silent success, exactly as before.
+        return Response.json(
+          { error: 'Discipline not found' },
+          { status: 404 },
+        );
+      default: {
+        const exhaustiveCheck: never = result.reason;
+        throw new Error(
+          `Unhandled removeDisciplineStaff reason: ${exhaustiveCheck}`,
+        );
+      }
+    }
   }
   return new Response(null, { status: 204 });
 }

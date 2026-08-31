@@ -22,7 +22,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   activeDragLessonIdAtom,
@@ -242,6 +242,24 @@ export const EditorContainer = () => {
     expandTimerRef.current = null;
   };
 
+  // The auto-expand timer is scheduled by `scheduleAutoExpand` during a drag
+  // and otherwise cleared by `cancelAutoExpand`/`clearActive` — but a drag can
+  // still be in flight when the editor itself unmounts (navigating away
+  // mid-drag), and nothing above runs then. Without this, the timeout fires
+  // after unmount and calls `setExpandedModuleIds` (a jotai setter, not a
+  // React state setter, so it wouldn't warn) against a board that is no
+  // longer on screen — a real, if small, leak.
+  useEffect(() => {
+    // Not `cancelAutoExpand` directly: that closure is redefined every render
+    // (it isn't memoized), so passing it here would need it in the dependency
+    // array, re-running the effect — and thus tearing down/re-adding this
+    // cleanup — on every render for no reason. Reading `expandTimerRef`
+    // directly needs no dependency at all, since refs are stable identity.
+    return () => {
+      if (expandTimerRef.current) clearTimeout(expandTimerRef.current.timer);
+    };
+  }, []);
+
   /**
    * Open a collapsed module after the drag has rested on it.
    *
@@ -264,9 +282,23 @@ export const EditorContainer = () => {
     };
   };
 
-  const rollback = () => {
-    if (snapshotRef.current) {
-      queryClient.setQueryData(boardKey, snapshotRef.current);
+  /**
+   * Restores a SPECIFIC snapshot, passed in by the caller — never reads
+   * `snapshotRef.current` itself. `snapshotRef` is one shared slot, but a
+   * drag's `mutate(...).onError` callback can still fire after a SECOND drag
+   * has already begun and overwritten that slot with its own pre-drag board
+   * (which, if the first drag's optimistic write already landed, now
+   * contains the first drag's write baked in as "the board before"). Reading
+   * the live ref at that point would restore the second drag's snapshot —
+   * which does not undo the first drag's failed write, it cements it. Every
+   * caller below captures its own drag's snapshot into a local `const` at
+   * the top of `onDragEnd`/`onDragCancel` and threads that value through, so
+   * a later drag overwriting the ref cannot affect an in-flight rollback that
+   * belongs to an earlier one.
+   */
+  const rollback = (snapshot: OrgEditorBoard | null) => {
+    if (snapshot) {
+      queryClient.setQueryData(boardKey, snapshot);
     }
   };
 
@@ -343,15 +375,21 @@ export const EditorContainer = () => {
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    // Read before `clearActive`, which resets it.
+    // Both read before `clearActive`, which resets `transferAppliedRef` (but
+    // not `snapshotRef` — this is the only place THIS drag's snapshot is
+    // captured, since `snapshotRef.current` can be overwritten by a new
+    // drag's `onDragStart` before this drag's async mutation settles). Every
+    // `rollback` call below — sync and inside an `onError` closure alike —
+    // uses this local constant, never `snapshotRef.current` directly.
     const transferApplied = transferAppliedRef.current;
+    const dragSnapshot = snapshotRef.current;
     clearActive();
 
     const current = readBoard();
     if (!over || !current) {
       // A genuine miss — released over no target at all. That is the "never
       // mind" gesture, so it cancels: undo the preview, say nothing.
-      rollback();
+      rollback(dragSnapshot);
       return;
     }
 
@@ -379,7 +417,7 @@ export const EditorContainer = () => {
             },
             {
               onError: (error) => {
-                rollback();
+                rollback(dragSnapshot);
                 toast.error(error.message);
               },
             },
@@ -387,12 +425,12 @@ export const EditorContainer = () => {
           return;
         }
       }
-      rollback();
+      rollback(dragSnapshot);
       return;
     }
 
     if (resolution.kind === 'forbidden') {
-      rollback();
+      rollback(dragSnapshot);
       toast.error(resolution.reason);
       return;
     }
@@ -411,7 +449,7 @@ export const EditorContainer = () => {
         },
         {
           onError: (error) => {
-            rollback();
+            rollback(dragSnapshot);
             toast.error(error.message);
           },
         },
@@ -435,7 +473,7 @@ export const EditorContainer = () => {
         },
         {
           onError: (error) => {
-            rollback();
+            rollback(dragSnapshot);
             toast.error(error.message);
           },
         },
@@ -458,7 +496,7 @@ export const EditorContainer = () => {
       { moduleId: resolution.moduleId, lessonId: resolution.lessonId },
       {
         onError: (error) => {
-          rollback();
+          rollback(dragSnapshot);
           toast.error(error.message);
         },
       },
@@ -466,8 +504,13 @@ export const EditorContainer = () => {
   };
 
   const onDragCancel = () => {
+    // Synchronous and scoped to the drag currently in progress — no other
+    // drag can have started yet to overwrite `snapshotRef.current` here —
+    // but captured into a local for the same reason as `onDragEnd`: so
+    // `rollback` never reads the shared ref directly.
+    const dragSnapshot = snapshotRef.current;
     clearActive();
-    rollback();
+    rollback(dragSnapshot);
   };
 
   /**

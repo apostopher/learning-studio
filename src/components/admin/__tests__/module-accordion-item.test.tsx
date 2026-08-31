@@ -99,6 +99,35 @@ describe('ModuleAccordionItem', () => {
     ).toBeTruthy();
   });
 
+  it('does not nest the action buttons inside the accordion trigger either', () => {
+    // The three action buttons carry the IDENTICAL collapse-on-click hazard
+    // as the drag handle above: nested inside `Accordion.Trigger`, clicking
+    // "Delete module" would also toggle the accordion open/closed. Only the
+    // drag handle had a structural (`within(trigger)`) test for this; these
+    // were checked only at document level, which would still pass even if a
+    // future edit moved them inside the trigger.
+    //
+    // Mutant: any of `Add lesson` / `Edit module` / `Delete module` moved to
+    // be children of `Accordion.Trigger` instead of its siblings. This
+    // assertion fails against that mutant because
+    // `within(trigger).queryByLabelText(...)` would then find the button.
+    const onAddLesson = vi.fn();
+    const onEditModule = vi.fn();
+    const onDeleteModule = vi.fn();
+    renderOpen(module_(), { onAddLesson, onEditModule, onDeleteModule });
+    const trigger = screen.getByRole('button', {
+      name: 'Toggle module Preflight Basics, 4 lessons',
+    });
+
+    expect(within(trigger).queryByLabelText('Add lesson')).toBeNull();
+    expect(within(trigger).queryByLabelText('Edit module')).toBeNull();
+    expect(within(trigger).queryByLabelText('Delete module')).toBeNull();
+    // Sanity check all three actually exist elsewhere in the document.
+    expect(screen.getByLabelText('Add lesson')).toBeTruthy();
+    expect(screen.getByLabelText('Edit module')).toBeTruthy();
+    expect(screen.getByLabelText('Delete module')).toBeTruthy();
+  });
+
   it('renders the lessonsSlot inside the panel', () => {
     // Mutant: `lessonsSlot` is dropped from the panel's JSX (e.g. the panel
     // renders a static "No lessons" placeholder instead of the prop). This

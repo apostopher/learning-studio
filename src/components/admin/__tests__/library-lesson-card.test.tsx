@@ -46,8 +46,18 @@ describe('LibraryLessonCard', () => {
     // Mutant: the `courseCount > 0` guard is dropped, so the badge always
     // renders (as "In 0 courses" here). This assertion fails against that
     // mutant since the label would then resolve instead of being null.
-    render(<LibraryLessonCard lesson={lesson({ courseCount: 0 })} />);
+    //
+    // The label query alone is not enough: a badge rendered with
+    // `aria-label=""` or `aria-label="0"` (still `role="img"`, still the
+    // `soft-apple` chip) would satisfy `queryByLabelText(/in \d+ courses?/i)`
+    // resolving to null while violating the actual rule — "no badge AT ALL"
+    // — so this also asserts the chip element itself (identified by its
+    // tone class, not by any text it might or might not carry) is absent.
+    const { container } = render(
+      <LibraryLessonCard lesson={lesson({ courseCount: 0 })} />,
+    );
     expect(screen.queryByLabelText(/in \d+ courses?/i)).toBeNull();
+    expect(container.querySelector('.bg-apple-3')).toBeNull();
   });
 
   it('never dims or disables a card that is used in courses', () => {
@@ -57,6 +67,11 @@ describe('LibraryLessonCard', () => {
     // (the exact bug this rule guards against — dimming a "used" card). This
     // assertion fails against that mutant because it would find that
     // attribute in the container.
+    //
+    // ARIA-clean is not the whole rule: a wrapper with `opacity-50` is
+    // visually dimmed with no ARIA footprint at all, which the two queries
+    // above would miss entirely. The rule is "never dimmed", so the wrapper's
+    // own class list is checked directly for an `opacity-` utility.
     const { container } = render(
       <LibraryLessonCard
         lesson={lesson({ courseCount: 3 })}
@@ -65,6 +80,8 @@ describe('LibraryLessonCard', () => {
     );
     expect(container.querySelector('[aria-disabled="true"]')).toBeNull();
     expect(container.querySelector('[disabled]')).toBeNull();
+    const wrapper = container.firstElementChild;
+    expect(wrapper?.className ?? '').not.toMatch(/(?:^|\s)opacity-\S+/);
   });
 
   it('marks an unpublished lesson as a draft, in words', () => {
