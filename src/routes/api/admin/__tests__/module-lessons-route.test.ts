@@ -14,6 +14,7 @@ const m = vi.hoisted(() => {
     absentResourceResponse: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
     createLesson: vi.fn(),
+    linkLesson: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -27,6 +28,7 @@ vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: m.getCourseIdForModuleId,
 }));
 vi.mock('#/db/admin', () => ({ createLesson: m.createLesson }));
+vi.mock('#/db/placements', () => ({ linkLesson: m.linkLesson }));
 
 import { postLessonHandler } from '../modules.$moduleId.lessons';
 
@@ -121,5 +123,13 @@ describe('POST /api/admin/modules/:moduleId/lessons', () => {
       moduleId: 5,
       name: 'Preflight checks',
     });
+  });
+
+  // Mutant this kills: dropping the `if ('lessonId' in parsed.data)` branch
+  // and always calling `createLesson` — every `{ name }` test above would
+  // still pass, but a `{ name }` request would ALSO call `linkLesson`.
+  it('does not link when creating from a name', async () => {
+    await postLessonHandler(req({ name: 'Preflight checks' }), '5');
+    expect(m.linkLesson).not.toHaveBeenCalled();
   });
 });

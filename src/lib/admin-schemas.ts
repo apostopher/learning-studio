@@ -71,10 +71,37 @@ export const updateModuleInputSchema = z.object({
 });
 export type UpdateModuleInput = z.infer<typeof updateModuleInputSchema>;
 
+/**
+ * Left untouched, still `{ name }` only: `create-lesson-dialog-container.tsx`
+ * types its whole react-hook-form with `CreateLessonInput` and calls
+ * `form.register('name')` — a union with `{ lessonId }` would leave `name`
+ * absent from one branch and break that form's typing. The library-linking
+ * shape lives in `addModuleLessonInputSchema` below instead.
+ */
 export const createLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
 });
 export type CreateLessonInput = z.infer<typeof createLessonInputSchema>;
+
+/** Link an existing library lesson into a module — the other half of `POST /api/admin/modules/:moduleId/lessons`. */
+export const linkLessonInputSchema = z
+  .object({ lessonId: z.number().int().positive() })
+  .strict();
+export type LinkLessonInput = z.infer<typeof linkLessonInputSchema>;
+
+/**
+ * The actual body `POST /api/admin/modules/:moduleId/lessons` accepts:
+ * author a brand new lesson (`name`), or link an existing library lesson into
+ * this module (`lessonId`). A `z.union` of two `.strict()` object schemas
+ * rather than one object with both fields optional — an object with both
+ * optional would accept `{}` and silently mean neither, which is exactly the
+ * empty body this shape exists to reject.
+ */
+export const addModuleLessonInputSchema = z.union([
+  createLessonInputSchema.strict(),
+  linkLessonInputSchema,
+]);
+export type AddModuleLessonInput = z.infer<typeof addModuleLessonInputSchema>;
 
 export const renameLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
@@ -203,9 +230,18 @@ export type UpdateModuleSequentialInput = z.infer<
  * Replace a lesson's explicit prerequisites. Slugs only — `moduleSlug` is not
  * accepted or stored, because lesson slugs are globally unique and a stored
  * module goes stale the moment the lesson moves.
+ *
+ * `courseId` names WHICH placement's prerequisites this is: prerequisites
+ * live on the placement (`module_lessons`), not the lesson, and a lesson can
+ * be taught by several courses at once — see admin.ts's `updateLessonDependencies`
+ * doc comment. Required, not derived server-side from the lesson alone,
+ * because a shared-library lesson has no single "the" course to fall back to.
  */
 export const updateLessonDependenciesInputSchema = z
-  .object({ dependsOn: z.array(z.string().min(1)).max(100) })
+  .object({
+    courseId: z.number().int().positive(),
+    dependsOn: z.array(z.string().min(1)).max(100),
+  })
   .strict();
 export type UpdateLessonDependenciesInput = z.infer<
   typeof updateLessonDependenciesInputSchema
@@ -498,6 +534,32 @@ export const COURSE_SCOPED_ROLES = [
 ] as const;
 export type CourseScopedRole = (typeof COURSE_SCOPED_ROLES)[number];
 
+/**
+ * Roles that mean NOTHING when held globally.
+ *
+ * A subject expert's authority comes from the discipline they were appointed
+ * to, never from a row in `user_roles`. Held globally the role would union
+ * into `requireScopedPermission` and grant `content:*` on every discipline and
+ * every course at once — the exact opposite of "an expert of this subject",
+ * and it would make the discipline roster decorative for anyone holding it.
+ *
+ * Enforced in two places, on purpose. `putUserRoleHandler` refuses to assign
+ * one, so no new global row can appear; and `requireScopedPermission` filters
+ * them out of the global list, so any row that already exists grants nothing.
+ * The second is what makes the invariant true rather than merely intended —
+ * without it the rule would hold only for accounts touched after this change.
+ *
+ * `course-manager` is deliberately NOT here. It is course-scoped in the same
+ * way, but nothing has asked for that to change and removing its global
+ * meaning would silently withdraw structure authority from anyone holding it
+ * today.
+ */
+export const SCOPE_ONLY_ROLES = [SUBJECT_EXPERT_ROLE] as const;
+
+export function isScopeOnlyRole(name: string): boolean {
+  return (SCOPE_ONLY_ROLES as readonly string[]).includes(name);
+}
+
 export function isCourseScopedRole(name: string): name is CourseScopedRole {
   return (COURSE_SCOPED_ROLES as readonly string[]).includes(name);
 }
@@ -605,6 +667,23 @@ export function isCourseScopedEntity(
   entity: PermissionEntity,
 ): entity is CourseScopedEntity {
   return (COURSE_SCOPED_ENTITIES as readonly string[]).includes(entity);
+}
+
+/**
+ * Entities resolved against `discipline_staff` rather than a global role or
+ * `course_staff`. Only `content`: a lesson's discipline is the one dimension
+ * its authorship follows (see `requireDisciplinePermission`); a course's
+ * `structure` and `staff` remain assembly concerns, scoped to the course
+ * doing the assembling, not to any lesson's discipline.
+ */
+export const DISCIPLINE_SCOPED_ENTITIES = ['content'] as const;
+export type DisciplineScopedEntity =
+  (typeof DISCIPLINE_SCOPED_ENTITIES)[number];
+
+export function isDisciplineScopedEntity(
+  entity: PermissionEntity,
+): entity is DisciplineScopedEntity {
+  return (DISCIPLINE_SCOPED_ENTITIES as readonly string[]).includes(entity);
 }
 
 export const permissionSchema = z.object({
@@ -731,3 +810,96 @@ export function hasPermissionKey(
     permissions.includes(permissionKey(entity, action))
   );
 }
+
+/**
+ * A lesson as the org library shows it. Deliberately carries none of a
+ * lesson's gates (`levels`, `requiredSubscriptions`, `hasDebrief`) — those
+ * are edited on the lesson's own config screen, not shown on a library card.
+ */
+export const libraryLessonSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  /** A lesson counts as configured once it has a video — same rule as `boardLessonSchema`. */
+  isConfigured: z.boolean(),
+  isAvailable: z.boolean(),
+  /**
+   * How many distinct courses teach this lesson. Drives the "in N courses"
+   * badge — a cross-reference, not a status, so it never dims the card: a
+   * lesson can be in the 2-Week and not the Mini.
+   */
+  courseCount: z.number(),
+});
+export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
+
+/** One discipline column of the library, with the lessons grouped under it. */
+export const libraryDisciplineSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  lessons: z.array(libraryLessonSchema),
+});
+export type LibraryDiscipline = z.infer<typeof libraryDisciplineSchema>;
+
+/**
+ * The whole org's library: one column per discipline, plus a leftmost
+ * "Untitled" column for lessons with no discipline assigned yet.
+ */
+export const orgLibrarySchema = z.object({
+  disciplines: z.array(libraryDisciplineSchema),
+  /**
+   * Lessons with `disciplineId IS NULL`, rendered as the leftmost "Untitled"
+   * column — not a synthetic discipline row, so it never collides with a
+   * real discipline named "Untitled".
+   */
+  untitled: z.array(libraryLessonSchema),
+});
+export type OrgLibrary = z.infer<typeof orgLibrarySchema>;
+
+/**
+ * The editor board's lesson: `boardLessonSchema` MINUS every video-identifying
+ * field.
+ *
+ * `/api/admin/editor` returns every course in the org to every caller with
+ * standing on the teaching side — a discipline SME staffing no course
+ * included. `videoRef` must not ride along: a bare Mux ref is directly
+ * streamable (`https://stream.mux.com/{ref}.m3u8`) unless every asset is
+ * signed-policy-only, which is an operator setting in the Mux console this
+ * code cannot verify. `src/routes/api/course/details.ts` strips the same
+ * fields from the learner payload for exactly that reason; this is that rule
+ * applied to the org-wide admin payload the widened guard created.
+ *
+ * Nothing in the editor reads either field — the pane needs names, ranks and
+ * placements, and `isConfigured` already answers "does this lesson have a
+ * video". `boardLessonFromLibrary` has always synthesised a linked card
+ * without them.
+ *
+ * Omitted rather than nulled, so nothing downstream can start reading them
+ * again: the fields are gone from the type, and this parse strips them from
+ * any payload that still carries one, so a ref cannot reach the query cache
+ * even if the server regresses. The response body is stripped server-side —
+ * `toEditorCourseBoard` in `#/db/editor` — which is the half that actually
+ * keeps it off the wire; this half keeps it out of the client.
+ */
+export const editorBoardLessonSchema = boardLessonSchema.omit({
+  videoProvider: true,
+  videoRef: true,
+});
+export type EditorBoardLesson = z.infer<typeof editorBoardLessonSchema>;
+
+/** A module on the editor board, holding the narrowed lessons. */
+export const editorBoardModuleSchema = boardModuleSchema.extend({
+  lessons: z.array(editorBoardLessonSchema),
+});
+export type EditorBoardModule = z.infer<typeof editorBoardModuleSchema>;
+
+/** One course's board as the editor sees it. */
+export const editorCourseBoardSchema = z.object({
+  course: boardCourseSchema,
+  modules: z.array(editorBoardModuleSchema),
+});
+export type EditorCourseBoard = z.infer<typeof editorCourseBoardSchema>;
+
+/** The horizontal rail of course boards shown beside the library. */
+export const orgEditorBoardSchema = z.array(editorCourseBoardSchema);
+export type OrgEditorBoard = z.infer<typeof orgEditorBoardSchema>;

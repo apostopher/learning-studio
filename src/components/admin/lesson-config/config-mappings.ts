@@ -1,4 +1,9 @@
-import type { BoardLesson, BoardModule } from '@/lib/admin-schemas';
+// The EDITOR's narrower types, not `BoardLesson`/`BoardModule`. Every helper
+// here reads only fields the two shapes share, and the org-level editor's
+// board omits `videoProvider`/`videoRef` (`editorBoardLessonSchema`) — so
+// asking for the wider type would have kept these helpers off that board for
+// fields they never touch. A full `BoardLesson` still satisfies them.
+import type { EditorBoardLesson, EditorBoardModule } from '@/lib/admin-schemas';
 import type { SubscriptionType } from '@/types';
 
 export type AvailabilityValue = 'public' | 'private';
@@ -6,13 +11,14 @@ export type AccessValue = 'free' | 'subscription';
 export type DebriefValue = 'on' | 'off';
 export type VideoWatchValue = 'required' | 'optional';
 
-export const availabilityValue = (lesson: BoardLesson): AvailabilityValue =>
-  lesson.isAvailable ? 'public' : 'private';
+export const availabilityValue = (
+  lesson: EditorBoardLesson,
+): AvailabilityValue => (lesson.isAvailable ? 'public' : 'private');
 
-export const debriefValue = (lesson: BoardLesson): DebriefValue =>
+export const debriefValue = (lesson: EditorBoardLesson): DebriefValue =>
   lesson.hasDebrief ? 'on' : 'off';
 
-export const videoWatchValue = (lesson: BoardLesson): VideoWatchValue =>
+export const videoWatchValue = (lesson: EditorBoardLesson): VideoWatchValue =>
   lesson.needsVideoWatch ? 'required' : 'optional';
 
 /**
@@ -25,8 +31,9 @@ export const videoWatchValue = (lesson: BoardLesson): VideoWatchValue =>
  * carry `needsVideoWatch: true` with no video (20 of them at the time of
  * writing, inherited from the course import).
  */
-export const isVideoWatchRequiredDisabled = (lesson: BoardLesson): boolean =>
-  !lesson.isConfigured && !lesson.needsVideoWatch;
+export const isVideoWatchRequiredDisabled = (
+  lesson: EditorBoardLesson,
+): boolean => !lesson.isConfigured && !lesson.needsVideoWatch;
 
 /**
  * Why the Video watch row is restricted, or null when it is unremarkable.
@@ -34,7 +41,7 @@ export const isVideoWatchRequiredDisabled = (lesson: BoardLesson): boolean =>
  * Two distinct cases, deliberately worded differently: one prevents a bad
  * setting, the other reports an existing one that cannot be satisfied.
  */
-export const videoWatchWarning = (lesson: BoardLesson): string | null => {
+export const videoWatchWarning = (lesson: EditorBoardLesson): string | null => {
   if (lesson.isConfigured) return null;
   return lesson.needsVideoWatch
     ? 'This lesson has no video, so a required watch can never be satisfied. Add a video, or set this to Optional.'
@@ -54,7 +61,7 @@ export const videoWatchWarning = (lesson: BoardLesson): string | null => {
  * Named with the count rather than a vague "this may hide the quiz": the
  * number is what makes it worth reading.
  */
-export const debriefWarning = (lesson: BoardLesson): string | null => {
+export const debriefWarning = (lesson: EditorBoardLesson): string | null => {
   if (!lesson.hasDebrief) return null;
   if (lesson.quizQuestionCount === 0) return null;
   const q = lesson.quizQuestionCount;
@@ -63,16 +70,16 @@ export const debriefWarning = (lesson: BoardLesson): string | null => {
   } hidden from learners while this is on.`;
 };
 
-export const accessValue = (lesson: BoardLesson): AccessValue =>
+export const accessValue = (lesson: EditorBoardLesson): AccessValue =>
   lesson.requiredSubscriptions.length > 0 ? 'subscription' : 'free';
 
 /** A lesson can only inherit subscriptions if its module has any. */
-export const isSubscriptionDisabled = (module: BoardModule): boolean =>
+export const isSubscriptionDisabled = (module: EditorBoardModule): boolean =>
   module.requiredSubscriptions.length === 0;
 
 /** Map an Access choice to the required_subscriptions array to persist. */
 export const accessSubscriptions = (
   next: AccessValue,
-  module: BoardModule,
+  module: EditorBoardModule,
 ): SubscriptionType[] =>
   next === 'subscription' ? [...module.requiredSubscriptions] : [];

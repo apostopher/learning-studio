@@ -18,7 +18,8 @@ export type ChipTone =
   | 'solid-warning'
   | 'solid-success'
   | 'soft-warning'
-  | 'soft-success';
+  | 'soft-success'
+  | 'soft-apple';
 
 const TONE_CLASSES: Record<ChipTone, string> = {
   /** An unset or off state. Reads as present-but-inactive, not disabled. */
@@ -29,6 +30,13 @@ const TONE_CLASSES: Record<ChipTone, string> = {
   /** A set state that should sit quieter than its solid sibling. */
   'soft-warning': 'bg-warning-3 text-warning-text',
   'soft-success': 'bg-success-3 text-success-text',
+  /**
+   * A cross-reference, not a status — e.g. "this lesson is also in 2 other
+   * courses." Lives in `apple` (this codebase's navy brand hue), deliberately
+   * apart from the warning/success tones above, which state something about
+   * *this* entity rather than pointing at others.
+   */
+  'soft-apple': 'bg-apple-3 text-apple-text',
 };
 
 /**

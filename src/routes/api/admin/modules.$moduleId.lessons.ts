@@ -3,8 +3,9 @@ import { createFileRoute } from '@tanstack/react-router';
 // imported directly by its route test.
 import { createLesson } from '#/db/admin';
 import { getCourseIdForModuleId } from '#/db/lesson-access';
+import { linkLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import { createLessonInputSchema } from '#/lib/admin-schemas';
+import { addModuleLessonInputSchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireCoursePermission,
@@ -51,10 +52,39 @@ export async function postLessonHandler(
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const parsed = createLessonInputSchema.safeParse(body);
+  const parsed = addModuleLessonInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
+
+  // `lessonId` means "link this existing library lesson into the module";
+  // `name` means "author a brand new one". The two must never both run —
+  // one request does exactly one of these things.
+  if ('lessonId' in parsed.data) {
+    const result = await linkLesson({
+      moduleId,
+      lessonId: parsed.data.lessonId,
+      // Appended to the end of the module rather than threaded through a
+      // position from the client: the library picker that calls this has no
+      // neighbor to place the lesson between.
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    if (result === null) {
+      // A dangling module id slipping through between the resolve above and
+      // this call (e.g. a concurrent delete) is a 404, not a lie dressed up
+      // as "already in this course".
+      return absentResourceResponse(request.headers, 'Module not found');
+    }
+    if (result === 'duplicate') {
+      return Response.json(
+        { error: 'This course already teaches this lesson' },
+        { status: 409 },
+      );
+    }
+    return Response.json(result);
+  }
+
   return Response.json(
     await createLesson({ moduleId, name: parsed.data.name }),
   );

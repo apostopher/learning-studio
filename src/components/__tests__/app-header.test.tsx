@@ -109,3 +109,32 @@ describe('AppHeader', () => {
     expect(onSignOut).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The header is chrome, and chrome runs edge to edge.
+ *
+ * It shared `content-grid`'s rails with the page body until the app grew
+ * full-width tools: the knowledge library editor spans the viewport, so a
+ * header capped at 1500px floated in the middle of a bar whose content ran to
+ * both edges. See the component's own note for the tradeoff.
+ */
+describe('AppHeader — edge to edge', () => {
+  it('does not cap its content at the page grid', async () => {
+    await renderHeader({ onSignOut: vi.fn(), isSigningOut: false });
+    const header = document.querySelector('header');
+
+    // Mutant this catches: `content-grid` restored on the header, or
+    // `.content` on the row inside it — either one puts the 1500px cap back
+    // and returns the logo to the middle of a full-width bar.
+    expect(header?.className).not.toContain('content-grid');
+    expect(document.querySelector('.content')).toBeNull();
+  });
+
+  it('pads its row on the same 1rem rail as the rest of the chrome', async () => {
+    await renderHeader({ onSignOut: vi.fn(), isSigningOut: false });
+
+    // Without padding of its own the logo would sit flush against the
+    // viewport edge — `content-grid` had been supplying it.
+    expect(document.querySelector('header > div')?.className).toContain('px-4');
+  });
+});

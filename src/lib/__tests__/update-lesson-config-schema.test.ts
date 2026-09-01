@@ -25,9 +25,9 @@ describe('updateLessonConfigInputSchema', () => {
   });
 
   it('rejects unknown keys (e.g. a rename body)', () => {
-    expect(
-      updateLessonConfigInputSchema.safeParse({ name: 'x' }).success,
-    ).toBe(false);
+    expect(updateLessonConfigInputSchema.safeParse({ name: 'x' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects an unknown subscription tier', () => {

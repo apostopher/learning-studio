@@ -4,26 +4,29 @@ import { createFileRoute } from '@tanstack/react-router';
 import { createCourse, listAdminCourses } from '#/db/admin';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import {
-  createCourseInputSchema,
-  type PermissionAction,
-} from '#/lib/admin-schemas';
+import { createCourseInputSchema } from '#/lib/admin-schemas';
 import {
   getStaffScopedCourseIds,
+  requireCourseCreation,
   requirePermission,
 } from '#/lib/permissions.server';
 
 // `course` is org-level, not course-scoped (see COURSE_SCOPED_ENTITIES in
 // admin-schemas): this route holds no course id, and a role scoped to a
-// course cannot authorize creating the course it would be scoped to. So this
-// goes through `requirePermission`, keeping its admin floor — CREATING a
-// course is a university act, and no staff fallback softens it.
-async function guard(
-  request: Request,
-  action: PermissionAction,
-): Promise<Response | null> {
+// course cannot authorize creating the course it would be scoped to.
+//
+// Which is why CREATE does not go through `requirePermission`. That guard
+// carries an admin floor, refusing anyone who is not admin or owner before it
+// looks at a grant — so a course manager could never pass it, and RBAC rule 5
+// says they may create an offering. `requireCourseCreation` is the union that
+// admits them; see its note for why a subject expert is not included.
+//
+// READ keeps `requirePermission` and its floor, inline in the handler below,
+// with its own staff fallback for an actor holding no `course:read`.
+/** RBAC rule 5: a course manager or an admin may create a new offering. */
+async function guardCreate(request: Request): Promise<Response | null> {
   try {
-    await requirePermission(request.headers, 'course', action);
+    await requireCourseCreation(request.headers);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -66,7 +69,7 @@ export async function listAdminCoursesHandler(
 }
 
 export async function createCourseHandler(request: Request): Promise<Response> {
-  const denied = await guard(request, 'create');
+  const denied = await guardCreate(request);
   if (denied) return denied;
 
   let body: unknown;

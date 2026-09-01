@@ -86,56 +86,63 @@ export async function searchStaffCandidates(
  * (single-digit users) the round trips are cheaper than the cartesian product.
  */
 export async function listUsers(): Promise<AdminUser[]> {
-  const profiles = await db
-    .select({
-      profileId: userProfileTable.id,
-      userId: userProfileTable.userId,
-      email: userProfileTable.email,
-      firstName: userProfileTable.firstName,
-      lastName: userProfileTable.lastName,
-      callSign: userProfileTable.callSign,
-      phoneNumber: userProfileTable.phoneNumber,
-      createdAt: userProfileTable.createdAt,
-    })
-    .from(userProfileTable)
-    .orderBy(asc(userProfileTable.email));
+  // All four are INDEPENDENT — none reads another's result — so they run
+  // together. Awaited one after another they cost four sequential round trips,
+  // which on a hosted Postgres is most of the time this endpoint takes and is
+  // what made /admin/users feel slow to open. The de-duplication below is
+  // unchanged; only the waiting is.
+  const [profiles, roleRows, courseRows, levelRows] = await Promise.all([
+    db
+      .select({
+        profileId: userProfileTable.id,
+        userId: userProfileTable.userId,
+        email: userProfileTable.email,
+        firstName: userProfileTable.firstName,
+        lastName: userProfileTable.lastName,
+        callSign: userProfileTable.callSign,
+        phoneNumber: userProfileTable.phoneNumber,
+        createdAt: userProfileTable.createdAt,
+      })
+      .from(userProfileTable)
+      .orderBy(asc(userProfileTable.email)),
 
-  const roleRows = await db
-    .select({
-      profileId: userProfileRolesTable.userProfileId,
-      name: userRolesTable.name,
-    })
-    .from(userProfileRolesTable)
-    .innerJoin(
-      userRolesTable,
-      eq(userRolesTable.id, userProfileRolesTable.roleId),
-    );
+    db
+      .select({
+        profileId: userProfileRolesTable.userProfileId,
+        name: userRolesTable.name,
+      })
+      .from(userProfileRolesTable)
+      .innerJoin(
+        userRolesTable,
+        eq(userRolesTable.id, userProfileRolesTable.roleId),
+      ),
 
-  const courseRows = await db
-    .select({
-      userId: courseSubscriptionsTable.userId,
-      courseId: coursesTable.id,
-      courseName: coursesTable.name,
-    })
-    .from(courseSubscriptionsTable)
-    .innerJoin(
-      coursesTable,
-      eq(coursesTable.id, courseSubscriptionsTable.courseId),
-    )
-    .orderBy(asc(coursesTable.name));
+    db
+      .select({
+        userId: courseSubscriptionsTable.userId,
+        courseId: coursesTable.id,
+        courseName: coursesTable.name,
+      })
+      .from(courseSubscriptionsTable)
+      .innerJoin(
+        coursesTable,
+        eq(coursesTable.id, courseSubscriptionsTable.courseId),
+      )
+      .orderBy(asc(coursesTable.name)),
 
-  // DISTINCT ON rather than a join against the roles/courses queries above:
-  // the newest row per (user, course) is a ranking, not a filter a
-  // drizzle join expresses cleanly, and raw SQL here is the readable option.
-  const levelRows = await db.execute<{
-    user_id: string;
-    course_id: number;
-    level: UserLevel;
-  }>(sql`
-    SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
-    FROM user_levels
-    ORDER BY user_id, course_id, created_at DESC, id DESC
-  `);
+    // DISTINCT ON rather than a join against the roles/courses queries above:
+    // the newest row per (user, course) is a ranking, not a filter a
+    // drizzle join expresses cleanly, and raw SQL here is the readable option.
+    db.execute<{
+      user_id: string;
+      course_id: number;
+      level: UserLevel;
+    }>(sql`
+      SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
+      FROM user_levels
+      ORDER BY user_id, course_id, created_at DESC, id DESC
+    `),
+  ]);
 
   const rolesByProfile = new Map<number, string[]>();
   for (const row of roleRows) {

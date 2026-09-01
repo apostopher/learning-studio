@@ -14,6 +14,7 @@ import {
   coursesTable,
   lessonMaterialProgressTable,
   lessonsTable,
+  moduleLessonsTable,
   modulesTable,
   videoProgressTable,
 } from '@/db/schema';
@@ -52,13 +53,22 @@ export async function getCourseProgress({
     })
     .from(coursesTable)
     .innerJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    // WIP lessons are excluded in the JOIN, not the WHERE: a module whose
-    // lessons are all unavailable must still yield its placeholder row, so it
-    // keeps rendering its heading instead of vanishing from the result.
+    // Two LEFT joins: a module with no placements at all must still reach
+    // `lessonsTable`'s join (module_lessons is LEFT, not INNER), and a
+    // placed-but-unavailable lesson must still leave the module's placeholder
+    // row standing (the WIP filter lives inside `lessonsTable`'s join
+    // condition, never the WHERE). Either becoming an inner join, or the WIP
+    // check moving to WHERE, would make a module whose lessons are all
+    // unavailable vanish from the result instead of yielding its placeholder
+    // row and keeping its heading.
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.moduleId, modulesTable.id),
+    )
     .leftJoin(
       lessonsTable,
       and(
-        eq(lessonsTable.moduleId, modulesTable.id),
+        eq(lessonsTable.id, moduleLessonsTable.lessonId),
         eq(lessonsTable.isAvailable, true),
       ),
     )
@@ -85,11 +95,12 @@ export async function getCourseProgress({
     .groupBy(
       modulesTable.id,
       modulesTable.rank,
+      moduleLessonsTable.id,
+      moduleLessonsTable.rank,
       lessonsTable.id,
-      lessonsTable.rank,
       ...progressComponentGroupBy,
     )
-    .orderBy(asc(modulesTable.rank), asc(lessonsTable.rank));
+    .orderBy(asc(modulesTable.rank), asc(moduleLessonsTable.rank));
 
   return aggregateCourseProgress(
     slug,

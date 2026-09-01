@@ -19,10 +19,20 @@ import { AppHeaderContainer } from '../app-header-container';
 export const AdminShellLayout = ({
   canSeePeople,
   canSeeCourses,
+  canSeeEditor,
   children,
 }: {
   canSeePeople: boolean;
   canSeeCourses: boolean;
+  /**
+   * Whether the org-level knowledge library editor has anything to show.
+   *
+   * There is no separate Disciplines link: a discipline IS a column of that
+   * editor's library pane, and it is created, renamed, staffed and deleted
+   * from the column itself. A second screen listing the same rows without the
+   * lessons in them was the worse of the two places to do it.
+   */
+  canSeeEditor: boolean;
   children: ReactNode;
 }) => (
   // The whole layout is now capped to the viewport so a full-height child
@@ -37,12 +47,21 @@ export const AdminShellLayout = ({
     <AppHeaderContainer />
     <nav
       aria-label="Admin sections"
-      className="content-grid border-gray-6 border-b bg-gray-2"
+      // Edge to edge on the same 1rem rail as the header above and the
+      // editor's own column gutters below — see `AppHeader` for why the
+      // chrome stopped using `content-grid`.
+      className="border-gray-6 border-b bg-gray-2"
     >
-      <div className="content flex gap-1 py-2">
+      <div className="flex gap-1 px-4 py-2">
         {canSeeCourses && <AdminNavLink to="/admin">Courses</AdminNavLink>}
+        {canSeeEditor && (
+          // Not "Library": the editor's own left pane is already called that,
+          // and a nav item sharing the name would read as a link to the pane
+          // rather than to the screen holding it.
+          <AdminNavLink to="/admin/editor">Knowledge library</AdminNavLink>
+        )}
         {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
-        {!canSeeCourses && !canSeePeople && (
+        {!canSeeCourses && !canSeeEditor && !canSeePeople && (
           // Not a bare strip: an actor with no section at all is told why,
           // in text a screen reader reaches like any other nav content.
           <p className="px-3 py-1.5 text-secondary text-sm">
@@ -64,6 +83,19 @@ const AdminNavLink = ({
 }) => (
   <Link
     to={to}
+    // A cross-fade between admin sections, via the browser's own
+    // `startViewTransition` (TanStack Router calls it; React's
+    // `<ViewTransition>` is canary-only and this app is on stable 19.2).
+    //
+    // A FADE, not a directional slide. These four sections are lateral — no
+    // one of them is "deeper" than another — and a slide would imply a spatial
+    // relationship that does not exist. Slides are for list-to-detail.
+    //
+    // Per-link rather than `defaultViewTransition` on the router, so it
+    // applies where it means something instead of to every navigation in the
+    // app, including redirects and back-button restores.
+    viewTransition
+    preload="intent"
     // `exact` on /admin only, so /admin/users doesn't light both links up.
     activeOptions={{ exact: to === '/admin' }}
     className="rounded-lg px-3 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 data-[status=active]:bg-gray-4 data-[status=active]:text-primary"

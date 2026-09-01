@@ -63,6 +63,23 @@ export function uploadPolicyFor(pathname: string): {
  * `lesson-material.parse.ts` takes, for the same reason: this route persists
  * nothing to a course, it hands back a short-lived token for a key the client
  * already chose.
+ *
+ * That bound is wider than the roles named above, and knowingly so. Since
+ * `isStaffAnywhere` began consulting `discipline_staff`, the population it
+ * admits to the non-`training-docs/` branch is: admins and owners, anyone
+ * holding a `course_staff` row on any course, and anyone holding a
+ * `discipline_staff` row on any discipline — a discipline-scoped SME included,
+ * even though `courses/`, `modules/` and `news-sources/` are not lesson
+ * authoring and are not theirs to write. Tolerated rather than tightened,
+ * because a token is not a write: the blob it mints is unreferenced until some
+ * other route attaches it to a course, a module or a news source, and every
+ * one of those routes runs its own per-course guard that an SME with no
+ * standing there fails. The same over-breadth already applied to every
+ * `course_staff` holder — a professor on course A could always mint a token
+ * for a `courses/` key destined for course B — so this widens an existing
+ * shape rather than opening a new one. Narrowing it wants a key namespace that
+ * carries its own scope, which is a change to every upload call site, not to
+ * this guard.
  */
 export async function requireUploadAccess(
   headers: Headers,

@@ -1,8 +1,18 @@
 /** Query-key factory for typesafe TanStack Query hooks in src/data-hooks/. */
 export const dataKeys = {
   adminCourses: () => ['admin', 'courses'] as const,
+  /**
+   * Every per-course board at once — the prefix `courseBoard` is built on.
+   *
+   * Exists because a lesson is org-owned and can be taught by several courses:
+   * deleting one invalidates EVERY board that was teaching it, and the caller
+   * doing the deleting knows no course id at all. Invalidating this prefix is
+   * the only correct answer there; naming one course would leave the others
+   * showing a lesson the server has destroyed.
+   */
+  courseBoards: () => ['admin', 'course-board'] as const,
   courseBoard: (courseId: number) =>
-    ['admin', 'course-board', courseId] as const,
+    [...dataKeys.courseBoards(), courseId] as const,
   /**
    * Mutation key, not a query key: it lets a settling lesson-config write ask
    * whether it is the last one in flight before invalidating the board.
@@ -60,4 +70,20 @@ export const dataKeys = {
     ['user', 'lesson-quiz-result', lessonSlug] as const,
   library: (courseSlug: string) => ['course', 'library', courseSlug] as const,
   courseNews: (courseSlug: string) => ['course', 'news', courseSlug] as const,
+  /**
+   * The org-wide knowledge library (admin lesson catalog), not to be confused
+   * with `library` above — that key is the unrelated, course-scoped learner
+   * file library keyed by `courseSlug`. This one is org-scoped with no
+   * parameter, so it cannot reuse that name without colliding.
+   */
+  orgLibrary: () => ['admin', 'library'] as const,
+  editorBoard: () => ['admin', 'editor-board'] as const,
+  /**
+   * Mutation key for the org editor's quickshot chips. Separate from
+   * `updateLessonConfig`, which is keyed per course: this board is not, and
+   * sharing the key would make one board's in-flight count decide when the
+   * other's optimistic values are reconciled.
+   */
+  updateEditorLessonConfig: () =>
+    ['admin', 'editor-board', 'lesson-config'] as const,
 } as const;

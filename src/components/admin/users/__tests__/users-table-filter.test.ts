@@ -3,6 +3,7 @@ import { emptyReason, filterUserRows, type UserRow } from '../users-table';
 
 const row = (overrides: Partial<UserRow> = {}): UserRow => ({
   kind: 'user',
+  userId: 'user-1',
   profileId: 1,
   email: 'pilot@example.com',
   name: 'Pat Pilot',

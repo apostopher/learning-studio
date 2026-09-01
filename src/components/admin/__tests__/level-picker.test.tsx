@@ -17,18 +17,16 @@ describe('LevelPicker', () => {
   it('shows "All levels" as the placeholder when nothing is selected', () => {
     render(<LevelPicker value={[]} onValueChange={() => {}} />);
     expect(
-      screen.getByRole('combobox', { name: 'Levels' }).getAttribute(
-        'placeholder',
-      ),
+      screen
+        .getByRole('combobox', { name: 'Levels' })
+        .getAttribute('placeholder'),
     ).toBe('All levels');
   });
 
   it('renders selected levels as chips with accessible remove labels', () => {
     render(<LevelPicker value={['basic']} onValueChange={() => {}} />);
     expect(screen.getByText('Basic')).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Remove Basic' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Basic' })).toBeTruthy();
   });
 
   it('calls onValueChange with the level added when an option is picked', async () => {

@@ -29,9 +29,7 @@ describe('TrainingDocRow', () => {
       />,
     );
     // Confirm is not in the DOM until the popover is opened.
-    expect(
-      screen.queryByRole('button', { name: /^confirm/i }),
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: /^confirm/i })).toBeNull();
     await userEvent.click(
       screen.getByRole('button', { name: /delete file-a.pdf/i }),
     );

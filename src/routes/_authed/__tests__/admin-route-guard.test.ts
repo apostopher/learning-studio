@@ -9,6 +9,10 @@ vi.mock('#/components/admin/admin-shell-layout', () => ({
 
 import { Route } from '../admin';
 
+// Only what `beforeLoad` reads. The shell's OTHER context field,
+// `isCourseStaffAnywhere`, is never consulted here — it drives the Courses nav
+// link, and `admin-shell-nav.test.tsx` covers that derivation by mounting the
+// component and reading the props the layout was handed.
 type Ctx = { roles: string[]; isStaffAnywhere: boolean };
 
 /**
@@ -49,6 +53,19 @@ describe('/admin route guard', () => {
    * so an admin-only floor redirected them away from the course editor they
    * were hired to author in and from the staff panel built for them — both are
    * children of this route.
+   *
+   * Fix round 3, Task 6r: `context.isStaffAnywhere` arrives here as an
+   * already-resolved boolean (computed by the real `isStaffAnywhere`, which
+   * now checks `discipline_staff` as well as `course_staff` — see
+   * lib/__tests__/permissions-server.test.ts). This guard branches on that
+   * boolean alone and cannot see which table made it `true`, so a
+   * discipline-only SME takes the exact same code path this test already
+   * covers — a separate "admits a discipline-only SME" test here would pass
+   * or fail identically to this one and would not exercise anything this
+   * doesn't. The real, failable coverage for "does a discipline-only SME
+   * make `isStaffAnywhere` true" lives where the boolean is actually
+   * computed: `permissions-server.test.ts`'s "is true for a discipline-only
+   * SME holding zero course_staff rows".
    */
   it('admits course staff who hold no global role', () => {
     expect(enter({ roles: [], isStaffAnywhere: true })).toBe('allowed');

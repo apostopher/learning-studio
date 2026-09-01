@@ -1,13 +1,24 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { generateLessonMaterial } from '#/ai/generate-lesson-material';
-import { auth } from '#/lib/auth';
-import { hasCoursePermissionAnywhere } from '#/lib/permissions.server';
+import { getDisciplineIdForLessonId } from '#/db/lesson-access';
+import { ForbiddenError } from '#/lib/admin-functions.server';
+import {
+  absentResourceResponse,
+  isStaffAnywhere,
+  requireLessonContentPermission,
+} from '#/lib/permissions.server';
 import { wordToHtml } from '#/lib/word-to-html.server';
 
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 /** Vercel serverless request bodies cap at ~4.5 MB; stay under it. */
 const MAX_SIZE_BYTES = 4 * 1024 * 1024;
+
+function parseLessonId(raw: FormDataEntryValue | null): number | null {
+  if (typeof raw !== 'string') return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 /**
  * Parse an uploaded .docx into structured lesson material for admin review.
@@ -16,36 +27,64 @@ const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 export async function parseLessonMaterialHandler(
   request: Request,
 ): Promise<Response> {
-  // Guarded on holding `content:create` on ANY course (spec §9b.2).
-  //
-  // This route takes a .docx and returns generated material. It persists
-  // nothing and receives no course, module or lesson id of any kind — only a
-  // multipart file, so `requireCoursePermission` has no course id to work
-  // with and course-scoping it would mean inventing an identifier the client
-  // does not have.
-  //
-  // The grant, not merely "is staff somewhere": a course manager holds
-  // `content:read` only and an admin by design holds no `content` grant at
-  // all, and both would otherwise burn LLM budget generating material that
-  // `lessons.$lessonId.material.ts` — which correctly requires
-  // `content:update` — would refuse to save.
-  const session = await auth.api.getSession({ headers: request.headers });
-  const userId = session?.user?.id;
-  if (!userId) return new Response('Forbidden', { status: 403 });
-
-  if (!(await hasCoursePermissionAnywhere(userId, 'content', 'create'))) {
+  // Cheap authenticated-and-staff floor, BEFORE any work: without this, an
+  // anonymous caller could make the server buffer and parse a multipart body
+  // up to the platform limit and issue a DB query, per request, before ever
+  // being refused. `isStaffAnywhere` already treats "no session" as false
+  // rather than throwing, so this one call covers both. The precise
+  // per-lesson authority is still `requireLessonContentPermission`, below,
+  // once the lesson id is known — this is only the floor every admin route
+  // needs, same as `uploads.ts`'s `requireUploadAccess`.
+  if (!(await isStaffAnywhere(request.headers))) {
     return new Response('Forbidden', { status: 403 });
   }
 
   let file: File | null;
+  let lessonId: number | null;
   try {
-    const value = (await request.formData()).get('file');
+    const form = await request.formData();
+    const value = form.get('file');
     file = value instanceof File ? value : null;
+    lessonId = parseLessonId(form.get('lessonId'));
   } catch {
     return Response.json(
       { error: 'Expected multipart form data.' },
       { status: 400 },
     );
+  }
+
+  if (lessonId === null) {
+    return Response.json(
+      { error: 'Missing or invalid lessonId' },
+      { status: 400 },
+    );
+  }
+
+  // Guarded on the SAME lesson, with the SAME guard, as the save this parse
+  // feeds: `lessons.$lessonId.material.ts`'s POST handler. This is the exact
+  // pairing — "this person can save THIS lesson" — not the approximate one
+  // ("someone who could save something") the previous version of this route
+  // used, which let an SME on any discipline parse a file for an "Untitled"
+  // lesson only an org admin could actually save. `getDisciplineIdForLessonId`
+  // resolves this lesson's discipline directly against `lessonsTable`, so a
+  // missing lesson id (invalid, or since deleted) 404s here exactly as it
+  // would on the save route, rather than wasting LLM budget generating
+  // material for a lesson that no longer exists.
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return absentResourceResponse(request.headers, 'Lesson not found');
+  }
+  try {
+    await requireLessonContentPermission(
+      request.headers,
+      lookup.disciplineId,
+      'update',
+    );
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    throw error;
   }
 
   if (!file || file.type !== DOCX_MIME) {

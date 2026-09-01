@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { setUserRole } from '#/db/permissions';
 import { getUserProfile } from '#/db/users';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import { setUserRoleInputSchema } from '#/lib/admin-schemas';
+import { isScopeOnlyRole, setUserRoleInputSchema } from '#/lib/admin-schemas';
 import { requireOwner } from '#/lib/permissions.server';
 import { parseProfileId } from './users.$profileId';
 
@@ -14,6 +14,11 @@ import { parseProfileId } from './users.$profileId';
  * could be delegated, an admin holding it could promote themselves to owner
  * and the hierarchy would be decorative. `user:update` excludes roles for the
  * same reason.
+ *
+ * `subject-expert` is refused outright — see `SCOPE_ONLY_ROLES`. It has no
+ * global form: a subject expert holds disciplines, and the appointment is a
+ * `requireAdmin` write on the discipline, not an owner-only write on the
+ * person.
  */
 export async function putUserRoleHandler(
   request: Request,
@@ -44,6 +49,19 @@ export async function putUserRoleHandler(
   const parsed = setUserRoleInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // A scope-only role has no global form to grant. Refused on the WRITE as
+  // well as ignored on the read (`requireScopedPermission` filters it out), so
+  // the table cannot accumulate rows that mean nothing — and the message names
+  // where the authority actually comes from rather than just saying no.
+  if (isScopeOnlyRole(parsed.data.role)) {
+    return Response.json(
+      {
+        error: `"${parsed.data.role}" is not a global role. Appoint someone to a discipline instead — a subject expert's authority comes from the disciplines they hold.`,
+      },
+      { status: 400 },
+    );
   }
 
   if (!(await getUserProfile(profileId))) {

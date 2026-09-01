@@ -1,7 +1,12 @@
-import { isAnyCourseStaff } from '#/db/course-staff';
+import {
+  isCourseManagerAnywhere as holdsCourseManagerRole,
+  isAnyCourseStaff,
+} from '#/db/course-staff';
+import { isAnyDisciplineStaff } from '#/db/discipline-staff';
 import { getUserPermissions } from '#/db/permissions';
 import { ensureUserProfile } from '#/db/user-profile';
 import { getUserRoleNames } from '#/db/user-roles';
+import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 
 /**
@@ -27,13 +32,17 @@ import { auth } from '#/lib/auth';
  * sign-in hook is), and a transient write error must not take down every
  * authenticated page load.
  *
- * `isStaffAnywhere` rides alongside `roles` and `permissions` because
- * `course_staff` membership is invisible to both: a subject expert holds no
- * global role and no global grant, so a route guard reading only those two
- * cannot tell them apart from an ordinary learner. It is deliberately a
- * boolean and not a list of course ids — the only question the router asks is
- * whether `/admin` is theirs to enter at all; which course is a per-request,
- * server-side decision that `requireCoursePermission` owns.
+ * `isStaffAnywhere` and `isCourseStaffAnywhere` ride alongside `roles` and
+ * `permissions` because staff-table membership is invisible to both: a subject
+ * expert holds no global role and no global grant, so a route guard reading
+ * only those two cannot tell them apart from an ordinary learner.
+ *
+ * They are two fields and not one because the router asks two different
+ * questions of them — see `__root.tsx`'s context type for each field's
+ * meaning, and `_authed/admin.tsx` for the two readers. Both are deliberately
+ * booleans and not lists of ids: which course or discipline is a per-request,
+ * server-side decision that `requireCoursePermission` and
+ * `requireLessonContentPermission` own.
  */
 export async function resolveAuthContext(headers: Headers) {
   const session = await auth.api.getSession({ headers });
@@ -44,6 +53,8 @@ export async function resolveAuthContext(headers: Headers) {
       roles: [] as string[],
       permissions: [] as string[],
       isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
+      isCourseManagerAnywhere: false,
     };
   }
 
@@ -55,13 +66,59 @@ export async function resolveAuthContext(headers: Headers) {
   // Serialised as an array because router context crosses the wire; the client
   // rebuilds a Set only where it matters. `['*']` means owner — see
   // `getUserPermissions`.
-  const [permissions, isStaffAnywhere] = await Promise.all([
+  const [permissions, staffing] = await Promise.all([
     getUserPermissions(roles)
       .then((set) => [...set])
       .catch(() => [] as string[]),
-    // Failing closed, exactly like the two above: a transient error must hide
-    // the admin console, never open it.
-    isAnyCourseStaff(userId).catch(() => false),
+    resolveStaffing(roles, userId),
   ]);
-  return { session, roles, permissions, isStaffAnywhere };
+  return { session, roles, permissions, ...staffing };
+}
+
+/**
+ * The three staffing booleans the router context carries, resolved together.
+ *
+ * Mirrors `permissions.server.ts`'s `isStaffAnywhere` for the union — same
+ * three sources, same short-circuit order (admin, then `course_staff`, then
+ * `discipline_staff`), so a course-staff hit never issues the discipline
+ * query. It cannot simply CALL that helper: this module already holds the
+ * session and the role names, and the helper re-derives both from headers.
+ *
+ * One deliberate deviation from that ordering: the `course_staff` lookup runs
+ * even for an admin, where the union alone would have short-circuited past it.
+ * `isCourseStaffAnywhere` means "holds a `course_staff` row", full stop — an
+ * admin who staffs no course does not hold one, and answering `true` for them
+ * on the strength of their global role would make the field a synonym for the
+ * union it exists to be distinguished from. The nav link it drives is already
+ * shown to an admin by their `course:read` grant.
+ *
+ * `isCourseManagerAnywhere` is narrower still — the course-manager ROLE on any
+ * course, which a subject expert staffed on a course does not satisfy. It
+ * mirrors `requireCourseCreation` (RBAC rule 5), so the "New offering" button
+ * and the endpoint behind it can never disagree about who may press it. It is
+ * skipped entirely for an admin, who is admitted by their `course:create`
+ * grant and needs no second reason.
+ *
+ * Every lookup fails closed, exactly like the roles and permissions lookups
+ * beside it: a transient error must hide the admin console, never open it.
+ */
+async function resolveStaffing(
+  roles: string[],
+  userId: string,
+): Promise<{
+  isStaffAnywhere: boolean;
+  isCourseStaffAnywhere: boolean;
+  isCourseManagerAnywhere: boolean;
+}> {
+  const isCourseStaffAnywhere = await isAnyCourseStaff(userId).catch(
+    () => false,
+  );
+  const isStaffAnywhere =
+    hasAdminAccess(roles) ||
+    isCourseStaffAnywhere ||
+    (await isAnyDisciplineStaff(userId).catch(() => false));
+  const isCourseManagerAnywhere =
+    isCourseStaffAnywhere &&
+    (await holdsCourseManagerRole(userId).catch(() => false));
+  return { isStaffAnywhere, isCourseStaffAnywhere, isCourseManagerAnywhere };
 }

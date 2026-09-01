@@ -1,10 +1,109 @@
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai-family';
-import type { ProviderId } from '@/lib/admin-schemas';
-import type { UserLevel } from '@/types';
+import type { ProviderId } from '#/lib/admin-schemas';
+import type { UserLevel } from '#/types';
 
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);
+
+/**
+ * Whether the create-discipline dialog is open.
+ *
+ * Lives beside `createCourseDialogOpenAtom` rather than inside the dialog as
+ * `useState`: the editor's library header owns the trigger while the dialog
+ * itself renders further down the tree, and the two only ever meet through
+ * this atom.
+ */
+export const createDisciplineDialogOpenAtom = atom(false);
+
+/**
+ * The search term in the create-discipline dialog's subject-expert picker.
+ *
+ * Separate from the form: it is what the picker is *searching for*, not what
+ * the form will submit. React Query keys the candidate request on it, so
+ * retyping a prefix is answered from cache.
+ */
+export const disciplineExpertQueryAtom = atom('');
+
+/**
+ * The discipline whose "add lesson" dialog is open, or null.
+ *
+ * Carries the NAME as well as the id because the dialog says which discipline
+ * the lesson is being filed under, and re-deriving that from the library cache
+ * inside the dialog would make it read a query it otherwise has no interest
+ * in. Same reason `deleteModuleAtom` carries a name.
+ */
+export const createLibraryLessonTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/** The discipline being renamed from the library column, or null. */
+export const renameDisciplineTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/**
+ * The discipline pending deletion from the library column, or null.
+ *
+ * `lessonCount` rides along because it is the whole reason a delete is
+ * refused: the dialog states the block and the number in plain text rather
+ * than letting the user press a button that will 409.
+ */
+export const deleteDisciplineTargetAtom = atom<{
+  id: number;
+  name: string;
+  lessonCount: number;
+} | null>(null);
+
+/**
+ * The library lesson being edited from `/admin/editor`, or null.
+ *
+ * Distinct from `configureLessonIdAtom`, which drives the per-course configure
+ * modal: that one edits how ONE course teaches a lesson (gates, sequencing,
+ * video credentials) and needs a course to mean anything. This one edits what
+ * the lesson IS, which is the same answer in every course teaching it.
+ */
+export const editLibraryLessonIdAtom = atom<number | null>(null);
+
+/**
+ * The course whose "create module" dialog is open on the ORG editor's rail, or
+ * null.
+ *
+ * The rail shows many courses at once, which is why this carries a target
+ * rather than being the boolean `createModuleDialogOpenAtom` beside it: one
+ * shared boolean would open every column's dialog at the same time. The name
+ * rides along so the dialog can say which course the module is going into.
+ */
+export const createModuleTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/**
+ * The measured inline size of the editor's two-pane row, in px.
+ *
+ * State rather than a read-on-demand measurement because the splitter's
+ * announced range (`aria-valuemin`/`max`) depends on it, and those are render
+ * output — a handler that measured on interaction would leave a screen reader
+ * being told about positions the handle refuses to move to. Zero until the
+ * observer first reports.
+ */
+export const editorPaneRowWidthAtom = atom(0);
+
+/**
+ * The subject-expert disciplines being edited in the user detail modal, or
+ * `null` while untouched.
+ *
+ * `null` rather than an empty array is load-bearing: it is what lets the
+ * picker show the server's current answer without an effect copying it into
+ * state, and what lets a deliberate "remove them all" stay empty instead of
+ * snapping back to the server's list on the next render.
+ */
+export const userDisciplinePicksAtom = atom<
+  { value: string; label: string }[] | null
+>(null);
 
 /** Whether the create-module dialog is open. */
 export const createModuleDialogOpenAtom = atom(false);
@@ -15,8 +114,34 @@ export const activeDragModuleIdAtom = atom<number | null>(null);
 /** Id of the lesson currently being dragged, or null. */
 export const activeDragLessonIdAtom = atom<number | null>(null);
 
-/** The lesson pending deletion (id + name), or null when closed. */
-export const deleteLessonAtom = atom<{ id: number; name: string } | null>(null);
+/**
+ * The lesson pending deletion, or null when closed.
+ *
+ * Carries `courseCount` — how many courses currently teach the lesson —
+ * because deleting is not the same act as removing a placement: it takes the
+ * lesson out of every course at once and cascades its progress rows, and the
+ * confirmation is not allowed to ask "are you sure?" without naming that
+ * blast radius. The count is only ever computed in one place
+ * (`LibraryLesson.courseCount`, from the org library query), so whoever opens
+ * this dialog reads it from there rather than deriving a second answer.
+ */
+export const deleteLessonAtom = atom<{
+  id: number;
+  name: string;
+  courseCount: number;
+  /**
+   * The exact accessible name of the "remove from module" control on the
+   * surface that opened this dialog, or `null` when that surface has none.
+   *
+   * Carried because the confirmation's job is to point at the reversible act,
+   * and the two surfaces differ: the knowledge editor's card has a remove
+   * control (labelled by `removeLessonLabel`), the per-course board's card
+   * does not. A sentence naming a button that is nowhere on the reader's
+   * screen sends them hunting for it — worse than saying nothing — so the
+   * copy branches on this rather than quoting one hard-coded phrase.
+   */
+  removeControlLabel: string | null;
+} | null>(null);
 
 /** Id of the lesson whose configure modal is open, or null when closed. */
 export const configureLessonIdAtom = atom<number | null>(null);
@@ -164,6 +289,11 @@ export const newPersonaNameAtom = atom('');
 /** Person whose detail modal is open on /admin/users. */
 export const openUserRowAtom = atom<{
   kind: 'user' | 'pending';
+  /**
+   * The auth user id — what `discipline_staff` keys on. Null for a pending
+   * row: there is no auth user until they sign in, so nothing to staff.
+   */
+  userId: string | null;
   profileId: number | null;
   email: string;
   name: string;
@@ -211,3 +341,41 @@ export const addUserEmailAtom = atom('');
  * to store.
  */
 export const addPersonCourseIdsAtom = atom<number[]>([]);
+
+/**
+ * Id of the LIBRARY lesson currently being dragged, or null.
+ *
+ * Separate from `activeDragLessonIdAtom`: that one holds a lesson already
+ * placed in a module, and the two drags mean different things (this one
+ * creates a placement, that one moves an existing one). One atom for both
+ * would make the drag overlay unable to tell which card to draw, and the
+ * whitelist unable to tell a `link` from a `move`.
+ */
+export const activeDragLibraryLessonIdAtom = atom<number | null>(null);
+
+/**
+ * Module ids whose accordion panel is open in the knowledge editor.
+ *
+ * Lifted out of `CourseColumn`'s accordion because a collapsed panel is
+ * `hidden`, so its droppable measures 0×0 and cannot receive a lesson. The
+ * editor auto-expands whatever module a drag hovers, which is only possible
+ * from outside the accordion. Module ids are unique across the org, so one
+ * flat list covers every course in the rail.
+ */
+export const expandedEditorModuleIdsAtom = atom<number[]>([]);
+
+/**
+ * Why the editor is refusing the drop currently under the pointer, or null.
+ *
+ * A refused drag must say why — a silent spring-back reads as broken
+ * software. This drives the note attached to the drag overlay; the same
+ * sentence is announced to screen readers through the DndContext's
+ * accessibility announcements and, on an actual drop, raised as a toast.
+ */
+export const editorDragRefusalAtom = atom<string | null>(null);
+
+/**
+ * The library pane's inline size as a percentage of the editor, moved by the
+ * pane splitter. Clamped by the splitter's handlers, not here.
+ */
+export const editorSplitPercentAtom = atom(40);

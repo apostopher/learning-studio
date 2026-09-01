@@ -6,7 +6,7 @@ import {
   userProfileTable,
   userRolesTable,
 } from '#/db/schema';
-import { isCourseScopedRole } from '#/lib/admin-schemas';
+import { COURSE_MANAGER_ROLE, isCourseScopedRole } from '#/lib/admin-schemas';
 
 export type CourseStaffMember = {
   userId: string;
@@ -129,48 +129,70 @@ export async function getStaffCourseSlugs(userId: string): Promise<string[]> {
 }
 
 /**
- * The distinct staff roles this person holds anywhere, across every course.
- *
- * Deliberately drops the course each role came from: its one caller
- * (`hasCoursePermissionAnywhere`) is answering a question that has no course
- * in it — "may this person do X on ANY course?" — and grants are keyed on the
- * role name alone in `role_permissions`. Returning pairs would invite a caller
- * to treat the set as authority on a specific course, which it is not.
- */
-export async function getStaffRoleNames(userId: string): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ name: userRolesTable.name })
-    .from(courseStaffTable)
-    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
-    .where(eq(courseStaffTable.userId, userId));
-  return rows.map((r) => r.name);
-}
-
-/**
  * Staff on ANY course.
  *
  * Two callers, both of which genuinely have no course id to scope by:
  *
- * - `resolveAuthContext`, which answers `/admin`'s route guard. Entering the
- *   admin console is not a per-course question — which course is decided,
- *   per request, by `requireCoursePermission`. A boolean is all the router
- *   may hold; a list of ids would be a second copy of course-scoped
- *   authority living on the client.
+ * - `resolveAuthContext`, where it becomes the router context's
+ *   `isCourseStaffAnywhere` — the field behind `/admin`'s Courses nav link,
+ *   which asks whether the course index has anything in it for this actor.
+ *   (Shell ENTRY is answered by the neighbouring `isStaffAnywhere` field,
+ *   which unions this with `discipline_staff` and the global admin roles; a
+ *   discipline-only SME enters the shell but gets no Courses link.) Neither
+ *   is a per-course question — which course is decided, per request, by
+ *   `requireCoursePermission`. A boolean is all the router may hold; a list
+ *   of ids would be a second copy of course-scoped authority living on the
+ *   client.
  * - `isStaffAnywhere`, which answers "teaching side or stranger?" for the
  *   blob-upload token endpoint (a blob key carries no course id) and for the
  *   lesson/module routes deciding whether an absent row may be reported as a
  *   404 at all.
  *
- * NOT for anything that turns on a specific GRANT — that is
- * `hasCoursePermissionAnywhere`, which resolves the roles rather than merely
- * counting rows. Holding a `course_staff` row says nothing about which of
- * `structure`/`content`/`staff` the role behind it was given.
+ * NOT for anything that turns on a specific GRANT. Holding a `course_staff`
+ * row says nothing about which of `structure`/`content`/`staff` the role
+ * behind it was given — resolve that with `getUserPermissions`/`hasPermission`
+ * (defined in `db/permissions.ts`, imported by `permissions.server.ts`)
+ * against a real role list: `requireCoursePermission` for a known course, or
+ * `getCourseRoleNames` unioned across every course a user is staffed on if a
+ * future caller genuinely needs "any course, any grant" (the last function
+ * that answered that, `hasCoursePermissionAnywhere`, was deleted as dead
+ * code once its one caller stopped needing it).
  */
 export async function isAnyCourseStaff(userId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: courseStaffTable.id })
     .from(courseStaffTable)
     .where(eq(courseStaffTable.userId, userId))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Does this person hold the COURSE-MANAGER role on any course at all?
+ *
+ * Narrower than `isAnyCourseStaff`, and the narrowness is the point: that
+ * function answers "is staff", which a subject expert also satisfies, while
+ * this one answers the RBAC question "may they create a new offering". Rule 5
+ * lists course managers and admins, not subject experts — an SME authors
+ * lessons and does not decide which courses the org sells.
+ *
+ * Role-scoped rather than course-scoped because creating a course has no
+ * course to scope to. Holding the role on one course is what makes someone a
+ * course manager in this org; there is no other place that fact is recorded.
+ */
+export async function isCourseManagerAnywhere(
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: courseStaffTable.id })
+    .from(courseStaffTable)
+    .innerJoin(userRolesTable, eq(userRolesTable.id, courseStaffTable.roleId))
+    .where(
+      and(
+        eq(courseStaffTable.userId, userId),
+        eq(userRolesTable.name, COURSE_MANAGER_ROLE),
+      ),
+    )
     .limit(1);
   return row !== undefined;
 }

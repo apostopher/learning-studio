@@ -1,19 +1,25 @@
 import {
   getCourseRoleNames,
   getStaffCourseIds,
-  getStaffRoleNames,
   isAnyCourseStaff,
+  isCourseManagerAnywhere,
 } from '#/db/course-staff';
+import {
+  getDisciplineRoleNames,
+  isAnyDisciplineStaff,
+} from '#/db/discipline-staff';
 import {
   getRoleNamesForProfile,
   getUserPermissions,
   hasPermission,
 } from '#/db/permissions';
 import { getUserRoleNames } from '#/db/user-roles';
-import { ForbiddenError } from '#/lib/admin-functions.server';
+import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import {
   hasAdminAccess,
   isCourseScopedEntity,
+  isDisciplineScopedEntity,
+  isScopeOnlyRole,
   OWNER_ROLE,
   type PermissionAction,
   type PermissionEntity,
@@ -75,13 +81,123 @@ export async function requirePermission(
 export type CourseActor = PermittedActor & { courseRoles: string[] };
 
 /**
+ * The resolution shared by every scope-qualified guard (course, discipline,
+ * and any future one): union the actor's global roles with whatever roles
+ * they hold in the given scope, then check the grant against that union.
+ *
+ * `requireCoursePermission` and `requireDisciplinePermission` differ only in
+ * three things — which entities are valid to ask about, how to fetch the
+ * scoped roles, and what to call the guard in the tripwire message — all
+ * captured in `config`. Extracted because these are the system's only two
+ * authorization guards below `requirePermission`, and this policy (same
+ * `ForbiddenError`, same anonymous-first refusal, same empty-role
+ * short-circuit, same non-`ForbiddenError` tripwire) drifting between them is
+ * exactly the shape of mistake `d4f767d` was: a hardening or a fix applied to
+ * one guard silently not applying to its sibling.
+ *
+ * Not exported: callers get a scope-shaped actor from the two wrappers below,
+ * never this raw resolution.
+ */
+async function requireScopedPermission(
+  headers: Headers,
+  entity: PermissionEntity,
+  action: PermissionAction,
+  config: {
+    guardName: string;
+    scopeLabel: string;
+    isScoped: (entity: PermissionEntity) => boolean;
+    getScopedRoles: (userId: string) => Promise<string[]>;
+  },
+): Promise<{
+  userId: string;
+  globalRoles: string[];
+  scopedRoles: string[];
+  permissions: Set<string>;
+}> {
+  // A caller reaching this guard with an entity its scope has nothing to say
+  // about is a wiring mistake, not a denied request: the union below would
+  // judge the actor against grants that do not apply. A plain Error on
+  // purpose — `ForbiddenError` would dress the bug up as a 403 and it would
+  // read as the guard working correctly.
+  //
+  // It therefore surfaces as an uncaught 500, deliberately: every route's
+  // `catch` maps only `ForbiddenError`. No caller in the tree trips it today,
+  // so it is a tripwire for a future route author, not a runtime branch — if
+  // you see this 500, the route is asking the wrong guard, not refusing a
+  // request.
+  if (!config.isScoped(entity)) {
+    throw new Error(
+      `${config.guardName} called with '${entity}', which is not ${config.scopeLabel}`,
+    );
+  }
+
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) throw new ForbiddenError();
+
+  const [globalRoles, scopedRoles] = await Promise.all([
+    getUserRoleNames(userId),
+    config.getScopedRoles(userId),
+  ]);
+
+  // No role anywhere — globally or in this scope — is no authority at all.
+  // Refusing here rather than asking for the grants of an empty role list keeps
+  // the join off the path of every ordinary learner, and fails closed if a
+  // permission lookup ever starts answering generously for `[]`.
+  // A scope-only role held globally grants nothing — see `SCOPE_ONLY_ROLES`.
+  // Filtering here rather than trusting the write guard is what makes the rule
+  // true for rows that already exist: `subject-expert` was assignable as a
+  // global role before this, and any account still carrying one would
+  // otherwise hold `content:*` over every discipline in the org.
+  const usableGlobalRoles = globalRoles.filter((r) => !isScopeOnlyRole(r));
+  const roles = [...usableGlobalRoles, ...scopedRoles];
+  if (roles.length === 0) throw new ForbiddenError();
+
+  const permissions = await getUserPermissions(roles);
+  // RBAC rule 3: an admin may CRUD every lesson and every course's structure.
+  //
+  // A BYPASS, not a floor — the distinction matters and the two are easy to
+  // confuse. A floor (as in `requirePermission`) REQUIRES admin and would make
+  // the two scoped roles inert. This admits an admin in ADDITION to whoever
+  // the grant lets through, so a subject expert with no global role still
+  // passes on their `discipline_staff` row and a course manager on their
+  // `course_staff` row, exactly as before.
+  //
+  // It exists because `admin` holds no `structure` or `content` grant at all
+  // (`migrate-staff-roles.ts:78`, which withheld them so that senior staff
+  // would administer rather than author). That rule has been superseded: an
+  // admin who cannot drag a lesson into a course or fix a typo in one is not
+  // an administrator of this system in any useful sense. The audit trail
+  // argument the old note made — "an admin who needs a course's authority
+  // assigns themselves, leaving a record in course_staff.assigned_by" — was
+  // never enforcement, only bookkeeping, and it cost the admin every ordinary
+  // corrective action in the product.
+  //
+  // `globalRoles`, never `roles`: admin is a global role, and reading the
+  // union would let a `course_staff` row naming a role called `admin` mint
+  // org-wide authority from a course-scoped grant.
+  if (
+    !hasAdminAccess(globalRoles) &&
+    !hasPermission(permissions, entity, action)
+  ) {
+    throw new ForbiddenError();
+  }
+
+  return { userId, globalRoles, scopedRoles, permissions };
+}
+
+/**
  * Guard for the per-course entities: `structure`, `content`, `staff`.
  *
- * Deliberately has NO admin floor. `requirePermission`'s floor exists because
+ * Deliberately has NO admin FLOOR. `requirePermission`'s floor exists because
  * its entities refine what an admin may do; these entities are held by people
  * who are not admins at all — a subject expert is staff on one course and
  * nothing anywhere else. Requiring admin here would make the two new roles
  * inert, which is the failure this whole design exists to avoid.
+ *
+ * It does carry an admin BYPASS, which is the opposite arrangement: see
+ * `requireScopedPermission`. An admin passes on top of, never instead of, the
+ * scoped roles.
  *
  * Authority is the union of the actor's global roles and their roles on THIS
  * course, so an owner (wildcard) passes, and an admin passes only for entities
@@ -97,49 +213,98 @@ export async function requireCoursePermission(
   entity: PermissionEntity,
   action: PermissionAction,
 ): Promise<CourseActor> {
-  // A caller reaching this guard with an org-level entity is a wiring mistake,
-  // not a denied request: `course_staff` has nothing to say about `user` or
-  // `enrolment`, so the union below would judge the actor against grants that
-  // do not apply. A plain Error on purpose — `ForbiddenError` would dress the
-  // bug up as a 403 and it would read as the guard working correctly.
-  //
-  // It therefore surfaces as an uncaught 500, deliberately: every route's
-  // `catch` maps only `ForbiddenError`. No caller in the tree trips it today
-  // (each passes a literal `'structure'`, `'content'` or `'staff'`), so it is
-  // a tripwire for a future route author, not a runtime branch — if you see
-  // this 500, the route is asking the wrong guard, not refusing a request.
-  if (!isCourseScopedEntity(entity)) {
-    throw new Error(
-      `requireCoursePermission called with '${entity}', which is not course-scoped`,
-    );
-  }
-
-  const session = await auth.api.getSession({ headers });
-  const userId = session?.user?.id;
-  if (!userId) throw new ForbiddenError();
-
-  const [globalRoles, courseRoles] = await Promise.all([
-    getUserRoleNames(userId),
-    getCourseRoleNames(userId, courseId),
-  ]);
-
-  // No role anywhere — globally or on this course — is no authority at all.
-  // Refusing here rather than asking for the grants of an empty role list keeps
-  // the join off the path of every ordinary learner, and fails closed if a
-  // permission lookup ever starts answering generously for `[]`.
-  const roles = [...globalRoles, ...courseRoles];
-  if (roles.length === 0) throw new ForbiddenError();
-
-  const permissions = await getUserPermissions(roles);
-  if (!hasPermission(permissions, entity, action)) throw new ForbiddenError();
+  const { userId, globalRoles, scopedRoles, permissions } =
+    await requireScopedPermission(headers, entity, action, {
+      guardName: 'requireCoursePermission',
+      scopeLabel: 'course-scoped',
+      isScoped: isCourseScopedEntity,
+      getScopedRoles: (userId) => getCourseRoleNames(userId, courseId),
+    });
 
   return {
     userId,
     roles: globalRoles,
-    courseRoles,
+    courseRoles: scopedRoles,
     permissions,
     isOwner: globalRoles.includes(OWNER_ROLE),
   };
+}
+
+/**
+ * Guard for the one per-DISCIPLINE entity: `content`.
+ *
+ * Mirrors `requireCoursePermission` in shape and failure mode — same
+ * `ForbiddenError`, same union-of-global-and-scoped-roles resolution, same
+ * tripwire against a caller asking the wrong guard — scoped to
+ * `discipline_staff` instead of `course_staff`. Both share their resolution
+ * via `requireScopedPermission`; this wrapper supplies only what differs.
+ *
+ * Deliberately has NO admin FLOOR, for the same reason `requireCoursePermission`
+ * has none: requiring admin would make the subject-expert role inert.
+ *
+ * It DOES admit an admin by bypass (see `requireScopedPermission`), which is
+ * RBAC rule 3 — an admin may CRUD every lesson. That supersedes the older
+ * arrangement in which `admin` was withheld `content` entirely and an admin
+ * needing a discipline's authority appointed themselves a subject-expert to
+ * leave a record in `discipline_staff.assigned_by`. Appointment still leaves
+ * that record and is still how a NON-admin gains authority; it is simply no
+ * longer the only way an admin can fix a lesson.
+ *
+ * Returns void rather than an actor (contrast `requireCoursePermission`,
+ * which returns `CourseActor`): its one caller,
+ * `requireLessonContentPermission`, has no further use for the resolved role
+ * list. Widen this the day a caller does.
+ */
+export async function requireDisciplinePermission(
+  headers: Headers,
+  disciplineId: number,
+  entity: PermissionEntity,
+  action: PermissionAction,
+): Promise<void> {
+  await requireScopedPermission(headers, entity, action, {
+    guardName: 'requireDisciplinePermission',
+    scopeLabel: 'discipline-scoped',
+    isScoped: isDisciplineScopedEntity,
+    getScopedRoles: (userId) => getDisciplineRoleNames(userId, disciplineId),
+  });
+}
+
+/**
+ * THE lesson-content guard. Authority follows the lesson's DISCIPLINE, not
+ * any one course teaching it: once several courses can teach the same lesson
+ * via `module_lessons`, "who may edit it" has to have exactly one answer, and
+ * a lesson has exactly one discipline (or none).
+ *
+ * `disciplineId === null` is the one case with no SME to ask — an "Untitled"
+ * lesson, which is a triage queue — so authority falls back to org-level
+ * `requireAdmin`.
+ *
+ * This null-branch is encoded in exactly ONE place on purpose. The prior
+ * incident on this exact branch (commit d4f767d, reverted) came from every
+ * lesson-content route independently deciding "org-owned, so `requireAdmin`
+ * unconditionally" — which took authorship away from Subject Experts on
+ * every disciplined lesson, not only the Untitled ones, and broke the
+ * docx→material workflow because the parse step required `content:create`,
+ * which admins do not hold. Every lesson-content route must call this
+ * function rather than hand-rolling the null check again.
+ *
+ * Takes an already-RESOLVED `disciplineId`, not a `lessonId`: resolving one
+ * (and telling "no such lesson" apart from "lesson has no discipline" — they
+ * get different answers, 404 vs admin-only) is
+ * `getDisciplineIdForLessonId`'s job in `db/lesson-access.ts`. The caller
+ * must turn a not-found lookup into a 404 (via `absentResourceResponse`)
+ * BEFORE ever reaching this function.
+ */
+export async function requireLessonContentPermission(
+  headers: Headers,
+  disciplineId: number | null,
+  action: PermissionAction,
+): Promise<void> {
+  if (disciplineId === null) {
+    await requireAdmin(headers);
+    return;
+  }
+  await requireDisciplinePermission(headers, disciplineId, 'content', action);
 }
 
 /**
@@ -163,14 +328,24 @@ export async function getStaffScopedCourseIds(
 
 /**
  * Is this caller staff ANYWHERE — admin or owner globally, or holding any
- * `course_staff` row at all?
+ * `course_staff` OR `discipline_staff` row at all?
  *
  * The honest bound for a route that has no course id to scope by. It grants
- * nothing on any particular course; it answers only "is this person part of
- * the teaching side of the deployment, or a stranger?" Two kinds of caller
- * need that: the blob-upload token endpoint (a blob pathname carries no course
- * id) and the lesson/module routes deciding whether a missing row may be
- * reported as a 404 rather than a flat 403.
+ * nothing on any particular course or discipline; it answers only "is this
+ * person part of the teaching side of the deployment, or a stranger?" Three
+ * kinds of caller need that: the blob-upload token endpoint (a blob pathname
+ * carries no course id), the lesson/module routes deciding whether a missing
+ * row may be reported as a 404 rather than a flat 403, and the docx-parse
+ * route's pre-body-parsing floor.
+ *
+ * Checks `discipline_staff` as well as `course_staff`, not either alone: the
+ * two tables are deliberately independent (see `migrate-discipline-staff.ts`
+ * — no backfill, because there is no source of truth linking them), so a
+ * discipline-only SME can hold zero `course_staff` rows. Checking only
+ * `course_staff` here would read that SME as a stranger at every "is staff
+ * somewhere" gate — the `/admin` shell's entry guard and the docx-parse
+ * floor among them — even though `requireLessonContentPermission` would
+ * correctly admit them the moment a lesson id resolves their discipline.
  *
  * False for an anonymous request, and it never throws for one: the session
  * lookup is optional-chained, so nothing downstream runs without a user id.
@@ -180,7 +355,11 @@ export async function isStaffAnywhere(headers: Headers): Promise<boolean> {
   const userId = session?.user?.id;
   if (!userId) return false;
   const roles = await getUserRoleNames(userId);
-  return hasAdminAccess(roles) || (await isAnyCourseStaff(userId));
+  return (
+    hasAdminAccess(roles) ||
+    (await isAnyCourseStaff(userId)) ||
+    (await isAnyDisciplineStaff(userId))
+  );
 }
 
 /**
@@ -209,35 +388,57 @@ export async function absentResourceResponse(
 }
 
 /**
- * Does this person hold `entity:action` on ANY course?
+ * RBAC rule 1: a course manager, a subject expert, or an admin may CREATE a
+ * discipline.
  *
- * The course-less counterpart of `requireCoursePermission`: it unions their
- * global roles with every distinct role they hold in `course_staff` and asks
- * `getUserPermissions` for the combined grant set — the same table, the same
- * function, the same wildcard short-circuit for an owner.
+ * The guard form of `isStaffAnywhere`, and it is exactly that union — admin or
+ * owner globally, any `course_staff` row, any `discipline_staff` row — because
+ * `course_staff` can only ever name a course manager or a subject expert
+ * (`COURSE_SCOPED_ROLES`) and `discipline_staff` only a subject expert
+ * (`DISCIPLINE_SCOPED_ROLES`). "Staff anywhere" and "one of those three
+ * populations" are the same set, enforced at both write sites.
  *
- * For the one route that genuinely has no identifier to scope by
- * (`lesson-material.parse.ts`: a .docx in, generated material out, nothing
- * persisted). "Is staff somewhere" is too loose there — it admits a
- * course-manager, who holds `content:read` only, and an admin, who by design
- * holds no `content` grant at all; both would burn LLM budget generating
- * material neither of them may save.
- *
- * Not a guard: it returns a boolean and throws nothing, because its one caller
- * has already resolved the session for itself.
+ * Creating a discipline is widened; renaming, deleting, and appointing its
+ * experts are NOT — those stay `requireAdmin`. Naming a new subject is
+ * cheap and reversible by its author. Appointing experts is the act that
+ * hands out authority, and letting an SME do it would make expert assignment
+ * self-propagating: the "an admin hires the experts" rule would hold exactly
+ * until the first hire.
  */
-export async function hasCoursePermissionAnywhere(
-  userId: string,
-  entity: PermissionEntity,
-  action: PermissionAction,
-): Promise<boolean> {
-  const [globalRoles, staffRoles] = await Promise.all([
-    getUserRoleNames(userId),
-    getStaffRoleNames(userId),
-  ]);
-  const roles = [...new Set([...globalRoles, ...staffRoles])];
-  if (roles.length === 0) return false;
-  return hasPermission(await getUserPermissions(roles), entity, action);
+export async function requireDisciplineCreation(
+  headers: Headers,
+): Promise<void> {
+  if (!(await isStaffAnywhere(headers))) throw new ForbiddenError();
+}
+
+/**
+ * RBAC rule 5: a course manager or an admin may create a new offering.
+ *
+ * Not `requirePermission(headers, 'course', 'create')` alone, which carries an
+ * ADMIN FLOOR — it refuses anyone who is not admin or owner before it ever
+ * looks at a grant, so a course manager could never pass it however the grants
+ * were configured. The union adds the course-manager role and nothing else; a
+ * subject expert is deliberately absent, authoring lessons rather than
+ * deciding which courses the org sells.
+ *
+ * `isCourseManagerAnywhere` and not `isAnyCourseStaff`: the latter is also
+ * true of a subject expert staffed on a course, which would admit exactly the
+ * population this rule leaves out.
+ */
+export async function requireCourseCreation(headers: Headers): Promise<void> {
+  try {
+    await requirePermission(headers, 'course', 'create');
+    return;
+  } catch (error) {
+    // Only a refusal falls through. Anything else is an outage, and reporting
+    // it as "not an admin" would hide it behind a second failing question.
+    if (!(error instanceof ForbiddenError)) throw error;
+  }
+
+  const session = await auth.api.getSession({ headers });
+  const userId = session?.user?.id;
+  if (!userId) throw new ForbiddenError();
+  if (!(await isCourseManagerAnywhere(userId))) throw new ForbiddenError();
 }
 
 /** Owner-only guard, for role assignment and permission editing. */

@@ -4,6 +4,7 @@ import {
   courseLastViewedTable,
   coursesTable,
   lessonsTable,
+  moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
 
@@ -53,6 +54,15 @@ export async function getLastViewedLessonId({
  * off a locked pointer on read anyway — so the worst a forged write achieves
  * is redirecting the forger to a lesson they still cannot open. Re-running
  * the gate here would mean a full progress aggregation on every lesson view.
+ *
+ * A lesson can now be taught by SEVERAL courses via `module_lessons`, and the
+ * caller only ever hands this a bare `lessonSlug` — no course context to say
+ * which one the pointer belongs to. Without an `ORDER BY`, the join below
+ * could non-deterministically pick a different course on different calls for
+ * the same lesson, bouncing the learner's resume pointer between courses.
+ * `orderBy` + `limit(1)` pin it to the lowest course id so a given lesson
+ * always writes the same course's pointer; a lesson genuinely being resumed
+ * per-course would need the caller to pass a courseSlug instead.
  */
 export async function recordLastViewedLesson({
   userId,
@@ -64,9 +74,14 @@ export async function recordLastViewedLesson({
   const [lesson] = await db
     .select({ lessonId: lessonsTable.id, courseId: coursesTable.id })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
     .where(eq(lessonsTable.slug, lessonSlug))
+    .orderBy(coursesTable.id)
     .limit(1);
   if (!lesson) return false;
 

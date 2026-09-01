@@ -10,6 +10,11 @@ const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
 });
+const moduleLessonsTable = pgTable('module_lessons', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
+  lessonId: integer('lesson_id'),
+});
 const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
@@ -19,7 +24,8 @@ const coursesTable = pgTable('courses', {
 });
 
 /**
- * A chainable stub standing in for `db.select().from().innerJoin().innerJoin().where().limit()`.
+ * A chainable stub standing in for
+ * `db.select().from().innerJoin().innerJoin().innerJoin().where().orderBy().limit()`.
  * Every builder method returns the same object so any subset/order of calls
  * keeps chaining, and `limit` resolves the awaited promise — matching the
  * real functions under test, which both terminate on `.limit(1)`.
@@ -29,6 +35,7 @@ function makeChain(result: unknown) {
     from: () => chain,
     innerJoin: () => chain,
     where: () => chain,
+    orderBy: () => chain,
     limit: () => Promise.resolve(result),
   };
   return chain;
@@ -37,7 +44,12 @@ function makeChain(result: unknown) {
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 
 vi.mock('#/db', () => ({ db }));
-vi.mock('#/db/schema', () => ({ lessonsTable, modulesTable, coursesTable }));
+vi.mock('#/db/schema', () => ({
+  lessonsTable,
+  moduleLessonsTable,
+  modulesTable,
+  coursesTable,
+}));
 
 const { getCourseIdForLessonId, getCourseIdForModuleId } = await import(
   '#/db/lesson-access'

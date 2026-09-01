@@ -17,10 +17,45 @@
  *   production-script scaffolding rather than being cleaned during import, so
  *   the result is verifiable by hash against the source. Cleanup is a separate
  *   pass with a known-good baseline; see the report this prints at the end.
+ *
+ * **Targets the post-contract schema** (Task 7,
+ * `migrate-drop-lesson-module-id.ts`): `NEW_DATABASE_URL`'s `lessons` no
+ * longer has `module_id`/`rank`, and `lesson_dependencies` no longer exists
+ * there — a lesson's course/rank/prerequisites are all written to its
+ * `module_lessons` placement instead. This is asymmetric: the OLD database
+ * (`OLD_DATABASE_URL`, read via `oldQ`) still has the pre-contract shape and
+ * is read as such throughout — only the writes against `DATABASE_URL` (via
+ * `newQ`) changed.
+ *
+ * **`lessons.org_id` is also NOT NULL** (Task 5/6). Rather than requiring a
+ * separate `pnpm db:seed-org-links` run between "create the course" and
+ * "import its lessons" — a real sequencing constraint that would otherwise
+ * belong in `docs/deploy-lessons-module-id-drop.md` — this script links the
+ * course to the active org (`getActiveOrgId()`) itself, right after
+ * resolving `courseId` and before the modules/lessons loops, the same
+ * invariant `createCourse` (`src/db/admin.ts`) enforces for courses created
+ * through the admin UI ("whatever this deployment administers, it owns
+ * what it creates/imports"). A fresh `import → run` needs no extra step —
+ * PROVIDED the course doesn't already belong to some OTHER org: linking is
+ * NOT unconditional (fix round 4, Important 2). `resolveCourseOrgId`
+ * (`./resolve-course-org-link.ts`) reads the course's existing
+ * `course_orgs` rows FIRST and REFUSES — throwing, before any write —
+ * if any exist and the active org isn't already one of them, since
+ * inserting anyway would silently change what `MIN(org_id)` resolves to
+ * for every lesson this import writes from then on (a permanently
+ * mixed-org lesson set inside one course). Only once that's ruled out does
+ * it link (or confirm the existing link) and log which org id it did — see
+ * that file for the full reasoning. `resolveCourseOrgId` also validates
+ * `ACTIVE_ORG_ID` needs to have already been read (`getActiveOrgId()`,
+ * hoisted to the very top of `main()`, fix round 4's Minor 8) so a
+ * misconfigured deployment fails before any write, including a dry run.
  */
 import { createHash } from 'node:crypto';
 import { put } from '@vercel/blob';
 import { Pool } from 'pg';
+import { getActiveOrgId } from '#/lib/active-org.server';
+import { healDuplicatePlacements } from './heal-duplicate-placements';
+import { resolveCourseOrgId } from './resolve-course-org-link';
 
 const OLD_COURSE_SLUG = '3d-airmanship';
 const NEW_COURSE_NAME = 'iTPS UAS Remote';
@@ -56,6 +91,44 @@ const newQ = async <T = Record<string, unknown>>(
   params: unknown[] = [],
 ): Promise<T[]> => (await newDb.query(sql, params)).rows as T[];
 
+/**
+ * Run `fn` against ONE checked-out connection wrapped in `begin`/`commit` —
+ * `newQ` above goes through the pool, which hands out a different
+ * connection per call, so two `newQ` calls can never share a transaction.
+ *
+ * Used for the one pair of writes in this script that must be atomic: a
+ * `lessons` row and its `module_lessons` placement (fix round 2, Important
+ * 4). Under the pre-Task-7 schema `lessons.module_id` was `NOT NULL`, so an
+ * unplaced lesson was unrepresentable and this couldn't happen; post-
+ * contract it can, and the migration's orphan gate — which only counts
+ * rows with a non-null `module_id`, a column that no longer exists by
+ * then — cannot detect it. A crash between the two writes without this
+ * wrapper would leave exactly that: a lesson with no placement at all.
+ */
+async function withNewTx<T>(
+  fn: (q: <U = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ) => Promise<U[]>) => Promise<T>,
+): Promise<T> {
+  const client = await newDb.connect();
+  const txQ = async <U = Record<string, unknown>>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<U[]> => (await client.query(sql, params)).rows as U[];
+  try {
+    await client.query('begin');
+    const result = await fn(txQ);
+    await client.query('commit');
+    return result;
+  } catch (err) {
+    await client.query('rollback').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 const sha = (v: string) => createHash('sha256').update(v, 'utf8').digest('hex');
 
 type Counter = { inserted: number; updated: number; skipped: number };
@@ -70,6 +143,13 @@ async function main() {
   console.log(
     `\n=== Import "${NEW_COURSE_NAME}" ${dryRun ? '(DRY RUN — no writes)' : ''}\n`,
   );
+
+  // Fix round 4, Minor 8: read (and validate) BEFORE any write and before
+  // the dry-run early-exit below — previously this ran after the course
+  // INSERT, so a missing/invalid `ACTIVE_ORG_ID` aborted having already
+  // created the course, and a `--dry-run` never validated it at all despite
+  // dry-run's whole point being to catch what WOULD fail.
+  const activeOrgId = getActiveOrgId();
 
   const [oldCourse] = await oldQ<{ id: number; name: string }>(
     `select id, name from courses where slug = $1`,
@@ -101,6 +181,23 @@ async function main() {
   }
   const courseId = course?.id;
   if (courseId === undefined) throw new Error('no course id');
+
+  // Whatever this deployment administers, it owns what it imports — same
+  // invariant `createCourse` (src/db/admin.ts) enforces via `linkCourseToOrg`
+  // — PROVIDED the course doesn't already belong to a DIFFERENT org (see
+  // `resolveCourseOrgId`'s own doc comment for the refusal this now does
+  // before linking, and why). Doing this HERE, before the lessons loop
+  // below, means a fresh import never needs a separate
+  // `pnpm db:seed-org-links` run in between, in the common case — see the
+  // header note. Split into `resolveCourseOrgId`
+  // (./resolve-course-org-link.ts) so it can be unit-tested without a real
+  // `pg.Pool`.
+  const lessonOrgId = await resolveCourseOrgId(
+    newQ,
+    courseId,
+    NEW_COURSE_SLUG,
+    activeOrgId,
+  );
 
   // --------------------------------------------------------------- modules
   const oldModules = await oldQ(
@@ -158,6 +255,29 @@ async function main() {
   }
   report('modules', mc);
 
+  // Every module id belonging to THIS course IN THE DESTINATION, per
+  // Important 3 (fix round 2) — scopes the placement lookup below to "does
+  // this lesson already have a placement IN THIS COURSE", the same scoping
+  // `movePlacement` (`src/db/placements.ts`) uses for its own UPDATE via
+  // `getModuleIdsForCourse` (a live `select id from modules where
+  // course_id = $1` against the real database).
+  //
+  // Fix round 4, Important 1: this used to be `[...moduleIdBySlug.values
+  // ()]` — every module the OLD SOURCE has for this course, not the
+  // destination. A module that exists only in the destination (an admin
+  // created one, or renamed a slug so the source/destination sets no
+  // longer line up 1:1) was invisible to that lookup, so a lesson already
+  // placed under it would be missed: the insert branch below would run
+  // instead of the move branch, creating the second placement in one
+  // course this whole fix exists to prevent. Queried fresh AFTER the
+  // modules loop above, so it includes modules this run just inserted too.
+  const courseModuleIds = (
+    await newQ<{ id: number }>(
+      `select id from modules where course_id = $1`,
+      [courseId],
+    )
+  ).map((r) => r.id);
+
   // --------------------------------------------------------------- lessons
   const oldLessons = await oldQ(
     `select l.id, l.module_id, l.name, l.slug, l.video_id, l.other_video_ids,
@@ -169,6 +289,11 @@ async function main() {
     [oldCourse.id],
   );
   const lessonIdBySlug = new Map<string, number>();
+  // Which module each lesson was placed under THIS run — read back by the
+  // lesson_dependencies loop below to target the right `module_lessons` row,
+  // since a lesson's course now comes from its placement, not a column on
+  // the lesson itself.
+  const lessonModuleIdBySlug = new Map<string, number>();
   const lc = tally();
   for (const l of oldLessons as Record<string, never>[]) {
     const row = l as unknown as {
@@ -213,61 +338,117 @@ async function main() {
     const videoRef = row.video_id ?? null;
     const otherVideoIds = JSON.stringify(row.other_video_ids ?? []);
 
-    const [existing] = await newQ<{ id: number }>(
-      `select id from lessons where slug = $1`,
-      [row.slug],
-    );
-    if (existing) {
-      await newQ(
-        `update lessons set module_id=$2, name=$3, other_video_ids=$4::jsonb,
-           video_provider=$5, video_ref=$13, required_subscriptions=$6, rank=$7,
-           is_available=$8, exclusive_per_day=$9, has_debrief=$10, needs_video_watch=$11,
-           updated_at=$12
-         where id=$1`,
-        [
-          existing.id,
-          moduleId,
-          row.name,
-          otherVideoIds,
-          videoProvider,
-          row.required_subscriptions,
-          row.rank,
-          row.is_available,
-          row.exclusive_per_day,
-          row.has_debrief,
-          row.needs_video_watch,
-          row.updated_at,
-          videoRef,
-        ],
+    // `lessons.module_id`/`lessons.rank` are gone (Task 7, contract
+    // migration) — a lesson's course/position is its `module_lessons`
+    // placement now, upserted below for BOTH branches, never a column on
+    // this row. The lesson write and its placement write run on ONE
+    // connection inside ONE transaction (Important 4, fix round 2): a crash
+    // between them would otherwise leave a lesson with no placement at
+    // all, which the contract migration's orphan gate cannot detect (it
+    // only counts rows with a non-null `module_id` — a column that no
+    // longer exists by the time this script runs against a migrated
+    // database).
+    const placedLessonId = await withNewTx(async (txQ) => {
+      const [existing] = await txQ<{ id: number }>(
+        `select id from lessons where slug = $1`,
+        [row.slug],
       );
-      lessonIdBySlug.set(row.slug, existing.id);
-      lc.updated++;
-    } else {
-      const [ins] = await newQ<{ id: number }>(
-        `insert into lessons (module_id, name, slug, other_video_ids, video_provider,
-           video_ref, required_subscriptions, rank, is_available, exclusive_per_day,
-           has_debrief, needs_video_watch, created_at, updated_at)
-         values ($1,$2,$3,$4::jsonb,$5,$14,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
-        [
-          moduleId,
-          row.name,
-          row.slug,
-          otherVideoIds,
-          videoProvider,
-          row.required_subscriptions,
-          row.rank,
-          row.is_available,
-          row.exclusive_per_day,
-          row.has_debrief,
-          row.needs_video_watch,
-          row.created_at,
-          row.updated_at,
-          videoRef,
-        ],
+      let lessonId: number;
+      if (existing) {
+        await txQ(
+          `update lessons set name=$2, other_video_ids=$3::jsonb,
+             video_provider=$4, video_ref=$5, required_subscriptions=$6,
+             is_available=$7, exclusive_per_day=$8, has_debrief=$9, needs_video_watch=$10,
+             updated_at=$11
+           where id=$1`,
+          [
+            existing.id,
+            row.name,
+            otherVideoIds,
+            videoProvider,
+            videoRef,
+            row.required_subscriptions,
+            row.is_available,
+            row.exclusive_per_day,
+            row.has_debrief,
+            row.needs_video_watch,
+            row.updated_at,
+          ],
+        );
+        lessonId = existing.id;
+        lc.updated++;
+      } else {
+        const [ins] = await txQ<{ id: number }>(
+          `insert into lessons (name, slug, other_video_ids, video_provider,
+             video_ref, required_subscriptions, is_available, exclusive_per_day,
+             has_debrief, needs_video_watch, org_id, created_at, updated_at)
+           values ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
+          [
+            row.name,
+            row.slug,
+            otherVideoIds,
+            videoProvider,
+            videoRef,
+            row.required_subscriptions,
+            row.is_available,
+            row.exclusive_per_day,
+            row.has_debrief,
+            row.needs_video_watch,
+            lessonOrgId,
+            row.created_at,
+            row.updated_at,
+          ],
+        );
+        if (!ins) throw new Error(`insert into lessons returned no row for slug ${row.slug}`);
+        lessonId = ins.id;
+        lc.inserted++;
+      }
+
+      // Placement: MOVE the placement that already exists for this lesson
+      // IN THIS COURSE, else insert a fresh one (Important 3, fix round 2).
+      // `on conflict (module_id, lesson_id)` alone is not enough: if this
+      // lesson's existing placement sits under a DIFFERENT module than
+      // `moduleId` (an admin moved it, or module slugs remapped between
+      // runs), that upsert would INSERT a second row rather than move the
+      // first — the same lesson would then have two placements in one
+      // course, which `movePlacement` (src/db/placements.ts) assumes can
+      // never happen; its own UPDATE would then hit both rows and collide
+      // with the unique index. The lookup is scoped to `courseModuleIds`
+      // (every module in THIS course), matching how `movePlacement` itself
+      // scopes a move. `healDuplicatePlacements` (fix round 4's Important 1
+      // secondary, extracted and made recoverable in round 5's Minor 1)
+      // also heals a PRE-EXISTING duplicate pair if one is found, and
+      // returns the survivor's id (or `null`) — the delete inside it runs
+      // BEFORE the move below, which is what keeps this UPDATE's target
+      // from ever colliding with a row that's still there.
+      const existingPlacementId = await healDuplicatePlacements(
+        txQ,
+        lessonId,
+        courseModuleIds,
+        row.slug,
       );
-      if (ins) lessonIdBySlug.set(row.slug, ins.id);
-      lc.inserted++;
-    }
+      if (existingPlacementId !== null) {
+        // `depends_on` is deliberately left alone here — set once by the
+        // lesson_dependencies loop below, and must survive a re-run of
+        // THIS loop untouched.
+        await txQ(
+          `update module_lessons set module_id=$2, rank=$3, updated_at=now()
+             where id=$1`,
+          [existingPlacementId, moduleId, row.rank],
+        );
+      } else {
+        await txQ(
+          `insert into module_lessons (module_id, lesson_id, rank, depends_on)
+             values ($1,$2,$3,'[]'::jsonb)`,
+          [moduleId, lessonId, row.rank],
+        );
+      }
+
+      return lessonId;
+    });
+
+    lessonIdBySlug.set(row.slug, placedLessonId);
+    lessonModuleIdBySlug.set(row.slug, moduleId);
   }
   report('lessons', lc);
 
@@ -525,34 +706,38 @@ async function main() {
      where m.course_id = $1`,
     [oldCourse.id],
   );
+  // `lesson_dependencies` (a global, one-per-lesson list) is gone (Task 7).
+  // Prerequisites live on the PLACEMENT now (`module_lessons.depends_on`),
+  // so each old row is written back to the (module, lesson) placement the
+  // lessons loop above already created for it — never a table of its own.
   const ldc = tally();
   for (const d of oldLessonDeps as Record<string, never>[]) {
     const row = d as unknown as { lesson_slug: string; depends_on: unknown };
     const lessonId = lessonIdBySlug.get(row.lesson_slug);
-    if (lessonId === undefined) {
+    const placementModuleId = lessonModuleIdBySlug.get(row.lesson_slug);
+    if (lessonId === undefined || placementModuleId === undefined) {
       ldc.skipped++;
       continue;
     }
     const payload = JSON.stringify(row.depends_on ?? []);
-    const [existing] = await newQ<{ id: number }>(
-      `select id from lesson_dependencies where lesson_id = $1`,
-      [lessonId],
+    const [updated] = await newQ<{ id: number }>(
+      `update module_lessons set depends_on=$3::jsonb, updated_at=now()
+         where module_id=$1 and lesson_id=$2
+       returning id`,
+      [placementModuleId, lessonId, payload],
     );
-    if (existing) {
-      await newQ(
-        `update lesson_dependencies set depends_on=$2::jsonb where id=$1`,
-        [existing.id, payload],
+    // The lessons loop above unconditionally upserts a module_lessons row
+    // for every lesson it processes, so this should always find its
+    // target. If it doesn't, something upstream broke the invariant —
+    // failing loudly beats silently leaving prerequisites unset.
+    if (!updated) {
+      throw new Error(
+        `no module_lessons placement for lesson "${row.lesson_slug}" in module ${placementModuleId} — the lessons loop above should have created one`,
       );
-      ldc.updated++;
-    } else {
-      await newQ(
-        `insert into lesson_dependencies (lesson_id, depends_on) values ($1,$2::jsonb)`,
-        [lessonId, payload],
-      );
-      ldc.inserted++;
     }
+    ldc.updated++;
   }
-  report('lesson_dependencies', ldc);
+  report('module_lessons.depends_on', ldc);
 
   // ------------------------------------------------------------ embeddings
   // Copied rather than regenerated: both projects embed with
@@ -603,11 +788,18 @@ async function main() {
   // ---------------------------------------------------------------- verify
   console.log('\n--- verification ---');
   const [counts] = await newQ<Record<string, string>>(
+    // Against the NEW (target) database, so `lessons`' course comes from its
+    // `module_lessons` placement, not the removed `lessons.module_id` — see
+    // the header note.
     `select
        (select count(*) from modules where course_id=$1) as modules,
-       (select count(*) from lessons l join modules m on l.module_id=m.id where m.course_id=$1) as lessons,
+       (select count(*) from lessons l
+          join module_lessons ml on ml.lesson_id=l.id
+          join modules m on ml.module_id=m.id where m.course_id=$1) as lessons,
        (select count(*) from lesson_material lm where lm.lesson_slug in
-          (select l.slug from lessons l join modules m on l.module_id=m.id where m.course_id=$1)) as material,
+          (select l.slug from lessons l
+             join module_lessons ml on ml.lesson_id=l.id
+             join modules m on ml.module_id=m.id where m.course_id=$1)) as material,
        (select count(*) from blob_files where "uploadedBy"=$2) as blob_files,
        (select count(*) from docs where course_id=$1) as doc_chunks`,
     [courseId, UPLOADED_BY],

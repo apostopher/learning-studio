@@ -16,22 +16,30 @@ const lessonsTable = pgTable('lessons', {
   videoProvider: text('video_provider'),
   videoRef: text('video_ref'),
 });
+const moduleLessonsTable = pgTable('module_lessons', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
+  lessonId: integer('lesson_id'),
+});
 const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
 });
 
 /**
- * A chainable stub standing in for `db.select().from().innerJoin().where()`.
- * The chain is itself thenable so an `await` on the unresolved builder (no
- * terminal `.returning()`/`.limit()` call, matching the real query in
- * `resolveLessonPlaybackUncached`) resolves too.
+ * A chainable stub standing in for
+ * `db.select().from().innerJoin().innerJoin().where().orderBy().limit()`.
+ * The chain is itself thenable so an `await` on the unresolved builder
+ * resolves too, matching the real query in `resolveLessonPlaybackUncached`,
+ * which terminates on `.limit(1)`.
  */
 function makeChain(result: unknown) {
   const chain = {
     from: () => chain,
     innerJoin: () => chain,
     where: () => chain,
+    orderBy: () => chain,
+    limit: () => chain,
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
     then: (
       resolve: (v: unknown) => unknown,
@@ -47,7 +55,11 @@ const redisMock = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
 const providers = vi.hoisted(() => ({ resolvePlayback: vi.fn() }));
 
 vi.mock('#/db', () => ({ db }));
-vi.mock('#/db/schema', () => ({ lessonsTable, modulesTable }));
+vi.mock('#/db/schema', () => ({
+  lessonsTable,
+  moduleLessonsTable,
+  modulesTable,
+}));
 vi.mock('#/db/admin', () => admin);
 vi.mock('#/integrations/upstash/redis', () => ({ redis: redisMock }));
 vi.mock('#/lib/video-providers/resolve.server', () => providers);

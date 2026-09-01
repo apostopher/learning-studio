@@ -22,6 +22,10 @@
  *   2. re-point only the assignments that came from the .xlsx in the source
  *
  * Idempotent: safe to re-run, and a no-op once repaired.
+ *
+ * Targets the post-contract schema (Task 7, `migrate-drop-lesson-module-id
+ * .ts`): a lesson's course comes from its `module_lessons` placement, not
+ * the removed `lessons.module_id` column.
  */
 import { put } from '@vercel/blob';
 import { Pool } from 'pg';
@@ -42,8 +46,11 @@ async function main() {
   // Every in-scope source file whose pathname has no counterpart in the target.
   const lessonSlugs = (
     await newQ<{ slug: string }>(
+      // Post-Task-7 target schema: a lesson's course is its PLACEMENT
+      // (`module_lessons`), not `lessons.module_id` — that column is gone.
       `select l.slug from lessons l
-       join modules m on l.module_id = m.id
+       join module_lessons ml on ml.lesson_id = l.id
+       join modules m on ml.module_id = m.id
        join courses c on m.course_id = c.id
        where c.slug = $1`,
       [COURSE_SLUG],
@@ -119,7 +126,10 @@ async function main() {
   const lessonIdBySlug = new Map(
     (
       await newQ<{ slug: string; id: number }>(
-        `select l.slug, l.id from lessons l join modules m on l.module_id=m.id
+        // Same post-Task-7 hop through the placement as above.
+        `select l.slug, l.id from lessons l
+         join module_lessons ml on ml.lesson_id=l.id
+         join modules m on ml.module_id=m.id
          join courses c on m.course_id=c.id where c.slug=$1`,
         [COURSE_SLUG],
       )

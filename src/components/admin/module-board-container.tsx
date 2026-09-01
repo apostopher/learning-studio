@@ -62,7 +62,12 @@ function resolveOverModuleId(
   const parsed = parseDndId(overId);
   if (!parsed) return null;
   if (parsed.type === 'container' || parsed.type === 'module') return parsed.id;
-  return findLessonModuleId(board, parsed.id);
+  // Only a placed `lesson` id resolves via lookup; `library-lesson` and
+  // `discipline` never appear as drop targets on this board, so treat them
+  // as "no module" explicitly rather than falling through into a lesson
+  // lookup that would coincidentally find nothing (or, worse, collide).
+  if (parsed.type === 'lesson') return findLessonModuleId(board, parsed.id);
+  return null;
 }
 
 /**
@@ -323,7 +328,11 @@ export const ModuleBoardContainer = ({
       <CreateLessonDialogContainer courseId={courseId} />
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
-      <DeleteLessonDialogContainer courseId={courseId} />
+      {/* No `courseId`: a lesson is org-owned and can be taught by several
+          courses, so its delete confirmation is not scoped to this board. What
+          it needs — including how many courses lose the lesson — rides on
+          `deleteLessonAtom`. */}
+      <DeleteLessonDialogContainer />
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
       <LessonVideoModalContainer modules={modules} />
     </DndContext>

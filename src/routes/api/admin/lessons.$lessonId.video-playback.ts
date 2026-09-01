@@ -50,7 +50,7 @@ export async function getVideoPlaybackHandler(
   if (denied) return denied;
 
   try {
-    const playback = await resolveLessonPlayback(lessonId);
+    const playback = await resolveLessonPlayback(lessonId, courseId);
     // 404 now means "no video assigned" only. A missing course credential
     // used to land here too, which made an admin misconfiguration
     // indistinguishable from an empty lesson; it throws

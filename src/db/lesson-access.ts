@@ -4,11 +4,18 @@ import {
   courseSubscriptionsTable,
   coursesTable,
   lessonsTable,
+  moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
 
 /**
  * The course a lesson belongs to, or null when the lesson doesn't exist.
+ *
+ * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
+ * returns only ONE of them (the lowest course id, so the answer is stable
+ * across calls rather than depending on row order). Callers that need every
+ * course teaching this lesson want `getCourseIdsForLesson` (by id, ids only)
+ * or `getCourseSlugsForLessonId` (by id, every slug) instead.
  *
  * `isAvailable` comes back rather than being filtered in SQL so the caller
  * decides what an unavailable (WIP) lesson means — `evaluateLessonGate` treats
@@ -27,9 +34,14 @@ export async function getCourseSlugForLesson(lessonSlug: string): Promise<{
       isAvailable: lessonsTable.isAvailable,
     })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
     .where(eq(lessonsTable.slug, lessonSlug))
+    .orderBy(modulesTable.courseId)
     .limit(1);
   return rows[0] ?? null;
 }
@@ -39,6 +51,13 @@ export async function getCourseSlugForLesson(lessonSlug: string): Promise<{
  * lesson slug. Admin mutations only ever hold a `lessonId`, and the
  * course-details cache is keyed by course slug, so this is the lookup they
  * need before invalidating. Returns null if the lesson doesn't exist.
+ *
+ * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
+ * returns only ONE of them (the lowest course id, so the answer is stable
+ * across calls rather than depending on row order). A caller that must act on
+ * EVERY course teaching this lesson — cache invalidation, in particular —
+ * wants `getCourseSlugsForLessonId` instead; using this one there would leave
+ * the other courses serving stale content.
  */
 export async function getCourseSlugForLessonId(
   lessonId: number,
@@ -46,11 +65,40 @@ export async function getCourseSlugForLessonId(
   const [row] = await db
     .select({ courseSlug: coursesTable.slug })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
     .where(eq(lessonsTable.id, lessonId))
+    .orderBy(modulesTable.courseId)
     .limit(1);
   return row?.courseSlug ?? null;
+}
+
+/**
+ * EVERY course slug that teaches this lesson.
+ *
+ * A lesson reaches learners through `module_lessons`, so editing one lesson
+ * can change what several courses show. Cache invalidation must therefore hit
+ * all of them — `getCourseSlugForLessonId` returns only one and would leave
+ * the rest serving stale content until the TTL expires.
+ */
+export async function getCourseSlugsForLessonId(
+  lessonId: number,
+): Promise<string[]> {
+  const rows = await db
+    .select({ courseSlug: coursesTable.slug })
+    .from(lessonsTable)
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
+    .where(eq(lessonsTable.id, lessonId));
+  return [...new Set(rows.map((r) => r.courseSlug))];
 }
 
 /**
@@ -78,6 +126,11 @@ export async function getCourseSlugForModuleId(
  * id would be two queries to answer one question. Returns null (never
  * throws) when the lesson doesn't exist, so callers can tell "no such
  * lesson" (404) apart from a real query failure.
+ *
+ * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
+ * returns only ONE of them (the lowest course id, so the answer is stable
+ * across calls rather than depending on row order). See `getCourseIdsForLesson`
+ * for callers that need every course a lesson belongs to.
  */
 export async function getCourseIdForLessonId(
   lessonId: number,
@@ -85,11 +138,42 @@ export async function getCourseIdForLessonId(
   const [row] = await db
     .select({ courseId: coursesTable.id })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
     .where(eq(lessonsTable.id, lessonId))
+    .orderBy(modulesTable.courseId)
     .limit(1);
   return row?.courseId ?? null;
+}
+
+/**
+ * A lesson's discipline, distinguishing "no such lesson" from "lesson exists
+ * with no discipline" — the two cases the lesson-content guard
+ * (`requireLessonContentPermission`) answers differently: a missing lesson is
+ * a 404, a discipline-less ("Untitled") one is admin-only. A bare
+ * `number | null` return cannot express both — its one `null` would have to
+ * mean either "doesn't exist" or "exists, no discipline", collapsing exactly
+ * the distinction the caller needs — so this returns a discriminated union
+ * instead.
+ */
+export type LessonDisciplineLookup =
+  | { found: false }
+  | { found: true; disciplineId: number | null };
+
+export async function getDisciplineIdForLessonId(
+  lessonId: number,
+): Promise<LessonDisciplineLookup> {
+  const [row] = await db
+    .select({ disciplineId: lessonsTable.disciplineId })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId))
+    .limit(1);
+  if (!row) return { found: false };
+  return { found: true, disciplineId: row.disciplineId };
 }
 
 /**

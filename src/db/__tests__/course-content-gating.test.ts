@@ -45,6 +45,7 @@ vi.mock('#/db/schema', () => ({
   coursesTable: {},
   lessonMaterialTable: {},
   lessonsTable: {},
+  moduleLessonsTable: {},
   modulesTable: {},
 }));
 vi.mock('#/db/course', () => ({ getCourseDetailsWithCache }));

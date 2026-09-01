@@ -9,6 +9,7 @@ import {
   coursesTable,
   lessonMaterialTable,
   lessonsTable,
+  moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
 import { getCurrentLevel } from '#/db/user-levels';
@@ -124,13 +125,22 @@ export async function getCourseContentForAgent(
     })
     .from(coursesTable)
     .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    .leftJoin(lessonsTable, eq(lessonsTable.moduleId, modulesTable.id))
+    // Both LEFT: a module with no placements at all must still reach the
+    // `lessonMaterialTable` join and the `isAvailable === null` branch below,
+    // so a module with zero lessons (or zero WIP-filtered lessons) still
+    // renders its heading — see the filter-1 comment. An inner join on
+    // either hop would drop that module-only row instead of keeping it.
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.moduleId, modulesTable.id),
+    )
+    .leftJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
     .leftJoin(
       lessonMaterialTable,
       eq(lessonMaterialTable.lessonSlug, lessonsTable.slug),
     )
     .where(eq(coursesTable.slug, slug))
-    .orderBy(asc(modulesTable.rank), asc(lessonsTable.rank));
+    .orderBy(asc(modulesTable.rank), asc(moduleLessonsTable.rank));
 
   if (rows.length === 0) return '';
 

@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
-import type { BoardLesson } from '#/lib/admin-schemas';
 import type { LessonMaterialGeneration } from '#/types';
 import { LessonMaterialGenerationSchema } from '#/types';
 import { AttachmentsList } from './attachments-list';
@@ -30,10 +29,16 @@ const EMPTY: LessonMaterialGeneration = {
 export const MaterialSectionContainer = ({
   lesson,
 }: {
-  lesson: BoardLesson;
+  /**
+   * Only the id is read — every hook below is lesson-scoped. Typed as the
+   * narrow shape rather than `BoardLesson` so the org-level editor, whose
+   * lessons carry no video fields at all (`editorBoardLessonSchema` omits
+   * them), can drive this section too.
+   */
+  lesson: { id: number };
 }) => {
   const existing = useLessonMaterial(lesson.id);
-  const parse = useParseLessonMaterial();
+  const parse = useParseLessonMaterial(lesson.id);
   const save = useSaveLessonMaterial(lesson.id);
 
   const form = useForm<LessonMaterialGeneration>({

@@ -2,9 +2,9 @@ import { GripVertical, ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonCard } from './lesson-card';
 import { OptimizedPicture } from './optimized-picture';
-import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 export const ModuleColumn = ({
   module: mod,

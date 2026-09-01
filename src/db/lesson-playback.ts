@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { resolveCourseProvider } from '#/db/admin';
-import { lessonsTable, modulesTable } from '#/db/schema';
+import { lessonsTable, moduleLessonsTable, modulesTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import {
@@ -17,6 +17,16 @@ const CACHE_KEY_PREFIX = 'lesson-playback';
  * credentials. Null when the lesson does not exist or has no video assigned —
  * callers deliberately render that as the same refusal as "locked", so the
  * route never confirms which slugs are real.
+ *
+ * A lesson can now be taught by SEVERAL courses via `module_lessons`, and this
+ * function only has a bare `lessonSlug` to go on — no course context to
+ * disambiguate which one's credentials to resolve against. Without an
+ * `ORDER BY`, the join below could non-deterministically hand back a
+ * different course (and therefore possibly different provider credentials)
+ * on different calls for the same lesson, which would make playback flap.
+ * `orderBy` + `limit(1)` pin it to the lowest course id so the answer is at
+ * least stable; if courses ever need genuinely different credentials for a
+ * shared lesson this will need a real course-scoped caller instead.
  */
 async function resolveLessonPlaybackUncached(
   lessonSlug: string,
@@ -30,8 +40,14 @@ async function resolveLessonPlaybackUncached(
       courseId: modulesTable.courseId,
     })
     .from(lessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))
-    .where(eq(lessonsTable.slug, lessonSlug));
+    .innerJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .where(eq(lessonsTable.slug, lessonSlug))
+    .orderBy(modulesTable.courseId)
+    .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
   const provider = lesson.videoProvider as ProviderId;

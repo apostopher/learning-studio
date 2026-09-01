@@ -2,24 +2,37 @@ import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { setLessonVideo } from '#/db/admin';
-import { getCourseIdForLessonId } from '#/db/lesson-access';
+import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { setLessonVideoInputSchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
-  requireCoursePermission,
+  requireLessonContentPermission,
 } from '#/lib/permissions.server';
 
-/** Video is content: only a subject expert may set it. */
+/**
+ * Video is lesson content: it changes what EVERY course teaching this lesson
+ * plays, not just one. Authority follows the lesson's DISCIPLINE — the SME
+ * who owns it — falling back to org-level admin only when the lesson has
+ * none ("Untitled"). See `requireLessonContentPermission`.
+ *
+ * Also serves as the existence check: `getDisciplineIdForLessonId` resolves
+ * the lesson directly against `lessonsTable`, so "no such lesson" (404, via
+ * `absentResourceResponse`) is told apart from "lesson exists with no
+ * discipline" (admin-only) here, before any guard runs.
+ */
 async function guard(
   request: Request,
-  courseId: number,
+  lessonId: number,
 ): Promise<Response | null> {
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return absentResourceResponse(request.headers, 'Lesson not found');
+  }
   try {
-    await requireCoursePermission(
+    await requireLessonContentPermission(
       request.headers,
-      courseId,
-      'content',
+      lookup.disciplineId,
       'update',
     );
     return null;
@@ -44,15 +57,7 @@ export async function putVideoHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open.
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
-  const denied = await guard(request, courseId);
+  const denied = await guard(request, lessonId);
   if (denied) return denied;
 
   let body: unknown;

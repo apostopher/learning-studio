@@ -120,15 +120,78 @@ describe('requireCoursePermission', () => {
     ).resolves.toMatchObject({ userId: 'u1' });
   });
 
-  it('refuses an admin authoring content — they administer, they do not author', async () => {
+  // RBAC rules 3 and 4: an admin may CRUD every lesson and may restructure any
+  // course (dragging a library lesson into one is a `structure` write).
+  // REPLACES the older test pinning the opposite — see the matching note in
+  // `require-discipline-permission.test.ts`.
+  it('admits an admin holding neither a structure nor a content grant', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
     m.getCourseRoleNames.mockResolvedValue([]);
-    // The seed grants admin course:* and staff:*, never structure/content.
+    // The seed grants admin course:* and staff:*, never structure/content —
+    // so both of these pass by BYPASS, not by grant.
     m.getUserPermissions.mockResolvedValue(new Set(['course:update']));
 
     await expect(
       requireCoursePermission(HEADERS, 7, 'content', 'update'),
+    ).resolves.toMatchObject({ userId: 'u1' });
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
+    ).resolves.toMatchObject({ userId: 'u1' });
+  });
+
+  it('reports an admin’s real permission set, not a widened one', async () => {
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['course:update']));
+
+    const actor = await requireCoursePermission(
+      HEADERS,
+      7,
+      'content',
+      'update',
+    );
+
+    // The bypass decides admission ONLY. `courses.$courseId.staff.ts` re-reads
+    // `actor.permissions` to decide what to return, so a bypass that also
+    // injected the entity into the set would silently widen a second,
+    // unrelated decision.
+    expect([...actor.permissions]).toEqual(['course:update']);
+  });
+
+  it('still refuses a signed-in non-admin with no grant and no course role', async () => {
+    m.getUserRoleNames.mockResolvedValue(['subject-expert']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['content:read']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('grants nothing to a subject-expert role held globally', async () => {
+    // The same rule reaches courses: a global `subject-expert` used to carry
+    // structure:* and content:* onto EVERY course, not just the ones it was
+    // staffed on. Mutant this catches: filtering scope-only roles in the
+    // discipline guard alone and forgetting this one — both wrappers share
+    // `requireScopedPermission`, and a filter applied in only one of them
+    // would leave the course half wide open.
+    m.getUserRoleNames.mockResolvedValue(['subject-expert']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['structure:update']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('still admits a subject expert staffed on THIS course', async () => {
+    m.getUserRoleNames.mockResolvedValue([]);
+    m.getCourseRoleNames.mockResolvedValue(['subject-expert']);
+    m.getUserPermissions.mockResolvedValue(new Set(['structure:update']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'structure', 'update'),
+    ).resolves.toMatchObject({ userId: 'u1' });
   });
 
   it('admits an owner anywhere via the wildcard', async () => {

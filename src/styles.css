@@ -28,6 +28,23 @@
 
 /* https://x.com/csswizardry/status/1717841334462005661 */
 @layer base {
+  /* `<body>` carries `wrap-anywhere` (`overflow-wrap: anywhere`) so that a long
+     unbroken string — an email address, a URL — wraps instead of overflowing
+     its column. That is right for CONTENT and wrong for a control: a button's
+     label is its name, and a name broken mid-word is not one.
+
+     It also does real layout damage. Table auto-layout sizes a column to its
+     min-content width, and under `anywhere` the min-content width of "Manage"
+     is one character — so the actions column of `/admin/users` collapsed and
+     the label wrapped onto two lines. `normal` restores the whole word as the
+     minimum, which is what the browser then makes room for.
+
+     This only stops breaking INSIDE a word. A multi-word label still wraps at
+     its spaces, because that is `white-space`, which this does not touch. */
+  button {
+    overflow-wrap: normal;
+  }
+
   html {
     /* Dark-only app: renders scrollbars, form controls and browser chrome
        dark. Previously set imperatively as `root.style.colorScheme` by the
@@ -1425,4 +1442,128 @@
 .course-nav__label {
   position: relative;
   z-index: 1;
+}
+
+@layer components {
+  /* Dialogs grow out of the point that opened them.
+     ------------------------------------------------------------------
+     `PointerOriginTracker` publishes the last click as `--pointer-x` /
+     `--pointer-y` in viewport pixels. Every popup in this app is centred the
+     same way (`fixed inset-0 m-auto`), so its own left edge sits at
+     `(100vw - width) / 2` — which means the click, expressed inside the
+     popup's own box, is:
+
+         pointer-x - (100vw - width)/2  ==  pointer-x - 50vw + width/2
+
+     and in `transform-origin`, `50%` already MEANS width/2 of this element.
+     That is why no JavaScript measures anything: the arithmetic below is
+     exact for a centred popup of any size, and it is resolved by the browser
+     at paint time rather than by a layout read that would have to happen
+     before the first frame.
+
+     The fallback of `50vw`/`50vh` puts the origin at the viewport centre, so
+     a dialog opened without a known origin simply scales from the middle.
+
+     Written with the INDEPENDENT `scale` property rather than `transform`, so
+     a popup that also carries a Tailwind `transform` utility cannot have it
+     silently overwritten. */
+  .dialog-popup {
+    transform-origin: calc(var(--pointer-x, 50vw) - 50vw + 50%)
+      calc(var(--pointer-y, 50vh) - 50vh + 50%);
+    opacity: 1;
+    scale: 1;
+    transition:
+      opacity var(--duration-dialog-enter) var(--ease-dialog-enter),
+      scale var(--duration-dialog-enter) var(--ease-dialog-enter);
+  }
+
+  /* Base UI puts `data-starting-style` on the first painted frame and
+     `data-ending-style` while closing, and holds the unmount until the
+     transition finishes — so one collapsed state serves as both the state it
+     grows out of and the state it shrinks back into. */
+  .dialog-popup[data-starting-style],
+  .dialog-popup[data-ending-style] {
+    opacity: 0;
+    scale: var(--scale-dialog-collapsed);
+  }
+
+  .dialog-popup[data-ending-style] {
+    transition-duration: var(--duration-dialog-exit);
+    transition-timing-function: var(--ease-dialog-exit);
+  }
+
+  /* The backdrop only fades. It has no origin — it is the whole viewport —
+     and scaling it would tear the blur. */
+  .dialog-backdrop {
+    opacity: 1;
+    transition: opacity var(--duration-dialog-enter) var(--ease-dialog-enter);
+  }
+
+  .dialog-backdrop[data-starting-style],
+  .dialog-backdrop[data-ending-style] {
+    opacity: 0;
+  }
+
+  .dialog-backdrop[data-ending-style] {
+    transition-duration: var(--duration-dialog-exit);
+    transition-timing-function: var(--ease-dialog-exit);
+  }
+}
+
+/* Reduced motion keeps the fade and drops the movement — gentler, not none.
+   The dialog must still take a non-zero time to leave: Base UI waits for the
+   transition to finish before unmounting, and `transition: none` would make
+   the popup vanish on the same frame the backdrop starts fading. */
+@media (prefers-reduced-motion: reduce) {
+  .dialog-popup,
+  .dialog-popup[data-starting-style],
+  .dialog-popup[data-ending-style] {
+    scale: 1;
+  }
+}
+
+/* Cross-fade between admin sections.
+   ------------------------------------------------------------------
+   The browser's default view transition already cross-fades the whole page,
+   but at its own pace and with a `blend` that double-exposes text mid-way.
+   These name the timing explicitly and let the outgoing snapshot leave a
+   little faster than the incoming one arrives, so the two never sit at full
+   opacity together.
+
+   `::view-transition-old/new(root)` is the whole-document snapshot pair —
+   TanStack Router drives the transition (see `AdminNavLink`), and nothing
+   here assigns per-element `view-transition-name`s, so `root` is the only
+   pair in play. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: view-fade-out var(--duration-view-transition-out)
+      var(--ease-standard) both;
+  }
+
+  ::view-transition-new(root) {
+    animation: view-fade-in var(--duration-view-transition-in)
+      var(--ease-standard) both;
+  }
+}
+
+/* Reduced motion gets NO transition rather than a gentler one. A view
+   transition is a full-page cross-fade — there is no movement to soften, so
+   the honest reduction is to skip it and let the new page appear. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+@keyframes view-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
 }

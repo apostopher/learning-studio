@@ -1,0 +1,109 @@
+import { useDroppable } from '@dnd-kit/core';
+import { useSetAtom } from 'jotai';
+import {
+  createLibraryLessonTargetAtom,
+  deleteDisciplineTargetAtom,
+  renameDisciplineTargetAtom,
+} from '#/atoms/admin';
+import type { LibraryLesson } from '#/lib/admin-schemas';
+import { cn } from '#/lib/cn';
+import { disciplineDndId } from '#/lib/dnd-ids';
+import { DisciplineColumn } from './discipline-column';
+import { DisciplineColumnActions } from './discipline-column-actions';
+import { LibraryLessonCardContainer } from './library-lesson-card-container';
+
+/**
+ * `disciplineId` for the leftmost "Untitled" column, whose lessons have no
+ * discipline at all. Discipline ids are positive serials, so 0 can never
+ * collide with a real one — and the column still has to be a droppable, or a
+ * lesson dropped on it would look exactly like a lesson dropped on nothing.
+ */
+export const UNTITLED_DISCIPLINE_ID = 0;
+
+/**
+ * One discipline column, registered as a drop target.
+ *
+ * It is a droppable it will always refuse. That is deliberate: the editor
+ * shares one DndContext across both panes, so a lesson dragged over the
+ * library is over *something*, and the only way to answer "you cannot put it
+ * back here, and here is why" is to be a real target that `resolveDrop`
+ * refuses by name.
+ */
+export const DisciplineColumnContainer = ({
+  disciplineId,
+  name,
+  lessons,
+  canManageDisciplines = false,
+}: {
+  disciplineId: number;
+  name: string;
+  lessons: LibraryLesson[];
+  /**
+   * Whether this actor may rename or delete a discipline — both `requireAdmin`
+   * on the server. Add-lesson is not gated here: authority over a lesson
+   * follows its discipline, which the router context cannot answer, so the
+   * control is offered and the server refuses if it must.
+   */
+  canManageDisciplines?: boolean;
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: disciplineDndId(disciplineId),
+    data: { type: 'discipline', disciplineId },
+  });
+  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
+  const openRename = useSetAtom(renameDisciplineTargetAtom);
+  const openDelete = useSetAtom(deleteDisciplineTargetAtom);
+
+  // The "Untitled" column is not a discipline: there is nothing to rename or
+  // delete, and a lesson filed under nothing is a triage-queue entry rather
+  // than something to create on purpose. It gets no action row at all.
+  const isUntitled = disciplineId === UNTITLED_DISCIPLINE_ID;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'h-full shrink-0 rounded-xl',
+        // The ring is the error colour, not the accent: hovering here is
+        // never going to work, and a welcoming highlight would say otherwise.
+        isOver && 'ring-2 ring-error-9/40',
+      )}
+    >
+      <DisciplineColumn
+        name={name}
+        lessonCount={lessons.length}
+        actions={
+          isUntitled ? undefined : (
+            <DisciplineColumnActions
+              disciplineName={name}
+              canManage={canManageDisciplines}
+              onAddLesson={() => openAddLesson({ id: disciplineId, name })}
+              onRename={() => openRename({ id: disciplineId, name })}
+              onDelete={() =>
+                openDelete({
+                  id: disciplineId,
+                  name,
+                  lessonCount: lessons.length,
+                })
+              }
+            />
+          )
+        }
+      >
+        {lessons.length === 0 ? (
+          <p className="px-1 py-4 text-center text-tertiary text-xs">
+            No lessons
+          </p>
+        ) : (
+          lessons.map((lesson) => (
+            <LibraryLessonCardContainer
+              key={lesson.id}
+              lesson={lesson}
+              disciplineId={disciplineId}
+            />
+          ))
+        )}
+      </DisciplineColumn>
+    </div>
+  );
+};

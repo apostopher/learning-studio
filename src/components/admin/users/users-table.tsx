@@ -11,6 +11,7 @@ import { cn } from '#/lib/cn';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import { USER_LEVELS, type UserLevel } from '#/types';
 import { UserAvatar } from './user-avatar';
+import { UsersTableSkeleton } from './users-table-skeleton';
 
 /**
  * Why the table came back empty, in the pilot's own terms.
@@ -63,6 +64,12 @@ const ALL_LEVELS = 'all';
  */
 export type UserRow = {
   kind: 'user' | 'pending';
+  /**
+   * The auth user id, which is what `discipline_staff` and `course_staff` key
+   * on. Null for a pending row: there is no auth user until they sign in, so
+   * there is nothing to staff.
+   */
+  userId: string | null;
   /** Null for a pending row — there is no profile until they sign in. */
   profileId: number | null;
   email: string;
@@ -393,6 +400,15 @@ export const UsersTable = ({
         </p>
       )}
 
+      {/* The skeleton rows are `aria-hidden` — eight rows of decorative
+          boxes are noise to a screen reader. This is what it hears instead,
+          and it replaces the "Loading people…" cell the skeleton took over
+          from: dropping that text without putting the announcement somewhere
+          would have made the wait silent. */}
+      <output aria-live="polite" className="sr-only">
+        {isLoading ? 'Loading people…' : ''}
+      </output>
+
       <div className="overflow-hidden rounded-xl border border-gray-6">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -451,7 +467,7 @@ export const UsersTable = ({
                   })}
                   <th
                     scope="col"
-                    className="border-gray-6 border-b px-4 py-2.5"
+                    className="w-px border-gray-6 border-b px-4 py-2.5"
                   >
                     <span className="sr-only">Actions</span>
                   </th>
@@ -460,14 +476,7 @@ export const UsersTable = ({
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={columns.length + 1}
-                    className="px-4 py-10 text-center text-secondary text-sm"
-                  >
-                    Loading people…
-                  </td>
-                </tr>
+                <UsersTableSkeleton columnCount={columns.length} />
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + 1} className="px-4 py-12">
@@ -505,11 +514,20 @@ export const UsersTable = ({
                         )}
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-end">
+                    {/* `w-px` is the shrink-to-fit idiom for a table column:
+                        auto-layout treats it as "as narrow as the content
+                        allows", so the actions column takes exactly its
+                        button and leaves the rest of the width to the columns
+                        that carry text. */}
+                    <td className="w-px px-4 py-3 text-end">
                       <button
                         type="button"
                         onClick={() => onOpenRow(row.original)}
-                        className="rounded-lg border border-gray-6 px-3 py-1.5 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                        // The label is one word and is the control's name —
+                        // it never wraps, whatever the column does. See the
+                        // `button { overflow-wrap: normal }` base rule for
+                        // the underlying cause this guards against locally.
+                        className="whitespace-nowrap rounded-lg border border-gray-6 px-3 py-1.5 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
                       >
                         {row.original.kind === 'pending' ? 'View' : 'Manage'}
                       </button>

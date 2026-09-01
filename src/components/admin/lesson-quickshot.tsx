@@ -12,8 +12,8 @@ import { LessonLevelChip } from '#/components/admin/lesson-level-chip';
 import { type ChipTone, chipClassName } from '#/components/ui/chip';
 import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
 import type {
-  BoardLesson,
-  BoardModule,
+  EditorBoardLesson,
+  EditorBoardModule,
   UpdateLessonConfigInput,
 } from '#/lib/admin-schemas';
 import type { UserLevel } from '#/types';
@@ -25,9 +25,14 @@ import type { UserLevel } from '#/types';
 const PRESS_SPRING = { type: 'spring', duration: 0.25, bounce: 0.35 } as const;
 
 interface LessonQuickshotProps {
-  lesson: BoardLesson;
+  /**
+   * The editor's narrower lesson type, so this row renders on BOTH boards —
+   * the per-course board and the org-level knowledge editor, whose payload
+   * omits `videoProvider`/`videoRef`. A full `BoardLesson` still satisfies it.
+   */
+  lesson: EditorBoardLesson;
   /** Needed for access: a lesson can only be paid if its module is. */
-  module: BoardModule;
+  module: EditorBoardModule;
   onPatch: (patch: UpdateLessonConfigInput) => void;
   /** Set while a mutation is in flight, or when the actor may not edit. */
   disabled?: boolean;

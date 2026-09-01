@@ -112,19 +112,37 @@ export const modulesTableRelations = relations(
       fields: [modulesTable.courseId],
       references: [coursesTable.id],
     }),
-    lessons: many(lessonsTable),
     fileAssignments: many(blobFileAssignmentsTable),
+    placements: many(moduleLessonsTable),
   }),
 );
 
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_modules_required_subs ON modules USING GIN (required_subscriptions);`;
 
+export const disciplinesTable = pgTable('disciplines', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  orgId: integer('org_id')
+    .notNull()
+    .references(() => orgsTable.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+});
+
+export const dbDisciplineSchema = createSelectSchema(disciplinesTable);
+export type DBDiscipline = z.infer<typeof dbDisciplineSchema>;
+
+export const disciplinesTableRelations = relations(
+  disciplinesTable,
+  ({ many }) => ({
+    lessons: many(lessonsTable),
+  }),
+);
+
 export const lessonsTable = pgTable('lessons', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  moduleId: integer('module_id')
-    .notNull()
-    .references(() => modulesTable.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   otherVideoIds: jsonb('other_video_ids')
@@ -140,10 +158,26 @@ export const lessonsTable = pgTable('lessons', {
    * see a `['basic']` lesson.
    */
   levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
-  rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
   isAvailable: boolean('is_available').notNull().default(false),
   exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
   hasDebrief: boolean('has_debrief').notNull().default(true),
+  disciplineId: integer('discipline_id').references(() => disciplinesTable.id, {
+    onDelete: 'no action',
+  }),
+  /**
+   * The org that owns this lesson. Lessons are org-level library items now,
+   * so an UNPLACED lesson — new, or removed from every course — still has a
+   * home and still appears in the library.
+   *
+   * One owner, deliberately. `course_orgs` allows a course to belong to
+   * several orgs, so the backfill takes the lowest. If genuine cross-org
+   * sharing arrives it becomes a join table, not a rework of this column.
+   */
+  orgId: integer('org_id')
+    .notNull()
+    .references(() => orgsTable.id, {
+      onDelete: 'cascade',
+    }),
   /**
    * PRESERVED FOR PARITY — no learner-side consumer yet.
    *
@@ -168,18 +202,78 @@ export const dbLessonSchema = createSelectSchema(lessonsTable, {
 });
 export type DBLesson = z.infer<typeof dbLessonSchema>;
 
-export const lessonsTableRelations = relations(
-  lessonsTable,
-  ({ one, many }) => ({
+export const lessonsTableRelations = relations(lessonsTable, ({ many }) => ({
+  quizAnswers: many(lessonQuizAnswersTable),
+  material: many(lessonMaterialTable),
+  fileAssignments: many(blobFileAssignmentsTable),
+  favKeyPoints: many(favKeyPointsTable),
+  orgLessons: many(orgLessonsTable),
+  placements: many(moduleLessonsTable),
+}));
+
+/**
+ * Where a lesson sits inside a module — the join that lets ONE lesson row be
+ * taught by many courses.
+ *
+ * `rank` and `dependsOn` live here rather than on the lesson because both are
+ * properties of the placement: a lesson is third in the 2-Week and eighth in
+ * the 16-Week, and its prerequisites can only name lessons the *containing*
+ * course actually holds. The gates (`levels`, `requiredSubscriptions`,
+ * `hasDebrief`, `needsVideoWatch`, `isAvailable`) deliberately stay on the
+ * lesson — see the design doc's "Deferred" section.
+ */
+export const moduleLessonsTable = pgTable(
+  'module_lessons',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    moduleId: integer('module_id')
+      .notNull()
+      .references(() => modulesTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    /**
+     * Explicit prerequisites for this lesson IN THIS COURSE. Moved off
+     * `lesson_dependencies`, whose `lesson_id` was `.unique()` — one global
+     * list per lesson cannot survive a lesson being taught by two courses.
+     */
+    dependsOn: jsonb('depends_on')
+      .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('module_lessons_module_lesson_idx').on(
+      table.moduleId,
+      table.lessonId,
+    ),
+    index('module_lessons_module_id_idx').on(table.moduleId),
+    index('module_lessons_lesson_id_idx').on(table.lessonId),
+    // Carried over from the old `lesson_dependencies` table's GIN index:
+    // `deleteLesson` strips a deleted lesson's slug from every placement via
+    // a jsonb containment predicate (`depends_on @> ...`), which would
+    // otherwise be a sequential scan of every placement per lesson delete.
+    index('module_lessons_depends_on_idx').using('gin', table.dependsOn),
+  ],
+);
+
+export const dbModuleLessonSchema = createSelectSchema(moduleLessonsTable);
+export type DBModuleLesson = z.infer<typeof dbModuleLessonSchema>;
+
+export const moduleLessonsTableRelations = relations(
+  moduleLessonsTable,
+  ({ one }) => ({
     module: one(modulesTable, {
-      fields: [lessonsTable.moduleId],
+      fields: [moduleLessonsTable.moduleId],
       references: [modulesTable.id],
     }),
-    quizAnswers: many(lessonQuizAnswersTable),
-    material: many(lessonMaterialTable),
-    fileAssignments: many(blobFileAssignmentsTable),
-    favKeyPoints: many(favKeyPointsTable),
-    orgLessons: many(orgLessonsTable),
+    lesson: one(lessonsTable, {
+      fields: [moduleLessonsTable.lessonId],
+      references: [lessonsTable.id],
+    }),
   }),
 );
 
@@ -219,20 +313,6 @@ export const moduleDependenciesTable = pgTable(
   },
   (table) => [index('module_depends_on_idx').on(table.dependsOn)],
 );
-
-export const lessonDependenciesTable = pgTable('lesson_dependencies', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  lessonId: integer('lesson_id')
-    .unique()
-    .notNull()
-    .references(() => lessonsTable.id, { onDelete: 'cascade' }),
-  dependsOn: jsonb('depends_on')
-    .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
-    .notNull(),
-});
-
-// GIN index for JSONB depends_on field
-void sql`CREATE INDEX IF NOT EXISTS idx_lesson_dependencies_depends_on ON lesson_dependencies USING GIN (depends_on);`;
 
 export const videoProgressTable = pgTable(
   'videos_progress',
@@ -823,6 +903,72 @@ export const courseStaffRelations = relations(courseStaffTable, ({ one }) => ({
     references: [userRolesTable.id],
   }),
 }));
+
+/**
+ * Which DISCIPLINES a person is staff on, and in what capacity.
+ *
+ * The sibling of `course_staff`, not a replacement for it: a lesson has
+ * exactly one discipline (or none), and once several courses can teach the
+ * same lesson via `module_lessons`, authorship of that lesson's content
+ * follows its discipline's SME rather than any one course's staff. Course
+ * staff still assemble an offering (add/remove/reorder a lesson, set its
+ * prerequisites) — the two tables answer different questions and neither one
+ * grants the other's authority.
+ *
+ * Reuses the existing `subject-expert` role rather than a new one: the same
+ * `role_permissions` grants (content:create/read/update/delete) already
+ * describe what an SME may do to a lesson's content, whether the row that
+ * names them lives in `course_staff` or here.
+ *
+ * `assignedBy` is a plain id rather than an FK, matching `course_staff`.
+ */
+export const disciplineStaffTable = pgTable(
+  'discipline_staff',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    disciplineId: integer('discipline_id')
+      .notNull()
+      .references(() => disciplinesTable.id, { onDelete: 'cascade' }),
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => userRolesTable.id, { onDelete: 'restrict' }),
+    /** Acting admin's or SME's user id. */
+    assignedBy: varchar('assigned_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('discipline_staff_user_discipline_role_idx').on(
+      table.userId,
+      table.disciplineId,
+      table.roleId,
+    ),
+    index('discipline_staff_user_discipline_idx').on(
+      table.userId,
+      table.disciplineId,
+    ),
+    index('discipline_staff_discipline_idx').on(table.disciplineId),
+  ],
+);
+
+export const dbDisciplineStaffSchema = createSelectSchema(disciplineStaffTable);
+export type DBDisciplineStaff = z.infer<typeof dbDisciplineStaffSchema>;
+
+export const disciplineStaffRelations = relations(
+  disciplineStaffTable,
+  ({ one }) => ({
+    discipline: one(disciplinesTable, {
+      fields: [disciplineStaffTable.disciplineId],
+      references: [disciplinesTable.id],
+    }),
+    role: one(userRolesTable, {
+      fields: [disciplineStaffTable.roleId],
+      references: [userRolesTable.id],
+    }),
+  }),
+);
 
 /**
  * News sources are sandboxed per course: a row belongs to exactly one course,

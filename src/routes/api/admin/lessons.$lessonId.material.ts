@@ -1,25 +1,39 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonMaterialByLessonId, upsertLessonMaterial } from '#/db/lesson';
-import { getCourseIdForLessonId } from '#/db/lesson-access';
+import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import type { PermissionAction } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
-  requireCoursePermission,
+  requireLessonContentPermission,
 } from '#/lib/permissions.server';
 import { LessonMaterialGenerationSchema } from '#/types';
 
 /**
- * Material is content: a course manager may read it, only a subject expert
- * may write it.
+ * Material is lesson content: it changes what EVERY course teaching this
+ * lesson shows, not just one. Authority follows the lesson's DISCIPLINE — the
+ * SME who owns it — falling back to org-level admin only when the lesson has
+ * none ("Untitled"). See `requireLessonContentPermission`.
+ *
+ * Also serves as the existence check: `getDisciplineIdForLessonId` resolves
+ * the lesson directly against `lessonsTable`, so "no such lesson" (404, via
+ * `absentResourceResponse`) is told apart from "lesson exists with no
+ * discipline" (admin-only) here, before any guard runs.
  */
 async function guard(
   request: Request,
-  courseId: number,
-  action: PermissionAction,
+  lessonId: number,
+  action: 'read' | 'update',
 ): Promise<Response | null> {
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return absentResourceResponse(request.headers, 'Lesson not found');
+  }
   try {
-    await requireCoursePermission(request.headers, courseId, 'content', action);
+    await requireLessonContentPermission(
+      request.headers,
+      lookup.disciplineId,
+      action,
+    );
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -42,15 +56,7 @@ export async function getMaterialHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open.
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
-  const denied = await guard(request, courseId, 'read');
+  const denied = await guard(request, lessonId, 'read');
   if (denied) return denied;
   const material = await getLessonMaterialByLessonId(lessonId);
   return Response.json(material ?? null);
@@ -64,11 +70,7 @@ export async function saveMaterialHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
-  const denied = await guard(request, courseId, 'update');
+  const denied = await guard(request, lessonId, 'update');
   if (denied) return denied;
 
   let body: unknown;

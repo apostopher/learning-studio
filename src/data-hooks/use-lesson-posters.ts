@@ -22,5 +22,11 @@ export function useLessonPosters(courseId: number) {
       return lessonPostersSchema.parse(await res.json());
     },
     staleTime: 30 * 60_000,
+    // A 403 is a permanent answer, not a blip: the endpoint is guarded by
+    // `requireCoursePermission(courseId, 'structure', 'read')`, which a
+    // discipline-only SME does not hold — and the org editor now calls this
+    // once per course column, so the default retry would double a whole
+    // rail's worth of requests that can only fail the same way twice.
+    retry: false,
   });
 }

@@ -8,23 +8,29 @@ import {
   updateLessonDependencies,
   updateLessonName,
 } from '#/db/admin';
-import { getCourseIdForLessonId } from '#/db/lesson-access';
+import {
+  getCourseIdForLessonId,
+  getCourseIdForModuleId,
+  getDisciplineIdForLessonId,
+} from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
   renameLessonInputSchema,
-  type UpdateLessonConfigInput,
   updateLessonConfigInputSchema,
   updateLessonDependenciesInputSchema,
 } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireCoursePermission,
+  requireLessonContentPermission,
 } from '#/lib/permissions.server';
 
 /**
- * Course-scoped guard for the structure-only branches (dependencies, rename,
- * move, delete). Returns a 403 Response to short-circuit, or null to proceed.
+ * Course-scoped guard for the branches that edit a single PLACEMENT rather
+ * than the lesson itself: dependencies (a course's own prerequisite list) and
+ * move (which course's module the lesson sits in, and where). Returns a 403
+ * Response to short-circuit, or null to proceed.
  */
 async function guardStructure(
   request: Request,
@@ -47,76 +53,22 @@ async function guardStructure(
   }
 }
 
-function parseLessonId(raw: string): number | null {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
 /**
- * `updateLessonConfigInputSchema` carries fields from two entities: a course
- * manager may set availability and level tags (structure); only a subject
- * expert may change whether a lesson has a debrief or requires its video
- * watched (content).
- *
- * `Record<keyof UpdateLessonConfigInput, ...>` on purpose, not two hand-kept
- * arrays: that keeps this map TOTAL over the schema's keys, so adding,
- * renaming, or removing a config field is a `tsc` error here rather than a
- * field that silently lands in neither group — which would reach
- * `updateLessonConfig` with zero permission checks at all.
+ * Guard for the branches that edit the LESSON itself — its name, its
+ * config/gates, or deleting it outright. Authority follows the lesson's
+ * DISCIPLINE, not any one course teaching it: once several courses can teach
+ * the same lesson, no single course's staff is the authority over what the
+ * lesson says or whether it exists at all, and a lesson has exactly one
+ * discipline (or none). See `requireLessonContentPermission` for the
+ * discipline/admin split this delegates to.
  */
-const CONFIG_FIELD_ENTITY: Record<
-  keyof UpdateLessonConfigInput,
-  'structure' | 'content'
-> = {
-  isAvailable: 'structure',
-  levels: 'structure',
-  // `content`, not `structure`. Spec §3 enumerates what structure covers —
-  // modules, lessons, ordering, dependencies, `isAvailable` and the lesson
-  // `levels` tag — and this is not among them; it is the paywall control.
-  // Filing it under structure would hand the paywall to `course-manager`,
-  // which was never decided.
-  requiredSubscriptions: 'content',
-  hasDebrief: 'content',
-  needsVideoWatch: 'content',
-};
-
-/**
- * Guard the config PATCH body per field group it touches. The client sends
- * one field at a time, so a mixed body is theoretical — but it must require
- * BOTH permissions rather than whichever group happens to be checked first,
- * and a refusal on either half must leave the write untouched: no partial
- * permission may produce a partial write.
- */
-async function guardConfig(
+async function guardContent(
   request: Request,
-  courseId: number,
-  patch: UpdateLessonConfigInput,
+  disciplineId: number | null,
+  action: 'update' | 'delete',
 ): Promise<Response | null> {
-  const touchedEntities = new Set(
-    (Object.keys(patch) as (keyof UpdateLessonConfigInput)[]).map(
-      (field) => CONFIG_FIELD_ENTITY[field],
-    ),
-  );
-  const touchesStructure = touchedEntities.has('structure');
-  const touchesContent = touchedEntities.has('content');
-
   try {
-    if (touchesStructure) {
-      await requireCoursePermission(
-        request.headers,
-        courseId,
-        'structure',
-        'update',
-      );
-    }
-    if (touchesContent) {
-      await requireCoursePermission(
-        request.headers,
-        courseId,
-        'content',
-        'update',
-      );
-    }
+    await requireLessonContentPermission(request.headers, disciplineId, action);
     return null;
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -126,6 +78,43 @@ async function guardConfig(
   }
 }
 
+/**
+ * The SOLE existence check for `rename`, `config`, and `deleteLessonHandler`
+ * — resolving the discipline `guardContent` needs to decide SME-vs-admin.
+ *
+ * Deliberately NOT `getCourseIdForLessonId` (the join-based check `move` and
+ * `dependencies` use): that check reads through `module_lessons`, so it
+ * reports "not found" for a lesson with zero course placements too — and
+ * `lessons.disciplineId`'s own doc comment makes that state a design goal
+ * of the knowledge library ("an UNPLACED lesson — new, or removed from
+ * every course — still has a home and still appears in the library"). A
+ * lesson content route 404ing an unplaced lesson for its own discipline SME
+ * would make it permanently unrenameable and undeletable the moment
+ * remove-from-course ships. `getDisciplineIdForLessonId` queries
+ * `lessonsTable` directly, so it answers "does the lesson exist" without
+ * going anywhere near its placements.
+ */
+async function resolveLessonDiscipline(
+  request: Request,
+  lessonId: number,
+): Promise<{ disciplineId: number | null } | { response: Response }> {
+  const lookup = await getDisciplineIdForLessonId(lessonId);
+  if (!lookup.found) {
+    return {
+      response: await absentResourceResponse(
+        request.headers,
+        'Lesson not found',
+      ),
+    };
+  }
+  return { disciplineId: lookup.disciplineId };
+}
+
+function parseLessonId(raw: string): number | null {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export async function patchLessonHandler(
   request: Request,
   lessonIdRaw: string,
@@ -133,14 +122,6 @@ export async function patchLessonHandler(
   const lessonId = parseLessonId(lessonIdRaw);
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
-  }
-  // Resolve the course before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open.
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
   }
 
   let body: unknown;
@@ -155,10 +136,38 @@ export async function patchLessonHandler(
   // swallow a dependency write and silently drop it.
   const dependencies = updateLessonDependenciesInputSchema.safeParse(body);
   if (dependencies.success) {
-    const denied = await guardStructure(request, courseId, 'update');
+    // A prerequisite list is a property of a PLACEMENT — this lesson, in
+    // THIS course — so its existence check is join-based through
+    // `module_lessons`, same as the guard target below: a lesson with no
+    // placement in any course (an unplaced, library-only lesson) has no
+    // course-scoped dependency list to guard or write, and 404 is the
+    // honest answer for this branch specifically. That is NOT the same
+    // question as "does the lesson exist" — see `resolveLessonDiscipline`,
+    // which `rename`/`config`/`delete` use instead, precisely because they
+    // must NOT 404 an unplaced lesson.
+    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
+    if (lessonExistsAt === null) {
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
+    // `dependencies.data.courseId` — the course the CLIENT is asking to
+    // edit — not `lessonExistsAt` above (only ever "lesson exists, resolved
+    // to its lowest-id course" for the existence check just above). A
+    // lesson taught by several courses has several placements, each with
+    // its own prerequisite list; guarding and writing against any course
+    // other than the one actually being edited would be wrong even though
+    // it's a real course this lesson belongs to. `updateLessonDependencies`
+    // itself still rejects a courseId this lesson has no placement in
+    // (`not-found`), so a forged value can't write a placement that
+    // doesn't exist.
+    const denied = await guardStructure(
+      request,
+      dependencies.data.courseId,
+      'update',
+    );
     if (denied) return denied;
     const result = await updateLessonDependencies(
       lessonId,
+      dependencies.data.courseId,
       dependencies.data.dependsOn,
     );
     if (result.ok) return Response.json(result);
@@ -173,7 +182,12 @@ export async function patchLessonHandler(
 
   const rename = renameLessonInputSchema.safeParse(body);
   if (rename.success) {
-    const denied = await guardStructure(request, courseId, 'update');
+    // A rename changes what EVERY course teaching this lesson shows — its
+    // authority follows the lesson's DISCIPLINE (or org admin, if it has
+    // none), not any one course. See `guardContent`.
+    const resolved = await resolveLessonDiscipline(request, lessonId);
+    if ('response' in resolved) return resolved.response;
+    const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
     const updated = await updateLessonName(lessonId, rename.data.name);
     if (!updated) return new Response('Not found', { status: 404 });
@@ -182,7 +196,30 @@ export async function patchLessonHandler(
 
   const move = moveLessonInputSchema.safeParse(body);
   if (move.success) {
-    const denied = await guardStructure(request, courseId, 'update');
+    // A move repositions an existing PLACEMENT — there is nothing to move
+    // for a lesson with no placement in any course (an unplaced,
+    // library-only lesson), so this existence check is join-based through
+    // `module_lessons`, same as `dependencies` above and for the same
+    // reason. This is NOT the same question as "does the lesson exist" —
+    // see `resolveLessonDiscipline`, used by `rename`/`config`/`delete`.
+    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
+    if (lessonExistsAt === null) {
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
+    // That module's course is the one actually being written by
+    // `moveLesson` below, and it is not necessarily (or even usually)
+    // `lessonExistsAt`, the lesson's lowest-id course. Guarding on the
+    // wrong one is wrong in both directions: staff on the lesson's lowest
+    // course could move it into a course they have no authority over, and
+    // staff on the real target course could be refused for their own
+    // course.
+    const targetCourseId = await getCourseIdForModuleId(
+      move.data.targetModuleId,
+    );
+    if (targetCourseId === null) {
+      return absentResourceResponse(request.headers, 'Target module not found');
+    }
+    const denied = await guardStructure(request, targetCourseId, 'update');
     if (denied) return denied;
     const updated = await moveLesson({
       lessonId,
@@ -196,7 +233,16 @@ export async function patchLessonHandler(
 
   const config = updateLessonConfigInputSchema.safeParse(body);
   if (config.success) {
-    const denied = await guardConfig(request, courseId, config.data);
+    // Every config field — availability, level tags, the paywall list, the
+    // debrief/video-watch gates — is a column on the lesson row
+    // (`updateLessonConfig` writes `lessonsTable` by `lessonId` alone, with
+    // no course in sight, and invalidates every course teaching this lesson).
+    // There is no course-scoped half left to split by field group — its
+    // authority follows the lesson's DISCIPLINE, same as rename. See
+    // `guardContent`.
+    const resolved = await resolveLessonDiscipline(request, lessonId);
+    if ('response' in resolved) return resolved.response;
+    const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
     const updated = await updateLessonConfig(lessonId, config.data);
     if (!updated) return new Response('Not found', { status: 404 });
@@ -214,11 +260,14 @@ export async function deleteLessonHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  const courseId = await getCourseIdForLessonId(lessonId);
-  if (courseId === null) {
-    return absentResourceResponse(request.headers, 'Lesson not found');
-  }
-  const denied = await guardStructure(request, courseId, 'delete');
+  // Deleting removes the lesson from EVERY course and cascades its progress
+  // rows, so this follows the lesson's DISCIPLINE same as rename/config: no
+  // single course's staff is the right authority for it, and an unplaced
+  // (library-only) lesson must still be deletable by its SME — see
+  // `resolveLessonDiscipline`, which is this handler's sole existence check.
+  const resolved = await resolveLessonDiscipline(request, lessonId);
+  if ('response' in resolved) return resolved.response;
+  const denied = await guardContent(request, resolved.disciplineId, 'delete');
   if (denied) return denied;
   const deleted = await deleteLesson(lessonId);
   if (!deleted) return new Response('Not found', { status: 404 });

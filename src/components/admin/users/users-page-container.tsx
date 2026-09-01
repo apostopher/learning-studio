@@ -27,7 +27,9 @@ import {
   useUserLevelHistory,
 } from '#/data-hooks/use-user-levels';
 import {
+  hasAdminAccess,
   hasPermissionKey,
+  isScopeOnlyRole,
   OWNER_ROLE,
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
@@ -36,6 +38,7 @@ import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
 import { SetLevelDialog } from './set-level-dialog';
 import { UserDetailModal } from './user-detail-modal';
+import { UserDisciplinesContainer } from './user-disciplines-container';
 import { resolveChangedByEmail } from './user-levels-helpers';
 import { type UserRow, UsersTable } from './users-table';
 
@@ -132,6 +135,7 @@ export const UsersPageContainer = ({
   const rows: UserRow[] = [
     ...(users.data?.users ?? []).map((u) => ({
       kind: 'user' as const,
+      userId: u.userId,
       profileId: u.profileId,
       email: u.email,
       name: [u.firstName, u.lastName].filter(Boolean).join(' '),
@@ -146,6 +150,7 @@ export const UsersPageContainer = ({
     })),
     ...(users.data?.pending ?? []).map((p) => ({
       kind: 'pending' as const,
+      userId: null,
       profileId: null,
       email: p.email,
       name: '',
@@ -380,7 +385,29 @@ export const UsersPageContainer = ({
         isSavingProfile={updateProfile.isPending}
         profileError={errorOf(updateProfile.error)}
         isOwner={isOwner}
-        assignableRoles={(rolePermissions.data?.roles ?? []).map((r) => r.name)}
+        // Shown for every real person, not only those already holding the
+        // role — because picking a discipline is now what MAKES someone a
+        // subject expert. `subject-expert` has no global form to tick first
+        // (see `SCOPE_ONLY_ROLES`), so gating this on holding it would leave
+        // no way to appoint anyone from this screen at all.
+        //
+        // `hasAdminAccess`, NOT `isOwner` — staffing a discipline is
+        // `requireAdmin` on the server while assigning a ROLE is owner-only,
+        // so this section is offered to a strictly wider audience than the
+        // Roles section below it, and deliberately.
+        disciplinesSlot={
+          openRow?.userId && hasAdminAccess(roles) ? (
+            <UserDisciplinesContainer userId={openRow.userId} />
+          ) : undefined
+        }
+        // A scope-only role is not assignable here and the server refuses it
+        // anyway (`putUserRoleHandler`). Withheld rather than shown disabled:
+        // there is no state in which ticking it would be right, and the
+        // control that DOES appoint a subject expert is the disciplines
+        // picker directly above.
+        assignableRoles={(rolePermissions.data?.roles ?? [])
+          .map((r) => r.name)
+          .filter((name) => !isScopeOnlyRole(name))}
         onToggleRole={(role, granted) =>
           setUserRole.mutate(
             { role, granted },

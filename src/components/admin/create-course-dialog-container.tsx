@@ -15,7 +15,23 @@ import { AddCourseButton } from './add-course-button';
 import { CreateCourseForm } from './create-course-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
 
-export const CreateCourseDialogContainer = () => {
+/**
+ * `triggerLabel` and `noun` exist because the editor's course rail calls the
+ * same thing an "offering" — a variant of a course (two-week, mini, full)
+ * that a learner actually buys. Offering is an ALIAS of course, not a second
+ * table, so this is one dialog with two names rather than two dialogs. They
+ * are separate props because the courses page keeps saying "Add course" while
+ * the rail says "New offering", and the dialog's own copy must follow the
+ * button that opened it — a button reading "New offering" over a dialog
+ * titled "Create course" reads as the wrong dialog having opened.
+ */
+export const CreateCourseDialogContainer = ({
+  triggerLabel = 'Add course',
+  noun = 'course',
+}: {
+  triggerLabel?: string;
+  noun?: string;
+} = {}) => {
   const [open, setOpen] = useAtom(createCourseDialogOpenAtom);
   const createCourse = useCreateCourse();
   const form = useForm<
@@ -38,7 +54,9 @@ export const CreateCourseDialogContainer = () => {
   const handleSubmit = form.handleSubmit((values) => {
     createCourse.mutate(values, {
       onSuccess: () => {
-        toast.success('Course created');
+        toast.success(
+          `${noun.charAt(0).toUpperCase()}${noun.slice(1)} created`,
+        );
         onOpenChange(false);
       },
     });
@@ -46,15 +64,15 @@ export const CreateCourseDialogContainer = () => {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger render={<AddCourseButton />} />
+      <Dialog.Trigger render={<AddCourseButton label={triggerLabel} />} />
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
-        <Dialog.Popup className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
+        <Dialog.Backdrop className="dialog-backdrop fixed inset-0 bg-gray-1/70 backdrop-blur-sm" />
+        <Dialog.Popup className="dialog-popup fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
           <Dialog.Title className="text-lg font-semibold text-primary">
-            Create course
+            Create {noun}
           </Dialog.Title>
           <Dialog.Description className="mt-1 mb-5 text-sm text-secondary">
-            Add a new course. You can add modules and lessons next.
+            Add a new {noun}. You can add modules and lessons next.
           </Dialog.Description>
           <CreateCourseForm
             onSubmit={handleSubmit}
@@ -91,9 +109,10 @@ export const CreateCourseDialogContainer = () => {
             }}
             serverError={
               createCourse.isError
-                ? 'Could not create course. Please try again.'
+                ? `Could not create ${noun}. Please try again.`
                 : undefined
             }
+            submitLabel={`Create ${noun}`}
             isPending={createCourse.isPending}
             onCancel={() => onOpenChange(false)}
           />

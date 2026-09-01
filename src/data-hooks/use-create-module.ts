@@ -16,6 +16,8 @@ export function useCreateModule(courseId: number) {
       return boardModuleSchema.parse(await res.json());
     },
     onSuccess: () => {
+      // The org editor's rail draws this course's modules too.
+      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
       queryClient.invalidateQueries({
         queryKey: dataKeys.courseBoard(courseId),
       });
