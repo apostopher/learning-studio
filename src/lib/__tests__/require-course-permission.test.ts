@@ -139,6 +139,39 @@ describe('requireCoursePermission', () => {
     ).resolves.toMatchObject({ userId: 'u1' });
   });
 
+  it('does NOT bypass an admin onto `staff`', async () => {
+    // Rule 3 named lessons and course structure. `staff` — who may appoint and
+    // dismiss course staff — is not part of it, and the bypass must not reach
+    // it: `courses.$courseId.staff.ts` re-reads `actor.permissions` after the
+    // guard to build its assignable-roles list, a set the bypass deliberately
+    // does not widen. An admin admitted here would pass the guard, get an
+    // empty list, and be told 403 by the very endpoint that just let them in.
+    //
+    // Mutant this catches — and it is what shipped: the bypass applied to
+    // every scoped entity, so this resolved instead of throwing, and any
+    // scoped entity added later would have been swept in silently too.
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['course:update']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'staff', 'create'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('still admits an admin holding the staff grant the seed gives them', async () => {
+    // The narrowing removes a BYPASS, not an admin's actual authority:
+    // `migrate-staff-roles.ts` seeds admin `staff:*`, and that grant still
+    // passes on its own merits.
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseRoleNames.mockResolvedValue([]);
+    m.getUserPermissions.mockResolvedValue(new Set(['staff:create']));
+
+    await expect(
+      requireCoursePermission(HEADERS, 7, 'staff', 'create'),
+    ).resolves.toMatchObject({ userId: 'u1' });
+  });
+
   it('reports an admin’s real permission set, not a widened one', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
     m.getCourseRoleNames.mockResolvedValue([]);

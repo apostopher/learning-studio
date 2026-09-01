@@ -71,6 +71,11 @@ export function useUpdateLessonConfig(courseId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.courseBoard(courseId),
       });
+      // The org editor draws the same lesson, so an edit made here must
+      // reach it too. Added when that second reader shipped — before it,
+      // one course board was the only place a lesson appeared.
+      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });
 }

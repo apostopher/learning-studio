@@ -40,6 +40,13 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
         slug: lessonsTable.slug,
         isAvailable: lessonsTable.isAvailable,
         videoRef: lessonsTable.videoRef,
+        // The lesson's own gates. Carried so the card the editor draws the
+        // instant a lesson is dropped shows the real chips rather than
+        // inventing "free, no level, no debrief" and flipping a moment later.
+        levels: lessonsTable.levels,
+        requiredSubscriptions: lessonsTable.requiredSubscriptions,
+        hasDebrief: lessonsTable.hasDebrief,
+        needsVideoWatch: lessonsTable.needsVideoWatch,
         disciplineId: disciplinesTable.id,
         disciplineName: disciplinesTable.name,
         disciplineSlug: disciplinesTable.slug,
@@ -86,6 +93,11 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
       isConfigured: row.videoRef !== null,
       isAvailable: row.isAvailable,
       courseCount: counts.get(row.id) ?? 0,
+      levels: row.levels as LibraryLesson['levels'],
+      requiredSubscriptions:
+        row.requiredSubscriptions as LibraryLesson['requiredSubscriptions'],
+      hasDebrief: row.hasDebrief,
+      needsVideoWatch: row.needsVideoWatch,
     };
 
     if (row.disciplineId === null) {

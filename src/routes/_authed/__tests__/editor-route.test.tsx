@@ -98,7 +98,12 @@ describe('/admin/$courseId/editor — the configure surface', () => {
       courseId: '5',
     } as never);
     vi.spyOn(LegacyEditorRoute, 'useRouteContext').mockReturnValue({
-      roles: [],
+      // An ADMIN holding only `course:update`. The role is required as well
+      // as the grant: `PATCH /api/admin/courses/:id` goes through
+      // `requirePermission`, which refuses a non-admin before it reads any
+      // grant — so a flag built from the grant alone would offer a control
+      // that always 403s.
+      roles: ['admin'],
       permissions: ['course:update'],
     } as never);
 
@@ -108,7 +113,10 @@ describe('/admin/$courseId/editor — the configure surface', () => {
     expect(m.board.mock.calls[0][0].capabilities).toEqual({
       canEditCourse: true,
       canDeleteCourse: false,
-      canTrainCourse: false,
+      // True now that the actor is an admin: the RAG corpus is guarded by
+      // `requireAdmin` rather than a permission key, so this flag mirrors the
+      // role directly. The grant is still what separates edit from delete.
+      canTrainCourse: true,
     });
   });
 });
@@ -217,7 +225,9 @@ describe('/admin/editor — the composing surface', () => {
 
   it('reads edit and delete off their own permission keys', async () => {
     vi.spyOn(EditorRoute, 'useRouteContext').mockReturnValue({
-      roles: [],
+      // Admin, so the org-level floor is met; the grant is what separates
+      // edit from delete.
+      roles: ['admin'],
       permissions: ['course:update'],
       isStaffAnywhere: false,
       isCourseManagerAnywhere: false,

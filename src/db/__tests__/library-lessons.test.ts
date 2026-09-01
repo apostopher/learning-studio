@@ -48,6 +48,12 @@ const ROW = {
   slug: 'stalls',
   isAvailable: false,
   videoRef: null,
+  // The gate columns come back from the INSERT's `returning` and are read
+  // onto the card, so the row has to carry them like the real one does.
+  levels: [],
+  requiredSubscriptions: [],
+  hasDebrief: false,
+  needsVideoWatch: false,
 };
 
 beforeEach(() => {
@@ -142,6 +148,10 @@ describe('createLibraryLesson', () => {
       isConfigured: false,
       isAvailable: false,
       courseCount: 0,
+      levels: [],
+      requiredSubscriptions: [],
+      hasDebrief: false,
+      needsVideoWatch: false,
     });
   });
 });

@@ -676,6 +676,30 @@ export function isCourseScopedEntity(
  * `structure` and `staff` remain assembly concerns, scoped to the course
  * doing the assembling, not to any lesson's discipline.
  */
+/**
+ * The scoped entities an ADMIN passes without holding a grant.
+ *
+ * RBAC rule 3 in its own words: an admin may CRUD every lesson and every
+ * course's structure. That is `content` and `structure` — and NOT `staff`.
+ *
+ * The distinction is load-bearing rather than pedantic. `staff` decides who
+ * may appoint and dismiss course staff, and `courses.$courseId.staff.ts`
+ * re-reads `actor.permissions` after the guard to build the assignable-roles
+ * list — a set the bypass deliberately does not widen. An admin admitted to
+ * `staff` by bypass therefore passes the guard and then gets an empty list,
+ * so the write answers 403 while the read serves every course's roster. The
+ * guard and the thing it guards would disagree.
+ *
+ * Listing the entities rather than bypassing every scoped one also means a
+ * scoped entity added later is refused by default, and someone has to decide
+ * to add it here.
+ */
+export const ADMIN_BYPASS_ENTITIES = ['structure', 'content'] as const;
+
+export function isAdminBypassEntity(entity: PermissionEntity): boolean {
+  return (ADMIN_BYPASS_ENTITIES as readonly string[]).includes(entity);
+}
+
 export const DISCIPLINE_SCOPED_ENTITIES = ['content'] as const;
 export type DisciplineScopedEntity =
   (typeof DISCIPLINE_SCOPED_ENTITIES)[number];
@@ -812,6 +836,32 @@ export function hasPermissionKey(
 }
 
 /**
+ * The client-side mirror of `requirePermission` — grant AND admin floor.
+ *
+ * `hasPermissionKey` alone is a pure grant check, and every endpoint behind an
+ * org-level entity routes through `requirePermission`, which refuses anyone
+ * who is not admin or owner BEFORE it looks at a grant. A flag built from the
+ * grant alone is therefore more permissive than the endpoint it stands for,
+ * and the gap is reachable through the shipped UI: `course` is not a
+ * course-scoped entity, so an owner can tick "Courses → Add" for
+ * `subject-expert` in the permission grid, and that SME is then shown a "New
+ * offering" button that answers 403 every time.
+ *
+ * Use this for anything guarded by `requirePermission`. Course- and
+ * discipline-scoped questions are a different shape entirely — the router
+ * context cannot answer them for a particular course, which is why those
+ * controls are offered and refused server-side instead.
+ */
+export function hasOrgPermission(
+  roles: string[],
+  permissions: string[],
+  entity: PermissionEntity,
+  action: PermissionAction,
+): boolean {
+  return hasAdminAccess(roles) && hasPermissionKey(permissions, entity, action);
+}
+
+/**
  * A lesson as the org library shows it. Deliberately carries none of a
  * lesson's gates (`levels`, `requiredSubscriptions`, `hasDebrief`) — those
  * are edited on the lesson's own config screen, not shown on a library card.
@@ -829,6 +879,24 @@ export const libraryLessonSchema = z.object({
    * lesson can be in the 2-Week and not the Mini.
    */
   courseCount: z.number(),
+  /**
+   * The lesson's own gates, carried so the card the editor draws the INSTANT
+   * a lesson is dropped can show the real chips.
+   *
+   * They were invented (`levels: []`, free, no debrief, no watch) while the
+   * placement was optimistic, on the belief that this pane drew no quickshot
+   * — it does. A paid, level-gated lesson therefore landed showing "Free" and
+   * an empty level chip and flipped a few hundred ms later, which is the
+   * flicker the optimistic card exists to avoid.
+   *
+   * `quizQuestionCount` is deliberately NOT here: it feeds only the debrief
+   * warning's tooltip text, never a chip's state, and would cost the library
+   * query a per-lesson count.
+   */
+  levels: UserLevelsSchema,
+  requiredSubscriptions: SubscriptionsSchema,
+  hasDebrief: z.boolean(),
+  needsVideoWatch: z.boolean(),
 });
 export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
 

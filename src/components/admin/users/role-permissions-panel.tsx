@@ -1,6 +1,8 @@
 import { Loader2 } from 'lucide-react';
 import {
   GRANTABLE_PERMISSIONS,
+  hasAdminAccess,
+  isAdminBypassEntity,
   isCourseScopedEntity,
   isCourseScopedRole,
   type PermissionAction,
@@ -70,8 +72,25 @@ function courseGrantLockedFor(role: string, entity: PermissionEntity): boolean {
   return isCourseScopedEntity(entity) && !isCourseScopedRole(role);
 }
 
-const lockReason = (role: string) =>
-  `${roleDisplayName(role)} is an org-level role — granting this here would apply to every course. Assign someone to the course instead.`;
+/**
+ * Why the checkbox is locked — and it must say the TRUE reason, which now
+ * differs by role.
+ *
+ * For an admin on `structure` or `content` the old sentence ("assign someone
+ * to the course instead") became false the day the admin bypass landed: an
+ * admin already holds both on every course and every discipline without any
+ * grant. A security-configuration screen telling its owner the opposite of
+ * what the system does is worse than one that says nothing, so this branches.
+ *
+ * The lock itself is right in both cases — ticking the box would change
+ * nothing either way — but only one of the two reasons is now true.
+ */
+const lockReason = (role: string, entity: PermissionEntity) => {
+  if (hasAdminAccess([role]) && isAdminBypassEntity(entity)) {
+    return `${roleDisplayName(role)} already holds this on every course and discipline — granting it here would change nothing.`;
+  }
+  return `${roleDisplayName(role)} is an org-level role — granting this here would apply to every course. Assign someone to the course instead.`;
+};
 
 /**
  * What a role may do, as entity × action.
@@ -171,7 +190,7 @@ export const RolePermissionsPanel = ({
                       // sighted and assistive-tech users both get, not one
                       // conveyed by styling (greyed-out) alone.
                       <p id={reasonId} className="pt-2 text-tertiary text-xs">
-                        {lockReason(role)}
+                        {lockReason(role, entity)}
                       </p>
                     )}
                   </fieldset>

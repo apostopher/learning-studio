@@ -1,6 +1,6 @@
 import { Tabs } from '@base-ui/react/tabs';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useQueryState } from 'nuqs';
 import { useForm } from 'react-hook-form';
 import {
@@ -10,6 +10,7 @@ import {
   openLevelHistoryCourseIdAtom,
   openUserRowAtom,
   setLevelDraftAtom,
+  userDisciplinePicksAtom,
 } from '#/atoms/admin';
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import {
@@ -84,6 +85,7 @@ export const UsersPageContainer = ({
     openLevelHistoryCourseIdAtom,
   );
   const [levelDraft, setLevelDraft] = useAtom(setLevelDraftAtom);
+  const setDisciplinePicks = useSetAtom(userDisciplinePicksAtom);
 
   const isOwner = roles.includes(OWNER_ROLE);
   const canAdd = hasPermissionKey(permissions, 'user', 'create');
@@ -316,6 +318,14 @@ export const UsersPageContainer = ({
           setOpenRow(null);
           setOpenLevelHistoryCourseId(null);
           setLevelDraft(null);
+          // Every draft on this modal is per-PERSON and the atoms holding them
+          // are module-global, so each one must be cleared here. The
+          // discipline picker was not, and an unsaved selection carried into
+          // the next profile opened: the picker showed the previous person's
+          // list, `isDirty` compared it against THIS person's roster and so
+          // enabled Save, and pressing it granted them someone else's
+          // disciplines.
+          setDisciplinePicks(null);
         }}
         allCourses={courseOptions}
         canEditEnrolments={canGrantCourse || canRevokeCourse}

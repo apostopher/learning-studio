@@ -1,5 +1,7 @@
 // @vitest-environment node
+import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 const m = vi.hoisted(() => ({ execute: vi.fn(), transaction: vi.fn() }));
 vi.mock('#/db', () => ({
@@ -16,16 +18,26 @@ const { migrateDropGlobalSubjectExpert } = await import(
   '#/db/migrate-drop-global-subject-expert'
 );
 
-/** Every SQL string issued, whitespace collapsed so it can be matched on. */
+/**
+ * Every statement issued, rendered to its exact PARAMETERIZED text plus its
+ * bound params — the house pattern from `render-sql.ts`.
+ *
+ * The first version of this helper walked `queryChunks` and joined
+ * `chunk.value`, which silently dropped every interpolated value. The role
+ * name is interpolated, so `expect(del).toContain('r."name" =')` asserted
+ * nothing about WHICH role was deleted: a mutant changing
+ * `${SUBJECT_EXPERT_ROLE}` to `${'admin'}` passed all five tests, on the one
+ * migration on this branch that deletes rows. `render-sql.ts`'s own doc
+ * comment warns about precisely this class of extractor; it should have been
+ * used from the start.
+ */
 const statements = () =>
-  m.execute.mock.calls.map((call) => {
-    const chunks = (call[0]?.queryChunks ?? []) as { value?: string[] }[];
-    return chunks
-      .map((chunk) => (chunk.value ?? []).join(''))
-      .join('')
+  m.execute.mock.calls.map((call) => ({
+    sql: renderSql(call[0] as SQL)
       .replace(/\s+/g, ' ')
-      .trim();
-  });
+      .trim(),
+    params: renderSqlParams(call[0] as SQL),
+  }));
 
 const AFFECTED = [
   { email: 'sme@example.com', user_id: 'u1', discipline_count: 2 },
@@ -47,7 +59,7 @@ describe('migrateDropGlobalSubjectExpert', () => {
     // the wrong way round, or ignored — which on the real database is an
     // unasked-for delete the operator ran expecting a report.
     expect(result.deleted).toBe(0);
-    expect(statements().some((s) => s.startsWith('delete'))).toBe(false);
+    expect(statements().some((s) => s.sql.startsWith('delete'))).toBe(false);
     expect(m.execute).toHaveBeenCalledTimes(1);
   });
 
@@ -59,14 +71,20 @@ describe('migrateDropGlobalSubjectExpert', () => {
     const result = await migrateDropGlobalSubjectExpert(true);
 
     expect(result.deleted).toBe(2);
-    const del = statements().find((s) => s.startsWith('delete'));
+    const del = statements().find((s) => s.sql.startsWith('delete'));
     // Joined to `user_roles` and filtered by name, so it cannot take every
-    // role row with it. A `delete from user_profile_roles` with no join is
-    // the mutant that matters here — it would strip every admin and owner in
-    // the org and the migration would still report success.
-    expect(del).toContain('delete from "user_profile_roles"');
-    expect(del).toContain('using "user_roles"');
-    expect(del).toContain('r."name" =');
+    // role row with it. Two mutants matter and BOTH are covered:
+    //   - `delete from user_profile_roles` with no join, which would strip
+    //     every admin and owner in the org and still report success;
+    //   - the same statement filtering on a DIFFERENT role name, which the
+    //     old param-blind extractor could not see at all.
+    expect(del?.sql).toBe(
+      'delete from "user_profile_roles" upr using "user_roles" r ' +
+        'where r."id" = upr."role_id" and r."name" = $1;',
+    );
+    // The bound value is the whole point: this is what says the migration
+    // deletes SUBJECT EXPERTS and not administrators.
+    expect(del?.params).toEqual(['subject-expert']);
   });
 
   it('never deletes the role itself', async () => {
@@ -81,8 +99,8 @@ describe('migrateDropGlobalSubjectExpert', () => {
     // expert's authority with it — the one genuinely destructive thing this
     // migration must not do.
     for (const statement of statements()) {
-      expect(statement).not.toContain('delete from "user_roles"');
-      expect(statement).not.toContain('delete from "role_permissions"');
+      expect(statement.sql).not.toContain('delete from "user_roles"');
+      expect(statement.sql).not.toContain('delete from "role_permissions"');
     }
   });
 

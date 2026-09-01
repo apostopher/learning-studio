@@ -51,11 +51,18 @@ export async function putUserRoleHandler(
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // A scope-only role has no global form to grant. Refused on the WRITE as
+  // A scope-only role has no global form to GRANT. Refused on the write as
   // well as ignored on the read (`requireScopedPermission` filters it out), so
   // the table cannot accumulate rows that mean nothing — and the message names
   // where the authority actually comes from rather than just saying no.
-  if (isScopeOnlyRole(parsed.data.role)) {
+  //
+  // REVOKE is deliberately still allowed. Refusing both directions made a
+  // legacy row — the role was globally assignable before `SCOPE_ONLY_ROLES` —
+  // impossible to remove through the product, and such a row still counts as
+  // "holds a global role" for `assertCanActOnProfile`, so nobody could enrol
+  // that person, set their level, or edit their profile either. A migration
+  // exists for the bulk case; this is how a single one gets cleared.
+  if (isScopeOnlyRole(parsed.data.role) && parsed.data.granted) {
     return Response.json(
       {
         error: `"${parsed.data.role}" is not a global role. Appoint someone to a discipline instead — a subject expert's authority comes from the disciplines they hold.`,

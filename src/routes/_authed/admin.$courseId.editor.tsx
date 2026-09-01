@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { CourseBoardContainer } from '#/components/admin/course-board-container';
-import { hasAdminAccess, hasPermissionKey } from '#/lib/admin-schemas';
+import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
 
 /**
  * The per-course **configure** surface: module CRUD, lesson config (video,
@@ -34,8 +34,13 @@ function EditorPage() {
       // permissions. All three are org-level with no course-scoped fallback,
       // so the staff this route now admits hold none of them.
       capabilities={{
-        canEditCourse: hasPermissionKey(permissions, 'course', 'update'),
-        canDeleteCourse: hasPermissionKey(permissions, 'course', 'delete'),
+        canEditCourse: hasOrgPermission(roles, permissions, 'course', 'update'),
+        canDeleteCourse: hasOrgPermission(
+          roles,
+          permissions,
+          'course',
+          'delete',
+        ),
         // The RAG corpus is guarded by `requireAdmin`, not by a permission
         // key, so the client-side mirror is the admin floor itself.
         canTrainCourse: hasAdminAccess(roles),

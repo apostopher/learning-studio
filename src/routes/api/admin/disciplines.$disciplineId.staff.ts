@@ -22,6 +22,12 @@ import { setDisciplineStaffInputSchema } from '#/lib/discipline-schemas';
  *
  * The codebase already reasons this way in the other direction:
  * `migrate-staff-roles.ts:76-80` withholds `content` from `admin` because
+ *
+ * NOTE: that citation is now HISTORY, not current policy. The admin bypass
+ * (`ADMIN_BYPASS_ENTITIES`) gives an admin `content` and `structure` on every
+ * course and discipline. The conclusion below still holds and for the same
+ * reason — an SME must not be able to appoint a peer — but it no longer rests
+ * on admin being withheld `content`.
  * "senior staff administer the university and do not author its syllabi." The
  * two halves are the same rule — administering and authoring are separate
  * authorities, and neither implies the other. An admin who wants to author

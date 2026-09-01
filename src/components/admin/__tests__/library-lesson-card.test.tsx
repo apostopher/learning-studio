@@ -28,6 +28,10 @@ const lesson = (over: Partial<LibraryLesson> = {}): LibraryLesson => ({
   isConfigured: true,
   isAvailable: true,
   courseCount: 0,
+  levels: [],
+  requiredSubscriptions: [],
+  hasDebrief: false,
+  needsVideoWatch: false,
   ...over,
 });
 

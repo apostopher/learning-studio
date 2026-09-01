@@ -133,6 +133,54 @@ describe('RolePermissionsPanel', () => {
     );
   });
 
+  it('tells an admin the TRUE reason their course grants are locked', () => {
+    render(
+      <RolePermissionsPanel {...baseProps} roles={['admin']} granted={{}} />,
+    );
+
+    // The old sentence — "granting this here would apply to every course.
+    // Assign someone to the course instead" — became false the day the admin
+    // bypass landed: an admin already holds `structure` and `content` on every
+    // course without any grant. A security-configuration screen that states
+    // the opposite of what the system does is worse than one that says
+    // nothing.
+    //
+    // Mutant this catches: the reason reverted to the single old string,
+    // which every other test here would still pass.
+    const structure = screen
+      .getAllByText('Course structure')
+      .map((legend) => legend.closest('fieldset'))[0];
+    expect(structure?.textContent).toMatch(
+      /already holds this on every course and discipline/i,
+    );
+
+    // `staff` is course-scoped but is NOT a bypass entity — an admin passes it
+    // on their seeded grant, not by bypass — so its lock keeps the original
+    // reason. Both sentences on one screen is correct, and asserting the
+    // fieldsets separately is what proves each got the right one.
+    const staff = screen
+      .getAllByText('Course staff')
+      .map((legend) => legend.closest('fieldset'))[0];
+    expect(staff?.textContent).toMatch(/Assign someone to the course instead/i);
+  });
+
+  it('keeps the old reason for a role the bypass does not cover', () => {
+    render(
+      <RolePermissionsPanel
+        {...baseProps}
+        roles={['course-manager']}
+        granted={{}}
+      />,
+    );
+
+    // `course-manager` IS course-scoped, so its course entities are not locked
+    // at all — the lock (and this reason) is for org-level roles. `user` is
+    // org-level for every role, so nothing here should claim the bypass.
+    expect(
+      screen.queryByText(/already holds this on every course/i),
+    ).toBeNull();
+  });
+
   it('keeps the lock per role when both kinds are on screen at once', () => {
     render(
       <RolePermissionsPanel

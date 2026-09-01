@@ -53,6 +53,11 @@ import {
   DisciplineColumnContainer,
   UNTITLED_DISCIPLINE_ID,
 } from './discipline-column-container';
+import {
+  acceptsLessonDrag,
+  acceptsModuleDrag,
+  isAreaTarget,
+} from './dnd-targets';
 import { DragRefusalNote } from './drag-refusal-note';
 import { EditCourseDialogContainer } from './edit-course-dialog-container';
 import {
@@ -228,13 +233,22 @@ export const EditorContainer = ({
       );
 
     if (activeType === 'module') {
-      // A module only ever lands on another module — including one in another
-      // course, which `resolveDrop` then refuses with both course names.
-      const modules = args.droppableContainers.filter(
-        (c) => c.data.current?.type === 'module',
+      // A module lands on another module — including one in another course,
+      // which `resolveDrop` refuses with both course names.
+      //
+      // The library columns and empty-course zones are candidates too, and
+      // that is the point: a module dragged onto either is a real attempt at
+      // something this pane does not do, and `resolveDrop` has a sentence for
+      // each. Filtered down to modules alone — as this was — `over` came back
+      // null for those drops, so the drag sprang back with no note, no
+      // announcement and no toast, which is the silent failure the whole
+      // refusal design exists to prevent. Two of `resolveDrop`'s branches
+      // were unreachable as a result, while their tests passed.
+      const moduleTargets = args.droppableContainers.filter((c) =>
+        acceptsModuleDrag(c.data.current?.type as DndType | undefined),
       );
-      if (missed(modules)) return [];
-      return closestCenter({ ...args, droppableContainers: modules });
+      if (missed(moduleTargets)) return [];
+      return closestCenter({ ...args, droppableContainers: moduleTargets });
     }
 
     const targets = args.droppableContainers.filter((c) => {
@@ -253,7 +267,7 @@ export const EditorContainer = ({
       // `course` is the empty-course region. It is a target so the drop can
       // be refused BY NAME rather than springing back silently — see
       // `EditorCourseEmptyContainer`.
-      return type === 'lesson' || type === 'container' || type === 'course';
+      return acceptsLessonDrag(type as DndType | undefined);
     });
     // Keyboard dragging has no pointer, so the two-stage narrowing below has
     // nothing to narrow with; fall back to plain geometry over every target.
@@ -265,10 +279,9 @@ export const EditorContainer = ({
     // A module's droppable wraps its whole item, so it would otherwise win
     // `closestCorners` against the smaller lesson cards nested within it and
     // every drop would append instead of landing in the slot under the cursor.
-    const areas = targets.filter((c) => {
-      const type = c.data.current?.type;
-      return type === 'container' || type === 'discipline' || type === 'course';
-    });
+    const areas = targets.filter((c) =>
+      isAreaTarget(c.data.current?.type as DndType | undefined),
+    );
     if (missed(areas)) return [];
     const hovered = pointerWithin({ ...args, droppableContainers: areas });
     const first = hovered[0];
@@ -925,6 +938,14 @@ function describeDndTarget(
     return `the ${name} discipline column`;
   }
   if (!board) return String(id);
+  if (parsed.type === 'course') {
+    // Named explicitly rather than falling through to the module loop below,
+    // which would match a MODULE whose id happened to equal this course's and
+    // announce the wrong thing. Reachable now that a module drag can land on
+    // an empty course column.
+    const courseBoard = board.find((cb) => cb.course.id === parsed.id);
+    return courseBoard ? `the ${courseBoard.course.name} column` : String(id);
+  }
   if (parsed.type === 'lesson') {
     for (const cb of board) {
       for (const mod of cb.modules) {

@@ -25,6 +25,7 @@ function makeChain(result: unknown) {
     where: () => p,
     orderBy: () => p,
     groupBy: () => p,
+    limit: () => p,
   });
   return p;
 }
@@ -40,6 +41,14 @@ const getCourseSlugForModuleId = vi.hoisted(() =>
   vi.fn().mockResolvedValue('a-course'),
 );
 const getCourseIdForModuleId = vi.hoisted(() => vi.fn().mockResolvedValue(3));
+/**
+ * The tenant boundary `linkLesson` consults before it writes. Defaulted to
+ * "yes" so every test here keeps exercising the behaviour it was written for;
+ * the two that own the boundary set it explicitly.
+ */
+const lessonBelongsToCourseOrg = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(true),
+);
 
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({ moduleLessonsTable, modulesTable }));
@@ -47,6 +56,7 @@ vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugForModuleId,
   getCourseIdForModuleId,
+  lessonBelongsToCourseOrg,
 }));
 
 const { linkLesson, unlinkLesson, movePlacement } = await import(
@@ -57,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getCourseSlugForModuleId.mockResolvedValue('a-course');
   getCourseIdForModuleId.mockResolvedValue(3);
+  lessonBelongsToCourseOrg.mockResolvedValue(true);
 });
 
 describe('linkLesson', () => {
@@ -76,6 +87,39 @@ describe('linkLesson', () => {
     expect(result).toBeNull();
     expect(db.select).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The tenant boundary. `lessons.id` is a global serial, so a `lessonId` in a
+   * request body is just an integer — and guarding the MODULE, which the route
+   * does, establishes authority over the destination while saying nothing at
+   * all about the lesson being dragged in.
+   */
+  it('refuses a lesson from another org, before writing anything', async () => {
+    lessonBelongsToCourseOrg.mockResolvedValueOnce(false);
+
+    const result = await linkLesson({
+      moduleId: 40,
+      lessonId: 9,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    expect(result).toBe('foreign-lesson');
+    // Nothing written, and nothing even looked up: a refusal that still did
+    // the duplicate lookup would leak timing, and one that wrote first would
+    // be no refusal at all. The insert assertion is the load-bearing one —
+    // this is the exact hole the review found: place any lesson in the
+    // database into a course you happen to hold `structure:create` on, and
+    // playback then resolves its videoRef against YOUR credentials.
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
+
+    // Asked about the lesson and the TARGET COURSE — not the module id.
+    // Mutant this catches: passing `input.moduleId` as the course, which
+    // type-checks (both numbers) and compares the lesson's org against a
+    // course id, so it would refuse almost everything while looking correct.
+    expect(lessonBelongsToCourseOrg).toHaveBeenCalledWith(9, 3);
   });
 
   it('refuses a second placement in a course that already teaches the lesson', async () => {

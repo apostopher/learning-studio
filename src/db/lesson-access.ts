@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import {
+  courseOrgsTable,
   courseSubscriptionsTable,
   coursesTable,
   lessonsTable,
@@ -265,4 +266,47 @@ export async function getLessonIdBySlug(slug: string): Promise<number | null> {
     .where(eq(lessonsTable.slug, slug))
     .limit(1);
   return rows[0]?.id ?? null;
+}
+
+/**
+ * Is this lesson's owning org one of the orgs the target course belongs to?
+ *
+ * THE tenant boundary for placement, and the reason it exists: `lessons.id` is
+ * a global serial, so a `lessonId` arriving in a request body is just an
+ * integer. Guarding the MODULE — which `linkLesson`'s caller does, and which
+ * establishes authority over the destination — says nothing at all about the
+ * lesson being dragged in. Without this, anyone holding `structure:create` on
+ * a course of their own could place any lesson in the database into it, and
+ * every downstream reader would serve it: the board renders it, the learner
+ * payload ships it, and `resolveLessonPlayback` resolves the foreign
+ * `videoRef` against the DESTINATION course's provider credentials, so the
+ * video plays.
+ *
+ * Expressed against `course_orgs` rather than `getActiveOrgId()` on purpose.
+ * The question is not "does this lesson belong to the deployment's org" but
+ * "does it belong to an org that owns the course it is being placed in" — and
+ * a course may belong to several (`course_orgs` is a join table, and
+ * `createLesson` resolves a lesson's single owner as the LOWEST of them). Only
+ * the relationship between the two rows can answer that; ambient config
+ * cannot.
+ *
+ * The mirror of `findDisciplineInOrg`, which does the same job for the other
+ * global serial on this surface.
+ */
+export async function lessonBelongsToCourseOrg(
+  lessonId: number,
+  courseId: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: lessonsTable.id })
+    .from(lessonsTable)
+    .innerJoin(courseOrgsTable, eq(courseOrgsTable.orgId, lessonsTable.orgId))
+    .where(
+      and(
+        eq(lessonsTable.id, lessonId),
+        eq(courseOrgsTable.courseId, courseId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }

@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AdminCoursesPageContainer } from '@/components/admin/admin-courses-page-container';
-import { hasPermissionKey } from '@/lib/admin-schemas';
+import { hasOrgPermission } from '@/lib/admin-schemas';
 
 export const Route = createFileRoute('/_authed/admin/')({
   component: AdminCoursesPage,
 });
 
 function AdminCoursesPage() {
-  const { permissions, isCourseManagerAnywhere } = Route.useRouteContext();
+  const { roles, permissions, isCourseManagerAnywhere } =
+    Route.useRouteContext();
   // Two separate facts, deliberately not one. `course:read` decides whether
   // the list is the whole catalogue or only this actor's staffed courses —
   // that is what the page's copy describes. `course:create` decides one
@@ -23,10 +24,10 @@ function AdminCoursesPage() {
   return (
     <AdminCoursesPageContainer
       canCreateCourse={
-        hasPermissionKey(permissions, 'course', 'create') ||
+        hasOrgPermission(roles, permissions, 'course', 'create') ||
         isCourseManagerAnywhere
       }
-      canReadCatalogue={hasPermissionKey(permissions, 'course', 'read')}
+      canReadCatalogue={hasOrgPermission(roles, permissions, 'course', 'read')}
     />
   );
 }

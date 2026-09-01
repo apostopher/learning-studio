@@ -4,6 +4,7 @@ import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import {
   getCourseIdForModuleId,
   getCourseSlugForModuleId,
+  lessonBelongsToCourseOrg,
 } from '#/db/lesson-access';
 import { moduleLessonsTable, modulesTable } from '#/db/schema';
 import type { CourseLessonDependency } from '#/types';
@@ -155,9 +156,16 @@ export async function linkLesson(input: {
   lessonId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
-}): Promise<Placement | 'duplicate' | null> {
+}): Promise<Placement | 'duplicate' | 'foreign-lesson' | null> {
   const targetCourseId = await getCourseIdForModuleId(input.moduleId);
   if (targetCourseId === null) return null;
+
+  // Before anything is written. The caller's guard proved authority over the
+  // destination module; this is the only thing that says the LESSON may go
+  // there. See `lessonBelongsToCourseOrg`.
+  if (!(await lessonBelongsToCourseOrg(input.lessonId, targetCourseId))) {
+    return 'foreign-lesson';
+  }
 
   const existing = await getCourseIdsForLesson(input.lessonId);
   if (existing.includes(targetCourseId)) return 'duplicate';

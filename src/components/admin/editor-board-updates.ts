@@ -187,11 +187,17 @@ export function commitTransferredLesson(
  * The board card to show for a library lesson the instant it is dropped,
  * before the refetch brings the real placement back.
  *
- * The invented fields are the ones `LessonCard` never renders in this pane
- * (it is given no quickshot slot here) — every field the card actually draws
- * comes from the library lesson itself, so the optimistic card and the real
- * one look the same. Anything else would flicker into a different card a
- * moment later.
+ * Every field the card draws comes from the library lesson. That includes the
+ * four gates behind the quickshot chips, which this used to invent — the
+ * comment here claimed the pane rendered no quickshot, and
+ * `EditorLessonCardContainer` passes one, so a paid level-gated lesson landed
+ * showing "Free" with an empty level chip and flipped a few hundred ms later.
+ *
+ * `rank: 0` and `quizQuestionCount: 0` are still placeholders, and both are
+ * safe: rank is replaced by the refetch and never drawn, and the quiz count
+ * feeds only the debrief warning's tooltip TEXT, never a chip's state.
+ * `dependsOn: []` is correct rather than a placeholder — a lesson has no
+ * prerequisites in a module it has just entered.
  */
 export function boardLessonFromLibrary(
   lesson: LibraryLesson,
@@ -203,10 +209,10 @@ export function boardLessonFromLibrary(
     rank: 0,
     isAvailable: lesson.isAvailable,
     isConfigured: lesson.isConfigured,
-    hasDebrief: false,
-    needsVideoWatch: false,
-    requiredSubscriptions: [],
-    levels: [],
+    hasDebrief: lesson.hasDebrief,
+    needsVideoWatch: lesson.needsVideoWatch,
+    requiredSubscriptions: lesson.requiredSubscriptions,
+    levels: lesson.levels,
     quizQuestionCount: 0,
     dependsOn: [],
   };

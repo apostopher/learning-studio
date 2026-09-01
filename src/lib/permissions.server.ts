@@ -17,6 +17,7 @@ import { getUserRoleNames } from '#/db/user-roles';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
 import {
   hasAdminAccess,
+  isAdminBypassEntity,
   isCourseScopedEntity,
   isDisciplineScopedEntity,
   isScopeOnlyRole,
@@ -176,10 +177,16 @@ async function requireScopedPermission(
   // `globalRoles`, never `roles`: admin is a global role, and reading the
   // union would let a `course_staff` row naming a role called `admin` mint
   // org-wide authority from a course-scoped grant.
-  if (
-    !hasAdminAccess(globalRoles) &&
-    !hasPermission(permissions, entity, action)
-  ) {
+  //
+  // Scoped to `ADMIN_BYPASS_ENTITIES`, not every scoped entity. Rule 3 named
+  // lessons and course structure; `staff` — who may appoint course staff — is
+  // not part of it, and admitting an admin there by bypass would put the guard
+  // at odds with `courses.$courseId.staff.ts`, which re-reads
+  // `actor.permissions` (a set this deliberately does not widen) to decide
+  // what the request may actually do.
+  const adminBypass =
+    hasAdminAccess(globalRoles) && isAdminBypassEntity(entity);
+  if (!adminBypass && !hasPermission(permissions, entity, action)) {
     throw new ForbiddenError();
   }
 
@@ -200,8 +207,11 @@ async function requireScopedPermission(
  * scoped roles.
  *
  * Authority is the union of the actor's global roles and their roles on THIS
- * course, so an owner (wildcard) passes, and an admin passes only for entities
- * their global role was actually granted.
+ * course, so an owner (wildcard) passes. An admin passes for the entities
+ * their global role was granted, PLUS the two the bypass covers — see
+ * `ADMIN_BYPASS_ENTITIES`. This sentence used to say "only for entities their
+ * global role was actually granted", which the bypass twenty lines above
+ * contradicts.
  *
  * `courseRoles` rides along on the returned actor so a caller can tell "allowed
  * because they own the deployment" from "allowed because they are the professor
