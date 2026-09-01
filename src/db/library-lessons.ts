@@ -45,6 +45,10 @@ export async function createLibraryLesson(input: {
       slug: lessonsTable.slug,
       isAvailable: lessonsTable.isAvailable,
       videoRef: lessonsTable.videoRef,
+      levels: lessonsTable.levels,
+      requiredSubscriptions: lessonsTable.requiredSubscriptions,
+      hasDebrief: lessonsTable.hasDebrief,
+      needsVideoWatch: lessonsTable.needsVideoWatch,
     });
 
   return {
@@ -57,5 +61,13 @@ export async function createLibraryLesson(input: {
     isConfigured: created.videoRef !== null,
     isAvailable: created.isAvailable,
     courseCount: 0,
+    // Read back rather than assumed: the columns carry defaults, and a card
+    // that guessed them would disagree with the library the moment it
+    // refetched.
+    levels: created.levels as LibraryLesson['levels'],
+    requiredSubscriptions:
+      created.requiredSubscriptions as LibraryLesson['requiredSubscriptions'],
+    hasDebrief: created.hasDebrief,
+    needsVideoWatch: created.needsVideoWatch,
   };
 }

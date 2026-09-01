@@ -169,6 +169,10 @@ describe('boardLessonFromLibrary', () => {
       isConfigured: false,
       isAvailable: false,
       courseCount: 0,
+      levels: [],
+      requiredSubscriptions: [],
+      hasDebrief: false,
+      needsVideoWatch: false,
     };
 
     const card = boardLessonFromLibrary(draft);
@@ -178,6 +182,63 @@ describe('boardLessonFromLibrary', () => {
     expect(card.slug).toBe('wake-turbulence');
     expect(card.isAvailable).toBe(false);
     expect(card.isConfigured).toBe(false);
+  });
+
+  it('carries the GATES, so the chips do not flip a moment after the drop', () => {
+    // The card this builds is drawn with a quickshot slot
+    // (`EditorLessonCardContainer`), which the four fields below drive. They
+    // used to be invented — `levels: []`, free, no debrief, no watch — on the
+    // stated belief that this pane rendered no chips. It does. So a paid,
+    // level-gated lesson landed showing "Free" and an empty level chip and
+    // flipped once the refetch arrived, which is the exact flicker the
+    // optimistic card exists to prevent.
+    //
+    // The fixture is deliberately NON-default on all four: defaults would
+    // pass against the old hardcoded values and prove nothing.
+    const gated: LibraryLesson = {
+      id: 501,
+      name: 'Spin recovery',
+      slug: 'spin-recovery',
+      isConfigured: true,
+      isAvailable: true,
+      courseCount: 1,
+      levels: ['advanced'],
+      requiredSubscriptions: ['rpoc'],
+      hasDebrief: true,
+      needsVideoWatch: true,
+    };
+
+    const card = boardLessonFromLibrary(gated);
+
+    expect(card.levels).toEqual(['advanced']);
+    expect(card.requiredSubscriptions).toEqual(['rpoc']);
+    expect(card.hasDebrief).toBe(true);
+    expect(card.needsVideoWatch).toBe(true);
+  });
+
+  it('leaves rank and the quiz count as placeholders, deliberately', () => {
+    // Not every field can be carried, and saying which is the point. `rank` is
+    // replaced by the refetch and never drawn; `quizQuestionCount` feeds only
+    // the debrief warning's tooltip TEXT, never a chip's state, and carrying
+    // it would cost the library query a per-lesson count. `dependsOn` is
+    // correct rather than a placeholder — a lesson has no prerequisites in a
+    // module it has just entered.
+    const card = boardLessonFromLibrary({
+      id: 502,
+      name: 'Stalls',
+      slug: 'stalls',
+      isConfigured: true,
+      isAvailable: true,
+      courseCount: 0,
+      levels: [],
+      requiredSubscriptions: [],
+      hasDebrief: false,
+      needsVideoWatch: false,
+    });
+
+    expect(card.rank).toBe(0);
+    expect(card.quizQuestionCount).toBe(0);
+    expect(card.dependsOn).toEqual([]);
   });
 });
 

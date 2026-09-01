@@ -23,6 +23,13 @@ export function useUnlinkLesson() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+      // The PREFIX, not one course. This write changes data the per-course
+      // board renders, and a lesson can sit in many courses — the editor
+      // links straight across to `/admin/$courseId/editor`, whose
+      // `useCourseBoard` has a 30s staleTime, so a board visited moments ago
+      // is still *fresh* and shows the old value for the rest of that mount.
+      // `useDeleteLesson` reasoned this through first; the same applies here.
+      queryClient.invalidateQueries({ queryKey: dataKeys.courseBoards() });
       queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });

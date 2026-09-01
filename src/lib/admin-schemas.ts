@@ -829,6 +829,24 @@ export const libraryLessonSchema = z.object({
    * lesson can be in the 2-Week and not the Mini.
    */
   courseCount: z.number(),
+  /**
+   * The lesson's own gates, carried so the card the editor draws the INSTANT
+   * a lesson is dropped can show the real chips.
+   *
+   * They were invented (`levels: []`, free, no debrief, no watch) while the
+   * placement was optimistic, on the belief that this pane drew no quickshot
+   * — it does. A paid, level-gated lesson therefore landed showing "Free" and
+   * an empty level chip and flipped a few hundred ms later, which is the
+   * flicker the optimistic card exists to avoid.
+   *
+   * `quizQuestionCount` is deliberately NOT here: it feeds only the debrief
+   * warning's tooltip text, never a chip's state, and would cost the library
+   * query a per-lesson count.
+   */
+  levels: UserLevelsSchema,
+  requiredSubscriptions: SubscriptionsSchema,
+  hasDebrief: z.boolean(),
+  needsVideoWatch: z.boolean(),
 });
 export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
 

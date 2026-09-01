@@ -193,7 +193,22 @@ describe('useUpdateLessonConfig', () => {
     await act(async () => {
       releases[1]?.();
     });
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    // Once per KEY, once per RUN — not once per tap. The count is 3 because
+    // this hook now invalidates three readers of the same lesson (this
+    // course's board, the org editor's board, the org library); what the
+    // batching guarantees is that a two-tap run settles them once, not twice.
+    // Asserting the keys rather than a bare count keeps this test about the
+    // batching instead of about how many readers happen to exist.
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(
+      invalidateSpy.mock.calls.map(
+        ([arg]) => (arg as { queryKey: unknown[] }).queryKey,
+      ),
+    ).toEqual([
+      ['admin', 'course-board', COURSE_ID],
+      ['admin', 'editor-board'],
+      ['admin', 'library'],
+    ]);
   });
 
   it('keeps a later tap when an earlier one fails mid-run', async () => {

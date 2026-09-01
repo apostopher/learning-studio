@@ -46,6 +46,10 @@ const LESSON = {
   isConfigured: true,
   isAvailable: true,
   courseCount: 2,
+  levels: [],
+  requiredSubscriptions: [],
+  hasDebrief: false,
+  needsVideoWatch: false,
 };
 
 describe('LibraryLessonCardContainer', () => {
