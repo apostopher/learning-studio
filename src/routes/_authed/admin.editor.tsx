@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { EditorContainer } from '#/components/admin/editor-container';
-import { hasAdminAccess, hasPermissionKey } from '#/lib/admin-schemas';
+import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
 
 /**
  * The knowledge library editor: every lesson the org owns on the left, every
@@ -60,13 +60,18 @@ function EditorPage() {
         // not decide which courses the org sells. Mirrors
         // `requireCourseCreation`.
         canCreateCourse:
-          hasPermissionKey(permissions, 'course', 'create') ||
+          hasOrgPermission(roles, permissions, 'course', 'create') ||
           isCourseManagerAnywhere,
         // Editing and deleting a course are org-level and admin-floored — no
         // course-manager union, unlike creation above: rule 5 named course
         // managers for creating offerings and nothing else.
-        canEditCourse: hasPermissionKey(permissions, 'course', 'update'),
-        canDeleteCourse: hasPermissionKey(permissions, 'course', 'delete'),
+        canEditCourse: hasOrgPermission(roles, permissions, 'course', 'update'),
+        canDeleteCourse: hasOrgPermission(
+          roles,
+          permissions,
+          'course',
+          'delete',
+        ),
       }}
     />
   );

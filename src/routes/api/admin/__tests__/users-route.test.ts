@@ -252,6 +252,29 @@ describe('PUT /api/admin/users/:id/roles — owner only', () => {
     expect((await res.json()).error).toMatch(/discipline/i);
   });
 
+  it('allows REVOKING a legacy scope-only row', async () => {
+    m.setUserRole.mockResolvedValueOnce({ ok: true });
+
+    const res = await putUserRoleHandler(
+      req({ role: 'subject-expert', granted: false }),
+      '5',
+    );
+
+    // The role was globally assignable before `SCOPE_ONLY_ROLES`, so rows may
+    // exist. Refusing both directions made them unremovable through the
+    // product — and such a row still reads as "holds a global role" to
+    // `assertCanActOnProfile`, so nobody could enrol that person, set their
+    // level or edit their profile either.
+    //
+    // Mutant this catches: the guard checking the role alone, ignoring
+    // `granted` — which is what shipped, and which every other test here
+    // passes against.
+    expect(res.status).toBe(204);
+    expect(m.setUserRole).toHaveBeenCalledWith(
+      expect.objectContaining({ roleName: 'subject-expert', granted: false }),
+    );
+  });
+
   it('still assigns a role that does have a global form', async () => {
     m.setUserRole.mockResolvedValueOnce({ ok: true });
     const res = await putUserRoleHandler(

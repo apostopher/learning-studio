@@ -118,9 +118,14 @@ describe('/admin shell nav', () => {
     expect(props.canSeeCourses).toBe(true);
   });
 
-  it('shows Courses to a course:read holder who staffs no course', async () => {
+  it('shows Courses to an admin holding course:read who staffs no course', async () => {
     const props = await navProps({
-      roles: [],
+      // The ROLE as well as the grant. `GET /api/admin/courses` goes through
+      // `requirePermission`, which refuses a non-admin before it reads any
+      // grant — so the link mirrors both halves. Gated on the grant alone, an
+      // owner could tick `course:read` for a non-admin role and hand that
+      // person a link to a page whose request 403s.
+      roles: ['admin'],
       permissions: ['course:read'],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
@@ -129,6 +134,20 @@ describe('/admin shell nav', () => {
     // An admin's route to the catalogue is the grant, not the staff table —
     // which is why `isCourseStaffAnywhere` may stay false for them.
     expect(props.canSeeCourses).toBe(true);
+  });
+
+  it('hides Courses from a non-admin holding course:read', async () => {
+    const props = await navProps({
+      roles: [],
+      permissions: ['course:read'],
+      isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
+    });
+
+    // Mutant this catches — and it is what shipped: the flag built from
+    // `hasPermissionKey` alone, which is more permissive than the endpoint it
+    // stands for.
+    expect(props.canSeeCourses).toBe(false);
   });
 
   it('hides Courses from someone with neither', async () => {
@@ -215,9 +234,9 @@ describe('/admin shell nav', () => {
     expect(props.canSeeEditor).toBe(false);
   });
 
-  it('gates People on user:read alone, never on staffing', async () => {
+  it('gates People on user:read plus the admin floor, never on staffing', async () => {
     const granted = await navProps({
-      roles: [],
+      roles: ['admin'],
       permissions: ['user:read'],
       isStaffAnywhere: false,
       isCourseStaffAnywhere: false,
@@ -228,8 +247,20 @@ describe('/admin shell nav', () => {
       isStaffAnywhere: true,
       isCourseStaffAnywhere: true,
     });
+    const grantWithoutTheFloor = await navProps({
+      roles: [],
+      permissions: ['user:read'],
+      isStaffAnywhere: false,
+      isCourseStaffAnywhere: false,
+    });
 
     expect(granted.canSeePeople).toBe(true);
+    // Staffing is not a route to People, and never was.
     expect(staffOnly.canSeePeople).toBe(false);
+    // Nor is the grant on its own: `GET /api/admin/users` refuses a
+    // non-admin before it reads any grant, so a link shown here would lead
+    // straight to a 403. The permission grid lets an owner tick `user:read`
+    // for a non-admin role, which is how this is reachable.
+    expect(grantWithoutTheFloor.canSeePeople).toBe(false);
   });
 });

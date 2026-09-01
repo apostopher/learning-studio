@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 // imported directly by its route test — the gate below is the switch that
 // makes course-scoped AND discipline-scoped roles reachable at all.
 import { AdminShellLayout } from '#/components/admin/admin-shell-layout';
-import { hasAdminAccess, hasPermissionKey } from '#/lib/admin-schemas';
+import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
 
 export const Route = createFileRoute('/_authed/admin')({
   beforeLoad: ({ context }) => {
@@ -34,7 +34,7 @@ function AdminShell() {
   // Both links are rendered only when the destination will actually show the
   // actor something — a link to a page that redirects or 403s straight back is
   // worse than no link, and each route guards itself regardless.
-  const canSeePeople = hasPermissionKey(permissions, 'user', 'read');
+  const canSeePeople = hasOrgPermission(roles, permissions, 'user', 'read');
   // `course:read` lists the whole catalogue; a staff-only actor holds no such
   // grant but still gets their own courses back from the same endpoint. So the
   // link's condition is "the index has content for you", not one permission.
@@ -43,7 +43,8 @@ function AdminShell() {
   // is in this shell (the guard above admits them) but staffs no course, so
   // the index would come back empty for them and the link would be a dead end.
   const canSeeCourses =
-    hasPermissionKey(permissions, 'course', 'read') || isCourseStaffAnywhere;
+    hasOrgPermission(roles, permissions, 'course', 'read') ||
+    isCourseStaffAnywhere;
   // The knowledge library editor's two endpoints (`/api/admin/library`,
   // `/api/admin/editor`) guard on `isStaffAnywhere`, so this link mirrors that
   // union exactly: admin/owner, any course staffing, any discipline staffing.
