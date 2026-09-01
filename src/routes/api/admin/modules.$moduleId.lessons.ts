@@ -70,6 +70,13 @@ export async function postLessonHandler(
       prevLessonId: null,
       nextLessonId: null,
     });
+    if (result === 'foreign-lesson') {
+      // Answered through `absentResourceResponse`, not a 403: to a caller
+      // outside this org the lesson simply does not exist, and a distinct
+      // "forbidden" would confirm that the id names something real. Staff of
+      // this org get the 404 — for them the lesson genuinely is not here.
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
     if (result === null) {
       // A dangling module id slipping through between the resolve above and
       // this call (e.g. a concurrent delete) is a 404, not a lie dressed up

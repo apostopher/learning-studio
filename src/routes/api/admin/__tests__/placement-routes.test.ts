@@ -332,13 +332,52 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
       nextLessonId: null,
     });
     const res = await patchPlacementHandler(req, '40', '9');
-    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    // The SOURCE course (module 40 -> course 3) is guarded first, before the
+    // body is even read — that ordering is what closes the id-enumeration
+    // oracle, and it means this call is expected. What must never happen is a
+    // permission check against the FOREIGN course, which would tell the
+    // caller something about a course they cannot see.
+    expect(m.requireCoursePermission).toHaveBeenCalledTimes(1);
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      3,
+      'structure',
+      'update',
+    );
     expect(m.movePlacement).not.toHaveBeenCalled();
     expect(res.status).toBe(404);
     expect(m.absentResourceResponse).toHaveBeenCalledWith(
       req.headers,
       'Target module not found',
     );
+  });
+
+  /**
+   * The id-enumeration oracle the review found: with the body parsed before
+   * the guard, an unauthenticated caller got 400 for a module that exists and
+   * 403 for one that does not, and could walk the integer space reading off
+   * which module ids are real. `absentResourceResponse` exists to close
+   * exactly that, and this handler was routing around it.
+   */
+  it('guards before reading the body, so a bad body cannot out-rank a refusal', async () => {
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+
+    const res = await patchPlacementHandler(
+      new Request('http://t/x', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: 'not-json',
+      }),
+      '40',
+      '9',
+    );
+
+    // Mutant this catches: the guard moved back below the parse. The response
+    // becomes 400 ("Invalid JSON body") for an existing module while a
+    // missing one still answers through `absentResourceResponse` — and the
+    // difference between those two IS the oracle.
+    expect(res.status).toBe(403);
+    expect(m.movePlacement).not.toHaveBeenCalled();
   });
 
   it('refuses without structure:update on the course, and never moves', async () => {

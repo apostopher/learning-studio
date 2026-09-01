@@ -92,6 +92,18 @@ export async function patchPlacementHandler(
     return absentResourceResponse(request.headers, 'Module not found');
   }
 
+  // Guarded BEFORE the body is read. With the parse first, an unauthenticated
+  // caller got a 400 for a module that exists and a 403 for one that does not
+  // — walking the integer space reads off which module ids are real, which is
+  // the id oracle `absentResourceResponse` exists to close. The DELETE handler
+  // above has always been ordered this way; this one drifted.
+  //
+  // The SOURCE module's course is the right thing to guard here: it is the one
+  // established by the id in the URL. Authority over the DESTINATION is
+  // checked separately below, once the body names it.
+  const deniedSource = await guard(request, courseId, 'update');
+  if (deniedSource) return deniedSource;
+
   let body: unknown;
   try {
     body = await request.json();
