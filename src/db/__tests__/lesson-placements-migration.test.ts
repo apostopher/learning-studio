@@ -2,7 +2,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const db = vi.hoisted(() => ({ execute: vi.fn() }));
-vi.mock('#/db', () => ({ db }));
+vi.mock('#/db', () => ({
+  db: {
+    execute: db.execute,
+    /**
+     * The whole migration runs inside one transaction now, so a failure
+     * part-way rolls the run back instead of leaving the database
+     * half-expanded. The stub runs the callback against a `tx` whose
+     * `execute` is the same spy, so every assertion below still sees the
+     * statements the migration actually issued — and the NOT NULL gate still
+     * throws through it.
+     */
+    transaction: (fn: (tx: { execute: typeof db.execute }) => unknown) =>
+      fn({ execute: db.execute }),
+  },
+}));
 
 const { migrateLessonPlacements } = await import(
   '#/db/migrate-lesson-placements'
@@ -78,6 +92,28 @@ describe('migrateLessonPlacements', () => {
     expect(insert).toContain('select "module_id", "id", "rank" from "lessons"');
     // Idempotent: re-running must not double-insert.
     expect(insert).toContain('on conflict');
+  });
+
+  it('skips lessons with no module, so a re-run cannot abort', async () => {
+    db.execute.mockResolvedValue({ rows: [{ n: 0 }] });
+
+    await migrateLessonPlacements();
+
+    const backfill = statements().find((sql) =>
+      sql.includes('insert into "module_lessons"'),
+    );
+    // `migrate-drop-lesson-module-id.ts` instructs a re-run of this migration
+    // as its remediation, and by then the app is deployed — so
+    // `createLibraryLesson` has been writing lessons with a NULL `module_id`
+    // (it creates no placement by design). Selected unfiltered they violate
+    // `module_lessons.module_id NOT NULL`; the statement aborts with a 23502
+    // and `on conflict` cannot catch it, since that only covers a unique
+    // violation.
+    //
+    // Mutant this catches: the WHERE dropped as redundant — every existing
+    // lesson has a module today, so it looks like a no-op right up until the
+    // moment the remediation is actually needed.
+    expect(backfill).toContain('is not null');
   });
 
   it('carries dependsOn across from lesson_dependencies', async () => {
