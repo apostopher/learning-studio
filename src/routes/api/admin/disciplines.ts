@@ -17,6 +17,12 @@ import { requireDisciplineCreation } from '#/lib/permissions.server';
  * structure/content. Senior staff administer the university and do not author
  * its syllabi; an admin who needs to edit a course assigns themselves as a
  * subject-expert." Read in the other direction, that is exactly this guard: a
+ *
+ * NOTE: that citation is now HISTORY, not current policy. The admin bypass
+ * (`ADMIN_BYPASS_ENTITIES`) gives an admin `content` and `structure` on every
+ * course and discipline. The conclusion below still holds and for the same
+ * reason — an SME must not be able to appoint a peer — but it no longer rests
+ * on admin being withheld `content`.
  * subject expert authors and does not administer. Guarding these routes on
  * discipline-scoped authority would let an SME appoint a peer — or themselves
  * — on the discipline they already hold, and the "an admin hires the experts"

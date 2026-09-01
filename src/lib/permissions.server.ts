@@ -207,8 +207,11 @@ async function requireScopedPermission(
  * scoped roles.
  *
  * Authority is the union of the actor's global roles and their roles on THIS
- * course, so an owner (wildcard) passes, and an admin passes only for entities
- * their global role was actually granted.
+ * course, so an owner (wildcard) passes. An admin passes for the entities
+ * their global role was granted, PLUS the two the bypass covers — see
+ * `ADMIN_BYPASS_ENTITIES`. This sentence used to say "only for entities their
+ * global role was actually granted", which the bypass twenty lines above
+ * contradicts.
  *
  * `courseRoles` rides along on the returned actor so a caller can tell "allowed
  * because they own the deployment" from "allowed because they are the professor
