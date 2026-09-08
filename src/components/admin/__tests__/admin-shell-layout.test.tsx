@@ -28,6 +28,7 @@ const renderAdmin = async (
   canSeePeople: boolean,
   canSeeCourses = true,
   canSeeEditor = false,
+  canSeeSchedule = canSeeCourses,
 ) => {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const homeRoute = createRoute({
@@ -45,6 +46,11 @@ const renderAdmin = async (
     path: '/admin/editor',
     component: () => null,
   });
+  const scheduleRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin/schedule',
+    component: () => null,
+  });
   const adminRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin',
@@ -52,6 +58,7 @@ const renderAdmin = async (
       <AdminShellLayout
         canSeePeople={canSeePeople}
         canSeeCourses={canSeeCourses}
+        canSeeSchedule={canSeeSchedule}
         canSeeEditor={canSeeEditor}
       >
         <p>Course list</p>
@@ -64,6 +71,7 @@ const renderAdmin = async (
       homeRoute,
       usersRoute,
       editorRoute,
+      scheduleRoute,
       adminRoute,
     ]),
     history: createMemoryHistory({ initialEntries: ['/admin'] }),
@@ -217,5 +225,24 @@ describe('AdminShellLayout', () => {
         'No admin sections are available with your current permissions.',
       ),
     ).toBeNull();
+  });
+
+  /**
+   * The schedule board reads the same courses the index does, so it is gated
+   * on the same condition — an actor who can see one can always see the other.
+   */
+  it('shows the Schedule link alongside Courses', async () => {
+    await renderAdmin(false);
+
+    expect(screen.getByRole('link', { name: 'Schedule' })).toBeDefined();
+    expect(
+      screen.getByRole('link', { name: 'Schedule' }).getAttribute('href'),
+    ).toBe('/admin/schedule');
+  });
+
+  it('hides the Schedule link when the schedule has nothing for the actor', async () => {
+    await renderAdmin(true, false, false, false);
+
+    expect(screen.queryByRole('link', { name: 'Schedule' })).toBeNull();
   });
 });

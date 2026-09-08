@@ -1468,6 +1468,23 @@
      a popup that also carries a Tailwind `transform` utility cannot have it
      silently overwritten. */
   .dialog-popup {
+    /* Above the page, below the floating layers.
+       ----------------------------------------------------------------
+       This app already had the convention — dialogs at 40, popovers and
+       menus at 50 — but it lived only in the Tailwind classes of the seven
+       popups that happened to spell it out. The other thirty-odd inherited
+       `z-index: auto`, which is fine until the page beneath them contains
+       anything positioned: the schedule calendar's sticky weekday row
+       (`z-[2]`) painted straight over the offering dialog, because a
+       positioned element with a z-index beats a positioned element without
+       one no matter which is "on top" in the markup.
+
+       Set here rather than on each popup so a dialog is above the page by
+       DEFAULT and cannot be added without it. The popups that still carry
+       `z-40`/`z-50` utilities keep winning — Tailwind's utilities layer
+       ranks above this components layer — so a dialog that genuinely needs
+       to sit somewhere else can still say so. */
+    z-index: 40;
     transform-origin: calc(var(--pointer-x, 50vw) - 50vw + 50%)
       calc(var(--pointer-y, 50vh) - 50vh + 50%);
     opacity: 1;
@@ -1495,6 +1512,9 @@
   /* The backdrop only fades. It has no origin — it is the whole viewport —
      and scaling it would tear the blur. */
   .dialog-backdrop {
+    /* Same layer as the popup it dims: the popup follows it in the DOM, so
+       source order puts it on top without a second z-index to keep in step. */
+    z-index: 40;
     opacity: 1;
     transition: opacity var(--duration-dialog-enter) var(--ease-dialog-enter);
   }

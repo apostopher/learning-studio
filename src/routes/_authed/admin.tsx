@@ -64,6 +64,10 @@ function AdminShell() {
     <AdminShellLayout
       canSeePeople={canSeePeople}
       canSeeCourses={canSeeCourses}
+      // Identical to `canSeeCourses` by construction: the schedule route's own
+      // `beforeLoad` gate is the same condition, so a link shown under any
+      // other rule would be a link that redirects straight back.
+      canSeeSchedule={canSeeCourses}
       canSeeEditor={canSeeEditor}
     >
       <Outlet />

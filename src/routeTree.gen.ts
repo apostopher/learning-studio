@@ -41,6 +41,7 @@ import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
 import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
 import { Route as ApiAdminRolePermissionsRouteImport } from './routes/api/admin/role-permissions'
 import { Route as ApiAdminPersonasRouteImport } from './routes/api/admin/personas'
+import { Route as ApiAdminOfferingsRouteImport } from './routes/api/admin/offerings'
 import { Route as ApiAdminLibraryRouteImport } from './routes/api/admin/library'
 import { Route as ApiAdminEditorRouteImport } from './routes/api/admin/editor'
 import { Route as ApiAdminDisciplinesRouteImport } from './routes/api/admin/disciplines'
@@ -48,6 +49,7 @@ import { Route as ApiAdminDisciplineStaffCandidatesRouteImport } from './routes/
 import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
 import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
+import { Route as AuthedAdminScheduleRouteImport } from './routes/_authed/admin.schedule'
 import { Route as AuthedAdminEditorRouteImport } from './routes/_authed/admin.editor'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
@@ -64,6 +66,7 @@ import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/cour
 import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
 import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
 import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
+import { Route as ApiAdminOfferingsOfferingIdRouteImport } from './routes/api/admin/offerings.$offeringId'
 import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
 import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
 import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
@@ -261,6 +264,11 @@ const ApiAdminPersonasRoute = ApiAdminPersonasRouteImport.update({
   path: '/api/admin/personas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminOfferingsRoute = ApiAdminOfferingsRouteImport.update({
+  id: '/api/admin/offerings',
+  path: '/api/admin/offerings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminLibraryRoute = ApiAdminLibraryRouteImport.update({
   id: '/api/admin/library',
   path: '/api/admin/library',
@@ -295,6 +303,11 @@ const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
 const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminScheduleRoute = AuthedAdminScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
 const AuthedAdminEditorRoute = AuthedAdminEditorRouteImport.update({
@@ -384,6 +397,12 @@ const ApiAdminPersonasPersonaIdRoute =
     id: '/$personaId',
     path: '/$personaId',
     getParentRoute: () => ApiAdminPersonasRoute,
+  } as any)
+const ApiAdminOfferingsOfferingIdRoute =
+  ApiAdminOfferingsOfferingIdRouteImport.update({
+    id: '/$offeringId',
+    path: '/$offeringId',
+    getParentRoute: () => ApiAdminOfferingsRoute,
   } as any)
 const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
   id: '/api/admin/modules/$moduleId',
@@ -602,6 +621,7 @@ export interface FileRoutesByFullPath {
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
+  '/admin/schedule': typeof AuthedAdminScheduleRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -609,6 +629,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/disciplines': typeof ApiAdminDisciplinesRouteWithChildren
   '/api/admin/editor': typeof ApiAdminEditorRoute
   '/api/admin/library': typeof ApiAdminLibraryRoute
+  '/api/admin/offerings': typeof ApiAdminOfferingsRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
   '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -642,6 +663,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
@@ -692,12 +714,14 @@ export interface FileRoutesByTo {
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
+  '/admin/schedule': typeof AuthedAdminScheduleRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
   '/api/admin/discipline-staff-candidates': typeof ApiAdminDisciplineStaffCandidatesRoute
   '/api/admin/disciplines': typeof ApiAdminDisciplinesRouteWithChildren
   '/api/admin/editor': typeof ApiAdminEditorRoute
   '/api/admin/library': typeof ApiAdminLibraryRoute
+  '/api/admin/offerings': typeof ApiAdminOfferingsRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
   '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -731,6 +755,7 @@ export interface FileRoutesByTo {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
@@ -784,6 +809,7 @@ export interface FileRoutesById {
   '/api/chats': typeof ApiChatsRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/_authed/admin/editor': typeof AuthedAdminEditorRoute
+  '/_authed/admin/schedule': typeof AuthedAdminScheduleRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/course/$courseSlug': typeof AuthedCourseCourseSlugRouteWithChildren
   '/api/admin/courses': typeof ApiAdminCoursesRouteWithChildren
@@ -791,6 +817,7 @@ export interface FileRoutesById {
   '/api/admin/disciplines': typeof ApiAdminDisciplinesRouteWithChildren
   '/api/admin/editor': typeof ApiAdminEditorRoute
   '/api/admin/library': typeof ApiAdminLibraryRoute
+  '/api/admin/offerings': typeof ApiAdminOfferingsRouteWithChildren
   '/api/admin/personas': typeof ApiAdminPersonasRouteWithChildren
   '/api/admin/role-permissions': typeof ApiAdminRolePermissionsRoute
   '/api/admin/uploads': typeof ApiAdminUploadsRoute
@@ -824,6 +851,7 @@ export interface FileRoutesById {
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
   '/api/admin/modules/$moduleId': typeof ApiAdminModulesModuleIdRouteWithChildren
+  '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
@@ -877,6 +905,7 @@ export interface FileRouteTypes {
     | '/api/chats'
     | '/auth/login'
     | '/admin/editor'
+    | '/admin/schedule'
     | '/admin/users'
     | '/course/$courseSlug'
     | '/api/admin/courses'
@@ -884,6 +913,7 @@ export interface FileRouteTypes {
     | '/api/admin/disciplines'
     | '/api/admin/editor'
     | '/api/admin/library'
+    | '/api/admin/offerings'
     | '/api/admin/personas'
     | '/api/admin/role-permissions'
     | '/api/admin/uploads'
@@ -917,6 +947,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
@@ -967,12 +998,14 @@ export interface FileRouteTypes {
     | '/api/chats'
     | '/auth/login'
     | '/admin/editor'
+    | '/admin/schedule'
     | '/admin/users'
     | '/api/admin/courses'
     | '/api/admin/discipline-staff-candidates'
     | '/api/admin/disciplines'
     | '/api/admin/editor'
     | '/api/admin/library'
+    | '/api/admin/offerings'
     | '/api/admin/personas'
     | '/api/admin/role-permissions'
     | '/api/admin/uploads'
@@ -1006,6 +1039,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
@@ -1058,6 +1092,7 @@ export interface FileRouteTypes {
     | '/api/chats'
     | '/auth/login'
     | '/_authed/admin/editor'
+    | '/_authed/admin/schedule'
     | '/_authed/admin/users'
     | '/_authed/course/$courseSlug'
     | '/api/admin/courses'
@@ -1065,6 +1100,7 @@ export interface FileRouteTypes {
     | '/api/admin/disciplines'
     | '/api/admin/editor'
     | '/api/admin/library'
+    | '/api/admin/offerings'
     | '/api/admin/personas'
     | '/api/admin/role-permissions'
     | '/api/admin/uploads'
@@ -1098,6 +1134,7 @@ export interface FileRouteTypes {
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
     | '/api/admin/modules/$moduleId'
+    | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/course/news/mute'
@@ -1153,6 +1190,7 @@ export interface RootRouteChildren {
   ApiAdminDisciplinesRoute: typeof ApiAdminDisciplinesRouteWithChildren
   ApiAdminEditorRoute: typeof ApiAdminEditorRoute
   ApiAdminLibraryRoute: typeof ApiAdminLibraryRoute
+  ApiAdminOfferingsRoute: typeof ApiAdminOfferingsRouteWithChildren
   ApiAdminPersonasRoute: typeof ApiAdminPersonasRouteWithChildren
   ApiAdminRolePermissionsRoute: typeof ApiAdminRolePermissionsRoute
   ApiAdminUploadsRoute: typeof ApiAdminUploadsRoute
@@ -1416,6 +1454,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminPersonasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/offerings': {
+      id: '/api/admin/offerings'
+      path: '/api/admin/offerings'
+      fullPath: '/api/admin/offerings'
+      preLoaderRoute: typeof ApiAdminOfferingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/library': {
       id: '/api/admin/library'
       path: '/api/admin/library'
@@ -1463,6 +1508,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AuthedAdminUsersRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/schedule': {
+      id: '/_authed/admin/schedule'
+      path: '/schedule'
+      fullPath: '/admin/schedule'
+      preLoaderRoute: typeof AuthedAdminScheduleRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/admin/editor': {
@@ -1576,6 +1628,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/personas/$personaId'
       preLoaderRoute: typeof ApiAdminPersonasPersonaIdRouteImport
       parentRoute: typeof ApiAdminPersonasRoute
+    }
+    '/api/admin/offerings/$offeringId': {
+      id: '/api/admin/offerings/$offeringId'
+      path: '/$offeringId'
+      fullPath: '/api/admin/offerings/$offeringId'
+      preLoaderRoute: typeof ApiAdminOfferingsOfferingIdRouteImport
+      parentRoute: typeof ApiAdminOfferingsRoute
     }
     '/api/admin/modules/$moduleId': {
       id: '/api/admin/modules/$moduleId'
@@ -1827,6 +1886,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthedAdminRouteChildren {
   AuthedAdminEditorRoute: typeof AuthedAdminEditorRoute
+  AuthedAdminScheduleRoute: typeof AuthedAdminScheduleRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedAdminCourseIdEditorRoute: typeof AuthedAdminCourseIdEditorRoute
@@ -1834,6 +1894,7 @@ interface AuthedAdminRouteChildren {
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminEditorRoute: AuthedAdminEditorRoute,
+  AuthedAdminScheduleRoute: AuthedAdminScheduleRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedAdminCourseIdEditorRoute: AuthedAdminCourseIdEditorRoute,
@@ -2027,6 +2088,17 @@ const ApiAdminDisciplinesRouteChildren: ApiAdminDisciplinesRouteChildren = {
 const ApiAdminDisciplinesRouteWithChildren =
   ApiAdminDisciplinesRoute._addFileChildren(ApiAdminDisciplinesRouteChildren)
 
+interface ApiAdminOfferingsRouteChildren {
+  ApiAdminOfferingsOfferingIdRoute: typeof ApiAdminOfferingsOfferingIdRoute
+}
+
+const ApiAdminOfferingsRouteChildren: ApiAdminOfferingsRouteChildren = {
+  ApiAdminOfferingsOfferingIdRoute: ApiAdminOfferingsOfferingIdRoute,
+}
+
+const ApiAdminOfferingsRouteWithChildren =
+  ApiAdminOfferingsRoute._addFileChildren(ApiAdminOfferingsRouteChildren)
+
 interface ApiAdminPersonasPersonaIdRouteChildren {
   ApiAdminPersonasPersonaIdDefaultRoute: typeof ApiAdminPersonasPersonaIdDefaultRoute
   ApiAdminPersonasPersonaIdDraftRoute: typeof ApiAdminPersonasPersonaIdDraftRoute
@@ -2163,6 +2235,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminDisciplinesRoute: ApiAdminDisciplinesRouteWithChildren,
   ApiAdminEditorRoute: ApiAdminEditorRoute,
   ApiAdminLibraryRoute: ApiAdminLibraryRoute,
+  ApiAdminOfferingsRoute: ApiAdminOfferingsRouteWithChildren,
   ApiAdminPersonasRoute: ApiAdminPersonasRouteWithChildren,
   ApiAdminRolePermissionsRoute: ApiAdminRolePermissionsRoute,
   ApiAdminUploadsRoute: ApiAdminUploadsRoute,

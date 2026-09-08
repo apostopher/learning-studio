@@ -19,11 +19,18 @@ import { AppHeaderContainer } from '../app-header-container';
 export const AdminShellLayout = ({
   canSeePeople,
   canSeeCourses,
+  canSeeSchedule,
   canSeeEditor,
   children,
 }: {
   canSeePeople: boolean;
   canSeeCourses: boolean;
+  /**
+   * Whether the schedule board has anything to show. Same condition as the
+   * Courses link — the two screens answer different questions about the same
+   * set of courses, so one is never useful without the other.
+   */
+  canSeeSchedule: boolean;
   /**
    * Whether the org-level knowledge library editor has anything to show.
    *
@@ -54,6 +61,9 @@ export const AdminShellLayout = ({
     >
       <div className="flex gap-1 px-4 py-2">
         {canSeeCourses && <AdminNavLink to="/admin">Courses</AdminNavLink>}
+        {canSeeSchedule && (
+          <AdminNavLink to="/admin/schedule">Schedule</AdminNavLink>
+        )}
         {canSeeEditor && (
           // Not "Library": the editor's own left pane is already called that,
           // and a nav item sharing the name would read as a link to the pane
@@ -61,13 +71,16 @@ export const AdminShellLayout = ({
           <AdminNavLink to="/admin/editor">Knowledge library</AdminNavLink>
         )}
         {canSeePeople && <AdminNavLink to="/admin/users">People</AdminNavLink>}
-        {!canSeeCourses && !canSeeEditor && !canSeePeople && (
-          // Not a bare strip: an actor with no section at all is told why,
-          // in text a screen reader reaches like any other nav content.
-          <p className="px-3 py-1.5 text-secondary text-sm">
-            No admin sections are available with your current permissions.
-          </p>
-        )}
+        {!canSeeCourses &&
+          !canSeeSchedule &&
+          !canSeeEditor &&
+          !canSeePeople && (
+            // Not a bare strip: an actor with no section at all is told why,
+            // in text a screen reader reaches like any other nav content.
+            <p className="px-3 py-1.5 text-secondary text-sm">
+              No admin sections are available with your current permissions.
+            </p>
+          )}
       </div>
     </nav>
     <div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -87,7 +100,7 @@ const AdminNavLink = ({
     // `startViewTransition` (TanStack Router calls it; React's
     // `<ViewTransition>` is canary-only and this app is on stable 19.2).
     //
-    // A FADE, not a directional slide. These four sections are lateral — no
+    // A FADE, not a directional slide. These sections are lateral — no
     // one of them is "deeper" than another — and a slide would imply a spatial
     // relationship that does not exist. Slides are for list-to-detail.
     //

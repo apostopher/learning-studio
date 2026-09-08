@@ -2,6 +2,15 @@
 export const dataKeys = {
   adminCourses: () => ['admin', 'courses'] as const,
   /**
+   * Offerings for one date window. The window is IN the key: two windows are
+   * genuinely different result sets, and sharing one entry between them would
+   * show the previous window's bars until a refetch landed.
+   */
+  offerings: (from: string, to: string) =>
+    ['admin', 'offerings', from, to] as const,
+  /** Every window at once — the prefix a write invalidates. */
+  allOfferings: () => ['admin', 'offerings'] as const,
+  /**
    * Every per-course board at once — the prefix `courseBoard` is built on.
    *
    * Exists because a lesson is org-owned and can be taught by several courses:

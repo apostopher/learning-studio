@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { personLabel } from '#/lib/person-label';
 import { dataKeys } from '#/data-hooks/keys';
 import {
   type LibraryLesson,
@@ -417,15 +418,14 @@ export type DisciplineStaffCandidate = z.infer<typeof staffCandidateSchema>;
  *
  * Exported rather than kept private to one screen because two pickers show the
  * same people — the disciplines page and the editor's create dialog — and a
- * second copy is a second place for the fallback rule to drift.
+ * second copy is a second place for the fallback rule to drift. The rule
+ * itself lives in `personLabel` so the offerings query can build the same
+ * labels on the server without importing this module.
  */
 export function staffCandidateLabel(
   candidate: DisciplineStaffCandidate,
 ): string {
-  const name = [candidate.firstName, candidate.lastName]
-    .filter((part): part is string => Boolean(part?.trim()))
-    .join(' ');
-  return name ? `${name} (${candidate.email})` : candidate.email;
+  return personLabel(candidate);
 }
 
 /**

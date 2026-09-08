@@ -1,6 +1,7 @@
 import { desc, relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  date,
   index,
   integer,
   json,
@@ -68,7 +69,118 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   fileAssignments: many(blobFileAssignmentsTable),
   onboarding: many(courseOnboardingTable),
   newsSources: many(newsSourcesTable),
+  offerings: many(offeringsTable),
 }));
+
+/**
+ * A scheduled instance of a course — an OFFERING.
+ *
+ * Terminology, because this word is overloaded in this codebase: the editor's
+ * course rail calls a course an "offering" (see `add-course-button.tsx`) on
+ * the theory that a two-week variant and a full course are separate rows in
+ * `courses`. That is a different sense of the word from this table. Here a
+ * course is the template — what is taught — and an offering is one dated run
+ * of it: the same course scheduled in September and again in November is two
+ * rows here and one row in `courses`.
+ *
+ * `date`, not `timestamp`. An offering starts on a calendar day: a run
+ * beginning 7 September begins on the 7th for everyone, and storing an
+ * instant would shift it either side of midnight depending on the reader's
+ * zone. `mode: 'string'` keeps it as 'yyyy-MM-dd' end to end, which is also
+ * exactly the shape of `CalendarDay.key` on the schedule grid, so no
+ * conversion sits between the column and the cell it is drawn in.
+ *
+ * Not org-scoped, matching `listAdminCourses`: the course a row points at
+ * already carries whatever org scoping exists, so a second copy here could
+ * only disagree with it.
+ */
+export const offeringsTable = pgTable(
+  'offerings',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    startsOn: date('starts_on', { mode: 'string' }).notNull(),
+    /**
+     * Inclusive: an offering that starts and ends on the same day is one day
+     * long, not zero. The grid draws a segment on every day from `startsOn` to
+     * `endsOn` inclusive, so treating it as exclusive would silently drop the
+     * final day off every bar.
+     */
+    endsOn: date('ends_on', { mode: 'string' }).notNull(),
+    /** Who scheduled it. Kept for attribution; nullable for imported rows. */
+    createdBy: varchar('created_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('offerings_course_id_idx').on(table.courseId),
+    // The grid loads a date WINDOW, so the range scan is the hot path.
+    index('offerings_starts_on_idx').on(table.startsOn),
+  ],
+);
+
+export const offeringsTableRelations = relations(
+  offeringsTable,
+  ({ one, many }) => ({
+    course: one(coursesTable, {
+      fields: [offeringsTable.courseId],
+      references: [coursesTable.id],
+    }),
+    users: many(offeringUsersTable),
+  }),
+);
+
+/**
+ * Who is on an offering.
+ *
+ * Attached to the OFFERING, not to the course: the same person can sit the
+ * September run and not the November one, and a course-level assignment could
+ * not express that. This is the table the headcount on a calendar bar counts.
+ *
+ * `userId` (the auth id) rather than `user_profiles.id`, matching
+ * `course_staff` — every other membership table in this schema joins on that
+ * column, and mixing the two keys is how a join silently returns nothing.
+ */
+export const offeringUsersTable = pgTable(
+  'offering_users',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    offeringId: integer('offering_id')
+      .notNull()
+      .references(() => offeringsTable.id, { onDelete: 'cascade' }),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    /** Acting admin's user id. */
+    assignedBy: varchar('assigned_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Assigning the same person twice is a no-op, not a second seat.
+    uniqueIndex('offering_users_offering_user_idx').on(
+      table.offeringId,
+      table.userId,
+    ),
+    index('offering_users_offering_id_idx').on(table.offeringId),
+    index('offering_users_user_id_idx').on(table.userId),
+  ],
+);
+
+export const offeringUsersTableRelations = relations(
+  offeringUsersTable,
+  ({ one }) => ({
+    offering: one(offeringsTable, {
+      fields: [offeringUsersTable.offeringId],
+      references: [offeringsTable.id],
+    }),
+    user: one(userProfileTable, {
+      fields: [offeringUsersTable.userId],
+      references: [userProfileTable.userId],
+    }),
+  }),
+);
 
 export const modulesTable = pgTable('modules', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
