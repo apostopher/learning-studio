@@ -1,7 +1,6 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom, useSetAtom } from 'jotai';
-import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -67,28 +66,33 @@ export const RenameDisciplineDialogContainer = () => {
   );
   const isLoadingExperts = target !== null && discipline === null;
 
+  /**
+   * Seeded by react-hook-form itself once the target AND its roster are both
+   * known — the form is mounted once at the editor root and outlives every
+   * opening, so its defaults are read long before any discipline is chosen,
+   * and the roster arrives a request later than the name does.
+   *
+   * `values` rather than a seeding effect, per docs/use-effect-rules.md. RHF
+   * deep-compares it, which is precisely what the effect's dependency list was
+   * hand-rolling by serialising the roster to `userId` joins: a refetch
+   * returning equal data is a no-op, so a half-edited picker is not reset
+   * under the user. `undefined` while the roster is still loading leaves
+   * `defaultValues` standing, which is what the old early-return did.
+   *
+   * `keepDirtyValues` covers the case the effect could not: a refetch that
+   * returns genuinely DIFFERENT data mid-edit now updates the untouched field
+   * and leaves the one being edited alone, instead of overwriting both.
+   */
   const form = useForm<EditDisciplineFormValues>({
     resolver: zodResolver(editDisciplineFormSchema),
     mode: 'onSubmit',
     defaultValues: { name: '', experts: [] },
+    values:
+      target && !isLoadingExperts
+        ? { name: target.name, experts: currentExperts }
+        : undefined,
+    resetOptions: { keepDirtyValues: true },
   });
-
-  const { reset } = form;
-  // Seeds the fields once the target AND its roster are both known. The form
-  // is mounted once at the editor root and outlives every opening, so its
-  // defaults are read long before any discipline is chosen — and the roster
-  // arrives a request later than the name does.
-  //
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialised roster, not the array identity, or a refetch returning equal data would reset a half-edited picker under the user
-  useEffect(() => {
-    if (!target || isLoadingExperts) return;
-    reset({ name: target.name, experts: currentExperts });
-  }, [
-    target,
-    isLoadingExperts,
-    reset,
-    currentExperts.map((e) => e.userId).join(),
-  ]);
 
   const onOpenChange = (next: boolean) => {
     if (!next) {

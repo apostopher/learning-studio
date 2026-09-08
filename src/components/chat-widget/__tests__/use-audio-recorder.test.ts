@@ -147,35 +147,68 @@ describe('useAudioRecorder', () => {
     );
   });
 
-  it.skip('sets permission-denied when getUserMedia rejects with NotAllowedError', async () => {
+  it.skip('reports permission-denied when getUserMedia rejects with NotAllowedError', async () => {
     installMediaMocks(() => {
       const err = new Error('denied');
       err.name = 'NotAllowedError';
       return Promise.reject(err);
     });
 
-    const { result } = renderHook(() => useAudioRecorder());
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioRecorder({ onError }));
     await act(async () => {
       await result.current.start();
     });
 
-    expect(result.current.error).toBe('permission-denied');
+    expect(onError).toHaveBeenCalledWith('permission-denied');
     expect(result.current.isRecording).toBe(false);
   });
 
-  it.skip('sets no-microphone when getUserMedia rejects with NotFoundError', async () => {
+  // Skipped like every other renderHook case in this file: the react-compiler
+  // + vitest setup nulls the hook dispatcher, so `useAudioRecorder` cannot be
+  // rendered here at all (see component-render-test-constraints). The
+  // assertions are written against the callback so they are ready the moment
+  // that harness limitation lifts.
+  //
+  // The failure that used to be silent: as an `error` FIELD, a second identical
+  // rejection left the value unchanged, so the effect watching it never re-ran
+  // and the second denial announced nothing.
+  it.skip('reports every failure, including an identical one twice running', async () => {
+    installMediaMocks(() => {
+      const err = new Error('denied');
+      err.name = 'NotAllowedError';
+      return Promise.reject(err);
+    });
+
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioRecorder({ onError }));
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(onError.mock.calls).toEqual([
+      ['permission-denied'],
+      ['permission-denied'],
+    ]);
+  });
+
+  it.skip('reports no-microphone when getUserMedia rejects with NotFoundError', async () => {
     installMediaMocks(() => {
       const err = new Error('no mic');
       err.name = 'NotFoundError';
       return Promise.reject(err);
     });
 
-    const { result } = renderHook(() => useAudioRecorder());
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioRecorder({ onError }));
     await act(async () => {
       await result.current.start();
     });
 
-    expect(result.current.error).toBe('no-microphone');
+    expect(onError).toHaveBeenCalledWith('no-microphone');
   });
 
   it.skip('sets transcription-failed when the API returns non-ok', async () => {
@@ -185,19 +218,20 @@ describe('useAudioRecorder', () => {
       vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
     );
 
-    const { result } = renderHook(() => useAudioRecorder());
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioRecorder({ onError }));
     await act(async () => {
       await result.current.start();
     });
 
     act(() => result.current.stop());
     await waitFor(() =>
-      expect(result.current.error).toBe('transcription-failed'),
+      expect(onError).toHaveBeenCalledWith('transcription-failed'),
     );
     await waitFor(() => expect(result.current.isTranscribing).toBe(false));
   });
 
-  it.skip('reset() clears final and error', async () => {
+  it.skip('reset() clears final', async () => {
     installMediaMocks();
     vi.stubGlobal(
       'fetch',
@@ -216,7 +250,6 @@ describe('useAudioRecorder', () => {
 
     act(() => result.current.reset());
     expect(result.current.final).toBe('');
-    expect(result.current.error).toBe(null);
   });
 
   it.skip('ignores start() if a recorder is already active', async () => {
@@ -267,7 +300,8 @@ describe('useAudioRecorder', () => {
       }),
     );
 
-    const { result } = renderHook(() => useAudioRecorder());
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAudioRecorder({ onError }));
 
     await act(async () => {
       await result.current.start();
@@ -281,7 +315,7 @@ describe('useAudioRecorder', () => {
     });
 
     expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toBe('too-long');
+    expect(onError).toHaveBeenCalledWith('too-long');
 
     vi.useRealTimers();
   });

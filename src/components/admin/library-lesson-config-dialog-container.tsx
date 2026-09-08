@@ -62,12 +62,21 @@ export const LibraryLessonConfigDialogContainer = () => {
     {
       value: 'details',
       title: 'Details',
-      content: lesson && <LibraryDetailsSectionContainer lesson={lesson} />,
+      // `key` is load-bearing, not a list artefact: this modal is mounted once
+      // for the whole editor and re-pointed at a different lesson, so without
+      // it the sections would keep the previous lesson's form state. Keying on
+      // the id is what docs/use-effect-rules.md prescribes in place of an
+      // effect that resets state when a prop changes.
+      content: lesson && (
+        <LibraryDetailsSectionContainer key={lesson.id} lesson={lesson} />
+      ),
     },
     {
       value: 'material',
       title: 'Content',
-      content: lesson && <MaterialSectionContainer lesson={lesson} />,
+      content: lesson && (
+        <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+      ),
     },
   ];
 

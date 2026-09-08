@@ -39,32 +39,49 @@ export function ChatWidgetInput({ onSend, isLoading }: ChatWidgetInputProps) {
     resolver: zodResolver(formSchema),
   });
 
-  const recorder = useAudioRecorder();
+  const recorder = useAudioRecorder({
+    // Announced from the callback rather than from an effect watching an
+    // `error` field: a toast is a response to something happening, which is
+    // the event-handler case in docs/use-effect-rules.md. It also fixes a
+    // silent second failure — as state, two identical errors in a row never
+    // changed the value, so the effect never re-ran.
+    onError: (error) => {
+      if (error === 'permission-denied') {
+        toast.error(
+          'Microphone access blocked. Allow access in your browser settings.',
+        );
+      } else if (error === 'no-microphone') {
+        toast.error('No microphone detected.');
+      } else if (error === 'transcription-failed') {
+        toast.error('Transcription failed. Try again.');
+      } else if (error === 'too-long') {
+        toast.error('Recording capped at 90 seconds.');
+      } else {
+        toast.error('Voice input failed. Please try again.');
+      }
+    },
+  });
   const reducedMotion = useReducedMotion() ?? false;
 
-  // A finished transcript is sent exactly like a typed message.
+  /**
+   * A finished transcript is sent exactly like a typed message.
+   *
+   * This one stays an effect deliberately. The mic is not disabled while a
+   * reply streams, so a transcript can land mid-reply — and the condition it
+   * waits for (`isLoading` going false) is not an event the recorder can fire.
+   * Moving the send into an `onTranscript` callback would have to drop those
+   * transcripts on the floor instead of holding them until the reply finishes.
+   *
+   * NOTE: typed messages are DROPPED in that same window (see `onSubmit`)
+   * while spoken ones are deferred. That inconsistency predates this comment
+   * and is a product decision, not a refactor.
+   */
   useEffect(() => {
     if (!recorder.final || isLoading) return;
     const text = recorder.final.trim();
     recorder.reset();
     if (text) onSend(text);
   }, [recorder.final, isLoading, onSend, recorder.reset]);
-
-  useEffect(() => {
-    if (recorder.error === 'permission-denied') {
-      toast.error(
-        'Microphone access blocked. Allow access in your browser settings.',
-      );
-    } else if (recorder.error === 'no-microphone') {
-      toast.error('No microphone detected.');
-    } else if (recorder.error === 'transcription-failed') {
-      toast.error('Transcription failed. Try again.');
-    } else if (recorder.error === 'too-long') {
-      toast.error('Recording capped at 90 seconds.');
-    } else if (recorder.error === 'other') {
-      toast.error('Voice input failed. Please try again.');
-    }
-  }, [recorder.error]);
 
   const onSubmit = (data: FormData) => {
     // Guard here too (not just the disabled button) so Enter can't send while a

@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
@@ -41,23 +40,33 @@ export const MaterialSectionContainer = ({
   const parse = useParseLessonMaterial(lesson.id);
   const save = useSaveLessonMaterial(lesson.id);
 
+  /**
+   * Hydrated by react-hook-form itself, not by an effect.
+   *
+   * `values` is RHF's own answer to "this form is filled from server data":
+   * it reseeds when the data arrives and again whenever it genuinely changes,
+   * which is what the hydrate-once effect and its `hydratedForLessonId` ref
+   * were hand-rolling — the "you might not need an effect" shape from
+   * docs/use-effect-rules.md.
+   *
+   * `keepDirtyValues` is what makes it safe to reseed more than once, and it
+   * is strictly better than the old guard. The effect refused EVERY reseed
+   * after the first, so a background refetch could never bring in a change;
+   * this refuses only the fields the admin has actually touched, so their
+   * unsaved edits survive while untouched fields pick up new server data.
+   *
+   * While the query is loading — and for a lesson that has no material at all —
+   * there is nothing to supply, so `defaultValues` (EMPTY) stands.
+   */
   const form = useForm<LessonMaterialGeneration>({
     resolver: zodResolver(LessonMaterialGenerationSchema),
     defaultValues: EMPTY,
+    // `?? undefined`, not the raw value: the query resolves to `null` for a
+    // lesson with no material yet, and RHF reads only `undefined` as "no
+    // values supplied". Passing null would try to reseed the form with it.
+    values: existing.data ?? undefined,
+    resetOptions: { keepDirtyValues: true },
   });
-
-  const hydratedForLessonId = useRef<number | null>(null);
-  const existingData = existing.data;
-  // Hydrate the form once per lesson (when its material first loads). Background
-  // refetches of the same lesson must NOT reset — that would wipe unsaved edits.
-  // A lesson switch re-hydrates because hydratedForLessonId no longer matches.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable; intentionally hydrate once per lesson.
-  useEffect(() => {
-    if (existing.isLoading) return;
-    if (hydratedForLessonId.current === lesson.id) return;
-    hydratedForLessonId.current = lesson.id;
-    form.reset(existingData ?? EMPTY);
-  }, [lesson.id, existing.isLoading, existingData]);
 
   const attachments = form.watch('attachments') ?? [];
 
@@ -70,7 +79,12 @@ export const MaterialSectionContainer = ({
         error={parse.error?.message}
         onFileSelected={(file) =>
           parse.mutate(file, {
-            onSuccess: (parsed) => form.reset({ ...EMPTY, ...parsed }),
+            // `keepDefaultValues` so the parsed content reads as DIRTY
+            // against the original defaults — that is what `keepDirtyValues`
+            // above then protects from being overwritten by a background
+            // refetch before the admin has saved it.
+            onSuccess: (parsed) =>
+              form.reset({ ...EMPTY, ...parsed }, { keepDefaultValues: true }),
           })
         }
       />

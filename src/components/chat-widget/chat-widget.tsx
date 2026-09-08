@@ -111,6 +111,15 @@ function OnboardingChat({
   // continued elsewhere" — otherwise the failure is invisible, and on a 409
   // specifically the hook has already rolled back the learner's optimistic
   // message, so without this toast their typed reply just silently vanishes.
+  //
+  // Stays an effect, deliberately. docs/use-effect-rules.md would put a toast
+  // in the handler that caused it, and three of the four errors folded into
+  // `activeError` are mutations that do have an `onError`. The fourth is the
+  // useQuery, and TanStack Query v5 removed `onError` from queries — a query
+  // failure can ONLY be observed by watching its error state. Moving the
+  // three would leave the toast split across two mechanisms with a shared
+  // "which error is newest" ordering (`errorSeqRef`) to keep in step between
+  // them, which is worse than one effect over the single derived value.
   useEffect(() => {
     if (!error) return;
     toast.error(

@@ -1,19 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { Loader2, Pencil, RotateCcw } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import {
   videoDraftDetectionAtom,
-  videoPlaybackForbiddenAtom,
-  videoReplaceModeAtom,
+  videoPlaybackForbiddenLessonIdAtom,
+  videoReplaceModeLessonIdAtom,
 } from '#/atoms/admin';
 import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
-import type { BoardLesson } from '#/lib/admin-schemas';
+import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
@@ -50,40 +50,47 @@ export const VideoSectionContainer = ({
   courseId,
   lesson,
 }: VideoSectionContainerProps) => {
-  const [draftDetection, setDraftDetection] = useAtom(videoDraftDetectionAtom);
-  const [replaceMode, setReplaceMode] = useAtom(videoReplaceModeAtom);
-  const [playbackForbidden, setPlaybackForbidden] = useAtom(
-    videoPlaybackForbiddenAtom,
+  const [storedDraft, setStoredDraft] = useAtom(videoDraftDetectionAtom);
+  const [replaceModeLessonId, setReplaceModeLessonId] = useAtom(
+    videoReplaceModeLessonIdAtom,
   );
+  const [playbackForbiddenLessonId, setPlaybackForbiddenLessonId] = useAtom(
+    videoPlaybackForbiddenLessonIdAtom,
+  );
+
+  // Derived, not reset by an effect. Each of these atoms carries the lesson it
+  // belongs to, so a value left behind by the previously configured lesson is
+  // simply not ours — see the atoms' own comment, and
+  // docs/use-effect-rules.md on resetting state when a prop changes.
+  const replaceMode = replaceModeLessonId === lesson.id;
+  const playbackForbidden = playbackForbiddenLessonId === lesson.id;
+  const setReplaceMode = (next: boolean) =>
+    setReplaceModeLessonId(next ? lesson.id : null);
+  const setPlaybackForbidden = (next: boolean) =>
+    setPlaybackForbiddenLessonId(next ? lesson.id : null);
+
+  const ownDraft = storedDraft?.lessonId === lesson.id ? storedDraft : null;
+  /**
+   * The draft, but only while it is still ahead of the lesson record.
+   *
+   * Once the board refetches and the lesson carries the same provider/ref, the
+   * draft and the record agree and the record becomes the source of truth.
+   * That used to be a second effect clearing the atom on the match; as a
+   * derivation it cannot race the refetch, and there is no window where both
+   * are live and disagreeing.
+   */
+  const draftDetection =
+    ownDraft &&
+    (lesson.videoProvider !== ownDraft.provider ||
+      lesson.videoRef !== ownDraft.ref)
+      ? ownDraft
+      : null;
+  const setDraftDetection = (
+    next: { provider: ProviderId; ref: string } | null,
+  ) => setStoredDraft(next ? { lessonId: lesson.id, ...next } : null);
 
   const credentials = useCourseCredentials(courseId);
   const setLessonVideo = useSetLessonVideo(courseId);
-
-  // Reset the modal's transient state whenever it's pointed at a different
-  // lesson. lesson.id isn't read in the body — it's the trigger, not a value.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lesson.id intentionally re-triggers the reset on lesson switch even though it isn't read in the body.
-  useEffect(() => {
-    setDraftDetection(null);
-    setReplaceMode(false);
-    setPlaybackForbidden(false);
-  }, [lesson.id, setDraftDetection, setReplaceMode, setPlaybackForbidden]);
-
-  // Once the board confirms the draft (refetches with matching provider/ref),
-  // drop the local draft so the lesson's own fields become the source of truth.
-  useEffect(() => {
-    if (
-      draftDetection &&
-      lesson.videoProvider === draftDetection.provider &&
-      lesson.videoRef === draftDetection.ref
-    ) {
-      setDraftDetection(null);
-    }
-  }, [
-    lesson.videoProvider,
-    lesson.videoRef,
-    draftDetection,
-    setDraftDetection,
-  ]);
 
   const activeProvider = draftDetection?.provider ?? lesson.videoProvider;
   const activeRef = draftDetection?.ref ?? lesson.videoRef;

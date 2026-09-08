@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 const MAX_RECORDING_MS = 90_000;
 const TRANSCRIBE_ENDPOINT = '/api/chat/transcribe';
@@ -16,12 +22,52 @@ export interface UseAudioRecorderResult {
   isRecording: boolean;
   isTranscribing: boolean;
   final: string;
-  error: AudioRecorderError;
   start: () => Promise<void>;
   stop: () => void;
   cancel: () => void;
   reset: () => void;
 }
+
+export interface UseAudioRecorderOptions {
+  /**
+   * Called once, at the moment a recording attempt fails.
+   *
+   * A callback rather than an `error` field on the result, because the only
+   * thing any caller does with a recorder error is announce it — and an error
+   * held as state has to be read by an effect watching it, which is the
+   * "you might not need an effect" shape from docs/use-effect-rules.md. It
+   * also made the announcement dependent on the value CHANGING: two identical
+   * failures in a row (deny the mic prompt twice) left `error` on the same
+   * string, so the effect never re-ran and the second attempt failed silently.
+   */
+  onError?: (error: NonNullable<AudioRecorderError>) => void;
+}
+
+/**
+ * Whether this browser can record audio at all.
+ *
+ * Read through `useSyncExternalStore` rather than detected in a mount effect
+ * that calls `setIsSupported`. That effect was the "initializing the
+ * application" shape from docs/use-effect-rules.md, and the reason it was
+ * reached for is SSR: a plain lazy `useState` initializer runs on the server,
+ * where `navigator` does not exist, and would then hydrate `false` forever.
+ *
+ * `useSyncExternalStore` is built for exactly that split — React reads
+ * `getServerSnapshot` while rendering on the server and hydrating, then reads
+ * the real snapshot once mounted, with no hydration mismatch and no extra
+ * render pass that we have to schedule ourselves.
+ *
+ * `subscribe` is a no-op: support is fixed for the lifetime of the document,
+ * so there is nothing to subscribe to. It still has to be a STABLE function
+ * identity or React resubscribes on every render.
+ */
+const subscribeToMicSupport = () => () => {};
+const getMicSupportSnapshot = () =>
+  typeof window !== 'undefined' &&
+  !!navigator.mediaDevices?.getUserMedia &&
+  typeof MediaRecorder !== 'undefined';
+/** No microphone exists during SSR, and claiming otherwise breaks hydration. */
+const getMicSupportServerSnapshot = () => false;
 
 export function detectMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return '';
@@ -54,12 +100,29 @@ export async function transcribeAudio(
   return data.transcript ?? '';
 }
 
-export function useAudioRecorder(): UseAudioRecorderResult {
-  const [isSupported, setIsSupported] = useState(false);
+export function useAudioRecorder({
+  onError,
+}: UseAudioRecorderOptions = {}): UseAudioRecorderResult {
+  const isSupported = useSyncExternalStore(
+    subscribeToMicSupport,
+    getMicSupportSnapshot,
+    getMicSupportServerSnapshot,
+  );
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [final, setFinal] = useState('');
-  const [error, setError] = useState<AudioRecorderError>(null);
+
+  // Latched in a ref, not read from the closure: `start`/`transcribeChunks`
+  // are `useCallback`s captured by MediaRecorder's own event handlers, so a
+  // caller passing an inline arrow would either go stale inside them or
+  // re-create the recorder on every parent render.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+  const emitError = useCallback((kind: NonNullable<AudioRecorderError>) => {
+    onErrorRef.current?.(kind);
+  }, []);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -69,14 +132,6 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   const mimeTypeRef = useRef<string>('');
   const startingRef = useRef(false);
   const discardRef = useRef(false);
-
-  useEffect(() => {
-    setIsSupported(
-      typeof window !== 'undefined' &&
-        !!navigator.mediaDevices?.getUserMedia &&
-        typeof MediaRecorder !== 'undefined',
-    );
-  }, []);
 
   const releaseMedia = useCallback(() => {
     if (timerRef.current) {
@@ -114,12 +169,12 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       setFinal(transcript);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
-      setError('transcription-failed');
+      emitError('transcription-failed');
     } finally {
       abortRef.current = null;
       setIsTranscribing(false);
     }
-  }, []);
+  }, [emitError]);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
@@ -175,7 +230,6 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       setIsTranscribing(false);
     }
     setFinal('');
-    setError(null);
 
     let stream: MediaStream;
     try {
@@ -183,11 +237,11 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     } catch (err) {
       const name = (err as Error).name;
       if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setError('permission-denied');
+        emitError('permission-denied');
       } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        setError('no-microphone');
+        emitError('no-microphone');
       } else {
-        setError('other');
+        emitError('other');
       }
       startingRef.current = false;
       discardRef.current = false;
@@ -233,18 +287,17 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     streamRef.current = stream;
     recorderRef.current = recorder;
     timerRef.current = setTimeout(() => {
-      setError('too-long');
+      emitError('too-long');
       stop();
     }, MAX_RECORDING_MS);
 
     recorder.start();
     setIsRecording(true);
     startingRef.current = false;
-  }, [releaseMedia, stop, transcribeChunks]);
+  }, [releaseMedia, stop, transcribeChunks, emitError]);
 
   const reset = useCallback(() => {
     setFinal('');
-    setError(null);
   }, []);
 
   useEffect(() => {
@@ -272,7 +325,6 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     isRecording,
     isTranscribing,
     final,
-    error,
     start,
     stop,
     cancel,

@@ -197,28 +197,56 @@ export const newsSourcePanelAtom = atom<{
 } | null>(null);
 
 /**
+ * The Video tab's three pieces of transient state, each STAMPED WITH THE
+ * LESSON THEY BELONG TO rather than reset when the modal is re-pointed.
+ *
+ * Only one lesson-config modal is open at a time, so a single atom — not a
+ * family — is still enough. The lesson id is what makes it safe: the reader
+ * derives "is this mine?" during render, so a value left behind by the
+ * previously configured lesson is ignored rather than needing an effect to
+ * clear it. That effect was the "resetting state when a prop changes"
+ * anti-pattern from docs/use-effect-rules.md, and a family keyed by lesson
+ * would have swapped it for state that outlives the modal entirely.
+ *
+ * Closing the modal clears all three through `resetVideoSectionAtom` below —
+ * an event, which is where that kind of reset belongs.
+ */
+
+/**
  * Provider/ref detected from a video URL the admin just typed into the Video
  * tab but hasn't been confirmed by the board yet (the source of truth is the
  * lesson record once `useSetLessonVideo` succeeds and the board refetches).
- * Only one lesson-config modal is open at a time, so a single atom — not a
- * family — is enough. Reset when the modal switches lessons or the draft is
- * confirmed by the refetched board.
  */
 export const videoDraftDetectionAtom = atom<{
+  lessonId: number;
   provider: ProviderId;
   ref: string;
 } | null>(null);
 
-/** Whether the Video tab is showing the "replace video URL" form over an already-configured video. */
-export const videoReplaceModeAtom = atom(false);
+/**
+ * The lesson whose Video tab is showing the "replace video URL" form over an
+ * already-configured video, or null when no tab is.
+ */
+export const videoReplaceModeLessonIdAtom = atom<number | null>(null);
 
 /**
- * Set when the browser's own request for a resolved playback URL is refused
+ * The lesson whose browser request for a resolved playback URL was refused
  * (401/403). This is the only signal that a Mux signing key has been revoked:
  * Mux JWTs are signed locally on our server, so playback resolution succeeds and
- * only Mux's edge rejects the token. Reset when the modal switches lessons.
+ * only Mux's edge rejects the token.
  */
-export const videoPlaybackForbiddenAtom = atom(false);
+export const videoPlaybackForbiddenLessonIdAtom = atom<number | null>(null);
+
+/**
+ * Clear the Video tab's transient state. Called when the lesson-config modal
+ * closes, so reopening the same lesson starts clean instead of restoring a
+ * half-finished "replace video" form.
+ */
+export const resetVideoSectionAtom = atom(null, (_get, set) => {
+  set(videoDraftDetectionAtom, null);
+  set(videoReplaceModeLessonIdAtom, null);
+  set(videoPlaybackForbiddenLessonIdAtom, null);
+});
 
 /** Course whose training-documents (AI embeddings) modal is open. */
 export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);

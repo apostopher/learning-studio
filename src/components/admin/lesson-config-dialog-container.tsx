@@ -1,6 +1,6 @@
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 
-import { configureLessonIdAtom } from '@/atoms/admin';
+import { configureLessonIdAtom, resetVideoSectionAtom } from '@/atoms/admin';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { ConfigSectionContainer } from './lesson-config/config-section-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
@@ -19,6 +19,7 @@ export const LessonConfigDialogContainer = ({
   modules: BoardModule[];
 }) => {
   const [lessonId, setLessonId] = useAtom(configureLessonIdAtom);
+  const resetVideoSection = useSetAtom(resetVideoSectionAtom);
   const parentModule =
     modules.find((m) => m.lessons.some((l) => l.id === lessonId)) ?? null;
   const lesson = parentModule?.lessons.find((l) => l.id === lessonId) ?? null;
@@ -27,20 +28,32 @@ export const LessonConfigDialogContainer = ({
     {
       value: 'video',
       title: 'Video',
+      // `key`, here and below, is load-bearing rather than a list artefact:
+      // this modal is mounted once and re-pointed at a different lesson, so
+      // without it each section would carry the previous lesson's form state
+      // over. It is what docs/use-effect-rules.md prescribes instead of an
+      // effect that resets state when a prop changes.
       content: lesson && (
-        <VideoSectionContainer courseId={courseId} lesson={lesson} />
+        <VideoSectionContainer
+          key={lesson.id}
+          courseId={courseId}
+          lesson={lesson}
+        />
       ),
     },
     {
       value: 'material',
       title: 'Content',
-      content: lesson && <MaterialSectionContainer lesson={lesson} />,
+      content: lesson && (
+        <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+      ),
     },
     {
       value: 'config',
       title: 'Config',
       content: lesson && parentModule && (
         <ConfigSectionContainer
+          key={lesson.id}
           courseId={courseId}
           lesson={lesson}
           module={parentModule}
@@ -53,7 +66,13 @@ export const LessonConfigDialogContainer = ({
     <SectionedConfigModal
       open={lessonId !== null}
       onOpenChange={(open) => {
-        if (!open) setLessonId(null);
+        if (!open) {
+          setLessonId(null);
+          // Cleared on the close EVENT, not from an effect watching the
+          // modal's open state — reopening the same lesson should not restore
+          // a half-finished "replace video" form.
+          resetVideoSection();
+        }
       }}
       title="Configure lesson"
       heading={lesson?.name ?? ''}

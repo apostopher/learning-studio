@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -42,15 +41,20 @@ export const LibraryDetailsSectionContainer = ({
     defaultValues: { name: lesson.name },
   });
 
-  const { reset } = form;
-  // Reseeds when the modal is pointed at a different lesson. The dialog is
-  // mounted once for the whole editor and outlives every opening, so the
-  // defaults above are read long before any lesson is chosen.
+  // No reseeding effect. The dialog is mounted once for the whole editor and
+  // outlives every opening, so this used to `reset({ name })` from an effect
+  // keyed on `lesson.id` and `lesson.name` — the "resetting state when a prop
+  // changes" anti-pattern from docs/use-effect-rules.md, and a live bug with
+  // it: `lesson.name` in the dependency list meant ANY refetch that
+  // re-delivered the row (a background revalidation, another admin's edit
+  // landing in the cache) reset the field under the cursor and discarded
+  // whatever was being typed.
   //
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lesson.id is not read in the body but IS the trigger — two lessons can share a name, and without it switching between them would keep the first one's unsaved draft in the field
-  useEffect(() => {
-    reset({ name: lesson.name });
-  }, [lesson.id, lesson.name, reset]);
+  // The fix the doc prescribes is a `key`: the caller mounts this with
+  // `key={lesson.id}`, so pointing the modal at a different lesson remounts
+  // it and `defaultValues` above does the seeding. Two lessons sharing a name
+  // are handled correctly by that (identity, not text, is the trigger), which
+  // the dependency list was only approximating.
 
   const onSubmitName = form.handleSubmit((values) => {
     if (values.name === lesson.name) return;

@@ -334,6 +334,8 @@ export function useOnboardingChat(courseSlug: string) {
 
   // `useQuery` (TanStack Query v5) has no `onError` callback, so its failure
   // is recorded from the `error` value itself rather than from a callback.
+  // This is the exception docs/use-effect-rules.md leaves room for: there is
+  // no event to hang this on, because the library no longer exposes one.
   useEffect(() => {
     if (query.error) recordFailure('query');
   }, [query.error, recordFailure]);
