@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { BoardCourse } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
 import { ScrollArea } from '../scroll-area';
+import { OptimizedPicture } from './optimized-picture';
 
 /**
  * One course's column in the course rail: a header naming the course, above
@@ -17,6 +18,11 @@ import { ScrollArea } from '../scroll-area';
  * halves of the editor read as one layout system. The name is clamped to fit
  * as it is; three icon buttons on the same line would eat the width that
  * clamping is already fighting for.
+ *
+ * The course's cover sits below that subheader, edge to edge. It is the one
+ * thing that tells two columns apart at a glance in a rail scrolled past the
+ * point where the names are readable, which is why it is worth the vertical
+ * space it costs.
  */
 export const CourseColumn = ({
   course,
@@ -59,38 +65,66 @@ export const CourseColumn = ({
    */
   expandedModuleIds?: number[];
   onExpandedModuleIdsChange?: (moduleIds: number[]) => void;
-}) => (
-  <section className="flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
-    <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
-      <ClampedText
-        text={course.name}
-        lines={1}
-        className="min-w-0 flex-1 font-semibold text-primary text-sm"
-      />
-      {configureSlot}
-    </header>
-    {actions && (
-      // A sibling of the header, outside the ScrollArea, so it stays put while
-      // the modules scroll.
-      <div className="flex items-center justify-end gap-1 border-gray-6 border-b bg-gray-2 px-2 py-1">
-        {actions}
-      </div>
-    )}
+}) => {
+  // A course with no cover renders no slot at all rather than a placeholder
+  // box: an empty grey rectangle in every column would cost the same vertical
+  // space as the thing it is standing in for and tell the reader nothing.
+  const hasCover = Boolean(course.imageUrlAvif ?? course.imageUrlWebp);
 
-    <ScrollArea
-      orientation="vertical"
-      className="flex-1"
-      viewportClassName="h-full"
-    >
-      <Accordion.Root
-        multiple
-        value={expandedModuleIds}
-        onValueChange={onExpandedModuleIdsChange}
-        className="flex flex-col"
+  return (
+    <section className="flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
+      <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
+        <ClampedText
+          text={course.name}
+          lines={1}
+          className="min-w-0 flex-1 font-semibold text-primary text-sm"
+        />
+        {configureSlot}
+      </header>
+      {actions && (
+        // A sibling of the header, outside the ScrollArea, so it stays put while
+        // the modules scroll.
+        <div className="flex items-center justify-end gap-1 border-gray-6 border-b bg-gray-2 px-2 py-1">
+          {actions}
+        </div>
+      )}
+
+      {hasCover && (
+        // Outside the ScrollArea, like the subheader above it: a cover that
+        // scrolled away would be missing exactly when the rail is scrolled and
+        // you most need to tell one column from another.
+        //
+        // `shrink-0` because this is a flex item in a full-height column — the
+        // modules below it are what should give up space when there is not
+        // enough, not the fixed-ratio image, which would otherwise squash.
+        <div className="shrink-0 overflow-hidden border-gray-6 border-b bg-gray-3">
+          <OptimizedPicture
+            avifUrl={course.imageUrlAvif}
+            webpUrl={course.imageUrlWebp}
+            // Decorative, deliberately: the course's name is announced directly
+            // above it, and `${course.name} cover` would make a screen reader
+            // read the same name twice for no added information.
+            alt=""
+            className="aspect-video w-full object-cover"
+          />
+        </div>
+      )}
+
+      <ScrollArea
+        orientation="vertical"
+        className="flex-1"
+        viewportClassName="h-full"
       >
-        {children}
-      </Accordion.Root>
-      {emptySlot && <div className="p-3">{emptySlot}</div>}
-    </ScrollArea>
-  </section>
-);
+        <Accordion.Root
+          multiple
+          value={expandedModuleIds}
+          onValueChange={onExpandedModuleIdsChange}
+          className="flex flex-col"
+        >
+          {children}
+        </Accordion.Root>
+        {emptySlot && <div className="p-3">{emptySlot}</div>}
+      </ScrollArea>
+    </section>
+  );
+};
