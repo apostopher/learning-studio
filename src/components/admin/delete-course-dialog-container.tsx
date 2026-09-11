@@ -46,7 +46,10 @@ export const DeleteCourseDialogContainer = ({
       onSuccess: () => {
         toast.success('Course deleted');
         onOpenChange(false);
-        if (navigateAfterDelete) navigate({ to: '/admin' });
+        // Back to the knowledge library — the course that was open here no
+        // longer exists to return to.
+        if (navigateAfterDelete)
+          navigate({ to: '/admin', search: { section: 'knowledge-library' } });
       },
     });
   });

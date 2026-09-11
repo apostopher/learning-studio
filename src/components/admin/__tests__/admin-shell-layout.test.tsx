@@ -10,6 +10,11 @@ import {
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  ADMIN_SECTION_LABELS,
+  type AdminSectionId,
+  visibleAdminSections,
+} from '#/lib/admin-sections';
 import { AdminShellLayout } from '../admin-shell-layout';
 
 vi.mock('../../logo', () => ({
@@ -24,11 +29,25 @@ vi.mock('../../../styles/theme.generated', () => ({
   logoDark: { kind: 'url', src: '/logo.png' },
 }));
 
+/** Every section, in nav order — what an admin is offered. */
+const ALL = visibleAdminSections({
+  'knowledge-library': true,
+  '3d-airmanship': true,
+  schedule: true,
+  people: true,
+});
+
+const sectionsOf = (...ids: AdminSectionId[]) =>
+  ids.map((id) => ({ id, label: ADMIN_SECTION_LABELS[id] }));
+
+/**
+ * `url` is the location the shell is rendered at — the nav's highlight comes
+ * from the router matching each link against it, so it is the only input that
+ * decides which section reads as current.
+ */
 const renderAdmin = async (
-  canSeePeople: boolean,
-  canSeeCourses = true,
-  canSeeEditor = false,
-  canSeeSchedule = canSeeCourses,
+  sections: { id: AdminSectionId; label: string }[] = ALL,
+  url = '/admin?section=knowledge-library',
 ) => {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const homeRoute = createRoute({
@@ -36,45 +55,35 @@ const renderAdmin = async (
     path: '/app',
     component: () => null,
   });
-  const usersRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/admin/users',
-    component: () => null,
-  });
-  const editorRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/admin/editor',
-    component: () => null,
-  });
-  const scheduleRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/admin/schedule',
-    component: () => null,
-  });
+  // Mirrors the real tree: the shell renders the nav around whichever child
+  // is showing — a section at `/admin` itself, or the course board, which is a
+  // screen you go INTO from a section.
   const adminRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin',
     component: () => (
-      <AdminShellLayout
-        canSeePeople={canSeePeople}
-        canSeeCourses={canSeeCourses}
-        canSeeSchedule={canSeeSchedule}
-        canSeeEditor={canSeeEditor}
-      >
-        <p>Course list</p>
+      <AdminShellLayout sections={sections}>
+        <Outlet />
       </AdminShellLayout>
     ),
+  });
+  const sectionRoute = createRoute({
+    getParentRoute: () => adminRoute,
+    path: '/',
+    component: () => <p>Section body</p>,
+  });
+  const boardRoute = createRoute({
+    getParentRoute: () => adminRoute,
+    path: '$courseId/editor',
+    component: () => <p>Section body</p>,
   });
 
   const router = createRouter({
     routeTree: rootRoute.addChildren([
       homeRoute,
-      usersRoute,
-      editorRoute,
-      scheduleRoute,
-      adminRoute,
+      adminRoute.addChildren([sectionRoute, boardRoute]),
     ]),
-    history: createMemoryHistory({ initialEntries: ['/admin'] }),
+    history: createMemoryHistory({ initialEntries: [url] }),
   });
 
   render(
@@ -83,23 +92,30 @@ const renderAdmin = async (
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   );
-  await waitFor(() => expect(screen.getByText('Course list')).toBeDefined());
+  await waitFor(() => expect(screen.getByText('Section body')).toBeDefined());
 };
+
+const navLinks = () =>
+  Array.from(
+    screen
+      .getByRole('navigation', { name: 'Admin sections' })
+      .querySelectorAll('a'),
+  );
 
 describe('AdminShellLayout', () => {
   /**
    * The requirement is that sign-out is reachable from every screen inside the
-   * app. Admin had no sign-out at all before this change, so this is the test
-   * that goes red if the header ever stops being mounted here.
+   * app. Admin had no sign-out at all before this was added, so this is the
+   * test that goes red if the header ever stops being mounted here.
    */
   it('puts a sign-out control on admin screens', async () => {
-    await renderAdmin(true);
+    await renderAdmin();
 
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined();
   });
 
   it('offers a way back to /app', async () => {
-    await renderAdmin(true);
+    await renderAdmin();
 
     const home = screen
       .getAllByRole('link')
@@ -108,58 +124,118 @@ describe('AdminShellLayout', () => {
   });
 
   /**
-   * The header is never permission-gated: an admin without `user:read`
-   * still needs to be able to leave.
+   * The header is never permission-gated: an admin whose only section is the
+   * library still needs to be able to leave.
    */
-  it('keeps sign-out reachable when the People link is hidden', async () => {
-    await renderAdmin(false);
+  it('keeps sign-out reachable when only one section is offered', async () => {
+    await renderAdmin(sectionsOf('knowledge-library'));
 
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined();
   });
 
   /**
-   * `canSeePeople` used to gate the entire `<nav>`, so an admin without
-   * `user:read` — the default, since `role_permissions` ships empty — lost
-   * the Courses link too and got a nav-less shell. Both links are conditional
-   * now, but each on its OWN destination: losing People must never take
-   * Courses with it.
+   * The nav renders the sections it is given, in the order it is given them —
+   * `ADMIN_SECTION_IDS` is the one place that order lives, and
+   * `admin-sections.test.ts` pins the order itself. This is the test that goes
+   * red if the layout sorts, groups or reverses them on the way out.
    */
-  it('keeps the Courses link when the actor cannot see People', async () => {
-    await renderAdmin(false);
+  it('reads knowledge library, 3D airmanship, schedule, people — in that order', async () => {
+    await renderAdmin();
 
-    expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
-    expect(screen.queryByRole('link', { name: 'People' })).toBeNull();
-  });
-
-  it('shows the People link when the actor can see People', async () => {
-    await renderAdmin(true);
-
-    expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
-    expect(screen.getByRole('link', { name: 'People' })).toBeDefined();
+    expect(navLinks().map((a) => a.textContent?.trim())).toEqual([
+      'Knowledge library',
+      '3D airmanship',
+      'Schedule',
+      'People',
+    ]);
   });
 
   /**
-   * `/admin` now admits course-scoped staff, so the Courses link stopped being
-   * unconditional: an admin with an empty grant set and no `course_staff` row
-   * gets a 403 from the course endpoint, and a link that bounces is worse than
-   * no link.
+   * Every link names its section, the default one included. All four share one
+   * pathname, so the search parameter is the only thing distinguishing them —
+   * and the router's match is a SUBSET test, in which an empty search is
+   * contained in every URL.
+   *
+   * Mutant seen RED: `search={section === DEFAULT_ADMIN_SECTION ? {} : { section }}`
+   * — a tidier-looking URL for the default section that makes its link read as
+   * active on all four, which the two highlight tests below then catch.
    */
-  it('hides the Courses link when the course index has nothing for the actor', async () => {
-    await renderAdmin(true, false);
+  it('links each section by query parameter, the default one included', async () => {
+    await renderAdmin();
 
-    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'People' })).toBeDefined();
+    expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
+      '/admin?section=knowledge-library',
+      '/admin?section=3d-airmanship',
+      '/admin?section=schedule',
+      '/admin?section=people',
+    ]);
   });
 
   /**
-   * A nav with no links must not be a bare strip — an actor who can reach
-   * neither section is told why, in text assistive tech reaches.
+   * The links must stay LINKS: a section is a URL, so it has to be
+   * middle-clickable, copyable and reachable with the keyboard as a link.
+   *
+   * Mutant this catches: nav items rewritten as buttons calling the nuqs
+   * setter, which looks identical and is none of those things.
    */
-  it('explains itself when neither section is available', async () => {
-    await renderAdmin(false, false);
+  it('renders sections as links, not buttons', async () => {
+    await renderAdmin();
 
-    expect(screen.queryAllByRole('link', { name: 'Courses' })).toHaveLength(0);
-    expect(screen.queryAllByRole('link', { name: 'People' })).toHaveLength(0);
+    expect(navLinks()).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Schedule' })).toBeNull();
+  });
+
+  /**
+   * The highlight is the only thing that says which section you are in, so it
+   * has to be said out loud too — `aria-current` for a screen reader, the
+   * `data-status` styling for everyone else. Both come from the router
+   * matching the link against the URL.
+   */
+  it('marks exactly the section named in the URL', async () => {
+    await renderAdmin(ALL, '/admin?section=schedule');
+
+    const current = navLinks().filter(
+      (a) => a.getAttribute('aria-current') === 'page',
+    );
+    expect(current.map((a) => a.textContent?.trim())).toEqual(['Schedule']);
+    expect(current[0].getAttribute('data-status')).toBe('active');
+  });
+
+  it('marks the knowledge library on the default section', async () => {
+    await renderAdmin();
+
+    expect(
+      navLinks()
+        .filter((a) => a.getAttribute('aria-current') === 'page')
+        .map((a) => a.textContent?.trim()),
+    ).toEqual(['Knowledge library']);
+  });
+
+  /**
+   * `/admin/$courseId/editor` is a screen you go INTO from the knowledge
+   * library, not a section — the nav is on screen while it is open, and
+   * lighting a section up there would name a place you are not.
+   *
+   * Mutant seen RED: `activeOptions` dropped, whose default is a PREFIX match
+   * on the path — every section link then reads as active on every course
+   * board.
+   */
+  it('marks nothing while a course board is open', async () => {
+    await renderAdmin(ALL, '/admin/7/editor');
+
+    expect(
+      navLinks().filter((a) => a.getAttribute('aria-current') === 'page'),
+    ).toHaveLength(0);
+  });
+
+  /**
+   * A nav with no links must not be a bare strip — an actor who can reach no
+   * section is told why, in text assistive tech reaches.
+   */
+  it('explains itself when no section is available', async () => {
+    await renderAdmin([]);
+
+    expect(navLinks()).toHaveLength(0);
     expect(
       screen.getByText(
         'No admin sections are available with your current permissions.',
@@ -167,58 +243,8 @@ describe('AdminShellLayout', () => {
     ).toBeDefined();
   });
 
-  /**
-   * The knowledge library editor is its own destination with its own gate, so
-   * it must survive the loss of the other two — the same independence bug the
-   * Courses/People pair was fixed for. Named "Knowledge library", not
-   * "Library": the editor's own left-hand pane already carries that word.
-   */
-  it('shows the Knowledge library link on its own gate alone', async () => {
-    await renderAdmin(false, false, true);
-
-    expect(
-      screen.getByRole('link', { name: 'Knowledge library' }),
-    ).toBeDefined();
-    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'People' })).toBeNull();
-    // And an actor who has one section is not told they have none.
-    expect(
-      screen.queryByText(
-        'No admin sections are available with your current permissions.',
-      ),
-    ).toBeNull();
-  });
-
-  it('hides the Knowledge library link when its gate is closed', async () => {
-    await renderAdmin(true, true, false);
-
-    expect(
-      screen.queryByRole('link', { name: 'Knowledge library' }),
-    ).toBeNull();
-  });
-
-  /**
-   * There is no Disciplines link, and its absence is a decision rather than an
-   * omission. Disciplines are created, renamed, staffed and deleted from the
-   * columns of the knowledge library editor — a discipline IS a column there.
-   * The separate `/admin/disciplines` screen listed the same rows without the
-   * lessons in them and has been removed.
-   *
-   * Mutant this catches: the link being restored (to a route that no longer
-   * exists) as part of "adding back" a nav item someone assumes went missing.
-   */
-  it('offers no Disciplines link — that screen is gone', async () => {
-    await renderAdmin(true, true, true);
-
-    expect(screen.queryByRole('link', { name: 'Disciplines' })).toBeNull();
-    // The editor is where that work happens now, and it is still offered.
-    expect(
-      screen.getByRole('link', { name: 'Knowledge library' }),
-    ).toBeDefined();
-  });
-
   it('says nothing about permissions when a section is available', async () => {
-    await renderAdmin(false, true);
+    await renderAdmin(sectionsOf('knowledge-library'));
 
     expect(
       screen.queryByText(
@@ -228,21 +254,22 @@ describe('AdminShellLayout', () => {
   });
 
   /**
-   * The schedule board reads the same courses the index does, so it is gated
-   * on the same condition — an actor who can see one can always see the other.
+   * The course index that used to sit at `/admin` is retired: courses are
+   * composed from the knowledge library's right-hand pane. There is no
+   * Disciplines link either, and that absence is a decision rather than an
+   * omission — a discipline IS a column of that same pane, created, renamed,
+   * staffed and deleted from the column itself.
+   *
+   * Mutant this catches: either link being restored as part of "adding back" a
+   * nav item someone assumes went missing.
    */
-  it('shows the Schedule link alongside Courses', async () => {
-    await renderAdmin(false);
+  it('offers no Courses or Disciplines link — both are the library now', async () => {
+    await renderAdmin();
 
-    expect(screen.getByRole('link', { name: 'Schedule' })).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Disciplines' })).toBeNull();
     expect(
-      screen.getByRole('link', { name: 'Schedule' }).getAttribute('href'),
-    ).toBe('/admin/schedule');
-  });
-
-  it('hides the Schedule link when the schedule has nothing for the actor', async () => {
-    await renderAdmin(true, false, false, false);
-
-    expect(screen.queryByRole('link', { name: 'Schedule' })).toBeNull();
+      screen.getByRole('link', { name: 'Knowledge library' }),
+    ).toBeDefined();
   });
 });
