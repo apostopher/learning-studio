@@ -54,6 +54,7 @@ import { createHash } from 'node:crypto';
 import { put } from '@vercel/blob';
 import { Pool } from 'pg';
 import { getActiveOrgId } from '#/lib/active-org.server';
+import { parseLegacyLink } from '#/db/migrate-material-links';
 import { healDuplicatePlacements } from './heal-duplicate-placements';
 import { resolveCourseOrgId } from './resolve-course-org-link';
 
@@ -140,6 +141,21 @@ const report = (label: string, c: Counter) =>
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  /**
+   * Run every phase EXCEPT re-hosting blobs into this project's store.
+   *
+   * The blob phase is the only one needing credentials for a third service
+   * (`BLOB_READ_WRITE_TOKEN`), and it sits in the middle of the pipeline — so
+   * a store that will not accept writes blocks the four phases after it,
+   * including the `blob_file_assignments` those uploads exist to serve.
+   *
+   * The lookup that populates `fileIdByOldId` still runs, so assignments for
+   * files ALREADY in this store are restored normally; only files that would
+   * need uploading are skipped, and they are listed by name at the end. Re-run
+   * without the flag once the store accepts writes to fill them in — every
+   * phase upserts, so nothing done here is repeated.
+   */
+  const skipBlobUploads = process.argv.includes('--skip-blob-uploads');
   console.log(
     `\n=== Import "${NEW_COURSE_NAME}" ${dryRun ? '(DRY RUN — no writes)' : ''}\n`,
   );
@@ -478,6 +494,26 @@ async function main() {
     };
     const kp = row.key_points === null ? null : JSON.stringify(row.key_points);
     const qz = row.quiz === null ? null : JSON.stringify(row.quiz);
+    /**
+     * `links` is `text[]` in the OLD database and `json` of `MaterialLink`
+     * (`{ name, url }`) in this one — `db:migrate-material-links` changed the
+     * column here after this script was written, so passing the array straight
+     * through made Postgres try to parse a `{…}` array literal as json:
+     * `invalid input syntax for type json`, on the first lesson whose links
+     * contain a comma.
+     *
+     * Converted with that migration's OWN parser rather than a second copy of
+     * the rule, so a markdown link, a bare `<a>` and a plain URL all land in
+     * the same shape they would have had via the migration. A string with no
+     * URL in it parses to null and is dropped, exactly as the migration
+     * dropped it.
+     */
+    const links =
+      row.links === null
+        ? null
+        : JSON.stringify(
+            row.links.map(parseLegacyLink).filter((l) => l !== null),
+          );
     const [existing] = await newQ<{ id: number }>(
       `select id from lesson_material where lesson_slug = $1`,
       [row.lesson_slug],
@@ -485,7 +521,7 @@ async function main() {
     if (existing) {
       await newQ(
         `update lesson_material set text=$2, key_points=$3::json, quiz=$4::json,
-           pro_tips=$5, links=$6, assignments=$7, job_of_the_day=$8, updated_at=$9
+           pro_tips=$5, links=$6::json, assignments=$7, job_of_the_day=$8, updated_at=$9
          where id=$1`,
         [
           existing.id,
@@ -493,7 +529,7 @@ async function main() {
           kp,
           qz,
           row.pro_tips,
-          row.links,
+          links,
           row.assignments,
           row.job_of_the_day,
           row.updated_at,
@@ -504,14 +540,14 @@ async function main() {
       await newQ(
         `insert into lesson_material (lesson_slug, text, key_points, quiz, pro_tips, links,
            assignments, job_of_the_day, created_at, updated_at)
-         values ($1,$2,$3::json,$4::json,$5,$6,$7,$8,$9,$10)`,
+         values ($1,$2,$3::json,$4::json,$5,$6::json,$7,$8,$9,$10)`,
         [
           row.lesson_slug,
           row.text,
           kp,
           qz,
           row.pro_tips,
-          row.links,
+          links,
           row.assignments,
           row.job_of_the_day,
           row.created_at,
@@ -539,6 +575,8 @@ async function main() {
   );
   const fileIdByOldId = new Map<number, number>();
   const bc = tally();
+  /** Files this run did not re-host, named so the gap is reportable. */
+  const notUploaded: string[] = [];
   let bytes = 0;
   for (const f of oldFiles as Record<string, never>[]) {
     const row = f as unknown as {
@@ -577,6 +615,11 @@ async function main() {
       bc.skipped++;
       continue;
     }
+    if (skipBlobUploads) {
+      notUploaded.push(pathname);
+      bc.skipped++;
+      continue;
+    }
     const res = await fetch(row.url);
     if (!res.ok)
       throw new Error(`GET ${row.url} -> ${res.status} ${res.statusText}`);
@@ -608,6 +651,12 @@ async function main() {
       );
   }
   report('blob_files', bc);
+  if (notUploaded.length > 0) {
+    console.log(
+      `    ${notUploaded.length} file(s) NOT re-hosted (--skip-blob-uploads); assignments naming them are skipped:`,
+    );
+    for (const name of notUploaded) console.log(`      ${name}`);
+  }
 
   // ------------------------------------------------- blob file assignments
   // SCHEMA CHANGE: old scopes by `module_slug`/`lesson_slug` (text); new uses
