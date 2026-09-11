@@ -60,7 +60,16 @@ export const TooltipIconButton = ({
   children,
 }: TooltipIconButtonProps) => {
   return (
-    <Tooltip.Root>
+    // Closes the moment the pointer leaves the trigger. Base UI's default
+    // is a floating-ui `safePolygon()` grace area (`TooltipTrigger`:
+    // `handleClose: !disableHoverablePopup ? safePolygon() : null`), which
+    // keeps the tooltip alive while the pointer travels toward the popup
+    // and indefinitely once it is over it. Measured in the browser: with
+    // the pointer off the chip and resting where the popup had appeared,
+    // the tooltip was still `data-open` half a second later. On a dense
+    // board whose popups overlap the row above, that reads as a tooltip
+    // that will not go away.
+    <Tooltip.Root disableHoverablePopup>
       <Tooltip.Trigger
         type="button"
         // `aria-disabled`, NOT the native `disabled` attribute. Base UI's

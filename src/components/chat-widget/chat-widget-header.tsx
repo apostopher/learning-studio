@@ -28,7 +28,8 @@ const HeaderControlButton = ({
   onClick,
   children,
 }: HeaderControlButtonProps) => (
-  <Tooltip.Root>
+  // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
+  <Tooltip.Root disableHoverablePopup>
     <Tooltip.Trigger
       render={
         <Button

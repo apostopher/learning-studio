@@ -56,7 +56,8 @@ const QuickshotToggle = ({
   disabled,
   onPressedChange,
 }: QuickshotToggleProps) => (
-  <Tooltip.Root>
+  // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
+  <Tooltip.Root disableHoverablePopup>
     <Tooltip.Trigger
       // `aria-disabled`, NOT the native attribute: Base UI's Tooltip.Trigger
       // swallows `disabled` so a tooltip can still explain an unavailable

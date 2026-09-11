@@ -47,7 +47,8 @@ export const CreateModuleDialogContainer = ({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Tooltip.Root>
+      {/* Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`. */}
+      <Tooltip.Root disableHoverablePopup>
         <Tooltip.Trigger
           render={<Dialog.Trigger render={<AddModuleButton />} />}
         />
