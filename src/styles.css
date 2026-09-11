@@ -510,12 +510,21 @@
     block-size: 100%;
     overscroll-behavior: contain;
   }
+  /* Contain overscroll only on the axis this area actually scrolls.
+     `contain` on the CROSS axis is what stranded a horizontal trackpad
+     gesture made over a column: the column had no horizontal scroll range,
+     but it refused to hand the gesture up to the rail the columns sit in, so
+     the gesture rubber-banded in place and the rail only scrolled when the
+     pointer happened to be off a column.
+     The matching cross-axis `overflow: clip` is applied INLINE in
+     `scroll-area.tsx`, not here — Base UI hardcodes an inline
+     `overflow: scroll` on its Viewport, which no stylesheet rule can outrank. */
   .scroll-area-viewport[data-orientation="vertical"] {
-    overflow-x: clip;
+    overscroll-behavior-inline: auto;
     overflow-wrap: anywhere;
   }
   .scroll-area-viewport[data-orientation="horizontal"] {
-    overflow-y: clip;
+    overscroll-behavior-block: auto;
   }
   .lesson-material-tabs-scroll {
     block-size: auto;
