@@ -70,6 +70,7 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   onboarding: many(courseOnboardingTable),
   newsSources: many(newsSourcesTable),
   offerings: many(offeringsTable),
+  courseModules: many(courseModulesTable),
 }));
 
 /**
@@ -226,11 +227,62 @@ export const modulesTableRelations = relations(
     }),
     fileAssignments: many(blobFileAssignmentsTable),
     placements: many(moduleLessonsTable),
+    courseModules: many(courseModulesTable),
   }),
 );
 
 // GIN index for required_subscriptions
 void sql`CREATE INDEX IF NOT EXISTS idx_modules_required_subs ON modules USING GIN (required_subscriptions);`;
+
+/**
+ * Which modules a course shows, and in what order.
+ *
+ * Membership, not ownership. `modules.course_id` still says who OWNS a module
+ * — who may rename or delete it — but this table says which rails it appears
+ * in and where. A course's own modules get a row here too, so there is exactly
+ * one answer to "what is in this course".
+ *
+ * The same shape `module_lessons` already gives lessons one level down: the
+ * thing is owned in one place and placed in many, with the placement carrying
+ * the per-course order.
+ */
+export const courseModulesTable = pgTable(
+  'course_modules',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    moduleId: integer('module_id')
+      .notNull()
+      .references(() => modulesTable.id, { onDelete: 'cascade' }),
+    /** Position in THIS course. Sibling courses order the same module freely. */
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('course_modules_course_module_idx').on(
+      table.courseId,
+      table.moduleId,
+    ),
+    index('course_modules_course_id_idx').on(table.courseId),
+    index('course_modules_module_id_idx').on(table.moduleId),
+  ],
+);
+
+export const courseModulesTableRelations = relations(
+  courseModulesTable,
+  ({ one }) => ({
+    course: one(coursesTable, {
+      fields: [courseModulesTable.courseId],
+      references: [coursesTable.id],
+    }),
+    module: one(modulesTable, {
+      fields: [courseModulesTable.moduleId],
+      references: [modulesTable.id],
+    }),
+  }),
+);
 
 export const disciplinesTable = pgTable('disciplines', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),

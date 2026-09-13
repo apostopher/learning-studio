@@ -27,6 +27,7 @@
     "db:relax-lesson-columns": "dotenv -e .env.local -- tsx src/db/migrate-relax-lesson-columns.ts",
     "db:migrate-drop-lesson-module-id": "dotenv -e .env.local -- tsx src/db/migrate-drop-lesson-module-id.ts",
     "db:drop-global-subject-expert": "dotenv -e .env.local -- tsx src/db/migrate-drop-global-subject-expert.ts",
+    "db:migrate-course-modules": "dotenv -e .env.local -- tsx src/db/migrate-course-modules.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
