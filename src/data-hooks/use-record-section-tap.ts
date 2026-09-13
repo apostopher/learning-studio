@@ -2,16 +2,20 @@ import { useMutation } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { useCallback, useRef } from 'react';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import type { LessonRef } from '#/lib/lesson-ref';
 import {
   isTrackedLessonSection,
   type TrackedLessonSection,
 } from '#/lib/lesson-visit-section';
 import { saveJson } from './save-json';
 
-export interface RecordSectionTapInput {
-  lessonSlug: string;
+/**
+ * Both slugs: the route refuses a body without `courseSlug` and gates the
+ * lesson inside that course before recording anything.
+ */
+export type RecordSectionTapInput = LessonRef & {
   section: TrackedLessonSection;
-}
+};
 
 /**
  * Record that the learner opened a material tab.
@@ -72,28 +76,34 @@ export function nextSectionTapWrite({
 /**
  * Returns a recorder for the active material tab, deduped per lesson.
  *
- * The dedupe set is keyed by lesson so navigating away and back records again
- * for a different lesson but not for the same one. `enabled` should be false
- * until the material has actually rendered — recording a tab the learner never
- * saw would inflate the ring for content that was never on screen.
+ * The dedupe set is keyed by course and lesson so navigating away and back
+ * records again for a different lesson (or the same lesson in another course)
+ * but not for the same one. `enabled` should be false until the material has
+ * actually rendered — recording a tab the learner never saw would inflate the
+ * ring for content that was never on screen.
  */
 export function useSectionTapRecorder({
+  courseSlug,
   lessonSlug,
   enabled,
-}: {
-  lessonSlug: string;
-  enabled: boolean;
-}) {
+}: LessonRef & { enabled: boolean }) {
   const { mutate } = useRecordSectionTap();
-  const recordedRef = useRef<{ slug: string; sections: Set<string> }>({
-    slug: lessonSlug,
+  const recordedRef = useRef<{ lesson: LessonRef; sections: Set<string> }>({
+    lesson: { courseSlug, lessonSlug },
     sections: new Set(),
   });
 
   return useCallback(
     (section: string) => {
-      if (recordedRef.current.slug !== lessonSlug) {
-        recordedRef.current = { slug: lessonSlug, sections: new Set() };
+      const current = recordedRef.current.lesson;
+      if (
+        current.courseSlug !== courseSlug ||
+        current.lessonSlug !== lessonSlug
+      ) {
+        recordedRef.current = {
+          lesson: { courseSlug, lessonSlug },
+          sections: new Set(),
+        };
       }
       const next = nextSectionTapWrite({
         recorded: recordedRef.current.sections,
@@ -102,8 +112,8 @@ export function useSectionTapRecorder({
       });
       if (next == null) return;
       recordedRef.current.sections.add(next);
-      mutate({ lessonSlug, section: next });
+      mutate({ courseSlug, lessonSlug, section: next });
     },
-    [enabled, lessonSlug, mutate],
+    [enabled, courseSlug, lessonSlug, mutate],
   );
 }

@@ -43,14 +43,20 @@ describe('useRecordLastViewed', () => {
     const { result } = renderHook(() => useRecordLastViewed(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ lessonSlug: 'airspace-basics' });
+    result.current.mutate({
+      courseSlug: 'ppl',
+      lessonSlug: 'airspace-basics',
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(beacon).toHaveBeenCalledTimes(1);
     expect(beacon.mock.calls[0][0]).toBe(URL);
     const blob = beacon.mock.calls[0][1];
     expect(blob).toBeInstanceOf(Blob);
+    // The course travels in the beacon body too: the route 400s without it,
+    // and the pointer it writes is per course (Task 6a).
     expect(JSON.parse(await blob.text())).toEqual({
+      courseSlug: 'ppl',
       lessonSlug: 'airspace-basics',
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -66,12 +72,13 @@ describe('useRecordLastViewed', () => {
     const { result } = renderHook(() => useRecordLastViewed(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ lessonSlug: 'l1' });
+    result.current.mutate({ courseSlug: 'ppl', lessonSlug: 'l1' });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe(URL);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      courseSlug: 'ppl',
       lessonSlug: 'l1',
     });
     expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);

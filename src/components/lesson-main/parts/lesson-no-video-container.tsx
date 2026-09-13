@@ -6,6 +6,7 @@ import { LessonNoVideo } from './lesson-no-video';
 
 type LessonNoVideoContainerProps = {
   lessonName: string;
+  courseSlug: string;
   lessonSlug: string;
   hasDebrief: boolean;
   /** `needsVideoWatch` — the admin's statement that a video belongs here. */
@@ -33,13 +34,14 @@ type LessonNoVideoContainerProps = {
  */
 export const LessonNoVideoContainer = ({
   lessonName,
+  courseSlug,
   lessonSlug,
   hasDebrief,
   videoExpected,
   readOnly,
 }: LessonNoVideoContainerProps) => {
   const setActiveTab = useSetAtom(activeTabAtom);
-  const { data } = useLessonMaterial(lessonSlug);
+  const { data } = useLessonMaterial({ courseSlug, lessonSlug });
   const material = data && !data.locked ? data.material : null;
 
   // Mirrors computeMaterialTabs: no generator input means no Debrief tab, so

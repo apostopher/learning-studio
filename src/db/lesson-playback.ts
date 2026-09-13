@@ -1,7 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { resolveCourseProvider } from '#/db/admin';
-import { lessonsTable, moduleLessonsTable, modulesTable } from '#/db/schema';
+import { courseModuleIds } from '#/db/course-modules';
+import { getLessonIdBySlug } from '#/db/lesson-access';
+import { getCourseIdsForLesson } from '#/db/placements';
+import { lessonsTable, moduleLessonsTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import {
@@ -13,45 +16,46 @@ import type { ProviderId } from '#/lib/video-providers/types';
 const CACHE_KEY_PREFIX = 'lesson-playback';
 
 /**
- * Playback for a lesson, resolved through the course's stored provider
- * credentials. Null when the lesson does not exist or has no video assigned —
- * callers deliberately render that as the same refusal as "locked", so the
- * route never confirms which slugs are real.
+ * Playback for a lesson AS TAUGHT BY one course, resolved through that
+ * course's stored provider credentials. Null when the lesson is not placed in
+ * the course or has no video assigned — callers deliberately render that as
+ * the same refusal as "locked", so the route never confirms which slugs are
+ * real.
  *
- * A lesson can now be taught by SEVERAL courses via `module_lessons`, and this
- * function only has a bare `lessonSlug` to go on — no course context to
- * disambiguate which one's credentials to resolve against. Without an
- * `ORDER BY`, the join below could non-deterministically hand back a
- * different course (and therefore possibly different provider credentials)
- * on different calls for the same lesson, which would make playback flap.
- * `orderBy` + `limit(1)` pin it to the lowest course id so the answer is at
- * least stable; if courses ever need genuinely different credentials for a
- * shared lesson this will need a real course-scoped caller instead.
+ * The course is explicit because a lesson can be taught by SEVERAL courses via
+ * `module_lessons`, and each course has its own provider credentials. This
+ * used to resolve the course from the lesson — the lowest course id, so at
+ * least stable — which handed a learner in any other course a URL signed with
+ * the wrong course's credentials. The route already knows the course (the
+ * gate resolved it from the URL), so it passes the id in and membership is
+ * checked here through `courseModuleIds`, the single definition of "which
+ * modules are in this course".
  */
 async function resolveLessonPlaybackUncached(
   lessonSlug: string,
+  courseId: number,
 ): Promise<PlaybackResult | null> {
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
-      // `modules.course_id` is already the FK we need — joining `courses` just
-      // to re-read its own `id` back would be a pointless extra join.
-      courseId: modulesTable.courseId,
     })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .where(eq(lessonsTable.slug, lessonSlug))
-    .orderBy(modulesTable.courseId)
+    .where(
+      and(
+        eq(lessonsTable.slug, lessonSlug),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
+      ),
+    )
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
   const provider = lesson.videoProvider as ProviderId;
-  const creds = await resolveCourseProvider(lesson.courseId, provider);
+  const creds = await resolveCourseProvider(courseId, provider);
   // Throws rather than returning null: null here is indistinguishable from
   // "no such lesson" and "no video assigned", which the route deliberately
   // renders as an opaque 403. A missing course credential is neither — it is
@@ -70,9 +74,9 @@ async function resolveLessonPlaybackUncached(
 }
 
 /**
- * Cached per lesson, with the TTL bounded by the signed URL's OWN expiry —
- * never a default TTL. A cached URL that outlives its signature is a player
- * that fails with no error path.
+ * Cached per course and lesson, with the TTL bounded by the signed URL's OWN
+ * expiry — never a default TTL. A cached URL that outlives its signature is a
+ * player that fails with no error path.
  *
  * Hand-rolled against the `redis` client directly rather than
  * `cacheWithRedis`: that helper's `expiresExtractor` cannot skip a write —
@@ -111,29 +115,41 @@ async function resolveLessonPlaybackUncached(
  *
  * Exposes `.invalidate(lessonSlug)` (see below) so a mutation that changes
  * what this would resolve to — `setLessonVideo` in `#/db/admin` — can evict
- * the stale entry instead of leaving learners on a previous video's
+ * the stale entries instead of leaving learners on a previous video's
  * still-validly-signed URL for up to the remainder of its TTL.
  */
+type LessonPlaybackOptions = {
+  /** The course the learner is in — the one whose credentials sign the URL. */
+  courseId: number;
+  skipCache?: boolean;
+};
+
 type LessonPlaybackReader = ((
   lessonSlug: string,
-  options?: { skipCache?: boolean },
+  options: LessonPlaybackOptions,
 ) => Promise<PlaybackResult | null>) & {
   invalidate: (lessonSlug: string) => Promise<void>;
 };
 
+const cacheKey = (courseId: number, lessonSlug: string) =>
+  `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}`;
+
 export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   async (
     lessonSlug: string,
-    options?: { skipCache?: boolean },
+    options: LessonPlaybackOptions,
   ): Promise<PlaybackResult | null> => {
-    const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
+    const key = cacheKey(options.courseId, lessonSlug);
 
-    if (!options?.skipCache) {
+    if (!options.skipCache) {
       const cached = await redis.get<PlaybackResult>(key);
       if (cached) return cached;
     }
 
-    const result = await resolveLessonPlaybackUncached(lessonSlug);
+    const result = await resolveLessonPlaybackUncached(
+      lessonSlug,
+      options.courseId,
+    );
 
     if (result?.status === 'ready' && result.expiresInSeconds !== null) {
       const ex = Math.max(1, result.expiresInSeconds - 30);
@@ -144,13 +160,20 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   },
   {
     /**
-     * Evict a lesson's cached playback entry. Unconditional — unlike the
-     * read path's TTL-bounded writes, an admin video swap must invalidate
-     * regardless of whether a cache entry currently exists, so callers never
-     * have to reason about whether one does.
+     * Evict a lesson's cached playback entry in EVERY course teaching it —
+     * the entries are keyed per course, and an admin video swap changes what
+     * all of them would resolve to. Unconditional — unlike the read path's
+     * TTL-bounded writes, the swap must invalidate regardless of whether an
+     * entry currently exists, so callers never have to reason about whether
+     * one does.
      */
     invalidate: async (lessonSlug: string): Promise<void> => {
-      await redis.del(`${CACHE_KEY_PREFIX}:${lessonSlug}`);
+      const lessonId = await getLessonIdBySlug(lessonSlug);
+      if (lessonId === null) return;
+      const courseIds = await getCourseIdsForLesson(lessonId);
+      await Promise.all(
+        courseIds.map((courseId) => redis.del(cacheKey(courseId, lessonSlug))),
+      );
     },
   },
 );

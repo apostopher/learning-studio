@@ -6,6 +6,10 @@ import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
 const lastViewedSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on. The pointer is
+  // per course and a lesson can be placed in several, so the course cannot be
+  // inferred from the slug — see recordLastViewedLesson.
+  courseSlug: z.string().min(1),
 });
 
 /**
@@ -13,8 +17,9 @@ const lastViewedSchema = z.object({
  * the course may move their own pointer — it is their own navigation history,
  * and the user is taken from the session, never from the body.
  *
- * The lesson's course is derived from the lesson (see recordLastViewedLesson),
- * so a forged slug cannot write a pointer into an unrelated course. The
+ * The pointer is written for the course the GATE resolved, and the lesson is
+ * looked up within it (see recordLastViewedLesson), so a forged slug cannot
+ * write a pointer into a course the lesson is not placed in. The
  * prerequisite LOCKS are deliberately not re-checked here: resolveResumeTarget
  * hops off a locked pointer when reading, so the worst a forged write achieves
  * is redirecting the forger to a lesson they still cannot open — not worth a
@@ -47,6 +52,7 @@ export async function recordLastViewedHandler(
   const gate = await evaluateLessonGate({
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
+    courseSlug: parsed.data.courseSlug,
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is
@@ -84,6 +90,7 @@ export async function recordLastViewedHandler(
     const recorded = await recordLastViewedLesson({
       userId: session.user.id,
       lessonSlug: parsed.data.lessonSlug,
+      courseId: gate.courseId,
     });
     if (!recorded) {
       return Response.json({ error: 'Lesson not found' }, { status: 404 });

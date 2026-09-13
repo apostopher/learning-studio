@@ -53,6 +53,8 @@ const freeTextQuestion = {
 };
 
 const openGate = {
+  courseSlug: 'c1',
+  courseId: 7,
   subscribed: true,
   level: 'basic',
   outOfTier: null,
@@ -89,7 +91,10 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
       outOfTier: { readOnly: false },
     });
     const res = await generateTestHandler(
-      post('/api/lesson/ai-test/generate', { lessonSlug: 'l1' }),
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+      }),
     );
     expect(res.status).toBe(403);
     expect(m.generateTest).not.toHaveBeenCalled();
@@ -105,7 +110,10 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
       outOfTier: { readOnly: true },
     });
     const res = await generateTestHandler(
-      post('/api/lesson/ai-test/generate', { lessonSlug: 'l1' }),
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+      }),
     );
     expect(res.status).toBe(403);
     expect(m.generateTest).not.toHaveBeenCalled();
@@ -120,6 +128,7 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
     const res = await evaluateAnswerHandler(
       post('/api/lesson/ai-test/evaluate', {
         lessonSlug: 'l1',
+        courseSlug: 'c1',
         question: freeTextQuestion,
         userAnswer: 'an answer',
       }),
@@ -138,6 +147,7 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
     const res = await evaluateAnswerHandler(
       post('/api/lesson/ai-test/evaluate', {
         lessonSlug: 'l1',
+        courseSlug: 'c1',
         question: freeTextQuestion,
         userAnswer: 'an answer',
       }),
@@ -151,6 +161,7 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
     const res = await evaluateAnswerHandler(
       post('/api/lesson/ai-test/evaluate', {
         lessonSlug: 'l1',
+        courseSlug: 'c1',
         question: freeTextQuestion,
         userAnswer: 'an answer',
       }),
@@ -172,6 +183,7 @@ describe('debrief endpoints refuse out-of-tier lessons', () => {
 describe('save-results refuses out-of-tier lessons', () => {
   const savePayload = {
     lessonSlug: 'l1',
+    courseSlug: 'c1',
     test: { lessonSlug: 'l1', questions: [] },
     evaluations: [],
     totalScore: 80,
@@ -226,6 +238,7 @@ describe('save-results refuses out-of-tier lessons', () => {
 describe('save-results from a non-subscriber', () => {
   const savePayload = {
     lessonSlug: 'l1',
+    courseSlug: 'c1',
     test: { lessonSlug: 'l1', questions: [] },
     evaluations: [],
     totalScore: 80,
@@ -248,5 +261,116 @@ describe('save-results from a non-subscriber', () => {
     );
     expect(res.status).toBe(403);
     expect(m.saveTestResult).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 6a: the course is no longer inferred from the lesson. All three routes
+ * take it from the body, refuse a body without it as malformed, hand it to the
+ * gate, and — where a debrief source is resolved — resolve it for the course
+ * the GATE returned, so the transcript fallback reads through that course's
+ * credentials.
+ */
+describe('the course comes from the request', () => {
+  const savePayload = {
+    lessonSlug: 'l1',
+    courseSlug: 'c-real',
+    test: { lessonSlug: 'l1', questions: [] },
+    evaluations: [],
+    totalScore: 80,
+  };
+
+  it('generate 400s without a courseSlug, before the gate', async () => {
+    const res = await generateTestHandler(
+      post('/api/lesson/ai-test/generate', { lessonSlug: 'l1' }),
+    );
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.generateTest).not.toHaveBeenCalled();
+  });
+
+  it("generate passes both slugs to the gate and the gate's course to the source", async () => {
+    m.evaluateLessonGate.mockResolvedValue({ ...openGate, courseId: 42 });
+    await generateTestHandler(
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c-real',
+      }),
+    );
+    expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c-real',
+    });
+    expect(m.resolveDebriefSource).toHaveBeenCalledWith('l1', 42);
+  });
+
+  it('evaluate 400s without a courseSlug, even for an MCQ', async () => {
+    // MCQ grading needs no lesson content, but the request shape is one
+    // contract: a malformed body is refused before the type is looked at.
+    const res = await evaluateAnswerHandler(
+      post('/api/lesson/ai-test/evaluate', {
+        lessonSlug: 'l1',
+        question: {
+          id: 'q1',
+          type: 'mcq',
+          question: 'Which?',
+          options: [
+            { id: 'a', value: 'A' },
+            { id: 'b', value: 'B' },
+            { id: 'c', value: 'C' },
+            { id: 'd', value: 'D' },
+          ],
+          correctOptionId: 'a',
+          keyPointIndex: 0,
+        },
+        userAnswer: 'a',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.evaluateMCQ).not.toHaveBeenCalled();
+  });
+
+  it("evaluate passes both slugs to the gate and the gate's course to the source", async () => {
+    m.evaluateLessonGate.mockResolvedValue({ ...openGate, courseId: 42 });
+    await evaluateAnswerHandler(
+      post('/api/lesson/ai-test/evaluate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c-real',
+        question: freeTextQuestion,
+        userAnswer: 'an answer',
+      }),
+    );
+    expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c-real',
+    });
+    expect(m.resolveDebriefSource).toHaveBeenCalledWith('l1', 42);
+  });
+
+  it('save-results 400s without a courseSlug, before the gate', async () => {
+    const { courseSlug: _omitted, ...withoutCourse } = savePayload;
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', withoutCourse),
+    );
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.saveTestResult).not.toHaveBeenCalled();
+  });
+
+  it('save-results passes both slugs to the gate', async () => {
+    await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', savePayload),
+    );
+    expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c-real',
+    });
   });
 });

@@ -69,7 +69,7 @@ beforeEach(() => {
  */
 describe('out-of-tier writes are refused', () => {
   describe('lesson-section', () => {
-    const body = { lessonSlug: 'l1', section: 'keyPoints' };
+    const body = { lessonSlug: 'l1', courseSlug: 'c1', section: 'keyPoints' };
 
     it('403s a never-completed out-of-tier lesson without recording the tap', async () => {
       m.evaluateLessonGate.mockResolvedValue({
@@ -115,7 +115,7 @@ describe('out-of-tier writes are refused', () => {
   });
 
   describe('last-viewed', () => {
-    const body = { lessonSlug: 'l1' };
+    const body = { lessonSlug: 'l1', courseSlug: 'c1' };
 
     it('403s a never-completed out-of-tier lesson without moving the pointer', async () => {
       m.evaluateLessonGate.mockResolvedValue({
@@ -175,6 +175,7 @@ describe('writes from a non-subscriber are refused', () => {
     const res = await recordLessonSectionHandler(
       post('/api/user/lesson-section', {
         lessonSlug: 'l1',
+        courseSlug: 'c1',
         section: 'keyPoints',
       }),
     );
@@ -186,7 +187,7 @@ describe('writes from a non-subscriber are refused', () => {
   it('403s a last-viewed write without moving the pointer', async () => {
     m.evaluateLessonGate.mockResolvedValue(unsubscribed);
     const res = await recordLastViewedHandler(
-      post('/api/user/last-viewed', { lessonSlug: 'l1' }),
+      post('/api/user/last-viewed', { lessonSlug: 'l1', courseSlug: 'c1' }),
     );
     expect(res.status).toBe(403);
     expect(m.recordLastViewedLesson).not.toHaveBeenCalled();
@@ -195,9 +196,85 @@ describe('writes from a non-subscriber are refused', () => {
   it('403s rather than 404s an unknown lesson, so the route is not an oracle', async () => {
     m.evaluateLessonGate.mockResolvedValue(null);
     const res = await recordLastViewedHandler(
-      post('/api/user/last-viewed', { lessonSlug: 'nope' }),
+      post('/api/user/last-viewed', { lessonSlug: 'nope', courseSlug: 'c1' }),
     );
     expect(res.status).toBe(403);
     expect(m.recordLastViewedLesson).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 6a: the course is no longer inferred from the lesson. Both routes take
+ * it from the body, refuse a body without it as malformed, and hand it to the
+ * gate — and last-viewed writes the pointer for the course the GATE resolved,
+ * never one derived from the lesson.
+ */
+describe('the course comes from the request', () => {
+  describe('lesson-section', () => {
+    it('400s without a courseSlug, before the gate', async () => {
+      const res = await recordLessonSectionHandler(
+        post('/api/user/lesson-section', {
+          lessonSlug: 'l1',
+          section: 'keyPoints',
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+      expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+      expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
+    });
+
+    it('passes the session user id and both slugs to the gate', async () => {
+      await recordLessonSectionHandler(
+        post('/api/user/lesson-section', {
+          lessonSlug: 'l1',
+          courseSlug: 'c-real',
+          section: 'keyPoints',
+        }),
+      );
+      expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+        userId: 'u1',
+        lessonSlug: 'l1',
+        courseSlug: 'c-real',
+      });
+    });
+  });
+
+  describe('last-viewed', () => {
+    it('400s without a courseSlug, before the gate', async () => {
+      const res = await recordLastViewedHandler(
+        post('/api/user/last-viewed', { lessonSlug: 'l1' }),
+      );
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+      expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+      expect(m.recordLastViewedLesson).not.toHaveBeenCalled();
+    });
+
+    it('passes the session user id and both slugs to the gate', async () => {
+      await recordLastViewedHandler(
+        post('/api/user/last-viewed', {
+          lessonSlug: 'l1',
+          courseSlug: 'c-real',
+        }),
+      );
+      expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+        userId: 'u1',
+        lessonSlug: 'l1',
+        courseSlug: 'c-real',
+      });
+    });
+
+    it("writes the pointer for the gate's course id", async () => {
+      m.evaluateLessonGate.mockResolvedValue({ ...inTier, courseId: 42 });
+      await recordLastViewedHandler(
+        post('/api/user/last-viewed', { lessonSlug: 'l1', courseSlug: 'c1' }),
+      );
+      expect(m.recordLastViewedLesson).toHaveBeenCalledWith({
+        userId: 'u1',
+        lessonSlug: 'l1',
+        courseId: 42,
+      });
+    });
   });
 });

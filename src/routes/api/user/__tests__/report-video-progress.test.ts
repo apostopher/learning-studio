@@ -62,7 +62,7 @@ describe('out-of-tier progress reports', () => {
       lessonLock: { kind: 'open' },
     });
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 50 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe('out-of-tier progress reports', () => {
       lessonLock: { kind: 'open' },
     });
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 95 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 95 }),
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe('reportVideoProgressHandler', () => {
   it('401 when not authenticated', async () => {
     getSession.mockResolvedValueOnce(null);
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 50 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(401);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -106,7 +106,7 @@ describe('reportVideoProgressHandler', () => {
 
   it('400 when the body fails validation', async () => {
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: '', progress: 50 }),
+      postReq({ lessonSlug: '', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(400);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe('reportVideoProgressHandler', () => {
 
   it('records progress for the authed user and returns 201', async () => {
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 50 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(201);
     expect(recordLessonProgress).toHaveBeenCalledWith({
@@ -124,20 +124,32 @@ describe('reportVideoProgressHandler', () => {
     });
   });
 
-  it('passes the session user id and the body slug to the gate — not a hardcoded or mismatched value', async () => {
+  it('passes the session user id and the body slugs to the gate — not a hardcoded or mismatched value', async () => {
     await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 50 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c-real', progress: 50 }),
     );
     expect(evaluateLessonGate).toHaveBeenCalledWith({
       userId: 'user-1',
       lessonSlug: 'l1',
+      courseSlug: 'c-real',
     });
+  });
+
+  it('400 when courseSlug is missing, before the gate', async () => {
+    // The course can no longer be inferred from the lesson (Task 6a).
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', progress: 50 }),
+    );
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+    expect(evaluateLessonGate).not.toHaveBeenCalled();
+    expect(recordLessonProgress).not.toHaveBeenCalled();
   });
 
   it('500 when the db write fails', async () => {
     recordLessonProgress.mockRejectedValueOnce(new Error('db down'));
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 50 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(500);
   });
@@ -152,7 +164,11 @@ describe('reportVideoProgressHandler', () => {
       new Request('http://t', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ lessonSlug: 'l1', progress: 25 }),
+        body: JSON.stringify({
+          lessonSlug: 'l1',
+          courseSlug: 'c1',
+          progress: 25,
+        }),
       }),
     );
     expect(res.status).toBe(403);
@@ -164,7 +180,7 @@ describe('reportVideoProgressHandler', () => {
   it('refuses when the gate resolves to null — no such lesson, or is_available=false', async () => {
     evaluateLessonGate.mockResolvedValueOnce(null);
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'ghost', progress: 25 }),
+      postReq({ lessonSlug: 'ghost', courseSlug: 'c1', progress: 25 }),
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -176,7 +192,7 @@ describe('reportVideoProgressHandler', () => {
       lessonLock: { kind: 'module-locked', moduleSlug: 'm', moduleName: 'M' },
     });
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'l1', progress: 25 }),
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 25 }),
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
@@ -185,7 +201,7 @@ describe('reportVideoProgressHandler', () => {
   it('403s when the gate resolves but the lesson slug cannot be found', async () => {
     getLessonIdBySlug.mockResolvedValueOnce(null);
     const res = await reportVideoProgressHandler(
-      postReq({ lessonSlug: 'ghost', progress: 50 }),
+      postReq({ lessonSlug: 'ghost', courseSlug: 'c1', progress: 50 }),
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();

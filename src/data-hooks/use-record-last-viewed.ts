@@ -1,10 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
+import type { LessonRef } from '#/lib/lesson-ref';
 import { saveJson } from './save-json';
 
-export interface RecordLastViewedInput {
-  lessonSlug: string;
-}
+/**
+ * Both slugs: the route refuses a body without `courseSlug`, and the pointer
+ * it writes is per course — a lesson placed in two courses moves two
+ * different pointers.
+ */
+export type RecordLastViewedInput = LessonRef;
 
 /**
  * Move the learner's resume pointer to a lesson.
@@ -63,23 +67,23 @@ export function nextLastViewedWrite({
  * `enabled` flipping true, rather than only firing on mount.
  */
 export function useRecordLastViewedLesson({
+  courseSlug,
   lessonSlug,
   enabled,
-}: {
-  lessonSlug: string;
-  enabled: boolean;
-}) {
+}: LessonRef & { enabled: boolean }) {
   const { mutate } = useRecordLastViewed();
-  const recordedSlugRef = useRef<string | null>(null);
+  const recordedRef = useRef<LessonRef | null>(null);
 
   useEffect(() => {
-    const next = nextLastViewedWrite({
-      recorded: recordedSlugRef.current,
-      lessonSlug,
-      enabled,
-    });
+    // "Already recorded" is per course: the same lesson opened in another
+    // course is a different pointer, so nothing counts as recorded there yet.
+    const recorded =
+      recordedRef.current?.courseSlug === courseSlug
+        ? recordedRef.current.lessonSlug
+        : null;
+    const next = nextLastViewedWrite({ recorded, lessonSlug, enabled });
     if (next == null) return;
-    recordedSlugRef.current = next;
-    mutate({ lessonSlug: next });
-  }, [enabled, lessonSlug, mutate]);
+    recordedRef.current = { courseSlug, lessonSlug: next };
+    mutate({ courseSlug, lessonSlug: next });
+  }, [enabled, courseSlug, lessonSlug, mutate]);
 }

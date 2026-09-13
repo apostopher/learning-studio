@@ -18,6 +18,7 @@ type LessonMainProps = {
 
 const renderPlayerSlot = (
   videoState: VideoFetchState,
+  courseSlug: string,
   lessonSlug: string,
   hasDebrief: boolean,
 ) => {
@@ -25,6 +26,7 @@ const renderPlayerSlot = (
     return (
       <LessonPlayerContainer
         videoState={videoState}
+        courseSlug={courseSlug}
         lessonSlug={lessonSlug}
         hasDebrief={hasDebrief}
       />
@@ -80,6 +82,7 @@ const renderArticleBody = (state: LessonMainState) => {
           <div className="lesson-player">
             <LessonNoVideoContainer
               lessonName={state.lessonName}
+              courseSlug={state.courseSlug}
               lessonSlug={state.lessonSlug}
               hasDebrief={state.hasDebrief}
               videoExpected={state.videoExpected}
@@ -103,6 +106,7 @@ const renderArticleBody = (state: LessonMainState) => {
           <div className="lesson-player">
             {renderPlayerSlot(
               state.videoState,
+              state.courseSlug,
               state.lessonSlug,
               state.hasDebrief,
             )}
@@ -129,12 +133,14 @@ const renderArticleBody = (state: LessonMainState) => {
             {state.videoState ? (
               renderPlayerSlot(
                 state.videoState,
+                state.courseSlug,
                 state.lessonSlug,
                 state.hasDebrief,
               )
             ) : (
               <LessonNoVideoContainer
                 lessonName={state.lessonName}
+                courseSlug={state.courseSlug}
                 lessonSlug={state.lessonSlug}
                 hasDebrief={state.hasDebrief}
                 videoExpected={state.videoExpected}

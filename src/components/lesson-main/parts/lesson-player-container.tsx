@@ -23,6 +23,7 @@ import { videoReachedEndAtomFamily } from './lesson-player-atoms';
 
 type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
+  courseSlug: string;
   lessonSlug: string;
   /** `lessons.has_debrief` — with it off, tab 2 is the authored quiz. */
   hasDebrief: boolean;
@@ -30,17 +31,21 @@ type LessonPlayerContainerProps = {
 
 export const LessonPlayerContainer = ({
   videoState,
+  courseSlug,
   lessonSlug,
   hasDebrief,
 }: LessonPlayerContainerProps) => {
   const playerId = useId();
+  // The lesson as the route names it — the material query and every write
+  // below are per course (see `LessonRef`).
+  const lesson = { courseSlug, lessonSlug };
   // Read once, up front: both the milestone-reporter guard below and the
   // material/materialLocked derivations further down come off this same
   // cached query, and readOnly has to be known before useMilestoneReporter is
   // called.
-  const { data } = useLessonMaterial(lessonSlug);
+  const { data } = useLessonMaterial(lesson);
   const readOnly = isMaterialReadOnly(data);
-  useMilestoneReporter(playerId, lessonSlug, readOnly);
+  useMilestoneReporter(playerId, lesson, readOnly);
   const [reachedEnd, setReachedEnd] = useAtom(
     videoReachedEndAtomFamily(lessonSlug),
   );
@@ -82,7 +87,7 @@ export const LessonPlayerContainer = ({
     // No guard on the material's contents any more: the server resolves what
     // the debrief is generated from (material, else the video transcript), and
     // `canDebrief` below already decides whether to offer the button at all.
-    const test = await generateTest(lessonSlug);
+    const test = await generateTest({ courseSlug, lessonSlug });
     if (test) {
       setActiveTab('quiz');
       queueMicrotask(() => {
@@ -92,7 +97,7 @@ export const LessonPlayerContainer = ({
         });
       });
     }
-  }, [generateTest, lessonSlug, readOnly, setActiveTab]);
+  }, [generateTest, courseSlug, lessonSlug, readOnly, setActiveTab]);
 
   const overlayKind = computePlayerOverlay({
     reachedEnd,

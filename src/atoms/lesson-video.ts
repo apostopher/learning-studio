@@ -3,6 +3,7 @@ import { atomFamily } from 'jotai-family';
 import { atomWithQuery } from 'jotai-tanstack-query';
 import { queryKeys } from '#/hooks/data/keys';
 import { lessonPlaybackSchema, playbackErrorSchema } from '#/lib/admin-schemas';
+import { type LessonRef, sameLessonRef } from '#/lib/lesson-ref';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
@@ -16,12 +17,16 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
  * the one `lessonPlaybackAtomFamily`'s default `queryFn` actually calls —
  * instead of asserting against a hand-rolled duplicate that could drift from
  * it silently.
+ *
+ * Both slugs go on the wire: the route refuses a request without
+ * `courseSlug`, and with it gates the lesson inside that course and signs the
+ * URL with that course's credentials.
  */
 export const fetchLessonPlayback = async (
-  lessonSlug: string,
+  { courseSlug, lessonSlug }: LessonRef,
   opts?: { fresh?: boolean },
 ): Promise<PlaybackResult> => {
-  const params = new URLSearchParams({ lessonSlug });
+  const params = new URLSearchParams({ lessonSlug, courseSlug });
   if (opts?.fresh) params.set('fresh', '1');
   const r = await fetch(`/api/lesson/playback?${params.toString()}`);
   if (!r.ok) {
@@ -40,15 +45,17 @@ export const fetchLessonPlayback = async (
   return lessonPlaybackSchema.parse(await r.json());
 };
 
-export const lessonPlaybackAtomFamily = atomFamily((lessonSlug: string) =>
-  atomWithQuery<PlaybackResult>(() => ({
-    queryKey: queryKeys.lessonPlayback(lessonSlug),
-    queryFn: () => fetchLessonPlayback(lessonSlug),
-    enabled: !!lessonSlug,
-    staleTime: 1000 * 60 * 30,
-    gcTime: 1000 * 60 * 60,
-    retry: 1,
-  })),
+export const lessonPlaybackAtomFamily = atomFamily(
+  (lesson: LessonRef) =>
+    atomWithQuery<PlaybackResult>(() => ({
+      queryKey: queryKeys.lessonPlayback(lesson),
+      queryFn: () => fetchLessonPlayback(lesson),
+      enabled: !!lesson.lessonSlug && !!lesson.courseSlug,
+      staleTime: 1000 * 60 * 30,
+      gcTime: 1000 * 60 * 60,
+      retry: 1,
+    })),
+  sameLessonRef,
 );
 
 /**
@@ -69,11 +76,11 @@ export const lessonPlaybackAtomFamily = atomFamily((lessonSlug: string) =>
  */
 export const refetchLessonPlaybackFresh = (
   queryClient: QueryClient,
-  lessonSlug: string,
+  lesson: LessonRef,
 ) =>
   queryClient.fetchQuery({
-    queryKey: queryKeys.lessonPlayback(lessonSlug),
-    queryFn: () => fetchLessonPlayback(lessonSlug, { fresh: true }),
+    queryKey: queryKeys.lessonPlayback(lesson),
+    queryFn: () => fetchLessonPlayback(lesson, { fresh: true }),
     // No internal retry: the caller (`compute-recovery-action.ts`'s
     // `MAX_RECOVERY_ATTEMPTS`) already owns a small, deliberate retry
     // budget for this exact failure. TanStack Query's own default retry

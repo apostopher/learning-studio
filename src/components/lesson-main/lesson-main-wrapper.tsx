@@ -30,8 +30,12 @@ export const LessonMainWrapper = ({
   const setOutOfTierNotice = useSetAtom(outOfTierNoticeAtom);
   const course = useCourseDetails(courseSlug);
   const courseData = course.data ?? undefined;
-  const video = useLessonVideo(lessonSlug);
-  const material = useLessonMaterial(lessonSlug);
+  // The lesson as the route names it — both queries are keyed and fetched
+  // per course, since the same lesson in another course is gated and signed
+  // differently (see `LessonRef`).
+  const lesson = { courseSlug, lessonSlug };
+  const video = useLessonVideo(lesson);
+  const material = useLessonMaterial(lesson);
 
   // A never-completed out-of-tier lesson: /api/lesson/material 403s rather
   // than serving anything, so there is no page-level state to render here —
@@ -102,7 +106,7 @@ export const LessonMainWrapper = ({
       // video just broke) would additionally log an unhandled promise
       // rejection on every failure, which is noise, not signal, on a path
       // that already has a real error handler.
-      void refetchLessonPlaybackFresh(queryClient, lessonSlug).catch(() => {});
+      void refetchLessonPlaybackFresh(queryClient, lesson).catch(() => {});
     },
   });
 
@@ -111,6 +115,7 @@ export const LessonMainWrapper = ({
   // page. Derived from the computed state rather than from the params, so the
   // pointer can never claim a lesson the learner was not shown.
   useRecordLastViewedLesson({
+    courseSlug,
     lessonSlug,
     enabled: shouldRecordLastViewed(state),
   });

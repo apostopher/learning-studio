@@ -16,13 +16,17 @@ vi.mock('#/db/lesson-playback', () => ({
 
 import { getLessonPlaybackHandler } from '../playback';
 
-const req = (slug: string) =>
-  new Request(`http://t/api/lesson/playback?lessonSlug=${slug}`);
+const req = (slug: string, courseSlug = 'c1') =>
+  new Request(
+    `http://t/api/lesson/playback?lessonSlug=${slug}&courseSlug=${courseSlug}`,
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
   m.evaluateLessonGate.mockResolvedValue({
+    courseSlug: 'c1',
+    courseId: 7,
     subscribed: true,
     lessonLock: { kind: 'open' },
   });
@@ -106,6 +110,7 @@ describe('getLessonPlaybackHandler', () => {
       url: 'https://cdn/v.mp4',
     });
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      courseId: 7,
       skipCache: false,
     });
   });
@@ -115,20 +120,58 @@ describe('getLessonPlaybackHandler', () => {
   // above (the gate mock resolves the same way regardless of its input), so
   // nothing here previously proved the gate was even asked about THIS caller
   // and THIS lesson. Model: report-video-progress.test.ts's equivalent test.
-  it('passes the session user id and the request lesson slug to the gate — not a hardcoded or mismatched value', async () => {
+  it('passes the session user id and the request lesson and course slugs to the gate — not a hardcoded or mismatched value', async () => {
     m.getSession.mockResolvedValueOnce({ user: { id: 'u-real' } });
 
-    await getLessonPlaybackHandler(req('lesson-real'));
+    await getLessonPlaybackHandler(req('lesson-real', 'course-real'));
 
     expect(m.evaluateLessonGate).toHaveBeenCalledWith({
       userId: 'u-real',
       lessonSlug: 'lesson-real',
+      courseSlug: 'course-real',
+    });
+  });
+
+  it('400s without a courseSlug, after the auth check and before the gate', async () => {
+    // The course can no longer be inferred from the lesson (Task 6a): a
+    // request that does not say which course it is in cannot be gated, so
+    // it is refused as malformed — not resolved against a guessed course.
+    m.getSession.mockResolvedValueOnce(null);
+    const anon = await getLessonPlaybackHandler(
+      new Request('http://t/api/lesson/playback?lessonSlug=l1'),
+    );
+    expect(anon.status).toBe(401);
+
+    const res = await getLessonPlaybackHandler(
+      new Request('http://t/api/lesson/playback?lessonSlug=l1'),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.text()).toMatch(/courseSlug/);
+    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.getLessonPlayback).not.toHaveBeenCalled();
+  });
+
+  it('resolves playback for the course the gate resolved, not one inferred from the lesson', async () => {
+    m.evaluateLessonGate.mockResolvedValueOnce({
+      courseSlug: 'c-other',
+      courseId: 42,
+      subscribed: true,
+      lessonLock: { kind: 'open' },
+    });
+
+    await getLessonPlaybackHandler(req('l1', 'c-other'));
+
+    expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      courseId: 42,
+      skipCache: false,
     });
   });
 
   it('passes skipCache through only when the caller sends fresh=1, after the same gate checks', async () => {
     const res = await getLessonPlaybackHandler(
-      new Request('http://t/api/lesson/playback?lessonSlug=l1&fresh=1'),
+      new Request(
+        'http://t/api/lesson/playback?lessonSlug=l1&courseSlug=c1&fresh=1',
+      ),
     );
     expect(res.status).toBe(200);
     // Gate is still evaluated before this — mocked to succeed in beforeEach,
@@ -136,15 +179,19 @@ describe('getLessonPlaybackHandler', () => {
     // still 401/403 above, never reach this call at all.
     expect(m.evaluateLessonGate).toHaveBeenCalledTimes(1);
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      courseId: 7,
       skipCache: true,
     });
   });
 
   it('ignores a fresh value other than exactly "1"', async () => {
     await getLessonPlaybackHandler(
-      new Request('http://t/api/lesson/playback?lessonSlug=l1&fresh=true'),
+      new Request(
+        'http://t/api/lesson/playback?lessonSlug=l1&courseSlug=c1&fresh=true',
+      ),
     );
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
+      courseId: 7,
       skipCache: false,
     });
   });

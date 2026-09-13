@@ -21,14 +21,10 @@ const moduleLessonsTable = pgTable('module_lessons', {
   moduleId: integer('module_id'),
   lessonId: integer('lesson_id'),
 });
-const modulesTable = pgTable('modules', {
-  id: integer('id').primaryKey(),
-  courseId: integer('course_id'),
-});
 
 /**
  * A chainable stub standing in for
- * `db.select().from().innerJoin().innerJoin().where().orderBy().limit()`.
+ * `db.select().from().innerJoin().where().limit()`.
  * The chain is itself thenable so an `await` on the unresolved builder
  * resolves too, matching the real query in `resolveLessonPlaybackUncached`,
  * which terminates on `.limit(1)`.
@@ -38,7 +34,6 @@ function makeChain(result: unknown) {
     from: () => chain,
     innerJoin: () => chain,
     where: () => chain,
-    orderBy: () => chain,
     limit: () => chain,
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
     then: (
@@ -58,15 +53,22 @@ vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   lessonsTable,
   moduleLessonsTable,
-  modulesTable,
 }));
 vi.mock('#/db/admin', () => admin);
 vi.mock('#/integrations/upstash/redis', () => ({ redis: redisMock }));
 vi.mock('#/lib/video-providers/resolve.server', () => providers);
+// The membership helper and the invalidate path's lookups would otherwise
+// issue queries through the same `db.select` stub these tests queue rows on.
+// Their SQL is pinned in lesson-course-scoped-reads.test.ts; here they are
+// inert so each test's single queued row reaches the playback lookup.
+vi.mock('#/db/course-modules', () => ({ courseModuleIds: () => 'SUBQUERY' }));
+vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug: vi.fn() }));
+vi.mock('#/db/placements', () => ({ getCourseIdsForLesson: vi.fn() }));
 
 const { getLessonPlayback } = await import('#/db/lesson-playback');
 
-const lessonRow = { videoProvider: 'mux', videoRef: 'ref-1', courseId: 3 };
+const lessonRow = { videoProvider: 'mux', videoRef: 'ref-1' };
+const inCourse = { courseId: 3 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -85,10 +87,10 @@ describe('getLessonPlayback', () => {
     };
     redisMock.get.mockResolvedValueOnce(cached);
 
-    const result = await getLessonPlayback('l1');
+    const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual(cached);
-    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:l1');
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1');
     expect(db.select).not.toHaveBeenCalled();
     expect(redisMock.set).not.toHaveBeenCalled();
   });
@@ -98,7 +100,7 @@ describe('getLessonPlayback', () => {
     db.select.mockReturnValueOnce(makeChain([lessonRow]));
     providers.resolvePlayback.mockResolvedValueOnce({ status: 'rendering' });
 
-    const result = await getLessonPlayback('l1');
+    const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual({ status: 'rendering' });
     // The Critical this test guards: a pending result must never be written,
@@ -112,7 +114,7 @@ describe('getLessonPlayback', () => {
     db.select.mockReturnValueOnce(makeChain([lessonRow]));
     providers.resolvePlayback.mockResolvedValueOnce({ status: 'failed' });
 
-    const result = await getLessonPlayback('l1');
+    const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual({ status: 'failed' });
     expect(redisMock.set).not.toHaveBeenCalled();
@@ -131,11 +133,11 @@ describe('getLessonPlayback', () => {
     };
     providers.resolvePlayback.mockResolvedValueOnce(ready);
 
-    const result = await getLessonPlayback('l1');
+    const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual(ready);
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:l1',
+      'lesson-playback:3:l1',
       JSON.stringify(ready),
       { ex: 60 }, // 90 - 30
     );
@@ -154,10 +156,10 @@ describe('getLessonPlayback', () => {
     };
     providers.resolvePlayback.mockResolvedValueOnce(ready);
 
-    await getLessonPlayback('l1');
+    await getLessonPlayback('l1', inCourse);
 
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:l1',
+      'lesson-playback:3:l1',
       JSON.stringify(ready),
       { ex: 1 },
     );
@@ -176,7 +178,7 @@ describe('getLessonPlayback', () => {
     };
     providers.resolvePlayback.mockResolvedValueOnce(ready);
 
-    const result = await getLessonPlayback('l1');
+    const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual(ready);
     expect(redisMock.set).not.toHaveBeenCalled();
@@ -186,7 +188,7 @@ describe('getLessonPlayback', () => {
     redisMock.get.mockResolvedValueOnce(null);
     db.select.mockReturnValueOnce(makeChain([])); // no matching lesson row
 
-    const result = await getLessonPlayback('missing');
+    const result = await getLessonPlayback('missing', inCourse);
 
     expect(result).toBeNull();
     expect(redisMock.set).not.toHaveBeenCalled();
@@ -209,13 +211,16 @@ describe('getLessonPlayback', () => {
     };
     providers.resolvePlayback.mockResolvedValueOnce(fresh);
 
-    const result = await getLessonPlayback('l1', { skipCache: true });
+    const result = await getLessonPlayback('l1', {
+      courseId: 3,
+      skipCache: true,
+    });
 
     expect(result).toEqual(fresh);
     expect(redisMock.get).not.toHaveBeenCalled();
     // Still writes a fresh cache entry under the normal TTL rules.
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:l1',
+      'lesson-playback:3:l1',
       JSON.stringify(fresh),
       { ex: 3570 },
     );
@@ -232,10 +237,13 @@ describe('getLessonPlayback', () => {
     };
     redisMock.get.mockResolvedValueOnce(cached);
 
-    const result = await getLessonPlayback('l1', { skipCache: false });
+    const result = await getLessonPlayback('l1', {
+      courseId: 3,
+      skipCache: false,
+    });
 
     expect(result).toEqual(cached);
-    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:l1');
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1');
     expect(db.select).not.toHaveBeenCalled();
   });
 });

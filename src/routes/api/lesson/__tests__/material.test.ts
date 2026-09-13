@@ -16,7 +16,7 @@ vi.mock('#/db/lesson-visit', () => ({ recordLessonVisit }));
 
 import { getLessonMaterialHandler } from '../material';
 
-const req = (query = '?lessonSlug=b') =>
+const req = (query = '?lessonSlug=b&courseSlug=c1') =>
   new Request(`http://test/api/lesson/material${query}`);
 
 const material = { lessonSlug: 'b', text: 'body', keyPoints: ['k'], quiz: [] };
@@ -144,6 +144,24 @@ describe('getLessonMaterialHandler', () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     expect((await getLessonMaterialHandler(req(''))).status).toBe(400);
   });
+
+  it('400s when courseSlug is missing, before the gate', async () => {
+    // The course can no longer be inferred from the lesson (Task 6a).
+    const res = await getLessonMaterialHandler(req('?lessonSlug=b'));
+    expect(res.status).toBe(400);
+    expect(await res.text()).toMatch(/courseSlug/);
+    expect(evaluateLessonGate).not.toHaveBeenCalled();
+  });
+
+  it('passes the session user id and both slugs to the gate', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u-real' } });
+    await getLessonMaterialHandler(req('?lessonSlug=b&courseSlug=c-real'));
+    expect(evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u-real',
+      lessonSlug: 'b',
+      courseSlug: 'c-real',
+    });
+  });
 });
 
 /**
@@ -219,7 +237,7 @@ describe('recording the visit', () => {
   });
 
   it('records the session user and the requested lesson when unlocked', async () => {
-    await getLessonMaterialHandler(req('?lessonSlug=b'));
+    await getLessonMaterialHandler(req());
     expect(recordLessonVisit).toHaveBeenCalledWith({
       userId: 'u1',
       lessonSlug: 'b',

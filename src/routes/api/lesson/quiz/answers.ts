@@ -9,6 +9,10 @@ import { CourseLessonQuizAnswersSchema } from '#/types';
 
 const SubmitQuizInputSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on — a lesson can
+  // be placed in several courses, each with its own gate, so it cannot be
+  // inferred from the slug.
+  courseSlug: z.string().min(1),
   answers: CourseLessonQuizAnswersSchema.min(1),
 });
 
@@ -35,7 +39,10 @@ export async function submitLessonQuizHandler(
   const parsed = SubmitQuizInputSchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json(
-      { error: 'A lessonSlug and at least one answer are required' },
+      {
+        error:
+          'A lessonSlug, a courseSlug and at least one answer are required',
+      },
       { status: 400 },
     );
   }
@@ -43,6 +50,7 @@ export async function submitLessonQuizHandler(
   const gate = await evaluateLessonGate({
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
+    courseSlug: parsed.data.courseSlug,
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is

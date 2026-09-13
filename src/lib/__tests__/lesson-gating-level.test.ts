@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
-  getCourseSlugForLesson: vi.fn(),
+  getLessonInCourse: vi.fn(),
   getUserRoleNames: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
@@ -12,7 +12,7 @@ const m = vi.hoisted(() => ({
 }));
 
 vi.mock('#/db/lesson-access', () => ({
-  getCourseSlugForLesson: m.getCourseSlugForLesson,
+  getLessonInCourse: m.getLessonInCourse,
   isSubscribedToCourse: m.isSubscribedToCourse,
 }));
 // `getUserRoleNames` lives in #/db/admin, not #/db/permissions — a vi.mock on
@@ -67,8 +67,7 @@ const DETAILS = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.getCourseSlugForLesson.mockResolvedValue({
-    courseSlug: 'c1',
+  m.getLessonInCourse.mockResolvedValue({
     courseId: 7,
     isAvailable: true,
   });
@@ -85,7 +84,11 @@ describe('level enforcement', () => {
     // A wrong vi.mock path leaves the real drizzle-backed getCurrentLevel in
     // place, which would never be called with these arguments.
     m.getCurrentLevel.mockResolvedValue('intermediate');
-    await evaluateLessonGate({ userId: 'u1', lessonSlug: 'inter-1' });
+    await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'inter-1',
+      courseSlug: 'c1',
+    });
     expect(m.getCurrentLevel).toHaveBeenCalledWith('u1', 7);
   });
 
@@ -94,6 +97,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'inter-1',
+      courseSlug: 'c1',
     });
     expect(result?.outOfTier).toBeNull();
   });
@@ -103,6 +107,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
     expect(result?.outOfTier).not.toBeNull();
   });
@@ -115,6 +120,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
     expect(result?.outOfTier).toEqual({ readOnly: true });
   });
@@ -127,6 +133,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
     expect(result?.outOfTier).toEqual({ readOnly: false });
   });
@@ -138,6 +145,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'inter-1',
+      courseSlug: 'c1',
     });
     expect(result?.lessonLock).toEqual({ kind: 'open' });
   });
@@ -147,24 +155,28 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'inter-1',
+      courseSlug: 'c1',
     });
     expect(result?.level).toBe('advanced');
   });
 
   it('rejects rather than skipping the check when the payload omits the lesson', async () => {
-    // The lesson resolved in getCourseSlugForLesson and is available, so a
+    // The lesson resolved in getLessonInCourse and is available, so a
     // payload that does not contain it is a broken payload. Returning a
     // verdict here would skip the level check and hand the decision to locks
     // that answer `open` for a lesson they cannot locate — the one line the
     // fail-closed intent rests on would be the line that fails open.
     m.getCurrentLevel.mockResolvedValue('intermediate');
-    m.getCourseSlugForLesson.mockResolvedValue({
-      courseSlug: 'c1',
+    m.getLessonInCourse.mockResolvedValue({
       courseId: 7,
       isAvailable: true,
     });
     await expect(
-      evaluateLessonGate({ userId: 'u1', lessonSlug: 'not-in-payload' }),
+      evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'not-in-payload',
+        courseSlug: 'c1',
+      }),
     ).rejects.toThrow(/not-in-payload/);
   });
 
@@ -176,6 +188,7 @@ describe('level enforcement', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
     expect(result?.outOfTier).toBeNull();
     expect(result?.lessonLock).toEqual({ kind: 'open' });

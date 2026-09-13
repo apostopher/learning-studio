@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { z } from 'zod';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import type { LessonRef } from '#/lib/lesson-ref';
 import {
   type CourseLessonQuizAnswers,
   CourseLessonQuizAnswersSchema,
@@ -63,8 +64,12 @@ export function useLessonQuizResult(lessonSlug: string) {
  * it (zod's default `object()` mode drops unrecognised keys) — `promotion` is
  * read from the same raw json separately via `extractPromotion` so it never
  * gets dropped on the floor.
+ *
+ * Both slugs go on the wire: the route refuses a body without `courseSlug`
+ * and gates the lesson inside that course before recording the attempt. The
+ * result cache stays keyed by lesson — the attempt row is the lesson's.
  */
-export function useSubmitLessonQuiz(lessonSlug: string) {
+export function useSubmitLessonQuiz({ courseSlug, lessonSlug }: LessonRef) {
   const queryClient = useQueryClient();
   const setPromotion = useSetAtom(pendingPromotionAtom);
 
@@ -73,7 +78,7 @@ export function useSubmitLessonQuiz(lessonSlug: string) {
       const res = await fetch('/api/lesson/quiz/answers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lessonSlug, answers }),
+        body: JSON.stringify({ courseSlug, lessonSlug, answers }),
       });
       if (!res.ok) {
         throw new Error(`Failed to save quiz answers (${res.status})`);

@@ -1,11 +1,11 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '#/db';
+import { courseModuleIds } from '#/db/course-modules';
 import {
   courseLastViewedTable,
   coursesTable,
   lessonsTable,
   moduleLessonsTable,
-  modulesTable,
 } from '#/db/schema';
 
 /**
@@ -42,46 +42,48 @@ export async function getLastViewedLessonId({
 }
 
 /**
- * Record that this user is on this lesson.
+ * Record that this user is on this lesson, in this course.
  *
- * The lesson's course is derived from the lesson itself rather than taken
- * from the caller, so a forged request cannot write a pointer into a course
- * the lesson does not belong to. Returns false when the slug matches no
- * lesson, so the route can 404 instead of silently doing nothing.
+ * The course is the one the caller resolved — the route's gate, from the
+ * `/course/$courseSlug/…` URL — and the lesson is looked up WITHIN it through
+ * `courseModuleIds`, so a forged request still cannot write a pointer into a
+ * course the lesson is not placed in. Returns false when the lesson is not
+ * placed in the course, so the route can 404 instead of silently doing
+ * nothing.
+ *
+ * Explicit rather than inferred because a lesson can be taught by SEVERAL
+ * courses via `module_lessons`, and the pointer is per course: this used to
+ * derive the course from the lesson (the lowest course id), which parked a
+ * learner's resume point in a course they were not reading.
  *
  * Deliberately does NOT re-check the lesson gate. The client only calls this
  * when the lesson rendered unlocked content, and `resolveResumeTarget` hops
  * off a locked pointer on read anyway — so the worst a forged write achieves
  * is redirecting the forger to a lesson they still cannot open. Re-running
  * the gate here would mean a full progress aggregation on every lesson view.
- *
- * A lesson can now be taught by SEVERAL courses via `module_lessons`, and the
- * caller only ever hands this a bare `lessonSlug` — no course context to say
- * which one the pointer belongs to. Without an `ORDER BY`, the join below
- * could non-deterministically pick a different course on different calls for
- * the same lesson, bouncing the learner's resume pointer between courses.
- * `orderBy` + `limit(1)` pin it to the lowest course id so a given lesson
- * always writes the same course's pointer; a lesson genuinely being resumed
- * per-course would need the caller to pass a courseSlug instead.
  */
 export async function recordLastViewedLesson({
   userId,
   lessonSlug,
+  courseId,
 }: {
   userId: string;
   lessonSlug: string;
+  courseId: number;
 }): Promise<boolean> {
   const [lesson] = await db
-    .select({ lessonId: lessonsTable.id, courseId: coursesTable.id })
+    .select({ lessonId: lessonsTable.id })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(lessonsTable.slug, lessonSlug))
-    .orderBy(coursesTable.id)
+    .where(
+      and(
+        eq(lessonsTable.slug, lessonSlug),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
+      ),
+    )
     .limit(1);
   if (!lesson) return false;
 
@@ -89,7 +91,7 @@ export async function recordLastViewedLesson({
     .insert(courseLastViewedTable)
     .values({
       userId,
-      courseId: lesson.courseId,
+      courseId,
       lessonId: lesson.lessonId,
     })
     .onConflictDoUpdate({

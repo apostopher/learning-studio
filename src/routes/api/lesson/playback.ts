@@ -22,6 +22,13 @@ export async function getLessonPlaybackHandler(
   const lessonSlug = url.searchParams.get('lessonSlug');
   if (!lessonSlug)
     return new Response('lessonSlug is required', { status: 400 });
+  // The course the learner is in, from the route they are on. A lesson can be
+  // placed in several courses and each has its own gate and credentials, so
+  // this cannot be inferred from the slug — a request without it is
+  // malformed, not resolved against a guessed course.
+  const courseSlug = url.searchParams.get('courseSlug');
+  if (!courseSlug)
+    return new Response('courseSlug is required', { status: 400 });
   // Lets a caller that already observed a real playback failure (a
   // mid-playback 401/403, or a plain retry click — see
   // `VideoPlayerContainer`/`compute-recovery-action.ts`) skip the Redis
@@ -35,6 +42,7 @@ export async function getLessonPlaybackHandler(
     const gate = await evaluateLessonGate({
       userId: session.user.id,
       lessonSlug,
+      courseSlug,
     });
     if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
       return new Response('Forbidden', { status: 403 });
@@ -56,6 +64,7 @@ export async function getLessonPlaybackHandler(
       return new Response('Forbidden', { status: 403 });
     }
     const playback = await getLessonPlayback(lessonSlug, {
+      courseId: gate.courseId,
       skipCache: fresh,
     });
     if (!playback) return new Response('Forbidden', { status: 403 });

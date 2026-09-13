@@ -69,15 +69,23 @@ export async function getLessonMaterialHandler(
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const lessonSlug = new URL(request.url).searchParams.get('lessonSlug');
+  const params = new URL(request.url).searchParams;
+  const lessonSlug = params.get('lessonSlug');
   if (!lessonSlug) {
     return new Response('lessonSlug is required', { status: 400 });
+  }
+  // The course the learner is in, from the route they are on — see
+  // playback.ts for why it cannot be inferred from the lesson.
+  const courseSlug = params.get('courseSlug');
+  if (!courseSlug) {
+    return new Response('courseSlug is required', { status: 400 });
   }
 
   try {
     const gate = await evaluateLessonGate({
       userId: session.user.id,
       lessonSlug,
+      courseSlug,
     });
     if (!gate) {
       return Response.json({ error: 'Lesson not found' }, { status: 404 });

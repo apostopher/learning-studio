@@ -9,6 +9,10 @@ import { maybePromote } from '#/lib/promotion.server';
 
 const reportVideoProgressSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on — a lesson can
+  // be placed in several courses, each with its own gate, so it cannot be
+  // inferred from the slug.
+  courseSlug: z.string().min(1),
   progress: z.number().int().min(0).max(100),
 });
 
@@ -47,6 +51,7 @@ export async function reportVideoProgressHandler(
   const gate = await evaluateLessonGate({
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
+    courseSlug: parsed.data.courseSlug,
   });
   if (!gate || !gate.subscribed || gate.lessonLock.kind !== 'open') {
     return new Response('Forbidden', { status: 403 });

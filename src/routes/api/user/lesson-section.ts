@@ -9,6 +9,10 @@ import { maybePromote } from '#/lib/promotion.server';
 
 const sectionTapSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on — a lesson can
+  // be placed in several courses, each with its own gate, so it cannot be
+  // inferred from the slug.
+  courseSlug: z.string().min(1),
   // Enumerated, not a free string. The section name is a component of this
   // table's unique index, so an unconstrained value would let a caller write
   // unbounded rows per lesson — and `LESSON_VISIT_SECTION` is deliberately not
@@ -57,6 +61,7 @@ export async function recordLessonSectionHandler(
   const gate = await evaluateLessonGate({
     userId: session.user.id,
     lessonSlug: parsed.data.lessonSlug,
+    courseSlug: parsed.data.courseSlug,
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is

@@ -28,11 +28,16 @@ const MIN_USEFUL_CHARS = 200;
  * than a failure: Mux videos carry no text track on this account, a lesson may
  * have no video at all, and a caption fetch can simply fail. Callers treat null
  * as "no transcript source" and the UI offers no debrief.
+ *
+ * `courseId` is the course the caller is serving — playback is resolved
+ * through that course's provider credentials (see `getLessonPlayback`), so
+ * the caption URL it hands back is one this course can actually fetch.
  */
 async function resolveLessonTranscriptUncached(
   lessonSlug: string,
+  courseId: number,
 ): Promise<string | null> {
-  const playback = await getLessonPlayback(lessonSlug);
+  const playback = await getLessonPlayback(lessonSlug, { courseId });
   if (playback?.status !== 'ready') return null;
   if (!playback.captions) return null;
 
@@ -52,6 +57,7 @@ async function resolveLessonTranscriptUncached(
 
 type LessonTranscriptReader = ((
   lessonSlug: string,
+  options: { courseId: number },
 ) => Promise<string | null>) & {
   invalidate: (lessonSlug: string) => Promise<void>;
 };
@@ -61,14 +67,25 @@ type LessonTranscriptReader = ((
  * captions the provider has not generated yet, a failed download — and
  * freezing any of them for a week would leave a lesson permanently
  * debrief-less with nothing to indicate why.
+ *
+ * Cached per LESSON, not per course, unlike the playback it is derived from:
+ * the words in the caption file are the video's, and the video is the
+ * lesson's — every course teaching it gets the same text. The course only
+ * decides whose credentials fetch it on a cold read.
  */
 export const getLessonTranscript: LessonTranscriptReader = Object.assign(
-  async (lessonSlug: string): Promise<string | null> => {
+  async (
+    lessonSlug: string,
+    options: { courseId: number },
+  ): Promise<string | null> => {
     const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
     const cached = await redis.get<string>(key);
     if (cached) return cached;
 
-    const transcript = await resolveLessonTranscriptUncached(lessonSlug);
+    const transcript = await resolveLessonTranscriptUncached(
+      lessonSlug,
+      options.courseId,
+    );
     if (transcript) {
       await redis.set(key, transcript, { ex: CACHE_TTL_SECONDS });
     }

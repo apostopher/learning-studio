@@ -32,12 +32,15 @@ export const LessonMaterialWrapper = ({
   courseSlug,
 }: LessonMaterialWrapperProps) => {
   const queryClient = useQueryClient();
-  const query = useLessonMaterial(lessonSlug);
+  // The lesson as the route names it — both queries and every write below
+  // are per course (see `LessonRef`).
+  const lessonRef = { courseSlug, lessonSlug };
+  const query = useLessonMaterial(lessonRef);
   const details = useCourseDetails(courseSlug);
   // The same cached query the player made — read here only to learn whether
   // the video has a caption track, which is what decides if a material-less
   // lesson can still offer a transcript-sourced debrief.
-  const video = useLessonVideo(lessonSlug);
+  const video = useLessonVideo(lessonRef);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   lessonMaterialRef.current = tabsRef.current;
@@ -57,15 +60,16 @@ export const LessonMaterialWrapper = ({
   // completed at an earlier level. See isSectionTapRecordingEnabled's own
   // tests for this decision (this component cannot be rendered under Vitest).
   const recordSectionTap = useSectionTapRecorder({
+    courseSlug,
     lessonSlug,
     enabled: isSectionTapRecordingEnabled(state),
   });
 
   const onRetry = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.lessonMaterial(lessonSlug),
+      queryKey: queryKeys.lessonMaterial({ courseSlug, lessonSlug }),
     });
-  }, [queryClient, lessonSlug]);
+  }, [queryClient, courseSlug, lessonSlug]);
 
   switch (state.kind) {
     case 'loading':
@@ -94,6 +98,7 @@ export const LessonMaterialWrapper = ({
       }) ? (
         <LessonDebriefSection sectionRef={tabsRef}>
           <DebriefQuizContainer
+            courseSlug={courseSlug}
             lessonSlug={lessonSlug}
             readOnly={state.readOnly}
           />
@@ -107,6 +112,7 @@ export const LessonMaterialWrapper = ({
           {state.adminBypass ? <AdminPreviewNote /> : null}
           <LessonMaterialView
             material={state.material}
+            courseSlug={courseSlug}
             tabsRef={tabsRef}
             // Defaults to the authored quiz while the course payload is still
             // in flight. Failing the other way would flash a Debrief tab on

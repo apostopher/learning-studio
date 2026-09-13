@@ -8,6 +8,7 @@ import {
   videoProgressSchema,
 } from '#/data-hooks/use-video-progress';
 import { queryKeys } from '#/hooks/data/keys';
+import type { LessonRef } from '#/lib/lesson-ref';
 import { videoPlayerStateAtomFamily } from './atoms';
 import {
   computeMilestoneTick,
@@ -60,7 +61,7 @@ async function fetchProgress(lessonSlug: string) {
  */
 export function useMilestoneReporter(
   playerId: string,
-  lessonSlug: string,
+  { courseSlug, lessonSlug }: LessonRef,
   readOnly: boolean,
 ): void {
   const { currentTime, duration } = useAtomValue(
@@ -86,8 +87,10 @@ export function useMilestoneReporter(
     );
     stateRef.current = state;
 
+    // Every report names the course: the route refuses a body without it and
+    // gates the lesson inside that course before recording the milestone.
     for (const milestone of crossed) {
-      reportRef.current.mutate({ lessonSlug, progress: milestone });
+      reportRef.current.mutate({ courseSlug, lessonSlug, progress: milestone });
     }
 
     if (!shouldReconcile) return;
@@ -95,15 +98,23 @@ export function useMilestoneReporter(
     void reconcileCoverage({
       lessonSlug,
       reported: state.reported,
-      report: (input) => reportRef.current.mutate(input),
+      report: (input) => reportRef.current.mutate({ courseSlug, ...input }),
       fetchProgress,
     }).then(() => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonMaterial(lessonSlug),
+        queryKey: queryKeys.lessonMaterial({ courseSlug, lessonSlug }),
       });
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonProgress(lessonSlug),
       });
     });
-  }, [currentTime, duration, lessonSlug, milestonesHit, queryClient, readOnly]);
+  }, [
+    currentTime,
+    duration,
+    courseSlug,
+    lessonSlug,
+    milestonesHit,
+    queryClient,
+    readOnly,
+  ]);
 }

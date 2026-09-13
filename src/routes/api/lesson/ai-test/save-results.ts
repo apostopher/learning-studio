@@ -9,6 +9,10 @@ import { maybePromote } from '#/lib/promotion.server';
 
 const SaveResultsInputSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on — a lesson can
+  // be placed in several courses, each with its own gate, so it cannot be
+  // inferred from the slug.
+  courseSlug: z.string().min(1),
   test: AITestSchema,
   evaluations: z.array(AIEvaluationResultSchema),
   totalScore: z.number().int().min(0).max(100),
@@ -39,16 +43,17 @@ export async function saveTestResultsHandler(
     return Response.json(
       {
         error:
-          'Valid lessonSlug, test, evaluations, and totalScore are required',
+          'Valid lessonSlug, courseSlug, test, evaluations, and totalScore are required',
       },
       { status: 400 },
     );
   }
-  const { lessonSlug, test, evaluations, totalScore } = parsed.data;
+  const { lessonSlug, courseSlug, test, evaluations, totalScore } = parsed.data;
 
   const gate = await evaluateLessonGate({
     userId: session.user.id,
     lessonSlug,
+    courseSlug,
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is

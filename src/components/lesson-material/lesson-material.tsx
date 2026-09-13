@@ -14,6 +14,8 @@ import { LessonQuizContainer } from './parts/quiz/lesson-quiz-container';
 
 type LessonMaterialProps = {
   material: NonNullable<LessonMaterial>;
+  /** The course the lesson is being read in — every write the quiz/debrief containers make is per course. */
+  courseSlug: string;
   tabsRef?: RefObject<HTMLDivElement | null>;
   /** Whether tab 2 is the Debrief rather than the authored quiz. */
   hasDebrief: boolean;
@@ -25,6 +27,7 @@ type LessonMaterialProps = {
 
 export const LessonMaterialView = ({
   material,
+  courseSlug,
   tabsRef,
   hasDebrief,
   onTabSelected,
@@ -82,11 +85,13 @@ export const LessonMaterialView = ({
         <Tabs.Panel value="quiz" className="outline-hidden">
           {hasDebrief ? (
             <DebriefQuizContainer
+              courseSlug={courseSlug}
               lessonSlug={material.lessonSlug}
               readOnly={readOnly}
             />
           ) : (
             <LessonQuizContainer
+              courseSlug={courseSlug}
               lessonSlug={material.lessonSlug}
               quiz={material.quiz}
               readOnly={readOnly}

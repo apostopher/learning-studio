@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
-  getCourseSlugForLesson: vi.fn(),
+  getLessonInCourse: vi.fn(),
   getUserRoleNames: vi.fn(),
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
@@ -12,7 +12,7 @@ const m = vi.hoisted(() => ({
 }));
 
 vi.mock('#/db/lesson-access', () => ({
-  getCourseSlugForLesson: m.getCourseSlugForLesson,
+  getLessonInCourse: m.getLessonInCourse,
   isSubscribedToCourse: m.isSubscribedToCourse,
 }));
 // `getUserRoleNames` lives in #/db/admin, not #/db/permissions — a vi.mock on
@@ -66,7 +66,7 @@ const DETAILS = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.getCourseSlugForLesson.mockResolvedValue({
+  m.getLessonInCourse.mockResolvedValue({
     courseSlug: 'comp-sci',
     courseId: 7,
     isAvailable: true,
@@ -87,6 +87,7 @@ describe('course staff bypass', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
 
     expect(result?.outOfTier).toBeNull();
@@ -106,6 +107,7 @@ describe('course staff bypass', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
 
     expect(result?.isAdmin).toBe(true);
@@ -117,7 +119,11 @@ describe('course staff bypass', () => {
     // tier of their own course, the same short-circuit admins get.
     m.isCourseStaff.mockResolvedValue(true);
 
-    await evaluateLessonGate({ userId: 'u1', lessonSlug: 'basic-1' });
+    await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'basic-1',
+      courseSlug: 'c1',
+    });
 
     expect(m.getCurrentLevel).not.toHaveBeenCalled();
     expect(m.isSubscribedToCourse).not.toHaveBeenCalled();
@@ -136,6 +142,7 @@ describe('course staff bypass', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
 
     expect(result?.outOfTier).not.toBeNull();
@@ -150,6 +157,7 @@ describe('course staff bypass', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'inter-1',
+      courseSlug: 'c1',
     });
 
     expect(result?.subscribed).toBe(false);
@@ -158,7 +166,11 @@ describe('course staff bypass', () => {
   it('does not query staff for an admin — they bypass on role alone', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
 
-    await evaluateLessonGate({ userId: 'u1', lessonSlug: 'basic-1' });
+    await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'basic-1',
+      courseSlug: 'c1',
+    });
 
     // This path runs on every gated request, including the video-progress
     // beacon's repeated calls. An admin must not pay a query for authority
@@ -172,6 +184,7 @@ describe('course staff bypass', () => {
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
+      courseSlug: 'c1',
     });
 
     expect(result?.isAdmin).toBe(true);

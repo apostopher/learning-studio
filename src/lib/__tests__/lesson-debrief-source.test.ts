@@ -28,7 +28,7 @@ describe('resolveDebriefSource', () => {
       keyPoints: ['authored'],
     });
 
-    await expect(resolveDebriefSource('l-1')).resolves.toEqual({
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material',
       keyPoints: ['authored'],
       text: 'lesson body',
@@ -42,7 +42,7 @@ describe('resolveDebriefSource', () => {
   it('derives key points from the material text when none were authored', async () => {
     getLessonMaterial.mockResolvedValue({ text: 'lesson body', keyPoints: [] });
 
-    await expect(resolveDebriefSource('l-1')).resolves.toEqual({
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material-derived',
       keyPoints: ['derived one', 'derived two'],
       text: 'lesson body',
@@ -56,7 +56,7 @@ describe('resolveDebriefSource', () => {
   it('falls back to the video transcript when the lesson has no material', async () => {
     getLessonTranscript.mockResolvedValue('spoken words from the video');
 
-    await expect(resolveDebriefSource('l-1')).resolves.toEqual({
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'transcript',
       keyPoints: ['derived one', 'derived two'],
       text: 'spoken words from the video',
@@ -64,18 +64,21 @@ describe('resolveDebriefSource', () => {
     expect(getDerivedKeyPoints).toHaveBeenCalledWith(
       'spoken words from the video',
     );
+    // The transcript is read for the course the caller is serving — playback
+    // resolves through that course's credentials (Task 6a).
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
   });
 
   it('falls back to the transcript when the material row has no body text', async () => {
     getLessonMaterial.mockResolvedValue({ text: '', keyPoints: [] });
     getLessonTranscript.mockResolvedValue('spoken words from the video');
 
-    const source = await resolveDebriefSource('l-1');
+    const source = await resolveDebriefSource('l-1', 7);
     expect(source?.kind).toBe('transcript');
   });
 
   it('returns null when there is neither material nor a transcript', async () => {
-    await expect(resolveDebriefSource('l-1')).resolves.toBeNull();
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toBeNull();
   });
 
   it('returns null rather than an empty-key-point source when derivation yields nothing', async () => {
@@ -84,6 +87,6 @@ describe('resolveDebriefSource', () => {
 
     // generateTest asks for `keyPoints.length * 2` questions, so an empty list
     // would generate a debrief of zero questions rather than fail.
-    await expect(resolveDebriefSource('l-1')).resolves.toBeNull();
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toBeNull();
   });
 });

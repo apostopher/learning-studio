@@ -28,7 +28,11 @@ describe('useReportVideoProgress', () => {
     const { result } = renderHook(() => useReportVideoProgress(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ lessonSlug: 'v1', progress: 50 });
+    result.current.mutate({
+      courseSlug: 'ppl',
+      lessonSlug: 'v1',
+      progress: 50,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(beacon).toHaveBeenCalledTimes(1);
@@ -36,6 +40,13 @@ describe('useReportVideoProgress', () => {
     const blob = beacon.mock.calls[0][1];
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe('application/json');
+    // The course travels in the beacon body: the route 400s without it and
+    // gates the lesson inside that course (Task 6a).
+    expect(JSON.parse(await blob.text())).toEqual({
+      courseSlug: 'ppl',
+      lessonSlug: 'v1',
+      progress: 50,
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -49,13 +60,21 @@ describe('useReportVideoProgress', () => {
     const { result } = renderHook(() => useReportVideoProgress(), {
       wrapper: wrapper(),
     });
-    result.current.mutate({ lessonSlug: 'v1', progress: 50 });
+    result.current.mutate({
+      courseSlug: 'ppl',
+      lessonSlug: 'v1',
+      progress: 50,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(URL);
     expect(init.method).toBe('POST');
     expect(init.keepalive).toBe(true);
-    expect(JSON.parse(init.body)).toEqual({ lessonSlug: 'v1', progress: 50 });
+    expect(JSON.parse(init.body)).toEqual({
+      courseSlug: 'ppl',
+      lessonSlug: 'v1',
+      progress: 50,
+    });
   });
 });

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   getCourseDetailsWithCache,
   getCourseProgress,
-  getCourseSlugForLesson,
+  getLessonInCourse,
   isSubscribedToCourse,
   getUserRoleNames,
   getCurrentLevel,
@@ -12,7 +12,7 @@ const {
 } = vi.hoisted(() => ({
   getCourseDetailsWithCache: vi.fn(),
   getCourseProgress: vi.fn(),
-  getCourseSlugForLesson: vi.fn(),
+  getLessonInCourse: vi.fn(),
   isSubscribedToCourse: vi.fn(),
   getUserRoleNames: vi.fn(),
   getCurrentLevel: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('#/db/course-progress', () => ({ getCourseProgress }));
 // backed) module would otherwise open a database connection here.
 vi.mock('#/db/course-staff', () => ({ isCourseStaff }));
 vi.mock('#/db/lesson-access', () => ({
-  getCourseSlugForLesson,
+  getLessonInCourse,
   isSubscribedToCourse,
 }));
 vi.mock('#/db/admin', () => ({ getUserRoleNames }));
@@ -88,8 +88,7 @@ const progress = (watchedLessonIds: number[]) => ({
 describe('evaluateLessonGate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getCourseSlugForLesson.mockResolvedValue({
-      courseSlug: 'c1',
+    getLessonInCourse.mockResolvedValue({
       courseId: 7,
       isAvailable: true,
     });
@@ -102,9 +101,13 @@ describe('evaluateLessonGate', () => {
   });
 
   it('returns null for a lesson that does not exist', async () => {
-    getCourseSlugForLesson.mockResolvedValue(null);
+    getLessonInCourse.mockResolvedValue(null);
     expect(
-      await evaluateLessonGate({ userId: 'u1', lessonSlug: 'nope' }),
+      await evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'nope',
+        courseSlug: 'c1',
+      }),
     ).toBeNull();
   });
 
@@ -114,13 +117,16 @@ describe('evaluateLessonGate', () => {
     // locate() misses them and every gate reads as OPEN. Without this branch a
     // subscriber who knows a draft slug gets its full material, and the
     // /api/lesson/video route serves its pre-signed download URL.
-    getCourseSlugForLesson.mockResolvedValue({
-      courseSlug: 'c1',
+    getLessonInCourse.mockResolvedValue({
       courseId: 7,
       isAvailable: false,
     });
     expect(
-      await evaluateLessonGate({ userId: 'u1', lessonSlug: 'draft' }),
+      await evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'draft',
+        courseSlug: 'c1',
+      }),
     ).toBeNull();
   });
 
@@ -129,18 +135,25 @@ describe('evaluateLessonGate', () => {
     // WIP lessons for admins too, so the lesson page already renders
     // not-found for them. The admin bypass covers gates, not existence.
     getUserRoleNames.mockResolvedValue(['admin']);
-    getCourseSlugForLesson.mockResolvedValue({
-      courseSlug: 'c1',
+    getLessonInCourse.mockResolvedValue({
       courseId: 7,
       isAvailable: false,
     });
     expect(
-      await evaluateLessonGate({ userId: 'u1', lessonSlug: 'draft' }),
+      await evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'draft',
+        courseSlug: 'c1',
+      }),
     ).toBeNull();
   });
 
   it('locks a lesson whose prerequisite is unwatched', async () => {
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.lessonLock).toEqual({
       kind: 'lesson-locked',
       lessonSlug: 'a',
@@ -151,21 +164,33 @@ describe('evaluateLessonGate', () => {
 
   it('opens the lesson but locks material once the prerequisite is watched', async () => {
     getCourseProgress.mockResolvedValue(progress([10]));
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.lessonLock).toEqual({ kind: 'open' });
     expect(result?.materialLock).toEqual({ kind: 'video-locked' });
   });
 
   it('opens everything once the lesson video is watched too', async () => {
     getCourseProgress.mockResolvedValue(progress([10, 11]));
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.lessonLock).toEqual({ kind: 'open' });
     expect(result?.materialLock).toEqual({ kind: 'open' });
   });
 
   it('forces both locks open for an admin', async () => {
     getUserRoleNames.mockResolvedValue(['admin']);
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.isAdmin).toBe(true);
     expect(result?.lessonLock).toEqual({ kind: 'open' });
     expect(result?.materialLock).toEqual({ kind: 'open' });
@@ -173,7 +198,11 @@ describe('evaluateLessonGate', () => {
 
   it('reports subscription separately from the gates', async () => {
     isSubscribedToCourse.mockResolvedValue(false);
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.subscribed).toBe(false);
   });
 
@@ -186,7 +215,11 @@ describe('evaluateLessonGate', () => {
     // point is that the caller cannot mistake this for success.
     getCourseDetailsWithCache.mockResolvedValue(null);
     await expect(
-      evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' }),
+      evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'b',
+        courseSlug: 'c1',
+      }),
     ).rejects.toThrow(/c1/);
   });
 
@@ -197,7 +230,11 @@ describe('evaluateLessonGate', () => {
     getUserRoleNames.mockResolvedValue(['admin']);
     getCourseDetailsWithCache.mockResolvedValue(null);
     await expect(
-      evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' }),
+      evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'b',
+        courseSlug: 'c1',
+      }),
     ).rejects.toThrow(/c1/);
   });
 
@@ -215,7 +252,11 @@ describe('evaluateLessonGate', () => {
         },
       ],
     });
-    const result = await evaluateLessonGate({ userId: 'u1', lessonSlug: 'b' });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
     expect(result?.lessonLock).toEqual({ kind: 'open' });
   });
 });

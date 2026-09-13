@@ -32,9 +32,13 @@ export type DebriefSource = {
  *
  * Null is answered with a 422, and the UI does not offer a debrief it cannot
  * generate, so it should not be reachable in practice.
+ *
+ * `courseId` is the course the gate resolved for this request: the transcript
+ * fallback resolves playback through that course's provider credentials.
  */
 export async function resolveDebriefSource(
   lessonSlug: string,
+  courseId: number,
 ): Promise<DebriefSource | null> {
   const material = await getLessonMaterial(lessonSlug);
 
@@ -56,7 +60,7 @@ export async function resolveDebriefSource(
     }
   }
 
-  const transcript = await getLessonTranscript(lessonSlug);
+  const transcript = await getLessonTranscript(lessonSlug, { courseId });
   if (!transcript) return null;
   const keyPoints = await getDerivedKeyPoints(transcript);
   if (keyPoints.length === 0) return null;

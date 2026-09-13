@@ -18,6 +18,7 @@ beforeEach(() => {
 
 const props = {
   lessonName: 'Radio Calls',
+  courseSlug: 'ppl',
   lessonSlug: 'radio-calls',
   hasDebrief: true,
   videoExpected: false,
@@ -27,6 +28,16 @@ describe('LessonNoVideoContainer', () => {
   it('offers the debrief shortcut on a normal video-less lesson', () => {
     render(<LessonNoVideoContainer {...props} readOnly={false} />);
     expect(screen.getByRole('button', { name: /Debrief/ })).toBeDefined();
+  });
+
+  it('reads the material for the course the lesson is being viewed in', () => {
+    // The material query is per course (Task 6a): the hook must receive both
+    // slugs, or the container reads (and caches) another course's answer.
+    render(<LessonNoVideoContainer {...props} readOnly={false} />);
+    expect(h.useLessonMaterial).toHaveBeenCalledWith({
+      courseSlug: 'ppl',
+      lessonSlug: 'radio-calls',
+    });
   });
 
   /**

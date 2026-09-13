@@ -6,13 +6,19 @@ import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
 /**
- * `lessonSlug` alone. The body used to carry `keyPoints` and `text` as well,
- * which made the caller responsible for supplying the prompt's source material —
- * so a lesson with no material row could not start a debrief at all, and any
- * signed-in caller could have questions generated from text of their choosing.
- * See `resolveDebriefSource`.
+ * `lessonSlug` and the course it is being read in. The body used to carry
+ * `keyPoints` and `text` as well, which made the caller responsible for
+ * supplying the prompt's source material — so a lesson with no material row
+ * could not start a debrief at all, and any signed-in caller could have
+ * questions generated from text of their choosing. See `resolveDebriefSource`.
+ *
+ * `courseSlug` because a lesson can be placed in several courses, each with
+ * its own gate and credentials, so it cannot be inferred from the slug.
  */
-const GenerateInputSchema = z.object({ lessonSlug: z.string().min(1) });
+const GenerateInputSchema = z.object({
+  lessonSlug: z.string().min(1),
+  courseSlug: z.string().min(1),
+});
 
 export async function generateTestHandler(request: Request): Promise<Response> {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -23,9 +29,12 @@ export async function generateTestHandler(request: Request): Promise<Response> {
   const body = await request.json().catch(() => null);
   const parsed = GenerateInputSchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json({ error: 'lessonSlug is required' }, { status: 400 });
+    return Response.json(
+      { error: 'lessonSlug and courseSlug are required' },
+      { status: 400 },
+    );
   }
-  const { lessonSlug } = parsed.data;
+  const { lessonSlug, courseSlug } = parsed.data;
 
   try {
     // The same gate the material panel passes. The debrief is lesson content,
@@ -35,6 +44,7 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     const gate = await evaluateLessonGate({
       userId: session.user.id,
       lessonSlug,
+      courseSlug,
     });
     if (
       !gate ||
@@ -53,7 +63,7 @@ export async function generateTestHandler(request: Request): Promise<Response> {
       return new Response('Forbidden', { status: 403 });
     }
 
-    const source = await resolveDebriefSource(lessonSlug);
+    const source = await resolveDebriefSource(lessonSlug, gate.courseId);
     if (!source) {
       // Not a 500: nothing is broken. This lesson has neither authored
       // material nor a usable transcript, so there is nothing to build a

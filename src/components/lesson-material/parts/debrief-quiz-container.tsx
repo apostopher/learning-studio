@@ -32,12 +32,15 @@ import { shouldAutoSaveDebrief } from './should-auto-save-debrief';
  * `resolveDebriefSource`.
  */
 type DebriefQuizContainerProps = {
+  /** The course the debrief is being taken in — every request below names it. */
+  courseSlug: string;
   lessonSlug: string;
   /** The lesson was completed at an earlier level — generate/evaluate/save must be inert. */
   readOnly: boolean;
 };
 
 export const DebriefQuizContainer = ({
+  courseSlug,
   lessonSlug,
   readOnly,
 }: DebriefQuizContainerProps) => {
@@ -93,8 +96,8 @@ export const DebriefQuizContainer = ({
       return;
     }
     savedRef.current = true;
-    saveResults().catch(console.error);
-  }, [isComplete, saveResults, readOnly]);
+    saveResults(courseSlug).catch(console.error);
+  }, [isComplete, saveResults, readOnly, courseSlug]);
 
   // Not `return null`: this tab is now the primary way into the debrief — the
   // only way, on a lesson with no video — so an empty panel here would be a
@@ -105,7 +108,7 @@ export const DebriefQuizContainer = ({
         loading={isGenerating}
         onStart={() => {
           if (readOnly) return;
-          void generateTest(lessonSlug);
+          void generateTest({ courseSlug, lessonSlug });
         }}
         readOnly={readOnly}
       />
@@ -122,7 +125,7 @@ export const DebriefQuizContainer = ({
           if (readOnly) return;
           savedRef.current = false;
           resetTest();
-          await generateTest(lessonSlug);
+          await generateTest({ courseSlug, lessonSlug });
         }}
         readOnly={readOnly}
       />
@@ -133,7 +136,7 @@ export const DebriefQuizContainer = ({
 
   const handleSubmit = async (answer: string) => {
     if (readOnly) return;
-    await evaluateAnswer(lessonSlug, currentQuestion, answer);
+    await evaluateAnswer({ courseSlug, lessonSlug }, currentQuestion, answer);
   };
 
   const handleNext = () => {

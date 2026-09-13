@@ -31,6 +31,8 @@ const CORRECT_ANSWER_DWELL_MS = 1200;
 const retakingAtomFamily = atomFamily((_key: string) => atom(false));
 
 type LessonQuizContainerProps = {
+  /** The course the quiz is being taken in — the submit request names it. */
+  courseSlug: string;
   lessonSlug: string;
   quiz: CourseLessonQuiz | null;
   /** The lesson was completed at an earlier level — submitting must be inert. */
@@ -45,6 +47,7 @@ type LessonQuizContainerProps = {
  * first client render disagrees with the markup it is hydrating.
  */
 export const LessonQuizContainer = ({
+  courseSlug,
   lessonSlug,
   quiz,
   readOnly,
@@ -52,6 +55,7 @@ export const LessonQuizContainer = ({
   <ClientGate>
     {() => (
       <LessonQuizClient
+        courseSlug={courseSlug}
         lessonSlug={lessonSlug}
         quiz={quiz}
         readOnly={readOnly}
@@ -61,6 +65,7 @@ export const LessonQuizContainer = ({
 );
 
 const LessonQuizClient = ({
+  courseSlug,
   lessonSlug,
   quiz,
   readOnly,
@@ -73,7 +78,7 @@ const LessonQuizClient = ({
 
   const { askable } = partitionQuiz(quiz);
   const result = useLessonQuizResult(lessonSlug);
-  const submit = useSubmitLessonQuiz(lessonSlug);
+  const submit = useSubmitLessonQuiz({ courseSlug, lessonSlug });
 
   const storageKey = quizProgressKey(userId, lessonSlug);
   const [storedProgress, setProgress] = useAtom(

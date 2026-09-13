@@ -72,7 +72,7 @@ beforeEach(() => {
  * the narrow scope cannot drift wider unnoticed.
  */
 describe('out-of-tier quiz submissions are refused', () => {
-  const body = { lessonSlug: 'l1', answers };
+  const body = { lessonSlug: 'l1', courseSlug: 'c1', answers };
 
   it('403s a never-completed out-of-tier lesson without recording the attempt', async () => {
     m.evaluateLessonGate.mockResolvedValue({
@@ -121,7 +121,7 @@ describe('quiz submit from a non-subscriber', () => {
   it('403s without recording the attempt or checking promotion', async () => {
     m.evaluateLessonGate.mockResolvedValue({ ...inTier, subscribed: false });
     const res = await submitLessonQuizHandler(
-      post({ lessonSlug: 'l1', answers }),
+      post({ lessonSlug: 'l1', courseSlug: 'c1', answers }),
     );
     expect(res.status).toBe(403);
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
@@ -131,9 +131,37 @@ describe('quiz submit from a non-subscriber', () => {
   it('403s an unknown lesson rather than writing against it', async () => {
     m.evaluateLessonGate.mockResolvedValue(null);
     const res = await submitLessonQuizHandler(
-      post({ lessonSlug: 'nope', answers }),
+      post({ lessonSlug: 'nope', courseSlug: 'c1', answers }),
     );
     expect(res.status).toBe(403);
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 6a: the course is no longer inferred from the lesson. The route takes
+ * it from the body, refuses a body without it as malformed, and hands it to
+ * the gate.
+ */
+describe('the course comes from the request', () => {
+  it('400s without a courseSlug, before the gate', async () => {
+    const res = await submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', answers }),
+    );
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/courseSlug/);
+    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+  });
+
+  it('passes the session user id and both slugs to the gate', async () => {
+    await submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', courseSlug: 'c-real', answers }),
+    );
+    expect(m.evaluateLessonGate).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c-real',
+    });
   });
 });

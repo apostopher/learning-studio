@@ -1,5 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
+import { courseModuleIds } from '#/db/course-modules';
 import {
   courseOrgsTable,
   courseSubscriptionsTable,
@@ -10,41 +11,52 @@ import {
 } from '#/db/schema';
 
 /**
- * The course a lesson belongs to, or null when the lesson doesn't exist.
+ * A lesson as placed in ONE course, or null when the course does not exist or
+ * the lesson is not placed in it.
  *
- * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
- * returns only ONE of them (the lowest course id, so the answer is stable
- * across calls rather than depending on row order). Callers that need every
- * course teaching this lesson want `getCourseIdsForLesson` (by id, ids only)
- * or `getCourseSlugsForLessonId` (by id, every slug) instead.
+ * The course comes from the caller — ultimately the `/course/$courseSlug/…`
+ * route the learner is on — and membership is checked through
+ * `courseModuleIds`, the single definition of "which modules are in this
+ * course". This replaces a lesson → module → course walk that picked the
+ * lowest course id among those teaching the lesson: with a lesson in two
+ * courses, that resolved a learner in the second against the first's tier
+ * and subscription.
  *
  * `isAvailable` comes back rather than being filtered in SQL so the caller
  * decides what an unavailable (WIP) lesson means — `evaluateLessonGate` treats
  * it as "does not exist" on the learner path. Filtering here would make the
  * two cases indistinguishable to anyone debugging a 404.
  */
-export async function getCourseSlugForLesson(lessonSlug: string): Promise<{
+export async function getLessonInCourse({
+  lessonSlug,
+  courseSlug,
+}: {
+  lessonSlug: string;
   courseSlug: string;
-  courseId: number;
-  isAvailable: boolean;
-} | null> {
-  const rows = await db
-    .select({
-      courseSlug: coursesTable.slug,
-      courseId: coursesTable.id,
-      isAvailable: lessonsTable.isAvailable,
-    })
+}): Promise<{ courseId: number; isAvailable: boolean } | null> {
+  const [course] = await db
+    .select({ id: coursesTable.id })
+    .from(coursesTable)
+    .where(eq(coursesTable.slug, courseSlug))
+    .limit(1);
+  if (!course) return null;
+
+  const [lesson] = await db
+    .select({ isAvailable: lessonsTable.isAvailable })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(lessonsTable.slug, lessonSlug))
-    .orderBy(modulesTable.courseId)
+    .where(
+      and(
+        eq(lessonsTable.slug, lessonSlug),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(course.id)),
+      ),
+    )
     .limit(1);
-  return rows[0] ?? null;
+  if (!lesson) return null;
+  return { courseId: course.id, isAvailable: lesson.isAvailable };
 }
 
 /**

@@ -27,6 +27,8 @@ const savedRow = {
   createdAt: new Date().toISOString(),
 };
 
+const lesson = { courseSlug: 'ppl', lessonSlug: 'l1' };
+
 describe('useSubmitLessonQuiz', () => {
   /**
    * The route returns `{ ...row, promotion }`. This is the seam most likely
@@ -50,7 +52,7 @@ describe('useSubmitLessonQuiz', () => {
       }),
     );
 
-    const { result } = renderHook(() => useSubmitLessonQuiz('l1'), {
+    const { result } = renderHook(() => useSubmitLessonQuiz(lesson), {
       wrapper: wrapper(store),
     });
     result.current.mutate([]);
@@ -73,7 +75,7 @@ describe('useSubmitLessonQuiz', () => {
       }),
     );
 
-    const { result } = renderHook(() => useSubmitLessonQuiz('l1'), {
+    const { result } = renderHook(() => useSubmitLessonQuiz(lesson), {
       wrapper: wrapper(store),
     });
     result.current.mutate([]);
@@ -92,7 +94,7 @@ describe('useSubmitLessonQuiz', () => {
       }),
     );
 
-    const { result } = renderHook(() => useSubmitLessonQuiz('l1'), {
+    const { result } = renderHook(() => useSubmitLessonQuiz(lesson), {
       wrapper: wrapper(store),
     });
     result.current.mutate([]);
@@ -100,5 +102,31 @@ describe('useSubmitLessonQuiz', () => {
     await waitFor(() =>
       expect(result.current.data).toEqual({ row: savedRow, promotion: null }),
     );
+  });
+
+  it('posts the course slug alongside the lesson slug and answers', async () => {
+    // /api/lesson/quiz/answers 400s without `courseSlug` and gates the
+    // lesson inside that course (Task 6a). Asserted on the body fetch
+    // received, whole.
+    const store = createStore();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...savedRow, promotion: null }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useSubmitLessonQuiz(lesson), {
+      wrapper: wrapper(store),
+    });
+    result.current.mutate([]);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/lesson/quiz/answers');
+    expect(JSON.parse(init.body)).toEqual({
+      courseSlug: 'ppl',
+      lessonSlug: 'l1',
+      answers: [],
+    });
   });
 });

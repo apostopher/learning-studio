@@ -1,12 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import type { LessonRef } from '#/lib/lesson-ref';
 import { saveJson } from './save-json';
 
-export interface ReportVideoProgressInput {
-  lessonSlug: string;
-  progress: number;
-}
+/**
+ * Both slugs: the route refuses a body without `courseSlug` and gates the
+ * lesson inside that course before recording the milestone.
+ */
+export type ReportVideoProgressInput = LessonRef & { progress: number };
 
 /**
  * Report a video-progress milestone for the logged-in user. Best-effort by

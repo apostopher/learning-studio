@@ -19,6 +19,10 @@ import { evaluateLessonGate } from '#/lib/lesson-gating.server';
  */
 const EvaluateInputSchema = z.object({
   lessonSlug: z.string().min(1),
+  // The course the learner is in, from the route they are on — a lesson can
+  // be placed in several courses, each with its own gate and credentials, so
+  // it cannot be inferred from the slug.
+  courseSlug: z.string().min(1),
   question: AITestQuestionSchema,
   userAnswer: z.string(),
 });
@@ -35,11 +39,14 @@ export async function evaluateAnswerHandler(
   const parsed = EvaluateInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json(
-      { error: 'lessonSlug, a valid question, and userAnswer are required' },
+      {
+        error:
+          'lessonSlug, courseSlug, a valid question, and userAnswer are required',
+      },
       { status: 400 },
     );
   }
-  const { lessonSlug, question, userAnswer } = parsed.data;
+  const { lessonSlug, courseSlug, question, userAnswer } = parsed.data;
 
   try {
     // MCQ is graded deterministically from the question itself and needs no
@@ -54,6 +61,7 @@ export async function evaluateAnswerHandler(
     const gate = await evaluateLessonGate({
       userId: session.user.id,
       lessonSlug,
+      courseSlug,
     });
     if (
       !gate ||
@@ -71,7 +79,7 @@ export async function evaluateAnswerHandler(
       return new Response('Forbidden', { status: 403 });
     }
 
-    const source = await resolveDebriefSource(lessonSlug);
+    const source = await resolveDebriefSource(lessonSlug, gate.courseId);
     if (!source) {
       return Response.json(
         { error: 'This lesson has no debrief source' },

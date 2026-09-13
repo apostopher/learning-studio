@@ -736,9 +736,10 @@ export async function setLessonVideo(
   if (!updated) return null;
 
   await invalidateAllCoursesForLesson(lessonId);
-  // Evicted by slug (not the course slugs above) — `getLessonPlayback` is
-  // keyed per-lesson, not per-course, so an unrelated course-details
-  // invalidation would leave this lesson's stale playback entry untouched.
+  // Evicted by slug (not the course slugs above) — `getLessonPlayback` keeps
+  // one entry per course teaching the lesson, and its `invalidate` finds and
+  // evicts every one of them; a course-details invalidation would leave
+  // this lesson's stale playback entries untouched.
   await invalidateLessonPlaybackCache(updated.slug);
 
   return { id: updated.id };

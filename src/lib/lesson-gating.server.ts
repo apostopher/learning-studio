@@ -2,10 +2,7 @@ import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
-import {
-  getCourseSlugForLesson,
-  isSubscribedToCourse,
-} from '#/db/lesson-access';
+import { getLessonInCourse, isSubscribedToCourse } from '#/db/lesson-access';
 import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
@@ -49,9 +46,16 @@ export type LessonGateResult = {
 };
 
 /**
- * Evaluate every gate for one user and one lesson. Returns null when the
- * lesson does not exist — or is `is_available = false`, which on the learner
- * path is the same thing — so callers can 404/403 without a second lookup.
+ * Evaluate every gate for one user and one lesson IN ONE COURSE. Returns null
+ * when the course does not exist, the lesson is not placed in it, or the
+ * lesson is `is_available = false` — all the same thing on the learner path —
+ * so callers can 404/403 without a second lookup.
+ *
+ * The course is taken from the caller, never inferred from the lesson: a
+ * lesson can be placed in several courses, and the learner is always at
+ * `/course/$courseSlug/…`, so the route knows which one. Inferring it (the
+ * lowest course id, as this used to) would gate a learner in one course
+ * against another's subscription and tier.
  *
  * Admins bypass both gates AND the subscription check: they author this
  * content and should not sit through their own videos to proofread it. The
@@ -68,11 +72,13 @@ export type LessonGateResult = {
 export async function evaluateLessonGate({
   userId,
   lessonSlug,
+  courseSlug,
 }: {
   userId: string;
   lessonSlug: string;
+  courseSlug: string;
 }): Promise<LessonGateResult | null> {
-  const lesson = await getCourseSlugForLesson(lessonSlug);
+  const lesson = await getLessonInCourse({ lessonSlug, courseSlug });
   if (!lesson) return null;
 
   // A WIP lesson is not servable to anyone on the learner path, admins
@@ -89,7 +95,7 @@ export async function evaluateLessonGate({
   // Deliberately re-projected rather than spread, so `isAvailable` — consumed
   // entirely by the branch above — cannot ride along into LessonGateResult as
   // a field with no reader.
-  const course = { courseSlug: lesson.courseSlug, courseId: lesson.courseId };
+  const course = { courseSlug, courseId: lesson.courseId };
 
   const [roles, details, progress] = await Promise.all([
     getUserRoleNames(userId),
@@ -150,7 +156,7 @@ export async function evaluateLessonGate({
     .flatMap((mod) => mod.lessons)
     .find((lesson) => lesson.slug === lessonSlug);
 
-  // The lesson resolved in `getCourseSlugForLesson` and is available, so the
+  // The lesson resolved in `getLessonInCourse` and is available, so the
   // cached payload disagreeing about its existence means the payload is wrong
   // — the same class of problem as the missing-payload branch above, and
   // thrown for the same reason. Returning here instead would skip the level
