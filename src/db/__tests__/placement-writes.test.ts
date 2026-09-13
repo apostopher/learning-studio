@@ -15,6 +15,14 @@ const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
 });
+// Task 6b: the placement table membership reads join, replacing the
+// `modules.course_id` (ownership) hop. Real columns so `eq`/`countDistinct`
+// build real fragments against `course_modules`.
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+});
 
 function makeChain(result: unknown) {
   const p = Promise.resolve(result) as Promise<unknown> &
@@ -51,13 +59,27 @@ const lessonBelongsToCourseOrg = vi.hoisted(() =>
 );
 
 vi.mock('#/db', () => ({ db }));
-vi.mock('#/db/schema', () => ({ moduleLessonsTable, modulesTable }));
+vi.mock('#/db/schema', () => ({
+  courseModulesTable,
+  moduleLessonsTable,
+  modulesTable,
+}));
 vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugForModuleId,
   getCourseIdForModuleId,
   lessonBelongsToCourseOrg,
 }));
+/**
+ * The membership helper `movePlacement` scopes its UPDATE with (Task 6b). An
+ * id-bearing sentinel rather than a real subquery, so a rendered parameter
+ * proves the UPDATE received the subquery FOR THE TARGET MODULE'S COURSE —
+ * not merely that some subquery was bound.
+ */
+const courseModuleIds = vi.hoisted(() =>
+  vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
+);
+vi.mock('#/db/course-modules', () => ({ courseModuleIds }));
 
 const { linkLesson, unlinkLesson, movePlacement } = await import(
   '#/db/placements'
@@ -333,9 +355,6 @@ describe('movePlacement', () => {
     const where = vi.fn().mockReturnValue({ returning });
     const set = vi.fn().mockReturnValue({ where });
     db.update.mockReturnValue({ set });
-    // getCourseIdForModuleId(41) resolves to course 3 (default mock); this
-    // is the lookup of course 3's module ids that scopes the UPDATE.
-    db.select.mockReturnValueOnce(makeChain([{ id: 40 }, { id: 41 }]));
 
     const result = await movePlacement({
       lessonId: 9,
@@ -366,18 +385,6 @@ describe('movePlacement', () => {
     const set = vi.fn().mockReturnValue({ where });
     db.update.mockReturnValue({ set });
 
-    // The module-id-for-course lookup itself, captured (not discarded) so
-    // this test can prove it was scoped to course 3 — the target module's
-    // OWN course — rather than merely asserting on a stub-controlled result
-    // that no implementation could contradict.
-    const moduleLookupWhere = vi
-      .fn()
-      .mockReturnValue(makeChain([{ id: 40 }, { id: 41 }]));
-    const moduleLookupFrom = vi
-      .fn()
-      .mockReturnValue({ where: moduleLookupWhere });
-    db.select.mockReturnValueOnce({ from: moduleLookupFrom });
-
     await movePlacement({
       lessonId: 9,
       targetModuleId: 41,
@@ -388,38 +395,30 @@ describe('movePlacement', () => {
     // getCourseIdForModuleId was asked about the TARGET module, not some
     // other one.
     expect(getCourseIdForModuleId).toHaveBeenCalledWith(41);
-    // The module-id lookup that feeds the UPDATE's allowlist was itself
-    // scoped to course 3 (getCourseIdForModuleId's resolved course for
+    // The allowlist that scopes the UPDATE is the membership helper's
+    // subquery for course 3 (getCourseIdForModuleId's resolved course for
     // module 41) — this is the mechanism that keeps module 90 (course 7)
-    // out of the allowlist, not an assertion that merely repeats a value no
-    // stub ever produced.
-    //
-    // Task 5e, Part 2b: exact SQL text, not `collectSqlTokens`, which cannot
-    // tell "scoped by course_id" apart from a mutant that scoped by a
-    // different integer column entirely as long as the value 3 still
-    // appears somewhere in the tree.
-    expect(renderSql(moduleLookupWhere.mock.calls[0][0])).toBe(
-      '"modules"."course_id" = $1',
-    );
-    expect(renderSqlParams(moduleLookupWhere.mock.calls[0][0])).toEqual([3]);
+    // out of it. Task 6b: it used to be a separate `modules.course_id`
+    // lookup, which asked who OWNS each module rather than which course it
+    // is placed in; now there is one definition of membership and this
+    // write uses it. No module-id select runs at all any more.
+    expect(courseModuleIds).toHaveBeenCalledWith(3);
+    expect(db.select).not.toHaveBeenCalled();
 
     expect(where).toHaveBeenCalledTimes(1);
     const condition = where.mock.calls[0][0];
     // Task 5e, Part 2b: this used to check `collectSqlTokens` for presence
-    // of 'module_id'/'40'/'41' — which cannot tell "scoped by
-    // module_lessons.lesson_id AND module_lessons.module_id in (40, 41)"
+    // of 'module_id'/'9' — which cannot tell "scoped by
+    // module_lessons.lesson_id AND module_lessons.module_id in (subquery)"
     // apart from a mutant that SWAPPED which column carries the lessonId vs
-    // the moduleId allowlist (e.g. `eq(moduleId, 9)` +
-    // `inArray(lessonId, [40, 41])`): both produce the exact same token set
-    // ('module_id', 'lesson_id', '9', '40', '41'), just paired with the
-    // wrong column. Exact SQL text pins the pairing. Verified RED against
-    // that swap mutant (renders `("module_lessons"."module_id" = $1 and
-    // "module_lessons"."lesson_id" in ($2, $3))` with params `[9, 40, 41]`
-    // instead of the column names swapped back).
+    // the allowlist. Exact SQL text pins the pairing, and the sentinel
+    // parameter pins WHICH course's subquery was bound: a mutant scoping by
+    // `courseModuleIds(input.targetModuleId)` (41, a module id — same type)
+    // renders `SUBQUERY:41` here and goes red.
     expect(renderSql(condition)).toBe(
-      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in ($2, $3))',
+      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in $2)',
     );
-    expect(renderSqlParams(condition)).toEqual([9, 40, 41]);
+    expect(renderSqlParams(condition)).toEqual([9, 'SUBQUERY:3']);
   });
 
   it('invalidates the target course cache so learners see the move', async () => {
@@ -431,7 +430,6 @@ describe('movePlacement', () => {
     const where = vi.fn().mockReturnValue({ returning });
     const set = vi.fn().mockReturnValue({ where });
     db.update.mockReturnValue({ set });
-    db.select.mockReturnValueOnce(makeChain([{ id: 40 }, { id: 41 }]));
 
     await movePlacement({
       lessonId: 9,

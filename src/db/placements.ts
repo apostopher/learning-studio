@@ -7,7 +7,7 @@ import {
   getCourseSlugForModuleId,
   lessonBelongsToCourseOrg,
 } from '#/db/lesson-access';
-import { moduleLessonsTable, modulesTable } from '#/db/schema';
+import { courseModulesTable, moduleLessonsTable } from '#/db/schema';
 import type { CourseLessonDependency } from '#/types';
 
 /** One lesson's position inside one module. */
@@ -56,17 +56,29 @@ export async function getPlacementsForCourse(
 /**
  * Every course teaching a lesson.
  *
- * Replaces the single-course answer `getCourseIdForLessonId` used to give.
- * Callers that guard a mutation must decide what several courses means — see
- * the plan's "Editing a lesson becomes an org-level permission".
+ * A MEMBERSHIP question, so it is answered through `course_modules` — the
+ * courses the lesson's modules are placed in — not `modules.course_id`,
+ * which names a module's owner. The two agree today; they stop agreeing the
+ * day a module is placed in a course it is not owned by, and the callers
+ * here (the playback cache's per-course eviction, the admin routes'
+ * "is this lesson placed anywhere / in this course" checks) all need the
+ * membership answer.
+ *
+ * Plural on purpose: a lesson can be in several courses, and there is no
+ * "the" course to infer. Callers that guard a mutation must decide what
+ * several courses means — see the plan's "Editing a lesson becomes an
+ * org-level permission". Empty means unplaced.
  */
 export async function getCourseIdsForLesson(
   lessonId: number,
 ): Promise<number[]> {
   const rows = await db
-    .select({ courseId: modulesTable.courseId })
+    .select({ courseId: courseModulesTable.courseId })
     .from(moduleLessonsTable)
-    .innerJoin(modulesTable, eq(moduleLessonsTable.moduleId, modulesTable.id))
+    .innerJoin(
+      courseModulesTable,
+      eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
+    )
     .where(eq(moduleLessonsTable.lessonId, lessonId));
 
   return [...new Set(rows.map((r) => r.courseId))];
@@ -81,13 +93,18 @@ export async function getCourseCountsForLessons(
 ): Promise<Map<number, number>> {
   if (lessonIds.length === 0) return new Map();
 
+  // Membership, same as `getCourseIdsForLesson` — a badge that counted
+  // owners would say "in 1 course" for a lesson whose module is placed in two.
   const rows = await db
     .select({
       lessonId: moduleLessonsTable.lessonId,
-      n: countDistinct(modulesTable.courseId),
+      n: countDistinct(courseModulesTable.courseId),
     })
     .from(moduleLessonsTable)
-    .innerJoin(modulesTable, eq(moduleLessonsTable.moduleId, modulesTable.id))
+    .innerJoin(
+      courseModulesTable,
+      eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
+    )
     .where(inArray(moduleLessonsTable.lessonId, lessonIds))
     .groupBy(moduleLessonsTable.lessonId);
 
@@ -132,15 +149,6 @@ function toPlacement(row: {
     rank: Number(row.rank),
     dependsOn: (row.dependsOn ?? []) as CourseLessonDependency[],
   };
-}
-
-/** Every module id belonging to a course — used to scope a write to that course. */
-async function getModuleIdsForCourse(courseId: number): Promise<number[]> {
-  const rows = await db
-    .select({ id: modulesTable.id })
-    .from(modulesTable)
-    .where(eq(modulesTable.courseId, courseId));
-  return rows.map((r) => r.id);
 }
 
 /**
@@ -232,8 +240,10 @@ export async function unlinkLesson(
  * The UPDATE below must therefore never key off `lessonId` alone: doing so
  * would match every course teaching this lesson and silently rewrite the
  * module/rank of placements the caller never asked to touch. It is scoped to
- * `targetModuleId`'s own course by resolving that course's module ids first
- * and requiring the placement's `moduleId` to be one of them.
+ * `targetModuleId`'s own course by requiring the placement's `moduleId` to
+ * be one of the modules `course_modules` places in that course — the same
+ * membership subquery every read uses, so the placement this write can reach
+ * is exactly the one the board showed.
  */
 export async function movePlacement(input: {
   lessonId: number;
@@ -243,8 +253,6 @@ export async function movePlacement(input: {
 }): Promise<Placement | null> {
   const targetCourseId = await getCourseIdForModuleId(input.targetModuleId);
   if (targetCourseId === null) return null;
-
-  const courseModuleIds = await getModuleIdsForCourse(targetCourseId);
 
   const [updated] = await db
     .update(moduleLessonsTable)
@@ -260,7 +268,7 @@ export async function movePlacement(input: {
     .where(
       and(
         eq(moduleLessonsTable.lessonId, input.lessonId),
-        inArray(moduleLessonsTable.moduleId, courseModuleIds),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(targetCourseId)),
       ),
     )
     .returning({

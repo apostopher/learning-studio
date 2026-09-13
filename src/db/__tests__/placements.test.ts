@@ -13,6 +13,14 @@ const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
 });
+// Task 6b: the placement table membership reads join, replacing the
+// `modules.course_id` (ownership) hop. Real columns so `eq`/`countDistinct`
+// build real fragments against `course_modules`.
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+});
 
 function makeChain(result: unknown) {
   const p = Promise.resolve(result) as Promise<unknown> &
@@ -29,7 +37,11 @@ function makeChain(result: unknown) {
 
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
-vi.mock('#/db/schema', () => ({ moduleLessonsTable, modulesTable }));
+vi.mock('#/db/schema', () => ({
+  courseModulesTable,
+  moduleLessonsTable,
+  modulesTable,
+}));
 // placements.ts now also imports these for its write functions (linkLesson /
 // unlinkLesson / movePlacement, exercised in placement-writes.test.ts). This
 // file only exercises the read functions above, but the module-level imports
