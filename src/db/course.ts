@@ -1,6 +1,7 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
+import { courseModuleIds } from '#/db/course-modules';
 import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
 import {
   progressComponentColumns,
@@ -17,6 +18,7 @@ import { shapeModuleLessons } from '#/lib/course-shaping';
 import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
+  courseModulesTable,
   courseSubscriptionsTable,
   coursesTable,
   lessonMaterialProgressTable,
@@ -63,14 +65,25 @@ type ModuleDetails = DBModule & {
 };
 
 export async function getCourseDetails(slug: string) {
-  // 1️⃣ Get course and its modules in a single query
+  // 1️⃣ Get course and its modules in a single query. Membership is the
+  // placement table (`course_modules`), joined THROUGH rather than filtered
+  // on `modules.course_id`: a module's own row says who owns it, only a
+  // placement says which course shows it. Both LEFT, so a course with no
+  // placements still resolves a course row rather than `null`. `rank` is the
+  // placement's — the same module can sit at a different position in a
+  // sibling course — and it overrides the module row's own `rank` below.
   const courseWithModules = await db
     .select({
       course: coursesTable,
       module: modulesTable,
+      rank: courseModulesTable.rank,
     })
     .from(coursesTable)
-    .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
+    .leftJoin(
+      courseModulesTable,
+      eq(courseModulesTable.courseId, coursesTable.id),
+    )
+    .leftJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
     .where(eq(coursesTable.slug, slug));
 
   if (!courseWithModules || courseWithModules.length === 0) return null;
@@ -78,15 +91,24 @@ export async function getCourseDetails(slug: string) {
   const course = courseWithModules[0].course;
 
   // 2️⃣ Get all lessons + dependencies + module dependencies in one query
+  // A placement's `module_id` is NOT NULL, so `module` and `rank` are null
+  // together (the no-placements row) or present together; the guard narrows
+  // both at once.
   const modules = courseWithModules
-    .map((m) => m.module)
-    .filter((module): module is DBModule => Boolean(module));
+    .map(({ module, rank }) => ({ module, rank }))
+    .filter(
+      (row): row is { module: DBModule; rank: string } =>
+        row.module !== null && row.rank !== null,
+    );
   const moduleMapWithDependencies = new Map<number, ModuleDetails>();
 
   // Create moduleMap from modules array
-  modules.forEach((module) => {
+  modules.forEach(({ module, rank }) => {
     moduleMapWithDependencies.set(module.id, {
       ...module,
+      // Placement's rank, not the module row's own — see the query comment
+      // above. This is what the `modules` sort at the bottom orders by.
+      rank,
       requiredSubscriptions: module.requiredSubscriptions as SubscriptionType[],
       dependsOn: [],
       lessons: [],
@@ -94,14 +116,15 @@ export async function getCourseDetails(slug: string) {
   });
 
   // Driven from `lessons` INNER JOINed to `module_lessons`, scoped to this
-  // course's own modules — this is the membership test itself, not a stray
-  // WIP filter, so it is a real INNER join rather than the LEFT-join-in-JOIN
-  // pattern used elsewhere in this file: a lesson with no placement in this
-  // course must not appear at all. Empty modules do not depend on this query
-  // to survive — `moduleMapWithDependencies` above is seeded from every
-  // module of the course independent of whether any lesson data comes back
-  // for it — so there is no "empty module vanishes" risk here to guard
-  // against. `rank` and `dependsOn` come from the placement
+  // course's modules via the one membership helper (`courseModuleIds`, a
+  // subquery over `course_modules`) — this is the membership test itself,
+  // not a stray WIP filter, so it is a real INNER join rather than the
+  // LEFT-join-in-JOIN pattern used elsewhere in this file: a lesson with no
+  // placement in this course must not appear at all. Empty modules do not
+  // depend on this query to survive — `moduleMapWithDependencies` above is
+  // seeded from every module of the course independent of whether any
+  // lesson data comes back for it — so there is no "empty module vanishes"
+  // risk here to guard against. `rank` and `dependsOn` come from the placement
   // (`module_lessons`), not the lesson row: a lesson can be third in one
   // course and eighth in another, and the old per-lesson dependency table
   // (one global list per lesson, dropped in Task 7) could never express
@@ -133,15 +156,7 @@ export async function getCourseDetails(slug: string) {
     )
     .leftJoin(orgLessonsTable, eq(lessonsTable.id, orgLessonsTable.lessonId))
     .leftJoin(orgsTable, eq(orgLessonsTable.orgId, orgsTable.id))
-    .where(
-      inArray(
-        moduleLessonsTable.moduleId,
-        db
-          .select({ id: modulesTable.id })
-          .from(modulesTable)
-          .where(eq(modulesTable.courseId, course.id)),
-      ),
-    );
+    .where(inArray(moduleLessonsTable.moduleId, courseModuleIds(course.id)));
 
   // 3️⃣ Restructure the result
 
@@ -234,6 +249,16 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
 // a genuine cache miss that repopulates with the current shape — no manual
 // Redis flush required, and it cannot be forgotten the way an operator step
 // can.
+/**
+ * The cached payload's version. Bumped whenever the payload's SHAPE or the
+ * QUESTION it answers changes — see the v2→v3 and v3→v4 notes above.
+ *
+ * v4 -> v5: a course's modules now come from `course_modules` rather than
+ * `modules.course_id`. A v4 entry answers a different question and must be
+ * orphaned rather than served for the rest of its 6h TTL.
+ */
+export const COURSE_DETAILS_CACHE_KEY = 'course-details-v5';
+
 export const getCourseDetailsWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
@@ -249,7 +274,7 @@ export const getCourseDetailsWithCache = cacheWithRedis<
   // reads as "visible to everyone," silently defeating the whole feature for
   // up to the 6h TTL. Bumping the prefix orphans the old entries instead of
   // reading them back as this shape.
->('course-details-v4', getCourseDetails);
+>(COURSE_DETAILS_CACHE_KEY, getCourseDetails);
 
 export type MyCourseSummary = {
   id: number;
@@ -292,7 +317,14 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       coursesTable,
       eq(coursesTable.id, courseSubscriptionsTable.courseId),
     )
-    .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
+    // Membership is the placement table, joined through — see
+    // getCourseDetails. LEFT, so a subscribed course with zero placements
+    // still appears at 0%.
+    .leftJoin(
+      courseModulesTable,
+      eq(courseModulesTable.courseId, coursesTable.id),
+    )
+    .leftJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
     // Two LEFT joins, both deliberate: a module with no placements at all
     // must still carry its module row through to `lessonsTable`'s join (so
     // module_lessons is LEFT, not INNER), and a placed-but-unavailable lesson
@@ -337,7 +369,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       coursesTable.imageUrlAvif,
       coursesTable.imageUrlWebp,
       modulesTable.id,
-      modulesTable.rank,
+      courseModulesTable.rank,
       moduleLessonsTable.id,
       moduleLessonsTable.rank,
       lessonsTable.id,
@@ -348,7 +380,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
     .orderBy(
       asc(coursesTable.name),
       asc(coursesTable.id),
-      asc(modulesTable.rank),
+      asc(courseModulesTable.rank),
       asc(moduleLessonsTable.rank),
     );
 

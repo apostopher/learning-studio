@@ -6,6 +6,7 @@ import {
   numeric,
   pgTable,
   text,
+  timestamp,
 } from 'drizzle-orm/pg-core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -40,6 +41,13 @@ const modulesTable = pgTable('modules', {
   imageUrlWebp: text('image_url_webp'),
   rank: text('rank'),
   requiredSubscriptions: jsonb('required_subscriptions'),
+});
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
+  createdAt: timestamp('created_at'),
 });
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
@@ -96,6 +104,7 @@ const db = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
 vi.mock('@/db/schema', () => ({
   coursesTable,
+  courseModulesTable,
   modulesTable,
   lessonsTable,
   moduleLessonsTable,
@@ -138,6 +147,9 @@ const courseWithModuleRow = {
     rank: '1',
     requiredSubscriptions: [],
   },
+  // The placement's rank — what `getCourseDetails` selects alongside the
+  // module row now that membership is read from `course_modules`.
+  rank: '1',
 };
 
 const lessonRow = (lesson: {

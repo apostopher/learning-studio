@@ -7,6 +7,7 @@ import {
   numeric,
   pgTable,
   text,
+  timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
@@ -55,6 +56,13 @@ const modulesTable = pgTable('modules', {
   rank: numeric('rank'),
   requiredSubscriptions: jsonb('required_subscriptions'),
   sequentialLessons: boolean('sequential_lessons'),
+});
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
+  createdAt: timestamp('created_at'),
 });
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
@@ -182,6 +190,7 @@ const render = renderSql;
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 const schema = {
   coursesTable,
+  courseModulesTable,
   modulesTable,
   lessonsTable,
   moduleLessonsTable,
@@ -246,6 +255,9 @@ const courseWithModuleRow = {
     requiredSubscriptions: [],
     sequentialLessons: true,
   },
+  // The placement's rank (Task 4: membership and module order come from
+  // `course_modules`, selected alongside the module row).
+  rank: '1',
 };
 
 const lessonRow = (opts: {
@@ -469,7 +481,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
   // ordered join list (fixed indices, not `indexOf`) closes that gap.
   // Verified RED against that mutant (modulesTable then shows up in
   // `calls.innerJoin`, and `calls.leftJoin` has only 2 entries instead of 3).
-  it('getMyCourses left-joins courses -> modules -> module_lessons -> lessons, only courses ever inner', async () => {
+  it('getMyCourses left-joins courses -> course_modules -> modules -> module_lessons -> lessons, only courses ever inner', async () => {
     const calls = newJoinCalls();
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
@@ -484,19 +496,27 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
       '"courses"."id" = "course_subscriptions"."course_id"',
     );
 
-    // First three leftJoins, by FIXED index rather than `indexOf` — proves
-    // modules is joined (and LEFT, not inner) immediately after courses,
-    // with module_lessons and lessons following in that exact order.
-    expect(calls.leftJoin[0][0]).toBe(modulesTable);
+    // First four leftJoins, by FIXED index rather than `indexOf` — proves
+    // the placement table and then modules are joined (and LEFT, not inner)
+    // immediately after courses, with module_lessons and lessons following
+    // in that exact order. Task 4: membership is `course_modules`, so the
+    // hop off `courses` is the placement, and modules hangs off it — the
+    // exact join text is pinned by course-payload-membership.test.ts; here
+    // the point is the join KIND and order.
+    expect(calls.leftJoin[0][0]).toBe(courseModulesTable);
     expect(render(calls.leftJoin[0][1])).toBe(
-      '"modules"."course_id" = "courses"."id"',
+      '"course_modules"."course_id" = "courses"."id"',
     );
-    expect(calls.leftJoin[1][0]).toBe(moduleLessonsTable);
+    expect(calls.leftJoin[1][0]).toBe(modulesTable);
     expect(render(calls.leftJoin[1][1])).toBe(
+      '"modules"."id" = "course_modules"."module_id"',
+    );
+    expect(calls.leftJoin[2][0]).toBe(moduleLessonsTable);
+    expect(render(calls.leftJoin[2][1])).toBe(
       '"module_lessons"."module_id" = "modules"."id"',
     );
-    expect(calls.leftJoin[2][0]).toBe(lessonsTable);
-    expect(render(calls.leftJoin[2][1])).toBe(
+    expect(calls.leftJoin[3][0]).toBe(lessonsTable);
+    expect(render(calls.leftJoin[3][1])).toBe(
       '("lessons"."id" = "module_lessons"."lesson_id" and "lessons"."is_available" = $1)',
     );
     // Fix round 1, Part 2c: `eq(lessonsTable.isAvailable, true)` and its
@@ -506,7 +526,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     // which lessons count toward `/app`'s percentages (every available
     // lesson dropped, every WIP lesson counted), and the string-only
     // assertion above could not have caught it.
-    expect(renderSqlParams(calls.leftJoin[2][1])).toEqual([true]);
+    expect(renderSqlParams(calls.leftJoin[3][1])).toEqual([true]);
   });
 
   // Mutant: change `.leftJoin(lessonsTable, ...)` in getCourseProgress
@@ -552,7 +572,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
   // `indexOf`-only version of this test. Pinning the full ordered join list
   // (fixed indices, `innerJoin` asserted empty) closes that gap the same way
   // it did for `getMyCourses`.
-  it('getCourseContentForAgent left-joins courses -> modules -> module_lessons -> lessons -> lesson_material, never inner', async () => {
+  it('getCourseContentForAgent left-joins courses -> course_modules -> modules -> module_lessons -> lessons -> lesson_material, never inner', async () => {
     const calls = newJoinCalls();
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
@@ -564,20 +584,26 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     // instead of vanishing from the agent's corpus.
     expect(calls.innerJoin).toHaveLength(0);
 
-    expect(calls.leftJoin[0][0]).toBe(modulesTable);
+    // Task 4: membership is `course_modules`, joined first, with modules
+    // hanging off the placement's module id.
+    expect(calls.leftJoin[0][0]).toBe(courseModulesTable);
     expect(render(calls.leftJoin[0][1])).toBe(
-      '"modules"."course_id" = "courses"."id"',
+      '"course_modules"."course_id" = "courses"."id"',
     );
-    expect(calls.leftJoin[1][0]).toBe(moduleLessonsTable);
+    expect(calls.leftJoin[1][0]).toBe(modulesTable);
     expect(render(calls.leftJoin[1][1])).toBe(
+      '"modules"."id" = "course_modules"."module_id"',
+    );
+    expect(calls.leftJoin[2][0]).toBe(moduleLessonsTable);
+    expect(render(calls.leftJoin[2][1])).toBe(
       '"module_lessons"."module_id" = "modules"."id"',
     );
-    expect(calls.leftJoin[2][0]).toBe(lessonsTable);
-    expect(render(calls.leftJoin[2][1])).toBe(
+    expect(calls.leftJoin[3][0]).toBe(lessonsTable);
+    expect(render(calls.leftJoin[3][1])).toBe(
       '"lessons"."id" = "module_lessons"."lesson_id"',
     );
-    expect(calls.leftJoin[3][0]).toBe(lessonMaterialTable);
-    expect(render(calls.leftJoin[3][1])).toBe(
+    expect(calls.leftJoin[4][0]).toBe(lessonMaterialTable);
+    expect(render(calls.leftJoin[4][1])).toBe(
       '"lesson_material"."lesson_slug" = "lessons"."slug"',
     );
   });
@@ -597,7 +623,8 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
 
     expect(calls.orderBy).toHaveLength(1);
     const [moduleRankArg, lessonRankArg] = calls.orderBy[0] as SQL[];
-    expect(render(moduleRankArg)).toBe('"modules"."rank" asc');
+    // Task 4: the module's position is the PLACEMENT's rank too.
+    expect(render(moduleRankArg)).toBe('"course_modules"."rank" asc');
     expect(render(lessonRankArg)).toBe('"module_lessons"."rank" asc');
   });
 });

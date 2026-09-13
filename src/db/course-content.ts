@@ -6,6 +6,7 @@ import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import {
+  courseModulesTable,
   coursesTable,
   lessonMaterialTable,
   lessonsTable,
@@ -124,7 +125,14 @@ export async function getCourseContentForAgent(
       proTips: lessonMaterialTable.proTips,
     })
     .from(coursesTable)
-    .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
+    // Membership is the placement table (`course_modules`), joined through
+    // rather than filtered on `modules.course_id` — see getCourseDetails
+    // (src/db/course.ts). LEFT on both hops, for the same reason as below.
+    .leftJoin(
+      courseModulesTable,
+      eq(courseModulesTable.courseId, coursesTable.id),
+    )
+    .leftJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
     // Both LEFT: a module with no placements at all must still reach the
     // `lessonMaterialTable` join and the `isAvailable === null` branch below,
     // so a module with zero lessons (or zero WIP-filtered lessons) still
@@ -140,7 +148,9 @@ export async function getCourseContentForAgent(
       eq(lessonMaterialTable.lessonSlug, lessonsTable.slug),
     )
     .where(eq(coursesTable.slug, slug))
-    .orderBy(asc(modulesTable.rank), asc(moduleLessonsTable.rank));
+    // Both ranks are the PLACEMENT's: the module's position in this course,
+    // then the lesson's position in its module.
+    .orderBy(asc(courseModulesTable.rank), asc(moduleLessonsTable.rank));
 
   if (rows.length === 0) return '';
 

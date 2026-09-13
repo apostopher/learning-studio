@@ -37,6 +37,7 @@ vi.mock('#/db', () => {
 });
 vi.mock('@/db/schema', () => ({
   courseSubscriptionsTable: {},
+  courseModulesTable: {},
   coursesTable: {},
   lessonDependenciesTable: {},
   lessonMaterialProgressTable: {},

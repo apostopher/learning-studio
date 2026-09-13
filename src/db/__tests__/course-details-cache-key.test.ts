@@ -29,6 +29,7 @@ vi.mock('@/integrations/upstash/redis', () =>
 vi.mock('#/db', () => ({ db: {} }));
 vi.mock('@/db/schema', () => ({
   coursesTable: {},
+  courseModulesTable: {},
   modulesTable: {},
   lessonsTable: {},
   lessonDependenciesTable: {},
@@ -48,7 +49,9 @@ vi.mock('#/db/course-last-viewed-batch', () => ({
 // value-imports `@/types` — the alias vitest cannot resolve.
 vi.mock('#/db/user-levels', () => ({ getCurrentLevelsByCourse: vi.fn() }));
 
-const { getCourseDetailsWithCache } = await import('#/db/course');
+const { COURSE_DETAILS_CACHE_KEY, getCourseDetailsWithCache } = await import(
+  '#/db/course'
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -66,7 +69,10 @@ describe('getCourseDetailsWithCache cache key', () => {
   // the key prefix on every shape change is what prevents that: a stale
   // entry becomes unreachable under the new key instead of being read back.
   // This test proves the real exported cache reads/writes under the CURRENT
-  // versioned key — not merely that a bare string constant exists somewhere.
+  // versioned key — the exported `COURSE_DETAILS_CACHE_KEY` constant, whose
+  // value course-payload-membership.test.ts pins — not merely that a bare
+  // string constant exists somewhere: the constant has to be what the cache
+  // wrapper was actually handed.
   it('reads under the versioned key, so a pre-migration cache entry can never be read back as this shape', async () => {
     // A "hit" — whatever is returned here never has to be a real course
     // shape, since the point is only to observe which key `redis.get` was
@@ -76,13 +82,13 @@ describe('getCourseDetailsWithCache cache key', () => {
     await getCourseDetailsWithCache('flight-basics');
 
     expect(redisClient.get).toHaveBeenCalledWith(
-      'course-details-v4:"flight-basics"',
+      `${COURSE_DETAILS_CACHE_KEY}:"flight-basics"`,
     );
-    // The pre-`levels` key. If this were ever called, a same-named entry
-    // written before this migration (missing `levels`) would be served as
-    // if it were current.
+    // The pre-`course_modules` key. If this were ever called, a same-named
+    // entry written before this migration (modules read from
+    // `modules.course_id`) would be served as if it were current.
     expect(redisClient.get).not.toHaveBeenCalledWith(
-      'course-details-v3:"flight-basics"',
+      'course-details-v4:"flight-basics"',
     );
   });
 });
