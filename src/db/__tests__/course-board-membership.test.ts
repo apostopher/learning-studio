@@ -14,6 +14,7 @@ const cap = vi.hoisted(() => {
     joinOn: [] as unknown[],
     where: [] as unknown[],
     orderBy: [] as unknown[],
+    groupBy: [] as unknown[],
   } satisfies Captured;
   return { captured, results: [] as unknown[][] };
 });

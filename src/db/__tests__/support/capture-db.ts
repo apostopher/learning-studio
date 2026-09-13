@@ -14,7 +14,10 @@
  *
  * `joins` holds the joined TABLE (by identity); `joinOn` holds the matching
  * ON condition at the same index, so a test can render it (`render-sql.ts`)
- * and pin the pairing, not just the table.
+ * and pin the pairing, not just the table. `groupBy` holds the columns
+ * handed to `.groupBy()`, flattened in call order, so a grouped query that
+ * orders by a column it forgot to group by (a Postgres runtime error no
+ * join/where/order assertion can see) is pinnable too.
  */
 export type Captured = {
   select: unknown[];
@@ -23,6 +26,7 @@ export type Captured = {
   joinOn: unknown[];
   where: unknown[];
   orderBy: unknown[];
+  groupBy: unknown[];
 };
 
 const CHAIN_METHODS = [
@@ -47,6 +51,7 @@ export function captureDb(initialResults: unknown[][] = []) {
     joinOn: [],
     where: [],
     orderBy: [],
+    groupBy: [],
   };
   const results = [...initialResults];
   // biome-ignore lint/suspicious/noExplicitAny: a stand-in for a builder whose real type is internal to Drizzle
@@ -63,6 +68,7 @@ export function captureDb(initialResults: unknown[][] = []) {
       }
       if (name === 'where') captured.where.push(args[0]);
       if (name === 'orderBy') captured.orderBy.push(...args);
+      if (name === 'groupBy') captured.groupBy.push(...args);
       return chain;
     };
   }

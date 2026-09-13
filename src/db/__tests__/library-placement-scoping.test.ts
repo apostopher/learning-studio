@@ -16,6 +16,12 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 // instead of the legacy single-valued `lessons.module_id`. Real `pgTable`
 // stubs, `#/db` and `#/db/schema` fully mocked — never `importOriginal` (see
 // memory: vitest can't resolve @/, use #/).
+//
+// Course-module membership (Task 5): "is this module in this course" is no
+// longer `modules.course_id` but a `course_modules` row, read through the
+// `courseModuleIds` helper (mocked to an id-bearing sentinel here — the
+// membership shape itself is pinned in progress-library-membership.test.ts;
+// this file pins that the placement rewrite around it still holds).
 const coursesTable = pgTable('courses', {
   id: integer('id').primaryKey(),
   slug: text('slug'),
@@ -24,6 +30,12 @@ const modulesTable = pgTable('modules', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
   slug: text('slug'),
+});
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
 });
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
@@ -123,9 +135,15 @@ function makeCapturingChain(result: unknown, calls: JoinCalls) {
 const render = renderSql;
 
 const db = vi.hoisted(() => ({ select: vi.fn(), selectDistinct: vi.fn() }));
+const membership = vi.hoisted(() => ({
+  courseModuleIds: vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
+  getCourseModuleIds: vi.fn(async () => []),
+}));
 vi.mock('#/db', () => ({ db }));
+vi.mock('#/db/course-modules', () => membership);
 vi.mock('#/db/schema', () => ({
   coursesTable,
+  courseModulesTable,
   modulesTable,
   lessonsTable,
   moduleLessonsTable,
@@ -208,6 +226,10 @@ describe('getLibraryForCourse', () => {
   // `is not null` (drops all 11 module-only rows). Exact SQL text catches all
   // three because each changes the rendered string, not just which table a
   // chunk points at.
+  //
+  // Task 5: each branch's `<module>.course_id = $n` became
+  // `<module>.id in <membership subquery>`; the `or`/`and`/`is null` shape
+  // around them is what this test still guards.
   it("keeps the lesson's placement winning over the assignment's stored module", async () => {
     const calls: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
@@ -216,7 +238,7 @@ describe('getLibraryForCourse', () => {
 
     expect(calls.where).toHaveLength(1);
     expect(render(calls.where[0])).toBe(
-      '("blob_files"."url" like $1 and ("lesson_module"."course_id" = $2 or ("lessons"."id" is null and "modules"."course_id" = $3)))',
+      '("blob_files"."url" like $1 and ("lesson_module"."id" in $2 or ("lessons"."id" is null and "modules"."id" in $3)))',
     );
   });
 
@@ -227,6 +249,11 @@ describe('getLibraryForCourse', () => {
   // point is that the SAME query shape must answer correctly for whichever
   // course is asked, so this pins that the bound parameter is actually the
   // caller's own courseId and not some closed-over or hardcoded value.
+  //
+  // Task 5: the course id now reaches the WHERE through the membership
+  // helper, so the bound value is the helper's id-bearing sentinel — proof
+  // the WHERE was handed the subquery built FOR THAT COURSE, not merely that
+  // the helper was called somewhere with the right number.
   it('parameterizes the placement scope by whichever course is actually queried', async () => {
     const callsA: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
     const callsB: JoinCalls = { innerJoin: [], leftJoin: [], where: [] };
@@ -237,8 +264,16 @@ describe('getLibraryForCourse', () => {
     await getLibraryForCourse(101);
     await getLibraryForCourse(202);
 
-    expect(renderSqlParams(callsA.where[0])).toEqual(['%/library-%', 101, 101]);
-    expect(renderSqlParams(callsB.where[0])).toEqual(['%/library-%', 202, 202]);
+    expect(renderSqlParams(callsA.where[0])).toEqual([
+      '%/library-%',
+      'SUBQUERY:101',
+      'SUBQUERY:101',
+    ]);
+    expect(renderSqlParams(callsB.where[0])).toEqual([
+      '%/library-%',
+      'SUBQUERY:202',
+      'SUBQUERY:202',
+    ]);
   });
 });
 

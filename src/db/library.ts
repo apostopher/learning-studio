@@ -1,9 +1,11 @@
-import { and, eq, like, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db } from '#/db';
+import { courseModuleIds } from '#/db/course-modules';
 import {
   blobFileAssignmentsTable,
   blobFilesTable,
+  courseModulesTable,
   coursesTable,
   lessonsTable,
   moduleLessonsTable,
@@ -56,16 +58,17 @@ const LIBRARY_URL_PATTERN = '%/library-%';
  * It does not produce duplicate ROWS for a single course's list: `linkLesson`
  * (`src/db/placements.ts`) checks-then-inserts to keep one placement per
  * course per lesson, so at most one `module_lessons` row normally satisfies
- * `eq(lessonModule.courseId, courseId)` for a given lesson. That check is
- * application-level, not a database constraint — the unique index is on
- * `(module_id, lesson_id)`, i.e. per MODULE, and `admin.ts`'s `createLesson`
- * is a second, independent writer — so it is not a guarantee. If it were ever
- * violated, the resulting duplicate rows would be harmless here rather than
- * merely rare: both would carry the identical `moduleSlug` (read from the
- * assignment's own stored module, not from the placement) and `lessonSlug`,
- * and `resolveLibraryFiles` (`src/lib/library-gating.ts`) is idempotent under
- * duplicate assignments — an any-satisfies check plus an earliest-position
- * `reduce` — so a second identical row changes nothing it returns.
+ * `inArray(lessonModule.id, courseModuleIds(courseId))` for a given lesson.
+ * That check is application-level, not a database constraint — the unique
+ * index is on `(module_id, lesson_id)`, i.e. per MODULE, and `admin.ts`'s
+ * `createLesson` is a second, independent writer — so it is not a guarantee.
+ * If it were ever violated, the resulting duplicate rows would be harmless
+ * here rather than merely rare: both would carry the identical `moduleSlug`
+ * (read from the assignment's own stored module, not from the placement) and
+ * `lessonSlug`, and `resolveLibraryFiles` (`src/lib/library-gating.ts`) is
+ * idempotent under duplicate assignments — an any-satisfies check plus an
+ * earliest-position `reduce` — so a second identical row changes nothing it
+ * returns.
  */
 export async function getLibraryForCourse(
   courseId: number,
@@ -105,11 +108,14 @@ export async function getLibraryForCourse(
     .where(
       and(
         like(blobFilesTable.url, LIBRARY_URL_PATTERN),
+        // Both branches are membership reads — "is this module in this
+        // course" — so both go through the single membership helper rather
+        // than a stored course id on the module row.
         or(
-          eq(lessonModule.courseId, courseId),
+          inArray(lessonModule.id, courseModuleIds(courseId)),
           and(
             sql`${lessonsTable.id} is null`,
-            eq(modulesTable.courseId, courseId),
+            inArray(modulesTable.id, courseModuleIds(courseId)),
           ),
         ),
       ),
@@ -146,11 +152,13 @@ export async function getLibraryForCourse(
  * The download route holds only a file id — the client never learns a course
  * slug for a file — so the gate has to be told which course to evaluate
  * against. Returns a list, not one slug, because a lesson can be placed in
- * several courses via `module_lessons`: a lesson-linked file now genuinely
+ * several courses via `module_lessons` — and, since membership moved onto
+ * `course_modules`, so can a module: a lesson-linked file now genuinely
  * returns one slug per course teaching that lesson (previously at most one,
- * via the single `lessons.module_id`), and a shared checklist attached to
- * several courses would otherwise be downloadable from only whichever course
- * happened to sort first.
+ * via the single `lessons.module_id`), a module-only file one slug per course
+ * the module is placed in, and a shared checklist attached to several courses
+ * would otherwise be downloadable from only whichever course happened to
+ * sort first.
  */
 export async function getCourseSlugsForLibraryFile(
   fileId: number,
@@ -158,6 +166,14 @@ export async function getCourseSlugsForLibraryFile(
   const lessonModule = alias(modulesTable, 'lesson_module');
   const moduleCourse = alias(coursesTable, 'module_course');
   const lessonCourse = alias(coursesTable, 'lesson_course');
+  // A module's course is reached through `course_modules`. The lesson side
+  // needs its own copy of the placement table (`courseModulesTable` is
+  // already joined for the module-only rows), aliased the same way
+  // `lessonModule` is.
+  const lessonModulePlacement = alias(
+    courseModulesTable,
+    'lesson_module_placement',
+  );
 
   const rows = await db
     .selectDistinct({
@@ -169,7 +185,11 @@ export async function getCourseSlugsForLibraryFile(
       modulesTable,
       eq(blobFileAssignmentsTable.moduleId, modulesTable.id),
     )
-    .leftJoin(moduleCourse, eq(modulesTable.courseId, moduleCourse.id))
+    .leftJoin(
+      courseModulesTable,
+      eq(courseModulesTable.moduleId, modulesTable.id),
+    )
+    .leftJoin(moduleCourse, eq(moduleCourse.id, courseModulesTable.courseId))
     .leftJoin(
       lessonsTable,
       eq(blobFileAssignmentsTable.lessonId, lessonsTable.id),
@@ -179,7 +199,11 @@ export async function getCourseSlugsForLibraryFile(
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
     .leftJoin(lessonModule, eq(lessonModule.id, moduleLessonsTable.moduleId))
-    .leftJoin(lessonCourse, eq(lessonModule.courseId, lessonCourse.id))
+    .leftJoin(
+      lessonModulePlacement,
+      eq(lessonModulePlacement.moduleId, lessonModule.id),
+    )
+    .leftJoin(lessonCourse, eq(lessonCourse.id, lessonModulePlacement.courseId))
     .where(eq(blobFileAssignmentsTable.fileId, fileId));
 
   // The lesson's course wins where both resolve — same D8 rule as everywhere

@@ -11,6 +11,7 @@ import {
 } from '#/lib/course-progress-agg';
 import { db } from '@/db';
 import {
+  courseModulesTable,
   coursesTable,
   lessonMaterialProgressTable,
   lessonsTable,
@@ -52,9 +53,18 @@ export async function getCourseProgress({
       ...progressComponentColumns(userId),
     })
     .from(coursesTable)
-    .innerJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
-    // Two LEFT joins: a module with no placements at all must still reach
-    // `lessonsTable`'s join (module_lessons is LEFT, not INNER), and a
+    // Membership and module order come from `course_modules` (the placement
+    // table), joined rather than filtered through `courseModuleIds` because
+    // the ORDER BY below needs the placement's rank, which a subquery in the
+    // WHERE cannot supply. INNER is right for these two: a course with no
+    // placements has no progress rows to aggregate.
+    .innerJoin(
+      courseModulesTable,
+      eq(courseModulesTable.courseId, coursesTable.id),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
+    // Two LEFT joins: a module with no lesson placements at all must still
+    // reach `lessonsTable`'s join (module_lessons is LEFT, not INNER), and a
     // placed-but-unavailable lesson must still leave the module's placeholder
     // row standing (the WIP filter lives inside `lessonsTable`'s join
     // condition, never the WHERE). Either becoming an inner join, or the WIP
@@ -94,13 +104,13 @@ export async function getCourseProgress({
     .where(eq(coursesTable.slug, slug))
     .groupBy(
       modulesTable.id,
-      modulesTable.rank,
+      courseModulesTable.rank,
       moduleLessonsTable.id,
       moduleLessonsTable.rank,
       lessonsTable.id,
       ...progressComponentGroupBy,
     )
-    .orderBy(asc(modulesTable.rank), asc(moduleLessonsTable.rank));
+    .orderBy(asc(courseModulesTable.rank), asc(moduleLessonsTable.rank));
 
   return aggregateCourseProgress(
     slug,
