@@ -193,7 +193,8 @@ export const modulesTable = pgTable('modules', {
   imageUrlAvif: text('image_url_avif'),
   imageUrlWebp: text('image_url_webp'),
   requiredSubscriptions: text('required_subscriptions').array().notNull(),
-  rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+  // No `rank` here: a module's position is per course and lives on its
+  // `course_modules` placement (dropped by migrate-drop-module-rank.ts).
   /**
    * Whether this module's lessons must be taken in rank order.
    *

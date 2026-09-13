@@ -294,8 +294,8 @@ export async function createModule(input: {
   // board reads membership from placements, so a module row with no
   // placement is created and then never seen. One transaction: a module
   // that exists in `modules` but not in `course_modules` is exactly that
-  // bug. `modules.rank` still gets the same value: it is the rollback until
-  // Task 7 drops the column.
+  // bug. The module row itself carries no rank: position is per course, so
+  // it lives on the placement alone (`modules.rank` was dropped in Task 7).
   const created = await db.transaction(async (tx) => {
     const [module] = await tx
       .insert(modulesTable)
@@ -306,7 +306,6 @@ export async function createModule(input: {
         imageUrlAvif: input.imageUrlAvif ?? null,
         imageUrlWebp: input.imageUrlWebp ?? null,
         requiredSubscriptions: [],
-        rank: String(rank),
       })
       .returning();
 
@@ -329,8 +328,8 @@ export async function createModule(input: {
     slug: created.slug,
     imageUrlAvif: created.imageUrlAvif,
     imageUrlWebp: created.imageUrlWebp,
-    // The placement's rank — the value just written to `course_modules` —
-    // not `created.rank` off the module row.
+    // The placement's rank — the value just written to `course_modules`;
+    // the module row has none.
     rank,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     sequentialLessons: created.sequentialLessons,
@@ -858,8 +857,8 @@ export async function getCourseLessonPosters(
  * same module can sit first in one course and fourth in another, so both the
  * neighbours' ranks and the row being moved are keyed on (course, module) —
  * keyed on `module_id` alone, this would move the module in every course
- * that places it. `modules.rank` is mirrored in the same transaction; it is
- * the rollback until Task 7 drops the column.
+ * that places it. The placement is the only write: `modules.rank`, mirrored
+ * here as the rollback through Tasks 3–6, was dropped in Task 7.
  */
 export async function reorderModule(input: {
   courseId: number;
@@ -878,31 +877,19 @@ export async function reorderModule(input: {
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
   else return null;
 
-  const updated = await db.transaction(async (tx) => {
-    const [placement] = await tx
-      .update(courseModulesTable)
-      .set({ rank: rankExpr })
-      .where(
-        and(
-          eq(courseModulesTable.courseId, input.courseId),
-          eq(courseModulesTable.moduleId, input.moduleId),
-        ),
-      )
-      .returning({
-        id: courseModulesTable.moduleId,
-        rank: courseModulesTable.rank,
-      });
-    if (!placement) return null;
-
-    // The value Postgres resolved for the placement, so the mirror can never
-    // disagree with it.
-    await tx
-      .update(modulesTable)
-      .set({ rank: placement.rank, updatedAt: sql`now()` })
-      .where(eq(modulesTable.id, input.moduleId));
-
-    return placement;
-  });
+  const [updated] = await db
+    .update(courseModulesTable)
+    .set({ rank: rankExpr })
+    .where(
+      and(
+        eq(courseModulesTable.courseId, input.courseId),
+        eq(courseModulesTable.moduleId, input.moduleId),
+      ),
+    )
+    .returning({
+      id: courseModulesTable.moduleId,
+      rank: courseModulesTable.rank,
+    });
   if (!updated) return null;
 
   await invalidateCourseDetailsCache(

@@ -60,6 +60,12 @@ type LessonDetails = DBLesson & {
   organizations: { id: number; name: string }[];
 };
 type ModuleDetails = DBModule & {
+  /**
+   * The placement's rank in THIS course (`course_modules.rank`), assigned in
+   * `getCourseDetails` — not a module-row column. `DBModule` has no `rank`
+   * since Task 7 dropped `modules.rank`; a module's position is per course.
+   */
+  rank: string;
   dependsOn: string[];
   lessons: LessonDetails[];
 };
@@ -71,7 +77,7 @@ export async function getCourseDetails(slug: string) {
   // placement says which course shows it. Both LEFT, so a course with no
   // placements still resolves a course row rather than `null`. `rank` is the
   // placement's — the same module can sit at a different position in a
-  // sibling course — and it overrides the module row's own `rank` below.
+  // sibling course; the module row itself has no rank.
   const courseWithModules = await db
     .select({
       course: coursesTable,
@@ -106,8 +112,8 @@ export async function getCourseDetails(slug: string) {
   modules.forEach(({ module, rank }) => {
     moduleMapWithDependencies.set(module.id, {
       ...module,
-      // Placement's rank, not the module row's own — see the query comment
-      // above. This is what the `modules` sort at the bottom orders by.
+      // Placement's rank — see the query comment above. This is what the
+      // `modules` sort at the bottom orders by.
       rank,
       requiredSubscriptions: module.requiredSubscriptions as SubscriptionType[],
       dependsOn: [],

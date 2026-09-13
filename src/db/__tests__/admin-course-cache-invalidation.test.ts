@@ -374,7 +374,13 @@ describe('course-details cache invalidation', () => {
   // `Number(created.rank)` (the `modules` row's own column) instead of the
   // placement's — the fixture's module row deliberately carries a stale rank
   // so only the placement value satisfies the last assertion.
-  it("createModule ranks the new module after this course's PLACEMENTS and inserts its course_modules row in the same transaction", async () => {
+  //
+  // Task 7: `modules.rank` is dropped, so the module insert must carry NO
+  // `rank` at all — the placement is the only write that does. Mutant D:
+  // restore `rank: String(rank)` on the `modulesTable` insert — compiles
+  // against a stub that still declares the column, and fails on the real
+  // database with `column "rank" of relation "modules" does not exist`.
+  it("createModule ranks the new module after this course's PLACEMENTS, inserts its course_modules row in the same transaction, and writes no rank onto the module row", async () => {
     const maxRankCalls: { from: unknown[]; where: SQL[] } = {
       from: [],
       where: [],
@@ -427,9 +433,11 @@ describe('course-details cache invalidation', () => {
     );
     expect(renderSqlParams(maxRankCalls.where[0])).toEqual([42]);
 
-    // The module row still carries the rank (rollback until Task 7 drops it).
+    // The module row is inserted first (the placement needs its id) and
+    // carries no `rank`: the column is gone (Task 7).
     expect(txInsert).toHaveBeenNthCalledWith(1, modulesTable);
-    expect(moduleInsert.valuesArg).toMatchObject({ courseId: 42, rank: '4' });
+    expect(moduleInsert.valuesArg).toMatchObject({ courseId: 42 });
+    expect(moduleInsert.valuesArg).not.toHaveProperty('rank');
     // The placement carries the created module's id, in the caller's course.
     expect(txInsert).toHaveBeenNthCalledWith(2, courseModulesTable);
     expect(placementInsert.valuesArg).toEqual({
@@ -833,9 +841,7 @@ describe('course-details cache invalidation', () => {
   });
 
   it('reorderModule invalidates the owning course, resolved from moduleId', async () => {
-    db.update
-      .mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }])) // placement
-      .mockReturnValueOnce(makeChain([])); // modules.rank mirror
+    db.update.mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }])); // placement
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
     await reorderModule({
@@ -852,15 +858,23 @@ describe('course-details cache invalidation', () => {
   // Task 3 (course-module membership): the board orders modules by their
   // `course_modules` placement rank, so a drag-reorder has to move THAT row —
   // the one for (courseId, moduleId), with the neighbours' ranks read from
-  // their placements in the same course — and mirror the result onto
-  // `modules.rank` (the rollback until Task 7) inside the same transaction.
-  // Mutant A: update `modules.rank` only — the board keeps reading the old
-  // placement order, so the drag visibly snaps back. Mutant B: key the
-  // placement UPDATE on `module_id` alone — moves the module in every course
-  // that places it, not the one being edited. Mutant C: read the neighbour's
-  // rank from `modules.rank` — right until a sibling course orders it
-  // differently. Rendered SQL pins the pairing; params pin which ids.
-  it("reorderModule moves the module's PLACEMENT in this course and mirrors the rank onto modules.rank, in one transaction", async () => {
+  // their placements in the same course. Mutant A: update `modules.rank`
+  // only — the board keeps reading the old placement order, so the drag
+  // visibly snaps back. Mutant B: key the placement UPDATE on `module_id`
+  // alone — moves the module in every course that places it, not the one
+  // being edited. Mutant C: read the neighbour's rank from `modules.rank` —
+  // right until a sibling course orders it differently. Rendered SQL pins
+  // the pairing; params pin which ids.
+  //
+  // Task 7: the `modules.rank` mirror that Task 3 kept as the rollback is
+  // gone with the column, and with it the transaction that existed only to
+  // pair the two writes. Mutant D: restore the second
+  // `update(modulesTable).set({ rank })` — compiles against the stub, and
+  // 500s every drag on the real database once the column is dropped.
+  // Pinned as "exactly one UPDATE, straight on `db`, targeting
+  // course_modules" — `db.transaction` is the collaborator a re-paired
+  // mirror would have to go through, so it is asserted untouched.
+  it("reorderModule moves the module's PLACEMENT in this course, and that is the only write", async () => {
     type UpdateCalls = { set: Array<Record<string, unknown>>; where: SQL[] };
     const makeUpdateChain = (result: unknown, calls: UpdateCalls) => {
       const chain = {
@@ -882,15 +896,8 @@ describe('course-details cache invalidation', () => {
       return chain;
     };
     const placementCalls: UpdateCalls = { set: [], where: [] };
-    const moduleCalls: UpdateCalls = { set: [], where: [] };
-    const txUpdate = vi
-      .fn()
-      .mockReturnValueOnce(
-        makeUpdateChain([{ id: 7, rank: '2.5' }], placementCalls),
-      )
-      .mockReturnValueOnce(makeUpdateChain([], moduleCalls));
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ update: txUpdate }),
+    db.update.mockReturnValueOnce(
+      makeUpdateChain([{ id: 7, rank: '2.5' }], placementCalls),
     );
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
@@ -901,8 +908,13 @@ describe('course-details cache invalidation', () => {
       nextModuleId: 3,
     });
 
-    // 1st write: the placement, keyed on (course, module).
-    expect(txUpdate).toHaveBeenNthCalledWith(1, courseModulesTable);
+    // The ONLY write: the placement, keyed on (course, module), issued
+    // directly — no transaction, because there is no second statement left
+    // to pair it with.
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(db.update).toHaveBeenCalledTimes(1);
+    expect(db.update).toHaveBeenNthCalledWith(1, courseModulesTable);
+    expect(db.update).not.toHaveBeenCalledWith(modulesTable);
     expect(render(placementCalls.where[0])).toBe(
       '("course_modules"."course_id" = $1 and "course_modules"."module_id" = $2)',
     );
@@ -917,13 +929,7 @@ describe('course-details cache invalidation', () => {
     );
     expect(renderSqlParams(rankExpr)).toEqual([42, 1, 42, 3]);
 
-    // 2nd write: the rollback mirror, carrying the rank the placement
-    // UPDATE returned, keyed on the module id alone (the module's own row).
-    expect(txUpdate).toHaveBeenNthCalledWith(2, modulesTable);
-    expect(moduleCalls.set[0]).toMatchObject({ rank: '2.5' });
-    expect(render(moduleCalls.where[0])).toBe('"modules"."id" = $1');
-    expect(renderSqlParams(moduleCalls.where[0])).toEqual([7]);
-
+    // The result is the rank Postgres resolved for the placement.
     expect(result).toEqual({ id: 7, rank: 2.5 });
   });
 

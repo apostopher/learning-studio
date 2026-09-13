@@ -129,17 +129,18 @@ describe('getCourseProgress', () => {
   /**
    * The grouped query orders by a column that is not an aggregate, so
    * Postgres requires it in the GROUP BY. Switching the ORDER BY but leaving
-   * `modules.rank` in the GROUP BY passes every join/order assertion above
-   * and fails at runtime with "column course_modules.rank must appear in the
-   * GROUP BY clause". Column identity is asserted — that is exactly what the
-   * builder was handed.
+   * the old `modules.rank` in the GROUP BY passed every join/order assertion
+   * above and failed at runtime with "column course_modules.rank must appear
+   * in the GROUP BY clause". Column identity is asserted — that is exactly
+   * what the builder was handed. (The `not.toContain(modulesTable.rank)`
+   * half of this pin went with the column in Task 7: that mutant no longer
+   * type-checks, so it needs no runtime guard.)
    */
-  it("groups by the placement's rank, not modules.rank", async () => {
+  it("groups by the placement's rank", async () => {
     await getCourseProgress({ userId: 'u1', slug: 'itps-uas-remote' });
 
     expect(cap.captured.groupBy[0]).toBe(modulesTable.id);
     expect(cap.captured.groupBy[1]).toBe(courseModulesTable.rank);
-    expect(cap.captured.groupBy).not.toContain(modulesTable.rank);
   });
 });
 
