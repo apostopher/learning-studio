@@ -4,7 +4,7 @@ import { act, render } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteLessonAtom } from '#/atoms/admin';
+import { deleteLessonAtom, playLessonAtom } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import type { BoardLesson, BoardModule, OrgLibrary } from '#/lib/admin-schemas';
 
@@ -162,6 +162,27 @@ describe('SortableLessonCard', () => {
       // nowhere on this screen.
       removeControlLabel: null,
     });
+  });
+
+  /**
+   * Task 6b: the preview modal asks the playback route for this lesson IN a
+   * course — the route guards on it and signs with its credentials, and no
+   * longer infers one. This board is one course's board, so the play tile
+   * hands the modal both halves.
+   *
+   * Mutant seen RED: `setPlayLesson({ lessonId: lesson.id, courseId: 0 })`
+   * (or the old id-only atom) — the modal then names a course the lesson is
+   * not in and the route answers 404 for a lesson that plainly has a video.
+   */
+  it('opens the preview for this lesson in THIS course', async () => {
+    const { store } = renderCard(LIBRARY);
+    const onPlay = cardProps.mock.calls[0][0].onPlay as () => void;
+
+    await act(async () => {
+      onPlay();
+    });
+
+    expect(store.get(playLessonAtom)).toEqual({ lessonId: 10, courseId: 7 });
   });
 
   /**

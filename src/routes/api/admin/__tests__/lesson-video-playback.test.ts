@@ -9,7 +9,7 @@ const {
   requireCoursePermission,
   absentResourceResponse,
   ForbiddenError,
-  getCourseIdForLessonId,
+  getCourseIdsForLesson,
   resolveLessonPlayback,
 } = vi.hoisted(() => {
   class ForbiddenError extends Error {
@@ -22,7 +22,7 @@ const {
     requireCoursePermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     ForbiddenError,
-    getCourseIdForLessonId: vi.fn(),
+    getCourseIdsForLesson: vi.fn<() => Promise<number[]>>(),
     // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
     // is a tsc error, not something only a runtime parse would catch.
     resolveLessonPlayback: vi.fn<() => Promise<PlaybackResult | null>>(),
@@ -33,19 +33,35 @@ vi.mock('#/lib/permissions.server', () => ({
   requireCoursePermission,
   absentResourceResponse,
 }));
-vi.mock('#/db/lesson-access', () => ({ getCourseIdForLessonId }));
+// Task 6b: the route no longer infers a course from the lesson. The client
+// names the course it is editing; the plural membership read only confirms
+// the lesson is placed there.
+vi.mock('#/db/placements', () => ({ getCourseIdsForLesson }));
 vi.mock('#/db/admin', () => ({ resolveLessonPlayback }));
 
 import { lessonPlaybackSchema } from '#/lib/admin-schemas';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { getVideoPlaybackHandler } from '../lessons.$lessonId.video-playback';
 
-const req = () => new Request('http://test/api/admin/lessons/1/video-playback');
+/**
+ * The editor always knows its course (`/admin/$courseId/editor`), so the
+ * request names it. Defaults to 42, one of the courses `beforeEach` places
+ * lesson 1 in; `courseId: null` builds a request with no param at all.
+ */
+const req = (courseId: string | null = '42') =>
+  new Request(
+    courseId === null
+      ? 'http://test/api/admin/lessons/1/video-playback'
+      : `http://test/api/admin/lessons/1/video-playback?courseId=${courseId}`,
+  );
 
 describe('getVideoPlaybackHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getCourseIdForLessonId.mockResolvedValue(42);
+    // Lesson 1 is placed in courses 42 and 99. Two, so a test naming one of
+    // them proves the route used the NAMED course and not the first (or
+    // lowest) one it found.
+    getCourseIdsForLesson.mockResolvedValue([42, 99]);
     requireCoursePermission.mockResolvedValue({ userId: 'u1' });
     // Stands in for the real helper (unit-tested in
     // lib/__tests__/permissions-server.test.ts): it answers 404 to someone on
@@ -56,10 +72,18 @@ describe('getVideoPlaybackHandler', () => {
     );
   });
 
-  it('asks for content:read scoped to the lesson’s course', async () => {
+  it('asks for content:read scoped to the course the client named', async () => {
     resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
-    await getVideoPlaybackHandler(req(), '1');
+    await getVideoPlaybackHandler(req('99'), '1');
     expect(requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      99,
+      'content',
+      'read',
+    );
+    // Not 42 — the other course this lesson is in, and the one a "first
+    // placement wins" regression would guard on.
+    expect(requireCoursePermission).not.toHaveBeenCalledWith(
       expect.anything(),
       42,
       'content',
@@ -71,17 +95,55 @@ describe('getVideoPlaybackHandler', () => {
   // own course independently of the guard above, via its own "lowest course
   // id" query — the two happened to agree only because both used the same
   // tie-break, an invisible coincidence that breaks the moment a lesson's
-  // placements' provider credentials genuinely differ per course. Now the
-  // guard's own resolved courseId is threaded straight through, so a
-  // regression back to an independent lookup can't silently reintroduce
-  // that mismatch.
-  it("threads the guard's own resolved courseId through to resolveLessonPlayback", async () => {
-    getCourseIdForLessonId.mockResolvedValue(99);
+  // placements' provider credentials genuinely differ per course. Task 6b:
+  // there is no inference on either side any more — the course the CLIENT
+  // named is what the guard checks and what picks the provider credentials,
+  // so a regression to an independent lookup on either side can't silently
+  // reintroduce that mismatch.
+  it('resolves playback with the course the client named, the same one it guarded', async () => {
     resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
 
-    await getVideoPlaybackHandler(req(), '1');
+    await getVideoPlaybackHandler(req('99'), '1');
 
     expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99);
+  });
+
+  /**
+   * A course id the lesson is NOT placed in is indistinguishable from an
+   * unknown lesson: the same `absentResourceResponse` path, so the answer
+   * reveals nothing about placement to someone off the teaching side, and
+   * neither the guard nor the provider is ever consulted for it.
+   */
+  it('treats a course the lesson is not placed in exactly like an absent lesson', async () => {
+    absentResourceResponse.mockResolvedValue(
+      new Response('Forbidden', { status: 403 }),
+    );
+    const request = req('7');
+
+    const res = await getVideoPlaybackHandler(request, '1');
+
+    expect(getCourseIdsForLesson).toHaveBeenCalledWith(1);
+    expect(absentResourceResponse).toHaveBeenCalledWith(
+      request.headers,
+      'Lesson not found',
+    );
+    expect(res.status).toBe(403);
+    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(resolveLessonPlayback).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', null],
+    ['non-integer', 'abc'],
+    ['fractional', '4.2'],
+    ['non-positive', '0'],
+  ])('400s a %s courseId without touching the database', async (_label, raw) => {
+    const res = await getVideoPlaybackHandler(req(raw), '1');
+
+    expect(res.status).toBe(400);
+    expect(getCourseIdsForLesson).not.toHaveBeenCalled();
+    expect(requireCoursePermission).not.toHaveBeenCalled();
+    expect(resolveLessonPlayback).not.toHaveBeenCalled();
   });
 
   it('returns a resolved playback the client schema can actually parse', async () => {
@@ -133,7 +195,7 @@ describe('getVideoPlaybackHandler', () => {
    * lib/__tests__/permissions-server.test.ts).
    */
   it('hands an absent lesson to absentResourceResponse and returns its answer', async () => {
-    getCourseIdForLessonId.mockResolvedValue(null);
+    getCourseIdsForLesson.mockResolvedValue([]);
     absentResourceResponse.mockResolvedValue(
       new Response('Forbidden', { status: 403 }),
     );
@@ -150,7 +212,7 @@ describe('getVideoPlaybackHandler', () => {
   });
 
   it('404s a lesson that does not exist, before guarding', async () => {
-    getCourseIdForLessonId.mockResolvedValue(null);
+    getCourseIdsForLesson.mockResolvedValue([]);
 
     const res = await getVideoPlaybackHandler(req(), '999');
 
@@ -163,7 +225,7 @@ describe('getVideoPlaybackHandler', () => {
     const res = await getVideoPlaybackHandler(req(), 'abc');
 
     expect(res.status).toBe(400);
-    expect(getCourseIdForLessonId).not.toHaveBeenCalled();
+    expect(getCourseIdsForLesson).not.toHaveBeenCalled();
     expect(resolveLessonPlayback).not.toHaveBeenCalled();
   });
 

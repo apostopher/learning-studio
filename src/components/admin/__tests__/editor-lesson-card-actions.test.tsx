@@ -4,7 +4,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteLessonAtom } from '#/atoms/admin';
+import { deleteLessonAtom, playLessonAtom } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import type { BoardLesson, OrgLibrary } from '#/lib/admin-schemas';
 
@@ -230,6 +230,32 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
       // This surface HAS a remove control, so the confirmation is told its
       // exact label and can point at it.
       removeControlLabel: removeLessonLabel('Stalls', 'Fundamentals'),
+    });
+  });
+
+  /**
+   * Task 6b: the editor rail holds SEVERAL courses' columns, and the same
+   * lesson can sit in two of them. The preview modal asks the playback route
+   * for the lesson in one named course (guarded and signed per course), so
+   * the tile has to say which column it was pressed in.
+   *
+   * Mutant seen RED: the old id-only atom — the modal then has to guess a
+   * course, which is exactly the inference the route no longer does.
+   */
+  it('opens the preview for this lesson in the column’s course', async () => {
+    const { store } = renderCard();
+
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '[aria-label="Play Stalls video"]',
+        ) as HTMLButtonElement,
+      );
+    });
+
+    expect(store.get(playLessonAtom)).toEqual({
+      lessonId: LESSON_ID,
+      courseId: 7,
     });
   });
 

@@ -7,8 +7,9 @@ import type { Captured } from './support/capture-db';
 /**
  * Task 6a: the learner path stops inferring a lesson's course.
  *
- * `getCourseSlugForLesson`, `lesson-playback.ts` and `course-last-viewed.ts`
- * each resolved lesson → module → course with `.orderBy(courseId).limit(1)`
+ * The gate's course-slug inferrer, `lesson-playback.ts` and
+ * `course-last-viewed.ts` each resolved lesson → module → course with
+ * `.orderBy(courseId).limit(1)`
  * — an arbitrary pick among the courses teaching that lesson. Once a lesson
  * is in two courses, a learner in the second is gated, played and resumed
  * against the first. The fix is to take the course from the caller (the
@@ -327,8 +328,29 @@ describe('recordLastViewedLesson writes the pointer for the course it was given'
   });
 });
 
-describe('the inferring lookup is gone', () => {
-  it('lesson-access no longer exports getCourseSlugForLesson', () => {
-    expect('getCourseSlugForLesson' in lessonAccess).toBe(false);
+describe('the inferring lookups are gone', () => {
+  /**
+   * The exact export set, so the three deleted inferrers — the learner
+   * gate's slug lookup (Task 6a) and the admin path's course-id and
+   * course-slug lookups by lesson id (Task 6b), each of which picked the
+   * lowest course id among those teaching a lesson — cannot come back under
+   * their old names, or any other. Every remaining single-course answer here
+   * is keyed by a MODULE or a COURSE, which have exactly one owner; nothing
+   * answers "the course" for a lesson, because a lesson has no such thing.
+   * Adding an export is a deliberate act that updates this list.
+   */
+  it('lesson-access exports exactly the course-explicit readers', () => {
+    expect(Object.keys(lessonAccess).sort()).toEqual([
+      'getCourseIdForModuleId',
+      'getCourseSlugForCourseId',
+      'getCourseSlugForModuleId',
+      'getCourseSlugsForLessonId',
+      'getDisciplineIdForLessonId',
+      'getLessonIdBySlug',
+      'getLessonInCourse',
+      'isSubscribedToCourse',
+      'isSubscribedToCourseSlug',
+      'lessonBelongsToCourseOrg',
+    ]);
   });
 });

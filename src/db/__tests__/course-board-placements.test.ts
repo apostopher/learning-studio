@@ -196,7 +196,6 @@ vi.mock('#/db/course-cache', () => ({
 vi.mock('#/db/course-orgs', () => ({ linkCourseToOrg: vi.fn() }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugForCourseId: vi.fn(),
-  getCourseSlugForLessonId: vi.fn(),
   getCourseSlugForModuleId: vi.fn(),
 }));
 vi.mock('#/db/lesson-playback', () => ({ getLessonPlayback: vi.fn() }));

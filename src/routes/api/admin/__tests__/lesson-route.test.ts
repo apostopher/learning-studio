@@ -13,7 +13,7 @@ const m = vi.hoisted(() => {
     requireCoursePermission: vi.fn(),
     requireLessonContentPermission: vi.fn(),
     absentResourceResponse: vi.fn(),
-    getCourseIdForLessonId: vi.fn(),
+    getCourseIdsForLesson: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
     getDisciplineIdForLessonId: vi.fn(),
     deleteLesson: vi.fn(),
@@ -32,9 +32,14 @@ vi.mock('#/lib/permissions.server', () => ({
   absentResourceResponse: m.absentResourceResponse,
 }));
 vi.mock('#/db/lesson-access', () => ({
-  getCourseIdForLessonId: m.getCourseIdForLessonId,
   getCourseIdForModuleId: m.getCourseIdForModuleId,
   getDisciplineIdForLessonId: m.getDisciplineIdForLessonId,
+}));
+// Task 6b: the placement-based existence check `dependencies`/`move` use is
+// the PLURAL membership read — there is no single course to infer for a
+// lesson any more. Empty means unplaced.
+vi.mock('#/db/placements', () => ({
+  getCourseIdsForLesson: m.getCourseIdsForLesson,
 }));
 vi.mock('#/db/admin', () => ({
   deleteLesson: m.deleteLesson,
@@ -60,11 +65,12 @@ beforeEach(() => {
   // clearAllMocks leaves an unconsumed queued "once" sitting on the mock for
   // the next test to accidentally inherit.
   vi.resetAllMocks();
-  // Lowest-id course this lesson happens to also be in — deliberately
+  // A course this lesson happens to also be placed in — deliberately
   // DIFFERENT from any course used as a guard target below, so a branch that
   // regresses to guarding on this value (instead of the target module's
-  // course) fails loudly rather than by coincidence.
-  m.getCourseIdForLessonId.mockResolvedValue(3);
+  // course, or the course the client named) fails loudly rather than by
+  // coincidence.
+  m.getCourseIdsForLesson.mockResolvedValue([3]);
   m.getCourseIdForModuleId.mockResolvedValue(7);
   // This lesson's discipline — a sentinel distinct from every course id used
   // anywhere in this file, so a branch that regresses to guarding on a course
@@ -102,7 +108,7 @@ beforeEach(() => {
  */
 describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
   it('hands the absent PATCH lesson to absentResourceResponse, not a bare 404', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.getCourseIdsForLesson.mockResolvedValue([]);
     const request = req({ courseId: 1, dependsOn: [] });
 
     await patchLessonHandler(request, '999');
@@ -114,7 +120,7 @@ describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
   });
 
   it('returns what that helper answered — a stranger gets 403, not 404', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.getCourseIdsForLesson.mockResolvedValue([]);
     m.absentResourceResponse.mockResolvedValue(
       new Response('Forbidden', { status: 403 }),
     );
@@ -129,8 +135,9 @@ describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
 
   it('hands the absent DELETE lesson to it too, and returns its answer', async () => {
     // DELETE's sole existence check is `getDisciplineIdForLessonId` (see
-    // `resolveLessonDiscipline`) — NOT the join-based `getCourseIdForLessonId`
-    // — so that is the mock that must report "not found" here.
+    // `resolveLessonDiscipline`) — NOT the placement-based
+    // `getCourseIdsForLesson` — so that is the mock that must report "not
+    // found" here.
     m.getDisciplineIdForLessonId.mockResolvedValue({ found: false });
     m.absentResourceResponse.mockResolvedValue(
       new Response('Forbidden', { status: 403 }),
@@ -150,7 +157,7 @@ describe('patchLessonHandler / deleteLessonHandler — absent lesson', () => {
 
 describe('patchLessonHandler — course resolution', () => {
   it('404s a lesson that does not exist, before guarding or parsing', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.getCourseIdsForLesson.mockResolvedValue([]);
     const res = await patchLessonHandler(
       req({ courseId: 1, dependsOn: [] }),
       '999',
@@ -166,7 +173,7 @@ describe('patchLessonHandler — course resolution', () => {
       'abc',
     );
     expect(res.status).toBe(400);
-    expect(m.getCourseIdForLessonId).not.toHaveBeenCalled();
+    expect(m.getCourseIdsForLesson).not.toHaveBeenCalled();
   });
 });
 
@@ -203,7 +210,7 @@ describe('patchLessonHandler — dependencies (still course-scoped, unchanged)',
   // unplaced lesson (zero course placements) genuinely has none to guard or
   // write — 404 is the honest answer here, unlike rename/config/delete.
   it('still 404s an unplaced lesson (zero course placements) — unlike rename/config/delete', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null); // unplaced: no join row
+    m.getCourseIdsForLesson.mockResolvedValue([]); // unplaced: no placement
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
       disciplineId: 7,
@@ -300,17 +307,17 @@ describe('patchLessonHandler — rename (discipline-owned content)', () => {
   });
 
   // Important 1 (fix round 1): an unplaced lesson (zero course placements —
-  // `getCourseIdForLessonId` would report null) still exists in the library
+  // `getCourseIdsForLesson` would report `[]`) still exists in the library
   // and must still be renameable by its own discipline SME.
   //
   // Mutant: restore the OLD shared top-of-handler existence check
-  // (`getCourseIdForLessonId`) instead of routing solely through
+  // (`getCourseIdsForLesson`) instead of routing solely through
   // `resolveLessonDiscipline`. RED: an unplaced lesson would 404 for
   // everyone, including its own SME, because the join through
   // `module_lessons` finds no row — this is the exact regression the fix
   // closes, and it must fail against the PRE-fix top-level check.
   it('is renameable by its discipline SME even with zero course placements', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null); // unplaced: no join row
+    m.getCourseIdsForLesson.mockResolvedValue([]); // unplaced: no placement
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
       disciplineId: 7,
@@ -372,10 +379,10 @@ describe('patchLessonHandler — config (discipline-owned content)', () => {
 
   // Important 1 (fix round 1): same as rename — an unplaced lesson must
   // still be editable by its discipline SME. Mutant: restore the shared
-  // top-level `getCourseIdForLessonId` existence check. RED for the same
+  // top-level `getCourseIdsForLesson` existence check. RED for the same
   // reason as rename's equivalent test.
   it('is editable by its discipline SME even with zero course placements', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null); // unplaced: no join row
+    m.getCourseIdsForLesson.mockResolvedValue([]); // unplaced: no placement
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
       disciplineId: 7,
@@ -392,20 +399,21 @@ describe('patchLessonHandler — config (discipline-owned content)', () => {
   });
 });
 
-// Requirements 4/5: move guards on the TARGET module's course — not the
-// lesson's lowest-id course, and not the lesson's discipline.
+// Requirements 4/5: move guards on the TARGET module's course — not some
+// other course the lesson is placed in, and not the lesson's discipline.
 describe('patchLessonHandler — move (guards the target module’s course)', () => {
   function moveReq() {
     return req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null });
   }
 
-  // Requirement 4, named mutant: guard the lesson's lowest course
-  // (`getCourseIdForLessonId` → 3) instead of the target module's course
-  // (`getCourseIdForModuleId(55)` → 7). `beforeEach` deliberately makes these
-  // two (and the lesson's discipline, 42) all differ, so a mutant that guards
-  // on any of the other two fails this `toHaveBeenCalledWith` assertion for 7
-  // — RED, not a crash (all three are valid ids).
-  it('guards on the TARGET module’s course, not the lesson’s lowest course or its discipline', async () => {
+  // Requirement 4, named mutant: guard a course the lesson is merely placed
+  // in (`getCourseIdsForLesson` → [3], first element) instead of the target
+  // module's course (`getCourseIdForModuleId(55)` → 7). `beforeEach`
+  // deliberately makes these two (and the lesson's discipline, 42) all
+  // differ, so a mutant that guards on any of the other two fails this
+  // `toHaveBeenCalledWith` assertion for 7 — RED, not a crash (all three are
+  // valid ids).
+  it('guards on the TARGET module’s course, not a course the lesson is placed in or its discipline', async () => {
     await patchLessonHandler(moveReq(), '10');
     expect(m.getCourseIdForModuleId).toHaveBeenCalledWith(55);
     expect(m.requireCoursePermission).toHaveBeenCalledWith(
@@ -438,8 +446,8 @@ describe('patchLessonHandler — move (guards the target module’s course)', ()
   });
 
   // Requirement 5, named mutant: skip the null check on
-  // `getCourseIdForModuleId` and guard on the lesson's lowest course as a
-  // fallback instead of 404ing. That mutant would call
+  // `getCourseIdForModuleId` and guard on a course the lesson is placed in
+  // as a fallback instead of 404ing. That mutant would call
   // `requireCoursePermission` (RED: not called here) and would call
   // `moveLesson` (RED: called here) instead of 404ing.
   it('404s when the target module does not exist, and never calls moveLesson', async () => {
@@ -465,7 +473,7 @@ describe('patchLessonHandler — move (guards the target module’s course)', ()
   // asymmetry with rename/config/delete, which the equivalent test in each
   // of those describe blocks proves does NOT 404 the same lesson.
   it('still 404s an unplaced lesson (zero course placements) — unlike rename/config/delete', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null); // unplaced: no join row
+    m.getCourseIdsForLesson.mockResolvedValue([]); // unplaced: no placement
     // Even though the lesson row itself exists with a discipline — proving
     // this 404 comes from move's own join-based check, not a missing lesson.
     m.getDisciplineIdForLessonId.mockResolvedValue({
@@ -514,7 +522,7 @@ describe('deleteLessonHandler — discipline-owned (deletes from every course)',
 
   it('404s a lesson that does not exist, before guarding', async () => {
     // DELETE's sole existence check is `getDisciplineIdForLessonId` now —
-    // NOT the join-based `getCourseIdForLessonId`, which no longer gates
+    // NOT the placement-based `getCourseIdsForLesson`, which no longer gates
     // this handler at all (see `resolveLessonDiscipline`).
     m.getDisciplineIdForLessonId.mockResolvedValue({ found: false });
     const res = await deleteLessonHandler(new Request('http://test/x'), '999');
@@ -524,16 +532,16 @@ describe('deleteLessonHandler — discipline-owned (deletes from every course)',
   });
 
   // The core fix (Important 1): an unplaced lesson (zero course placements —
-  // `getCourseIdForLessonId` would report null) still exists in the library
+  // `getCourseIdsForLesson` would report `[]`) still exists in the library
   // and must still be deletable by its own discipline SME.
   //
   // Mutant: restore the OLD shared top-of-handler existence check
-  // (`getCourseIdForLessonId`) for `deleteLessonHandler` instead of routing
+  // (`getCourseIdsForLesson`) for `deleteLessonHandler` instead of routing
   // solely through `resolveLessonDiscipline`. RED: an unplaced lesson would
   // 404 for everyone, including its own SME, because the join through
   // `module_lessons` finds no row.
   it('is deletable by its discipline SME even with zero course placements', async () => {
-    m.getCourseIdForLessonId.mockResolvedValue(null); // unplaced: no join row
+    m.getCourseIdsForLesson.mockResolvedValue([]); // unplaced: no placement
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
       disciplineId: 7,
@@ -557,7 +565,7 @@ describe('deleteLessonHandler — discipline-owned (deletes from every course)',
 // the guard, and no branch resolves a discipline for a lesson that was never
 // confirmed to exist.
 // Two existence checks now coexist (Important 1, fix round 1):
-// `getCourseIdForLessonId` (join-based, gates `dependencies`/`move`) and
+// `getCourseIdsForLesson` (placement-based, gates `dependencies`/`move`) and
 // `getDisciplineIdForLessonId` (lessonsTable-only, gates
 // `rename`/`config`/`delete`). A genuinely non-existent lesson id (not merely
 // unplaced) must report `not found` from BOTH, since either check alone
@@ -602,7 +610,7 @@ describe('non-existent lesson 404s (not 403) on every branch', () => {
   it.each(
     CASES,
   )('%s: 404, not 403, for a missing lesson', async (_label, checkKind, call) => {
-    m.getCourseIdForLessonId.mockResolvedValue(null);
+    m.getCourseIdsForLesson.mockResolvedValue([]);
     m.getDisciplineIdForLessonId.mockResolvedValue({ found: false });
     // Even an actor who would otherwise be denied must see a 404 here, not
     // a 403 — the existence check runs before any guard.
@@ -617,12 +625,12 @@ describe('non-existent lesson 404s (not 403) on every branch', () => {
 
     // Each branch's existence check short-circuits before the OTHER check
     // ever runs — dependencies/move never resolve a discipline at all, and
-    // rename/config/delete never touch the join-based course lookup.
+    // rename/config/delete never touch the placement-based course lookup.
     if (checkKind === 'discipline-check') {
       expect(m.getDisciplineIdForLessonId).toHaveBeenCalledWith(999);
-      expect(m.getCourseIdForLessonId).not.toHaveBeenCalled();
+      expect(m.getCourseIdsForLesson).not.toHaveBeenCalled();
     } else {
-      expect(m.getCourseIdForLessonId).toHaveBeenCalledWith(999);
+      expect(m.getCourseIdsForLesson).toHaveBeenCalledWith(999);
       expect(m.getDisciplineIdForLessonId).not.toHaveBeenCalled();
     }
   });

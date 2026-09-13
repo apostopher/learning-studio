@@ -60,43 +60,15 @@ export async function getLessonInCourse({
 }
 
 /**
- * Course slug owning a lesson, resolved by numeric lesson id rather than
- * lesson slug. Admin mutations only ever hold a `lessonId`, and the
- * course-details cache is keyed by course slug, so this is the lookup they
- * need before invalidating. Returns null if the lesson doesn't exist.
- *
- * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
- * returns only ONE of them (the lowest course id, so the answer is stable
- * across calls rather than depending on row order). A caller that must act on
- * EVERY course teaching this lesson — cache invalidation, in particular —
- * wants `getCourseSlugsForLessonId` instead; using this one there would leave
- * the other courses serving stale content.
- */
-export async function getCourseSlugForLessonId(
-  lessonId: number,
-): Promise<string | null> {
-  const [row] = await db
-    .select({ courseSlug: coursesTable.slug })
-    .from(lessonsTable)
-    .innerJoin(
-      moduleLessonsTable,
-      eq(moduleLessonsTable.lessonId, lessonsTable.id),
-    )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(lessonsTable.id, lessonId))
-    .orderBy(modulesTable.courseId)
-    .limit(1);
-  return row?.courseSlug ?? null;
-}
-
-/**
  * EVERY course slug that teaches this lesson.
  *
  * A lesson reaches learners through `module_lessons`, so editing one lesson
  * can change what several courses show. Cache invalidation must therefore hit
- * all of them — `getCourseSlugForLessonId` returns only one and would leave
- * the rest serving stale content until the TTL expires.
+ * all of them. Admin mutations only ever hold a `lessonId`, and the
+ * course-details cache is keyed by course slug, so this is the lookup they
+ * need before invalidating. There is deliberately no single-slug sibling: a
+ * lesson has no "the" course, and the one that used to pick one (the lowest
+ * id) left the other courses serving stale content.
  */
 export async function getCourseSlugsForLessonId(
   lessonId: number,
@@ -116,7 +88,7 @@ export async function getCourseSlugsForLessonId(
 
 /**
  * Course slug owning a module, resolved by numeric module id. Same rationale
- * as `getCourseSlugForLessonId`: admin mutations on a module only hold its
+ * as `getCourseSlugsForLessonId`: admin mutations on a module only hold its
  * id, not its course's slug.
  */
 export async function getCourseSlugForModuleId(
@@ -129,38 +101,6 @@ export async function getCourseSlugForModuleId(
     .where(eq(modulesTable.id, moduleId))
     .limit(1);
   return row?.courseSlug ?? null;
-}
-
-/**
- * The course id a lesson belongs to.
- *
- * The slug-returning siblings above exist for cache invalidation, which is
- * keyed by slug. Authorization is keyed by id, and round-tripping id → slug →
- * id would be two queries to answer one question. Returns null (never
- * throws) when the lesson doesn't exist, so callers can tell "no such
- * lesson" (404) apart from a real query failure.
- *
- * A lesson can now be taught by SEVERAL courses via `module_lessons` — this
- * returns only ONE of them (the lowest course id, so the answer is stable
- * across calls rather than depending on row order). See `getCourseIdsForLesson`
- * for callers that need every course a lesson belongs to.
- */
-export async function getCourseIdForLessonId(
-  lessonId: number,
-): Promise<number | null> {
-  const [row] = await db
-    .select({ courseId: coursesTable.id })
-    .from(lessonsTable)
-    .innerJoin(
-      moduleLessonsTable,
-      eq(moduleLessonsTable.lessonId, lessonsTable.id),
-    )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(lessonsTable.id, lessonId))
-    .orderBy(modulesTable.courseId)
-    .limit(1);
-  return row?.courseId ?? null;
 }
 
 /**
@@ -190,8 +130,16 @@ export async function getDisciplineIdForLessonId(
 }
 
 /**
- * The course id a module belongs to. Returns null (never throws) when the
- * module doesn't exist — see `getCourseIdForLessonId` for why.
+ * The course id a module belongs to — its OWNER, `modules.course_id`, which
+ * is what admin authority over a module follows. Returns null (never throws)
+ * when the module doesn't exist, so callers can tell "no such module" (404)
+ * apart from a real query failure.
+ *
+ * A module has exactly one owner, so this single answer is honest. A LESSON
+ * has no such thing — it is placed in any number of courses — which is why
+ * there is no single-course sibling for lessons beside this:
+ * `getCourseIdsForLesson` (placements.ts) answers the plural question, and
+ * every caller decides for itself what several courses means.
  */
 export async function getCourseIdForModuleId(
   moduleId: number,

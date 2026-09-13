@@ -25,10 +25,10 @@ const coursesTable = pgTable('courses', {
 
 /**
  * A chainable stub standing in for
- * `db.select().from().innerJoin().innerJoin().innerJoin().where().orderBy().limit()`.
- * Every builder method returns the same object so any subset/order of calls
- * keeps chaining, and `limit` resolves the awaited promise — matching the
- * real functions under test, which both terminate on `.limit(1)`.
+ * `db.select().from().innerJoin().where().limit()`. Every builder method
+ * returns the same object so any subset/order of calls keeps chaining, and
+ * `limit` resolves the awaited promise — matching the function under test,
+ * which terminates on `.limit(1)`.
  */
 function makeChain(result: unknown) {
   const chain = {
@@ -51,26 +51,10 @@ vi.mock('#/db/schema', () => ({
   coursesTable,
 }));
 
-const { getCourseIdForLessonId, getCourseIdForModuleId } = await import(
-  '#/db/lesson-access'
-);
+const { getCourseIdForModuleId } = await import('#/db/lesson-access');
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe('getCourseIdForLessonId', () => {
-  it('returns the course id a lesson belongs to', async () => {
-    db.select.mockReturnValueOnce(makeChain([{ courseId: 42 }]));
-
-    expect(await getCourseIdForLessonId(7)).toBe(42);
-  });
-
-  it('returns null for a lesson that does not exist', async () => {
-    db.select.mockReturnValueOnce(makeChain([]));
-
-    expect(await getCourseIdForLessonId(999)).toBeNull();
-  });
 });
 
 describe('getCourseIdForModuleId', () => {

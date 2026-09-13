@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { resolveLessonPlayback } from '#/db/admin';
-import { getCourseIdForLessonId } from '#/db/lesson-access';
+import { getCourseIdsForLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   absentResourceResponse,
@@ -24,7 +24,8 @@ async function guard(
   }
 }
 
-function parseLessonId(raw: string): number | null {
+function parsePositiveInt(raw: string | null): number | null {
+  if (raw === null) return null;
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : null;
 }
@@ -33,17 +34,34 @@ export async function getVideoPlaybackHandler(
   request: Request,
   rawLessonId: string,
 ): Promise<Response> {
-  const lessonId = parseLessonId(rawLessonId);
+  const lessonId = parsePositiveInt(rawLessonId);
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Resolve the course before guarding: guarding on a null course id would
-  // misreport "no such lesson" as "forbidden". The 404 is then answered only
-  // to someone on the teaching side — see `absentResourceResponse`, which
-  // closes the id-enumeration oracle this ordering would otherwise open. Distinct from the "no video assigned" 404 below,
-  // which only fires once we know the lesson is real.
-  const courseId = await getCourseIdForLessonId(lessonId);
+  // The course is NAMED by the client, never inferred from the lesson. A
+  // lesson can be placed in several courses and each course holds its own
+  // provider credentials, so "which course" decides both who may watch and
+  // which key signs the URL — and only the editor (`/admin/$courseId/…`)
+  // knows which one it is showing. Inferring it here used to pick the
+  // lowest course id, which was the wrong course for anyone in the other.
+  const courseId = parsePositiveInt(
+    new URL(request.url).searchParams.get('courseId'),
+  );
   if (courseId === null) {
+    return Response.json(
+      { error: 'A valid courseId is required' },
+      { status: 400 },
+    );
+  }
+  // Confirm the placement before guarding: guarding on a course the lesson is
+  // not in would misreport "no such lesson" as "forbidden". A course the
+  // lesson is not placed in gets the SAME answer as an unknown lesson, and
+  // that 404 is answered only to someone on the teaching side — see
+  // `absentResourceResponse`, which closes the id-enumeration oracle this
+  // ordering would otherwise open. Distinct from the "no video assigned" 404
+  // below, which only fires once we know the lesson is real and here.
+  const placedIn = await getCourseIdsForLesson(lessonId);
+  if (!placedIn.includes(courseId)) {
     return absentResourceResponse(request.headers, 'Lesson not found');
   }
   const denied = await guard(request, courseId);

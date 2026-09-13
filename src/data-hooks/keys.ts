@@ -30,8 +30,22 @@ export const dataKeys = {
     ['admin', 'update-lesson-config', courseId] as const,
   courseCredentials: (courseId: number) =>
     ['admin', 'course-credentials', courseId] as const,
-  lessonPlayback: (lessonId: number) =>
+  /**
+   * Every course's playback for one lesson — the prefix a video swap
+   * invalidates. A lesson is org-owned and can be taught by several courses,
+   * and a new video is a new video in all of them.
+   */
+  lessonPlaybacks: (lessonId: number) =>
     ['admin', 'lesson-playback', lessonId] as const,
+  /**
+   * Keyed by COURSE as well as lesson because the answer is: the route
+   * guards on the named course and signs the URL with that course's provider
+   * credentials, so the same lesson previewed from two courses is two
+   * different signed URLs. One shared entry would hand the second course
+   * the first's URL until it went stale.
+   */
+  lessonPlayback: (lessonId: number, courseId: number) =>
+    [...dataKeys.lessonPlaybacks(lessonId), courseId] as const,
   lessonPosters: (courseId: number) =>
     ['admin', 'lesson-posters', courseId] as const,
   lessonMaterial: (lessonId: number) =>

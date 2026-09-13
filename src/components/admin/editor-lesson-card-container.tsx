@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   deleteLessonAtom,
   editLibraryLessonIdAtom,
-  playLessonIdAtom,
+  playLessonAtom,
 } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
@@ -80,7 +80,7 @@ export const EditorLessonCardContainer = ({
   const unlinkLesson = useUnlinkLesson();
   const setDeleteLesson = useSetAtom(deleteLessonAtom);
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
-  const setPlayLessonId = useSetAtom(playLessonIdAtom);
+  const setPlayLesson = useSetAtom(playLessonAtom);
   /**
    * Read here rather than threaded down from `EditorContainer` through the
    * course column and the module: the only thing this card needs from the
@@ -144,8 +144,13 @@ export const EditorLessonCardContainer = ({
                 })
         }
         deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
+        // With the column's course: the rail shows several courses and the
+        // same lesson may sit in two of them, and the preview resolves
+        // playback for the lesson IN one named course.
         onPlay={
-          lesson.isConfigured ? () => setPlayLessonId(lesson.id) : undefined
+          lesson.isConfigured
+            ? () => setPlayLesson({ lessonId: lesson.id, courseId })
+            : undefined
         }
         quickshotSlot={
           <EditorLessonQuickshotContainer lesson={lesson} module={mod} />

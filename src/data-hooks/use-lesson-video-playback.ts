@@ -16,8 +16,8 @@ const MIN_REFETCH_SECONDS = 30;
  * open past the TTL silently stops working. `false` disables polling when the
  * provider gives no expiry.
  *
- * Exported for testing: the hook itself cannot be rendered under this repo's
- * vitest setup, so the arithmetic is verified directly.
+ * Exported so the arithmetic is verified directly, without waiting on a
+ * refetch timer.
  */
 export function playbackRefetchDelayMs(
   expiresInSeconds: number | null | undefined,
@@ -29,12 +29,37 @@ export function playbackRefetchDelayMs(
   );
 }
 
-/** Resolved playback URL for a lesson's video. `null` when no video is set. */
-export function useLessonVideoPlayback(lessonId: number, enabled: boolean) {
+/**
+ * A lesson as previewed from ONE course.
+ *
+ * The course is not decoration: the playback route guards on it and signs
+ * the URL with that course's provider credentials, and it no longer infers
+ * one from the lesson (a lesson can be in several, and none of them is
+ * "the" course). The editor always knows which course it is showing, so it
+ * says so — `/admin/$courseId/…` for the per-course board, the column the
+ * tile was pressed in for the org editor's rail.
+ */
+export type LessonInCourse = { lessonId: number; courseId: number };
+
+/**
+ * Resolved playback URL for a lesson's video, in the given course. `null`
+ * when no video is set. `target: null` means nothing is selected (a closed
+ * preview modal) and disables the query regardless of `enabled`.
+ */
+export function useLessonVideoPlayback(
+  target: LessonInCourse | null,
+  enabled: boolean,
+) {
   return useQuery({
-    queryKey: dataKeys.lessonPlayback(lessonId),
+    queryKey: dataKeys.lessonPlayback(
+      target?.lessonId ?? 0,
+      target?.courseId ?? 0,
+    ),
     queryFn: async () => {
-      const res = await fetch(`/api/admin/lessons/${lessonId}/video-playback`);
+      if (target === null) return null;
+      const res = await fetch(
+        `/api/admin/lessons/${target.lessonId}/video-playback?courseId=${target.courseId}`,
+      );
       if (res.status === 404) return null;
       if (!res.ok) {
         // A coded body means the provider refused something specific — rethrow
@@ -50,7 +75,7 @@ export function useLessonVideoPlayback(lessonId: number, enabled: boolean) {
       }
       return lessonPlaybackSchema.parse(await res.json());
     },
-    enabled,
+    enabled: enabled && target !== null,
     staleTime: 5 * 60_000,
     // Keeps a mounted preview's signed URL alive; see playbackRefetchDelayMs.
     // A rendering/failed result carries no `expiresInSeconds` (there is no

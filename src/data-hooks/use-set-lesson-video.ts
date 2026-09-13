@@ -26,8 +26,10 @@ export function useSetLessonVideo(courseId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.courseBoard(courseId),
       });
+      // The prefix, not this course's entry: a new video is a new video in
+      // every course teaching the lesson.
       queryClient.invalidateQueries({
-        queryKey: dataKeys.lessonPlayback(input.lessonId),
+        queryKey: dataKeys.lessonPlaybacks(input.lessonId),
       });
       // Without this the board's tile flips to a play button on refetch but
       // its poster stays grey for the full 30-minute lessonPosters staleTime

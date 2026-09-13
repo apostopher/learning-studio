@@ -4,7 +4,7 @@ import { useSetAtom } from 'jotai';
 import {
   configureLessonIdAtom,
   deleteLessonAtom,
-  playLessonIdAtom,
+  playLessonAtom,
 } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
@@ -45,7 +45,7 @@ export const SortableLessonCard = ({
   });
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
   const setDeleteLesson = useSetAtom(deleteLessonAtom);
-  const setPlayLessonId = useSetAtom(playLessonIdAtom);
+  const setPlayLesson = useSetAtom(playLessonAtom);
   /**
    * Deleting a lesson ends it in EVERY course, so the confirmation has to name
    * how many lose it — and this board, being one course's board, does not know.
@@ -97,8 +97,12 @@ export const SortableLessonCard = ({
         // control that vanishes without explanation is the locked state this
         // project does not ship.
         deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
+        // With the course: the preview resolves playback for the lesson IN
+        // this course, and this board is one course's board.
         onPlay={
-          lesson.isConfigured ? () => setPlayLessonId(lesson.id) : undefined
+          lesson.isConfigured
+            ? () => setPlayLesson({ lessonId: lesson.id, courseId })
+            : undefined
         }
         quickshotSlot={
           <LessonQuickshotContainer

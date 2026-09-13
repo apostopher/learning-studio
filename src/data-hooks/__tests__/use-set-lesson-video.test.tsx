@@ -51,7 +51,9 @@ describe('useSetLessonVideo', () => {
       ([arg]) => arg?.queryKey,
     );
     expect(invalidatedKeys).toContainEqual(dataKeys.courseBoard(COURSE_ID));
-    expect(invalidatedKeys).toContainEqual(dataKeys.lessonPlayback(10));
+    // The per-lesson PREFIX: playback is cached per course (Task 6b), and a
+    // new video is a new video in every course teaching the lesson.
+    expect(invalidatedKeys).toContainEqual(dataKeys.lessonPlaybacks(10));
     expect(invalidatedKeys).toContainEqual(dataKeys.lessonPosters(COURSE_ID));
   });
 });

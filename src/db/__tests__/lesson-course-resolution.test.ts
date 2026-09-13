@@ -143,48 +143,18 @@ function makeChain(result: unknown) {
 }
 
 /**
- * Variant of `makeChain` that records every argument passed to `.orderBy()`.
- * Needed for the determinism test: `makeChain` above swallows its arguments,
- * so it cannot prove `getCourseSlugForLessonId` actually asked Postgres to
- * order by `course_id` — only that its control flow reached `.limit(1)`. A
- * mutant that dropped the `.orderBy(...)` call entirely (or ordered by the
- * wrong column) would still pass every assertion built on plain `makeChain`.
- */
-function makeOrderedChain(result: unknown, orderByCalls: unknown[]) {
-  const chain = {
-    from: () => chain,
-    innerJoin: () => chain,
-    where: () => chain,
-    orderBy: (col: unknown) => {
-      orderByCalls.push(col);
-      return chain;
-    },
-    limit: () => chain,
-    // biome-ignore lint/suspicious/noThenProperty: see makeChain above
-    then: (
-      resolve: (v: unknown) => unknown,
-      reject?: (e: unknown) => unknown,
-    ) => Promise.resolve(result).then(resolve, reject),
-  };
-  return chain;
-}
-
-/**
  * Variant of `makeChain` that records every `(table, condition)` pair passed
  * to `.innerJoin()`. Needed to prove `getCourseSlugsForLessonId` actually
  * hops through `module_lessons` rather than the legacy `lessons.module_id`
  * path: `makeChain` discards its arguments entirely (see its own doc comment
  * above), so a mutant that put the OLD join back —
  * `.innerJoin(modulesTable, eq(modulesTable.id, lessonsTable.moduleId))` —
- * would satisfy every assertion built on plain `makeChain` or
- * `makeOrderedChain`. Pair with `collectSqlTokens` below to inspect what a
- * captured condition actually references.
+ * would satisfy every assertion built on plain `makeChain`. Pair with
+ * `collectSqlTokens` below to inspect what a captured condition actually
+ * references.
  *
- * `orderBy`/`limit` chain through untouched (rather than being omitted, as in
- * the original version of this stub) so the same capturing chain also works
- * for `getCourseSlugForLessonId`/`getCourseIdForLessonId`, which both call
- * `.orderBy().limit(1)` after `.where()` — see the per-join rendered-SQL
- * tests below (Task 5e, Part 2a).
+ * `orderBy`/`limit` chain through untouched so the same capturing chain
+ * keeps working for any reader that terminates on `.limit(1)`.
  *
  * `whereCalls` (fix round 1, 2a): optional, defaults to a throwaway array —
  * before this parameter existed, `.where()` was a bare no-op here, so no
@@ -271,11 +241,7 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
   getVideoThumbnailsWithCache: Object.assign(vi.fn(), synthesiaThumbnailsCache),
 }));
 
-const {
-  getCourseIdForLessonId,
-  getCourseSlugForLessonId,
-  getCourseSlugsForLessonId,
-} = await import('#/db/lesson-access');
+const { getCourseSlugsForLessonId } = await import('#/db/lesson-access');
 const { updateLessonName } = await import('#/db/admin');
 
 beforeEach(() => {
@@ -342,83 +308,27 @@ describe('getCourseSlugsForLessonId', () => {
   });
 });
 
-describe('getCourseSlugForLessonId determinism', () => {
-  // Mutant this catches: dropping `.orderBy(modulesTable.courseId)` (or
-  // ordering by the wrong column) from `getCourseSlugForLessonId`. That
-  // mutant is "correct-shaped" — it still resolves *a* slug and still
-  // type-checks — but with placements in several courses, which slug comes
-  // back would depend on Postgres's unspecified row order and could differ
-  // between calls. `makeChain` alone can't see this (it ignores `.orderBy`'s
-  // argument entirely), so this test uses `makeOrderedChain` to capture what
-  // was actually passed.
-  it('orders by course id and returns the same slug across repeated calls', async () => {
-    const orderByCalls: unknown[] = [];
-    db.select
-      .mockReturnValueOnce(
-        makeOrderedChain([{ courseSlug: 'flight-basics' }], orderByCalls),
-      )
-      .mockReturnValueOnce(
-        makeOrderedChain([{ courseSlug: 'flight-basics' }], orderByCalls),
-      );
-
-    const first = await getCourseSlugForLessonId(9);
-    const second = await getCourseSlugForLessonId(9);
-
-    expect(first).toBe('flight-basics');
-    expect(second).toBe('flight-basics');
-    expect(orderByCalls).toHaveLength(2);
-    for (const col of orderByCalls) {
-      expect((col as { name: string }).name).toBe('course_id');
-    }
-  });
-});
-
-describe('getCourseIdForLessonId determinism', () => {
-  // Same mutant and same rationale as the two determinism tests above.
-  // `getCourseIdForLessonId` backs the five admin lesson routes' permission
-  // guards (a later task replaces those guards; not in scope here — see the
-  // fix-round-1 report), but its determinism is still worth pinning now: an
-  // authorization check that answers differently across calls for the same
-  // lesson is its own kind of bug even before that guard is rewritten.
-  it('orders by course id and returns the same id across repeated calls', async () => {
-    const orderByCalls: unknown[] = [];
-    db.select
-      .mockReturnValueOnce(makeOrderedChain([{ courseId: 3 }], orderByCalls))
-      .mockReturnValueOnce(makeOrderedChain([{ courseId: 3 }], orderByCalls));
-
-    const first = await getCourseIdForLessonId(9);
-    const second = await getCourseIdForLessonId(9);
-
-    expect(first).toBe(3);
-    expect(second).toBe(3);
-    expect(orderByCalls).toHaveLength(2);
-    for (const col of orderByCalls) {
-      expect((col as { name: string }).name).toBe('course_id');
-    }
-  });
-});
-
-// Task 5e, Part 2a: before this block, `getCourseSlugsForLessonId` was the
-// only one of these functions with ANY join-argument assertion (the
-// `collectSqlTokens` check above). `getCourseSlugForLessonId` and
-// `getCourseIdForLessonId` share the identical
-// `lessons -> module_lessons -> modules -> courses` hop, but were
-// argument-blind: a PARTIAL revert of any one of their three joins back to
-// the legacy path — e.g. `.innerJoin(modulesTable, eq(modulesTable.id,
+// Task 5e, Part 2a: before this block, the `collectSqlTokens` check above
+// was the only join-argument assertion on this
+// `lessons -> module_lessons -> modules -> courses` hop, and it only proves
+// PRESENCE: a PARTIAL revert of any one of the three joins back to the
+// legacy path — e.g. `.innerJoin(modulesTable, eq(modulesTable.id,
 // lessonsTable.moduleId))`, skipping module_lessons entirely for that one
 // hop — was "correct-shaped" (still an integer FK join, still compiles) but
-// silently reverted this function's course resolution to the legacy
-// single-valued `lessons.module_id`, while the OTHER functions in this file
-// stayed migrated. Every existing test for these functions builds on
-// `makeChain`/`makeOrderedChain`, which both discard join arguments (see
-// their doc comments), so none of them could catch that. These tests
-// capture every `(table, condition)` pair passed to `.innerJoin()`, in call
-// order, and render each condition to its exact SQL text — pinning both the
-// join order and which columns are paired on each hop.
+// silently reverted the function's course resolution to the legacy
+// single-valued `lessons.module_id`. Every other test for it builds on
+// `makeChain`, which discards join arguments (see its doc comment), so none
+// of them could catch that. This test captures every `(table, condition)`
+// pair passed to `.innerJoin()`, in call order, and renders each condition
+// to its exact SQL text — pinning both the join order and which columns are
+// paired on each hop.
 //
-// (The learner-path sibling `getCourseSlugForLesson` was pinned here too
-// until Task 6a deleted it — the gate now resolves the lesson INSIDE the
-// course the route names; see lesson-course-scoped-reads.test.ts.)
+// (The single-course siblings that shared this hop — the learner gate's
+// slug inferrer and the admin path's id/slug-by-lesson-id inferrers — were
+// the ones pinned here until Tasks 6a/6b deleted them: each picked the
+// lowest course id among those teaching a lesson, and the routes now name
+// the course instead. See lesson-course-scoped-reads.test.ts. The pin moved
+// to the surviving plural reader, which walks the identical hop.)
 describe('join argument pinning: lessons -> module_lessons -> modules -> courses', () => {
   const expectedJoinChain = (
     joinCalls: Array<[table: unknown, condition: unknown]>,
@@ -438,9 +348,8 @@ describe('join argument pinning: lessons -> module_lessons -> modules -> courses
     );
   };
 
-  // Mutant: same partial revert, applied to getCourseSlugForLessonId's
-  // second join instead.
-  it('getCourseSlugForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
+  // Mutant: the partial revert above, applied to any one of the three joins.
+  it('getCourseSlugsForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
     const joinCalls: Array<[unknown, unknown]> = [];
     const whereCalls: unknown[] = [];
     db.select.mockReturnValueOnce(
@@ -451,32 +360,12 @@ describe('join argument pinning: lessons -> module_lessons -> modules -> courses
       ),
     );
 
-    await getCourseSlugForLessonId(9);
+    await getCourseSlugsForLessonId(9);
 
     expectedJoinChain(joinCalls);
-    // `.where()` was a bare no-op in this chain until fix round 1, Part 2a,
-    // so nothing here proved which column scoped the lookup. Mutant:
-    // `eq(moduleLessonsTable.lessonId, lessonId)` or any other column swap —
-    // "correct-shaped" (still an equality on a real column) but matches an
-    // entirely different row set.
-    expect(whereCalls).toHaveLength(1);
-    expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."id" = $1');
-    expect(renderSqlParams(whereCalls[0] as never)).toEqual([9]);
-  });
-
-  // Mutant: same partial revert, applied to getCourseIdForLessonId's second
-  // join instead.
-  it('getCourseIdForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
-    const joinCalls: Array<[unknown, unknown]> = [];
-    const whereCalls: unknown[] = [];
-    db.select.mockReturnValueOnce(
-      makeJoinCapturingChain([{ courseId: 3 }], joinCalls, whereCalls),
-    );
-
-    await getCourseIdForLessonId(9);
-
-    expectedJoinChain(joinCalls);
-    // Same rationale as getCourseSlugForLessonId's WHERE assertion above.
+    // Mutant: `eq(moduleLessonsTable.lessonId, lessonId)` or any other
+    // column swap — "correct-shaped" (still an equality on a real column)
+    // but matches an entirely different row set.
     expect(whereCalls).toHaveLength(1);
     expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."id" = $1');
     expect(renderSqlParams(whereCalls[0] as never)).toEqual([9]);
@@ -486,12 +375,13 @@ describe('join argument pinning: lessons -> module_lessons -> modules -> courses
 describe('bug regression: invalidating every course a lesson is placed in', () => {
   // This is the bug Task 5a fixes: with one lesson taught by three courses,
   // an admin edit used to resolve and invalidate only ONE course's cache
-  // (whichever `getCourseSlugForLessonId` happened to return), leaving the
-  // other two serving stale content until the 6h TTL expired.
+  // (whichever slug the since-deleted single-course lookup happened to
+  // return), leaving the other two serving stale content until the 6h TTL
+  // expired.
   //
   // Mutant this catches: reverting `updateLessonName`'s invalidation call to
-  // `invalidateCourseDetailsCache(await getCourseSlugForLessonId(lessonId))`
-  // (the pre-fix single-slug call). Under that mutant, `db.select`'s three
+  // a single-slug `invalidateCourseDetailsCache(await <one slug>)` (the
+  // pre-fix shape). Under that mutant, `db.select`'s three
   // mocked rows still resolve fine, but only the FIRST slug is ever passed to
   // `invalidate` — so `toHaveBeenCalledTimes(3)` fails (actual: 1) and the
   // per-slug assertion below fails too.

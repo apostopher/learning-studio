@@ -9,10 +9,10 @@ import {
   updateLessonName,
 } from '#/db/admin';
 import {
-  getCourseIdForLessonId,
   getCourseIdForModuleId,
   getDisciplineIdForLessonId,
 } from '#/db/lesson-access';
+import { getCourseIdsForLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
@@ -82,8 +82,8 @@ async function guardContent(
  * The SOLE existence check for `rename`, `config`, and `deleteLessonHandler`
  * — resolving the discipline `guardContent` needs to decide SME-vs-admin.
  *
- * Deliberately NOT `getCourseIdForLessonId` (the join-based check `move` and
- * `dependencies` use): that check reads through `module_lessons`, so it
+ * Deliberately NOT `getCourseIdsForLesson` (the placement-based check `move`
+ * and `dependencies` use): that check reads through `module_lessons`, so it
  * reports "not found" for a lesson with zero course placements too — and
  * `lessons.disciplineId`'s own doc comment makes that state a design goal
  * of the knowledge library ("an UNPLACED lesson — new, or removed from
@@ -145,20 +145,20 @@ export async function patchLessonHandler(
     // question as "does the lesson exist" — see `resolveLessonDiscipline`,
     // which `rename`/`config`/`delete` use instead, precisely because they
     // must NOT 404 an unplaced lesson.
-    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
-    if (lessonExistsAt === null) {
+    const placedIn = await getCourseIdsForLesson(lessonId);
+    if (placedIn.length === 0) {
       return absentResourceResponse(request.headers, 'Lesson not found');
     }
     // `dependencies.data.courseId` — the course the CLIENT is asking to
-    // edit — not `lessonExistsAt` above (only ever "lesson exists, resolved
-    // to its lowest-id course" for the existence check just above). A
-    // lesson taught by several courses has several placements, each with
-    // its own prerequisite list; guarding and writing against any course
-    // other than the one actually being edited would be wrong even though
-    // it's a real course this lesson belongs to. `updateLessonDependencies`
-    // itself still rejects a courseId this lesson has no placement in
-    // (`not-found`), so a forged value can't write a placement that
-    // doesn't exist.
+    // edit — not anything from `placedIn` above (only ever "is this lesson
+    // placed anywhere" for the existence check just above; there is no
+    // single course to read off it). A lesson taught by several courses has
+    // several placements, each with its own prerequisite list; guarding and
+    // writing against any course other than the one actually being edited
+    // would be wrong even though it's a real course this lesson belongs to.
+    // `updateLessonDependencies` itself still rejects a courseId this
+    // lesson has no placement in (`not-found`), so a forged value can't
+    // write a placement that doesn't exist.
     const denied = await guardStructure(
       request,
       dependencies.data.courseId,
@@ -198,21 +198,21 @@ export async function patchLessonHandler(
   if (move.success) {
     // A move repositions an existing PLACEMENT — there is nothing to move
     // for a lesson with no placement in any course (an unplaced,
-    // library-only lesson), so this existence check is join-based through
-    // `module_lessons`, same as `dependencies` above and for the same
-    // reason. This is NOT the same question as "does the lesson exist" —
-    // see `resolveLessonDiscipline`, used by `rename`/`config`/`delete`.
-    const lessonExistsAt = await getCourseIdForLessonId(lessonId);
-    if (lessonExistsAt === null) {
+    // library-only lesson), so this existence check is placement-based
+    // through `module_lessons`, same as `dependencies` above and for the
+    // same reason. This is NOT the same question as "does the lesson exist"
+    // — see `resolveLessonDiscipline`, used by `rename`/`config`/`delete`.
+    const placedIn = await getCourseIdsForLesson(lessonId);
+    if (placedIn.length === 0) {
       return absentResourceResponse(request.headers, 'Lesson not found');
     }
     // That module's course is the one actually being written by
-    // `moveLesson` below, and it is not necessarily (or even usually)
-    // `lessonExistsAt`, the lesson's lowest-id course. Guarding on the
-    // wrong one is wrong in both directions: staff on the lesson's lowest
-    // course could move it into a course they have no authority over, and
-    // staff on the real target course could be refused for their own
-    // course.
+    // `moveLesson` below, and it is not necessarily any particular one of
+    // `placedIn` — the lesson may be in several, and none of them is "the"
+    // course. Guarding on the wrong one is wrong in both directions: staff
+    // on some other course teaching the lesson could move it into a course
+    // they have no authority over, and staff on the real target course
+    // could be refused for their own course.
     const targetCourseId = await getCourseIdForModuleId(
       move.data.targetModuleId,
     );

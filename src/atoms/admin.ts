@@ -147,15 +147,25 @@ export const deleteLessonAtom = atom<{
 export const configureLessonIdAtom = atom<number | null>(null);
 
 /**
- * Id of the lesson whose video preview is open, or null when closed.
+ * The lesson whose video preview is open — and the course it was opened
+ * from — or null when closed.
  *
  * Held here rather than in the card because `LessonCard` is presentational and
  * renders once per lesson plus once more in the drag overlay — a modal owned
  * by the card would exist N times over. It is also what keeps playback
  * resolution lazy: the provider is only called while this is non-null, so
  * loading the board costs no provider calls at all.
+ *
+ * Carries the course because the playback route guards on, and signs with,
+ * a course the client NAMES — it no longer infers one from the lesson, which
+ * can be in several. The per-course board has one course; the org editor's
+ * rail has a column per course and the same lesson may sit in two of them,
+ * so only the tile that was pressed knows which.
  */
-export const playLessonIdAtom = atom<number | null>(null);
+export const playLessonAtom = atom<{
+  lessonId: number;
+  courseId: number;
+} | null>(null);
 
 /** Module id whose create-lesson dialog is open, or null when closed. */
 export const createLessonModuleIdAtom = atom<number | null>(null);

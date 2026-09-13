@@ -107,7 +107,10 @@ export const VideoSectionContainer = ({
   );
 
   const playbackEnabled = hasVideo && isProviderConfigured;
-  const playback = useLessonVideoPlayback(lesson.id, playbackEnabled);
+  const playback = useLessonVideoPlayback(
+    { lessonId: lesson.id, courseId },
+    playbackEnabled,
+  );
   const previewState = computeVideoPreviewState(playback.data);
 
   const urlForm = useForm<VideoUrlFormValues>({

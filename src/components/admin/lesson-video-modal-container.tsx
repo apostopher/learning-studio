@@ -1,8 +1,10 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { useAtom } from 'jotai';
 import { Video, X } from 'lucide-react';
-import { playLessonIdAtom } from '@/atoms/admin';
-import { useLessonVideoPlayback } from '@/data-hooks/use-lesson-video-playback';
+// `#/` not `@/` for the value imports: vitest cannot resolve the `@/` alias,
+// and this container is rendered by its own test.
+import { playLessonAtom } from '#/atoms/admin';
+import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import type { EditorBoardModule } from '@/lib/admin-schemas';
 import { computeVideoModalState } from './compute-video-modal-state';
 import { VideoPreview } from './lesson-config/video-preview';
@@ -53,13 +55,16 @@ export const LessonVideoModalContainer = ({
    */
   modules: EditorBoardModule[];
 }) => {
-  const [lessonId, setLessonId] = useAtom(playLessonIdAtom);
+  const [play, setPlay] = useAtom(playLessonAtom);
   const lesson =
-    modules.flatMap((m) => m.lessons).find((l) => l.id === lessonId) ?? null;
+    modules.flatMap((m) => m.lessons).find((l) => l.id === play?.lessonId) ??
+    null;
 
   // Only resolves while open. Left enabled, this would fire a provider call —
   // an HTTP round trip per Synthesia lesson — for every card on the board.
-  const playback = useLessonVideoPlayback(lessonId ?? 0, lessonId !== null);
+  // Resolved for the lesson IN the course the tile named — never one picked
+  // from `modules`, which on the org editor spans every course on the rail.
+  const playback = useLessonVideoPlayback(play, play !== null);
   const state = computeVideoModalState({
     isFetched: playback.isFetched,
     isError: playback.isError,
@@ -69,9 +74,9 @@ export const LessonVideoModalContainer = ({
 
   return (
     <Dialog.Root
-      open={lessonId !== null}
+      open={play !== null}
       onOpenChange={(open) => {
-        if (!open) setLessonId(null);
+        if (!open) setPlay(null);
       }}
     >
       <Dialog.Portal>
