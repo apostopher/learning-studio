@@ -62,6 +62,15 @@ const moduleLessonsTable = pgTable('module_lessons', {
   rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
+// Task 7: membership. `getCourseSlugsForLessonId` resolves the courses that
+// TEACH a lesson through this placement table, not through the module row's
+// owner (`modules.course_id`).
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
+});
 const lessonDependenciesTable = pgTable('lesson_dependencies', {
   id: integer('id').primaryKey(),
   lessonId: integer('lesson_id'),
@@ -217,6 +226,7 @@ const blob = vi.hoisted(() => ({
 
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
+  courseModulesTable,
   courseOrgsTable,
   coursesTable,
   courseSubscriptionsTable,
@@ -310,7 +320,7 @@ describe('getCourseSlugsForLessonId', () => {
 
 // Task 5e, Part 2a: before this block, the `collectSqlTokens` check above
 // was the only join-argument assertion on this
-// `lessons -> module_lessons -> modules -> courses` hop, and it only proves
+// `lessons -> module_lessons -> … -> courses` hop, and it only proves
 // PRESENCE: a PARTIAL revert of any one of the three joins back to the
 // legacy path — e.g. `.innerJoin(modulesTable, eq(modulesTable.id,
 // lessonsTable.moduleId))`, skipping module_lessons entirely for that one
@@ -329,7 +339,18 @@ describe('getCourseSlugsForLessonId', () => {
 // lowest course id among those teaching a lesson, and the routes now name
 // the course instead. See lesson-course-scoped-reads.test.ts. The pin moved
 // to the surviving plural reader, which walks the identical hop.)
-describe('join argument pinning: lessons -> module_lessons -> modules -> courses', () => {
+//
+// Task 7: the third hop is MEMBERSHIP. "Every course that teaches this
+// lesson" is every course the lesson's module is PLACED in — a
+// `course_modules` row — not the one course that OWNS the module
+// (`modules.course_id`). Mutant: the shipped Task 6b-era shape,
+// `.innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+// .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))` —
+// same row count today (every module is placed in its owner), and the day a
+// module is placed in a second course, editing one of its lessons leaves
+// that course's details cache stale. The `modules` table must not appear in
+// the chain at all: there is nothing on the module row this reader needs.
+describe('join argument pinning: lessons -> module_lessons -> course_modules -> courses', () => {
   const expectedJoinChain = (
     joinCalls: Array<[table: unknown, condition: unknown]>,
   ) => {
@@ -338,18 +359,19 @@ describe('join argument pinning: lessons -> module_lessons -> modules -> courses
     expect(renderSql(joinCalls[0][1] as never)).toBe(
       '"module_lessons"."lesson_id" = "lessons"."id"',
     );
-    expect(joinCalls[1][0]).toBe(modulesTable);
+    expect(joinCalls[1][0]).toBe(courseModulesTable);
     expect(renderSql(joinCalls[1][1] as never)).toBe(
-      '"modules"."id" = "module_lessons"."module_id"',
+      '"course_modules"."module_id" = "module_lessons"."module_id"',
     );
     expect(joinCalls[2][0]).toBe(coursesTable);
     expect(renderSql(joinCalls[2][1] as never)).toBe(
-      '"courses"."id" = "modules"."course_id"',
+      '"courses"."id" = "course_modules"."course_id"',
     );
+    expect(joinCalls.map(([table]) => table)).not.toContain(modulesTable);
   };
 
   // Mutant: the partial revert above, applied to any one of the three joins.
-  it('getCourseSlugsForLessonId joins module_lessons, then modules, then courses, each correctly paired', async () => {
+  it('getCourseSlugsForLessonId joins module_lessons, then course_modules, then courses, each correctly paired', async () => {
     const joinCalls: Array<[unknown, unknown]> = [];
     const whereCalls: unknown[] = [];
     db.select.mockReturnValueOnce(

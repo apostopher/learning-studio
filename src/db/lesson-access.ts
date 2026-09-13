@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { courseModuleIds } from '#/db/course-modules';
 import {
+  courseModulesTable,
   courseOrgsTable,
   courseSubscriptionsTable,
   coursesTable,
@@ -69,6 +70,12 @@ export async function getLessonInCourse({
  * need before invalidating. There is deliberately no single-slug sibling: a
  * lesson has no "the" course, and the one that used to pick one (the lowest
  * id) left the other courses serving stale content.
+ *
+ * Membership, not ownership: the courses that teach a lesson are the courses
+ * its module is PLACED in (`course_modules`), not the one that owns the module
+ * (`modules.course_id`). Walking ownership gives the same answer only while
+ * every module is placed solely in its owner; the first shared module would
+ * leave the sharing course's cache stale on every edit.
  */
 export async function getCourseSlugsForLessonId(
   lessonId: number,
@@ -80,8 +87,11 @@ export async function getCourseSlugsForLessonId(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
+    .innerJoin(
+      courseModulesTable,
+      eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
+    )
+    .innerJoin(coursesTable, eq(coursesTable.id, courseModulesTable.courseId))
     .where(eq(lessonsTable.id, lessonId));
   return [...new Set(rows.map((r) => r.courseSlug))];
 }
