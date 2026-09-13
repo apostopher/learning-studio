@@ -1,6 +1,7 @@
 import { and, countDistinct, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { courseModuleIds } from '#/db/course-modules';
 import {
   getCourseIdForModuleId,
   getCourseSlugForModuleId,
@@ -18,7 +19,15 @@ export type Placement = {
   dependsOn: CourseLessonDependency[];
 };
 
-/** Every placement in a course, across all its modules, in rank order. */
+/**
+ * Every placement in a course, across all its modules, in rank order.
+ *
+ * "Its modules" means the ones `course_modules` places in it — the single
+ * definition of membership (`courseModuleIds`) — not the ones whose
+ * `modules.course_id` names it. Today the two agree; the point of asking the
+ * helper is that they stay agreeing once a module can be placed in a course
+ * it is not owned by.
+ */
 export async function getPlacementsForCourse(
   courseId: number,
 ): Promise<Placement[]> {
@@ -31,8 +40,7 @@ export async function getPlacementsForCourse(
       dependsOn: moduleLessonsTable.dependsOn,
     })
     .from(moduleLessonsTable)
-    .innerJoin(modulesTable, eq(moduleLessonsTable.moduleId, modulesTable.id))
-    .where(eq(modulesTable.courseId, courseId))
+    .where(inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)))
     .orderBy(moduleLessonsTable.rank);
 
   return rows.map((r) => ({

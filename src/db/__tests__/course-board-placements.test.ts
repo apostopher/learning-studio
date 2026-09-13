@@ -37,6 +37,15 @@ const modulesTable = pgTable('modules', {
   requiredSubscriptions: jsonb('required_subscriptions'),
   sequentialLessons: boolean('sequential_lessons'),
 });
+// Task 3 (course-module membership): the board's module query reads
+// membership and order from `course_modules`, joined to `modules` — the join
+// condition needs real columns to build.
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
+});
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -167,6 +176,7 @@ const db = vi.hoisted(() => ({
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   coursesTable,
+  courseModulesTable,
   modulesTable,
   lessonsTable,
   moduleLessonsTable,

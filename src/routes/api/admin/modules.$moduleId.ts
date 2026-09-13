@@ -124,6 +124,9 @@ export async function patchModuleHandler(
   const reorder = reorderModuleInputSchema.safeParse(body);
   if (reorder.success) {
     const updated = await reorderModule({
+      // The course the guard was resolved for: the reorder moves this
+      // module's placement in THAT course's order, not in every course.
+      courseId,
       moduleId,
       prevModuleId: reorder.data.prevModuleId,
       nextModuleId: reorder.data.nextModuleId,

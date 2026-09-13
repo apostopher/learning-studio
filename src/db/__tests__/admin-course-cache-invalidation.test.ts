@@ -74,6 +74,17 @@ const moduleLessonsTable = pgTable('module_lessons', {
   rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
+// Task 3 (course-module membership): a module's order inside a course lives
+// on its `course_modules` placement, so `createModule`/`reorderModule` now
+// read and write this table — real columns so their `eq`/`and`/`sql`
+// fragments render for assertion.
+const courseModulesTable = pgTable('course_modules', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  moduleId: integer('module_id'),
+  rank: numeric('rank'),
+  createdAt: timestamp('created_at'),
+});
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -186,6 +197,7 @@ vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   courseOrgsTable,
   coursesTable,
+  courseModulesTable,
   modulesTable,
   moduleLessonsTable,
   lessonsTable,
@@ -328,25 +340,104 @@ describe('course-details cache invalidation', () => {
     db.select
       .mockReturnValueOnce(makeChain([])) // taken slugs
       .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
-    db.insert.mockReturnValueOnce(
-      makeChain([
-        {
-          id: 1,
-          name: 'Intro',
-          slug: 'intro',
-          imageUrlAvif: null,
-          imageUrlWebp: null,
-          rank: '1',
-          requiredSubscriptions: [],
-        },
-      ]),
-    );
+    db.insert
+      .mockReturnValueOnce(
+        makeChain([
+          {
+            id: 1,
+            name: 'Intro',
+            slug: 'intro',
+            imageUrlAvif: null,
+            imageUrlWebp: null,
+            rank: '1',
+            requiredSubscriptions: [],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(makeChain(undefined)); // course_modules placement
     lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
 
     await createModule({ courseId: 42, name: 'Intro' });
 
     expect(lessonAccess.getCourseSlugForCourseId).toHaveBeenCalledWith(42);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+  });
+
+  // Task 3 (course-module membership): the board reads which modules a course
+  // shows, and in what order, from `course_modules` — so a new module has to
+  // (a) take its rank from max(placement rank) + 1 over THIS course's
+  // placements and (b) get a placement row, or it never appears on the board
+  // at all. Mutant A: keep reading `max(modules.rank)` — identical numbers
+  // today (the backfill copied them) and drifts the first time a reorder
+  // moves only the placement. Mutant B: drop the placement insert — the
+  // module exists, owns a rank, and is invisible. Mutant C: return
+  // `Number(created.rank)` (the `modules` row's own column) instead of the
+  // placement's — the fixture's module row deliberately carries a stale rank
+  // so only the placement value satisfies the last assertion.
+  it("createModule ranks the new module after this course's PLACEMENTS and inserts its course_modules row in the same transaction", async () => {
+    const maxRankCalls: { from: unknown[]; where: SQL[] } = {
+      from: [],
+      where: [],
+    };
+    const maxRankChain = {
+      from: (table: unknown) => {
+        maxRankCalls.from.push(table);
+        return maxRankChain;
+      },
+      where: (condition: SQL) => {
+        maxRankCalls.where.push(condition);
+        return maxRankChain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([{ maxRank: '3' }]).then(resolve, reject),
+    };
+    db.select
+      .mockReturnValueOnce(makeChain([])) // taken slugs
+      .mockReturnValueOnce(maxRankChain);
+    const moduleInsert = makeChain([
+      {
+        id: 12,
+        name: 'Intro',
+        slug: 'intro',
+        imageUrlAvif: null,
+        imageUrlWebp: null,
+        rank: '999', // stale on purpose — see Mutant C above
+        requiredSubscriptions: [],
+        sequentialLessons: true,
+      },
+    ]);
+    const placementInsert = makeChain(undefined);
+    const txInsert = vi
+      .fn()
+      .mockReturnValueOnce(moduleInsert)
+      .mockReturnValueOnce(placementInsert);
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ insert: txInsert }),
+    );
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
+
+    const result = await createModule({ courseId: 42, name: 'Intro' });
+
+    expect(maxRankCalls.from[0]).toBe(courseModulesTable);
+    expect(render(maxRankCalls.where[0])).toBe(
+      '"course_modules"."course_id" = $1',
+    );
+    expect(renderSqlParams(maxRankCalls.where[0])).toEqual([42]);
+
+    // The module row still carries the rank (rollback until Task 7 drops it).
+    expect(txInsert).toHaveBeenNthCalledWith(1, modulesTable);
+    expect(moduleInsert.valuesArg).toMatchObject({ courseId: 42, rank: '4' });
+    // The placement carries the created module's id, in the caller's course.
+    expect(txInsert).toHaveBeenNthCalledWith(2, courseModulesTable);
+    expect(placementInsert.valuesArg).toEqual({
+      courseId: 42,
+      moduleId: 12,
+      rank: '4',
+    });
+    expect(result.rank).toBe(4);
   });
 
   it('createLesson invalidates the owning course, resolved from moduleId', async () => {
@@ -742,13 +833,98 @@ describe('course-details cache invalidation', () => {
   });
 
   it('reorderModule invalidates the owning course, resolved from moduleId', async () => {
-    db.update.mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }]));
+    db.update
+      .mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }])) // placement
+      .mockReturnValueOnce(makeChain([])); // modules.rank mirror
     lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
 
-    await reorderModule({ moduleId: 7, prevModuleId: 1, nextModuleId: null });
+    await reorderModule({
+      courseId: 42,
+      moduleId: 7,
+      prevModuleId: 1,
+      nextModuleId: null,
+    });
 
     expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(7);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+  });
+
+  // Task 3 (course-module membership): the board orders modules by their
+  // `course_modules` placement rank, so a drag-reorder has to move THAT row —
+  // the one for (courseId, moduleId), with the neighbours' ranks read from
+  // their placements in the same course — and mirror the result onto
+  // `modules.rank` (the rollback until Task 7) inside the same transaction.
+  // Mutant A: update `modules.rank` only — the board keeps reading the old
+  // placement order, so the drag visibly snaps back. Mutant B: key the
+  // placement UPDATE on `module_id` alone — moves the module in every course
+  // that places it, not the one being edited. Mutant C: read the neighbour's
+  // rank from `modules.rank` — right until a sibling course orders it
+  // differently. Rendered SQL pins the pairing; params pin which ids.
+  it("reorderModule moves the module's PLACEMENT in this course and mirrors the rank onto modules.rank, in one transaction", async () => {
+    type UpdateCalls = { set: Array<Record<string, unknown>>; where: SQL[] };
+    const makeUpdateChain = (result: unknown, calls: UpdateCalls) => {
+      const chain = {
+        set: (values: Record<string, unknown>) => {
+          calls.set.push(values);
+          return chain;
+        },
+        where: (condition: SQL) => {
+          calls.where.push(condition);
+          return chain;
+        },
+        returning: () => Promise.resolve(result),
+        // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+        then: (
+          resolve: (v: unknown) => unknown,
+          reject?: (e: unknown) => unknown,
+        ) => Promise.resolve(result).then(resolve, reject),
+      };
+      return chain;
+    };
+    const placementCalls: UpdateCalls = { set: [], where: [] };
+    const moduleCalls: UpdateCalls = { set: [], where: [] };
+    const txUpdate = vi
+      .fn()
+      .mockReturnValueOnce(
+        makeUpdateChain([{ id: 7, rank: '2.5' }], placementCalls),
+      )
+      .mockReturnValueOnce(makeUpdateChain([], moduleCalls));
+    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
+      fn({ update: txUpdate }),
+    );
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+
+    const result = await reorderModule({
+      courseId: 42,
+      moduleId: 7,
+      prevModuleId: 1,
+      nextModuleId: 3,
+    });
+
+    // 1st write: the placement, keyed on (course, module).
+    expect(txUpdate).toHaveBeenNthCalledWith(1, courseModulesTable);
+    expect(render(placementCalls.where[0])).toBe(
+      '("course_modules"."course_id" = $1 and "course_modules"."module_id" = $2)',
+    );
+    expect(renderSqlParams(placementCalls.where[0])).toEqual([42, 7]);
+    // Its new rank is the midpoint of the neighbours' PLACEMENT ranks in this
+    // course — each neighbour is looked up by (course, module) too.
+    const neighbour =
+      '(select "course_modules"."rank" from "course_modules" where "course_modules"."course_id" = $N and "course_modules"."module_id" = $N)';
+    const rankExpr = placementCalls.set[0].rank as SQL;
+    expect(render(rankExpr).replace(/\$\d+/g, '$N')).toBe(
+      `(${neighbour} + ${neighbour}) / 2`,
+    );
+    expect(renderSqlParams(rankExpr)).toEqual([42, 1, 42, 3]);
+
+    // 2nd write: the rollback mirror, carrying the rank the placement
+    // UPDATE returned, keyed on the module id alone (the module's own row).
+    expect(txUpdate).toHaveBeenNthCalledWith(2, modulesTable);
+    expect(moduleCalls.set[0]).toMatchObject({ rank: '2.5' });
+    expect(render(moduleCalls.where[0])).toBe('"modules"."id" = $1');
+    expect(renderSqlParams(moduleCalls.where[0])).toEqual([7]);
+
+    expect(result).toEqual({ id: 7, rank: 2.5 });
   });
 
   it('moveLesson invalidates every source course plus the target course when they differ', async () => {

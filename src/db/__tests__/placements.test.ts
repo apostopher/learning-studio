@@ -42,6 +42,13 @@ vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: vi.fn(),
   getCourseSlugForModuleId: vi.fn(),
 }));
+// `getPlacementsForCourse` scopes by the membership helper (Task 3); the
+// real one would issue a second `db.select` this canned chain never queued.
+// That it IS asked is course-board-membership.test.ts's assertion, not this
+// file's — here it only has to hand `inArray` something to bind.
+vi.mock('#/db/course-modules', () => ({
+  courseModuleIds: vi.fn(() => 'SUBQUERY'),
+}));
 
 const {
   getPlacementsForCourse,

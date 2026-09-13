@@ -25,6 +25,7 @@ import { getLessonTranscript } from '#/db/lesson-transcript';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
 import type { DBCourse } from '#/db/schema';
 import {
+  courseModulesTable,
   courseOrgsTable,
   coursesTable,
   courseVideoProvidersTable,
@@ -279,24 +280,44 @@ export async function createModule(input: {
   let slug = base;
   for (let n = 2; takenSet.has(slug); n++) slug = `${base}-${n}`;
 
+  // Append after this course's PLACEMENTS, not after `max(modules.rank)`:
+  // the board orders modules by `course_modules.rank`, and a reorder moves
+  // that row, so the module rows' own ranks are what drifts. Same reason
+  // `createLesson` ranks against `module_lessons`.
   const [{ maxRank }] = await db
-    .select({ maxRank: sql<string | null>`max(${modulesTable.rank})` })
-    .from(modulesTable)
-    .where(eq(modulesTable.courseId, input.courseId));
+    .select({ maxRank: sql<string | null>`max(${courseModulesTable.rank})` })
+    .from(courseModulesTable)
+    .where(eq(courseModulesTable.courseId, input.courseId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
 
-  const [created] = await db
-    .insert(modulesTable)
-    .values({
+  // The `course_modules` row is what puts the module ON the board — the
+  // board reads membership from placements, so a module row with no
+  // placement is created and then never seen. One transaction: a module
+  // that exists in `modules` but not in `course_modules` is exactly that
+  // bug. `modules.rank` still gets the same value: it is the rollback until
+  // Task 7 drops the column.
+  const created = await db.transaction(async (tx) => {
+    const [module] = await tx
+      .insert(modulesTable)
+      .values({
+        courseId: input.courseId,
+        name: input.name,
+        slug,
+        imageUrlAvif: input.imageUrlAvif ?? null,
+        imageUrlWebp: input.imageUrlWebp ?? null,
+        requiredSubscriptions: [],
+        rank: String(rank),
+      })
+      .returning();
+
+    await tx.insert(courseModulesTable).values({
       courseId: input.courseId,
-      name: input.name,
-      slug,
-      imageUrlAvif: input.imageUrlAvif ?? null,
-      imageUrlWebp: input.imageUrlWebp ?? null,
-      requiredSubscriptions: [],
+      moduleId: module.id,
       rank: String(rank),
-    })
-    .returning();
+    });
+
+    return module;
+  });
 
   await invalidateCourseDetailsCache(
     await getCourseSlugForCourseId(input.courseId),
@@ -308,7 +329,9 @@ export async function createModule(input: {
     slug: created.slug,
     imageUrlAvif: created.imageUrlAvif,
     imageUrlWebp: created.imageUrlWebp,
-    rank: Number(created.rank),
+    // The placement's rank — the value just written to `course_modules` —
+    // not `created.rank` off the module row.
+    rank,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
     sequentialLessons: created.sequentialLessons,
     // A module is created with no prerequisites and no learners by definition.
@@ -477,6 +500,13 @@ export async function getCourseBoard(
     .where(eq(coursesTable.id, courseId));
   if (!course) return null;
 
+  // The same shape one level up as one level down. `course_modules` — not
+  // `modules.course_id` — decides which modules this course shows and in
+  // what order: a module can sit first in one course and fourth in another,
+  // so `modules.rank` cannot decide this either. The module row still
+  // supplies name, image and gates; `modules.course_id` still says who OWNS
+  // it (rename/delete), which is not what a board is asking.
+  //
   // Placements — not `lessons.module_id` — decide which lessons belong to
   // this course, which module each sits in, and what order: a lesson can
   // sit third in one course and eighth in another, so `lessons.rank` cannot
@@ -491,13 +521,15 @@ export async function getCourseBoard(
         slug: modulesTable.slug,
         imageUrlAvif: modulesTable.imageUrlAvif,
         imageUrlWebp: modulesTable.imageUrlWebp,
-        rank: modulesTable.rank,
+        // The placement's rank, not the module's: this course's order.
+        rank: courseModulesTable.rank,
         requiredSubscriptions: modulesTable.requiredSubscriptions,
         sequentialLessons: modulesTable.sequentialLessons,
       })
-      .from(modulesTable)
-      .where(eq(modulesTable.courseId, courseId))
-      .orderBy(asc(modulesTable.rank), asc(modulesTable.id)),
+      .from(courseModulesTable)
+      .innerJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
+      .where(eq(courseModulesTable.courseId, courseId))
+      .orderBy(asc(courseModulesTable.rank), asc(modulesTable.id)),
     getPlacementsForCourse(courseId),
   ]);
 
@@ -818,17 +850,26 @@ export async function getCourseLessonPosters(
   });
 }
 
+/**
+ * Move a module to a new slot in ONE course's order.
+ *
+ * Order lives on the `course_modules` placement, not the module row: the
+ * same module can sit first in one course and fourth in another, so both the
+ * neighbours' ranks and the row being moved are keyed on (course, module) —
+ * keyed on `module_id` alone, this would move the module in every course
+ * that places it. `modules.rank` is mirrored in the same transaction; it is
+ * the rollback until Task 7 drops the column.
+ */
 export async function reorderModule(input: {
+  courseId: number;
   moduleId: number;
   prevModuleId: number | null;
   nextModuleId: number | null;
 }): Promise<{ id: number; rank: number } | null> {
-  const prevRank = input.prevModuleId
-    ? sql`(select ${modulesTable.rank} from ${modulesTable} where ${modulesTable.id} = ${input.prevModuleId})`
-    : null;
-  const nextRank = input.nextModuleId
-    ? sql`(select ${modulesTable.rank} from ${modulesTable} where ${modulesTable.id} = ${input.nextModuleId})`
-    : null;
+  const rankOf = (moduleId: number) =>
+    sql`(select ${courseModulesTable.rank} from ${courseModulesTable} where ${courseModulesTable.courseId} = ${input.courseId} and ${courseModulesTable.moduleId} = ${moduleId})`;
+  const prevRank = input.prevModuleId ? rankOf(input.prevModuleId) : null;
+  const nextRank = input.nextModuleId ? rankOf(input.nextModuleId) : null;
 
   let rankExpr: SQL;
   if (prevRank && nextRank) rankExpr = sql`(${prevRank} + ${nextRank}) / 2`;
@@ -836,11 +877,31 @@ export async function reorderModule(input: {
   else if (prevRank) rankExpr = sql`${prevRank} + 1`;
   else return null;
 
-  const [updated] = await db
-    .update(modulesTable)
-    .set({ rank: rankExpr, updatedAt: sql`now()` })
-    .where(eq(modulesTable.id, input.moduleId))
-    .returning({ id: modulesTable.id, rank: modulesTable.rank });
+  const updated = await db.transaction(async (tx) => {
+    const [placement] = await tx
+      .update(courseModulesTable)
+      .set({ rank: rankExpr })
+      .where(
+        and(
+          eq(courseModulesTable.courseId, input.courseId),
+          eq(courseModulesTable.moduleId, input.moduleId),
+        ),
+      )
+      .returning({
+        id: courseModulesTable.moduleId,
+        rank: courseModulesTable.rank,
+      });
+    if (!placement) return null;
+
+    // The value Postgres resolved for the placement, so the mirror can never
+    // disagree with it.
+    await tx
+      .update(modulesTable)
+      .set({ rank: placement.rank, updatedAt: sql`now()` })
+      .where(eq(modulesTable.id, input.moduleId));
+
+    return placement;
+  });
   if (!updated) return null;
 
   await invalidateCourseDetailsCache(

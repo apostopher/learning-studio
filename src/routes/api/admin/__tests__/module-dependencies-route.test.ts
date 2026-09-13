@@ -194,6 +194,25 @@ describe('patchModuleHandler — dependencies', () => {
     expect(m.updateModuleDependencies).not.toHaveBeenCalled();
     expect(m.reorderModule).toHaveBeenCalled();
   });
+
+  // A reorder now rewrites the module's PLACEMENT in `course_modules`, keyed
+  // on (course, module) — so the course the guard resolved has to reach the
+  // writer, not just the module id from the URL. Mutant: drop `courseId` from
+  // the call (the old shape) — compiles against a loose mock, and the writer
+  // would then have no way to pick which course's placement to move.
+  it('hands the reorder writer the course resolved for the guard, alongside the neighbours', async () => {
+    m.reorderModule.mockResolvedValue({ id: 7, rank: 2 });
+    await patchModuleHandler(
+      patch({ prevModuleId: 1, nextModuleId: null }),
+      '7',
+    );
+    expect(m.reorderModule).toHaveBeenCalledWith({
+      courseId: 42,
+      moduleId: 7,
+      prevModuleId: 1,
+      nextModuleId: null,
+    });
+  });
 });
 
 describe('deleteModuleHandler', () => {
