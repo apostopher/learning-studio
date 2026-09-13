@@ -21,9 +21,6 @@ export function courseModuleIds(courseId: number) {
 
 /** The same answer, resolved — for callers that need the ids in JS. */
 export async function getCourseModuleIds(courseId: number): Promise<number[]> {
-  const rows = await db
-    .select({ id: courseModulesTable.moduleId })
-    .from(courseModulesTable)
-    .where(eq(courseModulesTable.courseId, courseId));
+  const rows = await courseModuleIds(courseId);
   return rows.map((r) => r.id);
 }
