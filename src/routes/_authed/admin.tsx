@@ -3,7 +3,8 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 // imported directly by its route test — the gate below is the switch that
 // makes course-scoped AND discipline-scoped roles reachable at all.
 import { AdminShellLayout } from '#/components/admin/admin-shell-layout';
-import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
+import { hasAdminAccess } from '#/lib/admin-schemas';
+import { adminSectionGates, visibleAdminSections } from '#/lib/admin-sections';
 
 export const Route = createFileRoute('/_authed/admin')({
   beforeLoad: ({ context }) => {
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/_authed/admin')({
     // independent, see `migrate-discipline-staff.ts` — reaches this shell too.
     // It is the union field and NOT `isCourseStaffAnywhere` that is read here,
     // and that is the whole point of there being two. Entering is all this
-    // decides: every child route's data still goes through a server-side
+    // decides: every section's data still goes through a server-side
     // per-course (or per-discipline) guard.
     if (!hasAdminAccess(context.roles) && !context.isStaffAnywhere) {
       throw redirect({ to: '/app' });
@@ -29,47 +30,15 @@ export const Route = createFileRoute('/_authed/admin')({
 });
 
 function AdminShell() {
-  const { roles, permissions, isStaffAnywhere, isCourseStaffAnywhere } =
-    Route.useRouteContext();
-  // Both links are rendered only when the destination will actually show the
-  // actor something — a link to a page that redirects or 403s straight back is
-  // worse than no link, and each route guards itself regardless.
-  const canSeePeople = hasOrgPermission(roles, permissions, 'user', 'read');
-  // `course:read` lists the whole catalogue; a staff-only actor holds no such
-  // grant but still gets their own courses back from the same endpoint. So the
-  // link's condition is "the index has content for you", not one permission.
-  //
-  // Course staffing specifically, not `isStaffAnywhere`: a discipline-only SME
-  // is in this shell (the guard above admits them) but staffs no course, so
-  // the index would come back empty for them and the link would be a dead end.
-  const canSeeCourses =
-    hasOrgPermission(roles, permissions, 'course', 'read') ||
-    isCourseStaffAnywhere;
-  // The knowledge library editor's two endpoints (`/api/admin/library`,
-  // `/api/admin/editor`) guard on `isStaffAnywhere`, so this link mirrors that
-  // union exactly: admin/owner, any course staffing, any discipline staffing.
-  //
-  // `isStaffAnywhere` and NOT `isCourseStaffAnywhere` — the opposite of the
-  // Courses link above, and the whole reason the context carries both. A
-  // discipline-only SME staffs no course, so the course index would come back
-  // empty for them; the library is the screen built FOR them and comes back
-  // full. Course staff are included too: the editor's right-hand pane is
-  // course composition, which is their work.
-  //
-  // Identical to the condition `beforeLoad` above uses to admit anyone to this
-  // shell at all, which is why `/admin/editor` carries no gate of its own.
-  const canSeeEditor = hasAdminAccess(roles) || isStaffAnywhere;
+  const context = Route.useRouteContext();
+  // The same call the section screen's own gate makes, so a link that is
+  // offered and a section that may be entered can never disagree — see
+  // `adminSectionGates`. Which link is HIGHLIGHTED is the router's own
+  // business: the section is in the URL, so `Link` can see it.
+  const sections = visibleAdminSections(adminSectionGates(context));
 
   return (
-    <AdminShellLayout
-      canSeePeople={canSeePeople}
-      canSeeCourses={canSeeCourses}
-      // Identical to `canSeeCourses` by construction: the schedule route's own
-      // `beforeLoad` gate is the same condition, so a link shown under any
-      // other rule would be a link that redirects straight back.
-      canSeeSchedule={canSeeCourses}
-      canSeeEditor={canSeeEditor}
-    >
+    <AdminShellLayout sections={sections}>
       <Outlet />
     </AdminShellLayout>
   );
