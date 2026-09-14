@@ -24,13 +24,20 @@ const fake = vi.hoisted(() => {
       from?: unknown;
       where?: unknown;
       joinOn: unknown[];
+      orderBy: unknown[];
     }>,
   };
   function chain(kind?: 'insert' | 'delete', table?: unknown) {
     // biome-ignore lint/suspicious/noExplicitAny: builder stand-in
     const c: any = {};
-    let current: { from?: unknown; where?: unknown; joinOn: unknown[] } = {
+    let current: {
+      from?: unknown;
+      where?: unknown;
+      joinOn: unknown[];
+      orderBy: unknown[];
+    } = {
       joinOn: [],
+      orderBy: [],
     };
     let insertRecord: {
       table: unknown;
@@ -56,6 +63,7 @@ const fake = vi.hoisted(() => {
         if (name === 'from') current.from = args[0];
         if (name === 'innerJoin' || name === 'leftJoin')
           current.joinOn.push(args[1]);
+        if (name === 'orderBy') current.orderBy.push(...args);
         if (name === 'where') {
           current.where = args[0];
           if (kind === 'delete') state.deletes.push({ table, where: args[0] });
@@ -73,7 +81,7 @@ const fake = vi.hoisted(() => {
     ) => {
       if (kind === undefined) state.selects.push({ ...current });
       if (insertRecord) state.inserts.push(insertRecord);
-      current = { joinOn: [] };
+      current = { joinOn: [], orderBy: [] };
       insertRecord = null;
       return Promise.resolve(state.results.shift() ?? []).then(resolve, reject);
     };
@@ -102,9 +110,13 @@ vi.mock('#/db/lesson-access', () => ({
   getCourseSlugForCourseId: cache.getCourseSlugForCourseId,
 }));
 
-const { remixCourse, unremixCourse, countRemixers } = await import(
-  '../course-remixes'
-);
+const {
+  remixCourse,
+  unremixCourse,
+  countRemixers,
+  getRemixSourceIds,
+  getRemixerCourseIds,
+} = await import('../course-remixes');
 const { courseModulesTable, courseRemixesTable, modulesTable } = await import(
   '../schema'
 );
@@ -192,6 +204,11 @@ describe('remixCourse', () => {
     expect(renderSql(owned.joinOn[0] as SQL)).toBe(
       '("course_modules"."module_id" = "modules"."id" and "course_modules"."course_id" = $1)',
     );
+    // …ordered by the source's own rank, tie-broken by module id.
+    expect(owned.orderBy.map((o) => renderSql(o as SQL))).toEqual([
+      '"course_modules"."rank" asc',
+      '"modules"."id" asc',
+    ]);
     // The placement rows the remixer's rail received.
     const placement = fake.state.inserts[1];
     expect(placement.table).toBe(courseModulesTable);
@@ -284,5 +301,39 @@ describe('countRemixers', () => {
     expect(renderSql(fake.state.selects[0].where as SQL)).toBe(
       '"course_remixes"."source_course_id" = $1',
     );
+  });
+});
+
+describe('getRemixSourceIds', () => {
+  /**
+   * Mutant this catches: filtering on `source_course_id` instead of
+   * `course_id` — both compile and both return a `number[]`, but that would
+   * answer "who borrows from this course" instead of "what this course
+   * borrows from".
+   */
+  it('returns the courses THIS one borrows from', async () => {
+    fake.state.results.push([{ sourceCourseId: 6 }, { sourceCourseId: 7 }]);
+    expect(await getRemixSourceIds(2)).toEqual([6, 7]);
+    expect(renderSql(fake.state.selects[0].where as SQL)).toBe(
+      '"course_remixes"."course_id" = $1',
+    );
+    expect(renderSqlParams(fake.state.selects[0].where as SQL)).toEqual([2]);
+  });
+});
+
+describe('getRemixerCourseIds', () => {
+  /**
+   * Mutant this catches: filtering on `course_id` instead of
+   * `source_course_id` — both compile and both return a `number[]`, but that
+   * would answer "what this course borrows from" instead of "who borrows
+   * from this course".
+   */
+  it('returns the courses BORROWING FROM this one', async () => {
+    fake.state.results.push([{ courseId: 2 }, { courseId: 3 }]);
+    expect(await getRemixerCourseIds(6)).toEqual([2, 3]);
+    expect(renderSql(fake.state.selects[0].where as SQL)).toBe(
+      '"course_remixes"."source_course_id" = $1',
+    );
+    expect(renderSqlParams(fake.state.selects[0].where as SQL)).toEqual([6]);
   });
 });
