@@ -141,14 +141,19 @@ export const LessonCard = ({
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
-          <button
-            type="button"
-            aria-label="Drag to reorder lesson"
-            {...dragHandleProps}
-            className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
-          >
-            <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          {/* A card with no drag handle is read-only (e.g. a borrowed
+              module's `BorrowedLessonList`) — a grip that does nothing
+              promises a drag the card refuses. */}
+          {dragHandleProps && (
+            <button
+              type="button"
+              aria-label="Drag to reorder lesson"
+              {...dragHandleProps}
+              className="-me-1 shrink-0 cursor-grab rounded p-1 text-tertiary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 active:cursor-grabbing"
+            >
+              <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
         </div>
         {alsoIn && alsoIn.length > 0 && (
           <Chip tone="soft-apple">Also in {alsoIn.join(', ')}</Chip>

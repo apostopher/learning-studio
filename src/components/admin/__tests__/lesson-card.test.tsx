@@ -125,4 +125,27 @@ describe('LessonCard', () => {
     render(<LessonCard lesson={lesson()} alsoIn={[]} />);
     expect(screen.queryByText(/^Also in/)).toBeNull();
   });
+
+  it('shows the drag grip when the caller hands it drag handle props', () => {
+    // Mutant: the grip button always renders regardless of `dragHandleProps`.
+    // This assertion alone would still pass against that mutant — the
+    // negative case below is what actually catches it.
+    render(<LessonCard lesson={lesson()} dragHandleProps={{}} />);
+    expect(
+      screen.getByRole('button', { name: 'Drag to reorder lesson' }),
+    ).toBeTruthy();
+  });
+
+  it('draws no drag grip for a read-only card', () => {
+    // A card with no `dragHandleProps` has nothing for a grip to do — a
+    // focusable, cursor-grab button that refuses every drag is exactly the
+    // "control that looks live and is not" hazard `BorrowedLessonList`
+    // exists to avoid. Mutant: the `dragHandleProps &&` guard is dropped, so
+    // the grip renders unconditionally. This assertion fails against that
+    // mutant because the query would then resolve to an element.
+    render(<LessonCard lesson={lesson()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Drag to reorder lesson' }),
+    ).toBeNull();
+  });
 });
