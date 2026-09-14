@@ -116,6 +116,27 @@ describe('POST /api/admin/courses/:courseId/remixes', () => {
       (await postRemixHandler(post({ sourceCourseId: 6 }), '2')).status,
     ).toBe(404);
   });
+
+  it('400s an unparseable course id before guarding or reading the body', async () => {
+    const res = await postRemixHandler(post({ sourceCourseId: 6 }), 'nonsense');
+    expect(res.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.remixCourse).not.toHaveBeenCalled();
+  });
+
+  it('400s a non-integer sourceCourseId before guarding', async () => {
+    const stringified = await postRemixHandler(
+      post({ sourceCourseId: '6' }),
+      '2',
+    );
+    expect(stringified.status).toBe(400);
+    const fractional = await postRemixHandler(
+      post({ sourceCourseId: 1.5 }),
+      '2',
+    );
+    expect(fractional.status).toBe(400);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/admin/courses/:courseId/remixes/:sourceCourseId', () => {
@@ -153,5 +174,30 @@ describe('DELETE /api/admin/courses/:courseId/remixes/:sourceCourseId', () => {
       '6',
     );
     expect(res.status).toBe(404);
+  });
+
+  it('400s an unparseable remixer or source id before guarding', async () => {
+    const badCourse = await deleteRemixHandler(
+      new Request('http://t/x', { method: 'DELETE' }),
+      'nonsense',
+      '6',
+    );
+    expect(badCourse.status).toBe(400);
+    await expect(badCourse.json()).resolves.toEqual({
+      error: 'Invalid course id',
+    });
+
+    const badSource = await deleteRemixHandler(
+      new Request('http://t/x', { method: 'DELETE' }),
+      '2',
+      '0',
+    );
+    expect(badSource.status).toBe(400);
+    await expect(badSource.json()).resolves.toEqual({
+      error: 'Invalid source course id',
+    });
+
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.unremixCourse).not.toHaveBeenCalled();
   });
 });

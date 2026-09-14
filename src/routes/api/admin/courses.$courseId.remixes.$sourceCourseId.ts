@@ -22,9 +22,15 @@ export async function deleteRemixHandler(
   sourceCourseIdRaw: string,
 ): Promise<Response> {
   const courseId = parseId(courseIdRaw);
-  const sourceCourseId = parseId(sourceCourseIdRaw);
-  if (courseId === null || sourceCourseId === null) {
+  if (courseId === null) {
     return Response.json({ error: 'Invalid course id' }, { status: 400 });
+  }
+  const sourceCourseId = parseId(sourceCourseIdRaw);
+  if (sourceCourseId === null) {
+    return Response.json(
+      { error: 'Invalid source course id' },
+      { status: 400 },
+    );
   }
   try {
     await requireCoursePermission(
