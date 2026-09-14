@@ -50,6 +50,7 @@ export const EditorLessonCardContainer = ({
   module: mod,
   courseId,
   posterUrl,
+  alsoIn,
 }: {
   lesson: EditorBoardLesson;
   /**
@@ -61,6 +62,12 @@ export const EditorLessonCardContainer = ({
   courseId: number;
   /** Poster frame for this lesson's video, when its provider exposes one. */
   posterUrl?: string | null;
+  /**
+   * Names of the OTHER modules in this course that also hold this lesson,
+   * already filtered by the module container so this card never lists its
+   * own module. See `duplicateLessonNotes`.
+   */
+  alsoIn?: string[];
 }) => {
   const moduleId = mod.id;
   const moduleName = mod.name;
@@ -106,6 +113,7 @@ export const EditorLessonCardContainer = ({
       <LessonCard
         lesson={lesson}
         posterUrl={posterUrl}
+        alsoIn={alsoIn}
         dragHandleProps={{ ...attributes, ...listeners }}
         // RBAC rule 6 — the SME edits their lesson from the RIGHT pane too.
         // It opens the lesson-LEVEL modal, the same one the library card

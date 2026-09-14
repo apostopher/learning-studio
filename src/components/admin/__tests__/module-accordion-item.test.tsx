@@ -154,4 +154,37 @@ describe('ModuleAccordionItem', () => {
     expect(screen.getByLabelText('Edit module')).toBeTruthy();
     expect(screen.queryByLabelText('Delete module')).toBeNull();
   });
+
+  it('states where a borrowed module is edited, in text and in the link’s name', () => {
+    // Mutant: the provenance chip or link is dropped from the header row.
+    // This assertion fails against that mutant because neither the "from …"
+    // text nor the link's accessible name would resolve.
+    renderOpen(module_(), {
+      provenance: {
+        ownerName: '3D Airmanship',
+        editLinkSlot: (
+          <a
+            href="/admin/6/editor"
+            aria-label="Edited in 3D Airmanship — open its board to change this module"
+          >
+            Edited in 3D Airmanship
+          </a>
+        ),
+      },
+    });
+    expect(screen.getByText('from 3D Airmanship')).toBeTruthy();
+    expect(
+      screen.getByRole('link', {
+        name: /Edited in 3D Airmanship — open its board/,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('draws no provenance for a module the course owns', () => {
+    // Mutant: the `provenance &&` guard is dropped, so a "from …" chip
+    // renders even when the container passed nothing. This assertion fails
+    // against that mutant because `queryByText(/^from /)` would then resolve.
+    renderOpen(module_());
+    expect(screen.queryByText(/^from /)).toBeNull();
+  });
 });

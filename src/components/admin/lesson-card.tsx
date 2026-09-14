@@ -2,6 +2,7 @@ import { CircleMinus, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
+import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
 
@@ -29,6 +30,7 @@ export const LessonCard = ({
   deleteUnavailableReason,
   onPlay,
   quickshotSlot,
+  alsoIn,
 }: {
   lesson: LessonCardLesson;
   /** Poster frame for this lesson's video, when its provider exposes one. */
@@ -75,6 +77,12 @@ export const LessonCard = ({
    * edit — without it the card collapses back to its original single row.
    */
   quickshotSlot?: ReactNode;
+  /**
+   * Names of the OTHER modules in this course that also hold this lesson —
+   * whole-course remixing makes teaching a lesson twice common, and the spec
+   * says to surface that, not block it. Omitted or empty draws nothing.
+   */
+  alsoIn?: string[];
 }) => {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary">
@@ -142,6 +150,9 @@ export const LessonCard = ({
             <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
+        {alsoIn && alsoIn.length > 0 && (
+          <Chip tone="soft-apple">Also in {alsoIn.join(', ')}</Chip>
+        )}
         {quickshotSlot}
       </div>
     </div>

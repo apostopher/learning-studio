@@ -409,8 +409,17 @@ export const activeDragLibraryLessonIdAtom = atom<number | null>(null);
  * Lifted out of `CourseColumn`'s accordion because a collapsed panel is
  * `hidden`, so its droppable measures 0×0 and cannot receive a lesson. The
  * editor auto-expands whatever module a drag hovers, which is only possible
- * from outside the accordion. Module ids are unique across the org, so one
- * flat list covers every course in the rail.
+ * from outside the accordion.
+ *
+ * Keyed by module id alone, NOT (course, module) — deliberately, even though
+ * a remixed module now sits on two rails at once with the same id. Expanded
+ * state is SHARED across every rail a module appears on: both copies derive
+ * from this one atom, render identically, and show identical content (the
+ * same lessons, the same provenance chip), so there is nothing for
+ * independent collapse to mean yet. One flat list still covers the whole
+ * org. If independent collapse per rail is ever wanted, key by
+ * `(course, module)` instead — that is the change to make, not a workaround
+ * on top of this atom.
  */
 export const expandedEditorModuleIdsAtom = atom<number[]>([]);
 

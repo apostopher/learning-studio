@@ -3,6 +3,7 @@ import { ChevronDown, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
+import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /**
@@ -26,6 +27,13 @@ interface ModuleAccordionItemProps {
    * sortable list from a container, or a static list for a drag overlay.
    */
   lessonsSlot: ReactNode;
+  /**
+   * Present when the module is BORROWED through a remix. `ownerName` is drawn
+   * as a chip; `editLinkSlot` is the router link the container builds (this
+   * component is hookless), and it carries the reason and the remedy in its
+   * accessible name — the codebase's rule for any withheld control.
+   */
+  provenance?: { ownerName: string; editLinkSlot: ReactNode };
 }
 
 /**
@@ -45,6 +53,7 @@ export const ModuleAccordionItem = ({
   onEditModule,
   onDeleteModule,
   lessonsSlot,
+  provenance,
 }: ModuleAccordionItemProps) => {
   const lessonCount = mod.lessons.length;
   const lessonNoun = lessonCount === 1 ? 'lesson' : 'lessons';
@@ -74,6 +83,13 @@ export const ModuleAccordionItem = ({
             </span>
           </Accordion.Trigger>
         </Accordion.Header>
+
+        {provenance && (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <Chip tone="soft-apple">from {provenance.ownerName}</Chip>
+            {provenance.editLinkSlot}
+          </span>
+        )}
 
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>

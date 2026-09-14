@@ -17,6 +17,7 @@ import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
 import { useRemixCourse } from '#/data-hooks/use-remix-course';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
+import { duplicateLessonNotes } from '#/lib/duplicate-lessons';
 import { CourseColumn } from './course-column';
 import { CourseColumnActions } from './course-column-actions';
 import { EditorCourseEmptyContainer } from './editor-course-empty-container';
@@ -29,7 +30,9 @@ import { EditorModuleContainer } from './editor-module-container';
  * `Accordion.Root`, because the editor has to be able to open a module the
  * admin never clicked: a lesson dragged onto a collapsed module needs the
  * panel open before it has a slot to land in. The atom holds module ids for
- * the whole org — module ids are unique across courses — so this column
+ * the whole org — expanded state is SHARED across every rail a module
+ * appears on (a remixed module sits on two rails with the same id, and both
+ * copies render identically), so keying by id alone is enough — this column
  * filters it down to its own before handing it over, and folds its answer
  * back in without disturbing the other courses' entries.
  */
@@ -57,6 +60,14 @@ export const EditorCourseColumnContainer = ({
   );
   const { course, modules } = courseBoard;
   const ownIds = new Set(modules.map((m) => m.id));
+  /**
+   * Lessons THIS course teaches more than once, across its own modules —
+   * whole-course remixing makes it common that a remixer's own module
+   * already teaches a lesson a borrowed module also teaches. Computed once
+   * per column rather than per module, since it needs every module's
+   * lessons to notice a lesson repeated across them.
+   */
+  const alsoIn = duplicateLessonNotes(modules);
   /**
    * One posters request per COURSE column, not per lesson card — the endpoint
    * answers for a whole course at once, and a card-level query would be an
@@ -173,6 +184,7 @@ export const EditorCourseColumnContainer = ({
             module={mod}
             courseId={course.id}
             posters={posters}
+            alsoIn={alsoIn}
           />
         ))}
       </SortableContext>

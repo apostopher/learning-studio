@@ -109,4 +109,20 @@ describe('LessonCard', () => {
     expect(screen.queryByText('quickshot chips')).toBeNull();
     expect(screen.getByText('Crosswind landings')).toBeTruthy();
   });
+
+  it('flags a lesson the course also teaches in other modules', () => {
+    // Mutant: the `alsoIn && alsoIn.length > 0` guard is dropped or the chip
+    // text is built wrong. This assertion fails against that mutant because
+    // the exact joined text would not resolve.
+    render(<LessonCard lesson={lesson()} alsoIn={['Weather', 'Nav']} />);
+    expect(screen.getByText('Also in Weather, Nav')).toBeTruthy();
+  });
+
+  it('draws no duplicate chip for a lesson placed once', () => {
+    // Mutant: the chip renders unconditionally once `alsoIn` is passed at
+    // all, even when it's empty. This assertion fails against that mutant
+    // because `queryByText(/^Also in/)` would then resolve.
+    render(<LessonCard lesson={lesson()} alsoIn={[]} />);
+    expect(screen.queryByText(/^Also in/)).toBeNull();
+  });
 });
