@@ -147,7 +147,7 @@ export const ModuleBoardContainer = ({
     }),
   );
 
-  const moduleIds = modules.map((m) => moduleDndId(m.id));
+  const moduleIds = modules.map((m) => moduleDndId(courseId, m.id));
   const activeModule = modules.find((m) => m.id === activeModuleId) ?? null;
   const activeLesson =
     activeLessonId != null

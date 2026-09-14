@@ -30,7 +30,7 @@ export const SortableModuleColumn = ({
     isSorting,
     isDragging,
   } = useSortable({
-    id: moduleDndId(mod.id),
+    id: moduleDndId(courseId, mod.id),
     data: { type: 'module', moduleId: mod.id },
   });
   const setLessonModuleId = useSetAtom(createLessonModuleIdAtom);

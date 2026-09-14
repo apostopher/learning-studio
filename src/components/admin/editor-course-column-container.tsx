@@ -111,7 +111,7 @@ export const EditorCourseColumnContainer = ({
       }}
     >
       <SortableContext
-        items={modules.map((m) => moduleDndId(m.id))}
+        items={modules.map((m) => moduleDndId(course.id, m.id))}
         strategy={verticalListSortingStrategy}
       >
         {modules.map((mod) => (

@@ -73,7 +73,7 @@ export const EditorLessonCardContainer = ({
     isSorting,
     isDragging,
   } = useSortable({
-    id: lessonDndId(lesson.id),
+    id: lessonDndId(courseId, lesson.id),
     data: { type: 'lesson', lessonId: lesson.id, moduleId, courseId },
   });
 

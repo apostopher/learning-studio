@@ -37,6 +37,7 @@ const mod = (
   id: number,
   name: string,
   lessons: BoardLesson[],
+  owner: { id: number; name: string } = { id, name },
 ): BoardModule => ({
   id,
   name,
@@ -48,7 +49,7 @@ const mod = (
   dependsOn: [],
   sequentialLessons: false,
   learnerCount: 0,
-  owner: { id, name },
+  owner,
   otherCourseCount: 0,
   lessons,
 });
@@ -116,7 +117,7 @@ describe('resolveDrop — the allowed drops', () => {
       resolveDrop(
         board,
         libraryLessonDndId(WAKE_TURBULENCE),
-        containerDndId(CIRCUITS),
+        containerDndId(1, CIRCUITS),
       ),
     ).toEqual({
       kind: 'link',
@@ -129,12 +130,12 @@ describe('resolveDrop — the allowed drops', () => {
     // Mutant seen RED: `moduleId: from.module.id` — a "move" that reports the
     // module the lesson is already in, so the lesson never leaves it.
     expect(
-      resolveDrop(board, lessonDndId(STALLS), containerDndId(CIRCUITS)),
+      resolveDrop(board, lessonDndId(1, STALLS), containerDndId(1, CIRCUITS)),
     ).toEqual({
       kind: 'move',
       moduleId: CIRCUITS,
       lessonId: STALLS,
-      overId: containerDndId(CIRCUITS),
+      overId: containerDndId(1, CIRCUITS),
     });
   });
 
@@ -144,12 +145,12 @@ describe('resolveDrop — the allowed drops', () => {
     // Circuits — its own `moduleId: CIRCUITS` assertion proved it was a
     // cross-module drop. The same-module row is now covered below.
     expect(
-      resolveDrop(board, lessonDndId(STALLS), lessonDndId(GO_AROUND)),
+      resolveDrop(board, lessonDndId(1, STALLS), lessonDndId(1, GO_AROUND)),
     ).toEqual({
       kind: 'move',
       moduleId: CIRCUITS,
       lessonId: STALLS,
-      overId: lessonDndId(GO_AROUND),
+      overId: lessonDndId(1, GO_AROUND),
     });
   });
 
@@ -162,12 +163,12 @@ describe('resolveDrop — the allowed drops', () => {
     // A same-module drop is a `move` too, not a fifth kind: the over id names
     // the slot, which is why `overId` is carried through rather than dropped.
     expect(
-      resolveDrop(board, lessonDndId(STALLS), lessonDndId(TAXIING)),
+      resolveDrop(board, lessonDndId(1, STALLS), lessonDndId(1, TAXIING)),
     ).toEqual({
       kind: 'move',
       moduleId: FUNDAMENTALS,
       lessonId: STALLS,
-      overId: lessonDndId(TAXIING),
+      overId: lessonDndId(1, TAXIING),
     });
   });
 
@@ -176,7 +177,11 @@ describe('resolveDrop — the allowed drops', () => {
     // `{ moduleId: to.module.id, overModuleId: from.module.id }`. Both fields
     // are present and plausible, and the reorder runs backwards.
     expect(
-      resolveDrop(board, moduleDndId(FUNDAMENTALS), moduleDndId(CIRCUITS)),
+      resolveDrop(
+        board,
+        moduleDndId(1, FUNDAMENTALS),
+        moduleDndId(1, CIRCUITS),
+      ),
     ).toEqual({
       kind: 'reorder-module',
       courseId: 1,
@@ -194,8 +199,8 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     // implementation that refuses every drop on the board.
     const result = resolveDrop(
       board,
-      lessonDndId(STALLS),
-      containerDndId(BASICS),
+      lessonDndId(1, STALLS),
+      containerDndId(2, BASICS),
     );
 
     expect(result?.kind).toBe('forbidden');
@@ -230,8 +235,8 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     // is dragged out of its own course into another one.
     const result = resolveDrop(
       board,
-      moduleDndId(FUNDAMENTALS),
-      moduleDndId(BASICS),
+      moduleDndId(1, FUNDAMENTALS),
+      moduleDndId(2, BASICS),
     );
 
     expect(result?.kind).toBe('forbidden');
@@ -246,7 +251,11 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     // back to the library is a natural gesture, so it must answer with a
     // sentence rather than a shrug. Mutant seen RED: `return null` for that
     // branch — the drag springs back in silence.
-    const result = resolveDrop(board, lessonDndId(STALLS), disciplineDndId(7));
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      disciplineDndId(7),
+    );
 
     expect(result?.kind).toBe('forbidden');
     const reason = result?.kind === 'forbidden' ? result.reason : '';
@@ -267,7 +276,11 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
    * that is not there.
    */
   it('names the remove control by the exact label the card renders', () => {
-    const result = resolveDrop(board, lessonDndId(STALLS), disciplineDndId(7));
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      disciplineDndId(7),
+    );
 
     const reason = result?.kind === 'forbidden' ? result.reason : '';
     expect(reason).toContain(
@@ -282,7 +295,7 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
     const result = resolveDrop(
       board,
       libraryLessonDndId(RADIO_CALLS),
-      containerDndId(BASICS),
+      containerDndId(2, BASICS),
     );
 
     expect(result?.kind).toBe('forbidden');
@@ -308,14 +321,18 @@ describe('resolveDrop — no target at all', () => {
       resolveDrop(
         board,
         libraryLessonDndId(WAKE_TURBULENCE),
-        containerDndId(999),
+        containerDndId(1, 999),
       ),
     ).toBeNull();
     // Dropped on nothing, expressed as the empty over id dnd-kit reports.
-    expect(resolveDrop(board, lessonDndId(STALLS), '')).toBeNull();
+    expect(resolveDrop(board, lessonDndId(1, STALLS), '')).toBeNull();
     // Dropped back on itself.
     expect(
-      resolveDrop(board, moduleDndId(FUNDAMENTALS), moduleDndId(FUNDAMENTALS)),
+      resolveDrop(
+        board,
+        moduleDndId(1, FUNDAMENTALS),
+        moduleDndId(1, FUNDAMENTALS),
+      ),
     ).toBeNull();
   });
 });
@@ -370,7 +387,7 @@ describe('resolveDrop — dropping on a course column itself', () => {
     // module is not what is missing — this lesson may not cross courses at
     // all, and telling the reader to create a module would send them to do
     // something that still would not work.
-    const result = resolveDrop(board, lessonDndId(STALLS), courseDndId(3));
+    const result = resolveDrop(board, lessonDndId(1, STALLS), courseDndId(3));
 
     expect(result).toEqual({
       kind: 'forbidden',
@@ -380,7 +397,7 @@ describe('resolveDrop — dropping on a course column itself', () => {
   });
 
   it('refuses a placed lesson dropped on its OWN course with the module reason', () => {
-    const result = resolveDrop(board, lessonDndId(STALLS), courseDndId(1));
+    const result = resolveDrop(board, lessonDndId(1, STALLS), courseDndId(1));
 
     expect(result).toEqual({
       kind: 'forbidden',
@@ -392,7 +409,7 @@ describe('resolveDrop — dropping on a course column itself', () => {
   it('refuses a module dropped on another course', () => {
     const result = resolveDrop(
       board,
-      moduleDndId(FUNDAMENTALS),
+      moduleDndId(1, FUNDAMENTALS),
       courseDndId(3),
     );
 
@@ -410,5 +427,61 @@ describe('resolveDrop — dropping on a course column itself', () => {
     expect(
       resolveDrop(board, libraryLessonDndId(WAKE_TURBULENCE), courseDndId(99)),
     ).toBeNull();
+  });
+});
+
+/**
+ * Course remixing puts the same module — and every lesson placed in it — on
+ * TWO rails at once. `findModule`/`findPlacedLesson` used to answer "the
+ * first column holding this id", which for a remixed module is always the
+ * owner's column, never the remixer's.
+ */
+describe('resolveDrop — the same module shown on two rails', () => {
+  /**
+   * The same module on two rails. A drag that starts on course 2's copy and
+   * lands on course 2's other module is a reorder IN COURSE 2 — the mutant
+   * is `findModule` returning the first column that holds module 10 (course
+   * 6, the owner), which then refuses the drop as cross-course.
+   */
+  it('resolves a reorder within the column the drag started in, even when the module is also on another rail', () => {
+    const shared = mod(10, 'Shared', [], { id: 6, name: 'Source' });
+    const remixedBoard: OrgEditorBoard = [
+      courseBoard(6, 'Source', [shared]),
+      courseBoard(2, 'Remixer', [mod(20, 'Own', []), shared]),
+    ];
+    expect(
+      resolveDrop(remixedBoard, moduleDndId(2, 10), moduleDndId(2, 20)),
+    ).toEqual({
+      kind: 'reorder-module',
+      courseId: 2,
+      moduleId: 10,
+      overModuleId: 20,
+    });
+  });
+
+  /**
+   * The same module rendered in two columns is two DIFFERENT cards, even
+   * though `to.module.id === from.module.id` is true for both. Mutant this
+   * catches: comparing module ids alone (the pre-remix check) treats a drag
+   * from the remixer's card onto the owner's card of the SAME module as a
+   * self-drop no-op, instead of the cross-course refusal it actually is.
+   */
+  it('refuses a module dragged onto the OTHER column rendering the same module', () => {
+    const shared = mod(10, 'Shared', [], { id: 6, name: 'Source' });
+    const remixedBoard: OrgEditorBoard = [
+      courseBoard(6, 'Source', [shared]),
+      courseBoard(2, 'Remixer', [mod(20, 'Own', []), shared]),
+    ];
+    const result = resolveDrop(
+      remixedBoard,
+      moduleDndId(2, 10),
+      moduleDndId(6, 10),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Shared" belongs to Remixer, so it cannot be moved into Source. Modules are only reordered within their own course.',
+    });
   });
 });

@@ -27,10 +27,10 @@ export const LessonBoardContainer = ({
 }) => {
   const { id: moduleId, lessons } = mod;
   const { setNodeRef } = useDroppable({
-    id: containerDndId(moduleId),
+    id: containerDndId(courseId, moduleId),
     data: { type: 'container', moduleId },
   });
-  const ids = lessons.map((l) => lessonDndId(l.id));
+  const ids = lessons.map((l) => lessonDndId(courseId, l.id));
 
   return (
     <div ref={setNodeRef} className="flex min-h-12 flex-col gap-2">

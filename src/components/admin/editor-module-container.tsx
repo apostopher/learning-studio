@@ -44,15 +44,15 @@ export const EditorModuleContainer = ({
     isSorting,
     isDragging,
   } = useSortable({
-    id: moduleDndId(mod.id),
+    id: moduleDndId(courseId, mod.id),
     data: { type: 'module', moduleId: mod.id, courseId },
   });
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
-    id: containerDndId(mod.id),
+    id: containerDndId(courseId, mod.id),
     data: { type: 'container', moduleId: mod.id, courseId },
   });
 
-  const lessonIds = mod.lessons.map((l) => lessonDndId(l.id));
+  const lessonIds = mod.lessons.map((l) => lessonDndId(courseId, l.id));
 
   return (
     <div

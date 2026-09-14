@@ -292,10 +292,14 @@ export const EditorContainer = ({
     // Stage two: inside a module, pick the nearest of ITS lessons.
     const parsed = parseDndId(first.id);
     if (parsed?.type === 'container') {
+      // A remixed module's container is hit twice on the board — once per
+      // course column it appears in — so `moduleId` alone is not enough to
+      // pick out THIS column's lessons; `courseId` disambiguates them.
       const lessons = targets.filter(
         (c) =>
           c.data.current?.type === 'lesson' &&
-          c.data.current?.moduleId === parsed.id,
+          c.data.current?.moduleId === parsed.id &&
+          c.data.current?.courseId === parsed.courseId,
       );
       const nearest = closestCorners({
         ...args,
@@ -507,6 +511,7 @@ export const EditorContainer = ({
     if (resolution.kind === 'reorder-module') {
       const next = reorderModulesOnBoard(
         current,
+        resolution.courseId,
         resolution.moduleId,
         resolution.overModuleId,
       );
@@ -515,7 +520,7 @@ export const EditorContainer = ({
         {
           moduleId: resolution.moduleId,
           courseId: resolution.courseId,
-          ...moduleNeighbours(next, resolution.moduleId),
+          ...moduleNeighbours(next, resolution.courseId, resolution.moduleId),
         },
         {
           onError: (error) => {
@@ -948,7 +953,11 @@ function describeDndTarget(
     return courseBoard ? `the ${courseBoard.course.name} column` : String(id);
   }
   if (parsed.type === 'lesson') {
+    // A remixed module — and its lessons — can render in two columns; name
+    // the course the dragged/hovered CARD actually belongs to, not whichever
+    // column happens to appear first on the board.
     for (const cb of board) {
+      if (cb.course.id !== parsed.courseId) continue;
       for (const mod of cb.modules) {
         const lesson = mod.lessons.find((l) => l.id === parsed.id);
         if (lesson) return `${lesson.name} in ${mod.name}, ${cb.course.name}`;
@@ -957,6 +966,7 @@ function describeDndTarget(
     return String(id);
   }
   for (const cb of board) {
+    if (cb.course.id !== parsed.courseId) continue;
     const mod = cb.modules.find((m) => m.id === parsed.id);
     if (mod) return `${mod.name} in ${cb.course.name}`;
   }

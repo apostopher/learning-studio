@@ -33,7 +33,11 @@ const lesson = (id: number): BoardLesson => ({
   videoRef: null,
 });
 
-const mod = (id: number, lessonIds: number[]): BoardModule => ({
+const mod = (
+  id: number,
+  lessonIds: number[],
+  owner: { id: number; name: string } = { id, name: `Module ${id}` },
+): BoardModule => ({
   id,
   name: `Module ${id}`,
   slug: `m-${id}`,
@@ -44,36 +48,31 @@ const mod = (id: number, lessonIds: number[]): BoardModule => ({
   dependsOn: [],
   sequentialLessons: false,
   learnerCount: 0,
-  owner: { id, name: `Module ${id}` },
+  owner,
   otherCourseCount: 0,
   lessons: lessonIds.map(lesson),
 });
 
+const courseBoard = (
+  id: number,
+  name: string,
+  modules: BoardModule[],
+): OrgEditorBoard[number] => ({
+  course: {
+    id,
+    name,
+    slug: `c-${id}`,
+    description: null,
+    imageUrlAvif: null,
+    imageUrlWebp: null,
+  },
+  modules,
+  remixes: [],
+});
+
 const makeBoard = (): OrgEditorBoard => [
-  {
-    course: {
-      id: 1,
-      name: 'Two-Week Course',
-      slug: 'c-1',
-      description: null,
-      imageUrlAvif: null,
-      imageUrlWebp: null,
-    },
-    modules: [mod(10, [100, 101, 102]), mod(11, [110])],
-    remixes: [],
-  },
-  {
-    course: {
-      id: 2,
-      name: 'Mini Course',
-      slug: 'c-2',
-      description: null,
-      imageUrlAvif: null,
-      imageUrlWebp: null,
-    },
-    modules: [mod(20, [200])],
-    remixes: [],
-  },
+  courseBoard(1, 'Two-Week Course', [mod(10, [100, 101, 102]), mod(11, [110])]),
+  courseBoard(2, 'Mini Course', [mod(20, [200])]),
 ];
 
 const idsIn = (board: OrgEditorBoard, moduleId: number) =>
@@ -88,7 +87,7 @@ describe('moveLessonOnBoard', () => {
     // (`overIndexIn(stripped…)`), the classic off-by-one — 100 lands between
     // 101 and 102 instead of after 102.
     const board = makeBoard();
-    const next = moveLessonOnBoard(board, 100, 10, lessonDndId(102));
+    const next = moveLessonOnBoard(board, 100, 10, lessonDndId(1, 102));
 
     expect(idsIn(next, 10)).toEqual([101, 102, 100]);
   });
@@ -97,7 +96,7 @@ describe('moveLessonOnBoard', () => {
     // Mutant seen RED: inserted into `board` rather than the stripped copy —
     // the lesson appears in both modules and the board teaches it twice.
     const board = makeBoard();
-    const next = moveLessonOnBoard(board, 101, 11, containerDndId(11));
+    const next = moveLessonOnBoard(board, 101, 11, containerDndId(1, 11));
 
     expect(idsIn(next, 11)).toEqual([110, 101]);
     expect(idsIn(next, 10)).toEqual([100, 102]);
@@ -108,7 +107,7 @@ describe('moveLessonOnBoard', () => {
     // optimistic update quietly edits the snapshot the drag is holding, and
     // rolling back restores the failed move.
     const board = makeBoard();
-    moveLessonOnBoard(board, 100, 11, containerDndId(11));
+    moveLessonOnBoard(board, 100, 11, containerDndId(1, 11));
 
     expect(idsIn(board, 10)).toEqual([100, 101, 102]);
     expect(idsIn(board, 11)).toEqual([110]);
@@ -144,7 +143,7 @@ describe('the rank anchors sent to the API', () => {
   it("reads a module's neighbours within its own course, never across courses", () => {
     // Mutant seen RED: the search flattened across every course, so module 11
     // (last in course 1) reports module 20 of the Mini Course as its next.
-    expect(moduleNeighbours(makeBoard(), 11)).toEqual({
+    expect(moduleNeighbours(makeBoard(), 1, 11)).toEqual({
       prevModuleId: 10,
       nextModuleId: null,
     });
@@ -155,10 +154,34 @@ describe('reorderModulesOnBoard', () => {
   it('reorders inside one course and leaves the others alone', () => {
     // Mutant seen RED: `modules.push(moved)` — every reorder sends the module
     // to the bottom of its course regardless of where it was dropped.
-    const next = reorderModulesOnBoard(makeBoard(), 11, 10);
+    const next = reorderModulesOnBoard(makeBoard(), 1, 11, 10);
 
     expect(next[0].modules.map((m) => m.id)).toEqual([11, 10]);
     expect(next[1].modules.map((m) => m.id)).toEqual([20]);
+  });
+
+  /**
+   * Course remixing puts a module (and its rank) on two rails. Reordering
+   * the remixer's copy must not touch the owner's column — position is a
+   * per-column concept, not a property of the module itself.
+   */
+  it('reorders only the named course’s copy of a module shown on two rails', () => {
+    const shared = mod(10, [], { id: 6, name: 'Source' });
+    const board: OrgEditorBoard = [
+      courseBoard(6, 'Source', [shared, mod(11, [])]),
+      courseBoard(2, 'Remixer', [mod(20, []), shared]),
+    ];
+    const next = reorderModulesOnBoard(board, 2, 10, 20);
+    expect(next[1].modules.map((m) => m.id)).toEqual([10, 20]);
+    expect(next[0].modules.map((m) => m.id)).toEqual([10, 11]); // untouched
+    expect(moduleNeighbours(next, 2, 10)).toEqual({
+      prevModuleId: null,
+      nextModuleId: 20,
+    });
+    expect(moduleNeighbours(next, 6, 10)).toEqual({
+      prevModuleId: null,
+      nextModuleId: 11,
+    });
   });
 });
 
@@ -259,7 +282,12 @@ describe('commitTransferredLesson', () => {
     // shape, and the bug is invisible to any test that only checks the
     // rollback branch.
     const board = makeBoard();
-    const transferred = moveLessonOnBoard(board, 100, 11, containerDndId(11));
+    const transferred = moveLessonOnBoard(
+      board,
+      100,
+      11,
+      containerDndId(1, 11),
+    );
 
     expect(commitTransferredLesson(transferred, 100, true)).toEqual({
       targetModuleId: 11,
@@ -280,8 +308,13 @@ describe('commitTransferredLesson', () => {
     // of read from the board — a drag that wanders into module 11 and back
     // into module 10 would persist the wrong module.
     const board = makeBoard();
-    const viaEleven = moveLessonOnBoard(board, 100, 11, containerDndId(11));
-    const backInTen = moveLessonOnBoard(viaEleven, 100, 10, containerDndId(10));
+    const viaEleven = moveLessonOnBoard(board, 100, 11, containerDndId(1, 11));
+    const backInTen = moveLessonOnBoard(
+      viaEleven,
+      100,
+      10,
+      containerDndId(1, 10),
+    );
 
     expect(commitTransferredLesson(backInTen, 100, true)).toEqual({
       targetModuleId: 10,

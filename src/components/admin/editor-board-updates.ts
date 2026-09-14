@@ -96,13 +96,23 @@ export function linkLessonOnBoard(
   return insertAt(board, lesson, targetModuleId, target.lessons.length);
 }
 
-/** Reorder a module within whichever course holds it. */
+/**
+ * Reorder a module within the NAMED course's column only.
+ *
+ * A remixed module sits in two columns at once, so scanning every column
+ * (as this used to) would try to reorder BOTH — usually a no-op on the
+ * other column only because its sibling `overModuleId` does not happen to
+ * live there too, which is luck, not a guarantee. `courseId` is the column
+ * the drag actually happened in; every other column is left untouched.
+ */
 export function reorderModulesOnBoard(
   board: OrgEditorBoard,
+  courseId: number,
   moduleId: number,
   overModuleId: number,
 ): OrgEditorBoard {
   return board.map((cb) => {
+    if (cb.course.id !== courseId) return cb;
     const from = cb.modules.findIndex((m) => m.id === moduleId);
     const to = cb.modules.findIndex((m) => m.id === overModuleId);
     if (from === -1 || to === -1) return cb;
@@ -128,20 +138,25 @@ export function lessonNeighbours(
   };
 }
 
-/** The module's neighbours within its own course. */
+/**
+ * The module's neighbours within the NAMED course's column — never another
+ * column, even one also holding this module through a remix: rank is a
+ * per-column concept, and the two columns' copies can have entirely
+ * different neighbours.
+ */
 export function moduleNeighbours(
   board: OrgEditorBoard,
+  courseId: number,
   moduleId: number,
 ): { prevModuleId: number | null; nextModuleId: number | null } {
-  for (const cb of board) {
-    const at = cb.modules.findIndex((m) => m.id === moduleId);
-    if (at === -1) continue;
-    return {
-      prevModuleId: cb.modules[at - 1]?.id ?? null,
-      nextModuleId: cb.modules[at + 1]?.id ?? null,
-    };
-  }
-  return { prevModuleId: null, nextModuleId: null };
+  const cb = board.find((cb) => cb.course.id === courseId);
+  if (!cb) return { prevModuleId: null, nextModuleId: null };
+  const at = cb.modules.findIndex((m) => m.id === moduleId);
+  if (at === -1) return { prevModuleId: null, nextModuleId: null };
+  return {
+    prevModuleId: cb.modules[at - 1]?.id ?? null,
+    nextModuleId: cb.modules[at + 1]?.id ?? null,
+  };
 }
 
 /**

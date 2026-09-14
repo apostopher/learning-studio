@@ -18,10 +18,21 @@ export type DndType =
   | 'discipline'
   | 'course';
 
-export const moduleDndId = (id: number) => `module-${id}`;
-export const lessonDndId = (id: number) => `lesson-${id}`;
+/**
+ * Rail kinds are qualified by COURSE. A module — and every lesson placed in
+ * it — can sit on two rails at once through a remix, and dnd-kit ids must be
+ * unique inside the one `DndContext` both panes share; `module-10` twice is
+ * two sortables fighting over one id, and a lookup by module id alone lands
+ * on whichever column comes first. The course id makes each registration
+ * unique and every lookup column-scoped.
+ */
+export const moduleDndId = (courseId: number, moduleId: number) =>
+  `module-${courseId}-${moduleId}`;
+export const lessonDndId = (courseId: number, lessonId: number) =>
+  `lesson-${courseId}-${lessonId}`;
 /** Droppable wrapping a module's lesson area (so empty modules accept drops). */
-export const containerDndId = (moduleId: number) => `container-${moduleId}`;
+export const containerDndId = (courseId: number, moduleId: number) =>
+  `container-${courseId}-${moduleId}`;
 /** A lesson card in the library pane, distinct from a placed `lesson`. */
 export const libraryLessonDndId = (id: number) => `library-lesson-${id}`;
 /** A discipline column in the library — a real droppable so a drop onto it
@@ -33,24 +44,35 @@ export const disciplineDndId = (id: number) => `discipline-${id}`;
  *  yet) rather than looking identical to a drop on nothing. */
 export const courseDndId = (id: number) => `course-${id}`;
 
-export function parseDndId(
-  id: string | number,
-): { type: DndType; id: number } | null {
-  // Split on the LAST hyphen, not the first: `library-lesson-5` and
-  // `discipline-5` have hyphens inside the type name itself, so splitting on
-  // the first hyphen misreads `library-lesson-5` as prefix "library" / rest
-  // "lesson" (NaN) and silently returns null for every library lesson id.
+export type ParsedDndId =
+  | { type: 'module' | 'lesson' | 'container'; courseId: number; id: number }
+  | {
+      type: 'library-lesson' | 'discipline' | 'course';
+      id: number;
+      courseId?: undefined;
+    };
+
+const RAIL_TYPES = new Set(['module', 'lesson', 'container']);
+const FLAT_TYPES = new Set(['library-lesson', 'discipline', 'course']);
+
+export function parseDndId(id: string | number): ParsedDndId | null {
   const raw = String(id);
-  const at = raw.lastIndexOf('-');
-  if (at === -1) return null;
-  const prefix = raw.slice(0, at);
-  const num = Number(raw.slice(at + 1));
-  if (!Number.isInteger(num)) return null;
-  if (prefix === 'module') return { type: 'module', id: num };
-  if (prefix === 'lesson') return { type: 'lesson', id: num };
-  if (prefix === 'container') return { type: 'container', id: num };
-  if (prefix === 'library-lesson') return { type: 'library-lesson', id: num };
-  if (prefix === 'discipline') return { type: 'discipline', id: num };
-  if (prefix === 'course') return { type: 'course', id: num };
+  // Rail ids end in TWO numbers; flat ids in one. Match from the end so a
+  // type name containing a hyphen (`library-lesson`) cannot be split apart.
+  const rail = /^(.+)-(\d+)-(\d+)$/.exec(raw);
+  if (rail && RAIL_TYPES.has(rail[1])) {
+    return {
+      type: rail[1] as 'module' | 'lesson' | 'container',
+      courseId: Number(rail[2]),
+      id: Number(rail[3]),
+    };
+  }
+  const flat = /^(.+)-(\d+)$/.exec(raw);
+  if (flat && FLAT_TYPES.has(flat[1])) {
+    return {
+      type: flat[1] as 'library-lesson' | 'discipline' | 'course',
+      id: Number(flat[2]),
+    };
+  }
   return null;
 }

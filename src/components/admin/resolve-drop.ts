@@ -87,26 +87,34 @@ interface LocatedLesson extends LocatedModule {
   lesson: EditorBoardLesson;
 }
 
+/**
+ * Scoped to ONE course's column: a module (and every lesson it holds) can sit
+ * on two rails at once through a remix, so a lookup by module id alone would
+ * land on whichever column happens to come first on the board — typically
+ * the owner's, not the one the drag actually started or landed in.
+ */
 function findModule(
   board: OrgEditorBoard,
+  courseId: number,
   moduleId: number,
 ): LocatedModule | null {
-  for (const courseBoard of board) {
-    const module = courseBoard.modules.find((m) => m.id === moduleId);
-    if (module) return { courseBoard, module };
-  }
-  return null;
+  const courseBoard = findCourse(board, courseId);
+  if (!courseBoard) return null;
+  const module = courseBoard.modules.find((m) => m.id === moduleId);
+  if (!module) return null;
+  return { courseBoard, module };
 }
 
 function findPlacedLesson(
   board: OrgEditorBoard,
+  courseId: number,
   lessonId: number,
 ): LocatedLesson | null {
-  for (const courseBoard of board) {
-    for (const module of courseBoard.modules) {
-      const lesson = module.lessons.find((l) => l.id === lessonId);
-      if (lesson) return { courseBoard, module, lesson };
-    }
+  const courseBoard = findCourse(board, courseId);
+  if (!courseBoard) return null;
+  for (const module of courseBoard.modules) {
+    const lesson = module.lessons.find((l) => l.id === lessonId);
+    if (lesson) return { courseBoard, module, lesson };
   }
   return null;
 }
@@ -124,9 +132,10 @@ function resolveOverModule(
   const over = parseDndId(overId);
   if (!over) return null;
   if (over.type === 'container' || over.type === 'module') {
-    return findModule(board, over.id);
+    return findModule(board, over.courseId, over.id);
   }
-  if (over.type === 'lesson') return findPlacedLesson(board, over.id);
+  if (over.type === 'lesson')
+    return findPlacedLesson(board, over.courseId, over.id);
   return null;
 }
 
@@ -150,11 +159,19 @@ export function resolveDrop(
   // An id neither side of the editor minted is not a refusal — there is
   // nothing there to refuse.
   if (!active || !over) return null;
-  // Dropped on itself: a no-op, not a refusal.
-  if (active.type === over.type && active.id === over.id) return null;
+  // Dropped on itself: a no-op, not a refusal. Courses too — a remixed
+  // module renders on two rails, so the same numeric id can legitimately
+  // belong to two DIFFERENT cards; only an exact id AND column match is
+  // truly the same card.
+  if (
+    active.type === over.type &&
+    active.id === over.id &&
+    active.courseId === over.courseId
+  )
+    return null;
 
   if (active.type === 'module') {
-    const from = findModule(board, active.id);
+    const from = findModule(board, active.courseId, active.id);
     if (!from) return null;
 
     if (over.type === 'discipline' || over.type === 'library-lesson') {
@@ -175,7 +192,17 @@ export function resolveDrop(
 
     const to = resolveOverModule(board, overId);
     if (!to) return null;
-    if (to.module.id === from.module.id) return null;
+    // Same CARD, not just the same module id: a remixed module renders one
+    // card per column it is shown in, so `to.module.id === from.module.id`
+    // alone is no longer enough to mean "dropped on itself" — it is equally
+    // true of a genuine cross-course drop onto the OTHER column's card for
+    // this module, which must fall through to the cross-course refusal
+    // below, not silently no-op.
+    if (
+      to.module.id === from.module.id &&
+      to.courseBoard.course.id === from.courseBoard.course.id
+    )
+      return null;
     if (to.courseBoard.course.id !== from.courseBoard.course.id) {
       return {
         kind: 'forbidden',
@@ -191,7 +218,7 @@ export function resolveDrop(
   }
 
   if (active.type === 'lesson') {
-    const from = findPlacedLesson(board, active.id);
+    const from = findPlacedLesson(board, active.courseId, active.id);
     if (!from) return null;
 
     if (over.type === 'discipline' || over.type === 'library-lesson') {
