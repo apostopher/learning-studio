@@ -7,7 +7,11 @@ import {
   getCourseSlugForModuleId,
   lessonBelongsToCourseOrg,
 } from '#/db/lesson-access';
-import { courseModulesTable, moduleLessonsTable } from '#/db/schema';
+import {
+  courseModulesTable,
+  moduleLessonsTable,
+  modulesTable,
+} from '#/db/schema';
 import type { CourseLessonDependency } from '#/types';
 
 /** One lesson's position inside one module. */
@@ -231,28 +235,43 @@ export async function unlinkLesson(
 }
 
 /**
- * Move a placement within its course — to another module, or to another slot
- * in the same one. The placement row keeps its identity; only its module and
- * rank change.
+ * Move ONE placement — the `(fromModuleId, lessonId)` row — to another module
+ * of the same owner, or to another slot in the same one. The placement row
+ * keeps its identity; only its module and rank change.
  *
- * IMPORTANT: a lesson has one placement per COURSE, but it can have many
- * placements ACROSS courses — that's the entire point of the shared library.
- * The UPDATE below must therefore never key off `lessonId` alone: doing so
- * would match every course teaching this lesson and silently rewrite the
- * module/rank of placements the caller never asked to touch. It is scoped to
- * `targetModuleId`'s own course by requiring the placement's `moduleId` to
- * be one of the modules `course_modules` places in that course — the same
- * membership subquery every read uses, so the placement this write can reach
- * is exactly the one the board showed.
+ * IMPORTANT: a placement is one `(module, lesson)` row, shared by every
+ * course that shows the module, and a lesson can have many placements — one
+ * per module teaching it, across courses and, after a remix, within one
+ * course too (its own module and a borrowed one). The UPDATE below must
+ * therefore never key off `lessonId` alone: that matched every placement of
+ * the lesson, and with two of them in reach the unique (module_id, lesson_id)
+ * index turned the drag into a 500. The WHERE pins:
+ *
+ * - `module_id = fromModuleId` — exactly the placement the drag started on;
+ * - `module_id in (modules OWNED by the target's owner)` — the OWNERSHIP
+ *   scope, not membership. Membership (`courseModuleIds`) includes modules a
+ *   course merely borrows, so a remixer could name its own module as the
+ *   target and pull a lesson out of a borrowed one, changing the owner's
+ *   course everywhere it is shown (spec, Permissions row 2: adding or
+ *   removing a module's lessons is the OWNER's authority). Under the owned
+ *   scope such a row is unreachable: the write returns null and the route
+ *   404s — after its own guard on the source's owner has had the chance to
+ *   403 first.
+ *
+ * The owner filter is a `sql` fragment rather than a builder subquery, the
+ * way `unremixCourse` writes its owner filter: it is over the OWNER column,
+ * which has no membership-style helper, and a fragment renders standalone so
+ * the WHERE can be pinned as text.
  */
 export async function movePlacement(input: {
   lessonId: number;
+  fromModuleId: number;
   targetModuleId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
 }): Promise<Placement | null> {
-  const targetCourseId = await getCourseIdForModuleId(input.targetModuleId);
-  if (targetCourseId === null) return null;
+  const ownerCourseId = await getCourseIdForModuleId(input.targetModuleId);
+  if (ownerCourseId === null) return null;
 
   const [updated] = await db
     .update(moduleLessonsTable)
@@ -267,8 +286,9 @@ export async function movePlacement(input: {
     })
     .where(
       and(
+        eq(moduleLessonsTable.moduleId, input.fromModuleId),
         eq(moduleLessonsTable.lessonId, input.lessonId),
-        inArray(moduleLessonsTable.moduleId, courseModuleIds(targetCourseId)),
+        sql`${moduleLessonsTable.moduleId} in (select ${modulesTable.id} from ${modulesTable} where ${modulesTable.courseId} = ${ownerCourseId})`,
       ),
     )
     .returning({

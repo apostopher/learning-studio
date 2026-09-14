@@ -270,8 +270,12 @@ describe('PATCH /api/admin/modules/:moduleId/lessons/:lessonId', () => {
       '40',
       '9',
     );
+    // The URL's module IS the source placement — it reaches the writer as
+    // `fromModuleId`, pinning the UPDATE to that one row (final review,
+    // Critical #2); this route's body never carries one.
     expect(m.movePlacement).toHaveBeenCalledWith({
       lessonId: 9,
+      fromModuleId: 40,
       targetModuleId: 41,
       prevLessonId: 3,
       nextLessonId: null,

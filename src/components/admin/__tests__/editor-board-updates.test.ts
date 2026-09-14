@@ -87,7 +87,7 @@ describe('moveLessonOnBoard', () => {
     // (`overIndexIn(stripped…)`), the classic off-by-one — 100 lands between
     // 101 and 102 instead of after 102.
     const board = makeBoard();
-    const next = moveLessonOnBoard(board, 100, 10, lessonDndId(1, 102));
+    const next = moveLessonOnBoard(board, 100, 10, 10, lessonDndId(1, 102));
 
     expect(idsIn(next, 10)).toEqual([101, 102, 100]);
   });
@@ -96,10 +96,32 @@ describe('moveLessonOnBoard', () => {
     // Mutant seen RED: inserted into `board` rather than the stripped copy —
     // the lesson appears in both modules and the board teaches it twice.
     const board = makeBoard();
-    const next = moveLessonOnBoard(board, 101, 11, containerDndId(1, 11));
+    const next = moveLessonOnBoard(board, 101, 10, 11, containerDndId(1, 11));
 
     expect(idsIn(next, 11)).toEqual([110, 101]);
     expect(idsIn(next, 10)).toEqual([100, 102]);
+  });
+
+  /**
+   * Final review, Critical #2. A course can show one lesson twice — its own
+   * module and a borrowed one — and stripping by lesson id (the previous
+   * shape) pulled BOTH copies out for the length of the drag. Only the
+   * module the drag is carrying the lesson out of loses it.
+   */
+  it('strips the lesson from the named module only, leaving a duplicate copy elsewhere alone', () => {
+    const owner = { id: 6, name: 'Source' };
+    const board: OrgEditorBoard = [
+      courseBoard(1, 'Remixer', [
+        mod(30, [100, 101], owner),
+        mod(10, [100, 102], { id: 1, name: 'Remixer' }),
+        mod(11, [110], { id: 1, name: 'Remixer' }),
+      ]),
+    ];
+    const next = moveLessonOnBoard(board, 100, 10, 11, containerDndId(1, 11));
+
+    expect(idsIn(next, 30)).toEqual([100, 101]);
+    expect(idsIn(next, 10)).toEqual([102]);
+    expect(idsIn(next, 11)).toEqual([110, 100]);
   });
 
   it('leaves the board it was given untouched, so the rollback snapshot survives', () => {
@@ -107,7 +129,7 @@ describe('moveLessonOnBoard', () => {
     // optimistic update quietly edits the snapshot the drag is holding, and
     // rolling back restores the failed move.
     const board = makeBoard();
-    moveLessonOnBoard(board, 100, 11, containerDndId(1, 11));
+    moveLessonOnBoard(board, 100, 10, 11, containerDndId(1, 11));
 
     expect(idsIn(board, 10)).toEqual([100, 101, 102]);
     expect(idsIn(board, 11)).toEqual([110]);
@@ -285,11 +307,12 @@ describe('commitTransferredLesson', () => {
     const transferred = moveLessonOnBoard(
       board,
       100,
+      10,
       11,
       containerDndId(1, 11),
     );
 
-    expect(commitTransferredLesson(transferred, 100, true)).toEqual({
+    expect(commitTransferredLesson(transferred, 100, 11, true)).toEqual({
       targetModuleId: 11,
       prevLessonId: 110,
       nextLessonId: null,
@@ -300,26 +323,37 @@ describe('commitTransferredLesson', () => {
     // Mutant seen RED: the `transferApplied` guard dropped. Every drop on
     // nothing then persists a move — the opposite failure, and the reason the
     // flag exists rather than "commit whenever the lesson is on the board".
-    expect(commitTransferredLesson(makeBoard(), 100, false)).toBeNull();
+    expect(commitTransferredLesson(makeBoard(), 100, 10, false)).toBeNull();
   });
 
-  it('follows the lesson to where it actually ended up, not where it first went', () => {
-    // Mutant seen RED: the target module remembered from the transfer instead
-    // of read from the board — a drag that wanders into module 11 and back
-    // into module 10 would persist the wrong module.
+  it('follows the lesson to where the drag last carried it, not where it first went', () => {
+    // A drag that wanders into module 11 and back into module 10 persists
+    // module 10 — the holder the caller tracked through both transfers.
     const board = makeBoard();
-    const viaEleven = moveLessonOnBoard(board, 100, 11, containerDndId(1, 11));
+    const viaEleven = moveLessonOnBoard(
+      board,
+      100,
+      10,
+      11,
+      containerDndId(1, 11),
+    );
     const backInTen = moveLessonOnBoard(
       viaEleven,
       100,
+      11,
       10,
       containerDndId(1, 10),
     );
 
-    expect(commitTransferredLesson(backInTen, 100, true)).toEqual({
+    expect(commitTransferredLesson(backInTen, 100, 10, true)).toEqual({
       targetModuleId: 10,
       prevLessonId: 102,
       nextLessonId: null,
     });
+  });
+
+  it('rolls back when the tracked holder no longer shows the lesson', () => {
+    // The preview and the tracking disagree — nothing trustworthy to persist.
+    expect(commitTransferredLesson(makeBoard(), 100, 11, true)).toBeNull();
   });
 });

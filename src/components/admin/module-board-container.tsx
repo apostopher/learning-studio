@@ -43,14 +43,25 @@ import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { ModuleColumn } from './module-column';
 import { SortableModuleColumn } from './sortable-module-column';
 
-/** Which module currently holds the given lesson, or null. */
-function findLessonModuleId(
+/**
+ * Which of this course's OWN modules holds the given lesson, or null.
+ *
+ * Own modules only: a borrowed module registers no droppables (its lessons
+ * render read-only), so a `lesson` drop-target id can only ever name the
+ * course's own copy — and a course can show one lesson twice, in its own
+ * module and in a borrowed one, so a search over every module would land on
+ * whichever copy comes first.
+ */
+function findOwnLessonModuleId(
   board: CourseBoard,
   lessonId: number,
 ): number | null {
   return (
-    board.modules.find((m) => m.lessons.some((l) => l.id === lessonId))?.id ??
-    null
+    board.modules.find(
+      (m) =>
+        m.owner.id === board.course.id &&
+        m.lessons.some((l) => l.id === lessonId),
+    )?.id ?? null
   );
 }
 
@@ -66,13 +77,18 @@ function resolveOverModuleId(
   // `discipline` never appear as drop targets on this board, so treat them
   // as "no module" explicitly rather than falling through into a lesson
   // lookup that would coincidentally find nothing (or, worse, collide).
-  if (parsed.type === 'lesson') return findLessonModuleId(board, parsed.id);
+  if (parsed.type === 'lesson') return findOwnLessonModuleId(board, parsed.id);
   return null;
 }
 
 /**
- * Return a new board with `lessonId` moved into `targetModuleId` at the position
- * of `overId` (a lesson → its slot; a container → appended).
+ * Return a new board with `lessonId` moved out of `fromModuleId` into
+ * `targetModuleId` at the position of `overId` (a lesson → its slot; a
+ * container → appended).
+ *
+ * Stripped from exactly `fromModuleId` — the module currently showing the
+ * dragged card — never from every module holding the lesson: a borrowed
+ * module can hold a second copy, and that one is not what is moving.
  *
  * The insert index is the over lesson's index in the target's CURRENT list
  * (with the active lesson still present) — matching arrayMove semantics, so a
@@ -81,6 +97,7 @@ function resolveOverModuleId(
 function placeLesson(
   board: CourseBoard,
   lessonId: number,
+  fromModuleId: number,
   targetModuleId: number,
   overId: string | number,
 ): CourseBoard {
@@ -96,6 +113,7 @@ function placeLesson(
 
   let moved: BoardLesson | undefined;
   const withoutLesson = board.modules.map((m) => {
+    if (m.id !== fromModuleId) return m;
     const idx = m.lessons.findIndex((l) => l.id === lessonId);
     if (idx === -1) return m;
     moved = m.lessons[idx];
@@ -139,6 +157,21 @@ export const ModuleBoardContainer = ({
   // Snapshot the board at lesson-drag start so a cancel/error can roll back the
   // optimistic cross-module moves applied during the drag.
   const snapshotRef = useRef<CourseBoard | null>(null);
+  /**
+   * The lesson drag in flight: the module it was picked up from (`from`,
+   * fixed for the drag — the placement the server moves) and the module the
+   * board currently shows it in (`holder`, advanced on each live transfer so
+   * the next strip pulls the card out of the right module). Tracked rather
+   * than searched for by lesson id: a course can show one lesson twice — its
+   * own module and a borrowed one — and a search lands on whichever copy
+   * comes first. Read from the sortable's `data.moduleId` at drag START:
+   * after a live transfer the card re-registers under its new module and
+   * dnd-kit's data ref follows it.
+   */
+  const lessonDragRef = useRef<{
+    fromModuleId: number;
+    holderModuleId: number;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -158,6 +191,12 @@ export const ModuleBoardContainer = ({
 
   // Restrict collisions to droppables matching the dragged item's type, so a
   // dragged lesson never targets a module column and vice versa.
+  //
+  // A borrowed module renders no `LessonBoardContainer`, so it registers no
+  // `lesson`/`container` droppable at all — that absence is the WHOLE
+  // protection against dropping a lesson into it on this board; neither
+  // `resolveOverModuleId` nor `placeLesson` carries an explicit borrowed
+  // guard.
   const collisionDetection: CollisionDetection = (args) => {
     if (args.active.data.current?.type === 'module') {
       return closestCenter({
@@ -185,6 +224,11 @@ export const ModuleBoardContainer = ({
       snapshotRef.current =
         queryClient.getQueryData<CourseBoard | null>(key) ?? null;
       setActiveLessonId(parsed.id);
+      const moduleId: unknown = event.active.data.current?.moduleId;
+      lessonDragRef.current =
+        typeof moduleId === 'number'
+          ? { fromModuleId: moduleId, holderModuleId: moduleId }
+          : null;
     }
   };
 
@@ -196,19 +240,26 @@ export const ModuleBoardContainer = ({
     const board = queryClient.getQueryData<CourseBoard | null>(key);
     if (!board) return;
     const overModuleId = resolveOverModuleId(board, event.over.id);
-    const fromModuleId = findLessonModuleId(board, active.id);
+    const lessonDrag = lessonDragRef.current;
     // Same-module reorder is handled by the sortable + onDragEnd.
     if (
       overModuleId == null ||
-      fromModuleId == null ||
-      fromModuleId === overModuleId
+      !lessonDrag ||
+      lessonDrag.holderModuleId === overModuleId
     ) {
       return;
     }
     queryClient.setQueryData(
       key,
-      placeLesson(board, active.id, overModuleId, event.over.id),
+      placeLesson(
+        board,
+        active.id,
+        lessonDrag.holderModuleId,
+        overModuleId,
+        event.over.id,
+      ),
     );
+    lessonDrag.holderModuleId = overModuleId;
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -242,7 +293,9 @@ export const ModuleBoardContainer = ({
     if (parsed?.type === 'lesson') {
       setActiveLessonId(null);
       const snapshot = snapshotRef.current;
-      if (!over) {
+      const lessonDrag = lessonDragRef.current;
+      lessonDragRef.current = null;
+      if (!over || !lessonDrag) {
         if (snapshot) queryClient.setQueryData(key, snapshot);
         return;
       }
@@ -251,7 +304,13 @@ export const ModuleBoardContainer = ({
       const targetModuleId = resolveOverModuleId(board, over.id);
       if (targetModuleId == null) return;
 
-      const finalBoard = placeLesson(board, parsed.id, targetModuleId, over.id);
+      const finalBoard = placeLesson(
+        board,
+        parsed.id,
+        lessonDrag.holderModuleId,
+        targetModuleId,
+        over.id,
+      );
       queryClient.setQueryData(key, finalBoard);
 
       const targetLessons =
@@ -260,6 +319,7 @@ export const ModuleBoardContainer = ({
       moveLesson.mutate(
         {
           lessonId: parsed.id,
+          fromModuleId: lessonDrag.fromModuleId,
           targetModuleId,
           prevLessonId: targetLessons[idx - 1]?.id ?? null,
           nextLessonId: targetLessons[idx + 1]?.id ?? null,
@@ -277,6 +337,7 @@ export const ModuleBoardContainer = ({
     if (activeLessonId != null && snapshotRef.current) {
       queryClient.setQueryData(key, snapshotRef.current);
     }
+    lessonDragRef.current = null;
     setActiveModuleId(null);
     setActiveLessonId(null);
   };

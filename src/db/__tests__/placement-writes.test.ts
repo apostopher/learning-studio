@@ -71,10 +71,10 @@ vi.mock('#/db/lesson-access', () => ({
   lessonBelongsToCourseOrg,
 }));
 /**
- * The membership helper `movePlacement` scopes its UPDATE with (Task 6b). An
- * id-bearing sentinel rather than a real subquery, so a rendered parameter
- * proves the UPDATE received the subquery FOR THE TARGET MODULE'S COURSE —
- * not merely that some subquery was bound.
+ * The membership helper. `movePlacement` used to scope its UPDATE with it
+ * (Task 6b); since the final review's Critical #1 it scopes by OWNERSHIP
+ * instead, and the mock stays so a regression back to membership shows up
+ * as a call to this (asserted absent) rather than as an import crash.
  */
 const courseModuleIds = vi.hoisted(() =>
   vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
@@ -358,6 +358,7 @@ describe('movePlacement', () => {
 
     const result = await movePlacement({
       lessonId: 9,
+      fromModuleId: 40,
       targetModuleId: 41,
       prevLessonId: 3,
       nextLessonId: 4,
@@ -370,12 +371,30 @@ describe('movePlacement', () => {
     expect(result).toMatchObject({ moduleId: 41, rank: 1.5 });
   });
 
-  it('cannot touch a placement of the same lesson in a different course', async () => {
-    // Lesson 9 is placed in both course 3 (modules 40 and 41) and course 7
-    // (module 90). Moving it within course 3 (target module 41, also
-    // course 3) must scope the UPDATE's WHERE to course 3's modules only —
-    // a bare `eq(lessonId, 9)` WHERE (the brief's original code) would also
-    // match the course-7 placement in module 90 and silently corrupt it.
+  /**
+   * Final review, Critical #1 + #2. The UPDATE's WHERE pins THREE things:
+   *
+   * - `module_id = fromModuleId` — exactly ONE placement row. Keyed on the
+   *   lesson alone (the previous shape), a lesson a course holds twice — in
+   *   its own module AND in one it borrowed — matched both rows, and the
+   *   unique (module_id, lesson_id) index turned the drag into a 500.
+   * - `lesson_id = lessonId`.
+   * - `module_id in (modules OWNED by the target's owner)` — the placement
+   *   being moved must sit in a module the target's owner also owns. The
+   *   previous scope was MEMBERSHIP (`courseModuleIds(targetCourse)`), which
+   *   after a remix includes the source's modules: a remixer's manager could
+   *   name their own module as the target and pull a lesson OUT of a
+   *   borrowed module, changing the owner's course everywhere it is shown.
+   *   Under the owned scope that row is unreachable and the write returns
+   *   null (the route 404s); the route's own guard on the source's owner
+   *   turns it into a 403 first.
+   *
+   * Rendered as exact SQL text with the bound params, so a mutant that keeps
+   * the membership subquery (renders `in $3` with a `SUBQUERY:` sentinel,
+   * not the owner select), drops the `from` pin, or binds the target's id
+   * where the owner's course id belongs, all go red.
+   */
+  it('pins the UPDATE to the source placement, and to modules OWNED by the target’s owner', async () => {
     const returning = vi
       .fn()
       .mockResolvedValue([
@@ -387,38 +406,44 @@ describe('movePlacement', () => {
 
     await movePlacement({
       lessonId: 9,
+      fromModuleId: 40,
       targetModuleId: 41,
       prevLessonId: null,
       nextLessonId: null,
     });
 
-    // getCourseIdForModuleId was asked about the TARGET module, not some
-    // other one.
+    // The owner is resolved from the TARGET module, not the source one.
     expect(getCourseIdForModuleId).toHaveBeenCalledWith(41);
-    // The allowlist that scopes the UPDATE is the membership helper's
-    // subquery for course 3 (getCourseIdForModuleId's resolved course for
-    // module 41) — this is the mechanism that keeps module 90 (course 7)
-    // out of it. Task 6b: it used to be a separate `modules.course_id`
-    // lookup, which asked who OWNS each module rather than which course it
-    // is placed in; now there is one definition of membership and this
-    // write uses it. No module-id select runs at all any more.
-    expect(courseModuleIds).toHaveBeenCalledWith(3);
+    expect(getCourseIdForModuleId).not.toHaveBeenCalledWith(40);
+    // Ownership, not membership: the membership helper is the wrong
+    // question here and must not be consulted at all.
+    expect(courseModuleIds).not.toHaveBeenCalled();
     expect(db.select).not.toHaveBeenCalled();
 
     expect(where).toHaveBeenCalledTimes(1);
     const condition = where.mock.calls[0][0];
-    // Task 5e, Part 2b: this used to check `collectSqlTokens` for presence
-    // of 'module_id'/'9' — which cannot tell "scoped by
-    // module_lessons.lesson_id AND module_lessons.module_id in (subquery)"
-    // apart from a mutant that SWAPPED which column carries the lessonId vs
-    // the allowlist. Exact SQL text pins the pairing, and the sentinel
-    // parameter pins WHICH course's subquery was bound: a mutant scoping by
-    // `courseModuleIds(input.targetModuleId)` (41, a module id — same type)
-    // renders `SUBQUERY:41` here and goes red.
     expect(renderSql(condition)).toBe(
-      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in $2)',
+      '("module_lessons"."module_id" = $1 and "module_lessons"."lesson_id" = $2 and "module_lessons"."module_id" in (select "modules"."id" from "modules" where "modules"."course_id" = $3))',
     );
-    expect(renderSqlParams(condition)).toEqual([9, 'SUBQUERY:3']);
+    expect(renderSqlParams(condition)).toEqual([40, 9, 3]);
+  });
+
+  it('returns null, writing nothing else, when the UPDATE matched no row (placement in a borrowed module)', async () => {
+    const returning = vi.fn().mockResolvedValue([]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    db.update.mockReturnValue({ set });
+
+    const result = await movePlacement({
+      lessonId: 9,
+      fromModuleId: 40,
+      targetModuleId: 41,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+
+    expect(result).toBeNull();
+    expect(invalidateCourseDetailsCache).not.toHaveBeenCalled();
   });
 
   it('invalidates the target course cache so learners see the move', async () => {
@@ -433,6 +458,7 @@ describe('movePlacement', () => {
 
     await movePlacement({
       lessonId: 9,
+      fromModuleId: 40,
       targetModuleId: 41,
       prevLessonId: null,
       nextLessonId: null,

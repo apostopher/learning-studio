@@ -122,6 +122,14 @@ const board: OrgEditorBoard = [
   courseBoard(3, 'Weekend Refresher', []),
 ];
 
+/**
+ * Where a lesson drag was picked up — `resolveDrop`'s fourth argument, read
+ * by the editor from the sortable's `data.moduleId` at drag START. Every
+ * lesson drag below passes one; a drag without it is unresolvable (`null`),
+ * pinned in its own test.
+ */
+const from = (moduleId: number) => ({ moduleId });
+
 describe('resolveDrop — the allowed drops', () => {
   it('links a library lesson into the module it was dropped on', () => {
     // Mutant seen RED: `moduleId: to.courseBoard.modules[0].id` — links into
@@ -144,11 +152,17 @@ describe('resolveDrop — the allowed drops', () => {
     // Mutant seen RED: `moduleId: from.module.id` — a "move" that reports the
     // module the lesson is already in, so the lesson never leaves it.
     expect(
-      resolveDrop(board, lessonDndId(1, STALLS), containerDndId(1, CIRCUITS)),
+      resolveDrop(
+        board,
+        lessonDndId(1, STALLS),
+        containerDndId(1, CIRCUITS),
+        from(FUNDAMENTALS),
+      ),
     ).toEqual({
       kind: 'move',
       moduleId: CIRCUITS,
       lessonId: STALLS,
+      fromModuleId: FUNDAMENTALS,
       overId: containerDndId(1, CIRCUITS),
     });
   });
@@ -159,11 +173,17 @@ describe('resolveDrop — the allowed drops', () => {
     // Circuits — its own `moduleId: CIRCUITS` assertion proved it was a
     // cross-module drop. The same-module row is now covered below.
     expect(
-      resolveDrop(board, lessonDndId(1, STALLS), lessonDndId(1, GO_AROUND)),
+      resolveDrop(
+        board,
+        lessonDndId(1, STALLS),
+        lessonDndId(1, GO_AROUND),
+        from(FUNDAMENTALS),
+      ),
     ).toEqual({
       kind: 'move',
       moduleId: CIRCUITS,
       lessonId: STALLS,
+      fromModuleId: FUNDAMENTALS,
       overId: lessonDndId(1, GO_AROUND),
     });
   });
@@ -177,11 +197,17 @@ describe('resolveDrop — the allowed drops', () => {
     // A same-module drop is a `move` too, not a fifth kind: the over id names
     // the slot, which is why `overId` is carried through rather than dropped.
     expect(
-      resolveDrop(board, lessonDndId(1, STALLS), lessonDndId(1, TAXIING)),
+      resolveDrop(
+        board,
+        lessonDndId(1, STALLS),
+        lessonDndId(1, TAXIING),
+        from(FUNDAMENTALS),
+      ),
     ).toEqual({
       kind: 'move',
       moduleId: FUNDAMENTALS,
       lessonId: STALLS,
+      fromModuleId: FUNDAMENTALS,
       overId: lessonDndId(1, TAXIING),
     });
   });
@@ -215,6 +241,7 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
       board,
       lessonDndId(1, STALLS),
       containerDndId(2, BASICS),
+      from(FUNDAMENTALS),
     );
 
     expect(result?.kind).toBe('forbidden');
@@ -269,6 +296,7 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
       board,
       lessonDndId(1, STALLS),
       disciplineDndId(7),
+      from(FUNDAMENTALS),
     );
 
     expect(result?.kind).toBe('forbidden');
@@ -294,6 +322,7 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
       board,
       lessonDndId(1, STALLS),
       disciplineDndId(7),
+      from(FUNDAMENTALS),
     );
 
     const reason = result?.kind === 'forbidden' ? result.reason : '';
@@ -339,7 +368,16 @@ describe('resolveDrop — no target at all', () => {
       ),
     ).toBeNull();
     // Dropped on nothing, expressed as the empty over id dnd-kit reports.
-    expect(resolveDrop(board, lessonDndId(1, STALLS), '')).toBeNull();
+    expect(
+      resolveDrop(board, lessonDndId(1, STALLS), '', from(FUNDAMENTALS)),
+    ).toBeNull();
+    // A lesson drag whose pick-up module the caller failed to capture is
+    // unresolvable, not a guess: the only other way to find `from` is a
+    // search by lesson id, which lands on the wrong copy of a duplicated
+    // lesson (see "duplicate lessons" below).
+    expect(
+      resolveDrop(board, lessonDndId(1, STALLS), containerDndId(1, CIRCUITS)),
+    ).toBeNull();
     // Dropped back on itself.
     expect(
       resolveDrop(
@@ -401,7 +439,12 @@ describe('resolveDrop — dropping on a course column itself', () => {
     // module is not what is missing — this lesson may not cross courses at
     // all, and telling the reader to create a module would send them to do
     // something that still would not work.
-    const result = resolveDrop(board, lessonDndId(1, STALLS), courseDndId(3));
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      courseDndId(3),
+      from(FUNDAMENTALS),
+    );
 
     expect(result).toEqual({
       kind: 'forbidden',
@@ -411,7 +454,12 @@ describe('resolveDrop — dropping on a course column itself', () => {
   });
 
   it('refuses a placed lesson dropped on its OWN course with the module reason', () => {
-    const result = resolveDrop(board, lessonDndId(1, STALLS), courseDndId(1));
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      courseDndId(1),
+      from(FUNDAMENTALS),
+    );
 
     expect(result).toEqual({
       kind: 'forbidden',
@@ -532,7 +580,12 @@ describe('resolveDrop — borrowed modules', () => {
 
   it('refuses moving a placed lesson INTO a borrowed module', () => {
     expect(
-      resolveDrop(remixBoard, lessonDndId(2, 56), containerDndId(2, 10)),
+      resolveDrop(
+        remixBoard,
+        lessonDndId(2, 56),
+        containerDndId(2, 10),
+        from(20),
+      ),
     ).toMatchObject({
       kind: 'forbidden',
       reason: expect.stringContaining('is edited in 3D Airmanship'),
@@ -541,7 +594,12 @@ describe('resolveDrop — borrowed modules', () => {
 
   it('refuses moving a placed lesson OUT OF a borrowed module', () => {
     expect(
-      resolveDrop(remixBoard, lessonDndId(2, 55), containerDndId(2, 20)),
+      resolveDrop(
+        remixBoard,
+        lessonDndId(2, 55),
+        containerDndId(2, 20),
+        from(10),
+      ),
     ).toEqual({
       kind: 'forbidden',
       reason:
@@ -567,6 +625,134 @@ describe('resolveDrop — borrowed modules', () => {
       kind: 'link',
       moduleId: 10,
       lessonId: 99,
+    });
+  });
+});
+
+/**
+ * Final review, Critical #2. Whole-course remixing makes a lesson that sits
+ * in a course's OWN module and ALSO in one it borrowed ordinary (the spec's
+ * "duplicate lessons are surfaced, not blocked"). A lookup by lesson id
+ * lands on whichever module comes first on the board — here the borrowed
+ * one, deliberately listed first — so dragging the course's own copy was
+ * refused as "edited in <owner>", and the server's UPDATE matched both rows.
+ *
+ * The drag's pick-up module is therefore an INPUT (`resolveDrop`'s fourth
+ * argument, from the sortable's `data.moduleId` at drag start), never a
+ * search, and it travels out again as `fromModuleId` so the route can pin
+ * one placement.
+ */
+describe('resolveDrop — duplicate lessons (own copy and borrowed copy)', () => {
+  const owner = { id: 6, name: '3D Airmanship' };
+  const itps = { id: 2, name: 'ITPS' };
+  const CROSSWINDS = 55;
+  const BORROWED = 10;
+  const OWN = 20;
+  const OWN_TOO = 21;
+  const borrowed = mod(
+    BORROWED,
+    'Weather',
+    [lesson(CROSSWINDS, 'Crosswinds')],
+    owner,
+  );
+  const own = mod(OWN, 'Intro', [lesson(CROSSWINDS, 'Crosswinds')], itps);
+  const ownToo = mod(OWN_TOO, 'Review', [lesson(56, 'Welcome')], itps);
+  // Borrowed FIRST, so a first-match search finds the wrong copy.
+  const dupBoard: OrgEditorBoard = [
+    courseBoard(6, '3D Airmanship', [borrowed]),
+    courseBoard(2, 'ITPS', [borrowed, own, ownToo]),
+  ];
+
+  it('moves the course’s OWN copy when the drag started on it, naming that module as the source', () => {
+    expect(
+      resolveDrop(
+        dupBoard,
+        lessonDndId(2, CROSSWINDS),
+        containerDndId(2, OWN_TOO),
+        from(OWN),
+      ),
+    ).toEqual({
+      kind: 'move',
+      moduleId: OWN_TOO,
+      lessonId: CROSSWINDS,
+      fromModuleId: OWN,
+      overId: containerDndId(2, OWN_TOO),
+    });
+  });
+
+  it('still refuses the BORROWED copy when the drag started on it', () => {
+    expect(
+      resolveDrop(
+        dupBoard,
+        lessonDndId(2, CROSSWINDS),
+        containerDndId(2, OWN_TOO),
+        from(BORROWED),
+      ),
+    ).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it, so its lessons are arranged there.',
+    });
+  });
+
+  /**
+   * The OVER side has no pick-up data, so it is resolved by search — but a
+   * borrowed module registers no droppables (its lessons render read-only),
+   * so an `over` lesson id can only ever be the course's own copy. The
+   * search prefers own modules for exactly that reason; a first-match
+   * search would land on the borrowed copy and refuse the drop as adding to
+   * a borrowed module.
+   */
+  it('resolves an OVER lesson id to the course’s own copy, not the borrowed one listed first', () => {
+    expect(
+      resolveDrop(
+        dupBoard,
+        lessonDndId(2, 56),
+        lessonDndId(2, CROSSWINDS),
+        from(OWN_TOO),
+      ),
+    ).toEqual({
+      kind: 'move',
+      moduleId: OWN,
+      lessonId: 56,
+      fromModuleId: OWN_TOO,
+      overId: lessonDndId(2, CROSSWINDS),
+    });
+  });
+
+  /**
+   * After `onDragOver` carries a lesson into another module live, the board
+   * no longer shows it in its pick-up module — the resolution must still
+   * work off the pick-up module (for authority) and find the lesson where it
+   * now sits (for its name).
+   */
+  it('resolves a drop after the lesson was carried out of its pick-up module live', () => {
+    const carried: OrgEditorBoard = [
+      courseBoard(6, '3D Airmanship', [borrowed]),
+      courseBoard(2, 'ITPS', [
+        borrowed,
+        mod(OWN, 'Intro', [], itps),
+        mod(
+          OWN_TOO,
+          'Review',
+          [lesson(56, 'Welcome'), lesson(CROSSWINDS, 'Crosswinds')],
+          itps,
+        ),
+      ]),
+    ];
+    expect(
+      resolveDrop(
+        carried,
+        lessonDndId(2, CROSSWINDS),
+        lessonDndId(2, 56),
+        from(OWN),
+      ),
+    ).toEqual({
+      kind: 'move',
+      moduleId: OWN_TOO,
+      lessonId: CROSSWINDS,
+      fromModuleId: OWN,
+      overId: lessonDndId(2, 56),
     });
   });
 });

@@ -206,23 +206,52 @@ export async function patchLessonHandler(
     if (placedIn.length === 0) {
       return absentResourceResponse(request.headers, 'Lesson not found');
     }
-    // That module's course is the one actually being written by
-    // `moveLesson` below, and it is not necessarily any particular one of
-    // `placedIn` — the lesson may be in several, and none of them is "the"
-    // course. Guarding on the wrong one is wrong in both directions: staff
-    // on some other course teaching the lesson could move it into a course
-    // they have no authority over, and staff on the real target course
-    // could be refused for their own course.
+    // Two modules are written by `moveLesson` below — the placement leaves
+    // `fromModuleId` and lands in `targetModuleId` — and each one's OWNER
+    // (`modules.course_id`, via `getCourseIdForModuleId`) is a distinct
+    // authority: adding a lesson to a module and removing one from it are
+    // both that module's owner's call (spec, Permissions row 2). Neither is
+    // necessarily any particular one of `placedIn` — the lesson may be in
+    // several courses, and none of them is "the" course. Guarding on the
+    // wrong one is wrong in both directions: staff on some other course
+    // teaching the lesson could move it into a course they have no authority
+    // over, and staff on the real target course could be refused for their
+    // own course.
+    //
+    // The source guard is the one a remix makes load-bearing: after B
+    // remixes A, A's module M is on B's board, and B's course manager —
+    // structure on B, read on A — could otherwise name B's own module as
+    // the target, pass the target guard on B, and pull a lesson out of M,
+    // changing A's course everywhere it is shown. The writer's owned-modules
+    // scope makes that row unreachable regardless (a 404); guarding the
+    // source's owner here refuses it as a 403 on A, which is the honest
+    // answer. Source first, so a caller with no rights over where the
+    // lesson IS learns nothing about where they asked to put it; guarded
+    // once when both modules share an owner, which is every drag the
+    // editor can produce.
     const targetCourseId = await getCourseIdForModuleId(
       move.data.targetModuleId,
     );
     if (targetCourseId === null) {
       return absentResourceResponse(request.headers, 'Target module not found');
     }
-    const denied = await guardStructure(request, targetCourseId, 'update');
-    if (denied) return denied;
+    const sourceCourseId = await getCourseIdForModuleId(move.data.fromModuleId);
+    if (sourceCourseId === null) {
+      return absentResourceResponse(request.headers, 'Source module not found');
+    }
+    const sourceDenied = await guardStructure(
+      request,
+      sourceCourseId,
+      'update',
+    );
+    if (sourceDenied) return sourceDenied;
+    if (targetCourseId !== sourceCourseId) {
+      const denied = await guardStructure(request, targetCourseId, 'update');
+      if (denied) return denied;
+    }
     const updated = await moveLesson({
       lessonId,
+      fromModuleId: move.data.fromModuleId,
       targetModuleId: move.data.targetModuleId,
       prevLessonId: move.data.prevLessonId,
       nextLessonId: move.data.nextLessonId,

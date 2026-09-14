@@ -4,7 +4,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getCourseIdForModuleId } from '#/db/lesson-access';
 import { movePlacement, unlinkLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import { moveLessonInputSchema } from '#/lib/admin-schemas';
+import { movePlacementBodySchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireCoursePermission,
@@ -110,7 +110,7 @@ export async function patchPlacementHandler(
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const parsed = moveLessonInputSchema.safeParse(body);
+  const parsed = movePlacementBodySchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -137,8 +137,11 @@ export async function patchPlacementHandler(
   const denied = await guard(request, targetCourseId, 'update');
   if (denied) return denied;
 
+  // The URL's module is the source placement: it is what the guard above
+  // covered, and what pins the UPDATE to one row.
   const moved = await movePlacement({
     lessonId,
+    fromModuleId: moduleId,
     targetModuleId: parsed.data.targetModuleId,
     prevLessonId: parsed.data.prevLessonId,
     nextLessonId: parsed.data.nextLessonId,

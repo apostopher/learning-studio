@@ -280,13 +280,29 @@ export type UpdateLessonDependenciesInput = z.infer<
 >;
 
 /**
- * Move a lesson to `targetModuleId` (possibly the same module) between the given
- * neighbors. Both neighbors are null when the lesson lands in an empty module.
+ * Move a lesson from `fromModuleId` to `targetModuleId` (possibly the same
+ * module) between the given neighbors. Both neighbors are null when the
+ * lesson lands in an empty module.
+ *
+ * `fromModuleId` names WHICH placement moves: a placement is one
+ * (module, lesson) row, and a course can show the same lesson twice — in a
+ * module it owns and in one it borrowed through a remix — so the lesson id
+ * alone matches two rows. It is also what the route guards the OWNER of:
+ * taking a lesson out of a module is that module's owner's authority (spec,
+ * Permissions row 2), which the target's owner alone cannot vouch for.
  */
-export const moveLessonInputSchema = z.object({
+export const movePlacementBodySchema = z.object({
   targetModuleId: z.number().int().positive(),
   prevLessonId: z.number().int().positive().nullable(),
   nextLessonId: z.number().int().positive().nullable(),
+});
+/**
+ * `PATCH /api/admin/modules/:moduleId/lessons/:lessonId` takes the source
+ * module from its URL, so its body is the destination alone.
+ */
+export type MovePlacementBody = z.infer<typeof movePlacementBodySchema>;
+export const moveLessonInputSchema = movePlacementBodySchema.extend({
+  fromModuleId: z.number().int().positive(),
 });
 export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;
 

@@ -32,6 +32,7 @@ describe('useMovePlacement', () => {
     await act(async () => {
       await result.current.mutateAsync({
         lessonId: 9,
+        fromModuleId: 30,
         targetModuleId: 40,
         prevLessonId: 3,
         nextLessonId: 7,
@@ -41,7 +42,11 @@ describe('useMovePlacement', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/admin/lessons/9');
     expect(init?.method).toBe('PATCH');
+    // `fromModuleId` is the module the lesson was picked up from — the route
+    // guards its owner and the writer pins the UPDATE to that one placement
+    // (final review, Critical #1/#2). Dropped from the body, the route 400s.
     expect(JSON.parse(init?.body as string)).toEqual({
+      fromModuleId: 30,
       targetModuleId: 40,
       prevLessonId: 3,
       nextLessonId: 7,
@@ -67,6 +72,7 @@ describe('useMovePlacement', () => {
     await act(async () => {
       await result.current.mutateAsync({
         lessonId: 9,
+        fromModuleId: 30,
         targetModuleId: 40,
         prevLessonId: null,
         nextLessonId: null,
@@ -99,6 +105,7 @@ describe('useMovePlacement', () => {
       await result.current
         .mutateAsync({
           lessonId: 9,
+          fromModuleId: 30,
           targetModuleId: 40,
           prevLessonId: null,
           nextLessonId: null,
@@ -125,6 +132,7 @@ describe('useMovePlacement', () => {
     await act(async () => {
       await result.current.mutateAsync({
         lessonId: 9,
+        fromModuleId: 30,
         targetModuleId: 40,
         prevLessonId: null,
         nextLessonId: null,

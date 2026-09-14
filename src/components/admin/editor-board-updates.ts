@@ -56,10 +56,23 @@ function insertAt(
   }));
 }
 
-/** Move an already-placed lesson into `targetModuleId` at `overId`'s slot. */
+/**
+ * Move an already-placed lesson out of `fromModuleId` into `targetModuleId`
+ * at `overId`'s slot.
+ *
+ * Stripped from exactly `fromModuleId` — the module currently showing the
+ * dragged card — never from every module holding the lesson. A course can
+ * show one lesson twice (its own module and a borrowed one), and stripping
+ * by lesson id made the borrowed copy vanish from every column for the
+ * length of the drag. Where the lesson sits during a drag is the caller's
+ * to track; it starts as the pick-up module and advances on each live
+ * transfer. A module appears in every column that shows it, so the strip
+ * runs across all columns, keyed on the module id.
+ */
 export function moveLessonOnBoard(
   board: OrgEditorBoard,
   lessonId: number,
+  fromModuleId: number,
   targetModuleId: number,
   overId: string | number,
 ): OrgEditorBoard {
@@ -71,6 +84,7 @@ export function moveLessonOnBoard(
   const stripped = board.map((cb) => ({
     ...cb,
     modules: cb.modules.map((m) => {
+      if (m.id !== fromModuleId) return m;
       const at = m.lessons.findIndex((l) => l.id === lessonId);
       if (at === -1) return m;
       moved = m.lessons[at];
@@ -171,16 +185,21 @@ export function moduleNeighbours(
  * transfer the admin watched happen and released on deliberately.
  *
  * `transferApplied` is the whole distinction: without it every `null` would
- * commit, and a genuine miss would persist a move nobody asked for. The
- * target module is read from the board rather than remembered from the
- * transfer, because a drag that wandered through three modules must persist
- * where the lesson actually ended up.
+ * commit, and a genuine miss would persist a move nobody asked for.
+ * `holderModuleId` is where the drag last carried the lesson — a drag that
+ * wandered through three modules must persist where the lesson actually
+ * ended up — and it is a tracked input rather than a search by lesson id,
+ * which would land on the first of two copies of a duplicated lesson. The
+ * board is still consulted: a holder that no longer shows the lesson means
+ * the preview and the tracking disagree, and rolling back is the safe
+ * answer.
  *
  * Returns the move to persist, or `null` to roll back.
  */
 export function commitTransferredLesson(
   board: OrgEditorBoard,
   lessonId: number,
+  holderModuleId: number,
   transferApplied: boolean,
 ): {
   targetModuleId: number;
@@ -188,8 +207,8 @@ export function commitTransferredLesson(
   nextLessonId: number | null;
 } | null {
   if (!transferApplied) return null;
-  const holder = allModules(board).find((m) =>
-    m.lessons.some((l) => l.id === lessonId),
+  const holder = allModules(board).find(
+    (m) => m.id === holderModuleId && m.lessons.some((l) => l.id === lessonId),
   );
   if (!holder) return null;
   return {

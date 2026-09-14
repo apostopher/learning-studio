@@ -399,11 +399,20 @@ describe('patchLessonHandler — config (discipline-owned content)', () => {
   });
 });
 
-// Requirements 4/5: move guards on the TARGET module's course — not some
-// other course the lesson is placed in, and not the lesson's discipline.
-describe('patchLessonHandler — move (guards the target module’s course)', () => {
-  function moveReq() {
-    return req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null });
+// Requirements 4/5: move guards on the TARGET module's owner — not some
+// other course the lesson is placed in, and not the lesson's discipline —
+// and (final review, Critical #1) on the SOURCE module's owner too: taking a
+// lesson out of a module is that module's owner's authority (spec,
+// Permissions row 2), and after a remix the source can be a module the
+// viewing course only borrows.
+describe('patchLessonHandler — move (guards both modules’ owners)', () => {
+  function moveReq(fromModuleId = 30) {
+    return req({
+      fromModuleId,
+      targetModuleId: 55,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
   }
 
   // Requirement 4, named mutant: guard a course the lesson is merely placed
@@ -430,12 +439,87 @@ describe('patchLessonHandler — move (guards the target module’s course)', ()
     );
     // Requirement 7: never escalated to the discipline/admin content guard.
     expect(m.requireLessonContentPermission).not.toHaveBeenCalled();
+    // The source placement travels to the writer — it is what pins the
+    // UPDATE to one row (Critical #2).
     expect(m.moveLesson).toHaveBeenCalledWith({
       lessonId: 10,
+      fromModuleId: 30,
       targetModuleId: 55,
       prevLessonId: null,
       nextLessonId: null,
     });
+  });
+
+  /**
+   * Spec test group 2, the row the permission matrix never covered: B's
+   * course manager (structure on B, read on A) moving a lesson OUT of A's
+   * borrowed module M into B's own module N. Before the fix only the target
+   * (N → owner B) was guarded, so the guard passed and the write went
+   * through. Both owners are asserted BY COURSE ID, source first — a
+   * pass/fail assertion alone cannot tell `requireCoursePermission(B)` from
+   * `(A)`.
+   */
+  it('guards on the SOURCE module’s owner too, before the target’s, when they differ', async () => {
+    m.getCourseIdForModuleId.mockImplementation(async (id: number) =>
+      id === 30 ? 9 : id === 55 ? 7 : null,
+    );
+
+    const res = await patchLessonHandler(moveReq(30), '10');
+
+    expect(res.status).toBe(200);
+    expect(m.requireCoursePermission.mock.calls.map((c) => c.slice(1))).toEqual(
+      [
+        [9, 'structure', 'update'],
+        [7, 'structure', 'update'],
+      ],
+    );
+  });
+
+  it('guards the shared owner once when source and target are owned by the same course', async () => {
+    await patchLessonHandler(moveReq(30), '10');
+    expect(m.requireCoursePermission.mock.calls.map((c) => c.slice(1))).toEqual(
+      [[7, 'structure', 'update']],
+    );
+  });
+
+  it('403s a refused actor on the SOURCE owner without asking about the target or moving', async () => {
+    m.getCourseIdForModuleId.mockImplementation(async (id: number) =>
+      id === 30 ? 9 : id === 55 ? 7 : null,
+    );
+    m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
+
+    const res = await patchLessonHandler(moveReq(30), '10');
+
+    expect(res.status).toBe(403);
+    expect(m.requireCoursePermission.mock.calls.map((c) => c.slice(1))).toEqual(
+      [[9, 'structure', 'update']],
+    );
+    expect(m.moveLesson).not.toHaveBeenCalled();
+  });
+
+  it('404s when the source module does not exist, and never guards or moves', async () => {
+    m.getCourseIdForModuleId.mockImplementation(async (id: number) =>
+      id === 55 ? 7 : null,
+    );
+
+    const res = await patchLessonHandler(moveReq(30), '10');
+
+    expect(m.absentResourceResponse).toHaveBeenCalledWith(
+      expect.anything(),
+      'Source module not found',
+    );
+    expect(res.status).toBe(404);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.moveLesson).not.toHaveBeenCalled();
+  });
+
+  it('400s a move body with no fromModuleId — the writer cannot pin one placement without it', async () => {
+    const res = await patchLessonHandler(
+      req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null }),
+      '10',
+    );
+    expect(res.status).toBe(400);
+    expect(m.moveLesson).not.toHaveBeenCalled();
   });
 
   it('403s a refused actor on the target course without moving', async () => {
@@ -591,7 +675,12 @@ describe('non-existent lesson 404s (not 403) on every branch', () => {
       'course-check',
       () =>
         patchLessonHandler(
-          req({ targetModuleId: 55, prevLessonId: null, nextLessonId: null }),
+          req({
+            fromModuleId: 30,
+            targetModuleId: 55,
+            prevLessonId: null,
+            nextLessonId: null,
+          }),
           '999',
         ),
     ],

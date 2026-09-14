@@ -40,6 +40,13 @@ export type DropResolution =
       kind: 'move';
       moduleId: number;
       lessonId: number;
+      /**
+       * The module the lesson was picked up from — `origin.moduleId`, handed
+       * back so the route can pin the UPDATE to that ONE placement. A lesson
+       * a course holds twice (its own module and a borrowed one) has two
+       * placements; keyed on the lesson alone, the server matched both.
+       */
+      fromModuleId: number;
       /** The raw over id, so the caller can read the exact slot to insert at. */
       overId: string | number;
     }
@@ -129,6 +136,29 @@ function findModule(
   return { courseBoard, module };
 }
 
+/**
+ * Where a placed lesson was picked up: its module at drag START.
+ *
+ * An input, never a search. A course can hold one lesson twice — in a module
+ * it owns and in one it borrowed — and a search by lesson id lands on
+ * whichever module comes first on the board, which for a remix is usually
+ * the borrowed copy: dragging the course's own copy was then refused as
+ * "edited in <owner>", and the server's UPDATE matched both placements.
+ *
+ * Read from the sortable's `data.moduleId` when the drag starts, not at the
+ * drop: `onDragOver` carries a lesson into another module live, the card
+ * re-registers under its new module, and dnd-kit's data ref follows it.
+ */
+export type DragOrigin = { moduleId: number };
+
+/**
+ * A DROP TARGET that is a placed lesson, resolved by search — the over side
+ * carries no pick-up data. Own modules are searched before borrowed ones: a
+ * borrowed module registers no droppables (its lessons render read-only), so
+ * an `over` lesson id can only ever name the course's own copy, and a
+ * first-match search that landed on the borrowed copy would refuse the drop
+ * as adding to a borrowed module.
+ */
 function findPlacedLesson(
   board: OrgEditorBoard,
   courseId: number,
@@ -136,11 +166,41 @@ function findPlacedLesson(
 ): LocatedLesson | null {
   const courseBoard = findCourse(board, courseId);
   if (!courseBoard) return null;
-  for (const module of courseBoard.modules) {
+  const own = courseBoard.modules.filter(
+    (m) => m.owner.id === courseBoard.course.id,
+  );
+  const borrowed = courseBoard.modules.filter(
+    (m) => m.owner.id !== courseBoard.course.id,
+  );
+  for (const module of [...own, ...borrowed]) {
     const lesson = module.lessons.find((l) => l.id === lessonId);
     if (lesson) return { courseBoard, module, lesson };
   }
   return null;
+}
+
+/**
+ * The lesson being DRAGGED, located by its pick-up module. The lesson record
+ * itself is read from that module when it is still there, and from anywhere
+ * in the same column otherwise — `onDragOver` may already have carried it
+ * into another module live, and every copy of a lesson carries the same
+ * name, which is all the refusals below need from it.
+ */
+function findDraggedLesson(
+  board: OrgEditorBoard,
+  courseId: number,
+  lessonId: number,
+  origin: DragOrigin,
+): LocatedLesson | null {
+  const from = findModule(board, courseId, origin.moduleId);
+  if (!from) return null;
+  const lesson =
+    from.module.lessons.find((l) => l.id === lessonId) ??
+    from.courseBoard.modules
+      .flatMap((m) => m.lessons)
+      .find((l) => l.id === lessonId);
+  if (!lesson) return null;
+  return { ...from, lesson };
 }
 
 /**
@@ -177,6 +237,11 @@ export function resolveDrop(
   board: OrgEditorBoard,
   activeId: string | number,
   overId: string | number,
+  /**
+   * Required for a `lesson` drag (see `DragOrigin`); ignored for every other
+   * kind. A lesson drag without one is unresolvable — `null`, not a guess.
+   */
+  origin?: DragOrigin | null,
 ): DropResolution {
   const active = parseDndId(activeId);
   const over = parseDndId(overId);
@@ -242,7 +307,8 @@ export function resolveDrop(
   }
 
   if (active.type === 'lesson') {
-    const from = findPlacedLesson(board, active.courseId, active.id);
+    if (!origin) return null;
+    const from = findDraggedLesson(board, active.courseId, active.id, origin);
     if (!from) return null;
     // Content authority follows the owner: this must win over every other
     // refusal below, including the cross-course one — a borrowed module's
@@ -294,6 +360,7 @@ export function resolveDrop(
       kind: 'move',
       moduleId: to.module.id,
       lessonId: from.lesson.id,
+      fromModuleId: origin.moduleId,
       overId,
     };
   }

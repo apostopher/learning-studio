@@ -1010,6 +1010,7 @@ describe('course-details cache invalidation', () => {
 
     await moveLesson({
       lessonId: 9,
+      fromModuleId: 11,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,
@@ -1051,6 +1052,7 @@ describe('course-details cache invalidation', () => {
 
     await moveLesson({
       lessonId: 9,
+      fromModuleId: 11,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,
@@ -1074,6 +1076,7 @@ describe('course-details cache invalidation', () => {
 
     const result = await moveLesson({
       lessonId: 9,
+      fromModuleId: 11,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,
@@ -1102,6 +1105,7 @@ describe('course-details cache invalidation', () => {
 
     const result = await moveLesson({
       lessonId: 9,
+      fromModuleId: 11,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,
@@ -1120,8 +1124,11 @@ describe('course-details cache invalidation', () => {
     expect(db.transaction).not.toHaveBeenCalled();
     // No second (transaction) argument any more — `movePlacement` runs
     // against the module-level `db` directly.
+    // `fromModuleId` travels through untouched: it is what pins the UPDATE
+    // to ONE placement (final review, Critical #2).
     expect(placements.movePlacement).toHaveBeenCalledWith({
       lessonId: 9,
+      fromModuleId: 11,
       targetModuleId: 20,
       prevLessonId: null,
       nextLessonId: null,

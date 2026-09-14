@@ -1008,12 +1008,15 @@ export async function reorderModule(input: {
 }
 
 /**
- * Move a lesson to a module (same or different) with a midpoint rank computed
- * from its target neighbors. Handles reorder-within-module and cross-module
- * drag uniformly; rank 1 when the target module is empty.
+ * Move a lesson's placement in `fromModuleId` to a module (same or different)
+ * with a midpoint rank computed from its target neighbors. Handles
+ * reorder-within-module and cross-module drag uniformly; rank 1 when the
+ * target module is empty. `fromModuleId` names the ONE placement that moves
+ * — see `movePlacement` for why the lesson id alone cannot.
  */
 export async function moveLesson(input: {
   lessonId: number;
+  fromModuleId: number;
   targetModuleId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
@@ -1034,6 +1037,7 @@ export async function moveLesson(input: {
   // lesson row here.
   const movedPlacement = await movePlacement({
     lessonId: input.lessonId,
+    fromModuleId: input.fromModuleId,
     targetModuleId: input.targetModuleId,
     prevLessonId: input.prevLessonId,
     nextLessonId: input.nextLessonId,

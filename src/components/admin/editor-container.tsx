@@ -81,7 +81,7 @@ import { LibraryLessonCard } from './library-lesson-card';
 import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dialog-container';
 import { ModuleAccordionItem } from './module-accordion-item';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
-import { resolveDrop } from './resolve-drop';
+import { type DragOrigin, resolveDrop } from './resolve-drop';
 import { UnremixCourseDialogContainer } from './unremix-course-dialog-container';
 
 /** How long a lesson must hover a collapsed module before it opens. */
@@ -189,6 +189,22 @@ export const EditorContainer = ({
    * the transfer back and the drag would appear to have done nothing.
    */
   const transferAppliedRef = useRef(false);
+  /**
+   * The lesson drag in flight: where it was picked up (`origin`, fixed for
+   * the drag — the placement the server moves, and whose owner it guards)
+   * and where the board currently shows it (`holderModuleId`, advanced on
+   * each live transfer so the next strip pulls the card out of the right
+   * module). Both are tracked rather than searched for by lesson id: a
+   * course can show one lesson twice — its own module and a borrowed one —
+   * and a search lands on whichever copy comes first. Read from the
+   * sortable's `data.moduleId` at drag START, not later: after a live
+   * transfer the card re-registers under its new module and dnd-kit's data
+   * ref follows it.
+   */
+  const lessonDragRef = useRef<{
+    origin: DragOrigin;
+    holderModuleId: number;
+  } | null>(null);
   /** The pending auto-expand, so a drag that moves on cancels it. */
   const expandTimerRef = useRef<{
     moduleId: number;
@@ -379,6 +395,10 @@ export const EditorContainer = ({
 
   const clearActive = () => {
     transferAppliedRef.current = false;
+    // `lessonDragRef` is deliberately NOT cleared here: dnd-kit fires the
+    // accessibility announcements AFTER the `onDragEnd` prop, and the
+    // announcement re-resolves the drop with the same origin. The next
+    // lesson drag overwrites it at start; nothing but a lesson drag reads it.
     setActiveModuleId(null);
     setActiveLessonId(null);
     setActiveLibraryLessonId(null);
@@ -395,8 +415,14 @@ export const EditorContainer = ({
     // write optimistically into the same cached board.
     snapshotRef.current = readBoard();
     if (parsed.type === 'module') setActiveModuleId(parsed.id);
-    else if (parsed.type === 'lesson') setActiveLessonId(parsed.id);
-    else if (parsed.type === 'library-lesson')
+    else if (parsed.type === 'lesson') {
+      setActiveLessonId(parsed.id);
+      const moduleId: unknown = event.active.data.current?.moduleId;
+      lessonDragRef.current =
+        typeof moduleId === 'number'
+          ? { origin: { moduleId }, holderModuleId: moduleId }
+          : null;
+    } else if (parsed.type === 'library-lesson')
       setActiveLibraryLessonId(parsed.id);
   };
 
@@ -410,7 +436,13 @@ export const EditorContainer = ({
     const current = readBoard();
     if (!current) return;
 
-    const resolution = resolveDrop(current, active.id, over.id);
+    const lessonDrag = lessonDragRef.current;
+    const resolution = resolveDrop(
+      current,
+      active.id,
+      over.id,
+      lessonDrag?.origin,
+    );
     setRefusal(resolution?.kind === 'forbidden' ? resolution.reason : null);
 
     if (resolution?.kind === 'link' || resolution?.kind === 'move') {
@@ -429,22 +461,23 @@ export const EditorContainer = ({
     // Carry a cross-module move live, so the lesson renders where it is going
     // rather than snapping there on release. A same-module reorder is already
     // animated by the sortable and is settled at drop.
-    if (resolution?.kind === 'move') {
-      const from = current
-        .flatMap((cb) => cb.modules)
-        .find((m) => m.lessons.some((l) => l.id === resolution.lessonId));
-      if (from && from.id !== resolution.moduleId) {
-        queryClient.setQueryData(
-          boardKey,
-          moveLessonOnBoard(
-            current,
-            resolution.lessonId,
-            resolution.moduleId,
-            over.id,
-          ),
-        );
-        transferAppliedRef.current = true;
-      }
+    if (
+      resolution?.kind === 'move' &&
+      lessonDrag &&
+      lessonDrag.holderModuleId !== resolution.moduleId
+    ) {
+      queryClient.setQueryData(
+        boardKey,
+        moveLessonOnBoard(
+          current,
+          resolution.lessonId,
+          lessonDrag.holderModuleId,
+          resolution.moduleId,
+          over.id,
+        ),
+      );
+      lessonDrag.holderModuleId = resolution.moduleId;
+      transferAppliedRef.current = true;
     }
   };
 
@@ -458,6 +491,7 @@ export const EditorContainer = ({
     // uses this local constant, never `snapshotRef.current` directly.
     const transferApplied = transferAppliedRef.current;
     const dragSnapshot = snapshotRef.current;
+    const lessonDrag = lessonDragRef.current;
     clearActive();
 
     const current = readBoard();
@@ -469,23 +503,30 @@ export const EditorContainer = ({
     }
 
     const activeParsed = parseDndId(active.id);
-    const resolution = resolveDrop(current, active.id, over.id);
+    const resolution = resolveDrop(
+      current,
+      active.id,
+      over.id,
+      lessonDrag?.origin,
+    );
     if (!resolution) {
       // `null` is "no drop target", which is usually a rollback. The one
       // exception is a lesson released on ITSELF after `onDragOver` already
       // carried it into another module: the transferred card is a droppable,
       // so it can win the collision, and undoing there would throw away a
       // move the admin watched happen and released on deliberately.
-      if (activeParsed?.type === 'lesson') {
+      if (activeParsed?.type === 'lesson' && lessonDrag) {
         const commit = commitTransferredLesson(
           current,
           activeParsed.id,
+          lessonDrag.holderModuleId,
           transferApplied,
         );
         if (commit) {
           movePlacement.mutate(
             {
               lessonId: activeParsed.id,
+              fromModuleId: lessonDrag.origin.moduleId,
               targetModuleId: commit.targetModuleId,
               prevLessonId: commit.prevLessonId,
               nextLessonId: commit.nextLessonId,
@@ -535,9 +576,17 @@ export const EditorContainer = ({
     }
 
     if (resolution.kind === 'move') {
+      // `lessonDrag` is set for every lesson drag `resolveDrop` can answer
+      // `move` to — it refuses one without an origin — so this is a type
+      // narrowing, not a reachable branch.
+      if (!lessonDrag) {
+        rollback(dragSnapshot);
+        return;
+      }
       const next = moveLessonOnBoard(
         current,
         resolution.lessonId,
+        lessonDrag.holderModuleId,
         resolution.moduleId,
         resolution.overId,
       );
@@ -545,6 +594,7 @@ export const EditorContainer = ({
       movePlacement.mutate(
         {
           lessonId: resolution.lessonId,
+          fromModuleId: resolution.fromModuleId,
           targetModuleId: resolution.moduleId,
           ...lessonNeighbours(next, resolution.moduleId, resolution.lessonId),
         },
@@ -607,7 +657,12 @@ export const EditorContainer = ({
     }) => {
       const current = readBoard();
       if (!over || !current) return 'No drop target.';
-      const resolution = resolveDrop(current, active.id, over.id);
+      const resolution = resolveDrop(
+        current,
+        active.id,
+        over.id,
+        lessonDragRef.current?.origin,
+      );
       if (resolution?.kind === 'forbidden') return resolution.reason;
       if (!resolution) return 'Not a drop target.';
       return `Will ${resolution.kind === 'link' ? 'add to' : 'move within'} ${describeDndTarget(over.id, current, library)}.`;
@@ -621,7 +676,12 @@ export const EditorContainer = ({
     }) => {
       const current = readBoard();
       if (!over || !current) return 'Dropped with no change.';
-      const resolution = resolveDrop(current, active.id, over.id);
+      const resolution = resolveDrop(
+        current,
+        active.id,
+        over.id,
+        lessonDragRef.current?.origin,
+      );
       if (resolution?.kind === 'forbidden') return resolution.reason;
       if (!resolution) return 'Dropped with no change.';
       return `Dropped on ${describeDndTarget(over.id, current, library)}.`;

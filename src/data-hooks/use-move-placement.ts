@@ -5,6 +5,8 @@ import { dataKeys } from './keys';
 
 interface MovePlacementVars {
   lessonId: number;
+  /** The module the lesson was picked up from — which placement moves. */
+  fromModuleId: number;
   targetModuleId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
@@ -32,6 +34,7 @@ export function useMovePlacement() {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          fromModuleId: vars.fromModuleId,
           targetModuleId: vars.targetModuleId,
           prevLessonId: vars.prevLessonId,
           nextLessonId: vars.nextLessonId,
