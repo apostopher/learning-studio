@@ -155,10 +155,11 @@ describe('ModuleAccordionItem', () => {
     expect(screen.queryByLabelText('Delete module')).toBeNull();
   });
 
-  it('states where a borrowed module is edited, in text and in the link’s name', () => {
-    // Mutant: the provenance chip or link is dropped from the header row.
-    // This assertion fails against that mutant because neither the "from …"
-    // text nor the link's accessible name would resolve.
+  it('states where a borrowed module is edited, in text and in the link’s name — below the header, never in it', () => {
+    // Mutants: the provenance chip or link is dropped (neither the "from …"
+    // text nor the link's accessible name resolves), or it is drawn back into
+    // the header row, where it crowds out the name and lesson count — every
+    // accordion row must read the same: name, count, handle.
     renderOpen(module_(), {
       provenance: {
         ownerName: '3D Airmanship',
@@ -178,6 +179,10 @@ describe('ModuleAccordionItem', () => {
         name: /Edited in 3D Airmanship — open its board/,
       }),
     ).toBeTruthy();
+    const headerRow = screen.getByRole('button', { name: /^Toggle module/ })
+      .parentElement?.parentElement as HTMLElement;
+    expect(within(headerRow).queryByText('from 3D Airmanship')).toBeNull();
+    expect(within(headerRow).queryByRole('link')).toBeNull();
   });
 
   it('draws no provenance for a module the course owns', () => {

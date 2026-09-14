@@ -3,8 +3,8 @@ import { ChevronDown, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
-import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
+import { ModuleProvenanceNote } from './module-provenance-note';
 
 /**
  * Only the fields this component reads. Not `BoardModule`, for the same
@@ -28,10 +28,12 @@ interface ModuleAccordionItemProps {
    */
   lessonsSlot: ReactNode;
   /**
-   * Present when the module is BORROWED through a remix. `ownerName` is drawn
-   * as a chip; `editLinkSlot` is the router link the container builds (this
-   * component is hookless), and it carries the reason and the remedy in its
-   * accessible name — the codebase's rule for any withheld control.
+   * Present when the module is BORROWED through a remix. Drawn as a note at
+   * the top of the panel, not in the header row — see `ModuleProvenanceNote`
+   * for why the header must look the same on every module. `editLinkSlot` is
+   * the router link the container builds (this component is hookless), and
+   * it carries the reason and the remedy in its accessible name — the
+   * codebase's rule for any withheld control.
    */
   provenance?: { ownerName: string; editLinkSlot: ReactNode };
 }
@@ -84,13 +86,6 @@ export const ModuleAccordionItem = ({
           </Accordion.Trigger>
         </Accordion.Header>
 
-        {provenance && (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <Chip tone="soft-apple">from {provenance.ownerName}</Chip>
-            {provenance.editLinkSlot}
-          </span>
-        )}
-
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -122,7 +117,10 @@ export const ModuleAccordionItem = ({
       </div>
 
       <Accordion.Panel className="overflow-hidden">
-        <div className="flex flex-col gap-2 px-3 pb-3">{lessonsSlot}</div>
+        <div className="flex flex-col gap-2 px-3 pb-3">
+          {provenance && <ModuleProvenanceNote {...provenance} />}
+          {lessonsSlot}
+        </div>
       </Accordion.Panel>
     </Accordion.Item>
   );

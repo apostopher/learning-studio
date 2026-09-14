@@ -4,9 +4,9 @@ import type { HTMLAttributes, ReactNode } from 'react';
 // imported directly by its component test.
 import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
-import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonCard } from './lesson-card';
+import { ModuleProvenanceNote } from './module-provenance-note';
 import { OptimizedPicture } from './optimized-picture';
 
 export const ModuleColumn = ({
@@ -47,12 +47,6 @@ export const ModuleColumn = ({
           text={mod.name}
           className="min-w-0 flex-1 text-sm font-semibold text-primary"
         />
-        {provenance && (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <Chip tone="soft-apple">from {provenance.ownerName}</Chip>
-            {provenance.editLinkSlot}
-          </span>
-        )}
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -96,6 +90,12 @@ export const ModuleColumn = ({
           </div>
         )}
       </div>
+
+      {provenance && (
+        <div className="px-3 pt-3">
+          <ModuleProvenanceNote {...provenance} />
+        </div>
+      )}
 
       <p className="px-3 pt-3 pb-1 font-medium text-tertiary text-xs uppercase tracking-wide">
         Lessons
