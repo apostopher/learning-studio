@@ -177,8 +177,20 @@ export const editModuleAtom = atom<{
   imageUrlAvif: string | null;
   imageUrlWebp: string | null;
 } | null>(null);
-/** The module pending deletion (id + name), or null when closed. */
-export const deleteModuleAtom = atom<{ id: number; name: string } | null>(null);
+/**
+ * The module pending deletion, or null when closed.
+ *
+ * `otherCourseCount` rides along for the same reason `deleteLessonAtom`
+ * carries `courseCount`: deleting a module that a remix borrows reshapes
+ * every remixer at once, and the confirmation is not allowed to ask "are you
+ * sure?" without naming that blast radius. Sourced from
+ * `BoardModule.otherCourseCount`, never recomputed here.
+ */
+export const deleteModuleAtom = atom<{
+  id: number;
+  name: string;
+  otherCourseCount: number;
+} | null>(null);
 
 /** The course being edited (current field values), or null when closed. */
 export const editCourseAtom = atom<{

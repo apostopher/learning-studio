@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { moduleDndId } from '@/lib/dnd-ids';
 import { LessonBoardContainer } from './lesson-board-container';
 import { ModuleColumn } from './module-column';
+import { moduleProvenance } from './module-provenance';
 
 export const SortableModuleColumn = ({
   courseId,
@@ -37,6 +38,14 @@ export const SortableModuleColumn = ({
   const setEditModule = useSetAtom(editModuleAtom);
   const setDeleteModule = useSetAtom(deleteModuleAtom);
 
+  // Present exactly when this course doesn't own the module — see
+  // `moduleProvenance`. Borrowed modules keep their drag handle (position is
+  // THIS course's rail, not the owner's) but lose add/edit/delete and the
+  // DnD-enabled lessons list: `ModuleColumn`'s static fallback then draws the
+  // lessons read-only, straight from `posters`.
+  const provenance = moduleProvenance(mod, courseId);
+  const borrowed = provenance !== undefined;
+
   return (
     <div
       ref={setNodeRef}
@@ -52,22 +61,38 @@ export const SortableModuleColumn = ({
       <ModuleColumn
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
-        onAddLesson={() => setLessonModuleId(mod.id)}
-        onEditModule={() =>
-          setEditModule({
-            id: mod.id,
-            name: mod.name,
-            imageUrlAvif: mod.imageUrlAvif,
-            imageUrlWebp: mod.imageUrlWebp,
-          })
+        provenance={provenance}
+        posters={posters}
+        onAddLesson={borrowed ? undefined : () => setLessonModuleId(mod.id)}
+        onEditModule={
+          borrowed
+            ? undefined
+            : () =>
+                setEditModule({
+                  id: mod.id,
+                  name: mod.name,
+                  imageUrlAvif: mod.imageUrlAvif,
+                  imageUrlWebp: mod.imageUrlWebp,
+                })
         }
-        onDeleteModule={() => setDeleteModule({ id: mod.id, name: mod.name })}
+        onDeleteModule={
+          borrowed
+            ? undefined
+            : () =>
+                setDeleteModule({
+                  id: mod.id,
+                  name: mod.name,
+                  otherCourseCount: mod.otherCourseCount,
+                })
+        }
         lessonsSlot={
-          <LessonBoardContainer
-            courseId={courseId}
-            module={mod}
-            posters={posters}
-          />
+          borrowed ? undefined : (
+            <LessonBoardContainer
+              courseId={courseId}
+              module={mod}
+              posters={posters}
+            />
+          )
         }
       />
     </div>

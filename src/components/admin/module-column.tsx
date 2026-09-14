@@ -1,7 +1,10 @@
 import { GripVertical, ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
-import type { BoardModule } from '@/lib/admin-schemas';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
+import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonCard } from './lesson-card';
 import { OptimizedPicture } from './optimized-picture';
@@ -14,6 +17,7 @@ export const ModuleColumn = ({
   onDeleteModule,
   lessonsSlot,
   posters,
+  provenance,
 }: {
   module: BoardModule;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
@@ -25,6 +29,14 @@ export const ModuleColumn = ({
   /** Only used by the static fallback list below, i.e. the module drag
    *  overlay — when `lessonsSlot` is supplied it carries its own posters. */
   posters?: Record<string, string>;
+  /**
+   * Present when the module is BORROWED through a remix. `ownerName` is
+   * drawn as a chip; `editLinkSlot` is the router link the container builds
+   * (this component is hookless), and it carries the reason and the remedy
+   * in its accessible name — the codebase's rule for any withheld control.
+   * Same shape as `ModuleAccordionItemProps['provenance']`.
+   */
+  provenance?: { ownerName: string; editLinkSlot: ReactNode };
 }) => {
   const hasCover = Boolean(mod.imageUrlWebp ?? mod.imageUrlAvif);
 
@@ -35,6 +47,12 @@ export const ModuleColumn = ({
           text={mod.name}
           className="min-w-0 flex-1 text-sm font-semibold text-primary"
         />
+        {provenance && (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <Chip tone="soft-apple">from {provenance.ownerName}</Chip>
+            {provenance.editLinkSlot}
+          </span>
+        )}
         {onAddLesson && (
           <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
             <Plus className="h-4 w-4" aria-hidden="true" />

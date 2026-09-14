@@ -3,8 +3,10 @@ import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { deleteModuleAtom } from '@/atoms/admin';
-import { useDeleteModule } from '@/data-hooks/use-delete-module';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { deleteModuleAtom } from '#/atoms/admin';
+import { useDeleteModule } from '#/data-hooks/use-delete-module';
 import { DeleteConfirmForm } from './delete-confirm-form';
 
 export const DeleteModuleDialogContainer = ({
@@ -56,6 +58,17 @@ export const DeleteModuleDialogContainer = ({
                     {target?.name ?? ''}
                   </span>{' '}
                   will permanently delete the module and all of its lessons.
+                  {target && target.otherCourseCount > 0 && (
+                    <>
+                      {' '}
+                      It is also shown in{' '}
+                      <span className="font-medium text-primary">
+                        {target.otherCourseCount} other{' '}
+                        {target.otherCourseCount === 1 ? 'course' : 'courses'}
+                      </span>
+                      , which will lose it too.
+                    </>
+                  )}{' '}
                   This can't be undone.
                 </>
               }
