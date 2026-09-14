@@ -71,6 +71,8 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
   newsSources: many(newsSourcesTable),
   offerings: many(offeringsTable),
   courseModules: many(courseModulesTable),
+  remixes: many(courseRemixesTable, { relationName: 'remixer' }),
+  remixedBy: many(courseRemixesTable, { relationName: 'remixSource' }),
 }));
 
 /**
@@ -281,6 +283,61 @@ export const courseModulesTableRelations = relations(
     module: one(modulesTable, {
       fields: [courseModulesTable.moduleId],
       references: [modulesTable.id],
+    }),
+  }),
+);
+
+/**
+ * `course_remixes` — which courses this one BORROWS FROM.
+ *
+ * A remix is a live link, not a copy: remixing A into B places every module A
+ * OWNS (`modules.course_id = A`) onto B's rail as `course_modules` rows, and
+ * keeps doing so — a module A creates later is appended to B by
+ * `createModule`, one A deletes leaves B by cascade. Only owned modules
+ * travel, never ones A itself borrowed, so A⇄B is two flat lists and nothing
+ * recurses; the one rule is that a course may not remix itself.
+ *
+ * `source_course_id` is RESTRICT, not cascade: deleting a remixed source must
+ * fail rather than silently strip modules out of every remixer. `deleteCourse`
+ * refuses first with a friendly count; this constraint is the backstop for a
+ * code path that forgets.
+ */
+export const courseRemixesTable = pgTable(
+  'course_remixes',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    /** The remixer — the course whose rail gains the modules. */
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    /** The source — the course whose owned modules are borrowed. */
+    sourceCourseId: integer('source_course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'restrict' }),
+    createdBy: varchar('created_by', { length: 255 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('course_remixes_course_source_idx').on(
+      table.courseId,
+      table.sourceCourseId,
+    ),
+    index('course_remixes_source_course_id_idx').on(table.sourceCourseId),
+  ],
+);
+
+export const courseRemixesTableRelations = relations(
+  courseRemixesTable,
+  ({ one }) => ({
+    course: one(coursesTable, {
+      fields: [courseRemixesTable.courseId],
+      references: [coursesTable.id],
+      relationName: 'remixer',
+    }),
+    source: one(coursesTable, {
+      fields: [courseRemixesTable.sourceCourseId],
+      references: [coursesTable.id],
+      relationName: 'remixSource',
     }),
   }),
 );
