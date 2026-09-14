@@ -12,6 +12,10 @@
  * `migrate-relax-module-rank.ts` (`pnpm db:relax-module-rank`) is the one
  * step compatible with both sides — see its header for the full runbook.
  * This step is safe only once the deployed code no longer writes the column.
+ * ROLLBACK: before this step, reverting the deploy is degraded-not-broken
+ * (old code reads `modules.rank`, NULL on new-code-created modules — see
+ * the relax script's header for the by-hand backfill); after this step
+ * there is no rollback — the column and its values are gone.
  *
  * Hand-written rather than generated: `drizzle-kit push` diffs the whole
  * schema and offers to truncate `docs` over unrelated pre-existing drift.

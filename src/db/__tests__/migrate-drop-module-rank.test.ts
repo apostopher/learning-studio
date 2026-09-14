@@ -45,6 +45,10 @@ const IS_NULLABLE_PROBE = `select is_nullable from information_schema.columns ${
 const COLUMN_NAME_PROBE = `select column_name from information_schema.columns ${COLUMN_PROBE}`;
 const AFTER_DROP_PROBE = `select count(*)::int as n from information_schema.columns ${COLUMN_PROBE}`;
 const ORPHAN_PROBE = 'select count(*)::int as orphans from modules m';
+// The relax phase's straggler backfill (final review, Important 2): the
+// exact statement, whitespace-collapsed the way `textOf` renders it.
+const STRAGGLER_BACKFILL =
+  'insert into course_modules (course_id, module_id, rank) select m.course_id, m.id, m.rank from modules m where not exists (select 1 from course_modules cm where cm.module_id = m.id)';
 
 /**
  * Real driver shape: `db.execute` resolves to `{ rows, ... }`, never a bare
@@ -57,12 +61,15 @@ function mockDatabase(
     column?: 'absent' | 'not null' | 'nullable';
     orphans?: number;
     stillPresentAfterDrop?: boolean;
+    /** Rows the straggler backfill reports inserting (`rowCount`). */
+    stragglers?: number;
   } = {},
 ): void {
   const {
     column = 'not null',
     orphans = 0,
     stillPresentAfterDrop = false,
+    stragglers = 0,
   } = state;
   db.execute.mockImplementation((query: Query) => {
     const text = textOf(query);
@@ -81,6 +88,9 @@ function mockDatabase(
     }
     if (text.includes(ORPHAN_PROBE)) {
       return Promise.resolve({ rows: [{ orphans }] });
+    }
+    if (text.includes(STRAGGLER_BACKFILL)) {
+      return Promise.resolve({ rows: [], rowCount: stragglers });
     }
     if (text.includes(AFTER_DROP_PROBE)) {
       return Promise.resolve({ rows: [{ n: stillPresentAfterDrop ? 1 : 0 }] });
@@ -167,6 +177,65 @@ describe('migrateRelaxModuleRank (phase 1, before the deploy)', () => {
     const alterIndex = all.findIndex((s) => s.includes('drop not null'));
     expect(probeIndex).toBeGreaterThanOrEqual(0);
     expect(alterIndex).toBeGreaterThan(probeIndex);
+  });
+
+  // Final review, Important 2 — the orphan window. `migrate-course-modules.ts`
+  // backfilled placements once and early-exits forever after, so every module
+  // created on `main` between that run and this deploy has a `modules.rank`
+  // and NO `course_modules` row: invisible to the new board and rail, and a
+  // hard refusal at the drop phase's orphan gate. This phase runs while
+  // `modules.rank` is still authoritative, so it is the last moment that
+  // rank can be copied across. Asserted on the statements handed to
+  // `db.execute`, in order: the backfill must land BEFORE the constraint is
+  // relaxed — after it, old code is still live and could create more
+  // stragglers, but new-code modules leave `rank` NULL and must never be
+  // "backfilled" from it.
+  it('backfills stragglers (modules with no placement) from modules.rank BEFORE relaxing the constraint', async () => {
+    mockDatabase({ column: 'not null', stragglers: 2 });
+
+    await migrateRelaxModuleRank();
+
+    const all = statements();
+    const backfillIndex = all.findIndex((s) => s.includes(STRAGGLER_BACKFILL));
+    const alterIndex = all.findIndex((s) => s.includes('drop not null'));
+    expect(backfillIndex).toBeGreaterThanOrEqual(0);
+    expect(alterIndex).toBeGreaterThan(backfillIndex);
+  });
+
+  it('logs how many straggler placements it inserted', async () => {
+    mockDatabase({ column: 'not null', stragglers: 2 });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await migrateRelaxModuleRank();
+
+    const logged = info.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logged).toMatch(/2 .*course_modules/i);
+    info.mockRestore();
+  });
+
+  // A re-run after step 1 still has the column (nullable), and old code may
+  // have created more stragglers in between — they must be picked up too,
+  // otherwise the drop phase refuses and the operator has no script that
+  // heals it. `not exists` makes the statement idempotent, so re-running it
+  // never duplicates a placement.
+  it('still backfills stragglers on a re-run where the column is already nullable', async () => {
+    mockDatabase({ column: 'nullable' });
+
+    await migrateRelaxModuleRank();
+
+    const all = statements().join('\n');
+    expect(all).toContain(STRAGGLER_BACKFILL);
+    expect(all).not.toContain('alter table');
+  });
+
+  // Once the column is gone there is nothing to copy FROM — the statement
+  // would raise on `m.rank`. Skipped, not attempted.
+  it('skips the straggler backfill once modules.rank has already been dropped', async () => {
+    mockDatabase({ column: 'absent' });
+
+    await expect(migrateRelaxModuleRank()).resolves.toBeUndefined();
+
+    expect(statements().join('\n')).not.toContain('insert into course_modules');
   });
 });
 

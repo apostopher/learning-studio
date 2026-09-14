@@ -22,10 +22,20 @@
  * `migrate-drop-lesson-module-id.ts`): `NEW_DATABASE_URL`'s `lessons` no
  * longer has `module_id`/`rank`, and `lesson_dependencies` no longer exists
  * there — a lesson's course/rank/prerequisites are all written to its
- * `module_lessons` placement instead. This is asymmetric: the OLD database
- * (`OLD_DATABASE_URL`, read via `oldQ`) still has the pre-contract shape and
- * is read as such throughout — only the writes against `DATABASE_URL` (via
- * `newQ`) changed.
+ * `module_lessons` placement instead. Likewise post-`course_modules`
+ * (`migrate-course-modules.ts` + `migrate-drop-module-rank.ts`): `modules`
+ * no longer has `rank`, and which modules a course shows is its
+ * `course_modules` placements — `modules.course_id` is ownership only. Each
+ * module is upserted AND placed (`upsertCourseModules`,
+ * `./import-course-modules.ts`), and the lesson-placement scope reads
+ * membership from `course_modules`, the same definition `courseModuleIds`
+ * (`src/db/course-modules.ts`) gives the app. This is asymmetric: the OLD
+ * database (`OLD_DATABASE_URL`, read via `oldQ`) still has the pre-contract
+ * shape — `modules.rank`, `lessons.module_id` — and is read as such
+ * throughout; only the writes against `DATABASE_URL` (via `newQ`) changed.
+ * Every one of those writes still upserts on a natural key (slug, or
+ * `(course_id, module_id)` for a placement), so the header's idempotent/
+ * resumable promise holds across the new table too.
  *
  * **`lessons.org_id` is also NOT NULL** (Task 5/6). Rather than requiring a
  * separate `pnpm db:seed-org-links` run between "create the course" and
@@ -56,6 +66,11 @@ import { Pool } from 'pg';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { parseLegacyLink } from '#/db/migrate-material-links';
 import { healDuplicatePlacements } from './heal-duplicate-placements';
+import {
+  type OldModuleRow,
+  selectCourseModuleIds,
+  upsertCourseModules,
+} from './import-course-modules';
 import { resolveCourseOrgId } from './resolve-course-org-link';
 
 const OLD_COURSE_SLUG = '3d-airmanship';
@@ -216,67 +231,32 @@ async function main() {
   );
 
   // --------------------------------------------------------------- modules
-  const oldModules = await oldQ(
+  // The SOURCE still has `modules.rank`; it becomes the module's
+  // `course_modules.rank` in the destination (see `upsertCourseModules`).
+  const oldModules = await oldQ<OldModuleRow>(
     `select id, name, slug, required_subscriptions, rank, created_at, updated_at
      from modules where course_id = $1 order by rank`,
     [oldCourse.id],
   );
-  const moduleIdBySlug = new Map<string, number>();
   const mc = tally();
-  for (const m of oldModules as Record<string, never>[]) {
-    const row = m as unknown as {
-      id: number;
-      name: string;
-      slug: string;
-      required_subscriptions: string[];
-      rank: string;
-      created_at: Date;
-      updated_at: Date;
-    };
-    const [existing] = await newQ<{ id: number }>(
-      `select id from modules where slug = $1`,
-      [row.slug],
-    );
-    if (existing) {
-      await newQ(
-        `update modules set course_id=$2, name=$3, required_subscriptions=$4, rank=$5, updated_at=$6 where id=$1`,
-        [
-          existing.id,
-          courseId,
-          row.name,
-          row.required_subscriptions,
-          row.rank,
-          row.updated_at,
-        ],
-      );
-      moduleIdBySlug.set(row.slug, existing.id);
-      mc.updated++;
-    } else {
-      const [ins] = await newQ<{ id: number }>(
-        `insert into modules (course_id, name, slug, required_subscriptions, rank, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7) returning id`,
-        [
-          courseId,
-          row.name,
-          row.slug,
-          row.required_subscriptions,
-          row.rank,
-          row.created_at,
-          row.updated_at,
-        ],
-      );
-      if (ins) moduleIdBySlug.set(row.slug, ins.id);
-      mc.inserted++;
-    }
-  }
+  const { moduleIdBySlug, inserted, updated } = await upsertCourseModules(
+    newQ,
+    courseId,
+    oldModules,
+  );
+  mc.inserted = inserted;
+  mc.updated = updated;
   report('modules', mc);
 
-  // Every module id belonging to THIS course IN THE DESTINATION, per
+  // Every module id placed in THIS course IN THE DESTINATION, per
   // Important 3 (fix round 2) — scopes the placement lookup below to "does
   // this lesson already have a placement IN THIS COURSE", the same scoping
   // `movePlacement` (`src/db/placements.ts`) uses for its own UPDATE via
-  // `getModuleIdsForCourse` (a live `select id from modules where
-  // course_id = $1` against the real database).
+  // `courseModuleIds` (`src/db/course-modules.ts`, a live `select module_id
+  // from course_modules where course_id = $1` against the real database).
+  // Membership, not ownership: `modules.course_id` says who OWNS a module,
+  // and an admin can place another course's module here — that module must
+  // be in this set or its lessons get a second placement below.
   //
   // Fix round 4, Important 1: this used to be `[...moduleIdBySlug.values
   // ()]` — every module the OLD SOURCE has for this course, not the
@@ -286,13 +266,8 @@ async function main() {
   // placed under it would be missed: the insert branch below would run
   // instead of the move branch, creating the second placement in one
   // course this whole fix exists to prevent. Queried fresh AFTER the
-  // modules loop above, so it includes modules this run just inserted too.
-  const courseModuleIds = (
-    await newQ<{ id: number }>(
-      `select id from modules where course_id = $1`,
-      [courseId],
-    )
-  ).map((r) => r.id);
+  // modules loop above, so it includes modules this run just placed too.
+  const courseModuleIds = await selectCourseModuleIds(newQ, courseId);
 
   // --------------------------------------------------------------- lessons
   const oldLessons = await oldQ(
