@@ -1,6 +1,6 @@
 # Course Remixing — design
 
-Status: approved design, not yet implemented
+Status: approved design. Plan 1 (`course_modules` membership) landed 2026-09-14; Plan 2 (remixing) not yet implemented
 Date: 2026-09-12
 
 ## Summary
@@ -185,9 +185,32 @@ order.
 - Controls the actor lacks are not merely absent. This codebase's rule is that a
   locked state names its reason and its remedy, so the card reads *"Edited in
   CourseA"* and links there.
-- "Remix a course…" in the course column's actions, offering courses the actor
-  can read, minus itself and ones already remixed. Un-remix from the same menu,
-  naming how many modules will leave.
+- **Remixing is one button, pinned to the flagship course** (amended
+  2026-09-14; the original design was a "Remix a course…" picker over every
+  course the actor could read). In production "3D Airmanship" holds 7 of the
+  org's 9 modules and every other course is an ITPS syllabus built around it,
+  so the picker's list would be one item long. A constant
+  `FLAGSHIP_COURSE_SLUG = '3d-airmanship'` in a shared lib module — commented
+  as org-specific configuration — names the source; the button's label uses
+  the flagship's *name* from the board payload, so a rename follows. The
+  board already carries every course's slug, so nothing new is fetched, and
+  if no course has that slug the button renders nowhere.
+- The button sits at the start of the course column's actions, before "add a
+  module", as a compact icon-plus-text control: *"Remix 3D Airmanship"*. It
+  is absent on the flagship's own column (a course may not remix itself),
+  and once linked it reads *"Un-remix 3D Airmanship"*. Like "add a module" it
+  is offered regardless of the actor's course rights — router context cannot
+  answer course-scoped `structure` per column — and the server refuses if it
+  must.
+- Remix is one click with no dialog: it is reversible, and the borrowed cards
+  appearing at the end of the rail are the feedback. Un-remix confirms first,
+  naming how many modules will leave. Both invalidate the board query.
+- The board payload gains `sourceCourseId` on each module so the editor can
+  draw provenance and the lock; the learner payload gains nothing (see
+  Student view).
+- The courses-list counts in `admin.ts` (`moduleCount`/`lessonCount`) still
+  count *owned* modules and move to membership here — Plan 1 left them, since
+  the two agreed until the first remix.
 - The delete-module dialog gains **"used by N other courses"**: a source's SME
   deleting a module silently reshapes every remixer, which is inherent to live
   reference and should at least be said out loud.
