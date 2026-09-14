@@ -25,6 +25,8 @@ const fake = vi.hoisted(() => {
       where?: unknown;
       joinOn: unknown[];
       orderBy: unknown[];
+      /** The `.for(...)` lock strength, when the select asked for one. */
+      for?: string;
     }>,
   };
   function chain(kind?: 'insert' | 'delete', table?: unknown) {
@@ -35,6 +37,7 @@ const fake = vi.hoisted(() => {
       where?: unknown;
       joinOn: unknown[];
       orderBy: unknown[];
+      for?: string;
     } = {
       joinOn: [],
       orderBy: [],
@@ -58,6 +61,7 @@ const fake = vi.hoisted(() => {
       'onConflictDoNothing',
       'returning',
       'limit',
+      'for',
     ]) {
       c[name] = (...args: unknown[]) => {
         if (name === 'from') current.from = args[0];
@@ -71,6 +75,7 @@ const fake = vi.hoisted(() => {
         if (name === 'values' && insertRecord) insertRecord.values = args[0];
         if (name === 'onConflictDoNothing' && insertRecord)
           insertRecord.onConflict = true;
+        if (name === 'for') current.for = args[0] as string;
         return c;
       };
     }
@@ -158,6 +163,7 @@ describe('remixCourse', () => {
 
   it('reports already-remixed when the link row already exists, placing nothing', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]); // org check
+    fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([]); // insert … on conflict do nothing → no row
     const result = await remixCourse({
       orgId: ORG,
@@ -179,6 +185,7 @@ describe('remixCourse', () => {
    */
   it('places only the modules the source OWNS, in the source’s own order, appended after the remixer’s last rank', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]); // org check
+    fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([{ id: 1 }]); // link row inserted
     fake.state.results.push([
       { moduleId: 10, rank: '1' },
@@ -196,7 +203,8 @@ describe('remixCourse', () => {
 
     expect(result).toEqual({ ok: true, moduleCount: 2 });
     // The owned-modules query: FROM modules, filtered on the OWNER column.
-    const owned = fake.state.selects[1];
+    // selects[0] = org check, [1] = the source-row lock, [2] = this query.
+    const owned = fake.state.selects[2];
     expect(owned.from).toBe(modulesTable);
     expect(renderSql(owned.where as SQL)).toBe('"modules"."course_id" = $1');
     expect(renderSqlParams(owned.where as SQL)).toEqual([6]);
@@ -221,6 +229,7 @@ describe('remixCourse', () => {
 
   it('records who remixed, on the link row', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]);
+    fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([{ id: 1 }]);
     fake.state.results.push([]); // no owned modules
     fake.state.results.push([{ maxRank: null }]);
@@ -239,6 +248,7 @@ describe('remixCourse', () => {
 
   it('invalidates the REMIXER’s learner payload, not the source’s', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]);
+    fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([{ id: 1 }]);
     fake.state.results.push([]);
     fake.state.results.push([{ maxRank: null }]);
@@ -252,6 +262,37 @@ describe('remixCourse', () => {
     expect(cache.invalidateCourseDetailsCache).not.toHaveBeenCalledWith(
       'course-6',
     );
+  });
+
+  /**
+   * The race this closes: without the lock, `createModule` could read "who
+   * remixes this source" and commit a module insert into a course this
+   * remix is about to add, in the gap between an unlocked read here and this
+   * transaction's own commit — the just-created remix would then miss a
+   * module the source already has by the time it's visible. Locking the
+   * SOURCE row (`sourceCourseId`, not the remixer) first serialises the two
+   * transactions on that row.
+   */
+  it('locks the source course row for update before writing the link row', async () => {
+    fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]); // org check
+    fake.state.results.push([{ id: 6 }]); // lock on the source row
+    fake.state.results.push([{ id: 1 }]); // link row inserted
+    fake.state.results.push([]); // no owned modules
+    fake.state.results.push([{ maxRank: null }]);
+
+    await remixCourse({
+      orgId: ORG,
+      courseId: 2,
+      sourceCourseId: 6,
+      actorId: 'u1',
+    });
+
+    // selects[0] = org check, [1] = the lock — issued before the link insert
+    // (fake.state.inserts[0], asserted elsewhere) since it's read first here.
+    const lock = fake.state.selects[1];
+    expect(lock.for).toBe('update');
+    expect(renderSql(lock.where as SQL)).toBe('"courses"."id" = $1');
+    expect(renderSqlParams(lock.where as SQL)).toEqual([6]);
   });
 });
 

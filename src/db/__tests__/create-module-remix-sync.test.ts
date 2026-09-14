@@ -7,11 +7,19 @@ const fake = vi.hoisted(() => {
   const state = {
     results: [] as unknown[][],
     inserts: [] as Array<{ table: unknown; values: unknown }>,
+    /**
+     * Every SELECT issued, tagged by which object it was called on (`db` vs
+     * `tx`) and, when present, the `.for(...)` lock strength — this is what
+     * proves the remixer read happens INSIDE the transaction, after the lock,
+     * rather than merely returning the right rows by coincidence.
+     */
+    selects: [] as Array<{ source: 'db' | 'tx'; for?: string }>,
   };
-  function chain(insertTable?: unknown) {
+  function chain(source: 'db' | 'tx', insertTable?: unknown) {
     // biome-ignore lint/suspicious/noExplicitAny: builder stand-in
     const c: any = {};
     let values: unknown;
+    let forArg: string | undefined;
     for (const name of [
       'select',
       'from',
@@ -28,29 +36,40 @@ const fake = vi.hoisted(() => {
         return c;
       };
     }
+    c.for = (strength: string) => {
+      forArg = strength;
+      return c;
+    };
     // biome-ignore lint/suspicious/noThenProperty: intentionally thenable
     c.then = (
       resolve: (v: unknown) => unknown,
       reject?: (e: unknown) => unknown,
     ) => {
-      if (insertTable !== undefined)
+      if (insertTable !== undefined) {
         state.inserts.push({ table: insertTable, values });
+      } else {
+        state.selects.push({ source, for: forArg });
+      }
       return Promise.resolve(state.results.shift() ?? []).then(resolve, reject);
     };
     return c;
   }
-  const tx = { select: () => chain(), insert: (t: unknown) => chain(t) };
+  const tx = {
+    select: () => chain('tx'),
+    insert: (t: unknown) => chain('tx', t),
+  };
   const db = {
-    ...tx,
+    select: () => chain('db'),
+    insert: (t: unknown) => chain('db', t),
     transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   };
   return { state, db };
 });
 vi.mock('#/db', () => ({ db: fake.db }));
-const remixes = vi.hoisted(() => ({
-  getRemixerCourseIds: vi.fn(async () => [] as number[]),
-}));
-vi.mock('#/db/course-remixes', () => remixes);
+// createModule now reads its own remixers, locked, inside the transaction —
+// this module's only remaining role for admin.ts is `countRemixers`, used by
+// `deleteCourse` (untested here).
+vi.mock('#/db/course-remixes', () => ({ countRemixers: vi.fn() }));
 const cache = vi.hoisted(() => ({ invalidateCourseDetailsCache: vi.fn() }));
 vi.mock('#/db/course-cache', () => cache);
 vi.mock('#/db/lesson-access', () => ({
@@ -80,14 +99,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   fake.state.results.length = 0;
   fake.state.inserts.length = 0;
+  fake.state.selects.length = 0;
 });
 
 /** Queue the reads createModule performs before its inserts. */
 function seed(opts: { remixers: number[] }) {
-  remixes.getRemixerCourseIds.mockResolvedValue(opts.remixers);
   fake.state.results.push([{ id: 6, name: 'Source' }]); // owner course row (name for the payload)
   fake.state.results.push([]); // taken slugs
   fake.state.results.push([{ maxRank: '2' }]); // own max rank
+  fake.state.results.push([{ id: 6 }]); // lock select (`for update`) — value unused
+  fake.state.results.push(opts.remixers.map((courseId) => ({ courseId }))); // remixer read, inside the tx, after the lock
   fake.state.results.push([
     {
       id: 99,
@@ -112,7 +133,7 @@ describe('createModule → remixers', () => {
       (i) => i.table === courseModulesTable && Array.isArray(i.values),
     );
     expect(remixerInsert).toBeDefined();
-    const rows = remixerInsert!.values as Array<{
+    const rows = remixerInsert?.values as Array<{
       courseId: number;
       moduleId: number;
       rank: SQL;
@@ -145,5 +166,37 @@ describe('createModule → remixers', () => {
       .map((c) => c[0])
       .sort();
     expect(slugs).toEqual(['course-2', 'course-5', 'course-6']);
+  });
+
+  /**
+   * The race this closes: `remixCourse` reading "who remixes this source"
+   * (or committing its link row) between an old, unlocked remixer read and
+   * this create's commit would leave the new module missing from the
+   * just-added remixer. Locking the source row first — inside the SAME
+   * transaction, before the remixer read — makes the two transactions
+   * serialise instead: whichever commits second sees the other's effect.
+   *
+   * Mutant this catches: reading remixers via `db.select` before
+   * `db.transaction` opens (the pre-fix shape) — same rows, same result,
+   * until a remix commits in the gap between that read and this create's
+   * commit.
+   */
+  it('locks the source course row for update, then reads remixers inside the same transaction', async () => {
+    seed({ remixers: [2] });
+    await createModule({ courseId: 6, name: 'Weather' });
+
+    // Three plain reads before the transaction opens: owner, taken slugs,
+    // own max rank — all issued on `db`, none carrying a lock.
+    expect(fake.state.selects.slice(0, 3).every((s) => s.source === 'db')).toBe(
+      true,
+    );
+    expect(
+      fake.state.selects.slice(0, 3).every((s) => s.for === undefined),
+    ).toBe(true);
+    // The lock: issued on `tx`, `for update`, before the remixer read.
+    expect(fake.state.selects[3]).toEqual({ source: 'tx', for: 'update' });
+    // The remixer read: also on `tx` (inside the transaction), no lock of
+    // its own — it rides the source row's lock already held above.
+    expect(fake.state.selects[4]).toEqual({ source: 'tx', for: undefined });
   });
 });

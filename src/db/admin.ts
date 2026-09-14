@@ -15,7 +15,7 @@ import {
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
-import { countRemixers, getRemixerCourseIds } from '#/db/course-remixes';
+import { countRemixers } from '#/db/course-remixes';
 import {
   getCourseSlugForCourseId,
   getCourseSlugForModuleId,
@@ -29,6 +29,7 @@ import type { DBCourse } from '#/db/schema';
 import {
   courseModulesTable,
   courseOrgsTable,
+  courseRemixesTable,
   coursesTable,
   courseVideoProvidersTable,
   lessonsTable,
@@ -304,20 +305,36 @@ export async function createModule(input: {
     .where(eq(courseModulesTable.courseId, input.courseId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
 
-  // Every course that remixes THIS one gets the new module appended to its
-  // rail, in the same transaction — this is what makes a remix "live". The
-  // rank is computed per remixer, in SQL, against that remixer's own last
-  // placement: a remixer's order is its own admin's, so the module lands at
-  // the end where it is visible, not at the source's rank.
-  const remixerIds = await getRemixerCourseIds(input.courseId);
-
   // The `course_modules` row is what puts the module ON the board — the
   // board reads membership from placements, so a module row with no
   // placement is created and then never seen. One transaction: a module
   // that exists in `modules` but not in `course_modules` is exactly that
   // bug. The module row itself carries no rank: position is per course, so
   // it lives on the placement alone (`modules.rank` was dropped in Task 7).
+  //
+  // Every course that remixes THIS one gets the new module appended to its
+  // rail, in the same transaction — this is what makes a remix "live". The
+  // remixer read happens IN here, after locking the source course row `for
+  // update` — `remixCourse` takes the same lock before it inserts its link
+  // row, so a remix committing concurrently and this create now serialise on
+  // that row: whichever commits second sees the other's effect, instead of
+  // a remix racing this create and permanently missing the module. The rank
+  // is computed per remixer, in SQL, against that remixer's own last
+  // placement: a remixer's order is its own admin's, so the module lands at
+  // the end where it is visible, not at the source's rank.
   const created = await db.transaction(async (tx) => {
+    await tx
+      .select({ id: coursesTable.id })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, input.courseId))
+      .for('update');
+
+    const remixerRows = await tx
+      .select({ courseId: courseRemixesTable.courseId })
+      .from(courseRemixesTable)
+      .where(eq(courseRemixesTable.sourceCourseId, input.courseId));
+    const remixerIds = remixerRows.map((r) => r.courseId);
+
     const [module] = await tx
       .insert(modulesTable)
       .values({
@@ -346,33 +363,34 @@ export async function createModule(input: {
       );
     }
 
-    return module;
+    return { module, remixerIds };
   });
 
   // The owner's payload and every remixer's just gained a module.
   await Promise.all(
-    [input.courseId, ...remixerIds].map(async (id) =>
+    [input.courseId, ...created.remixerIds].map(async (id) =>
       invalidateCourseDetailsCache(await getCourseSlugForCourseId(id)),
     ),
   );
 
   return {
-    id: created.id,
-    name: created.name,
-    slug: created.slug,
-    imageUrlAvif: created.imageUrlAvif,
-    imageUrlWebp: created.imageUrlWebp,
+    id: created.module.id,
+    name: created.module.name,
+    slug: created.module.slug,
+    imageUrlAvif: created.module.imageUrlAvif,
+    imageUrlWebp: created.module.imageUrlWebp,
     // The placement's rank — the value just written to `course_modules`;
     // the module row has none.
     rank,
-    requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
-    sequentialLessons: created.sequentialLessons,
+    requiredSubscriptions: created.module
+      .requiredSubscriptions as SubscriptionType[],
+    sequentialLessons: created.module.sequentialLessons,
     // A module is created with no prerequisites and no learners by definition.
     dependsOn: [],
     learnerCount: 0,
     owner: { id: owner.id, name: owner.name },
     // Every remixer just received a placement of this module.
-    otherCourseCount: remixerIds.length,
+    otherCourseCount: created.remixerIds.length,
     lessons: [],
   };
 }

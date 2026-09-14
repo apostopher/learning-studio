@@ -85,6 +85,13 @@ const courseModulesTable = pgTable('course_modules', {
   rank: numeric('rank'),
   createdAt: timestamp('created_at'),
 });
+// Task 3 fix round 1: createModule reads `course_remixes` (locked, inside
+// its transaction) to find who remixes the course it's creating a module in.
+const courseRemixesTable = pgTable('course_remixes', {
+  id: integer('id').primaryKey(),
+  courseId: integer('course_id'),
+  sourceCourseId: integer('source_course_id'),
+});
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -143,6 +150,11 @@ function makeChain(result: unknown) {
     orderBy: () => chain,
     groupBy: () => chain,
     limit: () => chain,
+    // The `for update` row lock createModule/remixCourse take on the source
+    // course row (Task 3 fix round 1) — a passthrough, since no test here
+    // asserts on the lock strength itself (that's course-remixes.test.ts's
+    // and create-module-remix-sync.test.ts's job).
+    for: () => chain,
     onConflictDoUpdate: () => chain,
     onConflictDoNothing: () => chain,
     returning: () => Promise.resolve(result),
@@ -216,6 +228,7 @@ vi.mock('#/db/schema', () => ({
   courseOrgsTable,
   coursesTable,
   courseModulesTable,
+  courseRemixesTable,
   modulesTable,
   moduleLessonsTable,
   lessonsTable,
@@ -361,7 +374,9 @@ describe('course-details cache invalidation', () => {
     db.select
       .mockReturnValueOnce(makeChain([{ id: 42, name: 'Flight Basics' }])) // owner course row
       .mockReturnValueOnce(makeChain([])) // taken slugs
-      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
+      .mockReturnValueOnce(makeChain([{ maxRank: null }])) // maxRank
+      .mockReturnValueOnce(makeChain([{ id: 42 }])) // lock on the source row (for update)
+      .mockReturnValueOnce(makeChain([])); // remixer read → no remixers
     db.insert
       .mockReturnValueOnce(
         makeChain([
@@ -443,8 +458,15 @@ describe('course-details cache invalidation', () => {
       .fn()
       .mockReturnValueOnce(moduleInsert)
       .mockReturnValueOnce(placementInsert);
+    // The lock (`for update`) and the remixer read now happen INSIDE the
+    // transaction (Task 3 fix round 1) — this tx object needs its own
+    // `select`, distinct from `db.select`'s queue above.
+    const txSelect = vi
+      .fn()
+      .mockReturnValueOnce(makeChain([{ id: 42 }])) // lock on the source row
+      .mockReturnValueOnce(makeChain([])); // remixer read → no remixers
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ insert: txInsert }),
+      fn({ insert: txInsert, select: txSelect }),
     );
     lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
 

@@ -7,6 +7,7 @@ import {
   courseModulesTable,
   courseOrgsTable,
   courseRemixesTable,
+  coursesTable,
   modulesTable,
 } from '#/db/schema';
 
@@ -72,6 +73,19 @@ export async function remixCourse(input: {
   }
 
   const result = await db.transaction(async (tx): Promise<RemixResult> => {
+    // Lock the SOURCE course row before reading or writing anything else.
+    // `createModule` takes the same lock (on the same row, by course id)
+    // before it reads who remixes the source — so a remix committing here
+    // and a module being created in the source now serialise on that row:
+    // whichever transaction commits second sees the other's effect, instead
+    // of a remix racing a create and permanently missing the module (or a
+    // create racing a remix and never appending to the just-added remixer).
+    await tx
+      .select({ id: coursesTable.id })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, input.sourceCourseId))
+      .for('update');
+
     const linked = await tx
       .insert(courseRemixesTable)
       .values({
