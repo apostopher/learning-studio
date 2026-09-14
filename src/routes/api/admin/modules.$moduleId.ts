@@ -59,6 +59,35 @@ export async function patchModuleHandler(
   if (moduleId === null) {
     return Response.json({ error: 'Invalid module id' }, { status: 400 });
   }
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // A reorder is the one module write that belongs to the VIEWING course,
+  // not the owner: it moves this module's placement in `body.courseId`'s
+  // rail. Guarded there, written there, and the owner is never resolved —
+  // resolving it would misreport a stale board's reorder of a since-deleted
+  // module as "forbidden" instead of "not found".
+  const reorder = reorderModuleInputSchema.safeParse(body);
+  if (reorder.success) {
+    const denied = await guard(request, reorder.data.courseId, 'update');
+    if (denied) return denied;
+    const updated = await reorderModule({
+      courseId: reorder.data.courseId,
+      moduleId,
+      prevModuleId: reorder.data.prevModuleId,
+      nextModuleId: reorder.data.nextModuleId,
+    });
+    if (!updated) return new Response('Not found', { status: 404 });
+    return Response.json(updated);
+  }
+
+  // Everything else edits the module ITSELF — rename, image, tier,
+  // sequencing, prerequisites — and follows the owner.
+  //
   // Resolve the course before guarding: guarding on a null course id would
   // misreport "no such module" as "forbidden". The 404 is then answered only
   // to someone on the teaching side — see `absentResourceResponse`, which
@@ -69,12 +98,6 @@ export async function patchModuleHandler(
   }
   const denied = await guard(request, courseId, 'update');
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-  }
 
   const sequential = updateModuleSequentialInputSchema.safeParse(body);
   if (sequential.success) {
@@ -117,20 +140,6 @@ export async function patchModuleHandler(
   const update = updateModuleInputSchema.safeParse(body);
   if (update.success) {
     const updated = await updateModule(moduleId, update.data);
-    if (!updated) return new Response('Not found', { status: 404 });
-    return Response.json(updated);
-  }
-
-  const reorder = reorderModuleInputSchema.safeParse(body);
-  if (reorder.success) {
-    const updated = await reorderModule({
-      // The course the guard was resolved for: the reorder moves this
-      // module's placement in THAT course's order, not in every course.
-      courseId,
-      moduleId,
-      prevModuleId: reorder.data.prevModuleId,
-      nextModuleId: reorder.data.nextModuleId,
-    });
     if (!updated) return new Response('Not found', { status: 404 });
     return Response.json(updated);
   }

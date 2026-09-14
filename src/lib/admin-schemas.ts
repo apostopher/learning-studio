@@ -220,6 +220,12 @@ export type CourseBoard = z.infer<typeof courseBoardSchema>;
 
 export const reorderModuleInputSchema = z
   .object({
+    /**
+     * The course whose rail was dragged. Position belongs to the VIEWING
+     * course — a borrowed module sits at one rank in its owner and another
+     * here — so the guard and the write both use this, never the owner.
+     */
+    courseId: z.number().int().positive(),
     prevModuleId: z.number().int().positive().nullable(),
     nextModuleId: z.number().int().positive().nullable(),
   })

@@ -18,6 +18,7 @@ export function useReorderModule(courseId: number) {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          courseId,
           prevModuleId: vars.prevModuleId,
           nextModuleId: vars.nextModuleId,
         }),

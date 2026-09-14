@@ -185,26 +185,36 @@ describe('patchModuleHandler — dependencies', () => {
     expect(m.updateModule).toHaveBeenCalledWith(7, { name: 'Renamed' });
   });
 
-  it('does not route a reorder to the dependency writer', async () => {
+  // Without `courseId` the body no longer parses as a reorder at all — it
+  // falls through every other shape (no `dependsOn`, no `name`) and lands on
+  // the generic refusal, rather than reaching either writer.
+  it('400s a reorder body missing courseId instead of routing it anywhere', async () => {
     m.reorderModule.mockResolvedValue({ id: 7 });
-    await patchModuleHandler(
+    const res = await patchModuleHandler(
       patch({ prevModuleId: 1, nextModuleId: null }),
       '7',
     );
+    expect(res.status).toBe(400);
     expect(m.updateModuleDependencies).not.toHaveBeenCalled();
-    expect(m.reorderModule).toHaveBeenCalled();
+    expect(m.reorderModule).not.toHaveBeenCalled();
   });
 
   // A reorder now rewrites the module's PLACEMENT in `course_modules`, keyed
-  // on (course, module) — so the course the guard resolved has to reach the
-  // writer, not just the module id from the URL. Mutant: drop `courseId` from
-  // the call (the old shape) — compiles against a loose mock, and the writer
-  // would then have no way to pick which course's placement to move.
-  it('hands the reorder writer the course resolved for the guard, alongside the neighbours', async () => {
+  // on (course, module) — so the course named in the BODY has to reach the
+  // writer, not the module's owner. Mutant: drop `courseId` from the call
+  // (the old shape) — compiles against a loose mock, and the writer would
+  // then have no way to pick which course's placement to move.
+  it('hands the reorder writer the course from the body, alongside the neighbours', async () => {
     m.reorderModule.mockResolvedValue({ id: 7, rank: 2 });
     await patchModuleHandler(
-      patch({ prevModuleId: 1, nextModuleId: null }),
+      patch({ courseId: 42, prevModuleId: 1, nextModuleId: null }),
       '7',
+    );
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'structure',
+      'update',
     );
     expect(m.reorderModule).toHaveBeenCalledWith({
       courseId: 42,
@@ -212,6 +222,42 @@ describe('patchModuleHandler — dependencies', () => {
       prevModuleId: 1,
       nextModuleId: null,
     });
+  });
+
+  /**
+   * Spec test group 2 / row 1. A reorder moves the placement in the course
+   * whose rail was dragged — which, for a borrowed module, is NOT its owner.
+   * The mutant is the old code: resolve the owner (42) and guard/write there,
+   * which would let B's admin reorder A's rail and refuse them their own.
+   */
+  it('guards a reorder on the course in the BODY, not the module’s owner, and writes there', async () => {
+    m.reorderModule.mockResolvedValue({ id: 7, rank: 2 });
+    await patchModuleHandler(
+      patch({ courseId: 2, prevModuleId: 1, nextModuleId: null }),
+      '7',
+    );
+    expect(m.requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      2,
+      'structure',
+      'update',
+    );
+    expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
+    expect(m.reorderModule).toHaveBeenCalledWith({
+      courseId: 2,
+      moduleId: 7,
+      prevModuleId: 1,
+      nextModuleId: null,
+    });
+  });
+
+  it('404s a reorder of a module not placed in that course', async () => {
+    m.reorderModule.mockResolvedValue(null);
+    const res = await patchModuleHandler(
+      patch({ courseId: 2, prevModuleId: 1, nextModuleId: null }),
+      '7',
+    );
+    expect(res.status).toBe(404);
   });
 });
 

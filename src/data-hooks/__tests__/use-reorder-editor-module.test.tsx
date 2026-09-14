@@ -32,6 +32,7 @@ describe('useReorderEditorModule', () => {
     await act(async () => {
       await result.current.mutateAsync({
         moduleId: 40,
+        courseId: 3,
         prevModuleId: 12,
         nextModuleId: null,
       });
@@ -41,6 +42,7 @@ describe('useReorderEditorModule', () => {
     expect(url).toBe('/api/admin/modules/40');
     expect(init?.method).toBe('PATCH');
     expect(JSON.parse(init?.body as string)).toEqual({
+      courseId: 3,
       prevModuleId: 12,
       nextModuleId: null,
     });
@@ -64,6 +66,7 @@ describe('useReorderEditorModule', () => {
     await act(async () => {
       await result.current.mutateAsync({
         moduleId: 40,
+        courseId: 3,
         prevModuleId: null,
         nextModuleId: 12,
       });
@@ -87,7 +90,12 @@ describe('useReorderEditorModule', () => {
 
     await act(async () => {
       await result.current
-        .mutateAsync({ moduleId: 40, prevModuleId: null, nextModuleId: 12 })
+        .mutateAsync({
+          moduleId: 40,
+          courseId: 3,
+          prevModuleId: null,
+          nextModuleId: 12,
+        })
         .catch(() => {});
     });
 
@@ -109,6 +117,7 @@ describe('useReorderEditorModule', () => {
     await act(async () => {
       await result.current.mutateAsync({
         moduleId: 40,
+        courseId: 3,
         prevModuleId: null,
         nextModuleId: 12,
       });

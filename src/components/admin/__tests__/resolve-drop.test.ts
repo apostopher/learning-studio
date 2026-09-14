@@ -179,6 +179,7 @@ describe('resolveDrop — the allowed drops', () => {
       resolveDrop(board, moduleDndId(FUNDAMENTALS), moduleDndId(CIRCUITS)),
     ).toEqual({
       kind: 'reorder-module',
+      courseId: 1,
       moduleId: FUNDAMENTALS,
       overModuleId: CIRCUITS,
     });

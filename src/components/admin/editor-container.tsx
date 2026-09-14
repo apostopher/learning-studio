@@ -514,6 +514,7 @@ export const EditorContainer = ({
       reorderModule.mutate(
         {
           moduleId: resolution.moduleId,
+          courseId: resolution.courseId,
           ...moduleNeighbours(next, resolution.moduleId),
         },
         {

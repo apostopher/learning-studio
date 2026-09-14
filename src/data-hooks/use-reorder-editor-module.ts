@@ -5,6 +5,8 @@ import { dataKeys } from './keys';
 
 interface ReorderVars {
   moduleId: number;
+  /** The course whose rail was dragged — position belongs to the viewer, not the owner. */
+  courseId: number;
   prevModuleId: number | null;
   nextModuleId: number | null;
 }
@@ -24,6 +26,7 @@ export function useReorderEditorModule() {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          courseId: vars.courseId,
           prevModuleId: vars.prevModuleId,
           nextModuleId: vars.nextModuleId,
         }),

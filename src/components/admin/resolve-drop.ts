@@ -43,7 +43,13 @@ export type DropResolution =
       /** The raw over id, so the caller can read the exact slot to insert at. */
       overId: string | number;
     }
-  | { kind: 'reorder-module'; moduleId: number; overModuleId: number }
+  | {
+      kind: 'reorder-module';
+      /** The course whose rail was dragged — position belongs to the viewer, not the owner. */
+      courseId: number;
+      moduleId: number;
+      overModuleId: number;
+    }
   | { kind: 'forbidden'; reason: string }
   | null;
 
@@ -178,6 +184,7 @@ export function resolveDrop(
     }
     return {
       kind: 'reorder-module',
+      courseId: from.courseBoard.course.id,
       moduleId: from.module.id,
       overModuleId: to.module.id,
     };
