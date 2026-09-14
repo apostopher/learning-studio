@@ -297,9 +297,11 @@ export type MyCourseSummary = {
  * The courses a user is subscribed to, each with its overall progress
  * percent from one batched query rather than one round trip per course.
  *
- * modulesTable is LEFT JOINed (not INNER) so a subscribed course with zero
- * modules still appears in the result, at 0% — see ManyCourseProgressRow's
- * doc comment for why that placeholder row exists.
+ * courseModulesTable (the placement table — membership) is LEFT JOINed (not
+ * INNER) so a subscribed course with zero placed modules still appears in
+ * the result, at 0% — see ManyCourseProgressRow's doc comment for why that
+ * placeholder row exists. modulesTable hangs off that join and is LEFT for
+ * the same reason.
  */
 export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
   const rows = await db

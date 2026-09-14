@@ -175,6 +175,16 @@ const lessonAccess = vi.hoisted(() => ({
   getCourseSlugForModuleId: vi.fn(),
   getCourseSlugForCourseId: vi.fn(),
 }));
+// Final review, Important 3: the three admin reads that ask "is this lesson
+// in this course" go through the ONE definition of membership
+// (`courseModuleIds`, `#/db/course-modules`), never `modules.course_id`
+// (ownership). The sentinel carries the course id, so a rendered parameter
+// proves the consumer received the subquery FOR THAT COURSE — the same
+// pattern as lesson-course-scoped-reads.test.ts.
+const membership = vi.hoisted(() => ({
+  courseModuleIds: vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
+  getCourseModuleIds: vi.fn(async () => []),
+}));
 const courseCache = vi.hoisted(() => ({
   invalidate: vi.fn().mockResolvedValue(undefined),
 }));
@@ -212,6 +222,7 @@ vi.mock('#/db/course', () => ({
   getCourseDetailsWithCache: Object.assign(vi.fn(), courseCache),
 }));
 vi.mock('#/db/lesson-access', () => lessonAccess);
+vi.mock('#/db/course-modules', () => membership);
 // moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
 // Same reasoning as `#/db/course` above: admin.ts calls
@@ -246,6 +257,7 @@ const {
   deleteCourse,
   deleteLesson,
   deleteModule,
+  getCourseLessonPosters,
   moveLesson,
   reorderModule,
   resolveLessonPlayback,
@@ -840,9 +852,20 @@ describe('course-details cache invalidation', () => {
     expect(lessonPlaybackCache.invalidate).not.toHaveBeenCalled();
   });
 
-  it('reorderModule invalidates the owning course, resolved from moduleId', async () => {
+  // Final review one-liner: the write moved the module's placement in
+  // `input.courseId` — the course whose board changed — so THAT course's
+  // cache is the one to bust. Resolving via `getCourseSlugForModuleId`
+  // (the module's OWNER) was right while owner and placer were always the
+  // same course; once a module can be placed into a second course, a
+  // reorder there would invalidate the owner's cache and leave the edited
+  // course's board stale. Deliberately re-pointed from the previous
+  // "owning course, resolved from moduleId" pin: `getCourseSlugForModuleId`
+  // is stubbed to a DIFFERENT slug so the assertion can tell which lookup
+  // fed `invalidate`.
+  it('reorderModule invalidates the course it reordered IN (input.courseId), not the module owner', async () => {
     db.update.mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }])); // placement
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('owner-course');
 
     await reorderModule({
       courseId: 42,
@@ -851,7 +874,9 @@ describe('course-details cache invalidation', () => {
       nextModuleId: null,
     });
 
-    expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(7);
+    expect(lessonAccess.getCourseSlugForCourseId).toHaveBeenCalledWith(42);
+    expect(lessonAccess.getCourseSlugForModuleId).not.toHaveBeenCalled();
+    expect(courseCache.invalidate).toHaveBeenCalledTimes(1);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
@@ -1255,12 +1280,25 @@ describe('course-details cache invalidation', () => {
   // back first") would satisfy every OTHER assertion in this describe block
   // unchanged. Captures both queries' `.where()` conditions and renders them
   // to exact SQL text instead of trusting the canned rows.
-  it('scopes both the placement lookup and the sibling-slug validation to the given courseId', async () => {
+  //
+  // Final review, Important 3: both predicates are MEMBERSHIP reads — "is
+  // this lesson placed in this course" — so both go through the placement
+  // table's subquery, not `modules.course_id` (which is ownership: a module
+  // placed into this course from another course's library is "in" it for
+  // every other reader, and must be for prerequisites too). Mutant: leave
+  // either on `eq(modulesTable.courseId, courseId)` — renders a different
+  // string. The joined tables are captured too: with the module row no
+  // longer consulted, the `modules` join has nothing left to do.
+  it('scopes both the placement lookup and the sibling-slug validation to the given courseId, via membership', async () => {
     const placementWhereCalls: SQL[] = [];
     const siblingWhereCalls: SQL[] = [];
+    const joinedTables: unknown[] = [];
     const placementChain = {
       from: () => placementChain,
-      innerJoin: () => placementChain,
+      innerJoin: (table: unknown) => {
+        joinedTables.push(table);
+        return placementChain;
+      },
       where: (condition: SQL) => {
         placementWhereCalls.push(condition);
         return placementChain;
@@ -1273,7 +1311,10 @@ describe('course-details cache invalidation', () => {
     };
     const siblingChain = {
       from: () => siblingChain,
-      innerJoin: () => siblingChain,
+      innerJoin: (table: unknown) => {
+        joinedTables.push(table);
+        return siblingChain;
+      },
       where: (condition: SQL) => {
         siblingWhereCalls.push(condition);
         return siblingChain;
@@ -1292,10 +1333,18 @@ describe('course-details cache invalidation', () => {
 
     await updateLessonDependencies(9, 3, ['intro']);
 
+    expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(render(placementWhereCalls[0])).toBe(
-      '("module_lessons"."lesson_id" = $1 and "modules"."course_id" = $2)',
+      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in $2)',
     );
-    expect(render(siblingWhereCalls[0])).toBe('"modules"."course_id" = $1');
+    expect(renderSqlParams(placementWhereCalls[0])).toEqual([9, 'SUBQUERY:3']);
+    expect(render(siblingWhereCalls[0])).toBe(
+      '"module_lessons"."module_id" in $1',
+    );
+    expect(renderSqlParams(siblingWhereCalls[0])).toEqual(['SUBQUERY:3']);
+    // Sibling lookup joins lessons→module_lessons only; the placement lookup
+    // needs no join at all now that the module row is not consulted.
+    expect(joinedTables).toEqual([moduleLessonsTable]);
   });
 
   // Prerequisites are now per-PLACEMENT: this write only ever targets the one
@@ -1465,11 +1514,24 @@ describe('resolveLessonPlayback course scoping', () => {
   // the same two slots. That swap is exactly the "two integers threaded
   // through a two-arg function" defect this function's own doc comment
   // warns about. `renderSqlParams` closes it.
-  it('scopes the lesson lookup by BOTH lessonId and the caller-supplied courseId', async () => {
+  //
+  // Final review, Important 3: the video-playback route has just verified
+  // placement via `getCourseIdsForLesson` (a `course_modules` read) before
+  // calling this — so this predicate must agree, or a lesson placed here
+  // from another course's library passes the route guard and then 404s
+  // here. Membership is `module_lessons.module_id in courseModuleIds
+  // (courseId)`; `modules.course_id` is ownership. With the module row out
+  // of the WHERE, the `modules` join is dropped too — the joined tables are
+  // captured to pin that.
+  it('scopes the lesson lookup by BOTH lessonId and the caller-supplied courseId, via membership', async () => {
     const whereCalls: SQL[] = [];
+    const joinedTables: unknown[] = [];
     const lessonLookupChain = {
       from: () => lessonLookupChain,
-      innerJoin: () => lessonLookupChain,
+      innerJoin: (table: unknown) => {
+        joinedTables.push(table);
+        return lessonLookupChain;
+      },
       where: (condition: SQL) => {
         whereCalls.push(condition);
         return lessonLookupChain;
@@ -1494,11 +1556,13 @@ describe('resolveLessonPlayback course scoping', () => {
 
     await resolveLessonPlayback(9, 3);
 
+    expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(whereCalls).toHaveLength(1);
     expect(render(whereCalls[0])).toBe(
-      '("lessons"."id" = $1 and "modules"."course_id" = $2)',
+      '("lessons"."id" = $1 and "module_lessons"."module_id" in $2)',
     );
-    expect(renderSqlParams(whereCalls[0])).toEqual([9, 3]);
+    expect(renderSqlParams(whereCalls[0])).toEqual([9, 'SUBQUERY:3']);
+    expect(joinedTables).toEqual([moduleLessonsTable]);
   });
 
   // Task 5e, Part 3a (production regression): the unique index on
@@ -1568,6 +1632,50 @@ describe('resolveLessonPlayback course scoping', () => {
     expect(orderByCalls[0]).toBe(moduleLessonsTable.moduleId);
     expect(limitCalls).toEqual([1]);
     expect(result?.status).toBe('ready');
+  });
+});
+
+describe('getCourseLessonPosters course scoping', () => {
+  // Final review, Important 3: the poster sweep is a membership read —
+  // every lesson placed in THIS course — and used to scope on
+  // `modules.course_id`, so a module placed here from another course's
+  // library contributed no posters (its lessons rendered blank on the
+  // board) while its owner's board showed them. Mutant: leave the WHERE on
+  // `eq(modulesTable.courseId, courseId)` — renders a different string, and
+  // binds `3` where the subquery sentinel must be. An empty result returns
+  // `{}` before `buildLessonPosters` runs, so no provider machinery is
+  // needed to reach the query under test.
+  it('selects lessons through the membership subquery for the given courseId, not modules.course_id', async () => {
+    const whereCalls: SQL[] = [];
+    const joinedTables: unknown[] = [];
+    const chain = {
+      from: () => chain,
+      innerJoin: (table: unknown) => {
+        joinedTables.push(table);
+        return chain;
+      },
+      where: (condition: SQL) => {
+        whereCalls.push(condition);
+        return chain;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
+      then: (
+        resolve: (v: unknown) => unknown,
+        reject?: (e: unknown) => unknown,
+      ) => Promise.resolve([]).then(resolve, reject),
+    };
+    db.select.mockReturnValueOnce(chain);
+
+    const posters = await getCourseLessonPosters(3);
+
+    expect(posters).toEqual({});
+    expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
+    expect(whereCalls).toHaveLength(1);
+    expect(render(whereCalls[0])).toBe(
+      '("module_lessons"."module_id" in $1 and "lessons"."video_provider" is not null and "lessons"."video_ref" is not null)',
+    );
+    expect(renderSqlParams(whereCalls[0])).toEqual(['SUBQUERY:3']);
+    expect(joinedTables).toEqual([moduleLessonsTable]);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import {
   getCourseSlugForCourseId,
@@ -757,16 +758,23 @@ export async function resolveLessonPlayback(
   // Threading the caller's own courseId makes the permission check and the
   // credential lookup agree by construction instead of by coincidence.
   //
+  // "In this course" is MEMBERSHIP — the lesson's placement sits in a module
+  // this course places (`courseModuleIds`), not one this course owns. The
+  // video-playback route has just verified placement via
+  // `getCourseIdsForLesson` (a `course_modules` read) before calling this;
+  // scoping on `modules.course_id` here would pass that guard and then 404
+  // every lesson placed from another course's library.
+  //
   // The unique index on module_lessons only covers (module_id, lesson_id),
   // per module — nothing in the DB stops the SAME lesson from having two
   // placements inside this ONE course (two different modules). Unlike
   // resolveLessonPlaybackUncached (lesson-playback.ts), ordering by
-  // `modules.course_id` can't disambiguate here — courseId is already fixed
-  // by the WHERE clause, so every candidate row would tie on it. The
-  // remaining ambiguity axis is which MODULE the lesson sits in, so the
-  // tie-break orders by that instead, matching lesson-access.ts's "same
-  // shape" (`orderBy` + `limit(1)` for a deterministic pick) with the column
-  // adjusted to the axis that's actually still ambiguous here.
+  // course can't disambiguate here — courseId is already fixed by the WHERE
+  // clause, so every candidate row would tie on it. The remaining ambiguity
+  // axis is which MODULE the lesson sits in, so the tie-break orders by that
+  // instead, matching lesson-access.ts's "same shape" (`orderBy` +
+  // `limit(1)` for a deterministic pick) with the column adjusted to the
+  // axis that's actually still ambiguous here.
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
@@ -777,9 +785,11 @@ export async function resolveLessonPlayback(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .where(
-      and(eq(lessonsTable.id, lessonId), eq(modulesTable.courseId, courseId)),
+      and(
+        eq(lessonsTable.id, lessonId),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
+      ),
     )
     .orderBy(moduleLessonsTable.moduleId)
     .limit(1);
@@ -806,13 +816,14 @@ export async function resolveLessonPlayback(
 export async function getCourseLessonPosters(
   courseId: number,
 ): Promise<Record<number, string>> {
-  // Scoped by placement to THIS course, not the lesson's legacy module_id:
-  // a shared-library lesson's own column can name a module in a different
-  // course, which would either miss this course's poster entirely or (via a
-  // stale legacy pointer) leak a poster into the wrong course. By CONVENTION
-  // at most one placement per (course, lesson) — `linkLesson`'s check-then-
-  // insert, not a DB constraint (the unique index is per module_id+lesson_id,
-  // not per course) — so this join adds no more than one row per lesson in
+  // Scoped by placement to THIS course — the lesson's placement sits in a
+  // module this course places (`courseModuleIds`, membership), not one it
+  // owns (`modules.course_id`): a module placed here from another course's
+  // library would otherwise contribute no posters, and its lessons render
+  // blank on this board while showing on the owner's. By CONVENTION at most
+  // one placement per (course, lesson) — `linkLesson`'s check-then-insert,
+  // not a DB constraint (the unique index is per module_id+lesson_id, not
+  // per course) — so this join adds no more than one row per lesson in
   // practice; no dedup needed downstream.
   const rows = await db
     .select({
@@ -825,10 +836,9 @@ export async function getCourseLessonPosters(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .where(
       and(
-        eq(modulesTable.courseId, courseId),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
         isNotNull(lessonsTable.videoProvider),
         isNotNull(lessonsTable.videoRef),
       ),
@@ -892,8 +902,11 @@ export async function reorderModule(input: {
     });
   if (!updated) return null;
 
+  // The placement moved in `input.courseId`, so that is the board that
+  // changed — not the module's owner (`getCourseSlugForModuleId`), which is
+  // a different course once a module is placed into a second one.
   await invalidateCourseDetailsCache(
-    await getCourseSlugForModuleId(input.moduleId),
+    await getCourseSlugForCourseId(input.courseId),
   );
 
   return { id: updated.id, rank: Number(updated.rank) };
@@ -1100,19 +1113,20 @@ export async function updateLessonDependencies(
   courseId: number,
   dependsOn: string[],
 ): Promise<UpdateLessonDependenciesResult> {
-  // The placement this write targets: THIS lesson, placed in THIS course.
-  // `not-found` covers both "no such lesson" and "this lesson isn't taught
-  // by this course" — the caller (patchLessonHandler) already 404s before
-  // resolving a courseId at all when the lesson doesn't exist, so in
-  // practice this branch fires for the latter.
+  // The placement this write targets: THIS lesson, placed in THIS course —
+  // membership (`courseModuleIds`), not `modules.course_id` ownership, so a
+  // module placed here from another course's library can carry
+  // prerequisites too. `not-found` covers both "no such lesson" and "this
+  // lesson isn't taught by this course" — the caller (patchLessonHandler)
+  // already 404s before resolving a courseId at all when the lesson doesn't
+  // exist, so in practice this branch fires for the latter.
   const [target] = await db
     .select({ placementId: moduleLessonsTable.id })
     .from(moduleLessonsTable)
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
     .where(
       and(
         eq(moduleLessonsTable.lessonId, lessonId),
-        eq(modulesTable.courseId, courseId),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
       ),
     );
   if (!target) return { ok: false, reason: 'not-found' };
@@ -1122,8 +1136,9 @@ export async function updateLessonDependencies(
   const next = [...new Set(dependsOn)];
 
   // Siblings are every lesson placed in THIS course — reached through the
-  // placement, not the lessons' own (legacy) module_id, for the same reason
-  // as everywhere else in this file.
+  // placement and the course's module membership, for the same reason as
+  // above: a prerequisite in a placed-in module is as valid a gate as one
+  // in an owned module, and `evaluateLessonLock` searches by membership.
   const siblings = await db
     .select({ slug: lessonsTable.slug })
     .from(lessonsTable)
@@ -1131,8 +1146,7 @@ export async function updateLessonDependencies(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
-    .where(eq(modulesTable.courseId, courseId));
+    .where(inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)));
   const known = new Set(siblings.map((s) => s.slug));
   const unknown = next.filter((slug) => !known.has(slug));
   if (unknown.length > 0) {
