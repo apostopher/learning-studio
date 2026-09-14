@@ -517,10 +517,25 @@ export async function createLesson(input: {
  * modules with progress appear in the result; callers default the rest to
  * zero.
  */
-async function countLearnersByModule(
+// Not `async`, and returns the RAW rows rather than the built `Map` (the
+// `Map` is built at the call site instead, alongside `placementCountByModule`
+// and `dependsOnByModule`): calling `.then()` on the query builder — whether
+// via `await` inside an `async function` or via a `.then(mapFn)` chained
+// directly onto the return — invokes it SYNCHRONOUSLY the moment this
+// function is called, i.e. during `Promise.all([...])`'s array construction,
+// ahead of its sibling query builders in that same array (which only get
+// `.then`'d once `Promise.all` itself iterates the completed array). Real
+// drizzle query builders are genuine `Promise`s and are indifferent to this;
+// the mocked chain object `course-board-provenance.test.ts` swaps in is not,
+// and resolves queued results in `.then()`-call order — so either form above
+// silently steals the NEXT query's queued result. Verified empirically (see
+// task-4-report.md, fix round 1): only returning the untouched builder here —
+// no `.then()` anywhere in this function — keeps its resolution in array
+// order, same as its siblings.
+function countLearnersByModule(
   moduleIds: number[],
-): Promise<Map<number, number>> {
-  const rows = await db
+): Promise<Array<{ moduleId: number; learners: number }>> {
+  return db
     .select({
       moduleId: moduleLessonsTable.moduleId,
       learners: countDistinct(videoProgressTable.userId),
@@ -535,8 +550,6 @@ async function countLearnersByModule(
     )
     .where(inArray(moduleLessonsTable.moduleId, moduleIds))
     .groupBy(moduleLessonsTable.moduleId);
-
-  return new Map(rows.map((r) => [r.moduleId, Number(r.learners)]));
 }
 
 export async function getCourseBoard(
@@ -653,14 +666,7 @@ export async function getCourseBoard(
     list.sort((a, b) => a.rank - b.rank || a.id - b.id);
   }
 
-  // `countLearnersByModule` is awaited on its own, after this pair, rather
-  // than joined into the same `Promise.all`: it wraps its own query in an
-  // `async function`, and an `await` inside a helper resolves before a
-  // Promise.all sibling passed as a bare query builder — a mock-harness-only
-  // ordering quirk (the same helper, plain-inlined, would race fairly; real
-  // drizzle builders are true Promises this quirk doesn't apply to). Keeping
-  // it a separate call sidesteps needing to know that to read this code.
-  const [placementCounts, dependencies] = moduleIds.length
+  const [placementCounts, dependencies, learnerRows] = moduleIds.length
     ? await Promise.all([
         db
           .select({
@@ -677,17 +683,18 @@ export async function getCourseBoard(
           })
           .from(moduleDependenciesTable)
           .where(inArray(moduleDependenciesTable.moduleId, moduleIds)),
+        countLearnersByModule(moduleIds),
       ])
-    : [[], []];
-  const learnerCounts = moduleIds.length
-    ? await countLearnersByModule(moduleIds)
-    : new Map<number, number>();
+    : [[], [], []];
 
   const placementCountByModule = new Map(
     placementCounts.map((r) => [r.moduleId, Number(r.n)]),
   );
   const dependsOnByModule = new Map(
     dependencies.map((d) => [d.moduleId, d.dependsOn]),
+  );
+  const learnerCounts = new Map(
+    learnerRows.map((r) => [r.moduleId, Number(r.learners)]),
   );
 
   return {
