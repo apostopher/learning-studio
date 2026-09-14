@@ -398,6 +398,8 @@ describe('getOrgEditorBoard', () => {
           dependsOn: [],
           sequentialLessons: false,
           learnerCount: 0,
+          owner: { id: 11, name: 'Two-Week' },
+          otherCourseCount: 0,
           lessons: [
             {
               id: 9,

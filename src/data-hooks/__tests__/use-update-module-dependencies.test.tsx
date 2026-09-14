@@ -23,6 +23,8 @@ const boardModule = (id: number, slug: string, dependsOn: string[] = []) => ({
   dependsOn,
   sequentialLessons: true,
   learnerCount: 0,
+  owner: { id: COURSE_ID, name: 'C' },
+  otherCourseCount: 0,
   lessons: [],
 });
 

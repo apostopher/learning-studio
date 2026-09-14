@@ -88,6 +88,8 @@ const module_ = (): BoardModule =>
     imageUrlAvif: null,
     imageUrlWebp: null,
     learnerCount: 0,
+    owner: { id: 10, name: 'Emergencies' },
+    otherCourseCount: 0,
   }) as BoardModule;
 
 describe('tooltips close when the pointer leaves', () => {

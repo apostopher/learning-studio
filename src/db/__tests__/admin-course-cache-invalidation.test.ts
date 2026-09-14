@@ -185,6 +185,14 @@ const membership = vi.hoisted(() => ({
   courseModuleIds: vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
   getCourseModuleIds: vi.fn(async () => []),
 }));
+// Task 3 (course remixing sync): createModule reads the owner's name up
+// front and appends to every remixer, and deleteCourse refuses while
+// remixed — neither is under test in this file, so both default to "no
+// remixers" and the owner-name select is queued explicitly per test below.
+const remixes = vi.hoisted(() => ({
+  getRemixerCourseIds: vi.fn(async () => [] as number[]),
+  countRemixers: vi.fn(async () => 0),
+}));
 const courseCache = vi.hoisted(() => ({
   invalidate: vi.fn().mockResolvedValue(undefined),
 }));
@@ -223,6 +231,7 @@ vi.mock('#/db/course', () => ({
 }));
 vi.mock('#/db/lesson-access', () => lessonAccess);
 vi.mock('#/db/course-modules', () => membership);
+vi.mock('#/db/course-remixes', () => remixes);
 // moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
 // Same reasoning as `#/db/course` above: admin.ts calls
@@ -350,6 +359,7 @@ describe('course-details cache invalidation', () => {
 
   it('createModule invalidates the owning course, resolved from courseId', async () => {
     db.select
+      .mockReturnValueOnce(makeChain([{ id: 42, name: 'Flight Basics' }])) // owner course row
       .mockReturnValueOnce(makeChain([])) // taken slugs
       .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
     db.insert
@@ -413,6 +423,7 @@ describe('course-details cache invalidation', () => {
       ) => Promise.resolve([{ maxRank: '3' }]).then(resolve, reject),
     };
     db.select
+      .mockReturnValueOnce(makeChain([{ id: 42, name: 'Flight Basics' }])) // owner course row
       .mockReturnValueOnce(makeChain([])) // taken slugs
       .mockReturnValueOnce(maxRankChain);
     const moduleInsert = makeChain([
@@ -1459,7 +1470,7 @@ describe('course-details cache invalidation', () => {
 
     const result = await deleteCourse(42);
 
-    expect(result).toBe(true);
+    expect(result).toEqual({ ok: true });
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
@@ -1475,7 +1486,7 @@ describe('course-details cache invalidation', () => {
 
     const result = await deleteCourse(999);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ ok: false, reason: 'not-found' });
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 

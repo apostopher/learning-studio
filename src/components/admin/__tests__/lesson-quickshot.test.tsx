@@ -37,6 +37,9 @@ function module_(overrides: Partial<BoardModule> = {}): BoardModule {
     dependsOn: [],
     imageUrlAvif: null,
     imageUrlWebp: null,
+    learnerCount: 0,
+    owner: { id: 10, name: 'Emergencies' },
+    otherCourseCount: 0,
     ...overrides,
   } as BoardModule;
 }

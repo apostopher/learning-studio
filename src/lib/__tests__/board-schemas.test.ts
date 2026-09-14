@@ -62,6 +62,8 @@ describe('boardModuleSchema', () => {
       dependsOn: [],
       sequentialLessons: true,
       learnerCount: 0,
+      owner: { id: 1, name: 'M' },
+      otherCourseCount: 0,
       lessons: [],
     });
     expect(parsed.requiredSubscriptions).toEqual(['candidate']);
@@ -79,6 +81,8 @@ describe('boardModuleSchema', () => {
       dependsOn: ['m'],
       sequentialLessons: true,
       learnerCount: 12,
+      owner: { id: 2, name: 'M2' },
+      otherCourseCount: 0,
       lessons: [],
     });
     expect(parsed.dependsOn).toEqual(['m']);

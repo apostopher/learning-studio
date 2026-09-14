@@ -74,6 +74,8 @@ const mod: BoardModule = {
   dependsOn: [],
   sequentialLessons: true,
   learnerCount: 0,
+  owner: { id: 3, name: 'Approaches' },
+  otherCourseCount: 0,
   lessons: [lesson],
 };
 

@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.requirePermission.mockResolvedValue({ userId: 'u1' });
   m.updateCourse.mockResolvedValue(COURSE);
-  m.deleteCourse.mockResolvedValue(true);
+  m.deleteCourse.mockResolvedValue({ ok: true });
 });
 
 describe('patchCourseHandler', () => {
@@ -103,8 +103,26 @@ describe('deleteCourseHandler', () => {
   });
 
   it('404s a missing course', async () => {
-    m.deleteCourse.mockResolvedValue(false);
+    m.deleteCourse.mockResolvedValue({ ok: false, reason: 'not-found' });
     const res = await deleteCourseHandler(deleteReq(), '1');
     expect(res.status).toBe(404);
+  });
+
+  it('409s with the remixer count while another course remixes it', async () => {
+    m.deleteCourse.mockResolvedValue({
+      ok: false,
+      reason: 'remixed',
+      remixerCount: 2,
+    });
+    const res = await deleteCourseHandler(
+      new Request('http://t/x', { method: 'DELETE' }),
+      '6',
+    );
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error:
+        '2 other courses remix this course. Un-remix it from each of them first, then delete it.',
+      remixerCount: 2,
+    });
   });
 });

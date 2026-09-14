@@ -48,6 +48,8 @@ const mod = (
   dependsOn: [],
   sequentialLessons: false,
   learnerCount: 0,
+  owner: { id, name },
+  otherCourseCount: 0,
   lessons,
 });
 

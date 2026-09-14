@@ -45,6 +45,8 @@ function module_(overrides: Partial<BoardModule> = {}): BoardModule {
     imageUrlAvif: null,
     imageUrlWebp: null,
     learnerCount: 0,
+    owner: { id: 10, name: 'Preflight Basics' },
+    otherCourseCount: 0,
     lessons: [
       { id: 1 } as BoardModule['lessons'][number],
       { id: 2 } as BoardModule['lessons'][number],

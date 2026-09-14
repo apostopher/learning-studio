@@ -44,6 +44,8 @@ const mod = (id: number, lessonIds: number[]): BoardModule => ({
   dependsOn: [],
   sequentialLessons: false,
   learnerCount: 0,
+  owner: { id, name: `Module ${id}` },
+  otherCourseCount: 0,
   lessons: lessonIds.map(lesson),
 });
 

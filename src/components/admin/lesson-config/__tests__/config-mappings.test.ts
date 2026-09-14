@@ -41,6 +41,8 @@ const module = (over: Partial<BoardModule> = {}): BoardModule => ({
   dependsOn: [],
   sequentialLessons: true,
   learnerCount: 0,
+  owner: { id: 1, name: 'M' },
+  otherCourseCount: 0,
   lessons: [],
   ...over,
 });

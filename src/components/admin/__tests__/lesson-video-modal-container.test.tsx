@@ -43,6 +43,8 @@ const MODULES: EditorBoardModule[] = [
     imageUrlWebp: null,
     dependsOn: [],
     learnerCount: 0,
+    owner: { id: 3, name: 'Approaches' },
+    otherCourseCount: 0,
     lessons: [
       {
         id: 10,

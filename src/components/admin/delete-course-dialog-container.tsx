@@ -5,7 +5,10 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { deleteCourseAtom } from '@/atoms/admin';
-import { useDeleteCourse } from '@/data-hooks/use-delete-course';
+import {
+  CourseRequestError,
+  useDeleteCourse,
+} from '@/data-hooks/use-delete-course';
 import { DeleteConfirmForm } from './delete-confirm-form';
 
 export const DeleteCourseDialogContainer = ({
@@ -80,9 +83,12 @@ export const DeleteCourseDialogContainer = ({
               canSubmit={canSubmit}
               isPending={deleteCourse.isPending}
               serverError={
-                deleteCourse.isError
-                  ? 'Could not delete. Please try again.'
-                  : undefined
+                deleteCourse.error instanceof CourseRequestError &&
+                deleteCourse.error.status === 409
+                  ? deleteCourse.error.message
+                  : deleteCourse.isError
+                    ? 'Could not delete. Please try again.'
+                    : undefined
               }
               onCancel={() => onOpenChange(false)}
             />

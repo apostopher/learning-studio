@@ -81,6 +81,8 @@ const MODULE = {
   imageUrlWebp: null,
   dependsOn: [],
   learnerCount: 0,
+  owner: { id: MODULE_ID, name: 'Fundamentals' },
+  otherCourseCount: 0,
   lessons: [],
 };
 

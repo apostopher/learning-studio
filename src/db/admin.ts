@@ -15,6 +15,7 @@ import {
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
+import { countRemixers, getRemixerCourseIds } from '#/db/course-remixes';
 import {
   getCourseSlugForCourseId,
   getCourseSlugForModuleId,
@@ -177,7 +178,13 @@ export async function listAdminCourses(
       lessonCount: sql<number>`count(distinct ${lessonsTable.id})`,
     })
     .from(coursesTable)
-    .leftJoin(modulesTable, eq(modulesTable.courseId, coursesTable.id))
+    // Membership, not ownership: a remixer's count includes the modules it
+    // borrows, which is what its rail shows.
+    .leftJoin(
+      courseModulesTable,
+      eq(courseModulesTable.courseId, coursesTable.id),
+    )
+    .leftJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
     // Membership now comes from the placement, not `lessons.module_id`: a
     // lesson joins through `module_lessons` scoped to THIS course's own
     // modules, so `countDistinct(lessonsTable.id)` cannot double-count —
@@ -270,6 +277,12 @@ export async function createModule(input: {
   imageUrlAvif?: string | null;
   imageUrlWebp?: string | null;
 }): Promise<BoardModule> {
+  const [owner] = await db
+    .select({ id: coursesTable.id, name: coursesTable.name })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, input.courseId));
+  if (!owner) throw new Error(`createModule: no course ${input.courseId}`);
+
   const base = slugify(input.name) || 'module';
   const taken = await db
     .select({ slug: modulesTable.slug })
@@ -290,6 +303,13 @@ export async function createModule(input: {
     .from(courseModulesTable)
     .where(eq(courseModulesTable.courseId, input.courseId));
   const rank = maxRank === null ? 1 : Number(maxRank) + 1;
+
+  // Every course that remixes THIS one gets the new module appended to its
+  // rail, in the same transaction — this is what makes a remix "live". The
+  // rank is computed per remixer, in SQL, against that remixer's own last
+  // placement: a remixer's order is its own admin's, so the module lands at
+  // the end where it is visible, not at the source's rank.
+  const remixerIds = await getRemixerCourseIds(input.courseId);
 
   // The `course_modules` row is what puts the module ON the board — the
   // board reads membership from placements, so a module row with no
@@ -316,11 +336,24 @@ export async function createModule(input: {
       rank: String(rank),
     });
 
+    if (remixerIds.length > 0) {
+      await tx.insert(courseModulesTable).values(
+        remixerIds.map((remixerId) => ({
+          courseId: remixerId,
+          moduleId: module.id,
+          rank: sql`coalesce((select max(${courseModulesTable.rank}) from ${courseModulesTable} where ${courseModulesTable.courseId} = ${remixerId}), 0) + 1`,
+        })),
+      );
+    }
+
     return module;
   });
 
-  await invalidateCourseDetailsCache(
-    await getCourseSlugForCourseId(input.courseId),
+  // The owner's payload and every remixer's just gained a module.
+  await Promise.all(
+    [input.courseId, ...remixerIds].map(async (id) =>
+      invalidateCourseDetailsCache(await getCourseSlugForCourseId(id)),
+    ),
   );
 
   return {
@@ -337,6 +370,9 @@ export async function createModule(input: {
     // A module is created with no prerequisites and no learners by definition.
     dependsOn: [],
     learnerCount: 0,
+    owner: { id: owner.id, name: owner.name },
+    // Every remixer just received a placement of this module.
+    otherCourseCount: remixerIds.length,
     lessons: [],
   };
 }
@@ -621,6 +657,11 @@ export async function getCourseBoard(
       dependsOn: dependsOnByModule.get(m.id) ?? [],
       sequentialLessons: m.sequentialLessons,
       learnerCount: learnerCounts.get(m.id) ?? 0,
+      // TEMPORARY stand-in — Task 4 replaces this with the real owner join
+      // and cross-course placement count; its test is what proves this
+      // placeholder gone.
+      owner: { id: courseId, name: course.name },
+      otherCourseCount: 0,
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
         name: l.name,
@@ -1525,8 +1566,38 @@ export async function updateCourseOnboarding(
   return questions;
 }
 
-/** Delete a course; its modules and lessons cascade via FK. */
-export async function deleteCourse(courseId: number): Promise<boolean> {
+export type DeleteCourseResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-found' }
+  | { ok: false; reason: 'remixed'; remixerCount: number };
+
+/** Postgres 23503, raised directly or wrapped by drizzle's DrizzleQueryError. */
+function isForeignKeyViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if ((error as { code?: unknown }).code === '23503') return true;
+  const cause = (error as { cause?: unknown }).cause;
+  return Boolean(
+    cause &&
+      typeof cause === 'object' &&
+      (cause as { code?: unknown }).code === '23503',
+  );
+}
+
+/**
+ * Delete a course — refused, legibly, while another course still remixes it.
+ *
+ * `course_remixes.source_course_id` is `on delete restrict`, so the
+ * alternative to this refusal is a foreign-key violation surfacing as a 500
+ * that tells the admin nothing. The count is the instruction: it says how
+ * many rails to un-remix from before this can go. Same shape as
+ * `deleteDiscipline` refusing while it still holds lessons.
+ */
+export async function deleteCourse(
+  courseId: number,
+): Promise<DeleteCourseResult> {
+  const remixerCount = await countRemixers(courseId);
+  if (remixerCount > 0) return { ok: false, reason: 'remixed', remixerCount };
+
   // Collect the course cover and every cascade-deleted module cover so their
   // blobs can be removed after the row is gone. Also grab the slug here,
   // before the delete — once the row is gone there is nothing left to
@@ -1539,6 +1610,8 @@ export async function deleteCourse(courseId: number): Promise<boolean> {
     })
     .from(coursesTable)
     .where(eq(coursesTable.id, courseId));
+  // OWNED modules (`modules.course_id`) — those are the rows the cascade
+  // deletes and whose covers go with them. Borrowed placements just vanish.
   const moduleImages = await db
     .select({
       imageUrlAvif: modulesTable.imageUrlAvif,
@@ -1547,11 +1620,22 @@ export async function deleteCourse(courseId: number): Promise<boolean> {
     .from(modulesTable)
     .where(eq(modulesTable.courseId, courseId));
 
-  const [deleted] = await db
-    .delete(coursesTable)
-    .where(eq(coursesTable.id, courseId))
-    .returning({ id: coursesTable.id });
-  if (!deleted) return false;
+  let deleted: { id: number } | undefined;
+  try {
+    [deleted] = await db
+      .delete(coursesTable)
+      .where(eq(coursesTable.id, courseId))
+      .returning({ id: coursesTable.id });
+  } catch (error) {
+    if (!isForeignKeyViolation(error)) throw error;
+    // A remix landed between the count and the delete; RESTRICT held.
+    return {
+      ok: false,
+      reason: 'remixed',
+      remixerCount: await countRemixers(courseId),
+    };
+  }
+  if (!deleted) return { ok: false, reason: 'not-found' };
 
   await invalidateCourseDetailsCache(course?.slug ?? null);
   await deleteBlobs([
@@ -1559,5 +1643,5 @@ export async function deleteCourse(courseId: number): Promise<boolean> {
     course?.imageUrlWebp,
     ...moduleImages.flatMap((m) => [m.imageUrlAvif, m.imageUrlWebp]),
   ]);
-  return true;
+  return { ok: true };
 }

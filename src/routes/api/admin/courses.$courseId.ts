@@ -68,9 +68,19 @@ export async function deleteCourseHandler(
   const denied = await guard(request, 'delete');
   if (denied) return denied;
 
-  const deleted = await deleteCourse(courseId);
-  if (!deleted) return new Response('Not found', { status: 404 });
-  return new Response(null, { status: 204 });
+  const result = await deleteCourse(courseId);
+  if (result.ok) return new Response(null, { status: 204 });
+  if (result.reason === 'remixed') {
+    const noun = result.remixerCount === 1 ? 'course remixes' : 'courses remix';
+    return Response.json(
+      {
+        error: `${result.remixerCount} other ${noun} this course. Un-remix it from each of them first, then delete it.`,
+        remixerCount: result.remixerCount,
+      },
+      { status: 409 },
+    );
+  }
+  return new Response('Not found', { status: 404 });
 }
 
 export const Route = createFileRoute('/api/admin/courses/$courseId')({

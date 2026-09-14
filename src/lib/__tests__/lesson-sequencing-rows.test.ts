@@ -39,6 +39,8 @@ const board = (lessons: BoardLesson[], sequential = true): BoardModule[] => [
     dependsOn: [],
     sequentialLessons: sequential,
     learnerCount: 0,
+    owner: { id: 1, name: 'M' },
+    otherCourseCount: 0,
     lessons,
   },
 ];

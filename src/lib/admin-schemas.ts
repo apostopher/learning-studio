@@ -144,6 +144,18 @@ export const boardLessonSchema = z.object({
 });
 export type BoardLesson = z.infer<typeof boardLessonSchema>;
 
+/**
+ * The course whose `modules.course_id` this is — who may rename, delete or
+ * restructure the module. On a board it differs from the board's course
+ * exactly when the module is BORROWED through a remix; the editor draws
+ * provenance and withholds edit controls from that difference.
+ */
+export const boardModuleOwnerSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+});
+export type BoardModuleOwner = z.infer<typeof boardModuleOwnerSchema>;
+
 export const boardModuleSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -171,6 +183,13 @@ export const boardModuleSchema = z.object({
    * is a visible decision rather than an accident.
    */
   learnerCount: z.number(),
+  owner: boardModuleOwnerSchema,
+  /**
+   * Placements of this module in courses OTHER than this board's. Said out
+   * loud in the delete dialog: deleting a remixed source's module silently
+   * reshapes every remixer, which is inherent to a live reference.
+   */
+  otherCourseCount: z.number(),
   lessons: z.array(boardLessonSchema),
 });
 export type BoardModule = z.infer<typeof boardModuleSchema>;
