@@ -77,6 +77,9 @@ export const LessonConfigDialogContainer = ({
       title="Configure lesson"
       heading={lesson?.name ?? ''}
       sections={sections}
+      // Content is what an admin opens a lesson to work on; video and
+      // config are set once and rarely revisited.
+      defaultSection="material"
     />
   );
 };

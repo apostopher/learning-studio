@@ -42,6 +42,13 @@ interface SectionedConfigModalProps {
   width?: string;
   /** Sidebar (tab list) column width; defaults to 320px. */
   sidebarWidth?: string;
+  /**
+   * The section to open on, by `value`. Defaults to the first section; a
+   * value that matches no section also falls back to the first, so a stale
+   * caller cannot open the modal on an empty panel. Tab ORDER is untouched —
+   * this only chooses where the reader lands.
+   */
+  defaultSection?: string;
 }
 
 /**
@@ -59,8 +66,11 @@ export const SectionedConfigModal = ({
   sections,
   width = '1280px',
   sidebarWidth = '320px',
+  defaultSection,
 }: SectionedConfigModalProps) => {
-  const firstValue = sections[0]?.value;
+  const firstValue =
+    sections.find((section) => section.value === defaultSection)?.value ??
+    sections[0]?.value;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

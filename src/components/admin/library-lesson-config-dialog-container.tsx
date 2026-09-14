@@ -89,6 +89,9 @@ export const LibraryLessonConfigDialogContainer = () => {
       title="Edit lesson"
       heading={lesson?.name ?? ''}
       sections={sections}
+      // Content is what an admin opens a lesson to work on; details are set
+      // once and rarely revisited.
+      defaultSection="material"
     />
   );
 };
