@@ -337,14 +337,19 @@ describe('the inferring lookups are gone', () => {
    * their old names, or any other. Every remaining single-course answer here
    * is keyed by a MODULE or a COURSE, which have exactly one owner; nothing
    * answers "the course" for a lesson, because a lesson has no such thing.
-   * Adding an export is a deliberate act that updates this list.
+   * The module-keyed SLUG lookup is plural too (final review, Important #3):
+   * a module has one owner but is SHOWN by every course that remixes its
+   * owner, and cache invalidation must reach all of them — the single-slug
+   * `getCourseSlugForModuleId` is gone for the same reason its lesson
+   * sibling was. Adding an export is a deliberate act that updates this
+   * list.
    */
   it('lesson-access exports exactly the course-explicit readers', () => {
     expect(Object.keys(lessonAccess).sort()).toEqual([
       'getCourseIdForModuleId',
       'getCourseSlugForCourseId',
-      'getCourseSlugForModuleId',
       'getCourseSlugsForLessonId',
+      'getCourseSlugsForModuleId',
       'getDisciplineIdForLessonId',
       'getLessonIdBySlug',
       'getLessonInCourse',

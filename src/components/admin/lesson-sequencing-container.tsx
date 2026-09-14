@@ -177,6 +177,7 @@ export const LessonSequencingContainer = ({
                           onValueChange={(next) =>
                             updateDependencies.mutate({
                               lessonId: row.lessonId,
+                              moduleId: mod.id,
                               dependsOn: next,
                             })
                           }

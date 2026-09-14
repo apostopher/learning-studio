@@ -97,20 +97,33 @@ export async function getCourseSlugsForLessonId(
 }
 
 /**
- * Course slug owning a module, resolved by numeric module id. Same rationale
- * as `getCourseSlugsForLessonId`: admin mutations on a module only hold its
- * id, not its course's slug.
+ * EVERY course slug that SHOWS this module.
+ *
+ * Membership, not ownership — the same rationale as `getCourseSlugsForLessonId`
+ * one level up: a module has one owner (`modules.course_id`) but sits on the
+ * rail of every course that remixes the owner (`course_modules`), and each of
+ * those courses caches its own learner payload with the module in it. An
+ * admin write keyed on a module — creating a lesson in it, renaming it,
+ * toggling its sequencing, changing its or its lessons' prerequisites,
+ * deleting it, linking/unlinking/moving a placement in it — therefore
+ * changes what every one of them serves, and the owner-only slug this
+ * replaces left every remixer stale until the 6h TTL. There is deliberately
+ * no single-slug sibling any more, for the same reason there is none for
+ * lessons.
+ *
+ * Callers that delete the module must call this BEFORE the delete: the
+ * cascade takes the `course_modules` rows with it, and afterwards nothing is
+ * left to join.
  */
-export async function getCourseSlugForModuleId(
+export async function getCourseSlugsForModuleId(
   moduleId: number,
-): Promise<string | null> {
-  const [row] = await db
+): Promise<string[]> {
+  const rows = await db
     .select({ courseSlug: coursesTable.slug })
-    .from(modulesTable)
-    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
-    .where(eq(modulesTable.id, moduleId))
-    .limit(1);
-  return row?.courseSlug ?? null;
+    .from(courseModulesTable)
+    .innerJoin(coursesTable, eq(coursesTable.id, courseModulesTable.courseId))
+    .where(eq(courseModulesTable.moduleId, moduleId));
+  return [...new Set(rows.map((r) => r.courseSlug))];
 }
 
 /**

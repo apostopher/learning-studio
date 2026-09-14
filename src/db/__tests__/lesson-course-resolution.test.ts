@@ -251,7 +251,9 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
   getVideoThumbnailsWithCache: Object.assign(vi.fn(), synthesiaThumbnailsCache),
 }));
 
-const { getCourseSlugsForLessonId } = await import('#/db/lesson-access');
+const { getCourseSlugsForLessonId, getCourseSlugsForModuleId } = await import(
+  '#/db/lesson-access'
+);
 const { updateLessonName } = await import('#/db/admin');
 
 beforeEach(() => {
@@ -391,6 +393,64 @@ describe('join argument pinning: lessons -> module_lessons -> course_modules -> 
     expect(whereCalls).toHaveLength(1);
     expect(renderSql(whereCalls[0] as never)).toBe('"lessons"."id" = $1');
     expect(renderSqlParams(whereCalls[0] as never)).toEqual([9]);
+  });
+});
+
+/**
+ * Final review, Important #3. Every module-keyed admin write (create a
+ * lesson in it, rename it, toggle its sequencing, change its prerequisites,
+ * delete it, link/unlink/move a placement in it) invalidated ONE slug — the
+ * module's OWNER, via a since-deleted `getCourseSlugForModuleId`. After a
+ * remix the module is on every remixer's rail too, and each of those
+ * learner payloads served the stale module until the 6h TTL. This is the
+ * membership-keyed replacement: every course whose `course_modules` row
+ * names the module.
+ */
+describe('getCourseSlugsForModuleId', () => {
+  it('returns every course slug showing the module, deduplicated', async () => {
+    db.select.mockReturnValueOnce(
+      makeChain([
+        { courseSlug: 'flight-basics' },
+        { courseSlug: 'itps' },
+        { courseSlug: 'flight-basics' },
+      ]),
+    );
+
+    expect(await getCourseSlugsForModuleId(7)).toEqual([
+      'flight-basics',
+      'itps',
+    ]);
+  });
+
+  it('returns an empty array for a module no course shows', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+
+    expect(await getCourseSlugsForModuleId(7)).toEqual([]);
+  });
+
+  // Mutant: the owner walk — `.from(modulesTable).innerJoin(coursesTable,
+  // eq(coursesTable.id, modulesTable.courseId))` — which is exactly the
+  // single-slug helper this replaces. Membership goes through
+  // `course_modules`; the module row is never consulted.
+  it('reads membership: course_modules joined to courses, keyed on the module id', async () => {
+    const joinCalls: Array<[unknown, unknown]> = [];
+    const whereCalls: unknown[] = [];
+    db.select.mockReturnValueOnce(
+      makeJoinCapturingChain([{ courseSlug: 'itps' }], joinCalls, whereCalls),
+    );
+
+    await getCourseSlugsForModuleId(7);
+
+    expect(joinCalls).toHaveLength(1);
+    expect(joinCalls[0][0]).toBe(coursesTable);
+    expect(renderSql(joinCalls[0][1] as never)).toBe(
+      '"courses"."id" = "course_modules"."course_id"',
+    );
+    expect(whereCalls).toHaveLength(1);
+    expect(renderSql(whereCalls[0] as never)).toBe(
+      '"course_modules"."module_id" = $1',
+    );
+    expect(renderSqlParams(whereCalls[0] as never)).toEqual([7]);
   });
 });
 

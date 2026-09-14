@@ -75,7 +75,7 @@ vi.mock('#/db/course-cache', () => cache);
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: vi.fn(),
   getCourseSlugForCourseId: vi.fn(async (id: number) => `course-${id}`),
-  getCourseSlugForModuleId: vi.fn(),
+  getCourseSlugsForModuleId: vi.fn(),
   getCourseSlugsForLessonId: vi.fn(),
   lessonBelongsToCourseOrg: vi.fn(),
 }));

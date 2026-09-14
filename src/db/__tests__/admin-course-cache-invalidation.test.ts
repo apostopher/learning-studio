@@ -92,6 +92,13 @@ const courseRemixesTable = pgTable('course_remixes', {
   courseId: integer('course_id'),
   sourceCourseId: integer('source_course_id'),
 });
+// Final review, Important #3: `updateModuleDependencies` is exercised here
+// for its invalidation, so its own table needs real columns too.
+const moduleDependenciesTable = pgTable('module_dependencies', {
+  id: integer('id').primaryKey(),
+  moduleId: integer('module_id'),
+  dependsOn: jsonb('depends_on'),
+});
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -184,8 +191,12 @@ const placements = vi.hoisted(() => ({
 }));
 const lessonAccess = vi.hoisted(() => ({
   getCourseSlugsForLessonId: vi.fn(),
-  getCourseSlugForModuleId: vi.fn(),
+  // Final review, Important #3: plural. A module is SHOWN by its owner and
+  // by every course remixing the owner, and each of those learner payloads
+  // caches it — so every module-keyed write invalidates every one of them.
+  getCourseSlugsForModuleId: vi.fn(async () => [] as string[]),
   getCourseSlugForCourseId: vi.fn(),
+  getCourseIdForModuleId: vi.fn(),
 }));
 // Final review, Important 3: the three admin reads that ask "is this lesson
 // in this course" go through the ONE definition of membership
@@ -230,6 +241,7 @@ vi.mock('#/db/schema', () => ({
   courseModulesTable,
   courseRemixesTable,
   modulesTable,
+  moduleDependenciesTable,
   moduleLessonsTable,
   lessonsTable,
   courseVideoProvidersTable,
@@ -291,6 +303,8 @@ const {
   updateLessonDependencies,
   updateLessonName,
   updateModule,
+  updateModuleDependencies,
+  updateModuleSequential,
 } = await import('#/db/admin');
 // Real crypto.server (see the note above `courseVideoProvidersTable`) —
 // used here just to build a decryptable `secrets` fixture for
@@ -493,7 +507,7 @@ describe('course-details cache invalidation', () => {
     expect(result.rank).toBe(4);
   });
 
-  it('createLesson invalidates the owning course, resolved from moduleId', async () => {
+  it('createLesson invalidates every course showing the module, resolved from moduleId', async () => {
     db.select
       .mockReturnValueOnce(makeChain([]))
       .mockReturnValueOnce(makeChain([{ maxRank: null }]));
@@ -536,12 +550,19 @@ describe('course-details cache invalidation', () => {
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn(tx),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
 
     await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
-    expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(7);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
+    // The remixer's slug reaches the cache too — the owner-only helper this
+    // replaces left every remixer's learner payload stale for 6h.
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
     // Task 5a fix round 1 regression (Critical 2): a lesson created without
     // a module_lessons row is invisible to every placement-based reader —
     // the learner lesson page, playback, and all five admin lesson routes
@@ -616,7 +637,7 @@ describe('course-details cache invalidation', () => {
         insert: txInsert,
       }),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     const result = await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
@@ -676,7 +697,7 @@ describe('course-details cache invalidation', () => {
         insert: txInsert,
       }),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
@@ -771,7 +792,7 @@ describe('course-details cache invalidation', () => {
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn({ select: txSelect, insert: txInsert }),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     await createLesson({ moduleId: 7, name: 'Stall Recovery' });
 
@@ -887,18 +908,17 @@ describe('course-details cache invalidation', () => {
 
   // Final review one-liner: the write moved the module's placement in
   // `input.courseId` — the course whose board changed — so THAT course's
-  // cache is the one to bust. Resolving via `getCourseSlugForModuleId`
-  // (the module's OWNER) was right while owner and placer were always the
-  // same course; once a module can be placed into a second course, a
-  // reorder there would invalidate the owner's cache and leave the edited
-  // course's board stale. Deliberately re-pointed from the previous
-  // "owning course, resolved from moduleId" pin: `getCourseSlugForModuleId`
-  // is stubbed to a DIFFERENT slug so the assertion can tell which lookup
-  // fed `invalidate`.
+  // cache is the one to bust. Resolving via the module's OWNER was right
+  // while owner and placer were always the same course; once a module can
+  // be placed into a second course, a reorder there would invalidate the
+  // owner's cache and leave the edited course's board stale. A reorder
+  // changes one course's rail only, so the (plural, membership-keyed)
+  // module lookup is the wrong tool here too: it is stubbed to a DIFFERENT
+  // slug so the assertion can tell which lookup fed `invalidate`.
   it('reorderModule invalidates the course it reordered IN (input.courseId), not the module owner', async () => {
     db.update.mockReturnValueOnce(makeChain([{ id: 7, rank: '2' }])); // placement
     lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('owner-course');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['owner-course']);
 
     await reorderModule({
       courseId: 42,
@@ -908,7 +928,7 @@ describe('course-details cache invalidation', () => {
     });
 
     expect(lessonAccess.getCourseSlugForCourseId).toHaveBeenCalledWith(42);
-    expect(lessonAccess.getCourseSlugForModuleId).not.toHaveBeenCalled();
+    expect(lessonAccess.getCourseSlugsForModuleId).not.toHaveBeenCalled();
     expect(courseCache.invalidate).toHaveBeenCalledTimes(1);
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
@@ -957,7 +977,7 @@ describe('course-details cache invalidation', () => {
     db.update.mockReturnValueOnce(
       makeUpdateChain([{ id: 7, rank: '2.5' }], placementCalls),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     const result = await reorderModule({
       courseId: 42,
@@ -1006,7 +1026,10 @@ describe('course-details cache invalidation', () => {
       'source-course-a',
       'source-course-b',
     ]);
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('target-course');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'target-course',
+      'target-remixer',
+    ]);
 
     await moveLesson({
       lessonId: 9,
@@ -1020,7 +1043,7 @@ describe('course-details cache invalidation', () => {
     // placement at the target module/course, reading it after would already
     // see the new course instead of the old one(s).
     expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
-    expect(lessonAccess.getCourseSlugForModuleId).toHaveBeenCalledWith(20);
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(20);
     // Reverting to a single-slug "source" (the pre-fix-round-1 shape) would
     // still pass a bare `toHaveBeenCalledWith` on either slug — asserting
     // the full sorted set is what catches that regression. No separate
@@ -1036,7 +1059,12 @@ describe('course-details cache invalidation', () => {
     // own invalidation coverage.)
     expect(
       courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
-    ).toEqual(['source-course-a', 'source-course-b', 'target-course']);
+    ).toEqual([
+      'source-course-a',
+      'source-course-b',
+      'target-course',
+      'target-remixer',
+    ]);
   });
 
   it('moveLesson invalidates only once when source and target course are the same', async () => {
@@ -1048,7 +1076,7 @@ describe('course-details cache invalidation', () => {
       dependsOn: [],
     });
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     await moveLesson({
       lessonId: 9,
@@ -1101,7 +1129,7 @@ describe('course-details cache invalidation', () => {
       dependsOn: [],
     });
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
 
     const result = await moveLesson({
       lessonId: 9,
@@ -1273,10 +1301,11 @@ describe('course-details cache invalidation', () => {
   // nothing downstream reads. Verified RED against that mutant (`db.update`
   // is never called with `moduleLessonsTable`, and `db.insert`/`db.delete`
   // fire instead).
-  it('updateLessonDependencies writes module_lessons.dependsOn for the placement in the given course, never lesson_dependencies', async () => {
+  it('updateLessonDependencies writes module_lessons.dependsOn for the placement in the given module, never lesson_dependencies', async () => {
     db.select
-      .mockReturnValueOnce(makeChain([{ placementId: 55 }])) // this lesson's placement in courseId 3
-      .mockReturnValueOnce(makeChain([{ slug: 'intro' }])); // sibling lesson slugs in that course
+      .mockReturnValueOnce(makeChain([{ placementId: 55 }])) // this lesson's placement in module 40
+      .mockReturnValueOnce(makeChain([{ slug: 'intro' }])); // sibling lesson slugs on the owner's board
+    lessonAccess.getCourseIdForModuleId.mockResolvedValue(3);
     const setCalls: unknown[] = [];
     const whereCalls: SQL[] = [];
     const updateChain = {
@@ -1295,9 +1324,8 @@ describe('course-details cache invalidation', () => {
       ) => Promise.resolve(undefined).then(resolve, reject),
     };
     db.update.mockReturnValueOnce(updateChain);
-    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
 
-    const result = await updateLessonDependencies(9, 3, ['intro']);
+    const result = await updateLessonDependencies(9, 40, ['intro']);
 
     expect(result).toEqual({
       ok: true,
@@ -1312,24 +1340,17 @@ describe('course-details cache invalidation', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  // Important 2 (fix round 1): the (lessonId, courseId) placement lookup and
-  // the sibling-slug lookup are what make this a per-COURSE write at all — a
-  // canned-row mock like `makeChain` discards `.where()` entirely, so
-  // dropping `eq(modulesTable.courseId, courseId)` from either query's
-  // condition (silently reverting to "whichever placement/sibling set comes
-  // back first") would satisfy every OTHER assertion in this describe block
-  // unchanged. Captures both queries' `.where()` conditions and renders them
-  // to exact SQL text instead of trusting the canned rows.
-  //
-  // Final review, Important 3: both predicates are MEMBERSHIP reads — "is
-  // this lesson placed in this course" — so both go through the placement
-  // table's subquery, not `modules.course_id` (which is ownership: a module
-  // placed into this course from another course's library is "in" it for
-  // every other reader, and must be for prerequisites too). Mutant: leave
-  // either on `eq(modulesTable.courseId, courseId)` — renders a different
-  // string. The joined tables are captured too: with the module row no
-  // longer consulted, the `modules` join has nothing left to do.
-  it('scopes both the placement lookup and the sibling-slug validation to the given courseId, via membership', async () => {
+  // Final review, Important #4. The placement row `(module, lesson)` is
+  // SHARED by every course showing the module, so the write is keyed on the
+  // module — never on a client-supplied course — and the siblings a
+  // prerequisite may name are the lessons on the module's OWNER's board
+  // (membership of the owner: every remixer carries all of the owner's
+  // modules, so a gate that resolves there resolves everywhere the module
+  // is shown). Both predicates are rendered to exact SQL: a mutant that
+  // scopes the placement by a course's membership (`module_id in
+  // SUBQUERY:c`) or validates siblings against the caller's course renders
+  // a different string.
+  it('scopes the placement lookup to (module, lesson) and the sibling-slug validation to the OWNER’s membership', async () => {
     const placementWhereCalls: SQL[] = [];
     const siblingWhereCalls: SQL[] = [];
     const joinedTables: unknown[] = [];
@@ -1369,87 +1390,151 @@ describe('course-details cache invalidation', () => {
       .mockReturnValueOnce(placementChain)
       .mockReturnValueOnce(siblingChain);
     db.update.mockReturnValueOnce(makeChain(undefined));
-    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
+    // Module 40's OWNER is course 3 — the only course id in play.
+    lessonAccess.getCourseIdForModuleId.mockResolvedValue(3);
 
-    await updateLessonDependencies(9, 3, ['intro']);
+    await updateLessonDependencies(9, 40, ['intro']);
 
-    expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(render(placementWhereCalls[0])).toBe(
-      '("module_lessons"."lesson_id" = $1 and "module_lessons"."module_id" in $2)',
+      '("module_lessons"."module_id" = $1 and "module_lessons"."lesson_id" = $2)',
     );
-    expect(renderSqlParams(placementWhereCalls[0])).toEqual([9, 'SUBQUERY:3']);
+    expect(renderSqlParams(placementWhereCalls[0])).toEqual([40, 9]);
+    expect(lessonAccess.getCourseIdForModuleId).toHaveBeenCalledWith(40);
+    expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(render(siblingWhereCalls[0])).toBe(
       '"module_lessons"."module_id" in $1',
     );
     expect(renderSqlParams(siblingWhereCalls[0])).toEqual(['SUBQUERY:3']);
     // Sibling lookup joins lessons→module_lessons only; the placement lookup
-    // needs no join at all now that the module row is not consulted.
+    // needs no join at all.
     expect(joinedTables).toEqual([moduleLessonsTable]);
   });
 
-  // Prerequisites are now per-PLACEMENT: this write only ever targets the one
-  // course it was asked to edit (`courseId`, sent by the client — see
-  // admin.ts's doc comment on this function). Mutant: revert to
-  // `invalidateAllCoursesForLesson(lessonId)` —
-  // correct-shaped (still invalidates something real), wrong-behaving: it
-  // would bust the cache for every OTHER course teaching this lesson even
-  // though their own placement's dependsOn was never touched. Verified RED
-  // (that mutant calls `getCourseSlugsForLessonId`, which this test never
-  // stubs to resolve — the assertions below want `getCourseSlugForCourseId`
-  // instead).
-  it('updateLessonDependencies invalidates only the course it was asked to edit', async () => {
+  // The placement is shared by every course showing the module, so every
+  // one of them serves the new gate — the owner AND each remixer. Mutant:
+  // the previous `getCourseSlugForCourseId(courseId)` single-slug
+  // invalidation, which busted only the course the client named.
+  it('updateLessonDependencies invalidates every course showing the module', async () => {
     db.select
       .mockReturnValueOnce(makeChain([{ placementId: 55 }]))
       .mockReturnValueOnce(makeChain([]));
     db.update.mockReturnValueOnce(makeChain(undefined));
-    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('flight-basics');
-    // Stubbed even though correct code never calls it: without this, the
-    // regression mutant this test guards against (falling back to
-    // `invalidateAllCoursesForLesson`) crashes on an unmocked resolved
-    // value instead of failing the assertions below on its own terms.
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['aerobatics']);
+    lessonAccess.getCourseIdForModuleId.mockResolvedValue(3);
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
+    lessonAccess.getCourseSlugForCourseId.mockResolvedValue('never');
 
-    await updateLessonDependencies(9, 3, []);
+    await updateLessonDependencies(9, 40, []);
 
-    expect(lessonAccess.getCourseSlugForCourseId).toHaveBeenCalledWith(3);
-    expect(courseCache.invalidate).toHaveBeenCalledTimes(1);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
-    expect(lessonAccess.getCourseSlugsForLessonId).not.toHaveBeenCalled();
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(40);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
+    expect(lessonAccess.getCourseSlugForCourseId).not.toHaveBeenCalled();
   });
 
-  it('updateLessonDependencies reports not-found when the lesson has no placement in that course', async () => {
+  it('updateLessonDependencies reports not-found when the lesson has no placement in that module', async () => {
     db.select.mockReturnValueOnce(makeChain([])); // no matching placement
 
-    const result = await updateLessonDependencies(9, 3, []);
+    const result = await updateLessonDependencies(9, 40, []);
 
     expect(result).toEqual({ ok: false, reason: 'not-found' });
     expect(db.update).not.toHaveBeenCalled();
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
-  it('updateModule invalidates the owning course, resolved from moduleId', async () => {
+  it('updateLessonDependencies reports not-found when the module resolves no owner', async () => {
+    db.select.mockReturnValueOnce(makeChain([{ placementId: 55 }]));
+    lessonAccess.getCourseIdForModuleId.mockResolvedValue(null);
+
+    const result = await updateLessonDependencies(9, 40, []);
+
+    expect(result).toEqual({ ok: false, reason: 'not-found' });
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('updateModule invalidates every course showing the module, resolved from moduleId', async () => {
     db.select.mockReturnValueOnce(
       makeChain([{ imageUrlAvif: null, imageUrlWebp: null }]),
     );
     db.update.mockReturnValueOnce(makeChain([{ id: 7, name: 'Module 2' }]));
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
 
     await updateModule(7, { name: 'Module 2' });
 
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
   });
 
-  it('deleteModule invalidates the owning course, resolved before the row is gone', async () => {
+  it('updateModuleSequential invalidates every course showing the module', async () => {
+    db.update.mockReturnValueOnce(makeChain([{ id: 7 }]));
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
+
+    expect(await updateModuleSequential(7, true)).toBe(true);
+
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
+  });
+
+  it('updateModuleDependencies invalidates every course showing the module', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([{ slug: 'weather', courseId: 3 }])) // target
+      .mockReturnValueOnce(
+        makeChain([
+          { slug: 'weather', dependsOn: null },
+          { slug: 'intro', dependsOn: null },
+        ]),
+      ); // siblings
+    db.insert.mockReturnValueOnce(makeChain(undefined));
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
+
+    const result = await updateModuleDependencies(7, ['intro']);
+
+    expect(result).toEqual({ ok: true, dependsOn: ['intro'] });
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
+  });
+
+  it('deleteModule invalidates every course showing the module, resolved BEFORE the row is gone', async () => {
     db.select.mockReturnValueOnce(
       makeChain([{ imageUrlAvif: null, imageUrlWebp: null }]),
     );
-    lessonAccess.getCourseSlugForModuleId.mockResolvedValue('flight-basics');
+    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
+      'flight-basics',
+      'itps-remixer',
+    ]);
     db.delete.mockReturnValueOnce(makeChain([{ id: 7 }]));
 
     const result = await deleteModule(7);
 
     expect(result).toBe(true);
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
+    // Order is the whole point: the delete cascades the module's
+    // `course_modules` rows, and a membership lookup AFTER it would find no
+    // course at all — every remixer (and the owner) would be left stale.
+    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
+    expect(
+      lessonAccess.getCourseSlugsForModuleId.mock.invocationCallOrder[0],
+    ).toBeLessThan(db.delete.mock.invocationCallOrder[0]);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['flight-basics', 'itps-remixer']);
   });
 
   it('updateCourse invalidates using the slug from its own returning() row', async () => {

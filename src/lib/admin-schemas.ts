@@ -263,15 +263,20 @@ export type UpdateModuleSequentialInput = z.infer<
  * accepted or stored, because lesson slugs are globally unique and a stored
  * module goes stale the moment the lesson moves.
  *
- * `courseId` names WHICH placement's prerequisites this is: prerequisites
- * live on the placement (`module_lessons`), not the lesson, and a lesson can
- * be taught by several courses at once — see admin.ts's `updateLessonDependencies`
- * doc comment. Required, not derived server-side from the lesson alone,
- * because a shared-library lesson has no single "the" course to fall back to.
+ * Prerequisites live on the PLACEMENT (`module_lessons`, one row per
+ * `(module, lesson)`), not the lesson, and a lesson can sit in several
+ * modules at once — see admin.ts's `updateLessonDependencies` doc comment.
+ * `moduleId` names which placement; the sequencing tab always sends it,
+ * since a course can show one lesson twice (its own module and a borrowed
+ * one). `courseId` is the fallback key for a body without `moduleId` — "the
+ * lesson's placement in this course" — and is required so a shared-library
+ * lesson, which has no single "the" course, never has to be guessed at.
+ * Authority follows the module's OWNER either way, never `courseId`.
  */
 export const updateLessonDependenciesInputSchema = z
   .object({
     courseId: z.number().int().positive(),
+    moduleId: z.number().int().positive().optional(),
     dependsOn: z.array(z.string().min(1)).max(100),
   })
   .strict();

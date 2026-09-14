@@ -12,7 +12,7 @@ import {
   getCourseIdForModuleId,
   getDisciplineIdForLessonId,
 } from '#/db/lesson-access';
-import { getCourseIdsForLesson } from '#/db/placements';
+import { findPlacementModuleId, getCourseIdsForLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
@@ -28,9 +28,11 @@ import {
 
 /**
  * Course-scoped guard for the branches that edit a single PLACEMENT rather
- * than the lesson itself: dependencies (a course's own prerequisite list) and
- * move (which course's module the lesson sits in, and where). Returns a 403
- * Response to short-circuit, or null to proceed.
+ * than the lesson itself: dependencies (one placement's prerequisite list)
+ * and move (which module the lesson sits in, and where). The course handed
+ * in is always a module's OWNER (`getCourseIdForModuleId`) — a placement row
+ * is shared by every course showing its module, so no viewing course can
+ * vouch for it. Returns a 403 Response to short-circuit, or null to proceed.
  */
 async function guardStructure(
   request: Request,
@@ -149,25 +151,32 @@ export async function patchLessonHandler(
     if (placedIn.length === 0) {
       return absentResourceResponse(request.headers, 'Lesson not found');
     }
-    // `dependencies.data.courseId` — the course the CLIENT is asking to
-    // edit — not anything from `placedIn` above (only ever "is this lesson
-    // placed anywhere" for the existence check just above; there is no
-    // single course to read off it). A lesson taught by several courses has
-    // several placements, each with its own prerequisite list; guarding and
-    // writing against any course other than the one actually being edited
-    // would be wrong even though it's a real course this lesson belongs to.
-    // `updateLessonDependencies` itself still rejects a courseId this
-    // lesson has no placement in (`not-found`), so a forged value can't
-    // write a placement that doesn't exist.
-    const denied = await guardStructure(
-      request,
-      dependencies.data.courseId,
-      'update',
-    );
+    // The placement this edits is one `(module, lesson)` row, and that row
+    // is SHARED by every course showing the module — the module's owner and
+    // each course remixing it. So the guard is the module's OWNER (spec,
+    // Permissions row 2), never `dependencies.data.courseId`: after a remix
+    // the client's course can be one that merely borrows the module, and a
+    // gate written "for" it lands on the owner's row and fires in every
+    // course showing it. The module comes from the body when the sequencing
+    // tab sent it (it always does — a course can show one lesson twice), and
+    // is otherwise the lesson's placement in the named course. Nothing here
+    // is read off `placedIn`, which only answers "is this lesson placed
+    // anywhere" for the existence check above.
+    const moduleId =
+      dependencies.data.moduleId ??
+      (await findPlacementModuleId(lessonId, dependencies.data.courseId));
+    if (moduleId === null) {
+      return absentResourceResponse(request.headers, 'Lesson not found');
+    }
+    const ownerCourseId = await getCourseIdForModuleId(moduleId);
+    if (ownerCourseId === null) {
+      return absentResourceResponse(request.headers, 'Module not found');
+    }
+    const denied = await guardStructure(request, ownerCourseId, 'update');
     if (denied) return denied;
     const result = await updateLessonDependencies(
       lessonId,
-      dependencies.data.courseId,
+      moduleId,
       dependencies.data.dependsOn,
     );
     if (result.ok) return Response.json(result);

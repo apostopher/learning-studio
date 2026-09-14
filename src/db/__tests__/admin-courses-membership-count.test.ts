@@ -35,7 +35,7 @@ vi.mock('#/db/course-orgs', () => ({ linkCourseToOrg: vi.fn() }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: vi.fn(),
   getCourseSlugForCourseId: vi.fn(),
-  getCourseSlugForModuleId: vi.fn(),
+  getCourseSlugsForModuleId: vi.fn(),
   getCourseSlugsForLessonId: vi.fn(),
   lessonBelongsToCourseOrg: vi.fn(),
 }));

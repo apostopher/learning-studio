@@ -18,9 +18,10 @@ import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import { countRemixers, getRemixSourceIds } from '#/db/course-remixes';
 import {
+  getCourseIdForModuleId,
   getCourseSlugForCourseId,
-  getCourseSlugForModuleId,
   getCourseSlugsForLessonId,
+  getCourseSlugsForModuleId,
 } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { nextAvailableLessonSlug } from '#/db/lesson-slug';
@@ -121,6 +122,25 @@ async function invalidateLessonPlaybackCache(
  */
 async function invalidateAllCoursesForLesson(lessonId: number): Promise<void> {
   const slugs = await getCourseSlugsForLessonId(lessonId);
+  await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
+}
+
+/**
+ * Evict the learner-facing course-details cache for EVERY course that SHOWS
+ * this module — its owner and each course remixing the owner.
+ *
+ * The module-keyed twin of `invalidateAllCoursesForLesson`, for the same
+ * reason (final review, Important #3): a module has one owner but sits on
+ * every remixer's rail, and each of those courses caches its own payload
+ * with the module in it. Invalidating the owner's slug alone left every
+ * remixer serving the stale module until the 6h TTL. `deleteModule` must
+ * call this BEFORE its delete — the cascade takes the membership rows the
+ * lookup joins through.
+ */
+async function invalidateEveryCourseShowingModule(
+  moduleId: number,
+): Promise<void> {
+  const slugs = await getCourseSlugsForModuleId(moduleId);
   await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
 }
 
@@ -473,9 +493,7 @@ export async function createLesson(input: {
     return [insertedLesson];
   });
 
-  await invalidateCourseDetailsCache(
-    await getCourseSlugForModuleId(input.moduleId),
-  );
+  await invalidateEveryCourseShowingModule(input.moduleId);
 
   return {
     id: created.id,
@@ -998,8 +1016,9 @@ export async function reorderModule(input: {
   if (!updated) return null;
 
   // The placement moved in `input.courseId`, so that is the board that
-  // changed — not the module's owner (`getCourseSlugForModuleId`), which is
-  // a different course once a module is placed into a second one.
+  // changed — not the module's owner, which is a different course once a
+  // module is placed into a second one, and not every course showing the
+  // module either: a rail reorder changes one course's payload only.
   await invalidateCourseDetailsCache(
     await getCourseSlugForCourseId(input.courseId),
   );
@@ -1044,11 +1063,17 @@ export async function moveLesson(input: {
   });
   if (!movedPlacement) return null;
 
-  const targetCourseSlug = await getCourseSlugForModuleId(input.targetModuleId);
+  // Every course SHOWING the target module — its owner and each remixer —
+  // not the owner alone (final review, Important #3).
+  const targetCourseSlugs = await getCourseSlugsForModuleId(
+    input.targetModuleId,
+  );
   // De-duplicated via Set so a reorder that lands back in a course already
   // covered by `sourceCourseSlugs` doesn't invalidate that slug twice.
-  const slugsToInvalidate = new Set(sourceCourseSlugs);
-  if (targetCourseSlug) slugsToInvalidate.add(targetCourseSlug);
+  const slugsToInvalidate = new Set([
+    ...sourceCourseSlugs,
+    ...targetCourseSlugs,
+  ]);
   await Promise.all(
     [...slugsToInvalidate].map((slug) => invalidateCourseDetailsCache(slug)),
   );
@@ -1176,29 +1201,33 @@ export type UpdateLessonDependenciesResult =
   | { ok: false; reason: 'unknown-lessons'; slugs: string[] };
 
 /**
- * Replace one lesson's explicit prerequisites, IN ONE COURSE.
+ * Replace one PLACEMENT's explicit prerequisites — this lesson, in this
+ * module.
  *
- * Prerequisites now live on the placement (`module_lessons.depends_on`), not
- * on the lesson itself — see that table's doc comment in schema.ts. A lesson
- * shared by several courses can therefore have a DIFFERENT prerequisite list
- * per course, and this write only ever touches the one placement named by
- * `courseId`; it must never fan out to every course teaching this lesson,
- * or an edit meant for one course's chain would silently rewrite another's.
+ * Prerequisites live on the placement (`module_lessons.depends_on`), not on
+ * the lesson itself — see that table's doc comment in schema.ts. A lesson
+ * placed in several modules can therefore carry a DIFFERENT prerequisite
+ * list per placement, and this write only ever touches the one row named by
+ * `(moduleId, lessonId)`; it must never fan out to every placement of the
+ * lesson, or an edit meant for one chain would silently rewrite another's.
  *
- * `courseId` is the course the CLIENT is asking to edit — sent explicitly in
- * the request body (`updateLessonDependenciesInputSchema`), not derived from
- * the lesson alone. Fix round 1: it was previously the lowest-id course the
- * route resolved purely to guard the request, which was only ever correct
- * because `linkLesson` had zero callers and a lesson therefore had exactly
- * one placement — that justification expires the moment linking ships. A
- * forged or stale `courseId` can't do damage beyond its own scope: the
- * `not-found` branch below rejects any courseId this lesson has no placement
- * in, so the write can only ever land on a real placement, never invent or
- * hijack one.
+ * Keyed on the MODULE, not on a course (final review, Important #4). A
+ * placement row is shared by every course that shows its module — the
+ * module's owner and each course remixing the owner — so "this lesson in
+ * this course" does not name a row of the course's own: for a borrowed
+ * module it names the owner's row. The route guards the module's OWNER for
+ * exactly that reason, and this function re-resolves the owner rather than
+ * trusting a caller-supplied course.
  *
- * Prerequisites are confined to the same course: a foreign slug resolves to
- * nothing under `evaluateLessonLock`, which only ever searches the course it
- * was handed, so accepting one would persist a gate that can never fire.
+ * Prerequisites may name any lesson on the OWNER's board — the owner's
+ * membership (`courseModuleIds(owner)`), own modules and borrowed ones
+ * alike. A gate that resolves on the owner's board resolves on every
+ * remixer's too, since a remix carries all of the owner's own modules; a
+ * slug from outside it would resolve to nothing under `evaluateLessonLock`,
+ * which only ever searches the course it was handed, so accepting one would
+ * persist a gate that can never fire. (A gate naming a lesson in a module the
+ * owner itself BORROWED is the one-hop case `remixCourse` refuses to carry
+ * further — see its doc comment.)
  *
  * Deliberately NO cycle check, unlike `updateModuleDependencies`. Cycles are
  * impossible here by construction rather than by validation: expansion drops
@@ -1209,35 +1238,33 @@ export type UpdateLessonDependenciesResult =
  */
 export async function updateLessonDependencies(
   lessonId: number,
-  courseId: number,
+  moduleId: number,
   dependsOn: string[],
 ): Promise<UpdateLessonDependenciesResult> {
-  // The placement this write targets: THIS lesson, placed in THIS course —
-  // membership (`courseModuleIds`), not `modules.course_id` ownership, so a
-  // module placed here from another course's library can carry
-  // prerequisites too. `not-found` covers both "no such lesson" and "this
-  // lesson isn't taught by this course" — the caller (patchLessonHandler)
-  // already 404s before resolving a courseId at all when the lesson doesn't
-  // exist, so in practice this branch fires for the latter.
+  // The ONE placement this write targets. `not-found` covers "no such
+  // lesson", "no such module" and "this module doesn't hold this lesson"
+  // alike — the route already 404s an unplaced lesson before resolving a
+  // module at all, so in practice this fires for the last.
   const [target] = await db
     .select({ placementId: moduleLessonsTable.id })
     .from(moduleLessonsTable)
     .where(
       and(
+        eq(moduleLessonsTable.moduleId, moduleId),
         eq(moduleLessonsTable.lessonId, lessonId),
-        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
       ),
     );
   if (!target) return { ok: false, reason: 'not-found' };
+
+  const ownerCourseId = await getCourseIdForModuleId(moduleId);
+  if (ownerCourseId === null) return { ok: false, reason: 'not-found' };
 
   // Order-preserving dedupe: a duplicated slug is a client bug, not a reason
   // to fail the write, but it must not reach a column the UI renders as chips.
   const next = [...new Set(dependsOn)];
 
-  // Siblings are every lesson placed in THIS course — reached through the
-  // placement and the course's module membership, for the same reason as
-  // above: a prerequisite in a placed-in module is as valid a gate as one
-  // in an owned module, and `evaluateLessonLock` searches by membership.
+  // Siblings are every lesson on the OWNER's board — reached through the
+  // owner's module membership, for the reason in the doc comment above.
   const siblings = await db
     .select({ slug: lessonsTable.slug })
     .from(lessonsTable)
@@ -1245,7 +1272,9 @@ export async function updateLessonDependencies(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .where(inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)));
+    .where(
+      inArray(moduleLessonsTable.moduleId, courseModuleIds(ownerCourseId)),
+    );
   const known = new Set(siblings.map((s) => s.slug));
   const unknown = next.filter((slug) => !known.has(slug));
   if (unknown.length > 0) {
@@ -1268,10 +1297,9 @@ export async function updateLessonDependencies(
     .set({ dependsOn: rows, updatedAt: sql`now()` })
     .where(eq(moduleLessonsTable.id, target.placementId));
 
-  // Only THIS course's cache needs invalidating — the write touched exactly
-  // one placement, so every other course teaching this lesson still shows
-  // its own, unaffected, prerequisite chain.
-  await invalidateCourseDetailsCache(await getCourseSlugForCourseId(courseId));
+  // The placement is shared by every course showing its module, so every
+  // one of them now serves the new gate — owner and remixers alike.
+  await invalidateEveryCourseShowingModule(moduleId);
   return { ok: true, dependsOn: rows };
 }
 
@@ -1287,7 +1315,7 @@ export async function updateModuleSequential(
     .returning({ id: modulesTable.id });
   if (!updated) return false;
 
-  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  await invalidateEveryCourseShowingModule(moduleId);
   return true;
 }
 
@@ -1434,7 +1462,7 @@ export async function updateModule(
     },
     { avif: input.imageUrlAvif ?? null, webp: input.imageUrlWebp ?? null },
   );
-  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  await invalidateEveryCourseShowingModule(moduleId);
   return updated;
 }
 
@@ -1521,7 +1549,7 @@ export async function updateModuleDependencies(
       });
   }
 
-  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  await invalidateEveryCourseShowingModule(moduleId);
   return { ok: true, dependsOn: next };
 }
 
@@ -1535,9 +1563,11 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
     .from(modulesTable)
     .where(eq(modulesTable.id, moduleId));
 
-  // Resolve before the delete — once the row is gone, the course join used
-  // to find the owning slug has nothing to join against.
-  const courseSlug = await getCourseSlugForModuleId(moduleId);
+  // Resolve before the delete — the cascade takes this module's
+  // `course_modules` rows with it, and afterwards the membership join that
+  // finds every course showing the module (owner AND remixers) has nothing
+  // to join against.
+  const courseSlugs = await getCourseSlugsForModuleId(moduleId);
 
   const [deleted] = await db
     .delete(modulesTable)
@@ -1560,7 +1590,9 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
   }
 
   await deleteBlobs([existing?.imageUrlAvif, existing?.imageUrlWebp]);
-  await invalidateCourseDetailsCache(courseSlug);
+  await Promise.all(
+    courseSlugs.map((slug) => invalidateCourseDetailsCache(slug)),
+  );
   return true;
 }
 

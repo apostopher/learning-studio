@@ -4,7 +4,7 @@ import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import {
   getCourseIdForModuleId,
-  getCourseSlugForModuleId,
+  getCourseSlugsForModuleId,
   lessonBelongsToCourseOrg,
 } from '#/db/lesson-access';
 import {
@@ -86,6 +86,48 @@ export async function getCourseIdsForLesson(
     .where(eq(moduleLessonsTable.lessonId, lessonId));
 
   return [...new Set(rows.map((r) => r.courseId))];
+}
+
+/**
+ * The module holding a lesson's placement in ONE course, or null when the
+ * course does not teach it.
+ *
+ * For the dependencies route's fallback when the body names no module: a
+ * placement is a `(module, lesson)` row, and the route needs the module to
+ * resolve whose authority the write is under (the module's OWNER). Membership
+ * (`courseModuleIds`), since the course asking may only borrow the module.
+ * Ordered by module id so a course that shows the lesson twice (its own
+ * module and a borrowed one) answers deterministically — the editor always
+ * sends the module it means, so this is a fallback, not the normal path.
+ */
+export async function findPlacementModuleId(
+  lessonId: number,
+  courseId: number,
+): Promise<number | null> {
+  const [row] = await db
+    .select({ moduleId: moduleLessonsTable.moduleId })
+    .from(moduleLessonsTable)
+    .where(
+      and(
+        eq(moduleLessonsTable.lessonId, lessonId),
+        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
+      ),
+    )
+    .orderBy(moduleLessonsTable.moduleId)
+    .limit(1);
+  return row?.moduleId ?? null;
+}
+
+/**
+ * Evict the learner-facing course-details cache for EVERY course showing a
+ * module — its owner and each course remixing the owner. Best-effort per
+ * slug, like `invalidateCourseDetailsCache` itself.
+ */
+async function invalidateEveryCourseShowingModule(
+  moduleId: number,
+): Promise<void> {
+  const slugs = await getCourseSlugsForModuleId(moduleId);
+  await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
 }
 
 /**
@@ -206,9 +248,7 @@ export async function linkLesson(input: {
       dependsOn: moduleLessonsTable.dependsOn,
     });
 
-  await invalidateCourseDetailsCache(
-    await getCourseSlugForModuleId(input.moduleId),
-  );
+  await invalidateEveryCourseShowingModule(input.moduleId);
 
   return toPlacement(created);
 }
@@ -230,7 +270,7 @@ export async function unlinkLesson(
 
   if (removed.length === 0) return false;
 
-  await invalidateCourseDetailsCache(await getCourseSlugForModuleId(moduleId));
+  await invalidateEveryCourseShowingModule(moduleId);
   return true;
 }
 
@@ -301,9 +341,10 @@ export async function movePlacement(input: {
 
   if (!updated) return null;
 
-  await invalidateCourseDetailsCache(
-    await getCourseSlugForModuleId(input.targetModuleId),
-  );
+  // The target module's courses. The source module shares the owner (the
+  // WHERE above guarantees it), and every remixer of that owner shows both
+  // modules — so this set covers the placement's old home too.
+  await invalidateEveryCourseShowingModule(input.targetModuleId);
 
   return toPlacement(updated);
 }

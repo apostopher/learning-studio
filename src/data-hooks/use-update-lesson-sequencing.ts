@@ -65,12 +65,18 @@ export function useUpdateModuleSequential(courseId: number) {
 }
 
 /**
- * Replace one lesson's explicit prerequisites.
+ * Replace one placement's explicit prerequisites — this lesson, in this
+ * module.
  *
  * Sends slugs only. `moduleSlug` is neither sent nor stored: lesson slugs are
  * globally unique, so it is redundant for lookup, and a stored one goes stale
  * the moment the lesson moves module — which is how gates used to disappear
  * with nothing to indicate it.
+ *
+ * `moduleId` names WHICH placement: a course can show the same lesson twice
+ * (its own module and a borrowed one), and the sequencing tab's row belongs
+ * to one of them. The route guards that module's OWNER — for a borrowed
+ * module that is another course, and the write is refused there.
  *
  * No cycle error to handle, unlike the module equivalent. Expansion drops
  * every edge pointing at a later lesson, so a loop cannot be formed by any
@@ -80,11 +86,19 @@ export function useUpdateLessonDependencies(courseId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     scope: { id: `lesson-dependencies-${courseId}` },
-    mutationFn: async (input: { lessonId: number; dependsOn: string[] }) => {
+    mutationFn: async (input: {
+      lessonId: number;
+      moduleId: number;
+      dependsOn: string[];
+    }) => {
       const res = await fetch(`/api/admin/lessons/${input.lessonId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ courseId, dependsOn: input.dependsOn }),
+        body: JSON.stringify({
+          courseId,
+          moduleId: input.moduleId,
+          dependsOn: input.dependsOn,
+        }),
       });
       if (!res.ok) {
         throw new Error(`Failed to update prerequisites (${res.status})`);
@@ -95,21 +109,27 @@ export function useUpdateLessonDependencies(courseId: number) {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<CourseBoard>(key);
       if (previous) {
+        // Only the named module's copy: a duplicate copy in another module
+        // is a different placement with its own list.
         queryClient.setQueryData<CourseBoard>(key, {
           ...previous,
-          modules: previous.modules.map((m) => ({
-            ...m,
-            lessons: m.lessons.map((l) =>
-              l.id === input.lessonId
-                ? {
-                    ...l,
-                    dependsOn: input.dependsOn.map((lessonSlug) => ({
-                      lessonSlug,
-                    })),
-                  }
-                : l,
-            ),
-          })),
+          modules: previous.modules.map((m) =>
+            m.id !== input.moduleId
+              ? m
+              : {
+                  ...m,
+                  lessons: m.lessons.map((l) =>
+                    l.id === input.lessonId
+                      ? {
+                          ...l,
+                          dependsOn: input.dependsOn.map((lessonSlug) => ({
+                            lessonSlug,
+                          })),
+                        }
+                      : l,
+                  ),
+                },
+          ),
         });
       }
       return { previous };

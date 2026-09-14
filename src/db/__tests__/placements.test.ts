@@ -52,7 +52,7 @@ vi.mock('#/db/schema', () => ({
 vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache: vi.fn() }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: vi.fn(),
-  getCourseSlugForModuleId: vi.fn(),
+  getCourseSlugsForModuleId: vi.fn(),
 }));
 // `getPlacementsForCourse` scopes by the membership helper (Task 3); the
 // real one would issue a second `db.select` this canned chain never queued.

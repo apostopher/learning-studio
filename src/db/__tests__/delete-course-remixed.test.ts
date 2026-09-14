@@ -51,7 +51,7 @@ vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache: vi.fn() }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseIdForModuleId: vi.fn(),
   getCourseSlugForCourseId: vi.fn(),
-  getCourseSlugForModuleId: vi.fn(),
+  getCourseSlugsForModuleId: vi.fn(),
   getCourseSlugsForLessonId: vi.fn(),
   lessonBelongsToCourseOrg: vi.fn(),
 }));

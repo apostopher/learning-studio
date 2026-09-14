@@ -14,6 +14,7 @@ const m = vi.hoisted(() => {
     requireLessonContentPermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     getCourseIdsForLesson: vi.fn(),
+    findPlacementModuleId: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
     getDisciplineIdForLessonId: vi.fn(),
     deleteLesson: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('#/db/lesson-access', () => ({
 // lesson any more. Empty means unplaced.
 vi.mock('#/db/placements', () => ({
   getCourseIdsForLesson: m.getCourseIdsForLesson,
+  findPlacementModuleId: m.findPlacementModuleId,
 }));
 vi.mock('#/db/admin', () => ({
   deleteLesson: m.deleteLesson,
@@ -72,6 +74,9 @@ beforeEach(() => {
   // coincidence.
   m.getCourseIdsForLesson.mockResolvedValue([3]);
   m.getCourseIdForModuleId.mockResolvedValue(7);
+  // The module a body-without-`moduleId` dependencies write resolves to —
+  // distinct from every module id a body names below.
+  m.findPlacementModuleId.mockResolvedValue(30);
   // This lesson's discipline — a sentinel distinct from every course id used
   // anywhere in this file, so a branch that regresses to guarding on a course
   // id instead of the resolved discipline id fails a `toHaveBeenCalledWith`
@@ -177,29 +182,70 @@ describe('patchLessonHandler — course resolution', () => {
   });
 });
 
-// Requirement 7: `dependencies` still guards course-scoped on the
-// client-supplied `courseId`, pinned so this task cannot silently widen it
-// to the discipline/admin content guard — a placement's prerequisite list
-// affects only that one course.
-describe('patchLessonHandler — dependencies (still course-scoped, unchanged)', () => {
-  it('guards and writes against the courseId the client sent, not the lesson-resolved one', async () => {
+// Final review, Important #4: a prerequisite list lives on the PLACEMENT
+// `(module, lesson)`, which is one row shared by every course showing the
+// module — so the guard is the module's OWNER (spec, Permissions row 2),
+// never the `courseId` the client sent, which after a remix can be a course
+// that merely borrows the module. Asserting WHICH course id the guard was
+// handed, not merely that it threw: the bug shape is
+// `requireCoursePermission(B)` where it should be `(A)`.
+describe('patchLessonHandler — dependencies (guards the placement’s module owner)', () => {
+  it('guards on the named module’s OWNER, not the courseId the client sent, and writes that placement', async () => {
     m.updateLessonDependencies.mockResolvedValue({ ok: true, dependsOn: [] });
-    await patchLessonHandler(req({ courseId: 7, dependsOn: ['a'] }), '10');
-    expect(m.requireCoursePermission).toHaveBeenCalledWith(
-      expect.anything(),
-      7,
-      'structure',
-      'update',
+    m.getCourseIdForModuleId.mockImplementation(async (id: number) =>
+      id === 55 ? 9 : null,
     );
-    expect(m.updateLessonDependencies).toHaveBeenCalledWith(10, 7, ['a']);
+
+    const res = await patchLessonHandler(
+      req({ courseId: 2, moduleId: 55, dependsOn: ['a'] }),
+      '10',
+    );
+
+    expect(res.status).toBe(200);
+    expect(m.getCourseIdForModuleId).toHaveBeenCalledWith(55);
+    expect(m.requireCoursePermission.mock.calls.map((c) => c.slice(1))).toEqual(
+      [[9, 'structure', 'update']],
+    );
+    expect(m.updateLessonDependencies).toHaveBeenCalledWith(10, 55, ['a']);
+    // The body named the module, so no course-scoped lookup was needed.
+    expect(m.findPlacementModuleId).not.toHaveBeenCalled();
     // Never escalated to the discipline/admin content guard.
     expect(m.requireLessonContentPermission).not.toHaveBeenCalled();
+  });
+
+  it('resolves the placement by lesson-within-course when the body names no module, then guards its owner', async () => {
+    m.updateLessonDependencies.mockResolvedValue({ ok: true, dependsOn: [] });
+    m.findPlacementModuleId.mockResolvedValue(30);
+    m.getCourseIdForModuleId.mockImplementation(async (id: number) =>
+      id === 30 ? 9 : null,
+    );
+
+    await patchLessonHandler(req({ courseId: 2, dependsOn: ['a'] }), '10');
+
+    expect(m.findPlacementModuleId).toHaveBeenCalledWith(10, 2);
+    expect(m.requireCoursePermission.mock.calls.map((c) => c.slice(1))).toEqual(
+      [[9, 'structure', 'update']],
+    );
+    expect(m.updateLessonDependencies).toHaveBeenCalledWith(10, 30, ['a']);
+  });
+
+  it('404s when the lesson has no placement in the named course, without guarding or writing', async () => {
+    m.findPlacementModuleId.mockResolvedValue(null);
+
+    const res = await patchLessonHandler(
+      req({ courseId: 2, dependsOn: ['a'] }),
+      '10',
+    );
+
+    expect(res.status).toBe(404);
+    expect(m.requireCoursePermission).not.toHaveBeenCalled();
+    expect(m.updateLessonDependencies).not.toHaveBeenCalled();
   });
 
   it('403s a refused actor without writing dependencies', async () => {
     m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await patchLessonHandler(
-      req({ courseId: 7, dependsOn: ['a'] }),
+      req({ courseId: 7, moduleId: 55, dependsOn: ['a'] }),
       '10',
     );
     expect(res.status).toBe(403);

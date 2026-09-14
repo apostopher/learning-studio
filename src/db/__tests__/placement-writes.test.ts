@@ -45,8 +45,10 @@ const db = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 const invalidateCourseDetailsCache = vi.hoisted(() => vi.fn());
-const getCourseSlugForModuleId = vi.hoisted(() =>
-  vi.fn().mockResolvedValue('a-course'),
+// Final review, Important #3: plural — every course SHOWING the module (its
+// owner and every remixer of the owner), not the owner alone.
+const getCourseSlugsForModuleId = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(['a-course']),
 );
 const getCourseIdForModuleId = vi.hoisted(() => vi.fn().mockResolvedValue(3));
 /**
@@ -66,7 +68,7 @@ vi.mock('#/db/schema', () => ({
 }));
 vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache }));
 vi.mock('#/db/lesson-access', () => ({
-  getCourseSlugForModuleId,
+  getCourseSlugsForModuleId,
   getCourseIdForModuleId,
   lessonBelongsToCourseOrg,
 }));
@@ -87,7 +89,7 @@ const { linkLesson, unlinkLesson, movePlacement } = await import(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getCourseSlugForModuleId.mockResolvedValue('a-course');
+  getCourseSlugsForModuleId.mockResolvedValue(['a-course']);
   getCourseIdForModuleId.mockResolvedValue(3);
   lessonBelongsToCourseOrg.mockResolvedValue(true);
 });
@@ -276,7 +278,7 @@ describe('linkLesson', () => {
     expect(tokens).toContain(') / 2');
   });
 
-  it('invalidates the target course cache so learners see the new lesson', async () => {
+  it('invalidates every course showing the module so learners see the new lesson', async () => {
     db.select.mockReturnValueOnce(makeChain([]));
     db.insert.mockReturnValue({
       values: () => ({
@@ -287,6 +289,7 @@ describe('linkLesson', () => {
           ]),
       }),
     });
+    getCourseSlugsForModuleId.mockResolvedValue(['a-course', 'remixer']);
 
     await linkLesson({
       moduleId: 40,
@@ -295,11 +298,14 @@ describe('linkLesson', () => {
       nextLessonId: null,
     });
 
-    // Not just that the cache got the right slug (the stub returns
-    // 'a-course' no matter what it's asked), but that the lookup was asked
-    // about the right module in the first place.
-    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(40);
-    expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
+    // Not just that the cache got the right slugs (the stub answers the
+    // same no matter what it's asked), but that the lookup was asked about
+    // the right module in the first place — and that the REMIXER's slug
+    // reached the cache, which the owner-only lookup never delivered.
+    expect(getCourseSlugsForModuleId).toHaveBeenCalledWith(40);
+    expect(
+      invalidateCourseDetailsCache.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['a-course', 'remixer']);
   });
 });
 
@@ -311,7 +317,7 @@ describe('unlinkLesson', () => {
     expect(await unlinkLesson(40, 9)).toBe(false);
   });
 
-  it('scopes the DELETE to this module AND this lesson, and invalidates the right course cache', async () => {
+  it('scopes the DELETE to this module AND this lesson, and invalidates every course showing the module', async () => {
     // The destructive write: a bare eq(lessonId) WHERE (same defect class as
     // the movePlacement bug) would delete this lesson's placement out of
     // every course teaching it, not just module 40's. Capturing what
@@ -330,6 +336,7 @@ describe('unlinkLesson', () => {
       returning: vi.fn().mockResolvedValue([{ id: 1 }]),
     });
     db.delete.mockReturnValue({ where });
+    getCourseSlugsForModuleId.mockResolvedValue(['a-course', 'remixer']);
 
     expect(await unlinkLesson(40, 9)).toBe(true);
 
@@ -340,8 +347,10 @@ describe('unlinkLesson', () => {
     );
     expect(renderSqlParams(condition)).toEqual([40, 9]);
 
-    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(40);
-    expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
+    expect(getCourseSlugsForModuleId).toHaveBeenCalledWith(40);
+    expect(
+      invalidateCourseDetailsCache.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['a-course', 'remixer']);
   });
 });
 
@@ -446,7 +455,7 @@ describe('movePlacement', () => {
     expect(invalidateCourseDetailsCache).not.toHaveBeenCalled();
   });
 
-  it('invalidates the target course cache so learners see the move', async () => {
+  it('invalidates every course showing the target module so learners see the move', async () => {
     const returning = vi
       .fn()
       .mockResolvedValue([
@@ -455,6 +464,7 @@ describe('movePlacement', () => {
     const where = vi.fn().mockReturnValue({ returning });
     const set = vi.fn().mockReturnValue({ where });
     db.update.mockReturnValue({ set });
+    getCourseSlugsForModuleId.mockResolvedValue(['a-course', 'remixer']);
 
     await movePlacement({
       lessonId: 9,
@@ -466,8 +476,10 @@ describe('movePlacement', () => {
 
     // Precision: the slug lookup must be for the TARGET module (41), not
     // some other one the stub would happily answer for anyway.
-    expect(getCourseSlugForModuleId).toHaveBeenCalledWith(41);
-    expect(invalidateCourseDetailsCache).toHaveBeenCalledWith('a-course');
+    expect(getCourseSlugsForModuleId).toHaveBeenCalledWith(41);
+    expect(
+      invalidateCourseDetailsCache.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['a-course', 'remixer']);
   });
 
   // The optional caller-supplied `tx` parameter this test used to cover
