@@ -67,6 +67,7 @@ const courseBoard = (
     imageUrlWebp: null,
   },
   modules,
+  remixes: [],
 });
 
 /**

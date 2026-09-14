@@ -337,6 +337,7 @@ describe('getOrgEditorBoard', () => {
         imageUrlWebp: null,
       },
       modules: [],
+      remixes: [],
     });
     mockGetCourseBoard.mockImplementation(async (courseId: number) =>
       boardFor(courseId),
@@ -420,6 +421,7 @@ describe('getOrgEditorBoard', () => {
           ],
         },
       ],
+      remixes: [],
     });
 
     const boards = await getOrgEditorBoard(3);

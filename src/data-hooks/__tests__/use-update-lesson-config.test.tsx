@@ -58,6 +58,7 @@ function makeHarness() {
         ],
       },
     ],
+    remixes: [],
   };
   client.setQueryData(dataKeys.courseBoard(COURSE_ID), board);
   const wrapper = ({ children }: { children: ReactNode }) => (

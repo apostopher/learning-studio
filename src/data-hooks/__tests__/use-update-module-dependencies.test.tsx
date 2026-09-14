@@ -42,6 +42,7 @@ function makeHarness() {
       imageUrlWebp: null,
     },
     modules: [boardModule(1, 'a'), boardModule(2, 'b', ['a'])],
+    remixes: [],
   };
   client.setQueryData(dataKeys.courseBoard(COURSE_ID), board);
   const wrapper = ({ children }: { children: ReactNode }) => (

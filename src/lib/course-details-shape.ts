@@ -29,9 +29,27 @@ function omitLessonSecrets<
 }
 
 type LessonWithSecrets = Partial<Record<SecretLessonFields, unknown>>;
-type CourseShape = {
-  modules: readonly { lessons: readonly LessonWithSecrets[] }[];
+type ModuleWithOwner = {
+  courseId?: unknown;
+  lessons: readonly LessonWithSecrets[];
 };
+type CourseShape = { modules: readonly ModuleWithOwner[] };
+
+/**
+ * `courseId` on a module is its OWNER (`modules.course_id`), which differs
+ * from the course being viewed exactly when the module is borrowed through a
+ * remix. A learner must never learn that — the course they bought is one
+ * cohesive course — so the key is dropped here, the one place that shapes
+ * the payload. Nothing in the learner UI reads it (grepped `module.courseId`
+ * under src/components, src/hooks, src/routes/course before writing this —
+ * no hits outside `__tests__`, `src/db`, `src/routes/api`).
+ */
+function omitModuleOwner<T extends { courseId?: unknown }>(
+  mod: T,
+): Omit<T, 'courseId'> {
+  const { courseId: _owner, ...rest } = mod;
+  return rest;
+}
 
 /**
  * Drops every video-identifying field from each lesson before the payload
@@ -70,7 +88,7 @@ export function toLearnerCourseDetails<C extends CourseShape>(
     // answering is the only version of this that cannot rot.
     viewingAsAuthor,
     modules: course.modules.map((mod) => ({
-      ...mod,
+      ...omitModuleOwner(mod),
       lessons: mod.lessons.map(omitLessonSecrets),
     })),
   };

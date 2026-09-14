@@ -208,6 +208,8 @@ export type BoardCourse = z.infer<typeof boardCourseSchema>;
 export const courseBoardSchema = z.object({
   course: boardCourseSchema,
   modules: z.array(boardModuleSchema),
+  /** The courses this one borrows from. Editor only — never in the learner payload. */
+  remixes: z.array(z.object({ sourceCourseId: z.number() })),
 });
 export type CourseBoard = z.infer<typeof courseBoardSchema>;
 
@@ -984,6 +986,8 @@ export type EditorBoardModule = z.infer<typeof editorBoardModuleSchema>;
 export const editorCourseBoardSchema = z.object({
   course: boardCourseSchema,
   modules: z.array(editorBoardModuleSchema),
+  /** The courses this one borrows from. Editor only — never in the learner payload. */
+  remixes: z.array(z.object({ sourceCourseId: z.number() })),
 });
 export type EditorCourseBoard = z.infer<typeof editorCourseBoardSchema>;
 

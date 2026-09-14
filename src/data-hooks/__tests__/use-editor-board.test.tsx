@@ -27,6 +27,7 @@ const BOARDS = [
       imageUrlWebp: null,
     },
     modules: [],
+    remixes: [],
   },
 ];
 

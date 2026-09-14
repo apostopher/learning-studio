@@ -166,6 +166,12 @@ vi.mock('#/db/placements', () => ({
   getCourseIdsForLesson: vi.fn().mockResolvedValue([]),
   getCourseCountsForLessons: vi.fn().mockResolvedValue(new Map()),
 }));
+// Task 4: `getCourseBoard` now also asks course-remixes for the board's
+// remix links. None of these tests exercise remixing, so it's stubbed
+// wholesale rather than pulled through the mocked `db` above.
+vi.mock('#/db/course-remixes', () => ({
+  getRemixSourceIds: vi.fn().mockResolvedValue([]),
+}));
 
 const db = vi.hoisted(() => ({
   select: vi.fn(),
@@ -240,6 +246,7 @@ describe('getCourseBoard', () => {
           { id: 10, name: 'Lesson 10', slug: 'l10', rank: '2' },
         ]),
       ) // lessons
+      .mockReturnValueOnce(makeChain([])) // placement counts
       .mockReturnValueOnce(makeChain([])) // module dependencies
       .mockReturnValueOnce(makeChain([])); // learner counts
 
@@ -270,6 +277,7 @@ describe('getCourseBoard', () => {
           { id: 9, name: 'Lesson 9', slug: 'l9', rank: '1' },
         ]),
       )
+      .mockReturnValueOnce(makeChain([])) // placement counts
       .mockReturnValueOnce(makeChain([]))
       .mockReturnValueOnce(makeChain([]));
 
@@ -295,6 +303,7 @@ describe('getCourseBoard', () => {
       .mockReturnValueOnce(
         makeChain([{ id: 9, name: 'Lesson 9', slug: 'l9', rank: '1' }]),
       )
+      .mockReturnValueOnce(makeChain([])) // placement counts
       .mockReturnValueOnce(makeChain([]))
       .mockReturnValueOnce(makeChain([]));
 
@@ -327,6 +336,7 @@ describe('getCourseBoard', () => {
           { id: 10, name: 'Lesson 10', slug: 'l10', rank: '1' },
         ]),
       )
+      .mockReturnValueOnce(makeChain([])) // placement counts
       .mockReturnValueOnce(makeChain([])) // module dependencies
       .mockReturnValueOnce(makeChain([])); // learner counts
 
@@ -367,8 +377,9 @@ describe('getCourseBoard', () => {
           { id: 9, moduleId: 99, name: 'Lesson 9', slug: 'l9', rank: '1' },
         ]),
       ) // lessons
+      .mockReturnValueOnce(makeChain([])) // placement counts
       .mockReturnValueOnce(makeChain([])); // module dependencies
-    // The 5th db.select call is countLearnersByModule's own query — captured
+    // The 6th db.select call is countLearnersByModule's own query — captured
     // rather than canned, so `.from`/`.innerJoin`/`.where`/`.groupBy` can be
     // asserted on directly (Task 5e, Part 2d: these were previously
     // unasserted entirely).
@@ -387,8 +398,8 @@ describe('getCourseBoard', () => {
 
     const board = await getCourseBoard(3);
 
-    // The 5th db.select call is countLearnersByModule's own query.
-    const learnerCountsCallArg = db.select.mock.calls[4]?.[0] as {
+    // The 6th db.select call is countLearnersByModule's own query.
+    const learnerCountsCallArg = db.select.mock.calls[5]?.[0] as {
       moduleId: unknown;
     };
     expect(learnerCountsCallArg.moduleId).toBe(moduleLessonsTable.moduleId);

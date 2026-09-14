@@ -26,7 +26,11 @@ vi.mock('#/db', async () => {
   return { db };
 });
 const membership = vi.hoisted(() => ({
-  courseModuleIds: vi.fn(() => 'SUBQUERY'),
+  // Id-templated (not a fixed string) so a WHERE's bound param can be pinned
+  // to the SPECIFIC course the subquery was built for — same pattern as
+  // library-placement-scoping.test.ts and admin-course-cache-invalidation
+  // .test.ts.
+  courseModuleIds: vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
 }));
 vi.mock('#/db/course-modules', () => membership);
 
@@ -59,7 +63,7 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
 }));
 
 const { getPlacementsForCourse } = await import('../placements');
-const { getCourseBoard } = await import('../admin');
+const { getCourseBoard, updateModuleDependencies } = await import('../admin');
 const { courseModulesTable, modulesTable } = await import('../schema');
 
 beforeEach(() => {
@@ -135,5 +139,42 @@ describe('course board membership', () => {
     await getCourseBoard(2);
     const fields = cap.captured.select[1] as { rank: unknown };
     expect(fields.rank).toBe(courseModulesTable.rank);
+  });
+});
+
+describe('updateModuleDependencies siblings', () => {
+  /**
+   * The dependency picker must offer every module on the OWNER's board — the
+   * same membership `courseModuleIds` defines everywhere else — not merely
+   * "every module this module's course row owns" (`modules.course_id`): a
+   * course's own module may legitimately depend on one it only borrowed
+   * through a remix, and that borrowed module is never this course's OWNER.
+   * Mutant: leave the WHERE on `eq(modulesTable.courseId, target.courseId)`
+   * — compiles, looks right, and silently excludes every borrowed sibling.
+   *
+   * Reaching the picker's own DB-mutating branches (insert/update/delete)
+   * would need `db.insert`/`db.update`/`db.delete`, which this file's
+   * `captureDb()` harness does not stub (it only wraps the SELECT chain
+   * methods) — so this pins an unknown-slug input, which returns before any
+   * write, right after the siblings query the assertion is about.
+   */
+  it("offers the picker every module on the module's OWNER's board, via membership", async () => {
+    cap.results.push([{ slug: 'target-slug', courseId: 5 }]); // target lookup
+    cap.results.push([]); // siblings — the owner's board, empty here
+
+    const result = await updateModuleDependencies(42, ['ghost']);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'unknown-modules',
+      slugs: ['ghost'],
+    });
+    expect(membership.courseModuleIds).toHaveBeenCalledWith(5);
+    expect(renderSql(cap.captured.where[1] as SQL)).toBe(
+      '"modules"."id" in $1',
+    );
+    expect(renderSqlParams(cap.captured.where[1] as SQL)).toEqual([
+      'SUBQUERY:5',
+    ]);
   });
 });

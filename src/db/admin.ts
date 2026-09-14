@@ -12,10 +12,11 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
-import { countRemixers } from '#/db/course-remixes';
+import { countRemixers, getRemixSourceIds } from '#/db/course-remixes';
 import {
   getCourseSlugForCourseId,
   getCourseSlugForModuleId,
@@ -567,7 +568,8 @@ export async function getCourseBoard(
   // decide this. The lesson row still supplies name, video and every gate.
   // Fetched alongside `modules` rather than after: it depends only on
   // `courseId`, not on the module rows, so there is nothing to sequence.
-  const [modules, placements] = await Promise.all([
+  const ownerCourse = alias(coursesTable, 'owner_course');
+  const [modules, placements, remixSourceIds] = await Promise.all([
     db
       .select({
         id: modulesTable.id,
@@ -579,12 +581,18 @@ export async function getCourseBoard(
         rank: courseModulesTable.rank,
         requiredSubscriptions: modulesTable.requiredSubscriptions,
         sequentialLessons: modulesTable.sequentialLessons,
+        // The OWNER — `modules.course_id` — which is a different course from
+        // this board's exactly when the module is borrowed.
+        ownerId: ownerCourse.id,
+        ownerName: ownerCourse.name,
       })
       .from(courseModulesTable)
       .innerJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
+      .innerJoin(ownerCourse, eq(ownerCourse.id, modulesTable.courseId))
       .where(eq(courseModulesTable.courseId, courseId))
       .orderBy(asc(courseModulesTable.rank), asc(modulesTable.id)),
     getPlacementsForCourse(courseId),
+    getRemixSourceIds(courseId),
   ]);
 
   const moduleIds = modules.map((m) => m.id);
@@ -645,8 +653,23 @@ export async function getCourseBoard(
     list.sort((a, b) => a.rank - b.rank || a.id - b.id);
   }
 
-  const [dependencies, learnerCounts] = moduleIds.length
+  // `countLearnersByModule` is awaited on its own, after this pair, rather
+  // than joined into the same `Promise.all`: it wraps its own query in an
+  // `async function`, and an `await` inside a helper resolves before a
+  // Promise.all sibling passed as a bare query builder — a mock-harness-only
+  // ordering quirk (the same helper, plain-inlined, would race fairly; real
+  // drizzle builders are true Promises this quirk doesn't apply to). Keeping
+  // it a separate call sidesteps needing to know that to read this code.
+  const [placementCounts, dependencies] = moduleIds.length
     ? await Promise.all([
+        db
+          .select({
+            moduleId: courseModulesTable.moduleId,
+            n: sql<number>`count(*)::int`,
+          })
+          .from(courseModulesTable)
+          .where(inArray(courseModulesTable.moduleId, moduleIds))
+          .groupBy(courseModulesTable.moduleId),
         db
           .select({
             moduleId: moduleDependenciesTable.moduleId,
@@ -654,10 +677,15 @@ export async function getCourseBoard(
           })
           .from(moduleDependenciesTable)
           .where(inArray(moduleDependenciesTable.moduleId, moduleIds)),
-        countLearnersByModule(moduleIds),
       ])
-    : [[], new Map<number, number>()];
+    : [[], []];
+  const learnerCounts = moduleIds.length
+    ? await countLearnersByModule(moduleIds)
+    : new Map<number, number>();
 
+  const placementCountByModule = new Map(
+    placementCounts.map((r) => [r.moduleId, Number(r.n)]),
+  );
   const dependsOnByModule = new Map(
     dependencies.map((d) => [d.moduleId, d.dependsOn]),
   );
@@ -675,11 +703,11 @@ export async function getCourseBoard(
       dependsOn: dependsOnByModule.get(m.id) ?? [],
       sequentialLessons: m.sequentialLessons,
       learnerCount: learnerCounts.get(m.id) ?? 0,
-      // TEMPORARY stand-in — Task 4 replaces this with the real owner join
-      // and cross-course placement count; its test is what proves this
-      // placeholder gone.
-      owner: { id: courseId, name: course.name },
-      otherCourseCount: 0,
+      owner: { id: m.ownerId, name: m.ownerName },
+      otherCourseCount: Math.max(
+        0,
+        (placementCountByModule.get(m.id) ?? 1) - 1,
+      ),
       lessons: (byModule.get(m.id) ?? []).map((l) => ({
         id: l.id,
         name: l.name,
@@ -697,6 +725,7 @@ export async function getCourseBoard(
         videoRef: l.videoRef,
       })),
     })),
+    remixes: remixSourceIds.map((sourceCourseId) => ({ sourceCourseId })),
   };
 }
 
@@ -1439,7 +1468,11 @@ export async function updateModuleDependencies(
       moduleDependenciesTable,
       eq(moduleDependenciesTable.moduleId, modulesTable.id),
     )
-    .where(eq(modulesTable.courseId, target.courseId));
+    // The modules on the OWNER's board — membership, not ownership: a
+    // course's own module may depend on one it borrowed (the borrowed module
+    // is present wherever this one is shown, since a remix takes the whole
+    // source), and the picker offers exactly this list.
+    .where(inArray(modulesTable.id, courseModuleIds(target.courseId)));
 
   // Order-preserving dedupe: a duplicated slug is a client bug, not a reason
   // to fail the write, but it must not reach a column the UI renders as chips.

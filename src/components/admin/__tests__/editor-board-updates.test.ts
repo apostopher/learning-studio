@@ -60,6 +60,7 @@ const makeBoard = (): OrgEditorBoard => [
       imageUrlWebp: null,
     },
     modules: [mod(10, [100, 101, 102]), mod(11, [110])],
+    remixes: [],
   },
   {
     course: {
@@ -71,6 +72,7 @@ const makeBoard = (): OrgEditorBoard => [
       imageUrlWebp: null,
     },
     modules: [mod(20, [200])],
+    remixes: [],
   },
 ];
 
