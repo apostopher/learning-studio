@@ -242,7 +242,7 @@ export const newsSourcePanelAtom = atom<{
  * anti-pattern from docs/use-effect-rules.md, and a family keyed by lesson
  * would have swapped it for state that outlives the modal entirely.
  *
- * Closing the modal clears all three through `resetVideoSectionAtom` below —
+ * Closing the modal clears both through `resetVideoSectionAtom` below —
  * an event, which is where that kind of reset belongs.
  */
 
@@ -258,12 +258,6 @@ export const videoDraftDetectionAtom = atom<{
 } | null>(null);
 
 /**
- * The lesson whose Video tab is showing the "replace video URL" form over an
- * already-configured video, or null when no tab is.
- */
-export const videoReplaceModeLessonIdAtom = atom<number | null>(null);
-
-/**
  * The lesson whose browser request for a resolved playback URL was refused
  * (401/403). This is the only signal that a Mux signing key has been revoked:
  * Mux JWTs are signed locally on our server, so playback resolution succeeds and
@@ -272,13 +266,12 @@ export const videoReplaceModeLessonIdAtom = atom<number | null>(null);
 export const videoPlaybackForbiddenLessonIdAtom = atom<number | null>(null);
 
 /**
- * Clear the Video tab's transient state. Called when the lesson-config modal
- * closes, so reopening the same lesson starts clean instead of restoring a
- * half-finished "replace video" form.
+ * Clear the video block's transient state. Called when a lesson dialog
+ * closes, so reopening the same lesson starts clean rather than carrying a
+ * stale URL detection or a dead-key verdict across.
  */
 export const resetVideoSectionAtom = atom(null, (_get, set) => {
   set(videoDraftDetectionAtom, null);
-  set(videoReplaceModeLessonIdAtom, null);
   set(videoPlaybackForbiddenLessonIdAtom, null);
 });
 

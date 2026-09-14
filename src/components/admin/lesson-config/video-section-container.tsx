@@ -1,13 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
-import { Loader2, Pencil, RotateCcw } from 'lucide-react';
+import { Loader2, RotateCcw } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import {
   videoDraftDetectionAtom,
   videoPlaybackForbiddenLessonIdAtom,
-  videoReplaceModeLessonIdAtom,
 } from '#/atoms/admin';
 import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
@@ -72,9 +71,6 @@ export const VideoSectionContainer = ({
   previewNote,
 }: VideoSectionContainerProps) => {
   const [storedDraft, setStoredDraft] = useAtom(videoDraftDetectionAtom);
-  const [replaceModeLessonId, setReplaceModeLessonId] = useAtom(
-    videoReplaceModeLessonIdAtom,
-  );
   const [playbackForbiddenLessonId, setPlaybackForbiddenLessonId] = useAtom(
     videoPlaybackForbiddenLessonIdAtom,
   );
@@ -83,10 +79,7 @@ export const VideoSectionContainer = ({
   // belongs to, so a value left behind by the previously configured lesson is
   // simply not ours — see the atoms' own comment, and
   // docs/use-effect-rules.md on resetting state when a prop changes.
-  const replaceMode = replaceModeLessonId === lesson.id;
   const playbackForbidden = playbackForbiddenLessonId === lesson.id;
-  const setReplaceMode = (next: boolean) =>
-    setReplaceModeLessonId(next ? lesson.id : null);
   const setPlaybackForbidden = (next: boolean) =>
     setPlaybackForbiddenLessonId(next ? lesson.id : null);
 
@@ -151,10 +144,7 @@ export const VideoSectionContainer = ({
     setLessonVideo.mutate(
       { lessonId: lesson.id, provider: hit.provider, ref: hit.ref },
       {
-        onSuccess: () => {
-          urlForm.reset({ url: '' });
-          setReplaceMode(false);
-        },
+        onSuccess: () => urlForm.reset({ url: '' }),
         onError: () => setDraftDetection(null),
       },
     );
@@ -179,148 +169,148 @@ export const VideoSectionContainer = ({
   // this has to override it — otherwise we'd render a player that cannot play.
   const canPlay = isProviderConfigured && keyRejection === null;
 
-  const showUrlForm = !hasVideo || replaceMode;
+  /**
+   * One compact row: the thumbnail on the left, the URL field on the right,
+   * always. There is no "Replace" toggle to find first — pasting a new URL
+   * IS replacing — and no full-width player: the admin came here to work on
+   * the lesson's content, and a small preview is enough to confirm the right
+   * video is attached. Status lines (rendering, failed, dead key, connect the
+   * provider) sit under the row at full width so their controls have room.
+   */
+  const thumbnailPlayback =
+    courseId !== null && canPlay && previewState.kind === 'ready'
+      ? previewState.playback
+      : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      {hasVideo && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-secondary text-sm">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="w-full shrink-0 sm:w-44">
+          <VideoPreview
+            playback={thumbnailPlayback}
+            onForbidden={() => setPlaybackForbidden(true)}
+          />
+          {hasVideo && activeProvider && (
+            <p className="mt-1.5 text-tertiary text-xs">
               Current video:{' '}
-              <span className="font-medium text-primary">
-                {activeProvider ? VIDEO_PROVIDERS[activeProvider].label : ''}
+              <span className="font-medium text-secondary">
+                {VIDEO_PROVIDERS[activeProvider].label}
               </span>
             </p>
-            {!replaceMode && (
-              <button
-                type="button"
-                onClick={() => setReplaceMode(true)}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-              >
-                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                Replace video
-              </button>
-            )}
-          </div>
+          )}
+        </div>
 
-          {courseId === null ? (
-            <p className="text-secondary text-sm">
-              Preview and provider connection appear once this lesson is placed
-              in a course.
-            </p>
-          ) : canPlay ? (
-            <>
-              <VideoPreview
-                playback={
-                  previewState.kind === 'ready' ? previewState.playback : null
-                }
-                onForbidden={() => setPlaybackForbidden(true)}
-              />
-              {previewNote && (
-                <p className="text-tertiary text-xs">{previewNote}</p>
-              )}
-              {playback.isLoading && (
-                <p className="flex items-center gap-1.5 text-tertiary text-sm">
-                  <Loader2
-                    className="h-3.5 w-3.5 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Resolving playback…
-                </p>
-              )}
-              {playback.isError && (
+        <div className="min-w-0 flex-1">
+          <VideoUrlForm
+            onSubmit={handleUrlSubmit}
+            registerUrl={urlForm.register('url')}
+            urlError={urlForm.formState.errors.url?.message}
+            detectedLabel={
+              detected ? VIDEO_PROVIDERS[detected.provider].label : null
+            }
+            showUnsupported={urlValue.trim().length > 0 && !detected}
+            isPending={setLessonVideo.isPending}
+            serverError={setLessonVideo.error?.message}
+            submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
+          />
+        </div>
+      </div>
+
+      {hasVideo &&
+        (courseId === null ? (
+          <p className="text-secondary text-sm">
+            Preview and provider connection appear once this lesson is placed in
+            a course.
+          </p>
+        ) : canPlay ? (
+          <>
+            {previewNote && (
+              <p className="text-tertiary text-xs">{previewNote}</p>
+            )}
+            {playback.isLoading && (
+              <p className="flex items-center gap-1.5 text-tertiary text-sm">
+                <Loader2
+                  className="h-3.5 w-3.5 animate-spin"
+                  aria-hidden="true"
+                />
+                Resolving playback…
+              </p>
+            )}
+            {playback.isError && (
+              <p role="alert" className="text-error-text text-sm">
+                Couldn't resolve playback: {playback.error.message}
+              </p>
+            )}
+            {/*
+              Neither "rendering" nor "failed" is an error: the request
+              succeeded, the video just isn't playable yet (or ever, for
+              "failed"). The thumbnail already shows its blank placeholder
+              for both — this is the honest label plus a way to check again
+              without leaving the page. Branches on `previewState`
+              (computeVideoPreviewState), not on `playback.data` directly,
+              so the decision has one home a test can reach.
+            */}
+            {previewState.kind === 'rendering' && (
+              <div className="flex items-center justify-between gap-3">
+                <output className="text-secondary text-sm">
+                  This video is still rendering and isn't playable yet.
+                </output>
+                <button
+                  type="button"
+                  onClick={() => playback.refetch()}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Check again
+                </button>
+              </div>
+            )}
+            {previewState.kind === 'failed' && (
+              <div className="flex items-center justify-between gap-3">
                 <p role="alert" className="text-error-text text-sm">
-                  Couldn't resolve playback: {playback.error.message}
+                  This video failed to render at the provider.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => playback.refetch()}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Retry
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          activeProvider && (
+            <div className="flex flex-col gap-4">
+              {keyRejection === null && (
+                <p className="text-secondary text-sm">
+                  Connect {VIDEO_PROVIDERS[activeProvider].label} for this
+                  course to preview and serve this video.
                 </p>
               )}
               {/*
-                Neither "rendering" nor "failed" is an error: the request
-                succeeded, the video just isn't playable yet (or ever, for
-                "failed"). VideoPreview already shows its blank placeholder
-                for both — this is the honest label plus a way to check
-                again without leaving the page. Branches on `previewState`
-                (computeVideoPreviewState), not on `playback.data` directly,
-                so the decision has one home a test can reach.
+                Same flow as the course dialog's Video integrations section,
+                minus the card chrome — the line above already names the
+                provider. Opens straight into the form: the admin got here by
+                pasting a video that cannot play without a key.
               */}
-              {previewState.kind === 'rendering' && (
-                <div className="flex items-center justify-between gap-3">
-                  <output className="text-secondary text-sm">
-                    This video is still rendering and isn't playable yet.
-                  </output>
-                  <button
-                    type="button"
-                    onClick={() => playback.refetch()}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                    Check again
-                  </button>
-                </div>
-              )}
-              {previewState.kind === 'failed' && (
-                <div className="flex items-center justify-between gap-3">
-                  <p role="alert" className="text-error-text text-sm">
-                    This video failed to render at the provider.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => playback.refetch()}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                    Retry
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            activeProvider && (
-              <div className="flex flex-col gap-4">
-                {keyRejection === null && (
-                  <p className="text-secondary text-sm">
-                    Connect {VIDEO_PROVIDERS[activeProvider].label} for this
-                    course to preview and serve this video.
-                  </p>
+              <CredentialFlowContainer
+                courseId={courseId}
+                provider={activeProvider}
+                summary={credentials.data?.find(
+                  (c) => c.provider === activeProvider,
                 )}
-                {/*
-                  Same flow as the course dialog's Video integrations section,
-                  minus the card chrome — the heading above already names the
-                  provider. Opens straight into the form: the admin got here by
-                  pasting a video that cannot play without a key.
-                */}
-                <CredentialFlowContainer
-                  courseId={courseId}
-                  provider={activeProvider}
-                  summary={credentials.data?.find(
-                    (c) => c.provider === activeProvider,
-                  )}
-                  isLoadingCredentials={
-                    credentials.isLoading || credentials.isError
-                  }
-                  openFormImmediately
-                  providerRejection={keyRejection}
-                />
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      {showUrlForm && (
-        <VideoUrlForm
-          onSubmit={handleUrlSubmit}
-          registerUrl={urlForm.register('url')}
-          urlError={urlForm.formState.errors.url?.message}
-          detectedLabel={
-            detected ? VIDEO_PROVIDERS[detected.provider].label : null
-          }
-          showUnsupported={urlValue.trim().length > 0 && !detected}
-          isPending={setLessonVideo.isPending}
-          serverError={setLessonVideo.error?.message}
-          onCancel={hasVideo ? () => setReplaceMode(false) : undefined}
-        />
-      )}
+                isLoadingCredentials={
+                  credentials.isLoading || credentials.isError
+                }
+                openFormImmediately
+                providerRejection={keyRejection}
+              />
+            </div>
+          )
+        ))}
     </div>
   );
 };

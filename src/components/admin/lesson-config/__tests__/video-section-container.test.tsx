@@ -63,7 +63,7 @@ function stubHooks(opts: { configured?: boolean } = {}) {
 afterEach(() => vi.clearAllMocks());
 
 describe('VideoSectionContainer without a course (library lesson placed nowhere)', () => {
-  it('offers the URL form for a lesson with no video, and asks for no credentials or playback', () => {
+  it('offers the URL field beside a placeholder thumbnail, and asks for no credentials or playback', () => {
     stubHooks();
     render(
       <VideoSectionContainer
@@ -73,13 +73,14 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       { wrapper },
     );
     expect(screen.getByLabelText('Video URL or ID')).toBeTruthy();
+    expect(screen.getByTestId('video-preview')).toBeTruthy();
     expect(hooks.credentials).toHaveBeenCalledWith(null);
     expect(hooks.setVideo).toHaveBeenCalledWith(null);
     expect(hooks.playback).toHaveBeenCalledWith(null, false);
     expect(screen.queryByTestId('credential-flow')).toBeNull();
   });
 
-  it('names the current video and says why there is no preview, with a Replace control', () => {
+  it('names the current video, keeps the URL field open, and says why there is no preview', () => {
     stubHooks();
     render(
       <VideoSectionContainer
@@ -89,21 +90,22 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       { wrapper },
     );
     expect(screen.getByText('Mux')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Replace video' })).toBeTruthy();
+    // Always the field — pasting a new URL replaces the video; there is no
+    // toggle to find first, and the submit says what it will do.
+    expect(screen.getByLabelText('Video URL or ID')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: 'Replace video' });
+    expect(submit.getAttribute('type')).toBe('submit');
     expect(
       screen.getByText(
         'Preview and provider connection appear once this lesson is placed in a course.',
       ),
     ).toBeTruthy();
-    expect(screen.queryByTestId('video-preview')).toBeNull();
     expect(screen.queryByTestId('credential-flow')).toBeNull();
-    // The URL form is folded away behind Replace, same as with a course.
-    expect(screen.queryByLabelText('Video URL or ID')).toBeNull();
   });
 });
 
 describe('VideoSectionContainer with a course', () => {
-  it('asks playback for that course and draws the preview when the provider is connected', () => {
+  it('asks playback for that course and draws the thumbnail beside the field when the provider is connected', () => {
     stubHooks({ configured: true });
     render(
       <VideoSectionContainer
@@ -118,10 +120,27 @@ describe('VideoSectionContainer with a course', () => {
       true,
     );
     expect(screen.getByTestId('video-preview')).toBeTruthy();
+    expect(screen.getByLabelText('Video URL or ID')).toBeTruthy();
     expect(
       screen.getByText(
         'Preview is signed with the first course teaching this lesson.',
       ),
     ).toBeTruthy();
+  });
+
+  it('hands off to the credential flow when the provider is not connected', () => {
+    stubHooks({ configured: false });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByTestId('credential-flow')).toBeTruthy();
+    expect(hooks.playback).toHaveBeenCalledWith(
+      { lessonId: 10, courseId: 7 },
+      false,
+    );
   });
 });
