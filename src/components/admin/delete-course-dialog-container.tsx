@@ -4,11 +4,13 @@ import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { deleteCourseAtom } from '@/atoms/admin';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { deleteCourseAtom } from '#/atoms/admin';
 import {
   CourseRequestError,
   useDeleteCourse,
-} from '@/data-hooks/use-delete-course';
+} from '#/data-hooks/use-delete-course';
 import { DeleteConfirmForm } from './delete-confirm-form';
 
 export const DeleteCourseDialogContainer = ({

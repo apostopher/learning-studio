@@ -1,7 +1,9 @@
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
-import { cn } from '@/lib/cn';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is a
+// dependency of dialog containers imported directly by their component tests.
+import { cn } from '#/lib/cn';
 
 const CONFIRM_PHRASE = 'permanently delete';
 
@@ -48,6 +50,7 @@ export const DeleteConfirmForm = ({
           {...registerConfirm}
           id="delete-confirm"
           type="text"
+          // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened, where focus belongs on the first field rather than the popup container
           autoFocus
           autoComplete="off"
           placeholder={CONFIRM_PHRASE}
