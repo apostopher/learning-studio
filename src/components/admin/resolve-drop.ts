@@ -87,6 +87,30 @@ interface LocatedLesson extends LocatedModule {
   lesson: EditorBoardLesson;
 }
 
+/** True when the module is shown on this course's board but owned elsewhere. */
+function isBorrowed(located: LocatedModule): boolean {
+  return located.module.owner.id !== located.courseBoard.course.id;
+}
+
+/**
+ * Why a lesson may not be added to or taken out of a borrowed module here.
+ *
+ * Content authority follows the OWNER (spec, Permissions row 2): the server
+ * would refuse this with a 403 on the owner's course anyway, but a drag that
+ * springs back with a bare "Forbidden" leaves the admin with a lesson in hand
+ * and no idea where to put it. The sentence names the owner, says what the
+ * viewing course's relationship is, and points at the two things that DO
+ * work.
+ */
+function borrowedRefusal(target: LocatedModule, adding: boolean): string {
+  const mod = target.module.name;
+  const owner = target.module.owner.name;
+  const viewing = target.courseBoard.course.name;
+  return adding
+    ? `"${mod}" is edited in ${owner} — ${viewing} only borrows it. Add the lesson to it from ${owner}’s board, or drop it on one of ${viewing}’s own modules.`
+    : `"${mod}" is edited in ${owner} — ${viewing} only borrows it, so its lessons are arranged there.`;
+}
+
 /**
  * Scoped to ONE course's column: a module (and every lesson it holds) can sit
  * on two rails at once through a remix, so a lookup by module id alone would
@@ -186,7 +210,7 @@ export function resolveDrop(
       if (!courseBoard) return null;
       return {
         kind: 'forbidden',
-        reason: `"${from.module.name}" belongs to ${from.courseBoard.course.name}, and modules are only reordered within their own course — they cannot be moved into ${courseBoard.course.name}.`,
+        reason: `"${from.module.name}" is placed in ${from.courseBoard.course.name}, and modules are only reordered within their own course — they cannot be moved into ${courseBoard.course.name}.`,
       };
     }
 
@@ -206,7 +230,7 @@ export function resolveDrop(
     if (to.courseBoard.course.id !== from.courseBoard.course.id) {
       return {
         kind: 'forbidden',
-        reason: `"${from.module.name}" belongs to ${from.courseBoard.course.name}, so it cannot be moved into ${to.courseBoard.course.name}. Modules are only reordered within their own course.`,
+        reason: `"${from.module.name}" is placed in ${from.courseBoard.course.name}, so it cannot be moved into ${to.courseBoard.course.name}. Modules are only reordered within their own course.`,
       };
     }
     return {
@@ -220,6 +244,12 @@ export function resolveDrop(
   if (active.type === 'lesson') {
     const from = findPlacedLesson(board, active.courseId, active.id);
     if (!from) return null;
+    // Content authority follows the owner: this must win over every other
+    // refusal below, including the cross-course one — a borrowed module's
+    // lessons cannot be rearranged from any viewing column, not just other
+    // courses' columns.
+    if (isBorrowed(from))
+      return { kind: 'forbidden', reason: borrowedRefusal(from, false) };
 
     if (over.type === 'discipline' || over.type === 'library-lesson') {
       return {
@@ -249,6 +279,11 @@ export function resolveDrop(
 
     const to = resolveOverModule(board, overId);
     if (!to) return null;
+    // Same reasoning as the `from` check above, ahead of the cross-course
+    // refusal: a borrowed module refuses content changes from its OWN
+    // column too, not only from other courses'.
+    if (isBorrowed(to))
+      return { kind: 'forbidden', reason: borrowedRefusal(to, true) };
     if (to.courseBoard.course.id !== from.courseBoard.course.id) {
       return {
         kind: 'forbidden',
@@ -288,6 +323,10 @@ export function resolveDrop(
         reason: `${to.courseBoard.course.name} already teaches this lesson. Drag the copy that is already in ${to.courseBoard.course.name} to move it between that course's modules.`,
       };
     }
+    // Content authority follows the owner: linking a lesson into a borrowed
+    // module here would edit the OWNER's content from the borrower's board.
+    if (isBorrowed(to))
+      return { kind: 'forbidden', reason: borrowedRefusal(to, true) };
     return { kind: 'link', moduleId: to.module.id, lessonId: active.id };
   }
 

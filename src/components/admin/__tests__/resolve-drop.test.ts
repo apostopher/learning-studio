@@ -92,16 +92,30 @@ const FUNDAMENTALS = 10;
 const CIRCUITS = 11;
 const BASICS = 20;
 
+// Every module below is owned by the course whose column it sits in — none
+// of these fixtures are borrowed, so the `mod(...)` default owner (matching
+// the MODULE's own id/name, not a course) would wrongly mark all of them as
+// borrowed. The borrowed case is covered separately, below.
+const TWO_WEEK_COURSE = { id: 1, name: 'Two-Week Course' };
+const MINI_COURSE = { id: 2, name: 'Mini Course' };
+
 const board: OrgEditorBoard = [
   courseBoard(1, 'Two-Week Course', [
-    mod(FUNDAMENTALS, 'Fundamentals', [
-      lesson(STALLS, 'Stalls'),
-      lesson(TAXIING, 'Taxiing'),
-    ]),
-    mod(CIRCUITS, 'Circuits', [lesson(GO_AROUND, 'Go-around')]),
+    mod(
+      FUNDAMENTALS,
+      'Fundamentals',
+      [lesson(STALLS, 'Stalls'), lesson(TAXIING, 'Taxiing')],
+      TWO_WEEK_COURSE,
+    ),
+    mod(
+      CIRCUITS,
+      'Circuits',
+      [lesson(GO_AROUND, 'Go-around')],
+      TWO_WEEK_COURSE,
+    ),
   ]),
   courseBoard(2, 'Mini Course', [
-    mod(BASICS, 'Basics', [lesson(RADIO_CALLS, 'Radio Calls')]),
+    mod(BASICS, 'Basics', [lesson(RADIO_CALLS, 'Radio Calls')], MINI_COURSE),
   ]),
   // A course with NO modules — the only state in which the `course` drop
   // target is rendered.
@@ -416,7 +430,7 @@ describe('resolveDrop — dropping on a course column itself', () => {
     expect(result).toEqual({
       kind: 'forbidden',
       reason:
-        '"Fundamentals" belongs to Two-Week Course, and modules are only reordered within their own course — they cannot be moved into Weekend Refresher.',
+        '"Fundamentals" is placed in Two-Week Course, and modules are only reordered within their own course — they cannot be moved into Weekend Refresher.',
     });
   });
 
@@ -481,7 +495,78 @@ describe('resolveDrop — the same module shown on two rails', () => {
     expect(result).toEqual({
       kind: 'forbidden',
       reason:
-        '"Shared" belongs to Remixer, so it cannot be moved into Source. Modules are only reordered within their own course.',
+        '"Shared" is placed in Remixer, so it cannot be moved into Source. Modules are only reordered within their own course.',
+    });
+  });
+});
+
+/**
+ * A borrowed module is one shown on a course's board through a remix but
+ * owned by another course (`module.owner.id !== courseBoard.course.id`).
+ * Content authority follows the owner: a lesson may only be added to or
+ * removed from a borrowed module on the OWNER's board, though the borrowing
+ * course may still reorder the borrowed module's position on its own rail —
+ * that is layout, not content.
+ */
+describe('resolveDrop — borrowed modules', () => {
+  const owner = { id: 6, name: '3D Airmanship' };
+  const borrowed = mod(10, 'Weather', [lesson(55, 'Crosswinds')], owner);
+  const own = mod(20, 'Intro', [lesson(56, 'Welcome')], {
+    id: 2,
+    name: 'ITPS',
+  });
+  const remixBoard: OrgEditorBoard = [
+    courseBoard(6, '3D Airmanship', [borrowed]),
+    courseBoard(2, 'ITPS', [own, borrowed]),
+  ];
+
+  it('refuses a library lesson dropped on a borrowed module, naming where it is edited', () => {
+    expect(
+      resolveDrop(remixBoard, libraryLessonDndId(99), containerDndId(2, 10)),
+    ).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Add the lesson to it from 3D Airmanship’s board, or drop it on one of ITPS’s own modules.',
+    });
+  });
+
+  it('refuses moving a placed lesson INTO a borrowed module', () => {
+    expect(
+      resolveDrop(remixBoard, lessonDndId(2, 56), containerDndId(2, 10)),
+    ).toMatchObject({
+      kind: 'forbidden',
+      reason: expect.stringContaining('is edited in 3D Airmanship'),
+    });
+  });
+
+  it('refuses moving a placed lesson OUT OF a borrowed module', () => {
+    expect(
+      resolveDrop(remixBoard, lessonDndId(2, 55), containerDndId(2, 20)),
+    ).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it, so its lessons are arranged there.',
+    });
+  });
+
+  it('still lets the borrowing course reorder the borrowed module on its own rail', () => {
+    expect(
+      resolveDrop(remixBoard, moduleDndId(2, 10), moduleDndId(2, 20)),
+    ).toEqual({
+      kind: 'reorder-module',
+      courseId: 2,
+      moduleId: 10,
+      overModuleId: 20,
+    });
+  });
+
+  it('lets the OWNER’s column do everything it could before', () => {
+    expect(
+      resolveDrop(remixBoard, libraryLessonDndId(99), containerDndId(6, 10)),
+    ).toEqual({
+      kind: 'link',
+      moduleId: 10,
+      lessonId: 99,
     });
   });
 });
