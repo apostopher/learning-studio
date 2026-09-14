@@ -5,13 +5,16 @@ import {
 import { Link } from '@tanstack/react-router';
 import { useAtom, useSetAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   createModuleTargetAtom,
   deleteCourseAtom,
   editCourseAtom,
   expandedEditorModuleIdsAtom,
+  unremixCourseAtom,
 } from '#/atoms/admin';
 import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
+import { useRemixCourse } from '#/data-hooks/use-remix-course';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { CourseColumn } from './course-column';
@@ -34,12 +37,20 @@ export const EditorCourseColumnContainer = ({
   courseBoard,
   canEditCourse = false,
   canDeleteCourse = false,
+  flagship = null,
 }: {
   courseBoard: EditorCourseBoard;
   /** `course:update` — org-level, so the route can answer it. */
   canEditCourse?: boolean;
   /** `course:delete` — likewise. */
   canDeleteCourse?: boolean;
+  /**
+   * The org's flagship course (`#/lib/flagship-course`), or null when none
+   * carries the slug. Threaded in rather than looked up here: the editor
+   * already holds the whole board and finds it once for the rail, so every
+   * column reuses that one answer instead of re-scanning the board itself.
+   */
+  flagship?: { id: number; name: string } | null;
 }) => {
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedEditorModuleIdsAtom,
@@ -63,6 +74,47 @@ export const EditorCourseColumnContainer = ({
   const openEditCourse = useSetAtom(editCourseAtom);
   const openDeleteCourse = useSetAtom(deleteCourseAtom);
 
+  const remixCourse = useRemixCourse();
+  const openUnremix = useSetAtom(unremixCourseAtom);
+  const isFlagship = flagship?.id === course.id;
+  const isRemixed =
+    flagship !== null &&
+    courseBoard.remixes.some((r) => r.sourceCourseId === flagship.id);
+  // How many of THIS column's modules came from the flagship — the count the
+  // un-remix confirm states so the admin knows the blast radius before
+  // clicking, not just how many the flagship happens to hold in total.
+  const borrowedCount =
+    flagship === null
+      ? 0
+      : modules.filter((m) => m.owner.id === flagship.id).length;
+  const remix =
+    flagship && !isFlagship
+      ? {
+          sourceName: flagship.name,
+          isRemixed,
+          isPending: remixCourse.isPending,
+          onRemix: () =>
+            remixCourse.mutate(
+              { courseId: course.id, sourceCourseId: flagship.id },
+              {
+                onSuccess: ({ moduleCount }) =>
+                  toast.success(
+                    `${moduleCount} ${moduleCount === 1 ? 'module' : 'modules'} from ${flagship.name} added to ${course.name}`,
+                  ),
+                onError: (error) => toast.error(error.message),
+              },
+            ),
+          onUnremix: () =>
+            openUnremix({
+              courseId: course.id,
+              courseName: course.name,
+              sourceCourseId: flagship.id,
+              sourceName: flagship.name,
+              moduleCount: borrowedCount,
+            }),
+        }
+      : undefined;
+
   return (
     <CourseColumn
       course={course}
@@ -71,6 +123,7 @@ export const EditorCourseColumnContainer = ({
           courseName={course.name}
           canEditCourse={canEditCourse}
           canDeleteCourse={canDeleteCourse}
+          remix={remix}
           onAddModule={() =>
             openCreateModule({ id: course.id, name: course.name })
           }

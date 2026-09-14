@@ -192,6 +192,18 @@ export const editCourseAtom = atom<{
 export const deleteCourseAtom = atom<{ id: number; name: string } | null>(null);
 
 /**
+ * The un-remix being confirmed. Carries both names and the module count so
+ * the dialog can say exactly what leaves which rail without a fetch.
+ */
+export const unremixCourseAtom = atom<{
+  courseId: number;
+  courseName: string;
+  sourceCourseId: number;
+  sourceName: string;
+  moduleCount: number;
+} | null>(null);
+
+/**
  * What the course modal's News sources panel is showing.
  *
  * Carries the `courseId` it belongs to so a value left behind by a previously

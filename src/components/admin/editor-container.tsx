@@ -41,6 +41,7 @@ import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
 import type { LibraryLesson, OrgEditorBoard } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
+import { findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
@@ -81,6 +82,7 @@ import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dial
 import { ModuleAccordionItem } from './module-accordion-item';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { resolveDrop } from './resolve-drop';
+import { UnremixCourseDialogContainer } from './unremix-course-dialog-container';
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
@@ -724,6 +726,7 @@ export const EditorContainer = ({
     .flatMap((m) => m.lessons)
     .find((l) => l.id === activeLessonId);
   const activeLibraryLesson = findLibraryLesson(library, activeLibraryLessonId);
+  const flagship = findFlagshipCourse(board);
 
   return (
     <DndContext
@@ -810,6 +813,7 @@ export const EditorContainer = ({
                 courseBoard={courseBoard}
                 canEditCourse={capabilities.canEditCourse}
                 canDeleteCourse={capabilities.canDeleteCourse}
+                flagship={flagship}
               />
             ))}
           </CourseRail>
@@ -880,6 +884,7 @@ export const EditorContainer = ({
       <EditorCreateModuleDialogContainer />
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer navigateAfterDelete={false} />
+      <UnremixCourseDialogContainer />
       <LessonVideoModalContainer
         modules={board.flatMap((courseBoard) => courseBoard.modules)}
       />

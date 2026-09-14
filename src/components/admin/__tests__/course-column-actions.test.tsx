@@ -22,7 +22,17 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 import { CourseColumnActions } from '../course-column-actions';
 
 function renderActions(
-  overrides: { canEditCourse?: boolean; canDeleteCourse?: boolean } = {},
+  overrides: {
+    canEditCourse?: boolean;
+    canDeleteCourse?: boolean;
+    remix?: {
+      sourceName: string;
+      isRemixed: boolean;
+      isPending: boolean;
+      onRemix: () => void;
+      onUnremix: () => void;
+    };
+  } = {},
 ) {
   const handlers = {
     onAddModule: vi.fn(),
@@ -34,6 +44,7 @@ function renderActions(
       courseName="2 Week Intensive"
       canEditCourse={overrides.canEditCourse ?? true}
       canDeleteCourse={overrides.canDeleteCourse ?? true}
+      remix={overrides.remix}
       {...handlers}
     />,
   );
@@ -121,5 +132,69 @@ describe('CourseColumnActions', () => {
     expect(
       screen.getByRole('button', { name: 'Add a module to 2 Week Intensive' }),
     ).toBeTruthy();
+  });
+});
+
+describe('remix button', () => {
+  it('is absent when no remix source is offered (the flagship’s own column, or no flagship)', () => {
+    renderActions();
+    expect(screen.queryByRole('button', { name: /remix/i })).toBeNull();
+  });
+
+  it('sits FIRST in the bar and offers to remix the source by name', () => {
+    const onRemix = vi.fn();
+    renderActions({
+      remix: {
+        sourceName: '3D Airmanship',
+        isRemixed: false,
+        isPending: false,
+        onRemix,
+        onUnremix: vi.fn(),
+      },
+    });
+    const buttons = screen.getAllByRole('button');
+    expect(buttons[0].getAttribute('aria-label')).toBe(
+      'Remix 3D Airmanship into 2 Week Intensive',
+    );
+    expect(buttons[0].textContent).toContain('Remix 3D Airmanship');
+    fireEvent.click(buttons[0]);
+    expect(onRemix).toHaveBeenCalledOnce();
+  });
+
+  it('offers to un-remix once linked, and hands the click to the other callback', () => {
+    const onUnremix = vi.fn();
+    const onRemix = vi.fn();
+    renderActions({
+      remix: {
+        sourceName: '3D Airmanship',
+        isRemixed: true,
+        isPending: false,
+        onRemix,
+        onUnremix,
+      },
+    });
+    const button = screen.getByRole('button', {
+      name: 'Un-remix 3D Airmanship from 2 Week Intensive',
+    });
+    expect(button.textContent).toContain('Un-remix 3D Airmanship');
+    fireEvent.click(button);
+    expect(onUnremix).toHaveBeenCalledOnce();
+    expect(onRemix).not.toHaveBeenCalled();
+  });
+
+  it('is disabled while the request is in flight, and says so', () => {
+    renderActions({
+      remix: {
+        sourceName: '3D Airmanship',
+        isRemixed: false,
+        isPending: true,
+        onRemix: vi.fn(),
+        onUnremix: vi.fn(),
+      },
+    });
+    const button = screen.getByRole('button', {
+      name: /Remixing 3D Airmanship/,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
   });
 });
