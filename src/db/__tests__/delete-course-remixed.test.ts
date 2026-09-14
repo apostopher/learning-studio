@@ -43,7 +43,6 @@ const fake = vi.hoisted(() => {
 });
 vi.mock('#/db', () => ({ db: fake.db }));
 const remixes = vi.hoisted(() => ({
-  getRemixerCourseIds: vi.fn(async () => [] as number[]),
   countRemixers: vi.fn(async () => 0),
 }));
 vi.mock('#/db/course-remixes', () => remixes);

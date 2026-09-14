@@ -26,7 +26,6 @@ vi.mock('#/db', async () => {
 });
 const remixes = vi.hoisted(() => ({
   getRemixSourceIds: vi.fn(async () => [] as number[]),
-  getRemixerCourseIds: vi.fn(),
   countRemixers: vi.fn(),
 }));
 vi.mock('#/db/course-remixes', () => remixes);

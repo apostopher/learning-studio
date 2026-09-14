@@ -1,19 +1,34 @@
 // src/db/course-remixes.ts
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { courseModuleIds } from '#/db/course-modules';
 import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import {
   courseModulesTable,
   courseOrgsTable,
   courseRemixesTable,
   coursesTable,
+  lessonsTable,
+  moduleDependenciesTable,
+  moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
+import type { CourseLessonDependency } from '#/types';
 
 export type RemixResult =
   | { ok: true; moduleCount: number }
-  | { ok: false; reason: 'self' | 'not-found' | 'already-remixed' };
+  | { ok: false; reason: 'self' | 'not-found' | 'already-remixed' }
+  | {
+      /**
+       * One of the source's OWNED modules gates on a module the source only
+       * BORROWS. See `remixCourse` — the one-hop rule.
+       */
+      ok: false;
+      reason: 'source-depends-on-borrowed';
+      sourceName: string;
+      modules: Array<{ slug: string; name: string }>;
+    };
 
 export type UnremixResult =
   | { ok: true; moduleCount: number }
@@ -40,6 +55,79 @@ async function coursesAreInOrg(orgId: number, ids: number[]): Promise<boolean> {
 }
 
 /**
+ * The `tx` handed to a `db.transaction` callback — what `modulesGatingOnBorrowed`
+ * reads through so it runs under `remixCourse`'s lock.
+ */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Which of a source's OWNED modules gate on something the source only
+ * BORROWS — a module-level gate naming a borrowed module's slug, or a
+ * lesson-level gate naming a lesson placed in a borrowed module. Those gates
+ * would resolve to nothing one hop further; see `remixCourse`.
+ *
+ * "Borrowed" is the source's membership minus what it owns: a gate naming a
+ * slug that is on NEITHER list (a module deleted since, say) is already
+ * inert in the source and stays inert in the remixer, so it is not counted.
+ */
+async function modulesGatingOnBorrowed(
+  tx: Tx,
+  sourceCourseId: number,
+  owned: Array<{ moduleId: number; slug: string; name: string }>,
+): Promise<Array<{ slug: string; name: string }>> {
+  const ownedIds = owned.map((m) => m.moduleId);
+  const moduleGates = await tx
+    .select({
+      moduleId: moduleDependenciesTable.moduleId,
+      dependsOn: moduleDependenciesTable.dependsOn,
+    })
+    .from(moduleDependenciesTable)
+    .where(inArray(moduleDependenciesTable.moduleId, ownedIds));
+  const lessonGates = await tx
+    .select({
+      moduleId: moduleLessonsTable.moduleId,
+      dependsOn: moduleLessonsTable.dependsOn,
+    })
+    .from(moduleLessonsTable)
+    .where(inArray(moduleLessonsTable.moduleId, ownedIds));
+  // Membership (`courseModuleIds`) minus ownership — the modules on the
+  // source's board that it does not own — with every lesson placed in them.
+  // LEFT joins: a borrowed module with no lessons still names a module slug.
+  const borrowed = await tx
+    .select({ moduleSlug: modulesTable.slug, lessonSlug: lessonsTable.slug })
+    .from(modulesTable)
+    .leftJoin(
+      moduleLessonsTable,
+      eq(moduleLessonsTable.moduleId, modulesTable.id),
+    )
+    .leftJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
+    .where(
+      and(
+        inArray(modulesTable.id, courseModuleIds(sourceCourseId)),
+        ne(modulesTable.courseId, sourceCourseId),
+      ),
+    );
+  const borrowedModuleSlugs = new Set(borrowed.map((b) => b.moduleSlug));
+  const borrowedLessonSlugs = new Set(
+    borrowed.flatMap((b) => (b.lessonSlug ? [b.lessonSlug] : [])),
+  );
+
+  const gatingModuleIds = new Set<number>();
+  for (const gate of moduleGates) {
+    if ((gate.dependsOn ?? []).some((slug) => borrowedModuleSlugs.has(slug)))
+      gatingModuleIds.add(gate.moduleId);
+  }
+  for (const gate of lessonGates) {
+    const deps = (gate.dependsOn ?? []) as CourseLessonDependency[];
+    if (deps.some((d) => borrowedLessonSlugs.has(d.lessonSlug)))
+      gatingModuleIds.add(gate.moduleId);
+  }
+  return owned
+    .filter((m) => gatingModuleIds.has(m.moduleId))
+    .map((m) => ({ slug: m.slug, name: m.name }));
+}
+
+/**
  * Remix `sourceCourseId` into `courseId`: write the link row, then place every
  * module the source OWNS onto the remixer's rail, appended after its current
  * last module in the source's own order.
@@ -48,6 +136,20 @@ async function coursesAreInOrg(orgId: number, ids: number[]): Promise<boolean> {
  * has itself remixed something does not pass those borrowed modules along.
  * One hop only (spec: no transitivity), which is also what makes A⇄B a pair
  * of flat lists rather than a recursion.
+ *
+ * The one-hop rule has a consequence for prerequisites (final review, #6).
+ * An owned module MAY gate on a module its course only borrows — that is
+ * the ITPS→flagship use, and `updateModuleDependencies` offers the whole
+ * board — but the borrowed module does not travel on a further hop, so in
+ * a remixer that gate would name nothing: `resolveDependency` drops a gate
+ * it cannot resolve, and the remixer fails OPEN. The spec's "prerequisites
+ * survive by construction" therefore holds only while no exported module
+ * gates on a borrowed one, and this refuses the remix when one does —
+ * module-level gates (`module_dependencies`) and lesson-level gates
+ * (`module_lessons.depends_on` naming a lesson in a borrowed module) alike,
+ * since both fail open the same way. Refused BEFORE the link row, so a
+ * refusal writes nothing; the remedy (un-remix in the source, or drop the
+ * gate) is the route's to name.
  *
  * Ordering joins the source's placements for rank only: an owned module with
  * no placement in its own course is not on the source's board either and is
@@ -80,11 +182,49 @@ export async function remixCourse(input: {
     // whichever transaction commits second sees the other's effect, instead
     // of a remix racing a create and permanently missing the module (or a
     // create racing a remix and never appending to the just-added remixer).
-    await tx
-      .select({ id: coursesTable.id })
+    const [source] = await tx
+      .select({ id: coursesTable.id, name: coursesTable.name })
       .from(coursesTable)
       .where(eq(coursesTable.id, input.sourceCourseId))
       .for('update');
+    if (!source) return { ok: false, reason: 'not-found' };
+
+    const owned = await tx
+      .select({
+        moduleId: modulesTable.id,
+        slug: modulesTable.slug,
+        name: modulesTable.name,
+        rank: courseModulesTable.rank,
+      })
+      .from(modulesTable)
+      .innerJoin(
+        courseModulesTable,
+        and(
+          eq(courseModulesTable.moduleId, modulesTable.id),
+          eq(courseModulesTable.courseId, input.sourceCourseId),
+        ),
+      )
+      .where(eq(modulesTable.courseId, input.sourceCourseId))
+      .orderBy(asc(courseModulesTable.rank), asc(modulesTable.id));
+
+    // The one-hop check, before anything is written. Read under the lock so
+    // a gate added in the source while this runs is either seen here or
+    // serialised behind the commit.
+    if (owned.length > 0) {
+      const offending = await modulesGatingOnBorrowed(
+        tx,
+        input.sourceCourseId,
+        owned,
+      );
+      if (offending.length > 0) {
+        return {
+          ok: false,
+          reason: 'source-depends-on-borrowed',
+          sourceName: source.name,
+          modules: offending,
+        };
+      }
+    }
 
     const linked = await tx
       .insert(courseRemixesTable)
@@ -96,19 +236,6 @@ export async function remixCourse(input: {
       .onConflictDoNothing()
       .returning({ id: courseRemixesTable.id });
     if (linked.length === 0) return { ok: false, reason: 'already-remixed' };
-
-    const owned = await tx
-      .select({ moduleId: modulesTable.id, rank: courseModulesTable.rank })
-      .from(modulesTable)
-      .innerJoin(
-        courseModulesTable,
-        and(
-          eq(courseModulesTable.moduleId, modulesTable.id),
-          eq(courseModulesTable.courseId, input.sourceCourseId),
-        ),
-      )
-      .where(eq(modulesTable.courseId, input.sourceCourseId))
-      .orderBy(asc(courseModulesTable.rank), asc(modulesTable.id));
 
     const [{ maxRank }] = await tx
       .select({ maxRank: sql<string | null>`max(${courseModulesTable.rank})` })
@@ -161,6 +288,20 @@ export async function unremixCourse(input: {
   }
 
   const result = await db.transaction(async (tx): Promise<UnremixResult> => {
+    // Lock the SOURCE course row before reading or writing anything else —
+    // the same row `remixCourse` and `createModule` lock, for the same
+    // reason: a module being created in the source reads "who remixes this
+    // source" under that lock and appends to each remixer. Serialised here,
+    // the create either sees the link row gone (and skips this remixer) or
+    // commits first (and its placement is among those deleted below). Not
+    // serialised, it could append one borrowed module to a rail that no
+    // longer remixes anything.
+    await tx
+      .select({ id: coursesTable.id })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, input.sourceCourseId))
+      .for('update');
+
     const unlinked = await tx
       .delete(courseRemixesTable)
       .where(
@@ -203,17 +344,6 @@ export async function getRemixSourceIds(courseId: number): Promise<number[]> {
     .from(courseRemixesTable)
     .where(eq(courseRemixesTable.courseId, courseId));
   return rows.map((r) => r.sourceCourseId);
-}
-
-/** The courses borrowing from `sourceCourseId`. */
-export async function getRemixerCourseIds(
-  sourceCourseId: number,
-): Promise<number[]> {
-  const rows = await db
-    .select({ courseId: courseRemixesTable.courseId })
-    .from(courseRemixesTable)
-    .where(eq(courseRemixesTable.sourceCourseId, sourceCourseId));
-  return rows.map((r) => r.courseId);
 }
 
 /** How many courses borrow from `sourceCourseId` — what `deleteCourse` refuses on. */

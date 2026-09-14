@@ -241,13 +241,27 @@ module requiring `candidate` behaves identically in both courses. Modules within
 one course can already differ in tier. The only remix-specific part is that B's
 admin cannot change a borrowed module's tier, which is the edit-authority rule.
 
-**Prerequisites** survive by construction. Whole-course remixing means every
-module A owns is present in B, so both `module_dependencies.depends_on` (module
-slugs) and `module_lessons.depends_on` (lesson slugs) resolve inside B.
-`resolveDependency` matches on `lessonSlug` within the course being gated and
-returns null when absent, which silently drops the gate — so partial remixing
-would fail open. That is why "whole course, always" is a correctness decision,
-not an editorial one.
+**Prerequisites** survive by construction — with one rule. Whole-course
+remixing means every module A owns is present in B, so both
+`module_dependencies.depends_on` (module slugs) and `module_lessons.depends_on`
+(lesson slugs) resolve inside B. `resolveDependency` matches on `lessonSlug`
+within the course being gated and returns null when absent, which silently
+drops the gate — so partial remixing would fail open. That is why "whole
+course, always" is a correctness decision, not an editorial one.
+
+The rule is the **one-hop rule** (amended 2026-09-15). A module A owns may
+gate on a module A only *borrows* — an ITPS module gating on a flagship
+module is the real use, and the dependency picker offers A's whole board —
+but a remix carries only what A owns, so in a course remixing A that gate
+would name nothing and fail open. `remixCourse` therefore **refuses** to
+remix A while any module A owns gates on something A borrows (a module-level
+gate naming a borrowed module, or a lesson-level gate naming a lesson in a
+borrowed module), answering `source-depends-on-borrowed` → 409 with the
+offending module names and both remedies: un-remix in A, or remove the
+dependency. The check runs under the same source-row lock as the remix
+itself and before the link row is written, so a refusal writes nothing.
+Gates naming a slug that is on neither list (a deleted module's, say) are
+already inert in A and are not counted.
 
 ## Migration
 

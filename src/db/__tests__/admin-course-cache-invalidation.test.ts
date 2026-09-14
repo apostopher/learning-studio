@@ -213,7 +213,6 @@ const membership = vi.hoisted(() => ({
 // remixed — neither is under test in this file, so both default to "no
 // remixers" and the owner-name select is queued explicitly per test below.
 const remixes = vi.hoisted(() => ({
-  getRemixerCourseIds: vi.fn(async () => [] as number[]),
   countRemixers: vi.fn(async () => 0),
 }));
 const courseCache = vi.hoisted(() => ({

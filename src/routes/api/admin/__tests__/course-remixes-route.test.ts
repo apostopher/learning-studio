@@ -117,6 +117,50 @@ describe('POST /api/admin/courses/:courseId/remixes', () => {
     ).toBe(404);
   });
 
+  /**
+   * Final review, #6. The 409 body is what the remix button's toast shows
+   * (`useRemixCourse` reads `error`), so it names the source, the offending
+   * modules, and both remedies — and carries the slugs for a client that
+   * wants to link to them.
+   */
+  it('409s a source whose modules depend on modules it borrows, naming the source, the modules and the remedy', async () => {
+    m.remixCourse.mockResolvedValueOnce({
+      ok: false,
+      reason: 'source-depends-on-borrowed',
+      sourceName: 'ITPS',
+      modules: [
+        { slug: 'weather', name: 'Weather' },
+        { slug: 'nav', name: 'Navigation' },
+      ],
+    });
+
+    const res = await postRemixHandler(post({ sourceCourseId: 6 }), '2');
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error:
+        'ITPS cannot be remixed yet: its modules Weather, Navigation depend on modules it borrows, which would not travel. Un-remix those in ITPS first, or remove the dependency.',
+      slugs: ['weather', 'nav'],
+    });
+  });
+
+  it('phrases a single offending module in the singular', async () => {
+    m.remixCourse.mockResolvedValueOnce({
+      ok: false,
+      reason: 'source-depends-on-borrowed',
+      sourceName: 'ITPS',
+      modules: [{ slug: 'weather', name: 'Weather' }],
+    });
+
+    const res = await postRemixHandler(post({ sourceCourseId: 6 }), '2');
+
+    await expect(res.json()).resolves.toEqual({
+      error:
+        'ITPS cannot be remixed yet: its module Weather depends on modules it borrows, which would not travel. Un-remix those in ITPS first, or remove the dependency.',
+      slugs: ['weather'],
+    });
+  });
+
   it('400s an unparseable course id before guarding or reading the body', async () => {
     const res = await postRemixHandler(post({ sourceCourseId: 6 }), 'nonsense');
     expect(res.status).toBe(400);

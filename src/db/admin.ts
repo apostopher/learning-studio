@@ -1507,10 +1507,15 @@ export async function updateModuleDependencies(
       moduleDependenciesTable,
       eq(moduleDependenciesTable.moduleId, modulesTable.id),
     )
-    // The modules on the OWNER's board — membership, not ownership: a
-    // course's own module may depend on one it borrowed (the borrowed module
-    // is present wherever this one is shown, since a remix takes the whole
-    // source), and the picker offers exactly this list.
+    // The modules on the OWNER's board — membership, not ownership. An
+    // owned module MAY depend on one its course only borrowed (an ITPS
+    // module gating on a flagship one is the real use), and the picker
+    // offers exactly this list. The borrowed module is present wherever
+    // this one is shown ONE hop out — but not two: a remix carries only
+    // what the source owns, so such a gate would name nothing in a course
+    // remixing this one and fail open. `remixCourse` refuses to re-export a
+    // module gated that way one hop further (the one-hop rule, spec Edge
+    // cases); this write does not, and must not, forbid the gate itself.
     .where(inArray(modulesTable.id, courseModuleIds(target.courseId)));
 
   // Order-preserving dedupe: a duplicated slug is a client bug, not a reason

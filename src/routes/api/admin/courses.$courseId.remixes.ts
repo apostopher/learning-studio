@@ -90,6 +90,22 @@ export async function postRemixHandler(
       { status: 409 },
     );
   }
+  if (result.reason === 'source-depends-on-borrowed') {
+    // The one-hop rule (see `remixCourse`): a gate on a module the source
+    // only borrows would name nothing here and fail open. The sentence is
+    // what the remix button's toast shows, so it names the source, the
+    // modules, and both remedies; the slugs travel for a client that wants
+    // to link to them.
+    const names = result.modules.map((m) => m.name).join(', ');
+    const plural = result.modules.length > 1;
+    return Response.json(
+      {
+        error: `${result.sourceName} cannot be remixed yet: its ${plural ? 'modules' : 'module'} ${names} ${plural ? 'depend' : 'depends'} on modules it borrows, which would not travel. Un-remix those in ${result.sourceName} first, or remove the dependency.`,
+        slugs: result.modules.map((m) => m.slug),
+      },
+      { status: 409 },
+    );
+  }
   if (result.reason === 'self') {
     return Response.json(
       { error: 'A course cannot remix itself' },

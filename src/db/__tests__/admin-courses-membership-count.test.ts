@@ -24,7 +24,6 @@ vi.mock('#/db', async () => {
   return { db };
 });
 vi.mock('#/db/course-remixes', () => ({
-  getRemixerCourseIds: vi.fn(),
   countRemixers: vi.fn(),
 }));
 vi.mock('#/db/course-modules', () => ({
