@@ -81,20 +81,20 @@ vi.mock('#/db/schema', () => ({
   courseOrgsTable,
 }));
 vi.mock('#/db/admin', () => ({ getCourseBoard: vi.fn() }));
-vi.mock('#/db/placements', () => ({ getCourseCountsForLessons: vi.fn() }));
+vi.mock('#/db/placements', () => ({ getCourseIdsForLessons: vi.fn() }));
 
 const { getOrgLibrary, getOrgEditorBoard } = await import('#/db/editor');
 const { getCourseBoard } = await import('#/db/admin');
-const { getCourseCountsForLessons } = await import('#/db/placements');
+const { getCourseIdsForLessons } = await import('#/db/placements');
 
 const mockGetCourseBoard = vi.mocked(getCourseBoard);
-const mockGetCourseCounts = vi.mocked(getCourseCountsForLessons);
+const mockGetCourseIds = vi.mocked(getCourseIdsForLessons);
 
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: no lesson is in any course, so a test that doesn't care about
-  // course counts still gets a defined map back rather than undefined.
-  mockGetCourseCounts.mockResolvedValue(new Map());
+  // course membership still gets a defined map back rather than undefined.
+  mockGetCourseIds.mockResolvedValue(new Map());
   // `getOrgLibrary` issues TWO selects — the lesson rows, then the org's
   // disciplines. A test that only queues the first would otherwise get
   // `undefined` back for the second and die on `.from` before asserting
@@ -169,19 +169,28 @@ describe('getOrgLibrary', () => {
           slug: 'stalls',
           isAvailable: true,
           videoRef: 'abc',
+          videoProvider: 'mux',
           disciplineId: null,
           disciplineName: null,
           disciplineSlug: null,
         },
       ]),
     );
-    mockGetCourseCounts.mockResolvedValue(new Map([[9, 2]]));
+    mockGetCourseIds.mockResolvedValue(new Map([[9, [2, 6]]]));
 
     const lib = await getOrgLibrary(1);
 
     // Mutant this catches: hardcoding `courseCount: 0` (or any constant)
-    // instead of reading the counts map keyed by lesson id.
+    // instead of deriving it from the ids keyed by lesson id — and dropping
+    // the ids themselves, which the library's lesson dialog reads to sign
+    // its video preview with the first course teaching the lesson.
     expect(lib.untitled[0].courseCount).toBe(2);
+    expect(lib.untitled[0].courseIds).toEqual([2, 6]);
+    // The provider NAME travels (the library dialog labels the current
+    // video with it); the ref never does — see the `videoRef` assertion in
+    // the editor-board test below.
+    expect(lib.untitled[0].videoProvider).toBe('mux');
+    expect(Object.hasOwn(lib.untitled[0], 'videoRef')).toBe(false);
   });
 
   it('gives an unplaced lesson a count of zero rather than omitting it', async () => {
@@ -199,7 +208,7 @@ describe('getOrgLibrary', () => {
         },
       ]),
     );
-    mockGetCourseCounts.mockResolvedValue(new Map());
+    mockGetCourseIds.mockResolvedValue(new Map());
 
     const lib = await getOrgLibrary(1);
 
@@ -207,6 +216,7 @@ describe('getOrgLibrary', () => {
     // before building cards — the lesson would vanish instead of reporting 0.
     expect(lib.untitled).toHaveLength(1);
     expect(lib.untitled[0].courseCount).toBe(0);
+    expect(lib.untitled[0].courseIds).toEqual([]);
   });
 
   it('scopes the lesson query to this org, not every org', async () => {

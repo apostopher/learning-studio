@@ -46,6 +46,8 @@ const LESSON = {
   isConfigured: true,
   isAvailable: true,
   courseCount: 2,
+  courseIds: [],
+  videoProvider: null,
   levels: [],
   requiredSubscriptions: [],
   hasDebrief: false,

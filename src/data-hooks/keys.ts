@@ -46,8 +46,10 @@ export const dataKeys = {
    */
   lessonPlayback: (lessonId: number, courseId: number) =>
     [...dataKeys.lessonPlaybacks(lessonId), courseId] as const,
+  /** Every course's posters — the prefix `lessonPosters` is built on. */
+  allLessonPosters: () => ['admin', 'lesson-posters'] as const,
   lessonPosters: (courseId: number) =>
-    ['admin', 'lesson-posters', courseId] as const,
+    [...dataKeys.allLessonPosters(), courseId] as const,
   lessonMaterial: (lessonId: number) =>
     ['admin', 'lesson-material', lessonId] as const,
   courseEmbeddings: (courseId: number) =>

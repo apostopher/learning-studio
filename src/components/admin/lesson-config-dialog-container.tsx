@@ -26,26 +26,27 @@ export const LessonConfigDialogContainer = ({
 
   const sections: ConfigModalSection[] = [
     {
-      value: 'video',
-      title: 'Video',
+      value: 'material',
+      title: 'Content',
       // `key`, here and below, is load-bearing rather than a list artefact:
       // this modal is mounted once and re-pointed at a different lesson, so
       // without it each section would carry the previous lesson's form state
       // over. It is what docs/use-effect-rules.md prescribes instead of an
       // effect that resets state when a prop changes.
+      //
+      // Video sits at the top of Content rather than on a tab of its own: an
+      // admin opens a lesson to work on what it teaches, and the video is the
+      // first thing it teaches with. Compact once set — preview and Replace —
+      // so the written material is never far below.
       content: lesson && (
-        <VideoSectionContainer
-          key={lesson.id}
-          courseId={courseId}
-          lesson={lesson}
-        />
-      ),
-    },
-    {
-      value: 'material',
-      title: 'Content',
-      content: lesson && (
-        <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+        <div className="flex flex-col gap-8">
+          <VideoSectionContainer
+            key={`video-${lesson.id}`}
+            courseId={courseId}
+            lesson={lesson}
+          />
+          <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+        </div>
       ),
     },
     {
@@ -77,8 +78,8 @@ export const LessonConfigDialogContainer = ({
       title="Configure lesson"
       heading={lesson?.name ?? ''}
       sections={sections}
-      // Content is what an admin opens a lesson to work on; video and
-      // config are set once and rarely revisited.
+      // Content is what an admin opens a lesson to work on; config is set
+      // once and rarely revisited.
       defaultSection="material"
     />
   );

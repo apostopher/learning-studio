@@ -7,7 +7,7 @@ import type { Captured } from './support/capture-db';
 /**
  * Task 6b: "which courses teach this lesson" is a MEMBERSHIP question.
  *
- * `getCourseIdsForLesson` and `getCourseCountsForLessons` used to walk
+ * `getCourseIdsForLesson` and `getCourseIdsForLessons` used to walk
  * placement → module → `modules.course_id`: the module's OWNER, not the
  * courses it is placed in. Once a module can sit in a course it is not owned
  * by, Task 6a's playback-cache `invalidate` (one key per course id this
@@ -22,7 +22,7 @@ import type { Captured } from './support/capture-db';
  *
  * `#/db` is one `captureDb` per file; its arrays and result queue are
  * emptied per test. The real `#/db/schema` is loaded so `eq`/`inArray`/
- * `countDistinct` build real drizzle trees against the real column names.
+ * build real drizzle trees against the real column names.
  */
 const cap = vi.hoisted(() => {
   const captured = {
@@ -62,7 +62,7 @@ vi.mock('#/db/course-modules', () => ({
 }));
 
 const { courseModulesTable, moduleLessonsTable } = await import('#/db/schema');
-const { getCourseIdsForLesson, getCourseCountsForLessons } = await import(
+const { getCourseIdsForLesson, getCourseIdsForLessons } = await import(
   '#/db/placements'
 );
 
@@ -102,16 +102,22 @@ describe('getCourseIdsForLesson reads membership, not module ownership', () => {
   });
 });
 
-describe('getCourseCountsForLessons counts distinct member courses', () => {
+describe('getCourseIdsForLessons lists distinct member courses per lesson', () => {
   /**
-   * Mutant this catches: `countDistinct(modulesTable.courseId)` — the
-   * library badge would then say "in 1 course" for a lesson whose module is
-   * placed in two.
+   * Mutant this catches: selecting `modulesTable.courseId` (the OWNER) —
+   * the library card would then say "in 1 course" and the video preview
+   * would be signed with the owner's credentials for a lesson whose module
+   * is placed in two courses.
    */
-  it('counts distinct course_modules.course_id per lesson, joined on the module', async () => {
-    cap.results.push([{ lessonId: 9, n: '2' }]);
+  it('joins course_modules on the placement module and groups its course ids by lesson, ascending', async () => {
+    cap.results.push([
+      { lessonId: 9, courseId: 6 },
+      { lessonId: 9, courseId: 2 },
+      { lessonId: 9, courseId: 6 },
+      { lessonId: 10, courseId: 2 },
+    ]);
 
-    const counts = await getCourseCountsForLessons([9, 10]);
+    const ids = await getCourseIdsForLessons([9, 10]);
 
     expect(cap.captured.from[0]).toBe(moduleLessonsTable);
     expect(cap.captured.joins).toHaveLength(1);
@@ -119,14 +125,23 @@ describe('getCourseCountsForLessons counts distinct member courses', () => {
     expect(renderSql(cap.captured.joinOn[0] as SQL)).toBe(
       '"course_modules"."module_id" = "module_lessons"."module_id"',
     );
-    expect(renderSql((cap.captured.select[0] as { n: SQL }).n)).toBe(
-      'count(distinct "course_modules"."course_id")',
-    );
+    expect(cap.captured.select[0]).toEqual({
+      lessonId: moduleLessonsTable.lessonId,
+      courseId: courseModulesTable.courseId,
+    });
     expect(renderSql(cap.captured.where[0] as SQL)).toBe(
       '"module_lessons"."lesson_id" in ($1, $2)',
     );
     expect(renderSqlParams(cap.captured.where[0] as SQL)).toEqual([9, 10]);
-    expect(cap.captured.groupBy).toEqual([moduleLessonsTable.lessonId]);
-    expect(counts.get(9)).toBe(2);
+    // Deduplicated and sorted, so "the first course teaching it" is stable.
+    expect(ids.get(9)).toEqual([2, 6]);
+    expect(ids.get(10)).toEqual([2]);
+    expect(ids.has(11)).toBe(false);
+  });
+
+  it('issues no query for an empty id list', async () => {
+    const ids = await getCourseIdsForLessons([]);
+    expect(ids.size).toBe(0);
+    expect(cap.captured.from).toHaveLength(0);
   });
 });

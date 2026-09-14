@@ -1,9 +1,21 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ProviderId } from '@/lib/admin-schemas';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its test.
+import type { ProviderId } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
 
-/** Attach a provider video reference to a lesson, then refetch the board + playback + posters. */
-export function useSetLessonVideo(courseId: number) {
+/**
+ * Attach a provider video reference to a lesson, then refetch everything
+ * that draws it.
+ *
+ * `courseId` is the course whose board opened the dialog, or `null` from the
+ * library's "Edit lesson" dialog, which has no course in hand. A video is a
+ * property of the LESSON — org-owned, taught by any number of courses — so
+ * its `isConfigured` flips on every card at once: the library pane, the org
+ * editor's rail and every course board. With a course named, that course's
+ * board and posters are refreshed precisely; without one, by prefix.
+ */
+export function useSetLessonVideo(courseId: number | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -24,8 +36,13 @@ export function useSetLessonVideo(courseId: number) {
     },
     onSuccess: (_data, input) => {
       queryClient.invalidateQueries({
-        queryKey: dataKeys.courseBoard(courseId),
+        queryKey:
+          courseId === null
+            ? dataKeys.courseBoards()
+            : dataKeys.courseBoard(courseId),
       });
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
+      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
       // The prefix, not this course's entry: a new video is a new video in
       // every course teaching the lesson.
       queryClient.invalidateQueries({
@@ -35,7 +52,10 @@ export function useSetLessonVideo(courseId: number) {
       // its poster stays grey for the full 30-minute lessonPosters staleTime
       // — the exact moment an admin looks to confirm the attach worked.
       queryClient.invalidateQueries({
-        queryKey: dataKeys.lessonPosters(courseId),
+        queryKey:
+          courseId === null
+            ? dataKeys.allLessonPosters()
+            : dataKeys.lessonPosters(courseId),
       });
     },
   });

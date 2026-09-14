@@ -65,7 +65,7 @@ vi.mock('#/db/course-modules', () => ({
 const {
   getPlacementsForCourse,
   getCourseIdsForLesson,
-  getCourseCountsForLessons,
+  getCourseIdsForLessons,
 } = await import('#/db/placements');
 
 beforeEach(() => vi.clearAllMocks());
@@ -105,47 +105,21 @@ describe('getCourseIdsForLesson', () => {
   });
 });
 
-describe('getCourseCountsForLessons', () => {
-  it('maps each lesson id to how many distinct courses teach it', async () => {
-    // `n` mocked as a pg numeric-count string (like `rank` above) so this
-    // test can't pass if the implementation's `Number(r.n)` coercion is
-    // dropped and a raw string leaks into the returned map.
+describe('getCourseIdsForLessons', () => {
+  it('maps each lesson id to the distinct courses teaching it, ascending', async () => {
     db.select.mockReturnValueOnce(
       makeChain([
-        { lessonId: 9, n: '2' },
-        { lessonId: 10, n: '1' },
+        { lessonId: 9, courseId: 6 },
+        { lessonId: 9, courseId: 2 },
+        { lessonId: 10, courseId: 2 },
+        { lessonId: 10, courseId: 2 },
       ]),
     );
 
-    const counts = await getCourseCountsForLessons([9, 10]);
+    const ids = await getCourseIdsForLessons([9, 10]);
 
-    expect(counts.get(9)).toBe(2);
-    expect(counts.get(10)).toBe(1);
-  });
-
-  it('counts DISTINCT courses, so two modules of one course count once', async () => {
-    // `db.select` is a bare vi.fn(); mockReturnValueOnce ignores whatever is
-    // passed to .select(...), so the other tests in this file pass no matter
-    // what projection the implementation builds. This test instead inspects
-    // the actual argument .select() was called with, so it fails if
-    // `countDistinct` regresses to a plain `count` — which would double-count
-    // a lesson taught by two modules of the same course.
-    db.select.mockReturnValueOnce(makeChain([{ lessonId: 9, n: '1' }]));
-
-    await getCourseCountsForLessons([9]);
-
-    const projection = db.select.mock.calls[0][0] as {
-      n: { queryChunks: Array<{ value?: unknown[] }> };
-    };
-    // drizzle's countDistinct() opens its SQL with a `count(distinct ` string
-    // chunk; plain count() opens with `count(` — no "distinct". This is the
-    // only part of the built SQL that differs between the two functions.
-    const opening = String(projection.n.queryChunks[0]?.value?.[0] ?? '');
-    expect(opening).toMatch(/distinct/i);
-  });
-
-  it('short-circuits on an empty id list without querying', async () => {
-    expect((await getCourseCountsForLessons([])).size).toBe(0);
-    expect(db.select).not.toHaveBeenCalled();
+    expect(ids.get(9)).toEqual([2, 6]);
+    // Two modules of one course list the course once.
+    expect(ids.get(10)).toEqual([2]);
   });
 });

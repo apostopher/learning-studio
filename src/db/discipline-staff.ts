@@ -154,7 +154,7 @@ export type DisciplineStaffRemoveResult =
  *
  * A discipline with no experts gets no key at all; the caller defaults a
  * missing id to `[]` rather than dropping the discipline, the same contract
- * `getCourseCountsForLessons` uses.
+ * `getCourseIdsForLessons` uses.
  */
 export async function listDisciplineStaffByOrg(
   orgId: number,

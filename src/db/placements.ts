@@ -1,4 +1,4 @@
-import { and, countDistinct, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
@@ -131,30 +131,44 @@ async function invalidateEveryCourseShowingModule(
 }
 
 /**
- * How many distinct courses teach each of these lessons — the library card's
- * "in N courses" badge.
+ * Which courses teach each of these lessons — deduplicated, ascending — for
+ * the library card's "in N courses" badge and for the library's lesson
+ * dialog, which signs its video preview with the FIRST course teaching the
+ * lesson. Sorted so that "first" is stable across refetches rather than
+ * whatever order Postgres returned the rows in.
+ *
+ * Membership, same as `getCourseIdsForLesson` — a badge that counted
+ * owners would say "in 1 course" for a lesson whose module is placed in two.
  */
-export async function getCourseCountsForLessons(
+export async function getCourseIdsForLessons(
   lessonIds: number[],
-): Promise<Map<number, number>> {
+): Promise<Map<number, number[]>> {
   if (lessonIds.length === 0) return new Map();
 
-  // Membership, same as `getCourseIdsForLesson` — a badge that counted
-  // owners would say "in 1 course" for a lesson whose module is placed in two.
   const rows = await db
     .select({
       lessonId: moduleLessonsTable.lessonId,
-      n: countDistinct(courseModulesTable.courseId),
+      courseId: courseModulesTable.courseId,
     })
     .from(moduleLessonsTable)
     .innerJoin(
       courseModulesTable,
       eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
     )
-    .where(inArray(moduleLessonsTable.lessonId, lessonIds))
-    .groupBy(moduleLessonsTable.lessonId);
+    .where(inArray(moduleLessonsTable.lessonId, lessonIds));
 
-  return new Map(rows.map((r) => [r.lessonId, Number(r.n)]));
+  const byLesson = new Map<number, Set<number>>();
+  for (const row of rows) {
+    const set = byLesson.get(row.lessonId) ?? new Set<number>();
+    set.add(row.courseId);
+    byLesson.set(row.lessonId, set);
+  }
+  return new Map(
+    [...byLesson].map(([lessonId, set]) => [
+      lessonId,
+      [...set].sort((a, b) => a - b),
+    ]),
+  );
 }
 
 /**

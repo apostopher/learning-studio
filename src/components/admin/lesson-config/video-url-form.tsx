@@ -1,7 +1,9 @@
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import type { FormEventHandler } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
-import { cn } from '@/lib/cn';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// reached by the video section's test.
+import { cn } from '#/lib/cn';
 
 interface VideoUrlFormProps {
   onSubmit: FormEventHandler<HTMLFormElement>;
@@ -38,6 +40,7 @@ export const VideoUrlForm = ({
           {...registerUrl}
           id="video-url"
           type="text"
+          // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened (or after pressing "Replace video"), where focus belongs on the field rather than the popup container
           autoFocus
           autoComplete="off"
           placeholder="Paste a Mux playback URL/ID or Synthesia link/ID"

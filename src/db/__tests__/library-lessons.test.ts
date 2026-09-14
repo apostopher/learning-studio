@@ -148,6 +148,8 @@ describe('createLibraryLesson', () => {
       isConfigured: false,
       isAvailable: false,
       courseCount: 0,
+      courseIds: [],
+      videoProvider: null,
       levels: [],
       requiredSubscriptions: [],
       hasDebrief: false,

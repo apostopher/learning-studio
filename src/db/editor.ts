@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { getCourseBoard } from '#/db/admin';
-import { getCourseCountsForLessons } from '#/db/placements';
+import { getCourseIdsForLessons } from '#/db/placements';
 import { courseOrgsTable, disciplinesTable, lessonsTable } from '#/db/schema';
 import type {
   CourseBoard,
@@ -40,6 +40,7 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
         slug: lessonsTable.slug,
         isAvailable: lessonsTable.isAvailable,
         videoRef: lessonsTable.videoRef,
+        videoProvider: lessonsTable.videoProvider,
         // The lesson's own gates. Carried so the card the editor draws the
         // instant a lesson is dropped shows the real chips rather than
         // inventing "free, no level, no debrief" and flipping a moment later.
@@ -68,11 +69,12 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
       .orderBy(asc(disciplinesTable.name)),
   ]);
 
-  // One shared count query for every lesson on the board, rather than one
-  // per lesson: `getCourseCountsForLessons` returns a `Map` with no entry at
+  // One shared membership query for every lesson on the board, rather than
+  // one per lesson: `getCourseIdsForLessons` returns a `Map` with no entry at
   // all for a lesson taught by zero courses, so a missing id is defaulted to
-  // 0 here rather than the lesson being dropped.
-  const counts = await getCourseCountsForLessons(rows.map((r) => r.id));
+  // an empty list here rather than the lesson being dropped. The count the
+  // card shows is derived from the same list the lesson dialog reads.
+  const courseIdsByLesson = await getCourseIdsForLessons(rows.map((r) => r.id));
 
   // Seeded from the disciplines table, in name order, BEFORE any lesson is
   // read — so the map's insertion order is the column order and an empty
@@ -91,8 +93,11 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
       name: row.name,
       slug: row.slug,
       isConfigured: row.videoRef !== null,
+      // The provider name, never the ref — see `libraryLessonSchema`.
+      videoProvider: row.videoProvider as LibraryLesson['videoProvider'],
       isAvailable: row.isAvailable,
-      courseCount: counts.get(row.id) ?? 0,
+      courseCount: (courseIdsByLesson.get(row.id) ?? []).length,
+      courseIds: courseIdsByLesson.get(row.id) ?? [],
       levels: row.levels as LibraryLesson['levels'],
       requiredSubscriptions:
         row.requiredSubscriptions as LibraryLesson['requiredSubscriptions'],

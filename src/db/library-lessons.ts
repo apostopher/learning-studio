@@ -12,7 +12,7 @@ import type { LibraryLesson } from '#/lib/admin-schemas';
  * the org knows before any course teaches it, and it enters a course later by
  * being dragged into one. `getOrgLibrary` reads lessons by `org_id`, not by
  * placement, so an unplaced lesson still has a column to appear in — and
- * `getCourseCountsForLessons` returns no entry for it, which the library
+ * `getCourseIdsForLessons` returns no entry for it, which the library
  * renders as "in 0 courses" rather than dropping the card.
  *
  * No transaction, because there is only one write. The single insert is its
@@ -61,6 +61,8 @@ export async function createLibraryLesson(input: {
     isConfigured: created.videoRef !== null,
     isAvailable: created.isAvailable,
     courseCount: 0,
+    courseIds: [],
+    videoProvider: null,
     // Read back rather than assumed: the columns carry defaults, and a card
     // that guessed them would disagree with the library the moment it
     // refetched.

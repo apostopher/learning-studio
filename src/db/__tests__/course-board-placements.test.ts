@@ -164,7 +164,7 @@ const getPlacementsForCourse = vi.hoisted(() => vi.fn());
 vi.mock('#/db/placements', () => ({
   getPlacementsForCourse,
   getCourseIdsForLesson: vi.fn().mockResolvedValue([]),
-  getCourseCountsForLessons: vi.fn().mockResolvedValue(new Map()),
+  getCourseIdsForLessons: vi.fn().mockResolvedValue(new Map()),
 }));
 // Task 4: `getCourseBoard` now also asks course-remixes for the board's
 // remix links. None of these tests exercise remixing, so it's stubbed

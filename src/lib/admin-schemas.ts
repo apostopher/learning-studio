@@ -933,6 +933,22 @@ export const libraryLessonSchema = z.object({
    */
   courseCount: z.number(),
   /**
+   * The courses teaching this lesson, ascending — `courseCount` is their
+   * length. The library's lesson dialog signs its video preview with the
+   * FIRST of them: playback URLs are signed by a course's provider
+   * credentials, and an org-owned lesson has no course of its own to ask.
+   * Empty for a lesson placed nowhere yet — the dialog then saves the video
+   * ref without a preview.
+   */
+  courseIds: z.array(z.number()),
+  /**
+   * Which provider hosts the lesson's video, or null when it has none. The
+   * NAME only — the library's lesson dialog labels the current video with
+   * it. The ref stays server-side, as on the editor board: a bare Mux ref is
+   * streamable, and no card needs it.
+   */
+  videoProvider: providerIdSchema.nullable(),
+  /**
    * The lesson's own gates, carried so the card the editor draws the INSTANT
    * a lesson is dropped can show the real chips.
    *

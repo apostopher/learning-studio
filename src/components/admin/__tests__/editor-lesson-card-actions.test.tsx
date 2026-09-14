@@ -118,6 +118,8 @@ const LIBRARY: OrgLibrary = {
           isConfigured: true,
           isAvailable: true,
           courseCount: 3,
+          courseIds: [],
+          videoProvider: null,
           levels: [],
           requiredSubscriptions: [],
           hasDebrief: false,

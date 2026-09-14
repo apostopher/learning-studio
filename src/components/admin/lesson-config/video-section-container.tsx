@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { Loader2, Pencil, RotateCcw } from 'lucide-react';
-import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -27,9 +26,30 @@ const videoUrlFormSchema = z.object({
 });
 type VideoUrlFormValues = z.infer<typeof videoUrlFormSchema>;
 
+/**
+ * Only what this section reads. `videoRef` is optional because the library
+ * payload deliberately omits it (a bare Mux ref is streamable) while still
+ * naming the provider; the ref is only ever compared against a draft here.
+ */
+export type VideoSectionLesson = Pick<BoardLesson, 'id' | 'videoProvider'> & {
+  videoRef?: string | null;
+};
+
 interface VideoSectionContainerProps {
-  courseId: number;
-  lesson: BoardLesson;
+  /**
+   * The course whose provider credentials sign the playback preview, or
+   * `null` from the library's dialog for a lesson placed in no course yet.
+   * The video REF is a property of the lesson and saves either way; only the
+   * preview and the credential hand-off need a course.
+   */
+  courseId: number | null;
+  lesson: VideoSectionLesson;
+  /**
+   * One quiet line under the preview, for when the course above was chosen
+   * for the lesson rather than by the admin — the library dialog signs with
+   * the first course teaching the lesson and says so.
+   */
+  previewNote?: string;
 }
 
 /**
@@ -49,6 +69,7 @@ interface VideoSectionContainerProps {
 export const VideoSectionContainer = ({
   courseId,
   lesson,
+  previewNote,
 }: VideoSectionContainerProps) => {
   const [storedDraft, setStoredDraft] = useAtom(videoDraftDetectionAtom);
   const [replaceModeLessonId, setReplaceModeLessonId] = useAtom(
@@ -79,10 +100,12 @@ export const VideoSectionContainer = ({
    * derivation it cannot race the refetch, and there is no window where both
    * are live and disagreeing.
    */
+  // A lesson that carries no `videoRef` (the library payload) is compared on
+  // provider alone, so the draft still retires once the refetch agrees.
   const draftDetection =
     ownDraft &&
     (lesson.videoProvider !== ownDraft.provider ||
-      lesson.videoRef !== ownDraft.ref)
+      (lesson.videoRef !== undefined && lesson.videoRef !== ownDraft.ref))
       ? ownDraft
       : null;
   const setDraftDetection = (
@@ -93,22 +116,22 @@ export const VideoSectionContainer = ({
   const setLessonVideo = useSetLessonVideo(courseId);
 
   const activeProvider = draftDetection?.provider ?? lesson.videoProvider;
-  const activeRef = draftDetection?.ref ?? lesson.videoRef;
-  const hasVideo = activeProvider !== null && activeRef !== null;
+  // A provider with no ref in hand (library payload) still means "has a
+  // video": the ref exists on the lesson row, it just isn't sent.
+  const hasVideo = activeProvider !== null;
 
-  const isProviderConfigured = useMemo(
-    () =>
-      activeProvider !== null &&
-      (credentials.data?.some(
-        (c) => c.provider === activeProvider && c.configured,
-      ) ??
-        false),
-    [credentials.data, activeProvider],
-  );
+  // Plain derivations, not `useMemo`: the compiler memoises these, and a
+  // manual `useMemo` beside `useForm` trips React's dispatcher under vitest.
+  const isProviderConfigured =
+    activeProvider !== null &&
+    (credentials.data?.some(
+      (c) => c.provider === activeProvider && c.configured,
+    ) ??
+      false);
 
-  const playbackEnabled = hasVideo && isProviderConfigured;
+  const playbackEnabled = courseId !== null && hasVideo && isProviderConfigured;
   const playback = useLessonVideoPlayback(
-    { lessonId: lesson.id, courseId },
+    courseId === null ? null : { lessonId: lesson.id, courseId },
     playbackEnabled,
   );
   const previewState = computeVideoPreviewState(playback.data);
@@ -119,10 +142,7 @@ export const VideoSectionContainer = ({
     defaultValues: { url: '' },
   });
   const urlValue = urlForm.watch('url');
-  const detected = useMemo(
-    () => (urlValue.trim() ? detectVideoUrl(urlValue) : null),
-    [urlValue],
-  );
+  const detected = urlValue.trim() ? detectVideoUrl(urlValue) : null;
 
   const handleUrlSubmit = urlForm.handleSubmit((values) => {
     const hit = detectVideoUrl(values.url);
@@ -184,7 +204,12 @@ export const VideoSectionContainer = ({
             )}
           </div>
 
-          {canPlay ? (
+          {courseId === null ? (
+            <p className="text-secondary text-sm">
+              Preview and provider connection appear once this lesson is placed
+              in a course.
+            </p>
+          ) : canPlay ? (
             <>
               <VideoPreview
                 playback={
@@ -192,6 +217,9 @@ export const VideoSectionContainer = ({
                 }
                 onForbidden={() => setPlaybackForbidden(true)}
               />
+              {previewNote && (
+                <p className="text-tertiary text-xs">{previewNote}</p>
+              )}
               {playback.isLoading && (
                 <p className="flex items-center gap-1.5 text-tertiary text-sm">
                   <Loader2
