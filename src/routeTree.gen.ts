@@ -90,6 +90,7 @@ import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/ap
 import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
 import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
 import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
+import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
 import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
 import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
@@ -99,6 +100,7 @@ import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
 import { Route as ApiAdminModulesModuleIdLessonsLessonIdRouteImport } from './routes/api/admin/modules.$moduleId.lessons.$lessonId'
 import { Route as ApiAdminCoursesCourseIdStaffCandidatesRouteImport } from './routes/api/admin/courses.$courseId.staff.candidates'
+import { Route as ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport } from './routes/api/admin/courses.$courseId.remixes.$sourceCourseId'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
 import { Route as AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/course.$courseSlug.modules.$moduleSlug.lessons.$lessonSlug'
@@ -539,6 +541,12 @@ const ApiAdminCoursesCourseIdStaffRoute =
     path: '/staff',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
+const ApiAdminCoursesCourseIdRemixesRoute =
+  ApiAdminCoursesCourseIdRemixesRouteImport.update({
+    id: '/remixes',
+    path: '/remixes',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdPersonaRoute =
   ApiAdminCoursesCourseIdPersonaRouteImport.update({
     id: '/persona',
@@ -592,6 +600,12 @@ const ApiAdminCoursesCourseIdStaffCandidatesRoute =
     id: '/candidates',
     path: '/candidates',
     getParentRoute: () => ApiAdminCoursesCourseIdStaffRoute,
+  } as any)
+const ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute =
+  ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport.update({
+    id: '/$sourceCourseId',
+    path: '/$sourceCourseId',
+    getParentRoute: () => ApiAdminCoursesCourseIdRemixesRoute,
   } as any)
 const ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute =
   ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport.update({
@@ -686,6 +700,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
+  '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -702,6 +717,7 @@ export interface FileRoutesByFullPath {
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
+  '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
@@ -778,6 +794,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
+  '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -794,6 +811,7 @@ export interface FileRoutesByTo {
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
+  '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
@@ -874,6 +892,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
+  '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -890,6 +909,7 @@ export interface FileRoutesById {
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
+  '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
@@ -970,6 +990,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
+    | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -986,6 +1007,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
+    | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
@@ -1062,6 +1084,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
+    | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -1078,6 +1101,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
+    | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
@@ -1157,6 +1181,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
     | '/api/admin/courses/$courseId/persona'
+    | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -1173,6 +1198,7 @@ export interface FileRouteTypes {
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
+    | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
@@ -1797,6 +1823,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
+    '/api/admin/courses/$courseId/remixes': {
+      id: '/api/admin/courses/$courseId/remixes'
+      path: '/remixes'
+      fullPath: '/api/admin/courses/$courseId/remixes'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
     '/api/admin/courses/$courseId/persona': {
       id: '/api/admin/courses/$courseId/persona'
       path: '/persona'
@@ -1859,6 +1892,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/courses/$courseId/staff/candidates'
       preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffCandidatesRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdStaffRoute
+    }
+    '/api/admin/courses/$courseId/remixes/$sourceCourseId': {
+      id: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
+      path: '/$sourceCourseId'
+      fullPath: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRemixesRoute
     }
     '/api/admin/courses/$courseId/news-sources/$sourceId': {
       id: '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -1998,6 +2038,21 @@ const ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren =
     ApiAdminCoursesCourseIdNewsSourcesRouteChildren,
   )
 
+interface ApiAdminCoursesCourseIdRemixesRouteChildren {
+  ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute: typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
+}
+
+const ApiAdminCoursesCourseIdRemixesRouteChildren: ApiAdminCoursesCourseIdRemixesRouteChildren =
+  {
+    ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute:
+      ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute,
+  }
+
+const ApiAdminCoursesCourseIdRemixesRouteWithChildren =
+  ApiAdminCoursesCourseIdRemixesRoute._addFileChildren(
+    ApiAdminCoursesCourseIdRemixesRouteChildren,
+  )
+
 interface ApiAdminCoursesCourseIdStaffRouteChildren {
   ApiAdminCoursesCourseIdStaffCandidatesRoute: typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
 }
@@ -2021,6 +2076,7 @@ interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdNewsSourcesRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   ApiAdminCoursesCourseIdOnboardingRoute: typeof ApiAdminCoursesCourseIdOnboardingRoute
   ApiAdminCoursesCourseIdPersonaRoute: typeof ApiAdminCoursesCourseIdPersonaRoute
+  ApiAdminCoursesCourseIdRemixesRoute: typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   ApiAdminCoursesCourseIdStaffRoute: typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
 }
 
@@ -2037,6 +2093,8 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
     ApiAdminCoursesCourseIdOnboardingRoute:
       ApiAdminCoursesCourseIdOnboardingRoute,
     ApiAdminCoursesCourseIdPersonaRoute: ApiAdminCoursesCourseIdPersonaRoute,
+    ApiAdminCoursesCourseIdRemixesRoute:
+      ApiAdminCoursesCourseIdRemixesRouteWithChildren,
     ApiAdminCoursesCourseIdStaffRoute:
       ApiAdminCoursesCourseIdStaffRouteWithChildren,
   }

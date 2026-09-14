@@ -63,6 +63,11 @@ export const createModuleInputSchema = z.object({
 });
 export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 
+export const remixCourseInputSchema = z.object({
+  sourceCourseId: z.number().int().positive(),
+});
+export type RemixCourseInput = z.infer<typeof remixCourseInputSchema>;
+
 /** PATCH body for renaming / updating a module's details (name + cover image). */
 export const updateModuleInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
