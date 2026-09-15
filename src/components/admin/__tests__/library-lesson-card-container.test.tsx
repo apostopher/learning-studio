@@ -48,6 +48,7 @@ const LESSON = {
   courseCount: 2,
   courseIds: [],
   videoProvider: null,
+  disciplineModuleId: null,
   levels: [],
   requiredSubscriptions: [],
   hasDebrief: false,

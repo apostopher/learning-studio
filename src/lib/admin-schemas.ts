@@ -949,6 +949,12 @@ export const libraryLessonSchema = z.object({
    */
   videoProvider: providerIdSchema.nullable(),
   /**
+   * The discipline module this lesson is filed in, or null for its
+   * discipline's Untitled group. Library furniture only — never a course
+   * concept, never sent to a learner.
+   */
+  disciplineModuleId: z.number().nullable(),
+  /**
    * The lesson's own gates, carried so the card the editor draws the INSTANT
    * a lesson is dropped can show the real chips.
    *
@@ -969,14 +975,48 @@ export const libraryLessonSchema = z.object({
 });
 export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
 
-/** One discipline column of the library, with the lessons grouped under it. */
+/** One box on a discipline's shelf: a named, ordered group of its lessons. */
+export const libraryDisciplineModuleSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  rank: z.number(),
+  lessons: z.array(libraryLessonSchema),
+});
+export type LibraryDisciplineModule = z.infer<
+  typeof libraryDisciplineModuleSchema
+>;
+
+/** One discipline column of the library, with its lessons grouped by module. */
 export const libraryDisciplineSchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
-  lessons: z.array(libraryLessonSchema),
+  /** In rank order. */
+  modules: z.array(libraryDisciplineModuleSchema),
+  /**
+   * Lessons in this discipline that sit in no module — where every lesson
+   * starts. Not to be confused with the org-level `untitled` below (lessons
+   * with no discipline at all).
+   */
+  untitled: z.array(libraryLessonSchema),
 });
 export type LibraryDiscipline = z.infer<typeof libraryDisciplineSchema>;
+
+/**
+ * Every lesson in a discipline, in display order: each module's lessons in
+ * module order, then Untitled. The ONE definition — the flat `lessons`
+ * list was removed so the pane and the drop resolver cannot disagree about
+ * membership.
+ */
+export function disciplineLessons<L>(discipline: {
+  modules: ReadonlyArray<{ lessons: ReadonlyArray<L> }>;
+  untitled: ReadonlyArray<L>;
+}): L[] {
+  return [
+    ...discipline.modules.flatMap((m) => [...m.lessons]),
+    ...discipline.untitled,
+  ];
+}
 
 /**
  * The whole org's library: one column per discipline, plus a leftmost

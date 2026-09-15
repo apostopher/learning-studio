@@ -62,6 +62,9 @@ export async function createLibraryLesson(input: {
     isAvailable: created.isAvailable,
     courseCount: 0,
     courseIds: [],
+    // A lesson enters a module only by being dragged into one — see
+    // `getOrgLibrary`'s `libraryDisciplineModuleSchema` doc.
+    disciplineModuleId: null,
     videoProvider: null,
     // Read back rather than assumed: the columns carry defaults, and a card
     // that guessed them would disagree with the library the moment it

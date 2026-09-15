@@ -22,7 +22,8 @@ const LIBRARY = {
       id: 1,
       name: 'UAS',
       slug: 'uas',
-      lessons: [
+      modules: [],
+      untitled: [
         {
           id: 9,
           name: 'Preflight',
@@ -32,6 +33,7 @@ const LIBRARY = {
           courseCount: 2,
           courseIds: [],
           videoProvider: null,
+          disciplineModuleId: null,
           levels: [],
           requiredSubscriptions: [],
           hasDebrief: false,

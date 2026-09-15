@@ -2,7 +2,7 @@ import { useAtom, useSetAtom } from 'jotai';
 
 import { editLibraryLessonIdAtom, resetVideoSectionAtom } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
-import type { LibraryLesson } from '#/lib/admin-schemas';
+import { disciplineLessons, type LibraryLesson } from '#/lib/admin-schemas';
 import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
@@ -20,7 +20,7 @@ function findLesson(
   if (!library || lessonId === null) return null;
   const all = [
     ...library.untitled,
-    ...library.disciplines.flatMap((d) => d.lessons),
+    ...library.disciplines.flatMap((d) => disciplineLessons(d)),
   ];
   return all.find((lesson) => lesson.id === lessonId) ?? null;
 }

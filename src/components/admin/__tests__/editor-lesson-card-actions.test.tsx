@@ -110,7 +110,8 @@ const LIBRARY: OrgLibrary = {
       id: 4,
       name: 'Fixed wing',
       slug: 'fixed-wing',
-      lessons: [
+      modules: [],
+      untitled: [
         {
           id: LESSON_ID,
           name: 'Stalls',
@@ -120,6 +121,7 @@ const LIBRARY: OrgLibrary = {
           courseCount: 3,
           courseIds: [],
           videoProvider: null,
+          disciplineModuleId: null,
           levels: [],
           requiredSubscriptions: [],
           hasDebrief: false,

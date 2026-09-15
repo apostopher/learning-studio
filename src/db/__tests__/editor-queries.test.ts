@@ -3,6 +3,7 @@ import type { SQL } from 'drizzle-orm';
 import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
+import { disciplineLessons } from '#/lib/admin-schemas';
 
 // Task 8: `#/db/editor.ts` reads the org-level library (lessons grouped by
 // discipline, org-scoped) and the org's rail of course boards. Real `pgTable`
@@ -16,6 +17,8 @@ const lessonsTable = pgTable('lessons', {
   isAvailable: boolean('is_available'),
   videoRef: text('video_ref'),
   disciplineId: integer('discipline_id'),
+  disciplineModuleId: integer('discipline_module_id'),
+  libraryRank: text('library_rank'),
   orgId: integer('org_id'),
 });
 const disciplinesTable = pgTable('disciplines', {
@@ -23,6 +26,12 @@ const disciplinesTable = pgTable('disciplines', {
   name: text('name'),
   slug: text('slug'),
   orgId: integer('org_id'),
+});
+const disciplineModulesTable = pgTable('discipline_modules', {
+  id: integer('id').primaryKey(),
+  disciplineId: integer('discipline_id'),
+  name: text('name'),
+  rank: text('rank'),
 });
 const courseOrgsTable = pgTable('course_orgs', {
   id: integer('id').primaryKey(),
@@ -42,6 +51,7 @@ function makeChain(result: unknown) {
   Object.assign(p, {
     from: () => p,
     leftJoin: () => p,
+    innerJoin: () => p,
     where: () => p,
     orderBy: () => p,
   });
@@ -78,6 +88,7 @@ vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   lessonsTable,
   disciplinesTable,
+  disciplineModulesTable,
   courseOrgsTable,
 }));
 vi.mock('#/db/admin', () => ({ getCourseBoard: vi.fn() }));
@@ -95,12 +106,36 @@ beforeEach(() => {
   // Default: no lesson is in any course, so a test that doesn't care about
   // course membership still gets a defined map back rather than undefined.
   mockGetCourseIds.mockResolvedValue(new Map());
-  // `getOrgLibrary` issues TWO selects — the lesson rows, then the org's
-  // disciplines. A test that only queues the first would otherwise get
-  // `undefined` back for the second and die on `.from` before asserting
-  // anything. Queued `mockReturnValueOnce` values still take precedence.
+  // `getOrgLibrary` issues THREE selects — the lesson rows, the org's
+  // disciplines, then the org's discipline modules. A test that only queues
+  // the first would otherwise get `undefined` back for the rest and die on
+  // `.from` before asserting anything. Queued `mockReturnValueOnce` values
+  // still take precedence.
   db.select.mockReturnValue(makeChain([]));
 });
+
+/**
+ * A lesson row as `getOrgLibrary`'s first select returns it: (id, name, slug,
+ * isAvailable, videoRef, videoProvider, disciplineId, disciplineName,
+ * disciplineSlug, disciplineModuleId, libraryRank). `over` supplies the
+ * fields a given test cares about; everything else is filler.
+ */
+function row(over: Record<string, unknown>) {
+  return {
+    name: 'L',
+    slug: 'l',
+    isAvailable: true,
+    videoRef: null,
+    videoProvider: null,
+    disciplineName: 'Weather',
+    disciplineSlug: 'weather',
+    levels: [],
+    requiredSubscriptions: [],
+    hasDebrief: false,
+    needsVideoWatch: false,
+    ...over,
+  };
+}
 
 describe('getOrgLibrary', () => {
   it('files a null-discipline lesson under untitled, not a discipline', async () => {
@@ -125,7 +160,7 @@ describe('getOrgLibrary', () => {
     // Mutant this catches: an implementation that always builds a synthetic
     // "Untitled" discipline row instead of the separate `untitled` array
     // would leave `disciplines` non-empty here.
-    expect(lib.disciplines.flatMap((d) => d.lessons)).toEqual([]);
+    expect(lib.disciplines.flatMap((d) => disciplineLessons(d))).toEqual([]);
   });
 
   it('groups a lesson under its real discipline, not untitled', async () => {
@@ -157,7 +192,7 @@ describe('getOrgLibrary', () => {
       name: 'Aerobatics',
       slug: 'aerobatics',
     });
-    expect(lib.disciplines[0].lessons.map((l) => l.id)).toEqual([4]);
+    expect(disciplineLessons(lib.disciplines[0]).map((l) => l.id)).toEqual([4]);
   });
 
   it('carries the course count each card shows', async () => {
@@ -239,6 +274,7 @@ describe('getOrgLibrary', () => {
     db.select.mockReturnValueOnce(
       makeChain([{ id: 7, name: 'Aerobatics', slug: 'aerobatics' }]),
     );
+    db.select.mockReturnValueOnce(makeChain([]));
 
     const lib = await getOrgLibrary(1);
 
@@ -247,7 +283,13 @@ describe('getOrgLibrary', () => {
     // has no lessons joined to it, so it would be absent here — and the
     // screen that just created it would show nothing new.
     expect(lib.disciplines).toEqual([
-      { id: 7, name: 'Aerobatics', slug: 'aerobatics', lessons: [] },
+      {
+        id: 7,
+        name: 'Aerobatics',
+        slug: 'aerobatics',
+        modules: [],
+        untitled: [],
+      },
     ]);
   });
 
@@ -272,6 +314,7 @@ describe('getOrgLibrary', () => {
         { id: 9, name: 'Weather', slug: 'weather' },
       ]),
     );
+    db.select.mockReturnValueOnce(makeChain([]));
 
     const lib = await getOrgLibrary(1);
 
@@ -283,7 +326,7 @@ describe('getOrgLibrary', () => {
       'Aerobatics',
       'Weather',
     ]);
-    expect(lib.disciplines[1].lessons.map((l) => l.id)).toEqual([4]);
+    expect(disciplineLessons(lib.disciplines[1]).map((l) => l.id)).toEqual([4]);
   });
 
   it('still shows a lesson whose discipline the seed did not return', async () => {
@@ -302,6 +345,7 @@ describe('getOrgLibrary', () => {
       ]),
     );
     db.select.mockReturnValueOnce(makeChain([]));
+    db.select.mockReturnValueOnce(makeChain([]));
 
     const lib = await getOrgLibrary(1);
 
@@ -312,13 +356,14 @@ describe('getOrgLibrary', () => {
     expect(lib.untitled).toEqual([]);
     expect(lib.disciplines).toHaveLength(1);
     expect(lib.disciplines[0].name).toBe('Aerobatics');
-    expect(lib.disciplines[0].lessons.map((l) => l.id)).toEqual([4]);
+    expect(disciplineLessons(lib.disciplines[0]).map((l) => l.id)).toEqual([4]);
   });
 
   it('scopes the disciplines seed to this org too', async () => {
     const whereCalls: SQL[] = [];
     db.select.mockReturnValueOnce(makeChain([]));
     db.select.mockReturnValueOnce(makeCapturingChain([], whereCalls));
+    db.select.mockReturnValueOnce(makeChain([]));
 
     await getOrgLibrary(9);
 
@@ -329,6 +374,93 @@ describe('getOrgLibrary', () => {
     expect(whereCalls).toHaveLength(1);
     expect(renderSql(whereCalls[0])).toBe('"disciplines"."org_id" = $1');
     expect(renderSqlParams(whereCalls[0])).toEqual([9]);
+  });
+
+  it('groups a discipline’s lessons by module in rank order, then Untitled, each in library_rank order with unranked last', async () => {
+    db.select
+      .mockReturnValueOnce(
+        makeChain([
+          // lessons: (id, name, slug, isAvailable, videoRef, videoProvider, disciplineId, disciplineName, disciplineSlug, disciplineModuleId, libraryRank)
+          row({
+            id: 1,
+            disciplineId: 4,
+            disciplineModuleId: 7,
+            libraryRank: '2',
+          }),
+          row({
+            id: 2,
+            disciplineId: 4,
+            disciplineModuleId: 7,
+            libraryRank: '1',
+          }),
+          row({
+            id: 3,
+            disciplineId: 4,
+            disciplineModuleId: null,
+            libraryRank: null,
+          }),
+          row({
+            id: 5,
+            disciplineId: 4,
+            disciplineModuleId: null,
+            libraryRank: '0.5',
+          }),
+          row({
+            id: 6,
+            disciplineId: 4,
+            disciplineModuleId: 8,
+            libraryRank: null,
+          }),
+        ]),
+      )
+      .mockReturnValueOnce(
+        makeChain([{ id: 4, name: 'Weather', slug: 'weather' }]),
+      )
+      .mockReturnValueOnce(
+        makeChain([
+          { id: 8, disciplineId: 4, name: 'Advanced', rank: '2' },
+          { id: 7, disciplineId: 4, name: 'Basics', rank: '1' },
+        ]),
+      );
+    mockGetCourseIds.mockResolvedValue(new Map());
+
+    const lib = await getOrgLibrary(1);
+    const weather = lib.disciplines[0];
+    expect(
+      weather.modules.map((m) => [m.id, m.lessons.map((l) => l.id)]),
+    ).toEqual([
+      [7, [2, 1]],
+      [8, [6]],
+    ]);
+    expect(weather.untitled.map((l) => l.id)).toEqual([5, 3]);
+    expect(weather.untitled[0].disciplineModuleId).toBeNull();
+    expect(weather.modules[0].lessons[0].disciplineModuleId).toBe(7);
+    // Every lesson exactly once.
+    const all = [
+      ...weather.modules.flatMap((m) => m.lessons),
+      ...weather.untitled,
+    ]
+      .map((l) => l.id)
+      .sort();
+    expect(all).toEqual([1, 2, 3, 5, 6]);
+    expect(Object.hasOwn(weather, 'lessons')).toBe(false);
+  });
+
+  it('a module with no lessons is still a box', async () => {
+    db.select
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(
+        makeChain([{ id: 4, name: 'Weather', slug: 'weather' }]),
+      )
+      .mockReturnValueOnce(
+        makeChain([{ id: 7, disciplineId: 4, name: 'Basics', rank: '1' }]),
+      );
+    mockGetCourseIds.mockResolvedValue(new Map());
+    const lib = await getOrgLibrary(1);
+    expect(lib.disciplines[0].modules).toEqual([
+      { id: 7, name: 'Basics', rank: 1, lessons: [] },
+    ]);
+    expect(lib.disciplines[0].untitled).toEqual([]);
   });
 });
 

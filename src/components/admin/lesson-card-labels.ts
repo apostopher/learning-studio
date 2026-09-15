@@ -1,6 +1,8 @@
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported (for real, not mocked) by the drag-rules test.
 
+import { disciplineLessons } from '#/lib/admin-schemas';
+
 /**
  * The accessible name and tooltip of a placed lesson's "remove" control.
  *
@@ -34,7 +36,10 @@ export function removeLessonLabel(
 export function findLibraryCourseCount(
   library:
     | {
-        disciplines: { lessons: { id: number; courseCount: number }[] }[];
+        disciplines: {
+          modules: { lessons: { id: number; courseCount: number }[] }[];
+          untitled: { id: number; courseCount: number }[];
+        }[];
         untitled: { id: number; courseCount: number }[];
       }
     | undefined,
@@ -43,7 +48,7 @@ export function findLibraryCourseCount(
   if (!library) return null;
   const card = [
     ...library.untitled,
-    ...library.disciplines.flatMap((d) => d.lessons),
+    ...library.disciplines.flatMap((d) => disciplineLessons(d)),
   ].find((l) => l.id === lessonId);
   return card?.courseCount ?? null;
 }

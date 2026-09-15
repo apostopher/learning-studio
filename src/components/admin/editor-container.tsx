@@ -39,7 +39,11 @@ import { useLinkLesson } from '#/data-hooks/use-link-lesson';
 import { useMovePlacement } from '#/data-hooks/use-move-placement';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
-import type { LibraryLesson, OrgEditorBoard } from '#/lib/admin-schemas';
+import {
+  disciplineLessons,
+  type LibraryLesson,
+  type OrgEditorBoard,
+} from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
@@ -828,7 +832,7 @@ export const EditorContainer = ({
                 key={discipline.id}
                 disciplineId={discipline.id}
                 name={discipline.name}
-                lessons={discipline.lessons}
+                lessons={disciplineLessons(discipline)}
                 canManageDisciplines={capabilities.canManageDisciplines}
               />
             ))}
@@ -974,14 +978,20 @@ function pointerIsNear(
 /** The library card for a lesson id, across disciplines and the untitled column. */
 function findLibraryLesson(
   library:
-    | { disciplines: { lessons: LibraryLesson[] }[]; untitled: LibraryLesson[] }
+    | {
+        disciplines: {
+          modules: { lessons: LibraryLesson[] }[];
+          untitled: LibraryLesson[];
+        }[];
+        untitled: LibraryLesson[];
+      }
     | undefined,
   lessonId: number | null,
 ): LibraryLesson | undefined {
   if (!library || lessonId == null) return undefined;
   return [
     ...library.untitled,
-    ...library.disciplines.flatMap((d) => d.lessons),
+    ...library.disciplines.flatMap((d) => disciplineLessons(d)),
   ].find((l) => l.id === lessonId);
 }
 
@@ -991,7 +1001,12 @@ function describeDndTarget(
   board: OrgEditorBoard | null,
   library:
     | {
-        disciplines: { id: number; name: string; lessons: LibraryLesson[] }[];
+        disciplines: {
+          id: number;
+          name: string;
+          modules: { lessons: LibraryLesson[] }[];
+          untitled: LibraryLesson[];
+        }[];
         untitled: LibraryLesson[];
       }
     | undefined,

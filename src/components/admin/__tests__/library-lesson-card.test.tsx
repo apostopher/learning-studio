@@ -30,6 +30,7 @@ const lesson = (over: Partial<LibraryLesson> = {}): LibraryLesson => ({
   courseCount: 0,
   courseIds: [],
   videoProvider: null,
+  disciplineModuleId: null,
   levels: [],
   requiredSubscriptions: [],
   hasDebrief: false,
