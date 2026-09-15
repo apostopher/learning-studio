@@ -44,6 +44,11 @@ export const EditorPaneSplitter = ({
     aria-valuemax={ariaValueMax}
     tabIndex={0}
     onPointerDown={onPointerDown}
-    className="group relative w-1.5 shrink-0 cursor-col-resize touch-none bg-gray-6 transition-colors hover:bg-apple-9 focus-visible:bg-apple-9 focus-visible:outline-none"
+    // The `divider` scale is this control's own hue (#e3733a at step 9):
+    // dull at rest (step 7 — same hue, so the line already says what it will
+    // become), full colour under the pointer, while dragging (`:active`
+    // holds because the container captures the pointer) and on keyboard
+    // focus. Colour-only, 150ms: it is passed over constantly.
+    className="group relative w-1.5 shrink-0 cursor-col-resize touch-none bg-divider-7 transition-colors duration-150 hover:bg-divider-9 focus-visible:bg-divider-9 focus-visible:outline-none active:bg-divider-9"
   />
 );

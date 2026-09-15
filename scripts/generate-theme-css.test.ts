@@ -485,6 +485,7 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     { name: 'apple', light: '#1A2F40', dark: '#F2F9FF' },
     { name: 'link', light: '#0066cc', dark: '#2997ff' },
     { name: 'warning', light: '#FAA74A', dark: '#FAA74A' },
+    { name: 'divider', light: '#e3733a', dark: '#e3733a' },
   ]
 
   const css = buildThemeCss({
@@ -510,7 +511,7 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     return m[1]!.trim()
   }
 
-  const scales = ['gold', 'apple', 'link', 'success', 'warning', 'error']
+  const scales = ['gold', 'apple', 'link', 'success', 'warning', 'error', 'divider']
   const blocks: [string, string][] = [
     ['light', lightBlock],
     ['dark', darkBlock],

@@ -50,4 +50,20 @@ describe('EditorPaneSplitter', () => {
     );
     expect(onPointerDown).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * Idle it is a dull line of the divider hue (step 7); under the pointer,
+   * while dragging (`:active` holds — the container captures the pointer)
+   * and on keyboard focus it lights to the full colour (step 9, #e3733a).
+   * Mutant: the old `apple-9` states, or a bright idle line.
+   */
+  it('is dull at rest and lights to the divider colour on hover, drag and focus', () => {
+    render(<EditorPaneSplitter onPointerDown={() => {}} ariaValueNow={40} />);
+    const cls = screen.getByRole('separator').className;
+    expect(cls).toContain('bg-divider-7');
+    expect(cls).toContain('hover:bg-divider-9');
+    expect(cls).toContain('active:bg-divider-9');
+    expect(cls).toContain('focus-visible:bg-divider-9');
+    expect(cls).not.toContain('apple-9');
+  });
 });
