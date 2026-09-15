@@ -65,8 +65,12 @@ refuses a module of another discipline with a 400 naming both disciplines.
 Should a lesson ever move between disciplines, that write must clear
 `discipline_module_id` (recorded here so the future change has its rule).
 
-`library_rank` is nullable rather than backfilled: an unranked lesson sorts
-after ranked ones, by id, and gains a rank the first time it is dragged. The
+`library_rank` is nullable rather than backfilled. Reader and writer share one
+**effective rank**, `coalesce(library_rank, 1e9 + id)`: an unranked lesson sorts
+after every ranked one, by id, and a drop between two unranked neighbours
+computes its midpoint from those effective ranks — so the persisted order is
+the order the admin watched. A lesson gains a real rank the first time it is
+dragged. The
 migration is therefore purely additive — a new table and two nullable
 columns, no row updated, no row deleted — which is why it needs no
 relax/drop dance and why every existing lesson simply appears in its
@@ -168,7 +172,9 @@ learns the three new flat kinds.
 | library lesson | anything of **another discipline** | `forbidden`, naming both disciplines and the remedy (lessons stay in their discipline) |
 | library lesson | a course module | `link` — **unchanged** |
 | library module | a module of the same discipline | `reorder-library-module` `{ disciplineId, moduleId, overModuleId }` |
-| library module | anything else | `forbidden` (modules stay in their discipline; not droppable on the rail) |
+| library module | a lesson or container of a module in the same discipline | `reorder-library-module` against that module (the common pointer position during a module drag) |
+| library module | Untitled, a discipline column, or a discipline-less lesson | `null` — Untitled is always last and is not a module; nothing to reorder against, nothing to refuse (a release on the module's own header commits the last previewed order) |
+| library module | anything on the course rail, or a module of another discipline | `forbidden`, naming the rule (modules stay in their discipline; the library is not a course) |
 
 Optimistic updaters in `editor-board-updates.ts` work on `OrgLibrary`:
 `moveLessonInLibrary`, `reorderLibraryModules`, plus `libraryLessonNeighbours`
