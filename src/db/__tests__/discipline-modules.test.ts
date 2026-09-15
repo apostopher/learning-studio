@@ -111,21 +111,27 @@ describe('reorderDisciplineModule', () => {
    */
   it('reads each neighbour’s rank only within the module’s own discipline, and pins the update to the module', async () => {
     fake.state.results.push([{ disciplineId: 4 }]); // the module's discipline
+    fake.state.results.push([
+      { id: 6, rank: '2' },
+      { id: 8, rank: '3' },
+    ]); // the neighbours, scoped to that discipline
     fake.state.results.push([{ id: 7, rank: '2.5' }]); // update … returning
     const out = await reorderDisciplineModule({
       moduleId: 7,
       prevModuleId: 6,
       nextModuleId: 8,
     });
+    const neighbourSelect = fake.state.selects[1];
+    expect(renderSql(neighbourSelect.where as SQL)).toBe(
+      '("discipline_modules"."id" in ($1, $2) and "discipline_modules"."discipline_id" = $3)',
+    );
+    expect(renderSqlParams(neighbourSelect.where as SQL)).toEqual([6, 8, 4]);
     const upd = fake.state.updates[0];
     expect(upd.table).toBe(disciplineModulesTable);
     expect(renderSql(upd.where as SQL)).toBe('"discipline_modules"."id" = $1');
     expect(renderSqlParams(upd.where as SQL)).toEqual([7]);
-    const rank = (upd.set as { rank: SQL }).rank;
-    expect(renderSql(rank)).toBe(
-      '((select "discipline_modules"."rank" from "discipline_modules" where "discipline_modules"."id" = $1 and "discipline_modules"."discipline_id" = $2) + (select "discipline_modules"."rank" from "discipline_modules" where "discipline_modules"."id" = $3 and "discipline_modules"."discipline_id" = $4)) / 2',
-    );
-    expect(renderSqlParams(rank)).toEqual([6, 4, 8, 4]);
+    const set = upd.set as { rank: string };
+    expect(set.rank).toBe('2.5');
     expect(out).toEqual({ id: 7, rank: 2.5 });
   });
 
@@ -138,6 +144,24 @@ describe('reorderDisciplineModule', () => {
         nextModuleId: null,
       }),
     ).toBeNull();
+    expect(fake.state.updates).toHaveLength(0);
+  });
+
+  /**
+   * Mutant this catches: a stale/foreign neighbour id silently resolving to
+   * a rank of NULL (or 0) instead of refusing. `rank` is NOT NULL in the
+   * database, so if this refusal weren't decided before the write, a real
+   * UPDATE would raise a not-null violation instead of answering null.
+   */
+  it('answers null when a named neighbour isn’t in the module’s discipline, without writing', async () => {
+    fake.state.results.push([{ disciplineId: 4 }]); // the module's discipline
+    fake.state.results.push([{ id: 6, rank: '2' }]); // only prev comes back; 8 is elsewhere
+    const out = await reorderDisciplineModule({
+      moduleId: 7,
+      prevModuleId: 6,
+      nextModuleId: 8,
+    });
+    expect(out).toBeNull();
     expect(fake.state.updates).toHaveLength(0);
   });
 });

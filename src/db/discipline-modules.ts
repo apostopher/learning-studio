@@ -1,5 +1,5 @@
 // src/db/discipline-modules.ts
-import { eq, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   disciplineModulesTable,
@@ -66,14 +66,17 @@ export async function getDisciplineIdForDisciplineModule(
 
 /**
  * Move a module between two neighbours OF ITS OWN DISCIPLINE. Neighbour
- * ranks are scalar subqueries scoped to that discipline, so a neighbour id
- * from another discipline resolves to NULL and the update writes nothing —
- * the two disciplines' orders can never interleave. Mirrors `reorderModule`.
+ * ranks are resolved with a single SELECT scoped to that discipline
+ * (`id in (…) and discipline_id = …`) BEFORE any write — a neighbour id
+ * from another discipline (or that doesn't exist) simply doesn't come back
+ * in the result, and the function returns null having written nothing.
+ * Mirrors `reorderModule`.
  *
- * Deliberately NOT coalesced: every module is created with a rank (see
- * `createDisciplineModule`), so a NULL neighbour rank here means the
- * neighbour id did not resolve within this discipline at all — the intended
- * refusal, not a day-one norm the way an unranked lesson is.
+ * This is deliberately NOT a scalar subquery inlined into the UPDATE: `rank`
+ * is NOT NULL, so a stale neighbour's subquery would resolve to SQL NULL,
+ * the midpoint arithmetic would resolve to NULL, and the UPDATE would raise
+ * a not-null violation (23502) instead of failing softly. Deciding the
+ * refusal in JS, before the write, means a NULL can never reach the column.
  */
 export async function reorderDisciplineModule(input: {
   moduleId: number;
@@ -82,24 +85,51 @@ export async function reorderDisciplineModule(input: {
 }): Promise<{ id: number; rank: number } | null> {
   const disciplineId = await getDisciplineIdForDisciplineModule(input.moduleId);
   if (disciplineId === null) return null;
-  const rankOf = (id: number) =>
-    sql`(select ${disciplineModulesTable.rank} from ${disciplineModulesTable} where ${disciplineModulesTable.id} = ${id} and ${disciplineModulesTable.disciplineId} = ${disciplineId})`;
-  const prev = input.prevModuleId ? rankOf(input.prevModuleId) : null;
-  const next = input.nextModuleId ? rankOf(input.nextModuleId) : null;
-  let rankExpr: SQL;
-  if (prev && next) rankExpr = sql`(${prev} + ${next}) / 2`;
-  else if (next) rankExpr = sql`${next} / 2`;
-  else if (prev) rankExpr = sql`${prev} + 1`;
+
+  const neighbourIds = [input.prevModuleId, input.nextModuleId].filter(
+    (id): id is number => id !== null,
+  );
+  if (neighbourIds.length === 0) return null;
+
+  const neighbours = await db
+    .select({
+      id: disciplineModulesTable.id,
+      rank: disciplineModulesTable.rank,
+    })
+    .from(disciplineModulesTable)
+    .where(
+      and(
+        inArray(disciplineModulesTable.id, neighbourIds),
+        eq(disciplineModulesTable.disciplineId, disciplineId),
+      ),
+    );
+  const rankById = new Map(neighbours.map((n) => [n.id, Number(n.rank)]));
+  // A named neighbour missing here — wrong discipline, or gone — is the
+  // stale-neighbour refusal, decided before touching the row being moved.
+  if (neighbourIds.some((id) => !rankById.has(id))) return null;
+
+  const prevRank =
+    input.prevModuleId !== null ? rankById.get(input.prevModuleId) : undefined;
+  const nextRank =
+    input.nextModuleId !== null ? rankById.get(input.nextModuleId) : undefined;
+
+  let rank: number;
+  if (prevRank !== undefined && nextRank !== undefined)
+    rank = (prevRank + nextRank) / 2;
+  else if (nextRank !== undefined) rank = nextRank / 2;
+  else if (prevRank !== undefined) rank = prevRank + 1;
+  // Unreachable: neighbourIds.length === 0 already returned above.
   else return null;
+
   const [updated] = await db
     .update(disciplineModulesTable)
-    .set({ rank: rankExpr, updatedAt: sql`now()` })
+    .set({ rank: String(rank), updatedAt: sql`now()` })
     .where(eq(disciplineModulesTable.id, input.moduleId))
     .returning({
       id: disciplineModulesTable.id,
       rank: disciplineModulesTable.rank,
     });
-  if (!updated || updated.rank === null) return null;
+  if (!updated) return null;
   return { id: updated.id, rank: Number(updated.rank) };
 }
 
