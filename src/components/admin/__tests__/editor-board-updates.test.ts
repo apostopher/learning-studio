@@ -560,6 +560,32 @@ describe('reorderLibraryModules', () => {
     ).toEqual([ADVANCED_MODULE, BASICS_MODULE]);
     expect(next.disciplines.find((d) => d.id === NAVIGATION)).toBe(navigation);
   });
+
+  it('returns the input unchanged when moduleId and overModuleId are in DIFFERENT disciplines', () => {
+    // Coverage gap: BASICS_MODULE (7) is Weather's own module, but
+    // NAV_MODULE (20) belongs to Navigation — `disciplineId` names Weather,
+    // so NAV_MODULE is not found there and there is nothing to reorder.
+    const library = makeLibrary();
+    const next = reorderLibraryModules(
+      library,
+      WEATHER,
+      BASICS_MODULE,
+      NAV_MODULE,
+    );
+
+    expect(next).toBe(library);
+  });
+
+  it('leaves the library it was given untouched', () => {
+    const library = makeLibrary();
+    reorderLibraryModules(library, WEATHER, ADVANCED_MODULE, BASICS_MODULE);
+
+    expect(
+      library.disciplines
+        .find((d) => d.id === WEATHER)
+        ?.modules.map((m) => m.id),
+    ).toEqual([BASICS_MODULE, ADVANCED_MODULE]);
+  });
 });
 
 describe('the rank anchors sent to the API — library side', () => {

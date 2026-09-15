@@ -10,7 +10,7 @@ import type {
   OrgEditorBoard,
   OrgLibrary,
 } from '#/lib/admin-schemas';
-import { parseDndId } from '#/lib/dnd-ids';
+import { type ParsedDndId, parseDndId } from '#/lib/dnd-ids';
 import { removeLessonLabel } from './lesson-card-labels';
 
 /**
@@ -312,16 +312,39 @@ function crossDisciplineLessonRefusal(from: LocatedLibraryLesson): string {
  * `null` when the target id does not resolve on this library at all (an
  * over id for a module/discipline that has since disappeared).
  */
+/**
+ * A library-side over kind: anything a library lesson or module can
+ * meaningfully land on. A real type guard, not a `Set.has` + cast — so
+ * `ParsedDndId` and this list cannot drift apart silently.
+ *
+ * Written out rather than `Extract<ParsedDndId, { type: ... }>`: every FLAT
+ * kind (`library-lesson`/`discipline`/`course`/`library-module`/
+ * `library-container`/`library-untitled`) shares ONE object shape in
+ * `ParsedDndId`, with `type` itself a union inside it — so `Extract` sees no
+ * member of `ParsedDndId` as a subtype of the narrower `type` and resolves
+ * to `never` for both union arms, not the intended subset.
+ */
+type LibraryTarget = {
+  type:
+    | 'library-module'
+    | 'library-container'
+    | 'library-untitled'
+    | 'library-lesson';
+  id: number;
+  courseId?: undefined;
+};
+function isLibraryTarget(over: ParsedDndId): over is LibraryTarget {
+  return (
+    over.type === 'library-module' ||
+    over.type === 'library-container' ||
+    over.type === 'library-untitled' ||
+    over.type === 'library-lesson'
+  );
+}
+
 function resolveLibraryTarget(
   library: OrgLibrary,
-  over: {
-    type:
-      | 'library-module'
-      | 'library-container'
-      | 'library-untitled'
-      | 'library-lesson';
-    id: number;
-  },
+  over: LibraryTarget,
 ): { disciplineId: number; boxId: number | null } | null {
   if (over.type === 'library-module' || over.type === 'library-container') {
     const found = findLibraryModule(library, over.id);
@@ -340,12 +363,36 @@ function resolveLibraryTarget(
   return { disciplineId: target.discipline.id, boxId: target.boxId };
 }
 
-const LIBRARY_TARGET_TYPES = new Set([
-  'library-module',
-  'library-container',
-  'library-untitled',
-  'library-lesson',
-]);
+/**
+ * The discipline module that OWNS a library-side over target, for a
+ * `library-module` drag. A pointer dragging a module's HEADER spends most of
+ * its time over sibling modules' lesson cards and containers, not their
+ * headers — dnd-kit reports those as `over` far more often than the header
+ * itself — so a `library-container`/`library-lesson` target resolves to the
+ * module it belongs to, exactly like the course rail's `resolveOverModule`
+ * resolves a lesson/container id to its module. A lesson found in a
+ * discipline's own Untitled group (or the org-level one) names no module —
+ * Untitled is always last and is not a module — so this answers `null`
+ * there, same as for a target that has vanished from the library.
+ */
+function moduleForLibraryTarget(
+  library: OrgLibrary,
+  over: LibraryTarget,
+): { discipline: LibraryDiscipline; module: LibraryDisciplineModule } | null {
+  if (over.type === 'library-lesson') {
+    const located = findLibraryLesson(library, over.id);
+    if (!located || located.boxId === null) return null;
+    return findLibraryModule(library, located.boxId);
+  }
+  if (over.type === 'library-container') {
+    return findLibraryModule(library, over.id);
+  }
+  if (over.type === 'library-module') {
+    return findLibraryModule(library, over.id);
+  }
+  // `library-untitled`: Untitled is not a module.
+  return null;
+}
 
 /** Whether any module of this course already teaches the lesson. */
 function courseTeaches(
@@ -511,7 +558,7 @@ export function resolveDrop(
     // Library cards are sortables now, hence droppables — the old "landing on
     // another library-lesson is not a target the editor offers" line no
     // longer holds; a `library-lesson` over id is a real reorder target.
-    if (LIBRARY_TARGET_TYPES.has(over.type)) {
+    if (isLibraryTarget(over)) {
       if (!library) return null;
       const from = findLibraryLesson(library, active.id);
       if (!from) return null;
@@ -521,17 +568,7 @@ export function resolveDrop(
       if (!from.discipline)
         return { kind: 'forbidden', reason: noDisciplineRefusal(from.lesson) };
 
-      const target = resolveLibraryTarget(
-        library,
-        over as {
-          type:
-            | 'library-module'
-            | 'library-container'
-            | 'library-untitled'
-            | 'library-lesson';
-          id: number;
-        },
-      );
+      const target = resolveLibraryTarget(library, over);
       if (!target) return null;
       if (target.disciplineId !== from.discipline.id) {
         return {
@@ -574,9 +611,21 @@ export function resolveDrop(
     const from = findLibraryModule(library, active.id);
     if (!from) return null;
 
-    if (over.type === 'library-module') {
-      const to = findLibraryModule(library, over.id);
+    // A pointer dragging a module's HEADER hovers sibling modules' lesson
+    // cards and containers far more often than a header — `moduleForLibrary
+    // Target` resolves any of those (or a direct module target) to the
+    // module that owns it, the same as `resolveOverModule` does for the
+    // course rail.
+    if (isLibraryTarget(over) && over.type !== 'library-untitled') {
+      const to = moduleForLibraryTarget(library, over);
+      // No module owns the target — either it names no module at all (a
+      // lesson sitting in a discipline's own Untitled group, or the
+      // org-level one: Untitled is always last and is not a module) or it
+      // has vanished from the library. Nothing to reorder against and
+      // nothing to refuse.
       if (!to) return null;
+      // Dropped on its own card/container: a no-op, not a refusal.
+      if (to.module.id === from.module.id) return null;
       if (to.discipline.id !== from.discipline.id) {
         return {
           kind: 'forbidden',
@@ -591,10 +640,16 @@ export function resolveDrop(
       };
     }
 
-    // A discipline module organises the library only — it is never a course
-    // concept, so every other target (a course rail's module/lesson/
-    // container/course, the library's own container/untitled/lesson cards)
-    // is refused the same way.
+    // `library-untitled` and a discipline column id: Untitled is always
+    // last and is not a module, and a discipline column only groups the
+    // library — neither is a module to reorder against, and neither is
+    // refused (there is nothing to say beyond "not a target").
+    if (over.type === 'library-untitled' || over.type === 'discipline')
+      return null;
+
+    // Every remaining target is a course rail one (a course's module/lesson/
+    // container/course itself): a discipline module organises the library
+    // only, and is never a course concept.
     return {
       kind: 'forbidden',
       reason:

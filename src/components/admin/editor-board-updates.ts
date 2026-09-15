@@ -402,26 +402,37 @@ export function moveLessonInLibrary(
   };
 }
 
-/** Reorder a discipline module within the NAMED discipline's shelf only —
- *  every other discipline is returned untouched, at the same reference. */
+/**
+ * Reorder a discipline module within the NAMED discipline's shelf only —
+ * every other discipline is returned untouched, at the same reference.
+ *
+ * When `moduleId`/`overModuleId` do not BOTH belong to `disciplineId` (the
+ * two modules living in different disciplines, say), this is a true no-op:
+ * the exact `library` argument is returned, not a structurally-identical
+ * copy — the caller can tell "nothing changed" with `===`, the same way
+ * `moveLessonInLibrary` answers a no-op with its own input.
+ */
 export function reorderLibraryModules(
   library: OrgLibrary,
   disciplineId: number,
   moduleId: number,
   overModuleId: number,
 ): OrgLibrary {
+  const discipline = library.disciplines.find((d) => d.id === disciplineId);
+  if (!discipline) return library;
+  const from = discipline.modules.findIndex((m) => m.id === moduleId);
+  const to = discipline.modules.findIndex((m) => m.id === overModuleId);
+  if (from === -1 || to === -1) return library;
+
+  const modules = [...discipline.modules];
+  const [moved] = modules.splice(from, 1);
+  modules.splice(to, 0, moved);
+
   return {
     ...library,
-    disciplines: library.disciplines.map((d) => {
-      if (d.id !== disciplineId) return d;
-      const from = d.modules.findIndex((m) => m.id === moduleId);
-      const to = d.modules.findIndex((m) => m.id === overModuleId);
-      if (from === -1 || to === -1) return d;
-      const modules = [...d.modules];
-      const [moved] = modules.splice(from, 1);
-      modules.splice(to, 0, moved);
-      return { ...d, modules };
-    }),
+    disciplines: library.disciplines.map((d) =>
+      d.id === disciplineId ? { ...discipline, modules } : d,
+    ),
   };
 }
 

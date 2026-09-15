@@ -1035,4 +1035,107 @@ describe('resolveDrop — library-side drops', () => {
         '"Orphan" has no discipline yet, so there are no modules to file it in. Drag it onto a course module to teach it there.',
     });
   });
+
+  it('refuses a library lesson dragged onto another discipline’s LESSON, naming both', () => {
+    // Coverage gap (Ruling 4): the over side is a `library-lesson`, not a
+    // `library-module`/`library-container`/`library-untitled` — the cross-
+    // discipline refusal must fire off a lesson target too, not just a
+    // module/container/untitled one.
+    const result = resolveDrop(
+      board,
+      libraryLessonDndId(L1),
+      libraryLessonDndId(L30),
+      undefined,
+      libraryFixture(),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"L1" is in Weather. Lessons stay in their discipline — file it into one of Weather’s modules, or drop it on a course module to teach it there.',
+    });
+  });
+
+  /**
+   * Fix round 1: a pointer dragging a module HEADER spends most of its time
+   * over SIBLING modules' lesson cards and containers, not their headers —
+   * dnd-kit reports those as `over` far more often than the header itself.
+   * These must resolve the same as a direct `library-module` target: find
+   * the module that owns the hovered card (never via `disciplineModuleId`)
+   * and reorder against IT, or refuse across disciplines the same way.
+   */
+  describe('a library module dragged over a sibling module’s cards, not its header', () => {
+    it('reorders against the module owning the hovered LESSON', () => {
+      // L6 lives in Advanced (8) — hovering its card while dragging Basics
+      // (7) must resolve exactly as dropping on Advanced's own header would.
+      expect(
+        resolveDrop(
+          board,
+          libraryModuleDndId(BASICS_MODULE),
+          libraryLessonDndId(L6),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'reorder-library-module',
+        disciplineId: WEATHER,
+        moduleId: BASICS_MODULE,
+        overModuleId: ADVANCED_MODULE,
+      });
+    });
+
+    it('answers null for a module dragged over its OWN container', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryModuleDndId(BASICS_MODULE),
+          libraryContainerDndId(BASICS_MODULE),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toBeNull();
+    });
+
+    it('refuses a module dragged over another discipline’s LESSON card, naming both disciplines', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryModuleDndId(BASICS_MODULE),
+          libraryLessonDndId(L30),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'forbidden',
+        reason:
+          '"Basics" is in Weather. Modules stay in their discipline; it cannot be moved into Navigation.',
+      });
+    });
+
+    it('answers null for a module dragged over a discipline’s Untitled droppable — Untitled is not a module', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryModuleDndId(BASICS_MODULE),
+          libraryUntitledDndId(WEATHER),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toBeNull();
+    });
+
+    it('answers null for a module dragged over a lesson sitting in a discipline’s Untitled group', () => {
+      // L3 sits in Weather's OWN Untitled group — it has no module to
+      // reorder against, and nothing to refuse either.
+      expect(
+        resolveDrop(
+          board,
+          libraryModuleDndId(BASICS_MODULE),
+          libraryLessonDndId(L3),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toBeNull();
+    });
+  });
 });
