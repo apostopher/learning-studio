@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseFontSpecs, parseLogo, sanitizeSvg } from './generate-theme-css'
+import Color from 'colorjs.io'
 import { checkContrast, generateRadixColors } from '../src/utils/colors'
 
 describe('parseFontSpecs', () => {
@@ -104,7 +105,13 @@ describe('parseLogo', () => {
   })
 })
 
-import { buildScaleBlock, buildThemeCss, buildAliasBlock } from './generate-theme-css'
+import {
+  buildScaleBlock,
+  buildThemeCss,
+  buildAliasBlock,
+  computeAaaText,
+  mixToward,
+} from './generate-theme-css'
 import type { BrandEntry } from '../src/utils/brand-colors'
 
 describe('buildThemeCss', () => {
@@ -229,9 +236,9 @@ describe('buildScaleBlock', () => {
       accentContrast: '#ffffff',
       accentSurface: '#eeeeee',
       // These fixture steps aren't real colors (7-hex-digit strings), so
-      // skip computeTextStep's measurement — this test only exercises hex
+      // skip computeAaaText's measurement — this test only exercises hex
       // emission, not the text-step fallback.
-      textStep: 11 as const,
+      text: '#00001010',
     }
 
     const out = buildScaleBlock('accent', scale)
@@ -388,26 +395,25 @@ describe('step-role tokens', () => {
     accentScaleAlpha: Array.from({ length: 12 }, (_, i) => `#a000${i}${i}`),
     accentContrast: '#fff',
     accentSurface: '#eeeeee',
-    // These fixture steps aren't real colors (their step-3/step-11 pairing
-    // is near-transparent black on near-transparent black, which fails
-    // computeTextStep's measurement) — pin textStep so this test continues
-    // to exercise the 3/6/9/11 index mapping specifically.
-    textStep: 11 as const,
+    // These fixture steps aren't real colors, so the AAA text mix cannot be
+    // measured from them — pin `text` so this test continues to exercise
+    // the 3/6/9 index mapping specifically.
+    text: '#00001010',
   }
 
-  it('maps subtle/border/solid/text onto Radix steps 3/6/9/11', () => {
+  it('maps subtle/border/solid onto Radix steps 3/6/9 and emits the given text', () => {
     const out = buildScaleBlock('demo', scale)
     // The builder above produces `#0000` + index + index, so index 2 (step 3)
-    // is #000022 and index 10 (step 11) is #00001010.
+    // is #000022.
     expect(out).toContain('--color-demo-subtle: #000022;')
     expect(out).toContain('--color-demo-border: #000055;')
     expect(out).toContain('--color-demo-solid: #000088;')
     expect(out).toContain('--color-demo-text: #00001010;')
   })
 
-  it('falls back to step 12 when step 11 fails AA against its own step 3 (measured, no explicit textStep)', () => {
-    // gold light scale: step 11 vs step 3 measures 4.246 — below 4.5 — so
-    // buildScaleBlock must select step 12 instead when textStep is omitted.
+  it('measures an AAA text colour when none is given: the least-bright oklch mix of steps 11→12 clearing 7:1 on every surface', () => {
+    // gold light scale: step 11 vs step 3 measures 4.246 — not even AA —
+    // so the mix has to travel a long way toward step 12.
     const { accentScale, accentScaleAlpha, accentContrast, accentSurface } =
       generateRadixColors({
         appearance: 'light',
@@ -417,14 +423,29 @@ describe('step-role tokens', () => {
       })
     expect(checkContrast(accentScale[10]!, accentScale[2]!).wcagAA).toBe(false)
 
+    const surfaces = accentScale.slice(0, 4)
+    const text = computeAaaText(accentScale, surfaces)
+    for (const bg of surfaces) {
+      expect(
+        checkContrast(text, bg).ratio,
+        `${text} on ${bg}`,
+      ).toBeGreaterThanOrEqual(7)
+    }
+    // Least-bright: one notch back toward step 11 must fail somewhere,
+    // otherwise the search stopped late and threw away tint for nothing.
+    // (A result equal to step 11 itself has no notch back.)
+    if (text !== accentScale[10]) {
+      const notchBack = mixToward(accentScale[10]!, accentScale[11]!, text, -0.05)
+      expect(surfaces.some((bg) => checkContrast(notchBack, bg).ratio < 7)).toBe(true)
+    }
+
     const out = buildScaleBlock('gold', {
       accentScale,
       accentScaleAlpha,
       accentContrast,
       accentSurface,
     })
-    expect(out).toContain(`--color-gold-text: ${accentScale[11]};`)
-    expect(out).not.toContain(`--color-gold-text: ${accentScale[10]};`)
+    expect(out).toContain(`--color-gold-text: ${text};`)
   })
 
   it('corrects a contrast token that fails against its own step 9', () => {
@@ -516,77 +537,84 @@ describe('palette contrast (WCAG AA is a hard requirement)', () => {
     }
   })
 
-  it('body text tokens clear AA against the page background', () => {
+  it('body text tokens clear AAA (7:1) on every neutral surface', () => {
+    // --color-primary resolves to gray-12; -secondary and -tertiary to
+    // gray-text. Most SMEs are pilots over sixty: 7:1 is the floor, and it
+    // has to hold on gray-4 (a hovered row) as much as on the page.
     for (const [label, block] of blocks) {
-      const bg = token(block, 'background')
-      // --color-primary / -secondary / -tertiary resolve to these primitives.
-      for (const step of ['gray-12', 'gray-11']) {
-        const { ratio } = checkContrast(token(block, step), bg)
-        expect(
-          ratio,
-          `${label} ${step} on ${bg} = ${ratio.toFixed(2)}`,
-        ).toBeGreaterThanOrEqual(4.5)
-      }
-    }
-  })
-
-  it('gray-10 does NOT clear AA — the reason --color-tertiary uses gray-11', () => {
-    const bg = token(lightBlock, 'background')
-    expect(
-      checkContrast(token(lightBlock, 'gray-10'), bg).ratio,
-    ).toBeLessThan(4.5)
-  })
-
-  it('each scale text step clears AA on its own subtle fill and on the page', () => {
-    for (const [label, block] of blocks) {
-      const bg = token(block, 'background')
-      for (const name of scales) {
-        const text = token(block, `${name}-text`)
-        for (const [surface, value] of [
-          ['subtle', token(block, `${name}-subtle`)],
-          ['background', bg],
-        ] as const) {
-          const { ratio } = checkContrast(text, value)
+      const surfaces = [
+        token(block, 'background'),
+        token(block, 'panel-bg'),
+        ...[1, 2, 3, 4].map((n) => token(block, `gray-${n}`)),
+      ]
+      for (const name of ['gray-12', 'gray-text']) {
+        for (const bg of surfaces) {
+          const { ratio } = checkContrast(token(block, name), bg)
           expect(
             ratio,
-            `${label} ${name}-text on ${surface} (${value}) = ${ratio.toFixed(2)}`,
-          ).toBeGreaterThanOrEqual(4.5)
+            `${label} ${name} on ${bg} = ${ratio.toFixed(2)}`,
+          ).toBeGreaterThanOrEqual(7)
         }
       }
     }
   })
 
-  it('sRGB and wide-gamut (P3) blocks select the same text step for a failing scale (gold)', () => {
+  it('the measured text colour keeps its scale’s hue — a mix along the 11→12 ramp, never a jump to white or black', () => {
+    // Mutant this catches: computeAaaText returning step 12 (or #fff/#000)
+    // whenever step 11 fails, which passes every contrast test above and
+    // throws away the tint the scale exists to carry.
+    const hue = (hex: string) => new Color(hex).to('oklch').get('h')
+    const chroma = (hex: string) => new Color(hex).to('oklch').get('c')
+    for (const [label, block] of blocks) {
+      for (const name of ['apple', 'warning', 'error', 'link']) {
+        const text = token(block, `${name}-text`)
+        const step11 = token(block, `${name}-11`)
+        // Achromatic results have no meaningful hue; only compare when the
+        // mix still carries colour.
+        if (chroma(text) < 0.02) continue
+        const drift = Math.abs(((hue(text) - hue(step11) + 540) % 360) - 180)
+        expect(drift, `${label} ${name}-text ${text} vs step 11 ${step11}`).toBeLessThan(10)
+      }
+    }
+  })
+
+  it('each scale’s text clears AAA (7:1) on its own steps 1–4, the gray surfaces, and the page', () => {
+    for (const [label, block] of blocks) {
+      const neutral = [
+        token(block, 'background'),
+        token(block, 'panel-bg'),
+        ...[1, 2, 3, 4].map((n) => token(block, `gray-${n}`)),
+      ]
+      for (const name of scales) {
+        const text = token(block, `${name}-text`)
+        const own = [1, 2, 3, 4].map((n) => token(block, `${name}-${n}`))
+        for (const value of [...own, ...neutral]) {
+          const { ratio } = checkContrast(text, value)
+          expect(
+            ratio,
+            `${label} ${name}-text (${text}) on ${value} = ${ratio.toFixed(2)}`,
+          ).toBeGreaterThanOrEqual(7)
+        }
+      }
+    }
+  })
+
+  it('sRGB and wide-gamut (P3) blocks emit the SAME measured text colour for every scale', () => {
+    // The mix is measured once, from the sRGB scale, and handed to the P3
+    // block verbatim — never re-measured against the oklch strings, which
+    // could disagree near the 7:1 boundary and leave the two blocks
+    // choosing different colours for one token.
     const p3Block = css.slice(css.indexOf('@supports'))
     const p3LightBlock = p3Block.slice(0, p3Block.indexOf('.dark {'))
-
-    const light = generateRadixColors({
-      appearance: 'light',
-      accent: '#E9E28F',
-      gray: '#8B8D98',
-      background: '#ffffff',
-    })
-
-    // Precondition: gold really does fail step 11 vs step 3 in light mode,
-    // so this test is actually exercising the fallback-to-12 path, not a
-    // no-op.
-    expect(
-      checkContrast(light.accentScale[10]!, light.accentScale[2]!).wcagAA,
-    ).toBe(false)
-
-    // sRGB block: --color-gold-text must be the step-12 hex, not step-11.
-    expect(token(lightBlock, 'gold-text')).toBe(light.accentScale[11])
-    expect(token(lightBlock, 'gold-text')).not.toBe(light.accentScale[10])
-
-    // P3 block: --color-gold-text must be the step-12 oklch string — the
-    // *same* Radix step the sRGB block picked, never measured independently
-    // against the oklch strings (which could disagree near the AA boundary).
-    expect(token(p3LightBlock, 'gold-text')).toBe(
-      light.accentScaleWideGamut[11],
-    )
-    expect(token(p3LightBlock, 'gold-text')).not.toBe(
-      light.accentScaleWideGamut[10],
-    )
+    const p3DarkBlock = p3Block.slice(p3Block.indexOf('.dark {'))
+    for (const name of ['gray', ...scales]) {
+      expect(token(p3LightBlock, `${name}-text`)).toBe(
+        token(lightBlock, `${name}-text`),
+      )
+      expect(token(p3DarkBlock, `${name}-text`)).toBe(
+        token(darkBlock, `${name}-text`),
+      )
+    }
   })
 
   // WCAG 1.4.11 (non-text contrast): graphical objects — icons, chart

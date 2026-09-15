@@ -38,7 +38,7 @@ export const EmailStepForm = ({
           aria-invalid={!!errorMessage}
           className={cn(
             'w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none',
-            'placeholder:text-gray-8',
+            'placeholder:text-tertiary',
             'transition-colors duration-100',
             'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
             errorMessage

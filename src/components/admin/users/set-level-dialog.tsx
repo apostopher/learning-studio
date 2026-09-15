@@ -75,7 +75,7 @@ export const SetLevelDialog = ({
                 messageError ? 'level-message-error' : undefined
               }
               placeholder="Why the level is changing, in a sentence they'll understand."
-              className="w-full resize-none rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              className="w-full resize-none rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
             />
             <span className="text-secondary text-xs">
               Shown to the pilot. Required.
@@ -100,7 +100,7 @@ export const SetLevelDialog = ({
               {...registerNote}
               rows={2}
               placeholder="Context for other admins. Never shown to the pilot."
-              className="w-full resize-none rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              className="w-full resize-none rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
             />
           </label>
 

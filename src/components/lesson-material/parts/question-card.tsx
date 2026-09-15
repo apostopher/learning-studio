@@ -132,7 +132,7 @@ const FreeTextInput = ({
         onChange={(e) => setText(e.target.value)}
         readOnly={readOnly}
         aria-describedby={readOnly ? REASON_ID : undefined}
-        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-gray-9 read-only:opacity-60 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
+        className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-tertiary read-only:opacity-60 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
       />
 
       <button

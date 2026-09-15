@@ -259,7 +259,7 @@ export const PersonaList = ({
             placeholder="e.g. Viper7 — recurrent training"
             aria-invalid={createError ? true : undefined}
             aria-describedby={createError ? 'new-persona-error' : undefined}
-            className="min-w-0 flex-1 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            className="min-w-0 flex-1 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
           />
           <button
             type="submit"

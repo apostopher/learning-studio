@@ -109,7 +109,7 @@ export const LessonVideoTile = ({
       className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
     >
       <span
-        className={`${TILE} group text-gray-11 transition-colors hover:bg-gray-4 hover:text-primary`}
+        className={`${TILE} group text-secondary transition-colors hover:bg-gray-4 hover:text-primary`}
       >
         {poster && <PosterFrame src={poster} />}
         <PlayGlyph onPoster={Boolean(poster)} />

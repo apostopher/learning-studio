@@ -42,7 +42,7 @@ export const TrainingDocsList = ({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search documents…"
             aria-label="Search documents"
-            className="rounded-lg border border-gray-6 bg-gray-1 py-2 ps-9 pe-3 text-primary placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            className="rounded-lg border border-gray-6 bg-gray-1 py-2 ps-9 pe-3 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
           />
         </div>
       </div>

@@ -38,7 +38,7 @@ export const CreateLessonForm = ({
           aria-invalid={!!nameError}
           aria-describedby={nameError ? 'lesson-name-error' : undefined}
           className={cn(
-            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-gray-8',
+            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-tertiary',
             'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
             nameError
               ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'

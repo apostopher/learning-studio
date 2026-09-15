@@ -97,7 +97,7 @@ export const MultiSelectCombobox = ({
               <Combobox.Input
                 id={id}
                 placeholder={picked.length === 0 ? placeholder : undefined}
-                className="min-w-32 flex-1 bg-transparent px-1.5 py-1 text-primary text-sm outline-none placeholder:text-gray-9"
+                className="min-w-32 flex-1 bg-transparent px-1.5 py-1 text-primary text-sm outline-none placeholder:text-tertiary"
               />
             </>
           )}

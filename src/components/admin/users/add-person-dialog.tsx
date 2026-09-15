@@ -70,7 +70,7 @@ export const AddPersonDialog = ({
               // The whole dialog exists to capture this, so it takes focus.
               // biome-ignore lint/a11y/noAutofocus: sole purpose of the dialog
               autoFocus
-              className="w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              className="w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
             />
             <span className="text-secondary text-xs">
               No email is sent. Their courses are applied automatically the

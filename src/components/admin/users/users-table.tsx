@@ -290,7 +290,7 @@ export const UsersTable = ({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search…"
-              className="w-64 rounded-lg border border-gray-6 bg-gray-1 py-2 ps-9 pe-3 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              className="w-64 rounded-lg border border-gray-6 bg-gray-1 py-2 ps-9 pe-3 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
             />
           </label>
 

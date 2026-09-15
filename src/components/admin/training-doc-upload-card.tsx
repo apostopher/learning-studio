@@ -78,7 +78,7 @@ export const TrainingDocUploadCard = ({
         onChange={(e) => onDocNameChange(e.target.value)}
         placeholder="Enter a name for this document"
         disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+        className="mt-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
       />
       <p className="mt-1 text-tertiary text-xs">
         Optional — defaults to the file name. Identifies the document in the

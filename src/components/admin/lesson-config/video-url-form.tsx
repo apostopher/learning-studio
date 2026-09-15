@@ -47,7 +47,7 @@ export const VideoUrlForm = ({
           aria-invalid={!!urlError}
           aria-describedby={urlError ? 'video-url-error' : 'video-url-hint'}
           className={cn(
-            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-gray-8',
+            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-tertiary',
             'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
             urlError
               ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
@@ -67,10 +67,9 @@ export const VideoUrlForm = ({
           <p
             id="video-url-hint"
             aria-live="polite"
-            // Only gray/apple(accent)/red semantic scales exist in this project's
-            // theme (see src/styles/theme.generated.css) — accent stands in for
-            // the "success/detected" state since there's no green scale.
-            className="flex items-center gap-1.5 text-apple-11 text-sm"
+            // The measured `-text` token, never a raw step: success-11 is
+            // tuned for 4.5:1 and this product's floor is AAA.
+            className="flex items-center gap-1.5 text-sm text-success-text"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             Detected: {detectedLabel}

@@ -27,13 +27,19 @@
 @theme static {
   /* ---------- Foreground ---------- */
   --color-primary: var(--color-gray-12);
-  --color-secondary: var(--color-gray-11);
-  /* rmtp extension — Astryx has no tertiary. Resolves to gray-11, the same as
-     secondary, and that is deliberate: Radix exposes exactly two AA-safe text
-     steps (11 and 12). Step 10 is a solid-background step at ~3:1 and fails
-     WCAG AA. Tertiary stays a distinct NAME so these sites can differentiate
-     by weight or size rather than by contrast. */
-  --color-tertiary: var(--color-gray-11);
+  /* WCAG AAA (7:1), not AA. Most readers — SMEs and learners alike — are
+     pilots past sixty. `--color-gray-text` is measured by the generator
+     (scripts/generate-theme-css.ts, computeAaaText): the least-bright oklch
+     mix between gray-11 and gray-12 that clears 7:1 on gray-1..4 and the
+     page fills, so it stays visibly a step down from primary without
+     dropping below the floor on a hovered row. Never gray-11 directly — it
+     is tuned for 4.5:1 and lands near 5–6:1 on gray-3/4. */
+  --color-secondary: var(--color-gray-text);
+  /* rmtp extension — Astryx has no tertiary. Resolves to the same colour
+     as secondary, and that is deliberate: there is exactly one measured
+     AAA text colour below primary. Tertiary stays a distinct NAME so these
+     sites can differentiate by weight or size rather than by contrast. */
+  --color-tertiary: var(--color-gray-text);
   /* Below 4.5:1 by design — WCAG 1.4.3 exempts inactive UI components. Apply
      ONLY to genuinely disabled controls, never to de-emphasised active text
      (that is what --color-tertiary is for). */

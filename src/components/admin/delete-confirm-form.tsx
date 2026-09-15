@@ -55,7 +55,7 @@ export const DeleteConfirmForm = ({
           autoComplete="off"
           placeholder={CONFIRM_PHRASE}
           className={cn(
-            'min-w-0 w-full rounded-lg border border-gray-6 bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors placeholder:text-gray-8',
+            'min-w-0 w-full rounded-lg border border-gray-6 bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors placeholder:text-tertiary',
             'hover:border-gray-8 focus-visible:ring-2 focus-visible:ring-error-9 focus-visible:border-error-9',
           )}
         />

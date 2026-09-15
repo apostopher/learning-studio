@@ -309,7 +309,7 @@ export const CourseStaffPanel = ({
                     <Combobox.Input
                       aria-label="Person to assign"
                       placeholder="Search by name or email"
-                      className="w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-gray-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                      className="w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
                     />
                     <Combobox.Portal>
                       <Combobox.Positioner sideOffset={4} className="z-50">

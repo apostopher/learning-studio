@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { BrandEntry } from '../src/utils/brand-colors'
 import { mergeStatusDefaults } from '../src/utils/brand-colors'
+import Color from 'colorjs.io'
 import { checkContrast, generateRadixColors } from '../src/utils/colors'
 
 export type FontSlotKey = 'sans' | 'mono' | 'display' | 'serif'
@@ -81,26 +82,77 @@ type ScaleInput = {
   accentScaleAlpha: readonly string[]
   accentContrast?: string
   accentSurface?: string
-  // Which step (11 or 12) --color-N-text should use. When omitted,
-  // buildScaleBlock measures it from accentScale itself — see
-  // computeTextStep. Callers building both an sRGB and a wide-gamut block
-  // for the *same* underlying scale should measure once from the sRGB
-  // values and pass the result to both, so the two gamuts never disagree.
-  textStep?: 11 | 12
+  // The colour --color-N-text should use, as an sRGB hex. When omitted,
+  // buildScaleBlock measures it from accentScale against the scale's own
+  // steps 1–4 — see computeAaaText. Callers building both an sRGB and a
+  // wide-gamut block for the *same* underlying scale should measure once
+  // from the sRGB values (against every surface the text will sit on) and
+  // pass the result to both, so the two gamuts never disagree.
+  text?: string
+}
+
+/** WCAG 2 AAA for body text. Large text (≥24px, or ≥19px bold) needs 4.5. */
+const AAA_RATIO = 7
+
+/**
+ * A colour `t` of the way from `from` to `to`, interpolated in oklch so the
+ * hue is held and only lightness (and chroma) move — the one dimension that
+ * changes contrast. `offset` nudges an already-mixed colour back along the
+ * same line (tests use it to prove a result is the LEAST bright that
+ * passes). Returned as a gamut-clipped sRGB hex.
+ */
+export function mixToward(
+  from: string,
+  to: string,
+  at: string | number,
+  offset = 0,
+): string {
+  const range = Color.range(from, to, { space: 'oklch', outputSpace: 'srgb' })
+  const t =
+    typeof at === 'number'
+      ? at
+      : // Recover the position of an already-mixed colour by its lightness.
+        (() => {
+          const l = (c: string) => new Color(c).to('oklch').get('l')
+          const span = l(to) - l(from)
+          return span === 0 ? 0 : (l(at) - l(from)) / span
+        })()
+  const clamped = Math.min(1, Math.max(0, t + offset))
+  return range(clamped).toGamut().toString({ format: 'hex' })
 }
 
 /**
- * Radix's contrast guarantee for step 11 only holds against steps 1–2, not
- * step 3 (`subtle`). For hues with a narrow light-mode lightness range
- * (pale yellows, light saturated greens/oranges), step 11 on step 3 can land
- * just under WCAG AA. Measure it, and fall back to step 12 — never lower
- * the threshold or hand-tune the palette to dodge this.
+ * The text colour a scale gets: the LEAST bright oklch mix between its step
+ * 11 and step 12 that clears WCAG AAA (7:1) on every surface handed in.
+ *
+ * Why not just step 11 or step 12. Radix tunes step 11 for ~4.5:1 (AA) and
+ * step 12 for maximum contrast; most of this product's readers are pilots
+ * past sixty, and AA is not enough for them. Step 12 alone would pass, but
+ * in a tinted scale it is near-white (dark theme) or near-black (light),
+ * and the hue the scale exists to carry — the amber of a warning, the navy
+ * of a link — disappears. Walking from 11 toward 12 in oklch keeps the hue
+ * and spends only as much lightness as 7:1 costs.
+ *
+ * Measured, never assumed: `surfaces` is every fill this text is drawn on
+ * (the scale's own steps 1–4, and for a tinted scale the neutral surfaces
+ * too, since a warning message sits on gray-2 as often as on warning-3).
+ * When even step 12 falls short on some surface, step 12 is returned — the
+ * palette test then fails loudly rather than the token quietly regressing.
  */
-export function computeTextStep(accentScale: readonly string[]): 11 | 12 {
-  const step3 = accentScale[2]
+export function computeAaaText(
+  accentScale: readonly string[],
+  surfaces: readonly string[],
+): string {
   const step11 = accentScale[10]
-  if (step3 && step11 && checkContrast(step11, step3).wcagAA) return 11
-  return 12
+  const step12 = accentScale[11]
+  if (!step11 || !step12) throw new Error('computeAaaText: scale has no steps 11–12')
+  const clears = (hex: string) =>
+    surfaces.every((bg) => checkContrast(hex, bg).ratio >= AAA_RATIO)
+  for (let t = 0; t < 1; t += 0.05) {
+    const candidate = t === 0 ? step11 : mixToward(step11, step12, t)
+    if (clears(candidate)) return candidate
+  }
+  return step12
 }
 
 /**
@@ -133,8 +185,8 @@ export function buildScaleBlock(name: string, scale: ScaleInput): string {
   const subtle = step(3)
   const border = step(6)
   const solid = step(9)
-  const textStep = scale.textStep ?? computeTextStep(scale.accentScale)
-  const text = step(textStep)
+  const text =
+    scale.text ?? computeAaaText(scale.accentScale, scale.accentScale.slice(0, 4))
   if (subtle) lines.push(`  --color-${name}-subtle: ${subtle};`)
   if (border) lines.push(`  --color-${name}-border: ${border};`)
   if (solid) lines.push(`  --color-${name}-solid: ${solid};`)
@@ -189,12 +241,15 @@ export type ThemeColorInputs = {
 type GenResult = ReturnType<typeof generateRadixColors>
 
 // Shape a generateRadixColors result as a ScaleInput for buildScaleBlock.
-// Computes textStep from the sRGB scale so callers can hand the same
-// decision to asScaleInputP3 for the wide-gamut block of the same scale.
+// Measures the AAA text colour from the sRGB scale — against the scale's
+// own steps 1–4 plus `neutralSurfaces` (the gray surfaces and page fills
+// tinted text also sits on) — so callers can hand the same colour to
+// asScaleInputP3 for the wide-gamut block of the same scale.
 const asScaleInput = (
   g: GenResult,
   kind: 'gray' | 'accent',
-): ScaleInput & { textStep: 11 | 12 } => {
+  neutralSurfaces: readonly string[] = [],
+): ScaleInput & { text: string } => {
   const base =
     kind === 'gray'
       ? {
@@ -208,31 +263,39 @@ const asScaleInput = (
           accentContrast: g.accentContrast,
           accentSurface: g.accentSurface,
         }
-  return { ...base, textStep: computeTextStep(base.accentScale) }
+  return {
+    ...base,
+    text: computeAaaText(base.accentScale, [
+      ...base.accentScale.slice(0, 4),
+      ...neutralSurfaces,
+    ]),
+  }
 }
 
-// Same as asScaleInput but uses wide-gamut (oklch) arrays. `textStep` must
-// be measured from the sRGB scale (asScaleInput) and passed in here — never
-// measured independently from the oklch strings — so the sRGB and P3 blocks
-// for the same scale always agree on which step --color-N-text uses.
+// Same as asScaleInput but uses wide-gamut (oklch) arrays. `text` must be
+// the colour measured from the sRGB scale (asScaleInput) and passed in here
+// — never measured independently from the oklch strings — so the sRGB and
+// P3 blocks for the same scale always agree on --color-N-text. It stays an
+// sRGB hex in the P3 block: the mix was chosen for contrast, not chroma,
+// and a wide-gamut variant would buy nothing a reader could see.
 const asScaleInputP3 = (
   g: GenResult,
   kind: 'gray' | 'accent',
-  textStep: 11 | 12,
+  text: string,
 ): ScaleInput =>
   kind === 'gray'
     ? {
         accentScale: g.grayScaleWideGamut,
         accentScaleAlpha: g.grayScaleAlphaWideGamut,
         accentSurface: g.graySurfaceWideGamut,
-        textStep,
+        text,
       }
     : {
         accentScale: g.accentScaleWideGamut,
         accentScaleAlpha: g.accentScaleAlphaWideGamut,
         accentContrast: g.accentContrast,
         accentSurface: g.accentSurfaceWideGamut,
-        textStep,
+        text,
       }
 
 export function buildThemeCss(inputs: ThemeColorInputs): string {
@@ -286,20 +349,38 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
 
   const firstName = inputs.brandColors[0]!.name
 
-  // Compute each scale's sRGB ScaleInput (and its textStep) once, so the
-  // wide-gamut (P3) block below can reuse the same textStep decision rather
-  // than re-measuring against the oklch strings.
-  const lightGrayInput = asScaleInput(lightGray, 'gray')
-  const darkGrayInput = asScaleInput(darkGray, 'gray')
+  // Compute each scale's sRGB ScaleInput (and its measured text colour)
+  // once, so the wide-gamut (P3) block below can reuse the same decision
+  // rather than re-measuring against the oklch strings. Tinted scales are
+  // measured against the neutral surfaces too: an error message sits on
+  // gray-2 at least as often as on error-3.
+  const lightGrayInput = asScaleInput(lightGray, 'gray', [
+    inputs.bg.light,
+    inputs.panelBg.light,
+  ])
+  const darkGrayInput = asScaleInput(darkGray, 'gray', [
+    inputs.bg.dark,
+    inputs.panelBg.dark,
+  ])
+  const lightNeutral = [
+    ...lightGray.grayScale.slice(0, 4),
+    inputs.bg.light,
+    inputs.panelBg.light,
+  ]
+  const darkNeutral = [
+    ...darkGray.grayScale.slice(0, 4),
+    inputs.bg.dark,
+    inputs.panelBg.dark,
+  ]
   const lightInputs = light.map(({ name, colors }) => ({
     name,
     colors,
-    input: asScaleInput(colors, 'accent'),
+    input: asScaleInput(colors, 'accent', lightNeutral),
   }))
   const darkInputs = dark.map(({ name, colors }) => ({
     name,
     colors,
-    input: asScaleInput(colors, 'accent'),
+    input: asScaleInput(colors, 'accent', darkNeutral),
   }))
 
   // Emitted into the light @theme block only — the .dark block overrides just
@@ -340,19 +421,19 @@ export function buildThemeCss(inputs: ThemeColorInputs): string {
     '  @theme {',
     buildScaleBlock(
       'gray',
-      asScaleInputP3(lightGray, 'gray', lightGrayInput.textStep),
+      asScaleInputP3(lightGray, 'gray', lightGrayInput.text),
     ),
     ...lightInputs.map(({ name, colors, input }) =>
-      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.textStep)),
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.text)),
     ),
     '  }',
     '  .dark {',
     buildScaleBlock(
       'gray',
-      asScaleInputP3(darkGray, 'gray', darkGrayInput.textStep),
+      asScaleInputP3(darkGray, 'gray', darkGrayInput.text),
     ),
     ...darkInputs.map(({ name, colors, input }) =>
-      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.textStep)),
+      buildScaleBlock(name, asScaleInputP3(colors, 'accent', input.text)),
     ),
     '  }',
     '}',
