@@ -144,7 +144,7 @@ describe('discipline module hooks', () => {
     await expect(
       act(() => result.current.mutateAsync({ disciplineId: 4, name: 'x' })),
     ).rejects.toThrow(
-      "Only an admin or one of this discipline’s subject experts can organise it.",
+      'Only an admin or one of this discipline’s subject experts can organise it.',
     );
   });
 

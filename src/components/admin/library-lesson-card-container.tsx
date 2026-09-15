@@ -20,6 +20,8 @@ import { LibraryLessonCard } from './library-lesson-card';
 export const LibraryLessonCardContainer = ({
   lesson,
   disciplineId,
+  boxId,
+  sortable = true,
 }: {
   lesson: LibraryLesson;
   /**
@@ -29,6 +31,25 @@ export const LibraryLessonCardContainer = ({
    * refusal toast would make the universal cancel gesture look like an error.
    */
   disciplineId: number;
+  /**
+   * The BUCKET this card is rendered from — a discipline module's id, or
+   * null for an Untitled group — named by the container rendering it, never
+   * read off `lesson.disciplineModuleId`. The editor's stage-two collision
+   * filters pick "the lessons of the box the pointer is inside" by this
+   * field, and the payload column can be stale (its module was deleted; the
+   * payload has already re-bucketed the card under Untitled) — the same
+   * walk-the-buckets rule `resolveDrop` and `moveLessonInLibrary` follow.
+   */
+  boxId: number | null;
+  /**
+   * False for the org-level Untitled column: those cards have no order to
+   * keep (`resolveDrop` refuses every library-side target for a lesson with
+   * no discipline), but as sortables their siblings still animated a reorder
+   * the drop would refuse. Off, the card registers no droppable among its
+   * siblings, so nothing displaces — while the DRAG stays on: the card must
+   * still link into a course.
+   */
+  sortable?: boolean;
 }) => {
   const {
     attributes,
@@ -44,8 +65,9 @@ export const LibraryLessonCardContainer = ({
       type: 'library-lesson',
       lessonId: lesson.id,
       disciplineId,
-      disciplineModuleId: lesson.disciplineModuleId,
+      disciplineModuleId: boxId,
     },
+    disabled: { draggable: false, droppable: !sortable },
   });
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
 

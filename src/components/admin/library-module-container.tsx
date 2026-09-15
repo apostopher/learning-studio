@@ -95,6 +95,7 @@ export const LibraryModuleContainer = ({
                   key={lesson.id}
                   lesson={lesson}
                   disciplineId={disciplineId}
+                  boxId={mod.id}
                 />
               ))
             )}

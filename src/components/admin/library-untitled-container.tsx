@@ -65,6 +65,13 @@ export const LibraryUntitledContainer = ({
             key={lesson.id}
             lesson={lesson}
             disciplineId={disciplineId}
+            boxId={null}
+            // Org-level cards keep no order (`resolveDrop` refuses every
+            // library-side target for a lesson with no discipline), so they
+            // are not sortable — as sortables, their siblings animated a
+            // reorder the drop then refused. They stay draggable into a
+            // course.
+            sortable={!isOrgLevel}
           />
         ))}
       </SortableContext>

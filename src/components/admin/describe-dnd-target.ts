@@ -8,8 +8,7 @@ import {
   type OrgEditorBoard,
   type OrgLibrary,
 } from '#/lib/admin-schemas';
-import { parseDndId } from '#/lib/dnd-ids';
-import { UNTITLED_DISCIPLINE_ID } from './discipline-column-container';
+import { parseDndId, UNTITLED_DISCIPLINE_ID } from '#/lib/dnd-ids';
 
 /** The library card for a lesson id, across disciplines and the untitled column. */
 export function findLibraryLesson(

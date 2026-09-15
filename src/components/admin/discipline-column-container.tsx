@@ -13,19 +13,15 @@ import {
 } from '#/atoms/admin';
 import { disciplineLessons, type LibraryDiscipline } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
-import { disciplineDndId, libraryModuleDndId } from '#/lib/dnd-ids';
+import {
+  disciplineDndId,
+  libraryModuleDndId,
+  UNTITLED_DISCIPLINE_ID,
+} from '#/lib/dnd-ids';
 import { DisciplineColumn } from './discipline-column';
 import { DisciplineColumnActions } from './discipline-column-actions';
 import { LibraryModuleContainer } from './library-module-container';
 import { LibraryUntitledContainer } from './library-untitled-container';
-
-/**
- * `disciplineId` for the leftmost "Untitled" column, whose lessons have no
- * discipline at all. Discipline ids are positive serials, so 0 can never
- * collide with a real one — and the column still has to be a droppable, or a
- * lesson dropped on it would look exactly like a lesson dropped on nothing.
- */
-export const UNTITLED_DISCIPLINE_ID = 0;
 
 /**
  * One discipline column, registered as a drop target.

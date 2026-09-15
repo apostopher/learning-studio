@@ -42,6 +42,15 @@ export const libraryLessonDndId = (id: number) => `library-lesson-${id}`;
  *  can be explicitly refused with a reason, rather than looking identical to
  *  a drop on nothing. */
 export const disciplineDndId = (id: number) => `discipline-${id}`;
+/**
+ * `disciplineId` for the leftmost "Untitled" column, whose lessons have no
+ * discipline at all. Discipline ids are positive serials, so 0 can never
+ * collide with a real one — and the column still has to be a droppable, or a
+ * lesson dropped on it would look exactly like a lesson dropped on nothing.
+ * Lives here, beside the id it is minted into, so a pure module can name it
+ * without importing a dnd-kit component.
+ */
+export const UNTITLED_DISCIPLINE_ID = 0;
 /** A course column with no modules — a real droppable so a lesson dropped on
  *  an empty course can be refused with the reason (there is nowhere to put it
  *  yet) rather than looking identical to a drop on nothing. */
