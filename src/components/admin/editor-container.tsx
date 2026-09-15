@@ -54,7 +54,12 @@ import {
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
-import { commitLibraryDrop } from './commit-library-drop';
+import {
+  commitLibraryDrop,
+  type LibraryDropResolution,
+  type LibraryPreview,
+  libraryDropFromPreview,
+} from './commit-library-drop';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
@@ -217,6 +222,16 @@ export const EditorContainer = ({
    */
   const librarySnapshotRef = useRef<OrgLibrary | null>(null);
   /**
+   * The last library-side preview `onDragOver` actually applied to the
+   * cache — the library-side sibling of `lessonDragRef.holderModuleId`. Set
+   * whenever `moveLessonInLibrary`/`reorderLibraryModules` runs, read by
+   * `onDragEnd` to rebuild the resolution when the drag is released exactly
+   * on its own (already-relocated) card — see `libraryDropFromPreview`.
+   * Cleared at the start of every drag and once `onDragEnd`/`onDragCancel`
+   * are done with it (via `clearActive`).
+   */
+  const libraryPreviewRef = useRef<LibraryPreview | null>(null);
+  /**
    * Set once `onDragOver` has transferred the dragged lesson into another
    * module. The transferred card becomes a droppable of its own, so the
    * release can land on the dragged lesson's own id — a self-drop, which
@@ -319,34 +334,27 @@ export const EditorContainer = ({
     }
 
     if (activeType === 'library-module') {
-      // A discipline module lands on another discipline module — including
-      // one in another discipline, which `resolveDrop` refuses by name. Every
-      // `library-module` id (any discipline) is a candidate for that reason,
-      // the same as `moduleTargets` above keeps every course's modules in.
-      //
-      // `library-lesson`/`library-container` ids of the module's OWN
-      // discipline join them too: `resolveDrop` resolves either through
-      // `moduleForLibraryTarget` to the module that owns it — a pointer
-      // dragging a module's HEADER spends most of its time over a sibling
-      // module's lesson cards and container, not its header. Cross-discipline
-      // ones are left out on purpose: the header of every OTHER discipline's
-      // module is already reachable and carries the same refusal.
-      //
-      // Rail ids are deliberately NOT admitted wholesale — a discipline
-      // module organises the library only, and offering it every course's
-      // narrow per-slot `container`/`lesson` droppables would be noise. A
-      // sibling module header (`module`) and the empty-course region
-      // (`course`) stay in, because `resolveDrop` has exactly ONE reason for
-      // landing on the rail at all ("organises the library, not a course"),
-      // and it needs to be reachable through something.
+      // Every droppable is a candidate except the drag's OWN discipline
+      // column — the same rule `library-lesson` drags use below (a card
+      // released back on the column it came from is "never mind", not a
+      // mistake). Nothing else is filtered by kind, on purpose:
+      // `resolveDrop` refuses EVERY rail target ("organises the library, not
+      // a course") and every cross-discipline library target (naming both
+      // disciplines) — a refusal has to be reachable to be a refusal, the
+      // same reasoning `acceptsModuleDrag` documents for the rail's own
+      // module drags. An earlier version of this filter kept only the rail's
+      // `module`/`course` ids and excluded cross-discipline library
+      // lesson/container ids, which made both of those refusals
+      // unreachable through a course module's per-slot droppables or a
+      // sibling discipline's lesson cards — springing the drag back with no
+      // note, no announcement and no toast.
       const disciplineId = activeData?.disciplineId as number | undefined;
       const libraryModuleTargets = args.droppableContainers.filter((c) => {
         const type = c.data.current?.type as DndType | undefined;
-        if (type === 'library-module') return true;
-        if (type === 'library-lesson' || type === 'library-container') {
-          return c.data.current?.disciplineId === disciplineId;
+        if (type === 'discipline') {
+          return c.data.current?.disciplineId !== disciplineId;
         }
-        return type === 'module' || type === 'course';
+        return true;
       });
       if (missed(libraryModuleTargets)) return [];
       return closestCenter({
@@ -565,6 +573,12 @@ export const EditorContainer = ({
     // accessibility announcements AFTER the `onDragEnd` prop, and the
     // announcement re-resolves the drop with the same origin. The next
     // lesson drag overwrites it at start; nothing but a lesson drag reads it.
+    //
+    // `libraryPreviewRef` IS cleared here — unlike `lessonDragRef`, nothing
+    // reads it after `onDragEnd`/`onDragCancel` are done with it (the
+    // announcements re-resolve independently, never through the preview
+    // rescue), and both callers capture it into a local before calling this.
+    libraryPreviewRef.current = null;
     setActiveModuleId(null);
     setActiveLessonId(null);
     setActiveLibraryLessonId(null);
@@ -579,6 +593,7 @@ export const EditorContainer = ({
     if (!parsed) return;
     setRefusal(null);
     transferAppliedRef.current = false;
+    libraryPreviewRef.current = null;
     // Snapshot for every kind of drag, module reorders included: they all
     // write optimistically into the same cached board — and the library,
     // for the same reason, since a library-lesson/library-module drag
@@ -678,6 +693,12 @@ export const EditorContainer = ({
     // going without waiting for the drop. `moveLessonInLibrary` handles a
     // same-box hover (a reorder within a module) the same way it handles a
     // cross-box one; there is nothing here to special-case.
+    //
+    // `libraryPreviewRef` records what was just applied — never the ever-
+    // changing `overId`/`overModuleId`, only what identifies the card and
+    // where it landed — so `onDragEnd` can rebuild this exact resolution if
+    // the drag is released on the card's own (now-relocated) droppable. See
+    // `libraryDropFromPreview`.
     if (resolution?.kind === 'library-move' && currentLibrary) {
       queryClient.setQueryData(
         libraryKey,
@@ -688,6 +709,12 @@ export const EditorContainer = ({
           over.id,
         ),
       );
+      libraryPreviewRef.current = {
+        kind: 'library-move',
+        lessonId: resolution.lessonId,
+        disciplineId: resolution.disciplineId,
+        disciplineModuleId: resolution.disciplineModuleId,
+      };
     } else if (
       resolution?.kind === 'reorder-library-module' &&
       currentLibrary
@@ -701,6 +728,11 @@ export const EditorContainer = ({
           resolution.overModuleId,
         ),
       );
+      libraryPreviewRef.current = {
+        kind: 'reorder-library-module',
+        disciplineId: resolution.disciplineId,
+        moduleId: resolution.moduleId,
+      };
     }
   };
 
@@ -717,6 +749,7 @@ export const EditorContainer = ({
     const transferApplied = transferAppliedRef.current;
     const dragSnapshot = snapshotRef.current;
     const dragLibrarySnapshot = librarySnapshotRef.current;
+    const libraryPreview = libraryPreviewRef.current;
     const lessonDrag = lessonDragRef.current;
     clearActive();
 
@@ -729,6 +762,33 @@ export const EditorContainer = ({
     }
     const currentLibrary = readLibrary();
 
+    /**
+     * Commits a `library-move`/`reorder-library-module` resolution — shared
+     * by the ordinary path below and the self-drop rescue, so the mutation
+     * and its rollback are written once.
+     */
+    const commitLibraryResolution = (
+      libraryResolution: LibraryDropResolution,
+      lib: OrgLibrary,
+    ) => {
+      const commit = commitLibraryDrop(libraryResolution, lib);
+      if (commit.kind === 'place') {
+        placeLibraryLesson.mutate(commit.vars, {
+          onError: (error) => {
+            rollback(dragSnapshot, dragLibrarySnapshot);
+            toast.error(error.message);
+          },
+        });
+      } else {
+        reorderDisciplineModule.mutate(commit.vars, {
+          onError: (error) => {
+            rollback(dragSnapshot, dragLibrarySnapshot);
+            toast.error(error.message);
+          },
+        });
+      }
+    };
+
     const activeParsed = parseDndId(active.id);
     const resolution = resolveDrop(
       current,
@@ -738,11 +798,12 @@ export const EditorContainer = ({
       currentLibrary ?? undefined,
     );
     if (!resolution) {
-      // `null` is "no drop target", which is usually a rollback. The one
-      // exception is a lesson released on ITSELF after `onDragOver` already
-      // carried it into another module: the transferred card is a droppable,
-      // so it can win the collision, and undoing there would throw away a
-      // move the admin watched happen and released on deliberately.
+      // `null` is "no drop target", which is usually a rollback. The
+      // exceptions are a lesson (or a library lesson/module) released on
+      // ITSELF after `onDragOver` already carried it elsewhere: the
+      // transferred card is a droppable, so it can win the collision, and
+      // undoing there would throw away a move the admin watched happen and
+      // released on deliberately.
       if (activeParsed?.type === 'lesson' && lessonDrag) {
         const commit = commitTransferredLesson(
           current,
@@ -768,6 +829,18 @@ export const EditorContainer = ({
           );
           return;
         }
+      }
+      // The library-side twin of the rescue above — see `libraryPreviewRef`
+      // and `libraryDropFromPreview`. Matched by id, so a preview left over
+      // from an earlier hover (or nothing at all) still rolls back.
+      const rescued = libraryDropFromPreview(
+        libraryPreview,
+        active.id,
+        over.id,
+      );
+      if (rescued && currentLibrary) {
+        commitLibraryResolution(rescued, currentLibrary);
+        return;
       }
       rollback(dragSnapshot, dragLibrarySnapshot);
       return;
@@ -851,22 +924,7 @@ export const EditorContainer = ({
         rollback(dragSnapshot, dragLibrarySnapshot);
         return;
       }
-      const commit = commitLibraryDrop(resolution, currentLibrary);
-      if (commit.kind === 'place') {
-        placeLibraryLesson.mutate(commit.vars, {
-          onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
-            toast.error(error.message);
-          },
-        });
-      } else {
-        reorderDisciplineModule.mutate(commit.vars, {
-          onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
-            toast.error(error.message);
-          },
-        });
-      }
+      commitLibraryResolution(resolution, currentLibrary);
       return;
     }
 

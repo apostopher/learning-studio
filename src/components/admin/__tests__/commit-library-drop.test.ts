@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryLesson } from '#/lib/admin-schemas';
-import { commitLibraryDrop } from '../commit-library-drop';
+import {
+  commitLibraryDrop,
+  libraryDropFromPreview,
+} from '../commit-library-drop';
 
 // Not `as const`: the schema's array fields (`courseIds`, `levels`,
 // `requiredSubscriptions`) are mutable `T[]`, and a `const`-asserted `[]`
@@ -101,5 +104,84 @@ describe('commitLibraryDrop', () => {
       kind: 'reorder',
       vars: { moduleId: 7, prevModuleId: 8, nextModuleId: null },
     });
+  });
+});
+
+describe('libraryDropFromPreview', () => {
+  /**
+   * The self-drop rescue: `onDragOver`'s live preview already carried the
+   * lesson into module 7, so the dragged card re-registers there and the
+   * release can land on the card's own (relocated) id — `resolveDrop`
+   * correctly answers that self-drop `null`. Without this, the null would
+   * roll back a move the admin just watched happen.
+   */
+  it('rebuilds a library-move when the released id matches the preview', () => {
+    expect(
+      libraryDropFromPreview(
+        {
+          kind: 'library-move',
+          lessonId: 1,
+          disciplineId: 4,
+          disciplineModuleId: 7,
+        },
+        'library-lesson-1',
+        'library-lesson-1',
+      ),
+    ).toEqual({
+      kind: 'library-move',
+      lessonId: 1,
+      disciplineId: 4,
+      disciplineModuleId: 7,
+      overId: 'library-lesson-1',
+    });
+  });
+
+  it('rebuilds a reorder-library-module when the released id matches the preview', () => {
+    expect(
+      libraryDropFromPreview(
+        { kind: 'reorder-library-module', disciplineId: 4, moduleId: 7 },
+        'library-module-7',
+        'library-module-7',
+      ),
+    ).toEqual({
+      kind: 'reorder-library-module',
+      disciplineId: 4,
+      moduleId: 7,
+      overModuleId: 7,
+    });
+  });
+
+  it('answers null with no preview', () => {
+    expect(
+      libraryDropFromPreview(null, 'library-lesson-1', 'library-lesson-1'),
+    ).toBeNull();
+  });
+
+  it('answers null when the released id is a different lesson than the preview carried', () => {
+    // A stale preview from an earlier hover, or a genuinely different card —
+    // either way, rebuilding a resolution for the WRONG lesson would commit
+    // a move nobody made.
+    expect(
+      libraryDropFromPreview(
+        {
+          kind: 'library-move',
+          lessonId: 1,
+          disciplineId: 4,
+          disciplineModuleId: 7,
+        },
+        'library-lesson-2',
+        'library-lesson-2',
+      ),
+    ).toBeNull();
+  });
+
+  it('answers null when the active kind does not match the preview kind', () => {
+    expect(
+      libraryDropFromPreview(
+        { kind: 'reorder-library-module', disciplineId: 4, moduleId: 7 },
+        'library-lesson-7',
+        'library-lesson-7',
+      ),
+    ).toBeNull();
   });
 });
