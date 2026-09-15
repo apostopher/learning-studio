@@ -6,6 +6,7 @@ import {
   disciplinesTable,
   lessonsTable,
 } from '#/db/schema';
+import { unrankedLibraryRank } from '#/lib/library-rank';
 
 /**
  * Discipline modules: how a discipline's lessons are FILED in the library
@@ -133,33 +134,21 @@ export async function reorderDisciplineModule(input: {
   return { id: updated.id, rank: Number(updated.rank) };
 }
 
-export async function countLessonsInDisciplineModule(
-  id: number,
-): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(lessonsTable)
-    .where(eq(lessonsTable.disciplineModuleId, id));
-  return Number(row?.n ?? 0);
-}
-
 /**
  * Delete the module ROW. Its lessons are not touched by this function at
  * all — the foreign key's `on delete set null` returns them to their
- * discipline's Untitled group. The count is what the confirm dialog quotes.
+ * discipline's Untitled group. The confirm dialog quotes the count it
+ * already holds from the library payload; nothing reads one from here.
  */
 export async function deleteDisciplineModule(
   id: number,
-): Promise<
-  { ok: true; lessonsReturned: number } | { ok: false; reason: 'not-found' }
-> {
-  const lessonsReturned = await countLessonsInDisciplineModule(id);
+): Promise<{ ok: true } | { ok: false; reason: 'not-found' }> {
   const deleted = await db
     .delete(disciplineModulesTable)
     .where(eq(disciplineModulesTable.id, id))
     .returning({ id: disciplineModulesTable.id });
   if (deleted.length === 0) return { ok: false, reason: 'not-found' };
-  return { ok: true, lessonsReturned };
+  return { ok: true };
 }
 
 export type PlaceLessonResult =
@@ -181,14 +170,23 @@ export type PlaceLessonResult =
  * lesson's own discipline — is enforced here, the only write that sets the
  * column, by reading both disciplines first and refusing with both names.
  * Neighbour ranks are scoped to the SAME box (module, or Untitled of the
- * same discipline), so a stale neighbour id from elsewhere yields NULL and
- * nothing is written rather than a rank borrowed from another list.
+ * same discipline), so a neighbour id from another box never lends its rank
+ * to this list.
  *
- * A neighbour's `library_rank` is coalesced to 0 — unlike the module
- * neighbour lookup above. A lesson is unranked until it is first dragged
- * (`libraryRank` starts NULL), so a never-dragged neighbour is the day-one
- * norm, not a stale reference: coalescing keeps the midpoint arithmetic
- * working instead of nulling it out on the very first drag in a box.
+ * A neighbour with no `library_rank` — unlike the module neighbour lookup
+ * above — is not a stale reference but the day-one norm: a lesson is
+ * unranked until it is first dragged, and every lesson that predates this
+ * feature is unranked. Its rank is coalesced to `unrankedLibraryRank(id)`,
+ * the SAME position the reader (`getOrgLibrary`) sorts it at, so the rank
+ * written between/after unranked neighbours lands exactly where the admin
+ * released it after the refetch. Coalescing to 0 here while the reader put
+ * unranked lessons last sent every day-one drop to the top of the box.
+ * (A neighbour missing from the box entirely resolves the same way — no
+ * rank is borrowed from another list.) Nothing is backfilled.
+ *
+ * Absent neighbours mirror the rail's `rankBetween`: no prev → half the
+ * next; no next → one past the prev (so a drop at the very end of a box
+ * lands after the last effective rank); neither → 1.
  */
 export async function placeLessonInLibrary(input: {
   lessonId: number;
@@ -238,7 +236,7 @@ export async function placeLessonInLibrary(input: {
       ? sql`${lessonsTable.disciplineModuleId} is null and ${lessonsTable.disciplineId} = ${lesson.disciplineId}`
       : sql`${lessonsTable.disciplineModuleId} = ${input.disciplineModuleId}`;
   const rankOf = (id: number) =>
-    sql`coalesce((select ${lessonsTable.libraryRank} from ${lessonsTable} where ${lessonsTable.id} = ${id} and ${inBox}), 0)`;
+    sql`coalesce((select ${lessonsTable.libraryRank} from ${lessonsTable} where ${lessonsTable.id} = ${id} and ${inBox}), ${unrankedLibraryRank(id)})`;
   const prev = input.prevLessonId ? rankOf(input.prevLessonId) : null;
   const next = input.nextLessonId ? rankOf(input.nextLessonId) : null;
   let rankExpr: SQL;

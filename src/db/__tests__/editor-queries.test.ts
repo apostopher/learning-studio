@@ -4,6 +4,7 @@ import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 import { disciplineLessons } from '#/lib/admin-schemas';
+import { unrankedLibraryRank } from '#/lib/library-rank';
 
 // Task 8: `#/db/editor.ts` reads the org-level library (lessons grouped by
 // discipline, org-scoped) and the org's rail of course boards. Real `pgTable`
@@ -444,6 +445,46 @@ describe('getOrgLibrary', () => {
       .sort();
     expect(all).toEqual([1, 2, 3, 5, 6]);
     expect(Object.hasOwn(weather, 'lessons')).toBe(false);
+  });
+
+  /**
+   * The reader's half of the day-one round trip (the writer's half is in
+   * `discipline-modules.test.ts`): a lesson the writer ranked "after C" got
+   * `unrankedLibraryRank(C) + 1`, and the reader must sort it AFTER the
+   * unranked lessons — at the position the admin released it — not before
+   * every one of them because "ranked sorts first".
+   */
+  it('sorts an unranked lesson at OFFSET + id, so a rank written after one lands after it', async () => {
+    db.select
+      .mockReturnValueOnce(
+        makeChain([
+          row({
+            id: 1,
+            disciplineId: 4,
+            disciplineModuleId: null,
+            libraryRank: String(unrankedLibraryRank(3) + 1),
+          }),
+          row({
+            id: 2,
+            disciplineId: 4,
+            disciplineModuleId: null,
+            libraryRank: null,
+          }),
+          row({
+            id: 3,
+            disciplineId: 4,
+            disciplineModuleId: null,
+            libraryRank: null,
+          }),
+        ]),
+      )
+      .mockReturnValueOnce(
+        makeChain([{ id: 4, name: 'Weather', slug: 'weather' }]),
+      )
+      .mockReturnValueOnce(makeChain([]));
+
+    const lib = await getOrgLibrary(1);
+    expect(lib.disciplines[0].untitled.map((l) => l.id)).toEqual([2, 3, 1]);
   });
 
   it('a module with no lessons is still a box', async () => {

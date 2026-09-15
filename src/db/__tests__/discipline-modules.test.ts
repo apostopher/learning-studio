@@ -3,6 +3,11 @@
 import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
+import {
+  byLibraryOrder,
+  LIBRARY_RANK_OFFSET,
+  unrankedLibraryRank,
+} from '#/lib/library-rank';
 
 /**
  * A builder double in the shape of course-remixes.test.ts's: every method
@@ -167,11 +172,10 @@ describe('reorderDisciplineModule', () => {
 });
 
 describe('deleteDisciplineModule', () => {
-  it('counts the lessons that return to Untitled, deletes only the module row, and never a lesson', async () => {
-    fake.state.results.push([{ n: 3 }]);
+  it('deletes only the module row, and never a lesson', async () => {
     fake.state.results.push([{ id: 7 }]);
     const out = await deleteDisciplineModule(7);
-    expect(out).toEqual({ ok: true, lessonsReturned: 3 });
+    expect(out).toEqual({ ok: true });
     expect(fake.state.deletes).toHaveLength(1);
     expect(fake.state.deletes[0].table).toBe(disciplineModulesTable);
     expect(renderSql(fake.state.deletes[0].where as SQL)).toBe(
@@ -226,9 +230,16 @@ describe('placeLessonInLibrary', () => {
     };
     expect(set.disciplineModuleId).toBe(7);
     expect(renderSql(set.libraryRank)).toBe(
-      '(coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $1 and "lessons"."discipline_module_id" = $2), 0) + coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $3 and "lessons"."discipline_module_id" = $4), 0)) / 2',
+      '(coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $1 and "lessons"."discipline_module_id" = $2), $3) + coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $4 and "lessons"."discipline_module_id" = $5), $6)) / 2',
     );
-    expect(renderSqlParams(set.libraryRank)).toEqual([11, 7, 12, 7]);
+    expect(renderSqlParams(set.libraryRank)).toEqual([
+      11,
+      7,
+      unrankedLibraryRank(11),
+      12,
+      7,
+      unrankedLibraryRank(12),
+    ]);
     expect(out).toEqual({ ok: true, rank: 1.5 });
   });
 
@@ -247,10 +258,173 @@ describe('placeLessonInLibrary', () => {
     };
     expect(set.disciplineModuleId).toBeNull();
     expect(renderSql(set.libraryRank)).toBe(
-      'coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $1 and "lessons"."discipline_module_id" is null and "lessons"."discipline_id" = $2), 0) + 1',
+      'coalesce((select "lessons"."library_rank" from "lessons" where "lessons"."id" = $1 and "lessons"."discipline_module_id" is null and "lessons"."discipline_id" = $2), $3) + 1',
     );
-    expect(renderSqlParams(set.libraryRank)).toEqual([11, 4]);
+    expect(renderSqlParams(set.libraryRank)).toEqual([
+      11,
+      4,
+      unrankedLibraryRank(11),
+    ]);
     expect(out).toEqual({ ok: true, rank: 3 });
+  });
+
+  /**
+   * Day-one round trip: every existing lesson is unranked, and the writer
+   * and the reader must agree on where an unranked lesson stands or the
+   * refetch shows a different order from the one the admin released.
+   *
+   * Mutant this catches (the shipped bug): the writer coalescing an unranked
+   * neighbour to 0 while the reader sorted unranked lessons LAST — "drop A
+   * after C" got rank 1, and after the refetch A sorted before B and C, at
+   * the top of the box.
+   *
+   * The rank is computed by evaluating the SAME arithmetic the rendered SQL
+   * expresses (each coalesce resolves to the neighbour's stored rank, or the
+   * bound fallback param when it has none), and that number is then fed
+   * through the reader's sort.
+   */
+  describe('round trip through the reader’s sort, with every neighbour unranked', () => {
+    type Box = Array<{ id: number; libraryRank: number | null }>;
+    const A = 1;
+    const B = 2;
+    const C = 3;
+    const unranked = (): Box => [
+      { id: A, libraryRank: null },
+      { id: B, libraryRank: null },
+      { id: C, libraryRank: null },
+    ];
+
+    /** Evaluate the writer's rendered rank expression against a box. */
+    function evaluateRank(expr: SQL, box: Box): number {
+      const params = renderSqlParams(expr) as number[];
+      const stored = new Map(box.map((l) => [l.id, l.libraryRank]));
+      // Each neighbour term: `coalesce((select … where "lessons"."id" = $n
+      // and <box>), $m)` → the stored rank of lesson $n, else param $m.
+      const text = renderSql(expr).replace(
+        /coalesce\(\(select [^)]*"lessons"\."id" = \$(\d+) and [^)]*\), \$(\d+)\)/g,
+        (_, idParam: string, fallbackParam: string) => {
+          const id = params[Number(idParam) - 1];
+          const fallback = params[Number(fallbackParam) - 1];
+          return String(stored.get(id) ?? fallback);
+        },
+      );
+      const between = /^\(([\d.]+) \+ ([\d.]+)\) \/ 2$/.exec(text);
+      if (between) return (Number(between[1]) + Number(between[2])) / 2;
+      const start = /^([\d.]+) \/ 2$/.exec(text);
+      if (start) return Number(start[1]) / 2;
+      const end = /^([\d.]+) \+ 1$/.exec(text);
+      if (end) return Number(end[1]) + 1;
+      if (text === '1') return 1;
+      throw new Error(`unrecognised rank expression: ${text}`);
+    }
+
+    async function rankWrittenFor(input: {
+      lessonId: number;
+      prevLessonId: number | null;
+      nextLessonId: number | null;
+    }): Promise<{ expr: SQL; params: unknown[] }> {
+      fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
+      fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
+      fake.state.results.push([{ id: input.lessonId, libraryRank: '0' }]);
+      await placeLessonInLibrary({ disciplineModuleId: 7, ...input });
+      const set = fake.state.updates[0].set as { libraryRank: SQL };
+      return {
+        expr: set.libraryRank,
+        params: renderSqlParams(set.libraryRank),
+      };
+    }
+
+    it('drop C between A and B → the reader shows A, C, B', async () => {
+      const { expr, params } = await rankWrittenFor({
+        lessonId: C,
+        prevLessonId: A,
+        nextLessonId: B,
+      });
+      // The fallback for an unranked neighbour is its OFFSET + id, never 0.
+      expect(params).toEqual([
+        A,
+        7,
+        LIBRARY_RANK_OFFSET + A,
+        B,
+        7,
+        LIBRARY_RANK_OFFSET + B,
+      ]);
+      const rank = evaluateRank(expr, unranked());
+      expect(rank).toBe(LIBRARY_RANK_OFFSET + 1.5);
+
+      const refetched = unranked().map((l) =>
+        l.id === C ? { ...l, libraryRank: rank } : l,
+      );
+      expect(refetched.sort(byLibraryOrder).map((l) => l.id)).toEqual([
+        A,
+        C,
+        B,
+      ]);
+    });
+
+    it('drop A after C (end of the box) → the reader shows B, C, A', async () => {
+      const { expr, params } = await rankWrittenFor({
+        lessonId: A,
+        prevLessonId: C,
+        nextLessonId: null,
+      });
+      expect(params).toEqual([C, 7, LIBRARY_RANK_OFFSET + C]);
+      const rank = evaluateRank(expr, unranked());
+      expect(rank).toBe(LIBRARY_RANK_OFFSET + C + 1);
+
+      const refetched = unranked().map((l) =>
+        l.id === A ? { ...l, libraryRank: rank } : l,
+      );
+      expect(refetched.sort(byLibraryOrder).map((l) => l.id)).toEqual([
+        B,
+        C,
+        A,
+      ]);
+    });
+
+    it('drop C before A (start of the box) → the reader shows C, A, B', async () => {
+      const { expr } = await rankWrittenFor({
+        lessonId: C,
+        prevLessonId: null,
+        nextLessonId: A,
+      });
+      const rank = evaluateRank(expr, unranked());
+      expect(rank).toBe((LIBRARY_RANK_OFFSET + A) / 2);
+
+      const refetched = unranked().map((l) =>
+        l.id === C ? { ...l, libraryRank: rank } : l,
+      );
+      expect(refetched.sort(byLibraryOrder).map((l) => l.id)).toEqual([
+        C,
+        A,
+        B,
+      ]);
+    });
+
+    it('a ranked neighbour’s stored rank wins over its fallback', async () => {
+      // B was dragged before (rank 5); A and C never were. Drop C between A
+      // and B: A resolves to its fallback, B to its stored 5.
+      const { expr } = await rankWrittenFor({
+        lessonId: C,
+        prevLessonId: B,
+        nextLessonId: A,
+      });
+      const box: Box = [
+        { id: A, libraryRank: null },
+        { id: B, libraryRank: 5 },
+        { id: C, libraryRank: null },
+      ];
+      const rank = evaluateRank(expr, box);
+      expect(rank).toBe((5 + LIBRARY_RANK_OFFSET + A) / 2);
+      const refetched = box.map((l) =>
+        l.id === C ? { ...l, libraryRank: rank } : l,
+      );
+      expect(refetched.sort(byLibraryOrder).map((l) => l.id)).toEqual([
+        B,
+        C,
+        A,
+      ]);
+    });
   });
 
   it('answers not-found for an unknown lesson', async () => {

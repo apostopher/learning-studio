@@ -160,11 +160,8 @@ describe('PATCH /api/admin/discipline-modules/:id', () => {
 });
 
 describe('DELETE /api/admin/discipline-modules/:id', () => {
-  it('guards content:delete on the module’s discipline and 204s, reporting how many lessons returned to Untitled in a header', async () => {
-    m.deleteDisciplineModule.mockResolvedValue({
-      ok: true,
-      lessonsReturned: 3,
-    });
+  it('guards content:delete on the module’s discipline and 204s with an empty body', async () => {
+    m.deleteDisciplineModule.mockResolvedValue({ ok: true });
     const res = await deleteDisciplineModuleHandler(json('DELETE'), '7');
     expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
       expect.anything(),
@@ -172,6 +169,7 @@ describe('DELETE /api/admin/discipline-modules/:id', () => {
       'delete',
     );
     expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
   });
 });
 
@@ -225,6 +223,81 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     await expect(res.json()).resolves.toEqual({
       error:
         'This lesson is in Weather; that module is in Navigation. Lessons stay in their discipline — file it into one of Weather’s modules.',
+    });
+  });
+  /**
+   * Cross-tenant disclosure: the writer's `wrong-discipline` refusal echoes
+   * the target module's discipline NAME, so a module id from another org
+   * reaching it would name that org's discipline in this org's 400. The
+   * target module is resolved and org-checked in the route — the same
+   * `getDisciplineIdForDisciplineModule` → `findDisciplineInOrg` ordering
+   * the module routes use — AFTER the lesson-side guard (the body carrying
+   * the module id is only read once the actor is admitted), and a module
+   * outside the org is 404, not a naming 400.
+   */
+  it('404s a module of another org without naming its discipline; the guard still ran on the LESSON’s discipline', async () => {
+    // Module 99 belongs to discipline 77, which is not in org 1.
+    m.getDisciplineIdForDisciplineModule.mockResolvedValue(77);
+    m.findDisciplineInOrg.mockImplementation(
+      async (_orgId: number, disciplineId: number) =>
+        disciplineId === 4 ? { id: 4 } : null,
+    );
+    m.placeLessonInLibrary.mockResolvedValue({
+      ok: false,
+      reason: 'wrong-discipline',
+      lessonDiscipline: 'Weather',
+      moduleDiscipline: 'Other Org Secret',
+    });
+    const res = await patchLibraryPlacementHandler(
+      json('PATCH', {
+        disciplineModuleId: 99,
+        prevLessonId: null,
+        nextLessonId: null,
+      }),
+      '10',
+    );
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('Other Org Secret');
+    expect(m.getDisciplineIdForDisciplineModule).toHaveBeenCalledWith(99);
+    expect(m.findDisciplineInOrg).toHaveBeenCalledWith(1, 77);
+    expect(m.requireLessonContentPermission).toHaveBeenCalledTimes(1);
+    expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      4,
+      'update',
+    );
+    expect(m.placeLessonInLibrary).not.toHaveBeenCalled();
+  });
+  it('404s a target module that does not exist, without writing', async () => {
+    m.getDisciplineIdForDisciplineModule.mockResolvedValue(null);
+    const res = await patchLibraryPlacementHandler(
+      json('PATCH', {
+        disciplineModuleId: 99,
+        prevLessonId: null,
+        nextLessonId: null,
+      }),
+      '10',
+    );
+    expect(res.status).toBe(404);
+    expect(m.placeLessonInLibrary).not.toHaveBeenCalled();
+  });
+  it('filing back to Untitled (null module) resolves no module at all', async () => {
+    m.placeLessonInLibrary.mockResolvedValue({ ok: true, rank: 1 });
+    const res = await patchLibraryPlacementHandler(
+      json('PATCH', {
+        disciplineModuleId: null,
+        prevLessonId: null,
+        nextLessonId: null,
+      }),
+      '10',
+    );
+    expect(res.status).toBe(200);
+    expect(m.getDisciplineIdForDisciplineModule).not.toHaveBeenCalled();
+    expect(m.placeLessonInLibrary).toHaveBeenCalledWith({
+      lessonId: 10,
+      disciplineModuleId: null,
+      prevLessonId: null,
+      nextLessonId: null,
     });
   });
   it('an Untitled (null) lesson has no discipline to guard — 404, and nothing is written', async () => {

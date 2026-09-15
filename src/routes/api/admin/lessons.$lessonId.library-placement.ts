@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: see the sibling routes.
-import { placeLessonInLibrary } from '#/db/discipline-modules';
+import {
+  getDisciplineIdForDisciplineModule,
+  placeLessonInLibrary,
+} from '#/db/discipline-modules';
 import { findDisciplineInOrg } from '#/db/disciplines';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { getActiveOrgId } from '#/lib/active-org.server';
@@ -23,6 +26,14 @@ function parseId(raw: string): number | null {
  * another discipline regardless, and the guard must not be satisfiable by
  * naming a module the actor happens to hold. A lesson with no discipline
  * (the org-level Untitled column) has no shelf and no modules: 404.
+ *
+ * The target module is still org-checked — after the guard, once the body
+ * naming it is read — because the writer's `wrong-discipline` refusal
+ * echoes the module's discipline NAME: left unchecked, a module id from
+ * another org would have this org's 400 name that org's discipline. Resolved
+ * the way the module routes do (`getDisciplineIdForDisciplineModule`, then
+ * `findDisciplineInOrg`); a module outside the org is indistinguishable from
+ * one that does not exist. The same-org refusal keeps its naming sentence.
  */
 export async function patchLibraryPlacementHandler(
   request: Request,
@@ -58,6 +69,18 @@ export async function patchLibraryPlacementHandler(
   const parsed = libraryPlacementInputSchema.safeParse(body);
   if (!parsed.success)
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  if (parsed.data.disciplineModuleId !== null) {
+    const moduleDisciplineId = await getDisciplineIdForDisciplineModule(
+      parsed.data.disciplineModuleId,
+    );
+    if (
+      moduleDisciplineId === null ||
+      !(await findDisciplineInOrg(getActiveOrgId(), moduleDisciplineId))
+    ) {
+      return absentResourceResponse(request.headers, 'Module not found');
+    }
+  }
 
   const result = await placeLessonInLibrary({ lessonId, ...parsed.data });
   if (result.ok) return Response.json(result);

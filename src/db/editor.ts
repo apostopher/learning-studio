@@ -16,17 +16,10 @@ import type {
   LibraryLesson,
   OrgLibrary,
 } from '#/lib/admin-schemas';
-
-/** `library_rank` ascending, unranked (never dragged) last, then id. */
-function byLibraryOrder(
-  a: { id: number; libraryRank: number | null },
-  b: { id: number; libraryRank: number | null },
-): number {
-  if (a.libraryRank === null && b.libraryRank === null) return a.id - b.id;
-  if (a.libraryRank === null) return 1;
-  if (b.libraryRank === null) return -1;
-  return a.libraryRank - b.libraryRank || a.id - b.id;
-}
+// The sort is SHARED with the writer (`placeLessonInLibrary`), which
+// coalesces an unranked neighbour to the same position this sorts it at —
+// see `#/lib/library-rank` for why the two must never disagree.
+import { byLibraryOrder } from '#/lib/library-rank';
 
 /**
  * The whole org's library, grouped by discipline.
@@ -246,8 +239,10 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
     }
   }
 
-  // `library_rank` sorts within a box, then the rank is stripped — the card
-  // does not read it and the schema does not declare it.
+  // Effective `library_rank` (unranked lessons at OFFSET + id, so after
+  // every ranked one and in id order among themselves) sorts within a box,
+  // then the rank is stripped — the card does not read it and the schema
+  // does not declare it.
   for (const discipline of disciplinesById.values()) {
     // The query orders modules by (rank, id) itself, but a mocked or
     // otherwise unordered row source cannot be trusted to preserve that —
