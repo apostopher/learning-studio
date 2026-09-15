@@ -63,6 +63,46 @@ export const createModuleInputSchema = z.object({
 });
 export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 
+/** Input accepted by POST /api/admin/disciplines/:id/modules. */
+export const createDisciplineModuleInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+export type CreateDisciplineModuleInput = z.infer<
+  typeof createDisciplineModuleInputSchema
+>;
+
+/** Rename body for PATCH /api/admin/discipline-modules/:id. */
+export const renameDisciplineModuleInputSchema = z
+  .object({ name: z.string().trim().min(1).max(120) })
+  .strict();
+export type RenameDisciplineModuleInput = z.infer<
+  typeof renameDisciplineModuleInputSchema
+>;
+
+/** Reorder body for PATCH /api/admin/discipline-modules/:id. */
+export const reorderDisciplineModuleInputSchema = z
+  .object({
+    prevModuleId: z.number().int().positive().nullable(),
+    nextModuleId: z.number().int().positive().nullable(),
+  })
+  .strict()
+  .refine((v) => v.prevModuleId !== null || v.nextModuleId !== null, {
+    message: 'At least one neighbor is required',
+  });
+export type ReorderDisciplineModuleInput = z.infer<
+  typeof reorderDisciplineModuleInputSchema
+>;
+
+/** Input accepted by PATCH /api/admin/lessons/:id/library-placement. */
+export const libraryPlacementInputSchema = z
+  .object({
+    disciplineModuleId: z.number().int().positive().nullable(),
+    prevLessonId: z.number().int().positive().nullable(),
+    nextLessonId: z.number().int().positive().nullable(),
+  })
+  .strict();
+export type LibraryPlacementInput = z.infer<typeof libraryPlacementInputSchema>;
+
 export const remixCourseInputSchema = z.object({
   sourceCourseId: z.number().int().positive(),
 });

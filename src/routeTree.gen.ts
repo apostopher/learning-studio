@@ -71,6 +71,7 @@ import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/
 import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
 import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
 import { Route as ApiAdminDisciplinesDisciplineIdRouteImport } from './routes/api/admin/disciplines.$disciplineId'
+import { Route as ApiAdminDisciplineModulesModuleIdRouteImport } from './routes/api/admin/discipline-modules.$moduleId'
 import { Route as ApiAdminCoursesCourseIdRouteImport } from './routes/api/admin/courses.$courseId'
 import { Route as AuthedCourseCourseSlugSettingsRouteImport } from './routes/_authed/course.$courseSlug.settings'
 import { Route as AuthedCourseCourseSlugNewsRouteImport } from './routes/_authed/course.$courseSlug.news'
@@ -87,7 +88,9 @@ import { Route as ApiAdminModulesModuleIdLessonsRouteImport } from './routes/api
 import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './routes/api/admin/lessons.$lessonId.video-playback'
 import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
 import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
+import { Route as ApiAdminLessonsLessonIdLibraryPlacementRouteImport } from './routes/api/admin/lessons.$lessonId.library-placement'
 import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
+import { Route as ApiAdminDisciplinesDisciplineIdModulesRouteImport } from './routes/api/admin/disciplines.$disciplineId.modules'
 import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
 import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
 import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
@@ -428,6 +431,12 @@ const ApiAdminDisciplinesDisciplineIdRoute =
     path: '/$disciplineId',
     getParentRoute: () => ApiAdminDisciplinesRoute,
   } as any)
+const ApiAdminDisciplineModulesModuleIdRoute =
+  ApiAdminDisciplineModulesModuleIdRouteImport.update({
+    id: '/api/admin/discipline-modules/$moduleId',
+    path: '/api/admin/discipline-modules/$moduleId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAdminCoursesCourseIdRoute = ApiAdminCoursesCourseIdRouteImport.update({
   id: '/$courseId',
   path: '/$courseId',
@@ -523,10 +532,22 @@ const ApiAdminLessonsLessonIdMaterialRoute =
     path: '/material',
     getParentRoute: () => ApiAdminLessonsLessonIdRoute,
   } as any)
+const ApiAdminLessonsLessonIdLibraryPlacementRoute =
+  ApiAdminLessonsLessonIdLibraryPlacementRouteImport.update({
+    id: '/library-placement',
+    path: '/library-placement',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
 const ApiAdminDisciplinesDisciplineIdStaffRoute =
   ApiAdminDisciplinesDisciplineIdStaffRouteImport.update({
     id: '/staff',
     path: '/staff',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdModulesRoute =
+  ApiAdminDisciplinesDisciplineIdModulesRouteImport.update({
+    id: '/modules',
+    path: '/modules',
     getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
   } as any)
 const ApiAdminDisciplinesDisciplineIdLessonsRoute =
@@ -673,6 +694,7 @@ export interface FileRoutesByFullPath {
   '/course/$courseSlug/news': typeof AuthedCourseCourseSlugNewsRoute
   '/course/$courseSlug/settings': typeof AuthedCourseCourseSlugSettingsRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/discipline-modules/$moduleId': typeof ApiAdminDisciplineModulesModuleIdRoute
   '/api/admin/disciplines/$disciplineId': typeof ApiAdminDisciplinesDisciplineIdRouteWithChildren
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
@@ -703,7 +725,9 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
+  '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
+  '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
@@ -767,6 +791,7 @@ export interface FileRoutesByTo {
   '/course/$courseSlug/news': typeof AuthedCourseCourseSlugNewsRoute
   '/course/$courseSlug/settings': typeof AuthedCourseCourseSlugSettingsRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/discipline-modules/$moduleId': typeof ApiAdminDisciplineModulesModuleIdRoute
   '/api/admin/disciplines/$disciplineId': typeof ApiAdminDisciplinesDisciplineIdRouteWithChildren
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
@@ -797,7 +822,9 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
+  '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
+  '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
@@ -865,6 +892,7 @@ export interface FileRoutesById {
   '/_authed/course/$courseSlug/news': typeof AuthedCourseCourseSlugNewsRoute
   '/_authed/course/$courseSlug/settings': typeof AuthedCourseCourseSlugSettingsRoute
   '/api/admin/courses/$courseId': typeof ApiAdminCoursesCourseIdRouteWithChildren
+  '/api/admin/discipline-modules/$moduleId': typeof ApiAdminDisciplineModulesModuleIdRoute
   '/api/admin/disciplines/$disciplineId': typeof ApiAdminDisciplinesDisciplineIdRouteWithChildren
   '/api/admin/lesson-material/parse': typeof ApiAdminLessonMaterialParseRoute
   '/api/admin/lessons/$lessonId': typeof ApiAdminLessonsLessonIdRouteWithChildren
@@ -895,7 +923,9 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
+  '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
+  '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
@@ -963,6 +993,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug/news'
     | '/course/$courseSlug/settings'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/discipline-modules/$moduleId'
     | '/api/admin/disciplines/$disciplineId'
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
@@ -993,7 +1024,9 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
+    | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
+    | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
@@ -1057,6 +1090,7 @@ export interface FileRouteTypes {
     | '/course/$courseSlug/news'
     | '/course/$courseSlug/settings'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/discipline-modules/$moduleId'
     | '/api/admin/disciplines/$disciplineId'
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
@@ -1087,7 +1121,9 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
+    | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
+    | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
@@ -1154,6 +1190,7 @@ export interface FileRouteTypes {
     | '/_authed/course/$courseSlug/news'
     | '/_authed/course/$courseSlug/settings'
     | '/api/admin/courses/$courseId'
+    | '/api/admin/discipline-modules/$moduleId'
     | '/api/admin/disciplines/$disciplineId'
     | '/api/admin/lesson-material/parse'
     | '/api/admin/lessons/$lessonId'
@@ -1184,7 +1221,9 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
     | '/api/admin/disciplines/$disciplineId/lessons'
+    | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
+    | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
@@ -1238,6 +1277,7 @@ export interface RootRouteChildren {
   ApiUserMyLevelRoute: typeof ApiUserMyLevelRoute
   ApiUserReportVideoProgressRoute: typeof ApiUserReportVideoProgressRoute
   ApiUserVideoProgressRoute: typeof ApiUserVideoProgressRoute
+  ApiAdminDisciplineModulesModuleIdRoute: typeof ApiAdminDisciplineModulesModuleIdRoute
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
   ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRouteWithChildren
   ApiAdminModulesModuleIdRoute: typeof ApiAdminModulesModuleIdRouteWithChildren
@@ -1690,6 +1730,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdRouteImport
       parentRoute: typeof ApiAdminDisciplinesRoute
     }
+    '/api/admin/discipline-modules/$moduleId': {
+      id: '/api/admin/discipline-modules/$moduleId'
+      path: '/api/admin/discipline-modules/$moduleId'
+      fullPath: '/api/admin/discipline-modules/$moduleId'
+      preLoaderRoute: typeof ApiAdminDisciplineModulesModuleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/courses/$courseId': {
       id: '/api/admin/courses/$courseId'
       path: '/$courseId'
@@ -1802,11 +1849,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminLessonsLessonIdMaterialRouteImport
       parentRoute: typeof ApiAdminLessonsLessonIdRoute
     }
+    '/api/admin/lessons/$lessonId/library-placement': {
+      id: '/api/admin/lessons/$lessonId/library-placement'
+      path: '/library-placement'
+      fullPath: '/api/admin/lessons/$lessonId/library-placement'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdLibraryPlacementRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
     '/api/admin/disciplines/$disciplineId/staff': {
       id: '/api/admin/disciplines/$disciplineId/staff'
       path: '/staff'
       fullPath: '/api/admin/disciplines/$disciplineId/staff'
       preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
+    '/api/admin/disciplines/$disciplineId/modules': {
+      id: '/api/admin/disciplines/$disciplineId/modules'
+      path: '/modules'
+      fullPath: '/api/admin/disciplines/$disciplineId/modules'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdModulesRouteImport
       parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
     }
     '/api/admin/disciplines/$disciplineId/lessons': {
@@ -2118,6 +2179,7 @@ const ApiAdminCoursesRouteWithChildren = ApiAdminCoursesRoute._addFileChildren(
 
 interface ApiAdminDisciplinesDisciplineIdRouteChildren {
   ApiAdminDisciplinesDisciplineIdLessonsRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
+  ApiAdminDisciplinesDisciplineIdModulesRoute: typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   ApiAdminDisciplinesDisciplineIdStaffRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRoute
 }
 
@@ -2125,6 +2187,8 @@ const ApiAdminDisciplinesDisciplineIdRouteChildren: ApiAdminDisciplinesDisciplin
   {
     ApiAdminDisciplinesDisciplineIdLessonsRoute:
       ApiAdminDisciplinesDisciplineIdLessonsRoute,
+    ApiAdminDisciplinesDisciplineIdModulesRoute:
+      ApiAdminDisciplinesDisciplineIdModulesRoute,
     ApiAdminDisciplinesDisciplineIdStaffRoute:
       ApiAdminDisciplinesDisciplineIdStaffRoute,
   }
@@ -2232,6 +2296,7 @@ const ApiCourseNewsRouteWithChildren = ApiCourseNewsRoute._addFileChildren(
 )
 
 interface ApiAdminLessonsLessonIdRouteChildren {
+  ApiAdminLessonsLessonIdLibraryPlacementRoute: typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   ApiAdminLessonsLessonIdMaterialRoute: typeof ApiAdminLessonsLessonIdMaterialRoute
   ApiAdminLessonsLessonIdVideoRoute: typeof ApiAdminLessonsLessonIdVideoRoute
   ApiAdminLessonsLessonIdVideoPlaybackRoute: typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
@@ -2239,6 +2304,8 @@ interface ApiAdminLessonsLessonIdRouteChildren {
 
 const ApiAdminLessonsLessonIdRouteChildren: ApiAdminLessonsLessonIdRouteChildren =
   {
+    ApiAdminLessonsLessonIdLibraryPlacementRoute:
+      ApiAdminLessonsLessonIdLibraryPlacementRoute,
     ApiAdminLessonsLessonIdMaterialRoute: ApiAdminLessonsLessonIdMaterialRoute,
     ApiAdminLessonsLessonIdVideoRoute: ApiAdminLessonsLessonIdVideoRoute,
     ApiAdminLessonsLessonIdVideoPlaybackRoute:
@@ -2315,6 +2382,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiUserMyLevelRoute: ApiUserMyLevelRoute,
   ApiUserReportVideoProgressRoute: ApiUserReportVideoProgressRoute,
   ApiUserVideoProgressRoute: ApiUserVideoProgressRoute,
+  ApiAdminDisciplineModulesModuleIdRoute:
+    ApiAdminDisciplineModulesModuleIdRoute,
   ApiAdminLessonMaterialParseRoute: ApiAdminLessonMaterialParseRoute,
   ApiAdminLessonsLessonIdRoute: ApiAdminLessonsLessonIdRouteWithChildren,
   ApiAdminModulesModuleIdRoute: ApiAdminModulesModuleIdRouteWithChildren,
