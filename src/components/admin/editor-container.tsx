@@ -27,13 +27,19 @@ import { toast } from 'sonner';
 import {
   activeDragLessonIdAtom,
   activeDragLibraryLessonIdAtom,
+  activeDragLibraryModuleIdAtom,
   activeDragModuleIdAtom,
   editorDragRefusalAtom,
   editorPaneRowWidthAtom,
   editorSplitPercentAtom,
   expandedEditorModuleIdsAtom,
+  expandedLibraryModuleIdsAtom,
 } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
+import {
+  usePlaceLibraryLesson,
+  useReorderDisciplineModule,
+} from '#/data-hooks/use-discipline-modules';
 import { useEditorBoard } from '#/data-hooks/use-editor-board';
 import { useLinkLesson } from '#/data-hooks/use-link-lesson';
 import { useMovePlacement } from '#/data-hooks/use-move-placement';
@@ -43,10 +49,12 @@ import {
   disciplineLessons,
   type LibraryLesson,
   type OrgEditorBoard,
+  type OrgLibrary,
 } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
+import { commitLibraryDrop } from './commit-library-drop';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
@@ -73,7 +81,9 @@ import {
   lessonNeighbours,
   linkLessonOnBoard,
   moduleNeighbours,
+  moveLessonInLibrary,
   moveLessonOnBoard,
+  reorderLibraryModules,
   reorderModulesOnBoard,
 } from './editor-board-updates';
 import { EditorCourseColumnContainer } from './editor-course-column-container';
@@ -162,6 +172,7 @@ export const EditorContainer = ({
 }) => {
   const queryClient = useQueryClient();
   const boardKey = dataKeys.editorBoard();
+  const libraryKey = dataKeys.orgLibrary();
 
   const { data: library, error: libraryError } = useOrgLibrary();
   const { data: board, error: boardError } = useEditorBoard();
@@ -171,15 +182,23 @@ export const EditorContainer = ({
   const [activeLibraryLessonId, setActiveLibraryLessonId] = useAtom(
     activeDragLibraryLessonIdAtom,
   );
+  const [activeLibraryModuleId, setActiveLibraryModuleId] = useAtom(
+    activeDragLibraryModuleIdAtom,
+  );
   const [refusal, setRefusal] = useAtom(editorDragRefusalAtom);
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedEditorModuleIdsAtom,
+  );
+  const [expandedLibraryModuleIds, setExpandedLibraryModuleIds] = useAtom(
+    expandedLibraryModuleIdsAtom,
   );
   const [splitPercent, setSplitPercent] = useAtom(editorSplitPercentAtom);
 
   const linkLesson = useLinkLesson();
   const movePlacement = useMovePlacement();
   const reorderModule = useReorderEditorModule();
+  const placeLibraryLesson = usePlaceLibraryLesson();
+  const reorderDisciplineModule = useReorderDisciplineModule();
 
   /**
    * The board as it stood when the drag began. Every optimistic edit below is
@@ -188,6 +207,15 @@ export const EditorContainer = ({
    * worse than one that never looked like it worked.
    */
   const snapshotRef = useRef<OrgEditorBoard | null>(null);
+  /**
+   * The library as it stood when the drag began — the library-side sibling of
+   * `snapshotRef`, restored by the same `rollback`. A library-lesson or
+   * library-module drag writes its live preview straight into this query's
+   * cache too (`moveLessonInLibrary`/`reorderLibraryModules`), so a failed
+   * mutation or a genuine miss needs this to undo it, exactly as `snapshotRef`
+   * undoes a board-side preview.
+   */
+  const librarySnapshotRef = useRef<OrgLibrary | null>(null);
   /**
    * Set once `onDragOver` has transferred the dragged lesson into another
    * module. The transferred card becomes a droppable of its own, so the
@@ -217,12 +245,26 @@ export const EditorContainer = ({
     moduleId: number;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
+  /**
+   * The pending auto-expand for a LIBRARY module — a second ref rather than
+   * reusing `expandTimerRef`, because the two are keyed on different id
+   * spaces (course modules vs discipline modules) and open different atoms
+   * (`expandedEditorModuleIdsAtom` vs `expandedLibraryModuleIdsAtom`). Mixing
+   * them would risk a discipline module id colliding with a course module id
+   * and expanding the wrong one.
+   */
+  const libraryExpandTimerRef = useRef<{
+    moduleId: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   /** The pane row, measured live so the splitter works at any window size. */
   const paneRowRef = useRef<HTMLDivElement>(null);
   const [paneRowWidth, setPaneRowWidth] = useAtom(editorPaneRowWidthAtom);
 
   const readBoard = () =>
     queryClient.getQueryData<OrgEditorBoard>(boardKey) ?? null;
+  const readLibrary = () =>
+    queryClient.getQueryData<OrgLibrary>(libraryKey) ?? null;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -276,8 +318,45 @@ export const EditorContainer = ({
       return closestCenter({ ...args, droppableContainers: moduleTargets });
     }
 
+    if (activeType === 'library-module') {
+      // A discipline module lands on another discipline module — including
+      // one in another discipline, which `resolveDrop` refuses by name. Every
+      // `library-module` id (any discipline) is a candidate for that reason,
+      // the same as `moduleTargets` above keeps every course's modules in.
+      //
+      // `library-lesson`/`library-container` ids of the module's OWN
+      // discipline join them too: `resolveDrop` resolves either through
+      // `moduleForLibraryTarget` to the module that owns it — a pointer
+      // dragging a module's HEADER spends most of its time over a sibling
+      // module's lesson cards and container, not its header. Cross-discipline
+      // ones are left out on purpose: the header of every OTHER discipline's
+      // module is already reachable and carries the same refusal.
+      //
+      // Rail ids are deliberately NOT admitted wholesale — a discipline
+      // module organises the library only, and offering it every course's
+      // narrow per-slot `container`/`lesson` droppables would be noise. A
+      // sibling module header (`module`) and the empty-course region
+      // (`course`) stay in, because `resolveDrop` has exactly ONE reason for
+      // landing on the rail at all ("organises the library, not a course"),
+      // and it needs to be reachable through something.
+      const disciplineId = activeData?.disciplineId as number | undefined;
+      const libraryModuleTargets = args.droppableContainers.filter((c) => {
+        const type = c.data.current?.type as DndType | undefined;
+        if (type === 'library-module') return true;
+        if (type === 'library-lesson' || type === 'library-container') {
+          return c.data.current?.disciplineId === disciplineId;
+        }
+        return type === 'module' || type === 'course';
+      });
+      if (missed(libraryModuleTargets)) return [];
+      return closestCenter({
+        ...args,
+        droppableContainers: libraryModuleTargets,
+      });
+    }
+
     const targets = args.droppableContainers.filter((c) => {
-      const type = c.data.current?.type;
+      const type = c.data.current?.type as DndType | undefined;
       if (type === 'discipline') {
         // A library card released back on the column it came from is "never
         // mind", not a mistake — the same reasoning that makes a self-drop
@@ -289,10 +368,23 @@ export const EditorContainer = ({
           c.data.current?.disciplineId === activeData?.disciplineId
         );
       }
+      if (
+        type === 'library-module' ||
+        type === 'library-container' ||
+        type === 'library-untitled' ||
+        type === 'library-lesson'
+      ) {
+        // Not `discipline` ids, so they pass through here unchanged — a
+        // library-lesson drag's real targets (`resolveDrop` files it into a
+        // module, Untitled, or refuses a cross-discipline one by name), and a
+        // harmless miss for anything else (`resolveDrop` answers those
+        // `null`, same as dropping on nothing).
+        return true;
+      }
       // `course` is the empty-course region. It is a target so the drop can
       // be refused BY NAME rather than springing back silently — see
       // `EditorCourseEmptyContainer`.
-      return acceptsLessonDrag(type as DndType | undefined);
+      return acceptsLessonDrag(type);
     });
     // Keyboard dragging has no pointer, so the two-stage narrowing below has
     // nothing to narrow with; fall back to plain geometry over every target.
@@ -331,6 +423,32 @@ export const EditorContainer = ({
         droppableContainers: lessons,
       });
       if (nearest.length > 0) return nearest;
+    } else if (parsed?.type === 'library-container') {
+      // The library's analogue of `container` above — a discipline module is
+      // never remixed, so its id alone (no course to disambiguate) already
+      // picks out its own lessons.
+      const lessons = targets.filter(
+        (c) =>
+          c.data.current?.type === 'library-lesson' &&
+          c.data.current?.disciplineModuleId === parsed.id,
+      );
+      const nearest = closestCorners({
+        ...args,
+        droppableContainers: lessons,
+      });
+      if (nearest.length > 0) return nearest;
+    } else if (parsed?.type === 'library-untitled') {
+      const lessons = targets.filter(
+        (c) =>
+          c.data.current?.type === 'library-lesson' &&
+          c.data.current?.disciplineModuleId === null &&
+          c.data.current?.disciplineId === parsed.id,
+      );
+      const nearest = closestCorners({
+        ...args,
+        droppableContainers: lessons,
+      });
+      if (nearest.length > 0) return nearest;
     }
     return hovered;
   };
@@ -338,6 +456,14 @@ export const EditorContainer = ({
   const cancelAutoExpand = () => {
     if (expandTimerRef.current) clearTimeout(expandTimerRef.current.timer);
     expandTimerRef.current = null;
+  };
+
+  /** The library-module sibling of `cancelAutoExpand` — see `libraryExpandTimerRef`. */
+  const cancelLibraryAutoExpand = () => {
+    if (libraryExpandTimerRef.current) {
+      clearTimeout(libraryExpandTimerRef.current.timer);
+    }
+    libraryExpandTimerRef.current = null;
   };
 
   // The auto-expand timer is scheduled by `scheduleAutoExpand` during a drag
@@ -355,6 +481,9 @@ export const EditorContainer = ({
     // directly needs no dependency at all, since refs are stable identity.
     return () => {
       if (expandTimerRef.current) clearTimeout(expandTimerRef.current.timer);
+      if (libraryExpandTimerRef.current) {
+        clearTimeout(libraryExpandTimerRef.current.timer);
+      }
     };
   }, []);
 
@@ -380,6 +509,25 @@ export const EditorContainer = ({
     };
   };
 
+  /** The library-module sibling of `scheduleAutoExpand` — opens a collapsed
+   *  DISCIPLINE module through `expandedLibraryModuleIdsAtom` instead of the
+   *  rail's atom. Never share `expandTimerRef`/`expandedModuleIds` with this:
+   *  the two id spaces (course modules, discipline modules) are unrelated
+   *  tables and a shared list would risk expanding the wrong one. */
+  const scheduleLibraryAutoExpand = (moduleId: number) => {
+    if (libraryExpandTimerRef.current?.moduleId === moduleId) return;
+    cancelLibraryAutoExpand();
+    libraryExpandTimerRef.current = {
+      moduleId,
+      timer: setTimeout(() => {
+        libraryExpandTimerRef.current = null;
+        setExpandedLibraryModuleIds((prev) =>
+          prev.includes(moduleId) ? prev : [...prev, moduleId],
+        );
+      }, AUTO_EXPAND_DELAY_MS),
+    };
+  };
+
   /**
    * Restores a SPECIFIC snapshot, passed in by the caller — never reads
    * `snapshotRef.current` itself. `snapshotRef` is one shared slot, but a
@@ -393,10 +541,21 @@ export const EditorContainer = ({
    * the top of `onDragEnd`/`onDragCancel` and threads that value through, so
    * a later drag overwriting the ref cannot affect an in-flight rollback that
    * belongs to an earlier one.
+   *
+   * `librarySnapshot` is the library-side twin of `snapshot`, restored the
+   * same way and for the same reason — a library-lesson/library-module drag's
+   * live preview is written into the library query's cache, never the
+   * board's, so undoing it means restoring THAT cache.
    */
-  const rollback = (snapshot: OrgEditorBoard | null) => {
+  const rollback = (
+    snapshot: OrgEditorBoard | null,
+    librarySnapshot: OrgLibrary | null,
+  ) => {
     if (snapshot) {
       queryClient.setQueryData(boardKey, snapshot);
+    }
+    if (librarySnapshot) {
+      queryClient.setQueryData(libraryKey, librarySnapshot);
     }
   };
 
@@ -409,8 +568,10 @@ export const EditorContainer = ({
     setActiveModuleId(null);
     setActiveLessonId(null);
     setActiveLibraryLessonId(null);
+    setActiveLibraryModuleId(null);
     setRefusal(null);
     cancelAutoExpand();
+    cancelLibraryAutoExpand();
   };
 
   const onDragStart = (event: DragStartEvent) => {
@@ -419,8 +580,11 @@ export const EditorContainer = ({
     setRefusal(null);
     transferAppliedRef.current = false;
     // Snapshot for every kind of drag, module reorders included: they all
-    // write optimistically into the same cached board.
+    // write optimistically into the same cached board — and the library,
+    // for the same reason, since a library-lesson/library-module drag
+    // previews into that cache instead.
     snapshotRef.current = readBoard();
+    librarySnapshotRef.current = readLibrary();
     if (parsed.type === 'module') setActiveModuleId(parsed.id);
     else if (parsed.type === 'lesson') {
       setActiveLessonId(parsed.id);
@@ -431,6 +595,8 @@ export const EditorContainer = ({
           : null;
     } else if (parsed.type === 'library-lesson')
       setActiveLibraryLessonId(parsed.id);
+    else if (parsed.type === 'library-module')
+      setActiveLibraryModuleId(parsed.id);
   };
 
   const onDragOver = (event: DragOverEvent) => {
@@ -438,10 +604,12 @@ export const EditorContainer = ({
     if (!over) {
       setRefusal(null);
       cancelAutoExpand();
+      cancelLibraryAutoExpand();
       return;
     }
     const current = readBoard();
     if (!current) return;
+    const currentLibrary = readLibrary();
 
     const lessonDrag = lessonDragRef.current;
     const resolution = resolveDrop(
@@ -449,6 +617,7 @@ export const EditorContainer = ({
       active.id,
       over.id,
       lessonDrag?.origin,
+      currentLibrary ?? undefined,
     );
     setRefusal(resolution?.kind === 'forbidden' ? resolution.reason : null);
 
@@ -463,6 +632,23 @@ export const EditorContainer = ({
       }
     } else {
       cancelAutoExpand();
+    }
+
+    // The library-module sibling of the rail's auto-expand above: only a
+    // `library-move` landing INSIDE a module (never Untitled, which has no
+    // accordion to open) is worth opening one for.
+    if (
+      resolution?.kind === 'library-move' &&
+      resolution.disciplineModuleId != null
+    ) {
+      const targetModuleId = resolution.disciplineModuleId;
+      if (!expandedLibraryModuleIds.includes(targetModuleId)) {
+        scheduleLibraryAutoExpand(targetModuleId);
+      } else {
+        cancelLibraryAutoExpand();
+      }
+    } else {
+      cancelLibraryAutoExpand();
     }
 
     // Carry a cross-module move live, so the lesson renders where it is going
@@ -486,6 +672,36 @@ export const EditorContainer = ({
       lessonDrag.holderModuleId = resolution.moduleId;
       transferAppliedRef.current = true;
     }
+
+    // The library-side live preview — written to the LIBRARY query, never the
+    // board's, so a lesson (or a discipline module) renders where it is
+    // going without waiting for the drop. `moveLessonInLibrary` handles a
+    // same-box hover (a reorder within a module) the same way it handles a
+    // cross-box one; there is nothing here to special-case.
+    if (resolution?.kind === 'library-move' && currentLibrary) {
+      queryClient.setQueryData(
+        libraryKey,
+        moveLessonInLibrary(
+          currentLibrary,
+          resolution.lessonId,
+          resolution.disciplineModuleId,
+          over.id,
+        ),
+      );
+    } else if (
+      resolution?.kind === 'reorder-library-module' &&
+      currentLibrary
+    ) {
+      queryClient.setQueryData(
+        libraryKey,
+        reorderLibraryModules(
+          currentLibrary,
+          resolution.disciplineId,
+          resolution.moduleId,
+          resolution.overModuleId,
+        ),
+      );
+    }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -496,8 +712,11 @@ export const EditorContainer = ({
     // drag's `onDragStart` before this drag's async mutation settles). Every
     // `rollback` call below — sync and inside an `onError` closure alike —
     // uses this local constant, never `snapshotRef.current` directly.
+    // `dragLibrarySnapshot` is the library-side twin, threaded through the
+    // same way for the same reason.
     const transferApplied = transferAppliedRef.current;
     const dragSnapshot = snapshotRef.current;
+    const dragLibrarySnapshot = librarySnapshotRef.current;
     const lessonDrag = lessonDragRef.current;
     clearActive();
 
@@ -505,9 +724,10 @@ export const EditorContainer = ({
     if (!over || !current) {
       // A genuine miss — released over no target at all. That is the "never
       // mind" gesture, so it cancels: undo the preview, say nothing.
-      rollback(dragSnapshot);
+      rollback(dragSnapshot, dragLibrarySnapshot);
       return;
     }
+    const currentLibrary = readLibrary();
 
     const activeParsed = parseDndId(active.id);
     const resolution = resolveDrop(
@@ -515,6 +735,7 @@ export const EditorContainer = ({
       active.id,
       over.id,
       lessonDrag?.origin,
+      currentLibrary ?? undefined,
     );
     if (!resolution) {
       // `null` is "no drop target", which is usually a rollback. The one
@@ -540,7 +761,7 @@ export const EditorContainer = ({
             },
             {
               onError: (error) => {
-                rollback(dragSnapshot);
+                rollback(dragSnapshot, dragLibrarySnapshot);
                 toast.error(error.message);
               },
             },
@@ -548,12 +769,14 @@ export const EditorContainer = ({
           return;
         }
       }
-      rollback(dragSnapshot);
+      rollback(dragSnapshot, dragLibrarySnapshot);
       return;
     }
 
     if (resolution.kind === 'forbidden') {
-      rollback(dragSnapshot);
+      // Covers a library-side refusal too — see `rollback`: restoring the
+      // library snapshot is a no-op when this drag never touched it.
+      rollback(dragSnapshot, dragLibrarySnapshot);
       toast.error(resolution.reason);
       return;
     }
@@ -574,7 +797,7 @@ export const EditorContainer = ({
         },
         {
           onError: (error) => {
-            rollback(dragSnapshot);
+            rollback(dragSnapshot, dragLibrarySnapshot);
             toast.error(error.message);
           },
         },
@@ -587,7 +810,7 @@ export const EditorContainer = ({
       // `move` to — it refuses one without an origin — so this is a type
       // narrowing, not a reachable branch.
       if (!lessonDrag) {
-        rollback(dragSnapshot);
+        rollback(dragSnapshot, dragLibrarySnapshot);
         return;
       }
       const next = moveLessonOnBoard(
@@ -607,11 +830,43 @@ export const EditorContainer = ({
         },
         {
           onError: (error) => {
-            rollback(dragSnapshot);
+            rollback(dragSnapshot, dragLibrarySnapshot);
             toast.error(error.message);
           },
         },
       );
+      return;
+    }
+
+    if (
+      resolution.kind === 'library-move' ||
+      resolution.kind === 'reorder-library-module'
+    ) {
+      // Read off the PREVIEWED library, not the drag-start snapshot: the
+      // neighbours sent to the server must be the ones `onDragOver` already
+      // showed the admin, or the persisted order would disagree with what
+      // they watched happen. `currentLibrary` above is that same read, taken
+      // before anything in this branch writes to the cache again.
+      if (!currentLibrary) {
+        rollback(dragSnapshot, dragLibrarySnapshot);
+        return;
+      }
+      const commit = commitLibraryDrop(resolution, currentLibrary);
+      if (commit.kind === 'place') {
+        placeLibraryLesson.mutate(commit.vars, {
+          onError: (error) => {
+            rollback(dragSnapshot, dragLibrarySnapshot);
+            toast.error(error.message);
+          },
+        });
+      } else {
+        reorderDisciplineModule.mutate(commit.vars, {
+          onError: (error) => {
+            rollback(dragSnapshot, dragLibrarySnapshot);
+            toast.error(error.message);
+          },
+        });
+      }
       return;
     }
 
@@ -630,7 +885,7 @@ export const EditorContainer = ({
       { moduleId: resolution.moduleId, lessonId: resolution.lessonId },
       {
         onError: (error) => {
-          rollback(dragSnapshot);
+          rollback(dragSnapshot, dragLibrarySnapshot);
           toast.error(error.message);
         },
       },
@@ -643,8 +898,9 @@ export const EditorContainer = ({
     // but captured into a local for the same reason as `onDragEnd`: so
     // `rollback` never reads the shared ref directly.
     const dragSnapshot = snapshotRef.current;
+    const dragLibrarySnapshot = librarySnapshotRef.current;
     clearActive();
-    rollback(dragSnapshot);
+    rollback(dragSnapshot, dragLibrarySnapshot);
   };
 
   /**
@@ -663,16 +919,21 @@ export const EditorContainer = ({
       over: { id: string | number } | null;
     }) => {
       const current = readBoard();
+      const currentLibrary = readLibrary();
       if (!over || !current) return 'No drop target.';
       const resolution = resolveDrop(
         current,
         active.id,
         over.id,
         lessonDragRef.current?.origin,
+        currentLibrary ?? undefined,
       );
       if (resolution?.kind === 'forbidden') return resolution.reason;
       if (!resolution) return 'Not a drop target.';
-      return `Will ${resolution.kind === 'link' ? 'add to' : 'move within'} ${describeDndTarget(over.id, current, library)}.`;
+      if (resolution.kind === 'library-move') {
+        return `Will file in ${describeDndTarget(over.id, current, currentLibrary ?? undefined)}.`;
+      }
+      return `Will ${resolution.kind === 'link' ? 'add to' : 'move within'} ${describeDndTarget(over.id, current, currentLibrary ?? undefined)}.`;
     },
     onDragEnd: ({
       active,
@@ -682,16 +943,18 @@ export const EditorContainer = ({
       over: { id: string | number } | null;
     }) => {
       const current = readBoard();
+      const currentLibrary = readLibrary();
       if (!over || !current) return 'Dropped with no change.';
       const resolution = resolveDrop(
         current,
         active.id,
         over.id,
         lessonDragRef.current?.origin,
+        currentLibrary ?? undefined,
       );
       if (resolution?.kind === 'forbidden') return resolution.reason;
       if (!resolution) return 'Dropped with no change.';
-      return `Dropped on ${describeDndTarget(over.id, current, library)}.`;
+      return `Dropped on ${describeDndTarget(over.id, current, currentLibrary ?? undefined)}.`;
     },
     onDragCancel: () => 'Drag cancelled, nothing moved.',
   };
@@ -793,6 +1056,9 @@ export const EditorContainer = ({
     .flatMap((m) => m.lessons)
     .find((l) => l.id === activeLessonId);
   const activeLibraryLesson = findLibraryLesson(library, activeLibraryLessonId);
+  const activeLibraryModule = library.disciplines
+    .flatMap((d) => d.modules)
+    .find((m) => m.id === activeLibraryModuleId);
   const flagship = findFlagshipCourse(board);
 
   return (
@@ -899,6 +1165,18 @@ export const EditorContainer = ({
               <ModuleAccordionItem module={activeModule} lessonsSlot={null} />
             </Accordion.Root>
           </div>
+        ) : activeLibraryModule ? (
+          // Same neutral shape as `activeModule` above — no action buttons,
+          // no provenance note, no lessons: a preview of what is being
+          // carried, not the real (interactive) `LibraryModuleContainer`.
+          <div className="w-96 rounded-xl border border-gray-6 bg-gray-2">
+            <Accordion.Root multiple>
+              <ModuleAccordionItem
+                module={activeLibraryModule}
+                lessonsSlot={null}
+              />
+            </Accordion.Root>
+          </div>
         ) : activeLesson ? (
           <LessonCard lesson={activeLesson} />
         ) : activeLibraryLesson ? (
@@ -988,15 +1266,7 @@ function pointerIsNear(
 
 /** The library card for a lesson id, across disciplines and the untitled column. */
 function findLibraryLesson(
-  library:
-    | {
-        disciplines: {
-          modules: { lessons: LibraryLesson[] }[];
-          untitled: LibraryLesson[];
-        }[];
-        untitled: LibraryLesson[];
-      }
-    | undefined,
+  library: OrgLibrary | undefined,
   lessonId: number | null,
 ): LibraryLesson | undefined {
   if (!library || lessonId == null) return undefined;
@@ -1006,26 +1276,44 @@ function findLibraryLesson(
   ].find((l) => l.id === lessonId);
 }
 
+/** A discipline module found by walking every discipline, with the
+ *  discipline that owns it — for naming it in an announcement. */
+function findLibraryModuleWithDiscipline(
+  library: OrgLibrary | undefined,
+  moduleId: number,
+) {
+  if (!library) return null;
+  for (const discipline of library.disciplines) {
+    const module = discipline.modules.find((m) => m.id === moduleId);
+    if (module) return { discipline, module };
+  }
+  return null;
+}
+
 /** A dnd id as a phrase a screen reader can read back. */
 function describeDndTarget(
   id: string | number,
   board: OrgEditorBoard | null,
-  library:
-    | {
-        disciplines: {
-          id: number;
-          name: string;
-          modules: { lessons: LibraryLesson[] }[];
-          untitled: LibraryLesson[];
-        }[];
-        untitled: LibraryLesson[];
-      }
-    | undefined,
+  library: OrgLibrary | undefined,
 ): string {
   const parsed = parseDndId(id);
   if (!parsed) return 'nothing';
   if (parsed.type === 'library-lesson') {
     return `library lesson ${findLibraryLesson(library, parsed.id)?.name ?? parsed.id}`;
+  }
+  if (parsed.type === 'library-module' || parsed.type === 'library-container') {
+    // Found by walking the library, never by trusting anything about the id
+    // beyond what it names — the same reasoning `resolveDrop` follows.
+    const found = findLibraryModuleWithDiscipline(library, parsed.id);
+    return found
+      ? `${found.module.name} in ${found.discipline.name}`
+      : String(id);
+  }
+  if (parsed.type === 'library-untitled') {
+    const name =
+      library?.disciplines.find((d) => d.id === parsed.id)?.name ??
+      String(parsed.id);
+    return `Untitled in ${name}`;
   }
   if (parsed.type === 'discipline') {
     const name =

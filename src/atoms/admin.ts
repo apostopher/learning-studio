@@ -449,6 +449,17 @@ export const addPersonCourseIdsAtom = atom<number[]>([]);
 export const activeDragLibraryLessonIdAtom = atom<number | null>(null);
 
 /**
+ * Id of the discipline MODULE currently being dragged in the library pane, or
+ * null.
+ *
+ * Separate from `activeDragLibraryLessonIdAtom` for the same reason
+ * `activeDragModuleIdAtom` is separate from `activeDragLessonIdAtom`: the drag
+ * overlay has to draw a module card for one and a lesson card for the other,
+ * and one shared atom could not tell the drag overlay which to render.
+ */
+export const activeDragLibraryModuleIdAtom = atom<number | null>(null);
+
+/**
  * Module ids whose accordion panel is open in the knowledge editor.
  *
  * Lifted out of `CourseColumn`'s accordion because a collapsed panel is

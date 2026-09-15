@@ -71,4 +71,19 @@ describe('isAreaTarget', () => {
     expect(isAreaTarget('lesson')).toBe(false);
     expect(isAreaTarget('module')).toBe(false);
   });
+
+  it("includes the library's own regions — a discipline module's lesson area and its Untitled group", () => {
+    // The library's analogue of `container` and `course` above: a discipline
+    // module's droppable wraps its whole item (same reason as `container`),
+    // and Untitled is a real region of its own. Without these, a
+    // library-lesson dropped anywhere inside a discipline column would only
+    // ever resolve to the column itself — `resolveDrop`'s `library-move`
+    // would never run.
+    expect(isAreaTarget('library-container')).toBe(true);
+    expect(isAreaTarget('library-untitled')).toBe(true);
+    // `library-module` and `library-lesson` are the cards, not the regions —
+    // same as `module` and `lesson` above.
+    expect(isAreaTarget('library-module')).toBe(false);
+    expect(isAreaTarget('library-lesson')).toBe(false);
+  });
 });

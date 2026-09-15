@@ -42,5 +42,16 @@ export function acceptsLessonDrag(type: DndType | undefined): boolean {
  * would append instead of landing in the slot under the cursor.
  */
 export function isAreaTarget(type: DndType | undefined): boolean {
-  return type === 'container' || type === 'discipline' || type === 'course';
+  return (
+    type === 'container' ||
+    type === 'discipline' ||
+    type === 'course' ||
+    // The library's own regions: `library-container` wraps a discipline
+    // module's whole item — same reason as `container` above — and
+    // `library-untitled` is a discipline's Untitled group. Without these, the
+    // area stage would only ever find the enclosing `discipline` column, and
+    // a library-lesson dropped inside a module would never resolve to it.
+    type === 'library-container' ||
+    type === 'library-untitled'
+  );
 }
