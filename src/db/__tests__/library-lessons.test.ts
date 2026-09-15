@@ -12,6 +12,7 @@ const lessonsTable = pgTable('lessons', {
   isAvailable: boolean('is_available'),
   videoRef: text('video_ref'),
   disciplineId: integer('discipline_id'),
+  disciplineModuleId: integer('discipline_module_id'),
   orgId: integer('org_id'),
 });
 
@@ -54,6 +55,7 @@ const ROW = {
   requiredSubscriptions: [],
   hasDebrief: false,
   needsVideoWatch: false,
+  disciplineModuleId: null,
 };
 
 beforeEach(() => {
@@ -79,8 +81,59 @@ describe('createLibraryLesson', () => {
         requiredSubscriptions: [],
         orgId: 7,
         disciplineId: 4,
+        disciplineModuleId: null,
       },
     ]);
+  });
+
+  /**
+   * "Add lesson" inside a module files the lesson there at birth. The INSERT
+   * carries the module, and the card read back says so — a mutant that
+   * wrote the column but returned `null` would make the new card appear in
+   * Untitled until the next refetch, then jump.
+   */
+  it('files the lesson into the module it was added from, and the card says so', async () => {
+    const seen = { values: [] as unknown[] };
+    m.insert.mockReturnValue(
+      makeInsertChain({ ...ROW, disciplineModuleId: 12 }, seen),
+    );
+
+    const card = await createLibraryLesson({
+      orgId: 7,
+      disciplineId: 4,
+      name: 'Stalls',
+      disciplineModuleId: 12,
+    });
+
+    expect(seen.values).toEqual([
+      {
+        name: 'Stalls',
+        slug: 'stalls',
+        requiredSubscriptions: [],
+        orgId: 7,
+        disciplineId: 4,
+        disciplineModuleId: 12,
+      },
+    ]);
+    expect(card.disciplineModuleId).toBe(12);
+  });
+
+  it('files into Untitled (no module) when no module is named', async () => {
+    const seen = { values: [] as unknown[] };
+    m.insert.mockReturnValue(
+      makeInsertChain({ ...ROW, disciplineModuleId: null }, seen),
+    );
+
+    const card = await createLibraryLesson({
+      orgId: 7,
+      disciplineId: 4,
+      name: 'Stalls',
+    });
+
+    expect(
+      (seen.values[0] as { disciplineModuleId: unknown }).disciplineModuleId,
+    ).toBeNull();
+    expect(card.disciplineModuleId).toBeNull();
   });
 
   it('creates no placement, so the lesson teaches no course yet', async () => {

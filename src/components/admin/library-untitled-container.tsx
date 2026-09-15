@@ -3,7 +3,9 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { useSetAtom } from 'jotai';
 import type { ReactNode } from 'react';
+import { createLibraryLessonTargetAtom } from '#/atoms/admin';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { libraryLessonDndId, libraryUntitledDndId } from '#/lib/dnd-ids';
@@ -38,10 +40,13 @@ const DroppableUntitled = ({
  */
 export const LibraryUntitledContainer = ({
   disciplineId,
+  disciplineName,
   lessons,
   isOrgLevel = false,
 }: {
   disciplineId: number;
+  /** For the create-lesson dialog's sentence; unused on the org-level column, which offers no Add lesson. */
+  disciplineName?: string;
   lessons: LibraryLesson[];
   /**
    * True only for the org-level "Untitled" column (lessons with no
@@ -54,8 +59,22 @@ export const LibraryUntitledContainer = ({
    */
   isOrgLevel?: boolean;
 }) => {
+  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
   const content = (
-    <LibraryUntitled lessonCount={lessons.length} showHeading={!isOrgLevel}>
+    <LibraryUntitled
+      lessonCount={lessons.length}
+      showHeading={!isOrgLevel}
+      onAddLesson={
+        isOrgLevel
+          ? undefined
+          : () =>
+              openAddLesson({
+                id: disciplineId,
+                name: disciplineName ?? '',
+                module: null,
+              })
+      }
+    >
       <SortableContext
         items={lessons.map((l) => libraryLessonDndId(l.id))}
         strategy={verticalListSortingStrategy}

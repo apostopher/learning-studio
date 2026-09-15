@@ -36,6 +36,12 @@ export const disciplineExpertQueryAtom = atom('');
 export const createLibraryLessonTargetAtom = atom<{
   id: number;
   name: string;
+  /**
+   * The discipline module the lesson is born into — "Add lesson" lives on
+   * each module's header — or `null` from the Untitled group's own button.
+   * Carries the name for the same reason the discipline does.
+   */
+  module: { id: number; name: string } | null;
 } | null>(null);
 
 /** The discipline being renamed from the library column, or null. */

@@ -128,6 +128,22 @@ export const createLessonInputSchema = z.object({
 });
 export type CreateLessonInput = z.infer<typeof createLessonInputSchema>;
 
+/**
+ * `POST /api/admin/disciplines/:id/lessons` — the library's "add lesson".
+ * `disciplineModuleId` files the new lesson into one of the discipline's
+ * modules at birth (the action lives on each module's header); `null` or
+ * absent files it into Untitled. The route refuses a module of another
+ * discipline as not found.
+ */
+export const createLibraryLessonInputSchema = createLessonInputSchema
+  .extend({
+    disciplineModuleId: z.number().int().positive().nullable().optional(),
+  })
+  .strict();
+export type CreateLibraryLessonInput = z.infer<
+  typeof createLibraryLessonInputSchema
+>;
+
 /** Link an existing library lesson into a module — the other half of `POST /api/admin/modules/:moduleId/lessons`. */
 export const linkLessonInputSchema = z
   .object({ lessonId: z.number().int().positive() })

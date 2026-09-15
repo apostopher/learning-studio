@@ -6,7 +6,6 @@ import {
 import { useAtom, useSetAtom } from 'jotai';
 import {
   createDisciplineModuleTargetAtom,
-  createLibraryLessonTargetAtom,
   deleteDisciplineTargetAtom,
   expandedLibraryModuleIdsAtom,
   renameDisciplineTargetAtom,
@@ -58,7 +57,6 @@ export const DisciplineColumnContainer = ({
     id: disciplineDndId(disciplineId),
     data: { type: 'discipline', disciplineId },
   });
-  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
   const openAddModule = useSetAtom(createDisciplineModuleTargetAtom);
   const openRename = useSetAtom(renameDisciplineTargetAtom);
   const openDelete = useSetAtom(deleteDisciplineTargetAtom);
@@ -100,7 +98,6 @@ export const DisciplineColumnContainer = ({
                   disciplineName: name,
                 })
               }
-              onAddLesson={() => openAddLesson({ id: disciplineId, name })}
               onRename={() => openRename({ id: disciplineId, name })}
               onDelete={() =>
                 openDelete({
@@ -131,11 +128,13 @@ export const DisciplineColumnContainer = ({
               key={mod.id}
               module={mod}
               disciplineId={disciplineId}
+              disciplineName={name}
             />
           ))}
         </SortableContext>
         <LibraryUntitledContainer
           disciplineId={disciplineId}
+          disciplineName={name}
           lessons={discipline.untitled}
           isOrgLevel={isUntitled}
         />

@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { useCallback } from 'react';
 import {
+  createLibraryLessonTargetAtom,
   deleteDisciplineModuleTargetAtom,
   renameDisciplineModuleTargetAtom,
 } from '#/atoms/admin';
@@ -31,9 +32,12 @@ import { ModuleAccordionItem } from './module-accordion-item';
 export const LibraryModuleContainer = ({
   module: mod,
   disciplineId,
+  disciplineName,
 }: {
   module: LibraryDisciplineModule;
   disciplineId: number;
+  /** For the create-lesson dialog's sentence ("Add a lesson to Basics in Weather"). */
+  disciplineName: string;
 }) => {
   const {
     attributes,
@@ -53,6 +57,7 @@ export const LibraryModuleContainer = ({
   });
   const openRename = useSetAtom(renameDisciplineModuleTargetAtom);
   const openDelete = useSetAtom(deleteDisciplineModuleTargetAtom);
+  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
 
   return (
     <div
@@ -72,6 +77,15 @@ export const LibraryModuleContainer = ({
       <ModuleAccordionItem
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
+        // A lesson is born filed in the module whose header it was added
+        // from, as on the course rail — never in Untitled to be dragged over.
+        onAddLesson={() =>
+          openAddLesson({
+            id: disciplineId,
+            name: disciplineName,
+            module: { id: mod.id, name: mod.name },
+          })
+        }
         onEditModule={() => openRename({ id: mod.id, name: mod.name })}
         onDeleteModule={() =>
           openDelete({

@@ -33,7 +33,7 @@ have not been given a home yet".
 | order | **manual, by drag** — modules within the discipline, lessons within a module or within Untitled | the SME arranges the shelf; the course rail already taught this gesture |
 | authority | **discipline staff + admin**, via `requireLessonContentPermission(disciplineId, …)` | organising a shelf is content work on that discipline, the same authority that edits its lessons |
 | delete a module | **its lessons return to Untitled** (`on delete set null`) | a box is thrown away, not its contents — no write in this feature deletes a lesson |
-| new lessons | land in **Untitled** | creating a lesson does not need a module to exist |
+| new lessons | born in the module (or Untitled) whose **Add lesson** was pressed | the column bar's `+` adds a module; lessons are added from inside a box, as on the course rail, so nothing lands in an inbox to be filed later (`POST …/lessons` takes an optional `disciplineModuleId`, refused as not found unless it is this discipline's) |
 | learner surface | **none** | discipline modules are library furniture |
 | remixing | **untouched** | remixing moves course modules; the library is not a course |
 
@@ -149,9 +149,10 @@ the same ordering the lesson routes use so an unowned id reads as not found.
   shell the course rail uses (name · lesson count · drag handle; rename and
   delete icons) — followed by an **Untitled** group that is not a module: no
   rename, no delete, no handle, always last, always present (empty reads
-  "Every lesson is in a module").
-- **Add module** joins `DisciplineColumnActions`, with a create dialog
-  mirroring the course rail's.
+  "Every lesson is in a module"); its one control is Add lesson.
+- The column bar's `+` is **Add module** (create dialog mirroring the course
+  rail's); each module header and the Untitled group carry their own **Add
+  lesson**, which files the new lesson there at birth.
 - Controls are offered to everyone the pane admits and the server refuses
   when it must — the pane's existing rule, since router context cannot
   answer per-discipline authority.
@@ -215,4 +216,3 @@ Six groups, red first.
 - A lesson in more than one discipline module.
 - Any learner-facing use of discipline modules; sequencing or gating on them.
 - Moving a lesson between disciplines.
-- Filing new lessons straight into a module on creation.

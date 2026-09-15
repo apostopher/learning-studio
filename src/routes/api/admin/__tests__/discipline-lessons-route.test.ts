@@ -37,8 +37,12 @@ const m = vi.hoisted(() => {
     renameDiscipline: vi.fn(),
     deleteDiscipline: vi.fn(),
     createLibraryLesson: vi.fn(),
+    getDisciplineIdForDisciplineModule: vi.fn(),
   };
 });
+vi.mock('#/db/discipline-modules', () => ({
+  getDisciplineIdForDisciplineModule: m.getDisciplineIdForDisciplineModule,
+}));
 vi.mock('#/lib/admin-functions.server', () => ({
   requireAdmin: m.requireAdmin,
   ForbiddenError: m.ForbiddenError,
@@ -100,7 +104,77 @@ describe('postDisciplineLessonHandler', () => {
     // handler that dropped `disciplineId` (filing every library lesson under
     // no discipline at all) would still answer 201 with a plausible card.
     expect(m.createLibraryLesson.mock.calls).toEqual([
-      [{ orgId: 7, disciplineId: 4, name: 'Stalls' }],
+      [{ orgId: 7, disciplineId: 4, name: 'Stalls', disciplineModuleId: null }],
+    ]);
+  });
+
+  /**
+   * "Add lesson" on a module header files the new lesson there. The writer
+   * must receive the module — a handler that parsed it and dropped it would
+   * still answer 201 and the lesson would surface in Untitled.
+   */
+  it('files the lesson into a module of THIS discipline when the body names one', async () => {
+    m.getDisciplineIdForDisciplineModule.mockResolvedValue(4);
+
+    const res = await postDisciplineLessonHandler(
+      post({ name: 'Stalls', disciplineModuleId: 12 }),
+      '4',
+    );
+
+    expect(res.status).toBe(201);
+    expect(m.getDisciplineIdForDisciplineModule.mock.calls).toEqual([[12]]);
+    expect(m.createLibraryLesson.mock.calls).toEqual([
+      [{ orgId: 7, disciplineId: 4, name: 'Stalls', disciplineModuleId: 12 }],
+    ]);
+  });
+
+  /**
+   * The one invariant of discipline modules: a lesson's module belongs to the
+   * lesson's own discipline. A module of another discipline — this org's or
+   * a stranger's — reads as not found, the same absent-resource path the
+   * discipline itself takes, so the response never confirms the id exists
+   * or names the other discipline.
+   */
+  it("refuses a module that is not this discipline's, through absentResourceResponse, without writing", async () => {
+    m.getDisciplineIdForDisciplineModule.mockResolvedValue(9);
+    m.absentResourceResponse.mockResolvedValue(
+      Response.json({ error: 'Module not found' }, { status: 404 }),
+    );
+
+    const res = await postDisciplineLessonHandler(
+      post({ name: 'Stalls', disciplineModuleId: 12 }),
+      '4',
+    );
+
+    expect(res.status).toBe(404);
+    expect(m.absentResourceResponse.mock.calls[0][1]).toBe('Module not found');
+    expect(m.createLibraryLesson).not.toHaveBeenCalled();
+  });
+
+  it('treats an unknown module id the same way', async () => {
+    m.getDisciplineIdForDisciplineModule.mockResolvedValue(null);
+    m.absentResourceResponse.mockResolvedValue(
+      Response.json({ error: 'Module not found' }, { status: 404 }),
+    );
+
+    const res = await postDisciplineLessonHandler(
+      post({ name: 'Stalls', disciplineModuleId: 12 }),
+      '4',
+    );
+
+    expect(res.status).toBe(404);
+    expect(m.createLibraryLesson).not.toHaveBeenCalled();
+  });
+
+  it('does not look a module up when the body files into Untitled', async () => {
+    await postDisciplineLessonHandler(
+      post({ name: 'Stalls', disciplineModuleId: null }),
+      '4',
+    );
+
+    expect(m.getDisciplineIdForDisciplineModule).not.toHaveBeenCalled();
+    expect(m.createLibraryLesson.mock.calls).toEqual([
+      [{ orgId: 7, disciplineId: 4, name: 'Stalls', disciplineModuleId: null }],
     ]);
   });
 

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createStore, Provider } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createLibraryLessonTargetAtom } from '#/atoms/admin';
 
 // The card is the consumer of what this container decides; recorded rather
 // than rendered, since its own registration has its own suite.
@@ -13,6 +15,19 @@ vi.mock('../library-lesson-card-container', () => ({
 }));
 vi.mock('@dnd-kit/core', () => ({
   useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
+}));
+vi.mock('../../ui/tooltip-icon-button', () => ({
+  TooltipIconButton: ({
+    label,
+    onClick,
+  }: {
+    label: string;
+    onClick?: () => void;
+  }) => (
+    <button type="button" aria-label={label} onClick={onClick}>
+      {label}
+    </button>
+  ),
 }));
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: ({ children }: { children: React.ReactNode }) => (
@@ -61,6 +76,39 @@ describe('LibraryUntitledContainer', () => {
         sortable: true,
       }),
     );
+  });
+
+  /**
+   * "Add lesson" from Untitled opens the create dialog aimed at THIS
+   * discipline with no module — the dialog is the consumer, and it reads
+   * the atom, so the atom's value is what is asserted.
+   */
+  it('aims the create-lesson dialog at this discipline and no module', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <LibraryUntitledContainer
+          disciplineId={4}
+          disciplineName="Weather"
+          lessons={[]}
+        />
+      </Provider>,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add lesson to Untitled' }),
+    );
+    expect(store.get(createLibraryLessonTargetAtom)).toEqual({
+      id: 4,
+      name: 'Weather',
+      module: null,
+    });
+  });
+
+  it('offers no Add lesson on the org-level column', () => {
+    render(
+      <LibraryUntitledContainer disciplineId={0} lessons={[]} isOrgLevel />,
+    );
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
   it('turns sorting off for the org-level column, whose cards keep no order', () => {

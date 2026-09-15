@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { personLabel } from '#/lib/person-label';
 import { dataKeys } from '#/data-hooks/keys';
 import {
   type LibraryLesson,
@@ -14,6 +13,7 @@ import {
   type SetDisciplineStaffInput,
   setDisciplineStaffInputSchema,
 } from '#/lib/discipline-schemas';
+import { personLabel } from '#/lib/person-label';
 
 /**
  * Query keys for the discipline admin surface.
@@ -249,13 +249,20 @@ function staffBody(userId: string): string {
 export function useCreateLibraryLesson(disciplineId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string }): Promise<LibraryLesson> => {
+    mutationFn: async (input: {
+      name: string;
+      /** The module to file into at birth; `null` for Untitled. */
+      disciplineModuleId: number | null;
+    }): Promise<LibraryLesson> => {
       const res = await fetch(
         `/api/admin/disciplines/${disciplineId}/lessons`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: input.name }),
+          body: JSON.stringify({
+            name: input.name,
+            disciplineModuleId: input.disciplineModuleId,
+          }),
         },
       );
       if (!res.ok) {

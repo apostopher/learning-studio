@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
+import { getDisciplineIdForDisciplineModule } from '#/db/discipline-modules';
 import { findDisciplineInOrg } from '#/db/disciplines';
 import { createLibraryLesson } from '#/db/library-lessons';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError } from '#/lib/admin-functions.server';
-import { createLessonInputSchema } from '#/lib/admin-schemas';
+import { createLibraryLessonInputSchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireLessonContentPermission,
@@ -79,15 +80,29 @@ export async function postDisciplineLessonHandler(
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const parsed = createLessonInputSchema.strict().safeParse(body);
+  const parsed = createLibraryLessonInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // A lesson's module belongs to the lesson's own discipline — the one
+  // invariant discipline modules carry. A module of any OTHER discipline
+  // (this org's or a stranger's) reads as not found, through the same
+  // absent-resource path as the discipline: a naming 400 here would confirm
+  // the id exists and could echo another org's discipline name.
+  const disciplineModuleId = parsed.data.disciplineModuleId ?? null;
+  if (disciplineModuleId !== null) {
+    const owner = await getDisciplineIdForDisciplineModule(disciplineModuleId);
+    if (owner !== disciplineId) {
+      return absentResourceResponse(request.headers, 'Module not found');
+    }
   }
 
   const lesson = await createLibraryLesson({
     orgId,
     disciplineId,
     name: parsed.data.name,
+    disciplineModuleId,
   });
   return Response.json(lesson, { status: 201 });
 }

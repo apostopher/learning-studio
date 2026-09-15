@@ -21,12 +21,9 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 
 import { DisciplineColumnActions } from '../discipline-column-actions';
 
-function renderActions(
-  overrides: { canManage?: boolean; onAddModule?: () => void } = {},
-) {
+function renderActions(overrides: { canManage?: boolean } = {}) {
   const handlers = {
-    onAddModule: overrides.onAddModule ?? vi.fn(),
-    onAddLesson: vi.fn(),
+    onAddModule: vi.fn(),
     onRename: vi.fn(),
     onDelete: vi.fn(),
   };
@@ -42,15 +39,27 @@ function renderActions(
 
 describe('DisciplineColumnActions', () => {
   it('names the discipline in every action, not just the verb', () => {
-    // Mutant: labels hardcoded to "Add lesson" / "Rename" / "Delete". The
+    // Mutant: labels hardcoded to "Add module" / "Rename" / "Delete". The
     // library shows many of these rows side by side, so a bare verb tells a
     // screen-reader user nothing about WHICH column is about to be deleted.
     renderActions();
     expect(
-      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+      screen.getByRole('button', { name: 'Add a module to Weather' }),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit Weather' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Delete Weather' })).toBeTruthy();
+  });
+
+  /**
+   * Lessons are added from inside a module (or Untitled), the way the course
+   * rail adds lessons from inside a course module — the column bar's "+" is
+   * the module, and there is no column-level "add lesson" to mis-file one.
+   */
+  it('has exactly three actions: add a module (first), edit, delete', () => {
+    renderActions();
+    expect(
+      screen.getAllByRole('button').map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Add a module to Weather', 'Edit Weather', 'Delete Weather']);
   });
 
   it('calls each handler from its own button', () => {
@@ -60,9 +69,9 @@ describe('DisciplineColumnActions', () => {
     const handlers = renderActions();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+      screen.getByRole('button', { name: 'Add a module to Weather' }),
     );
-    expect(handlers.onAddLesson).toHaveBeenCalledTimes(1);
+    expect(handlers.onAddModule).toHaveBeenCalledTimes(1);
     expect(handlers.onRename).not.toHaveBeenCalled();
     expect(handlers.onDelete).not.toHaveBeenCalled();
 
@@ -75,7 +84,7 @@ describe('DisciplineColumnActions', () => {
   });
 
   it('withholds rename and delete from an actor who cannot manage disciplines', () => {
-    // Mutant: `canManage` ignored, or applied to add-lesson instead. Both
+    // Mutant: `canManage` ignored, or applied to add-module instead. Both
     // halves are asserted: the two admin-only actions must be GONE, and the
     // authoring action must REMAIN — a mutant that hid all three would
     // otherwise pass the first half.
@@ -84,19 +93,8 @@ describe('DisciplineColumnActions', () => {
     expect(screen.queryByRole('button', { name: 'Edit Weather' })).toBe(null);
     expect(screen.queryByRole('button', { name: 'Delete Weather' })).toBe(null);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+      screen.getByRole('button', { name: 'Add a module to Weather' }),
     );
-    expect(handlers.onAddLesson).toHaveBeenCalledTimes(1);
-  });
-
-  it('offers to add a module, first in the bar, naming the discipline', () => {
-    const onAddModule = vi.fn();
-    renderActions({ onAddModule });
-    const buttons = screen.getAllByRole('button');
-    expect(buttons[0].getAttribute('aria-label')).toBe(
-      'Add a module to Weather',
-    );
-    fireEvent.click(buttons[0]);
-    expect(onAddModule).toHaveBeenCalledOnce();
+    expect(handlers.onAddModule).toHaveBeenCalledTimes(1);
   });
 });

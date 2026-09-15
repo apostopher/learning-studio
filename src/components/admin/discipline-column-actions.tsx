@@ -1,9 +1,12 @@
-import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /**
- * The four actions on a discipline column: add a module to it, add a lesson
- * to it, edit it (its name and its subject experts), delete it.
+ * The three actions on a discipline column: add a module to it, edit it (its
+ * name and its subject experts), delete it. Lessons are added from INSIDE a
+ * module or the Untitled group — the same place the course rail adds them —
+ * so a new lesson lands where the SME was looking, never in a column-level
+ * inbox they then have to file from.
  *
  * Icon-only with tooltips, and every tooltip names the DISCIPLINE. A library
  * pane holds many of these rows side by side, so a bare "Delete" tells a
@@ -17,11 +20,8 @@ import { TooltipIconButton } from '../ui/tooltip-icon-button';
  * control is worse than no control. Add-module and add-lesson are always
  * offered, because whether this actor may write to THIS discipline is a
  * per-discipline question the router context cannot answer — the server
- * decides, and the mutation turns its 403 into a sentence.
- *
- * Add-module is FIRST in the bar: a discipline with no modules yet has
- * nowhere for "add a lesson" to file into but Untitled, so the action that
- * gives the column its shelves comes before the one that fills them.
+ * decides, and the mutation turns its 403 into a sentence. Add-module is
+ * always offered for the same reason.
  *
  * Delete is NOT disabled when the discipline still holds lessons. It opens the
  * confirmation, which states the block and the count in visible text: a
@@ -32,14 +32,12 @@ export const DisciplineColumnActions = ({
   disciplineName,
   canManage,
   onAddModule,
-  onAddLesson,
   onRename,
   onDelete,
 }: {
   disciplineName: string;
   canManage: boolean;
   onAddModule: () => void;
-  onAddLesson: () => void;
   onRename: () => void;
   onDelete: () => void;
 }) => (
@@ -47,12 +45,6 @@ export const DisciplineColumnActions = ({
     <TooltipIconButton
       label={`Add a module to ${disciplineName}`}
       onClick={onAddModule}
-    >
-      <FolderPlus className="h-4 w-4" aria-hidden="true" />
-    </TooltipIconButton>
-    <TooltipIconButton
-      label={`Add a lesson to ${disciplineName}`}
-      onClick={onAddLesson}
     >
       <Plus className="h-4 w-4" aria-hidden="true" />
     </TooltipIconButton>

@@ -26,6 +26,12 @@ export async function createLibraryLesson(input: {
   orgId: number;
   disciplineId: number;
   name: string;
+  /**
+   * The discipline module the lesson is filed into at birth — "Add lesson"
+   * lives on each module's header — or `null`/absent for Untitled. The route
+   * has already checked the module belongs to `disciplineId`.
+   */
+  disciplineModuleId?: number | null;
 }): Promise<LibraryLesson> {
   const slug = await nextAvailableLessonSlug(input.name);
   const [created] = await db
@@ -38,6 +44,7 @@ export async function createLibraryLesson(input: {
       requiredSubscriptions: [],
       orgId: input.orgId,
       disciplineId: input.disciplineId,
+      disciplineModuleId: input.disciplineModuleId ?? null,
     })
     .returning({
       id: lessonsTable.id,
@@ -49,6 +56,7 @@ export async function createLibraryLesson(input: {
       requiredSubscriptions: lessonsTable.requiredSubscriptions,
       hasDebrief: lessonsTable.hasDebrief,
       needsVideoWatch: lessonsTable.needsVideoWatch,
+      disciplineModuleId: lessonsTable.disciplineModuleId,
     });
 
   return {
@@ -62,9 +70,9 @@ export async function createLibraryLesson(input: {
     isAvailable: created.isAvailable,
     courseCount: 0,
     courseIds: [],
-    // A lesson enters a module only by being dragged into one — see
-    // `getOrgLibrary`'s `libraryDisciplineModuleSchema` doc.
-    disciplineModuleId: null,
+    // Read back rather than echoed from the input so the card agrees with
+    // the row the library will refetch.
+    disciplineModuleId: created.disciplineModuleId,
     videoProvider: null,
     // Read back rather than assumed: the columns carry defaults, and a card
     // that guessed them would disagree with the library the moment it
