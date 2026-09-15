@@ -117,7 +117,13 @@ export const ModuleAccordionItem = ({
       </div>
 
       <Accordion.Panel className="overflow-hidden">
-        <div className="flex flex-col gap-2 px-3 pb-3">
+        {/*
+          `pt-1`: the panel clips at its edges, and a lesson card's hover /
+          focus outline is drawn 2px OUTSIDE the card — without headroom the
+          first card's outline loses its top edge. Bottom and sides already
+          have room from `pb-3` / `px-3`.
+        */}
+        <div className="flex flex-col gap-2 px-3 pt-1 pb-3">
           {provenance && <ModuleProvenanceNote {...provenance} />}
           {lessonsSlot}
         </div>

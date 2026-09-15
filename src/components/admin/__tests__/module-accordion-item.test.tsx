@@ -192,4 +192,16 @@ describe('ModuleAccordionItem', () => {
     renderOpen(module_());
     expect(screen.queryByText(/^from /)).toBeNull();
   });
+
+  /**
+   * The panel is `overflow-hidden`; a lesson card's outline is 2px outside
+   * its box. Without top padding the first card's outline is clipped —
+   * this pins the headroom. Mutant: `pt-1` dropped from the list.
+   */
+  it('leaves headroom above the first lesson so its outline is not clipped by the panel', () => {
+    renderOpen(module_(), { lessonsSlot: <p>lessons</p> });
+    const list = screen.getByText('lessons').parentElement as HTMLElement;
+    expect(list.className).toMatch(/\bpt-1\b/);
+    expect(list.parentElement?.className).toContain('overflow-hidden');
+  });
 });
