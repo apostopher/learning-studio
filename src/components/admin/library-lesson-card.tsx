@@ -31,7 +31,17 @@ export const LibraryLessonCard = ({
   onEdit?: () => void;
 }) => {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary">
+    // Hover and keyboard-focus treatment: an outline in ITPS's orange
+    // (`warning-9`), colour-only. An outline rather than a border so the
+    // card never changes size; `transition` on the two colours only, at
+    // 150ms — a hover is seen tens of times a day and must feel instant,
+    // not animated. No lift or scale: the card is a dnd sortable, and a
+    // transform on the hover target moves it out from under the cursor.
+    // `has-focus-visible`, not `focus-within`: the card is not focusable,
+    // its buttons are, and only KEYBOARD focus on one of them should light
+    // the whole card — a mouse click on Edit would otherwise leave the
+    // outline stuck on until blur.
+    <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary outline outline-2 outline-offset-0 outline-transparent transition-[outline-color,background-color] duration-150 hover:bg-gray-2 hover:outline-warning-9 has-focus-visible:outline-warning-9">
       <LessonVideoTile
         hasVideo={lesson.isConfigured}
         lessonName={lesson.name}

@@ -148,4 +148,22 @@ describe('LessonCard', () => {
       screen.queryByRole('button', { name: 'Drag to reorder lesson' }),
     ).toBeNull();
   });
+  /**
+   * The card's hover and keyboard-focus treatment: an outline in ITPS's
+   * orange (`warning-9`, 6.5:1 on gray-2 — a 60+ pilot can see it), colour-
+   * only so nothing shifts under the cursor, and `has-focus-visible` rather
+   * than `focus-within` so a mouse click on the card's own buttons does not
+   * leave the outline stuck on. Mutant: the classes dropped from the root —
+   * every other assertion in this file still passes.
+   */
+  it('outlines itself in the accent orange on hover and on keyboard focus within, without moving', () => {
+    const { container } = render(<LessonCard lesson={lesson()} />);
+    const root = container.firstElementChild as HTMLElement;
+    const cls = root.className;
+    expect(cls).toContain('hover:outline-warning-9');
+    expect(cls).toContain('has-focus-visible:outline-warning-9');
+    expect(cls).toContain('outline-transparent');
+    expect(cls).toContain('transition-[outline-color,background-color]');
+    expect(cls).not.toMatch(/hover:(scale|-?translate)/);
+  });
 });
