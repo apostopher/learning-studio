@@ -5,6 +5,7 @@ import type {
   EditorBoardLesson,
   LibraryLesson,
   OrgEditorBoard,
+  OrgLibrary,
 } from '#/lib/admin-schemas';
 import { parseDndId } from '#/lib/dnd-ids';
 
@@ -249,5 +250,221 @@ export function boardLessonFromLibrary(
     levels: lesson.levels,
     quizQuestionCount: 0,
     dependsOn: [],
+  };
+}
+
+/**
+ * The library's own optimistic updaters — the same style as the course-side
+ * ones above, applied to `OrgLibrary` instead of `OrgEditorBoard`.
+ *
+ * A dragged lesson is located by walking the library's own buckets (a
+ * discipline's modules, then its own Untitled group), NEVER by trusting the
+ * lesson's `disciplineModuleId` field — that field can go stale (its module
+ * was deleted, say) while the payload has already re-bucketed the lesson
+ * under Untitled. The field is an OUTPUT here (set on the moved lesson to
+ * wherever it lands), never an input for finding anything.
+ *
+ * `resolveDrop`'s `library-move` never crosses disciplines (Ruling 4: a
+ * cross-discipline target is `forbidden`), so a move only ever touches ONE
+ * discipline — every other discipline is returned untouched, at the same
+ * object reference, exactly as `reorderModulesOnBoard` leaves every other
+ * course's column alone.
+ */
+
+/** The discipline that owns a discipline module id, or null when it names no
+ *  module on this library. */
+function disciplineOwningModule(
+  library: OrgLibrary,
+  moduleId: number,
+): OrgLibrary['disciplines'][number] | null {
+  return (
+    library.disciplines.find((d) => d.modules.some((m) => m.id === moduleId)) ??
+    null
+  );
+}
+
+/**
+ * Which discipline a `moveLessonInLibrary` call is filing INTO. A non-null
+ * `disciplineModuleId` names its own discipline unambiguously. `null` means
+ * "that discipline's own Untitled group", which `disciplineModuleId` alone
+ * cannot name — so the over id supplies it: a `library-untitled` id names
+ * the discipline directly, and a `library-lesson` id resolves through
+ * wherever THAT (different) lesson currently sits, mirroring Ruling 4 in
+ * `resolveDrop`.
+ */
+function libraryMoveTargetDiscipline(
+  library: OrgLibrary,
+  disciplineModuleId: number | null,
+  overId: string | number,
+): number | null {
+  if (disciplineModuleId !== null) {
+    return disciplineOwningModule(library, disciplineModuleId)?.id ?? null;
+  }
+  const over = parseDndId(overId);
+  if (over?.type === 'library-untitled') return over.id;
+  if (over?.type === 'library-lesson') {
+    for (const d of library.disciplines) {
+      for (const m of d.modules) {
+        if (m.lessons.some((l) => l.id === over.id)) return d.id;
+      }
+      if (d.untitled.some((l) => l.id === over.id)) return d.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Where in a library bucket a drop lands: a `library-lesson` over id names
+ * the slot it takes, anything else appends. Mirrors `overIndexIn`.
+ */
+function overIndexInLibrary(
+  lessons: LibraryLesson[],
+  overId: string | number,
+): number {
+  const over = parseDndId(overId);
+  if (over?.type === 'library-lesson') {
+    const at = lessons.findIndex((l) => l.id === over.id);
+    if (at !== -1) return at;
+  }
+  return lessons.length;
+}
+
+/**
+ * Move a library lesson to `disciplineModuleId` (a discipline module's id,
+ * or null for that discipline's own Untitled group), at `overId`'s slot.
+ *
+ * The insertion index is read from the target bucket AS IT STANDS NOW,
+ * before the dragged lesson is pulled out of it — same reasoning as
+ * `moveLessonOnBoard`: a same-bucket downward move must land in the slot
+ * under the pointer, not one above it.
+ */
+export function moveLessonInLibrary(
+  library: OrgLibrary,
+  lessonId: number,
+  disciplineModuleId: number | null,
+  overId: string | number,
+): OrgLibrary {
+  const toDisciplineId = libraryMoveTargetDiscipline(
+    library,
+    disciplineModuleId,
+    overId,
+  );
+  if (toDisciplineId === null) return library;
+  const discipline = library.disciplines.find((d) => d.id === toDisciplineId);
+  if (!discipline) return library;
+
+  const beforeStrip =
+    disciplineModuleId === null
+      ? discipline.untitled
+      : (discipline.modules.find((m) => m.id === disciplineModuleId)?.lessons ??
+        []);
+  const index = overIndexInLibrary(beforeStrip, overId);
+
+  // Located by walking THIS discipline's own buckets — never by trusting the
+  // lesson's own (possibly stale) `disciplineModuleId`.
+  let moved: LibraryLesson | undefined;
+  let untitled = discipline.untitled;
+  const untitledAt = discipline.untitled.findIndex((l) => l.id === lessonId);
+  if (untitledAt !== -1) {
+    moved = discipline.untitled[untitledAt];
+    untitled = discipline.untitled.filter((l) => l.id !== lessonId);
+  }
+  const modules = discipline.modules.map((m) => {
+    const at = m.lessons.findIndex((l) => l.id === lessonId);
+    if (at === -1) return m;
+    moved = m.lessons[at];
+    return { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) };
+  });
+  if (!moved) return library;
+
+  const placed: LibraryLesson = { ...moved, disciplineModuleId };
+  let nextModules = modules;
+  let nextUntitled = untitled;
+  if (disciplineModuleId === null) {
+    nextUntitled = [...untitled];
+    nextUntitled.splice(Math.min(index, nextUntitled.length), 0, placed);
+  } else {
+    nextModules = modules.map((m) => {
+      if (m.id !== disciplineModuleId) return m;
+      const lessons = [...m.lessons];
+      lessons.splice(Math.min(index, lessons.length), 0, placed);
+      return { ...m, lessons };
+    });
+  }
+
+  return {
+    ...library,
+    disciplines: library.disciplines.map((d) =>
+      d.id === toDisciplineId
+        ? { ...discipline, modules: nextModules, untitled: nextUntitled }
+        : d,
+    ),
+  };
+}
+
+/** Reorder a discipline module within the NAMED discipline's shelf only —
+ *  every other discipline is returned untouched, at the same reference. */
+export function reorderLibraryModules(
+  library: OrgLibrary,
+  disciplineId: number,
+  moduleId: number,
+  overModuleId: number,
+): OrgLibrary {
+  return {
+    ...library,
+    disciplines: library.disciplines.map((d) => {
+      if (d.id !== disciplineId) return d;
+      const from = d.modules.findIndex((m) => m.id === moduleId);
+      const to = d.modules.findIndex((m) => m.id === overModuleId);
+      if (from === -1 || to === -1) return d;
+      const modules = [...d.modules];
+      const [moved] = modules.splice(from, 1);
+      modules.splice(to, 0, moved);
+      return { ...d, modules };
+    }),
+  };
+}
+
+/** The library lesson's neighbours in whichever bucket holds it — a
+ *  discipline module's lessons, a discipline's own Untitled group, or the
+ *  org-level Untitled column. */
+export function libraryLessonNeighbours(
+  library: OrgLibrary,
+  lessonId: number,
+): { prevLessonId: number | null; nextLessonId: number | null } {
+  let bucket: LibraryLesson[] = library.untitled;
+  outer: for (const d of library.disciplines) {
+    for (const m of d.modules) {
+      if (m.lessons.some((l) => l.id === lessonId)) {
+        bucket = m.lessons;
+        break outer;
+      }
+    }
+    if (d.untitled.some((l) => l.id === lessonId)) {
+      bucket = d.untitled;
+      break;
+    }
+  }
+  const at = bucket.findIndex((l) => l.id === lessonId);
+  return {
+    prevLessonId: bucket[at - 1]?.id ?? null,
+    nextLessonId: bucket[at + 1]?.id ?? null,
+  };
+}
+
+/** The discipline module's neighbours within the NAMED discipline's shelf
+ *  only — never another discipline. */
+export function libraryModuleNeighbours(
+  library: OrgLibrary,
+  disciplineId: number,
+  moduleId: number,
+): { prevModuleId: number | null; nextModuleId: number | null } {
+  const discipline = library.disciplines.find((d) => d.id === disciplineId);
+  if (!discipline) return { prevModuleId: null, nextModuleId: null };
+  const at = discipline.modules.findIndex((m) => m.id === moduleId);
+  if (at === -1) return { prevModuleId: null, nextModuleId: null };
+  return {
+    prevModuleId: discipline.modules[at - 1]?.id ?? null,
+    nextModuleId: discipline.modules[at + 1]?.id ?? null,
   };
 }

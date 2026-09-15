@@ -16,7 +16,10 @@ export type DndType =
   | 'container'
   | 'library-lesson'
   | 'discipline'
-  | 'course';
+  | 'course'
+  | 'library-module'
+  | 'library-container'
+  | 'library-untitled';
 
 /**
  * Rail kinds are qualified by COURSE. A module — and every lesson placed in
@@ -43,17 +46,43 @@ export const disciplineDndId = (id: number) => `discipline-${id}`;
  *  an empty course can be refused with the reason (there is nowhere to put it
  *  yet) rather than looking identical to a drop on nothing. */
 export const courseDndId = (id: number) => `course-${id}`;
+/** A module box on a discipline's library shelf. Flat, like `discipline` and
+ *  `course` — a discipline module's id is already unique across the whole
+ *  library, with no course to qualify it by. */
+export const libraryModuleDndId = (id: number) => `library-module-${id}`;
+/** Droppable wrapping a discipline module's lesson area, so an EMPTY module
+ *  accepts drops — the same reason `containerDndId` exists on the course
+ *  side. */
+export const libraryContainerDndId = (moduleId: number) =>
+  `library-container-${moduleId}`;
+/** A discipline's Untitled group — a real droppable so a lesson filed out of
+ *  every module lands somewhere named, not on the discipline column itself. */
+export const libraryUntitledDndId = (disciplineId: number) =>
+  `library-untitled-${disciplineId}`;
 
 export type ParsedDndId =
   | { type: 'module' | 'lesson' | 'container'; courseId: number; id: number }
   | {
-      type: 'library-lesson' | 'discipline' | 'course';
+      type:
+        | 'library-lesson'
+        | 'discipline'
+        | 'course'
+        | 'library-module'
+        | 'library-container'
+        | 'library-untitled';
       id: number;
       courseId?: undefined;
     };
 
 const RAIL_TYPES = new Set(['module', 'lesson', 'container']);
-const FLAT_TYPES = new Set(['library-lesson', 'discipline', 'course']);
+const FLAT_TYPES = new Set([
+  'library-lesson',
+  'discipline',
+  'course',
+  'library-module',
+  'library-container',
+  'library-untitled',
+]);
 
 export function parseDndId(id: string | number): ParsedDndId | null {
   const raw = String(id);
@@ -70,7 +99,13 @@ export function parseDndId(id: string | number): ParsedDndId | null {
   const flat = /^(.+)-(\d+)$/.exec(raw);
   if (flat && FLAT_TYPES.has(flat[1])) {
     return {
-      type: flat[1] as 'library-lesson' | 'discipline' | 'course',
+      type: flat[1] as
+        | 'library-lesson'
+        | 'discipline'
+        | 'course'
+        | 'library-module'
+        | 'library-container'
+        | 'library-untitled',
       id: Number(flat[2]),
     };
   }

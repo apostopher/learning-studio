@@ -4,7 +4,11 @@ import type {
   EditorBoardLesson,
   EditorBoardModule,
   EditorCourseBoard,
+  LibraryDiscipline,
+  LibraryDisciplineModule,
+  LibraryLesson,
   OrgEditorBoard,
+  OrgLibrary,
 } from '#/lib/admin-schemas';
 import { parseDndId } from '#/lib/dnd-ids';
 import { removeLessonLabel } from './lesson-card-labels';
@@ -54,6 +58,22 @@ export type DropResolution =
       kind: 'reorder-module';
       /** The course whose rail was dragged — position belongs to the viewer, not the owner. */
       courseId: number;
+      moduleId: number;
+      overModuleId: number;
+    }
+  | {
+      kind: 'library-move';
+      lessonId: number;
+      /** The discipline the DRAGGED lesson belongs to — found by locating it, never read off its (possibly stale) `disciplineModuleId`. */
+      disciplineId: number;
+      /** The destination box: a discipline module's id, or null for that discipline's Untitled group. */
+      disciplineModuleId: number | null;
+      /** The raw over id, so the caller can read the exact slot to insert at. */
+      overId: string | number;
+    }
+  | {
+      kind: 'reorder-library-module';
+      disciplineId: number;
       moduleId: number;
       overModuleId: number;
     }
@@ -223,6 +243,110 @@ function resolveOverModule(
   return null;
 }
 
+/**
+ * A library lesson found by walking the library's own buckets — never by
+ * trusting its `disciplineModuleId` field. That field can go stale (its
+ * module was deleted, say) while the payload has already re-bucketed the
+ * lesson under Untitled, so it is an OUTPUT of `moveLessonInLibrary`, never
+ * an input for locating anything.
+ *
+ * `discipline: null` means the lesson was found in the ORG-LEVEL `untitled`
+ * (no discipline assigned at all) — distinct from `boxId: null`, which means
+ * a discipline's own Untitled group.
+ */
+interface LocatedLibraryLesson {
+  lesson: LibraryLesson;
+  discipline: LibraryDiscipline | null;
+  boxId: number | null;
+}
+
+/** Walks every discipline's modules then its Untitled group, then the
+ *  org-level Untitled column, in that order. */
+function findLibraryLesson(
+  library: OrgLibrary,
+  lessonId: number,
+): LocatedLibraryLesson | null {
+  for (const discipline of library.disciplines) {
+    for (const module of discipline.modules) {
+      const lesson = module.lessons.find((l) => l.id === lessonId);
+      if (lesson) return { lesson, discipline, boxId: module.id };
+    }
+    const untitled = discipline.untitled.find((l) => l.id === lessonId);
+    if (untitled) return { lesson: untitled, discipline, boxId: null };
+  }
+  const orphan = library.untitled.find((l) => l.id === lessonId);
+  if (orphan) return { lesson: orphan, discipline: null, boxId: null };
+  return null;
+}
+
+/** A discipline module found by walking every discipline, with the
+ *  discipline that owns it. */
+function findLibraryModule(
+  library: OrgLibrary,
+  moduleId: number,
+): { discipline: LibraryDiscipline; module: LibraryDisciplineModule } | null {
+  for (const discipline of library.disciplines) {
+    const module = discipline.modules.find((m) => m.id === moduleId);
+    if (module) return { discipline, module };
+  }
+  return null;
+}
+
+/** Why a library lesson with no discipline cannot be filed into a module —
+ *  there is no discipline's module list to file it into. Its `link` onto a
+ *  course module is unaffected; this only guards library-side targets. */
+function noDisciplineRefusal(lesson: LibraryLesson): string {
+  return `"${lesson.name}" has no discipline yet, so there are no modules to file it in. Drag it onto a course module to teach it there.`;
+}
+
+/** Why a lesson may not be filed into a module of a DIFFERENT discipline
+ *  than the one it belongs to. */
+function crossDisciplineLessonRefusal(from: LocatedLibraryLesson): string {
+  const disciplineName = from.discipline?.name ?? '';
+  return `"${from.lesson.name}" is in ${disciplineName}. Lessons stay in their discipline — file it into one of ${disciplineName}’s modules, or drop it on a course module to teach it there.`;
+}
+
+/**
+ * The target box a library-side drop names: which discipline module id (or
+ * null for Untitled) it resolves to, and which discipline owns that box.
+ * `null` when the target id does not resolve on this library at all (an
+ * over id for a module/discipline that has since disappeared).
+ */
+function resolveLibraryTarget(
+  library: OrgLibrary,
+  over: {
+    type:
+      | 'library-module'
+      | 'library-container'
+      | 'library-untitled'
+      | 'library-lesson';
+    id: number;
+  },
+): { disciplineId: number; boxId: number | null } | null {
+  if (over.type === 'library-module' || over.type === 'library-container') {
+    const found = findLibraryModule(library, over.id);
+    if (!found) return null;
+    return { disciplineId: found.discipline.id, boxId: found.module.id };
+  }
+  if (over.type === 'library-untitled') {
+    const discipline = library.disciplines.find((d) => d.id === over.id);
+    if (!discipline) return null;
+    return { disciplineId: discipline.id, boxId: null };
+  }
+  // over.type === 'library-lesson': the target's box is wherever THAT lesson
+  // is found — its module, or null for its discipline's Untitled.
+  const target = findLibraryLesson(library, over.id);
+  if (!target || !target.discipline) return null;
+  return { disciplineId: target.discipline.id, boxId: target.boxId };
+}
+
+const LIBRARY_TARGET_TYPES = new Set([
+  'library-module',
+  'library-container',
+  'library-untitled',
+  'library-lesson',
+]);
+
 /** Whether any module of this course already teaches the lesson. */
 function courseTeaches(
   courseBoard: EditorCourseBoard,
@@ -242,6 +366,14 @@ export function resolveDrop(
    * kind. A lesson drag without one is unresolvable — `null`, not a guess.
    */
   origin?: DragOrigin | null,
+  /**
+   * Required to resolve any LIBRARY-side target (`library-module` /
+   * `library-container` / `library-untitled` / `library-lesson` as an over
+   * id, or a `library-module` drag). Without it those resolve `null` rather
+   * than guessing — the drop springs back exactly as it would if the library
+   * had not loaded yet.
+   */
+  library?: OrgLibrary,
 ): DropResolution {
   const active = parseDndId(activeId);
   const over = parseDndId(overId);
@@ -373,9 +505,49 @@ export function resolveDrop(
           'A discipline column only groups the library — it does not teach anything. Drop this lesson on a module in a course to add it there.',
       };
     }
-    // Library cards are draggable but never droppable, so one landing on
-    // another is not a target the editor offers, not a rule it enforces.
-    if (over.type === 'library-lesson') return null;
+
+    // Library-side targets: filing the lesson into a module, its
+    // discipline's Untitled group, or reordering it against another lesson.
+    // Library cards are sortables now, hence droppables — the old "landing on
+    // another library-lesson is not a target the editor offers" line no
+    // longer holds; a `library-lesson` over id is a real reorder target.
+    if (LIBRARY_TARGET_TYPES.has(over.type)) {
+      if (!library) return null;
+      const from = findLibraryLesson(library, active.id);
+      if (!from) return null;
+      // A lesson with no discipline at all has no discipline's modules to
+      // file it into — its `link` onto a course container, below, is
+      // unaffected by this refusal.
+      if (!from.discipline)
+        return { kind: 'forbidden', reason: noDisciplineRefusal(from.lesson) };
+
+      const target = resolveLibraryTarget(
+        library,
+        over as {
+          type:
+            | 'library-module'
+            | 'library-container'
+            | 'library-untitled'
+            | 'library-lesson';
+          id: number;
+        },
+      );
+      if (!target) return null;
+      if (target.disciplineId !== from.discipline.id) {
+        return {
+          kind: 'forbidden',
+          reason: crossDisciplineLessonRefusal(from),
+        };
+      }
+      return {
+        kind: 'library-move',
+        lessonId: from.lesson.id,
+        disciplineId: from.discipline.id,
+        disciplineModuleId: target.boxId,
+        overId,
+      };
+    }
+
     if (over.type === 'course') {
       const courseBoard = findCourse(board, over.id);
       if (!courseBoard) return null;
@@ -395,6 +567,39 @@ export function resolveDrop(
     if (isBorrowed(to))
       return { kind: 'forbidden', reason: borrowedRefusal(to, true) };
     return { kind: 'link', moduleId: to.module.id, lessonId: active.id };
+  }
+
+  if (active.type === 'library-module') {
+    if (!library) return null;
+    const from = findLibraryModule(library, active.id);
+    if (!from) return null;
+
+    if (over.type === 'library-module') {
+      const to = findLibraryModule(library, over.id);
+      if (!to) return null;
+      if (to.discipline.id !== from.discipline.id) {
+        return {
+          kind: 'forbidden',
+          reason: `"${from.module.name}" is in ${from.discipline.name}. Modules stay in their discipline; it cannot be moved into ${to.discipline.name}.`,
+        };
+      }
+      return {
+        kind: 'reorder-library-module',
+        disciplineId: from.discipline.id,
+        moduleId: from.module.id,
+        overModuleId: to.module.id,
+      };
+    }
+
+    // A discipline module organises the library only — it is never a course
+    // concept, so every other target (a course rail's module/lesson/
+    // container/course, the library's own container/untitled/lesson cards)
+    // is refused the same way.
+    return {
+      kind: 'forbidden',
+      reason:
+        'A discipline module organises the library; it cannot be added to a course. Drag its lessons into the course instead.',
+    };
   }
 
   // `container` and `discipline` are drop targets, never draggables.

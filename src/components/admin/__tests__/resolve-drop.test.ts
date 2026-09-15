@@ -3,14 +3,20 @@ import type {
   BoardLesson,
   BoardModule,
   CourseBoard,
+  LibraryDisciplineModule,
+  LibraryLesson,
   OrgEditorBoard,
+  OrgLibrary,
 } from '#/lib/admin-schemas';
 import {
   containerDndId,
   courseDndId,
   disciplineDndId,
   lessonDndId,
+  libraryContainerDndId,
   libraryLessonDndId,
+  libraryModuleDndId,
+  libraryUntitledDndId,
   moduleDndId,
 } from '#/lib/dnd-ids';
 import { removeLessonLabel } from '../lesson-card-labels';
@@ -129,6 +135,90 @@ const board: OrgEditorBoard = [
  * pinned in its own test.
  */
 const from = (moduleId: number) => ({ moduleId });
+
+/**
+ * Task 6's library-side fixture: two disciplines. Weather (4) has modules
+ * Basics (7, lessons L1/L2) and Advanced (8, lesson L6), plus its own
+ * Untitled group (L3). Navigation (9) has one module, 20, holding L30 — the
+ * SAME numeric id as `BASICS` above (a course-side module in an unrelated
+ * course board): the two live in different id spaces (`library-module-20`
+ * vs `module-2-20`), so the collision is deliberate, not a bug.
+ *
+ * The org-level `untitled` column (lessons with NO discipline at all) holds
+ * one lesson, ORPHAN (50) — Ruling 2's case, distinct from a discipline's
+ * OWN Untitled group.
+ */
+const libraryLesson = (
+  id: number,
+  name: string,
+  disciplineModuleId: number | null,
+): LibraryLesson => ({
+  id,
+  name,
+  slug: `ll-${id}`,
+  isConfigured: true,
+  isAvailable: true,
+  courseCount: 0,
+  courseIds: [],
+  videoProvider: null,
+  disciplineModuleId,
+  levels: [],
+  requiredSubscriptions: [],
+  hasDebrief: false,
+  needsVideoWatch: false,
+});
+
+const libraryModule = (
+  id: number,
+  name: string,
+  lessons: LibraryDisciplineModule['lessons'],
+): LibraryDisciplineModule => ({ id, name, rank: id, lessons });
+
+const L1 = 1;
+const L2 = 2;
+const L3 = 3;
+const L6 = 6;
+const L30 = 30;
+const ORPHAN = 50;
+const WEATHER = 4;
+const BASICS_MODULE = 7;
+const ADVANCED_MODULE = 8;
+const NAVIGATION = 9;
+const NAV_MODULE = 20;
+
+function libraryFixture(): OrgLibrary {
+  return {
+    disciplines: [
+      {
+        id: WEATHER,
+        name: 'Weather',
+        slug: 'weather',
+        modules: [
+          libraryModule(BASICS_MODULE, 'Basics', [
+            libraryLesson(L1, 'L1', BASICS_MODULE),
+            libraryLesson(L2, 'L2', BASICS_MODULE),
+          ]),
+          libraryModule(ADVANCED_MODULE, 'Advanced', [
+            libraryLesson(L6, 'L6', ADVANCED_MODULE),
+          ]),
+        ],
+        untitled: [libraryLesson(L3, 'L3', null)],
+      },
+      {
+        id: NAVIGATION,
+        name: 'Navigation',
+        slug: 'navigation',
+        modules: [
+          libraryModule(NAV_MODULE, 'Charts', [
+            libraryLesson(L30, 'L30', NAV_MODULE),
+          ]),
+        ],
+        untitled: [],
+      },
+    ],
+    untitled: [libraryLesson(ORPHAN, 'Orphan', null)],
+  };
+}
 
 describe('resolveDrop — the allowed drops', () => {
   it('links a library lesson into the module it was dropped on', () => {
@@ -753,6 +843,196 @@ describe('resolveDrop — duplicate lessons (own copy and borrowed copy)', () =>
       lessonId: CROSSWINDS,
       fromModuleId: OWN,
       overId: lessonDndId(2, 56),
+    });
+  });
+});
+
+/**
+ * Task 6: library-side drops — filing a library lesson into a discipline
+ * module or Untitled group, reordering discipline modules, and refusing
+ * across-discipline drags. `library` is `resolveDrop`'s 5th argument; every
+ * test below either supplies `libraryFixture()` or deliberately omits it to
+ * prove the "no library, no resolution" rule.
+ */
+describe('resolveDrop — library-side drops', () => {
+  it('files a library lesson into a module over its container', () => {
+    // Spec row: library lesson 1 over libraryContainerDndId(8).
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        libraryContainerDndId(ADVANCED_MODULE),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'library-move',
+      lessonId: L1,
+      disciplineId: WEATHER,
+      disciplineModuleId: ADVANCED_MODULE,
+      overId: libraryContainerDndId(ADVANCED_MODULE),
+    });
+  });
+
+  it('reorders a library lesson against another lesson in the SAME module', () => {
+    // Spec row: library lesson 1 over libraryLessonDndId(2) — L1 and L2 are
+    // both in Basics (7), so this is a reorder, not a transfer.
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        libraryLessonDndId(L2),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'library-move',
+      lessonId: L1,
+      disciplineId: WEATHER,
+      disciplineModuleId: BASICS_MODULE,
+      overId: libraryLessonDndId(L2),
+    });
+  });
+
+  it('files a library lesson into its discipline’s Untitled group', () => {
+    // Spec row: library lesson 1 over libraryUntitledDndId(4).
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        libraryUntitledDndId(WEATHER),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'library-move',
+      lessonId: L1,
+      disciplineId: WEATHER,
+      disciplineModuleId: null,
+      overId: libraryUntitledDndId(WEATHER),
+    });
+  });
+
+  it('refuses a library lesson dragged into another discipline’s module, naming both', () => {
+    // Spec row: library lesson 1 over libraryModuleDndId(20) (Navigation).
+    const result = resolveDrop(
+      board,
+      libraryLessonDndId(L1),
+      libraryModuleDndId(NAV_MODULE),
+      undefined,
+      libraryFixture(),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"L1" is in Weather. Lessons stay in their discipline — file it into one of Weather’s modules, or drop it on a course module to teach it there.',
+    });
+  });
+
+  it('still links a library lesson into a course container, unaffected by the library-side rules', () => {
+    // Spec row: library lesson 1 over a course container — unchanged
+    // behaviour, re-asserted with the library-side fixture in play too.
+    expect(
+      resolveDrop(board, libraryLessonDndId(L1), containerDndId(1, CIRCUITS)),
+    ).toEqual({
+      kind: 'link',
+      moduleId: CIRCUITS,
+      lessonId: L1,
+    });
+  });
+
+  it('reorders a discipline module against another module of the same discipline', () => {
+    // Spec row: library module 7 over libraryModuleDndId(8).
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        libraryModuleDndId(ADVANCED_MODULE),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'reorder-library-module',
+      disciplineId: WEATHER,
+      moduleId: BASICS_MODULE,
+      overModuleId: ADVANCED_MODULE,
+    });
+  });
+
+  it('refuses a discipline module dragged into another discipline’s module, naming both', () => {
+    // Spec row: library module 7 over libraryModuleDndId(20) (Navigation).
+    const result = resolveDrop(
+      board,
+      libraryModuleDndId(BASICS_MODULE),
+      libraryModuleDndId(NAV_MODULE),
+      undefined,
+      libraryFixture(),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Basics" is in Weather. Modules stay in their discipline; it cannot be moved into Navigation.',
+    });
+  });
+
+  it('refuses a discipline module dragged onto a course module', () => {
+    // Spec row: library module 7 over a course module.
+    const result = resolveDrop(
+      board,
+      libraryModuleDndId(BASICS_MODULE),
+      moduleDndId(1, CIRCUITS),
+      undefined,
+      libraryFixture(),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        'A discipline module organises the library; it cannot be added to a course. Drag its lessons into the course instead.',
+    });
+  });
+
+  it('answers null for a library-side over id when no library was supplied', () => {
+    // Spec row: resolveDrop without `library` and a library-side over id.
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        libraryContainerDndId(ADVANCED_MODULE),
+      ),
+    ).toBeNull();
+    // A library-module drag is equally unresolvable without the library.
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        libraryModuleDndId(ADVANCED_MODULE),
+      ),
+    ).toBeNull();
+  });
+
+  /**
+   * Ruling 2: a library lesson found in the ORG-LEVEL `library.untitled`
+   * (no discipline at all, distinct from a discipline's OWN Untitled group)
+   * has no discipline's modules to file it into. Every library-side target
+   * refuses it the same way; its `link` onto a course container is
+   * unaffected (not re-tested here — that path never consults `library`).
+   */
+  it('refuses a library lesson with no discipline dragged onto any library-side target', () => {
+    const result = resolveDrop(
+      board,
+      libraryLessonDndId(ORPHAN),
+      libraryContainerDndId(ADVANCED_MODULE),
+      undefined,
+      libraryFixture(),
+    );
+
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Orphan" has no discipline yet, so there are no modules to file it in. Drag it onto a course module to teach it there.',
     });
   });
 });

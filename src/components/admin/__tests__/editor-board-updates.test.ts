@@ -4,15 +4,26 @@ import type {
   BoardModule,
   LibraryLesson,
   OrgEditorBoard,
+  OrgLibrary,
 } from '#/lib/admin-schemas';
-import { containerDndId, lessonDndId } from '#/lib/dnd-ids';
+import {
+  containerDndId,
+  lessonDndId,
+  libraryContainerDndId,
+  libraryLessonDndId,
+  libraryUntitledDndId,
+} from '#/lib/dnd-ids';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
   lessonNeighbours,
+  libraryLessonNeighbours,
+  libraryModuleNeighbours,
   linkLessonOnBoard,
   moduleNeighbours,
+  moveLessonInLibrary,
   moveLessonOnBoard,
+  reorderLibraryModules,
   reorderModulesOnBoard,
 } from '../editor-board-updates';
 
@@ -364,5 +375,215 @@ describe('commitTransferredLesson', () => {
   it('rolls back when the tracked holder no longer shows the lesson', () => {
     // The preview and the tracking disagree — nothing trustworthy to persist.
     expect(commitTransferredLesson(makeBoard(), 100, 11, true)).toBeNull();
+  });
+});
+
+/**
+ * Task 6's library-side fixture, mirroring `resolve-drop.test.ts`'s: two
+ * disciplines. Weather (4) has modules Basics (7, lessons L1/L2) and
+ * Advanced (8, lesson L6), plus its own Untitled group (L3). Navigation (9)
+ * has one module, 20, holding L30.
+ */
+const libLesson = (
+  id: number,
+  disciplineModuleId: number | null,
+): LibraryLesson => ({
+  id,
+  name: `L${id}`,
+  slug: `ll-${id}`,
+  isConfigured: true,
+  isAvailable: true,
+  courseCount: 0,
+  courseIds: [],
+  videoProvider: null,
+  disciplineModuleId,
+  levels: [],
+  requiredSubscriptions: [],
+  hasDebrief: false,
+  needsVideoWatch: false,
+});
+
+const WEATHER = 4;
+const NAVIGATION = 9;
+const BASICS_MODULE = 7;
+const ADVANCED_MODULE = 8;
+const NAV_MODULE = 20;
+
+const makeLibrary = (): OrgLibrary => ({
+  disciplines: [
+    {
+      id: WEATHER,
+      name: 'Weather',
+      slug: 'weather',
+      modules: [
+        {
+          id: BASICS_MODULE,
+          name: 'Basics',
+          rank: 0,
+          lessons: [libLesson(1, BASICS_MODULE), libLesson(2, BASICS_MODULE)],
+        },
+        {
+          id: ADVANCED_MODULE,
+          name: 'Advanced',
+          rank: 1,
+          lessons: [libLesson(6, ADVANCED_MODULE)],
+        },
+      ],
+      untitled: [libLesson(3, null)],
+    },
+    {
+      id: NAVIGATION,
+      name: 'Navigation',
+      slug: 'navigation',
+      modules: [
+        {
+          id: NAV_MODULE,
+          name: 'Charts',
+          rank: 0,
+          lessons: [libLesson(30, NAV_MODULE)],
+        },
+      ],
+      untitled: [],
+    },
+  ],
+  untitled: [],
+});
+
+const idsInModule = (library: OrgLibrary, moduleId: number) =>
+  library.disciplines
+    .flatMap((d) => d.modules)
+    .find((m) => m.id === moduleId)
+    ?.lessons.map((l) => l.id);
+
+const idsInUntitled = (library: OrgLibrary, disciplineId: number) =>
+  library.disciplines
+    .find((d) => d.id === disciplineId)
+    ?.untitled.map((l) => l.id);
+
+describe('moveLessonInLibrary', () => {
+  it('moves lesson 3 from Untitled into module 8 before lesson 6, updating disciplineModuleId', () => {
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      3,
+      ADVANCED_MODULE,
+      libraryLessonDndId(6),
+    );
+
+    expect(idsInModule(next, ADVANCED_MODULE)).toEqual([3, 6]);
+    expect(idsInUntitled(next, WEATHER)).toEqual([]);
+    const moved = next.disciplines
+      .flatMap((d) => d.modules)
+      .flatMap((m) => m.lessons)
+      .find((l) => l.id === 3);
+    expect(moved?.disciplineModuleId).toBe(ADVANCED_MODULE);
+  });
+
+  it('appends to the target module when dropped on its container', () => {
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      3,
+      ADVANCED_MODULE,
+      libraryContainerDndId(ADVANCED_MODULE),
+    );
+
+    expect(idsInModule(next, ADVANCED_MODULE)).toEqual([6, 3]);
+  });
+
+  it('files a lesson OUT of a module into its discipline’s Untitled group, over the untitled droppable', () => {
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      1,
+      null,
+      libraryUntitledDndId(WEATHER),
+    );
+
+    expect(idsInModule(next, BASICS_MODULE)).toEqual([2]);
+    expect(idsInUntitled(next, WEATHER)).toEqual([3, 1]);
+    const moved = next.disciplines
+      .find((d) => d.id === WEATHER)
+      ?.untitled.find((l) => l.id === 1);
+    expect(moved?.disciplineModuleId).toBeNull();
+  });
+
+  it('reorders within the SAME module, landing in the slot under the pointer', () => {
+    // Mirrors moveLessonOnBoard's own "moving down its own module" case: the
+    // insertion index is read BEFORE the dragged lesson is pulled out.
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      1,
+      BASICS_MODULE,
+      libraryLessonDndId(2),
+    );
+
+    expect(idsInModule(next, BASICS_MODULE)).toEqual([2, 1]);
+  });
+
+  it('leaves the OTHER discipline referentially identical', () => {
+    const library = makeLibrary();
+    const navigation = library.disciplines.find((d) => d.id === NAVIGATION);
+    const next = moveLessonInLibrary(
+      library,
+      3,
+      ADVANCED_MODULE,
+      libraryLessonDndId(6),
+    );
+
+    expect(next.disciplines.find((d) => d.id === NAVIGATION)).toBe(navigation);
+  });
+
+  it('leaves the library it was given untouched', () => {
+    const library = makeLibrary();
+    moveLessonInLibrary(library, 3, ADVANCED_MODULE, libraryLessonDndId(6));
+
+    expect(idsInUntitled(library, WEATHER)).toEqual([3]);
+    expect(idsInModule(library, ADVANCED_MODULE)).toEqual([6]);
+  });
+});
+
+describe('reorderLibraryModules', () => {
+  it('swaps modules within discipline 4 only, leaving discipline 9 alone', () => {
+    const library = makeLibrary();
+    const navigation = library.disciplines.find((d) => d.id === NAVIGATION);
+    const next = reorderLibraryModules(
+      library,
+      WEATHER,
+      ADVANCED_MODULE,
+      BASICS_MODULE,
+    );
+
+    expect(
+      next.disciplines.find((d) => d.id === WEATHER)?.modules.map((m) => m.id),
+    ).toEqual([ADVANCED_MODULE, BASICS_MODULE]);
+    expect(next.disciplines.find((d) => d.id === NAVIGATION)).toBe(navigation);
+  });
+});
+
+describe('the rank anchors sent to the API — library side', () => {
+  it("reads a library lesson's neighbours within its bucket", () => {
+    const library = makeLibrary();
+    expect(libraryLessonNeighbours(library, 2)).toEqual({
+      prevLessonId: 1,
+      nextLessonId: null,
+    });
+    expect(libraryLessonNeighbours(library, 1)).toEqual({
+      prevLessonId: null,
+      nextLessonId: 2,
+    });
+  });
+
+  it("reads a discipline module's neighbours within its own discipline, never across disciplines", () => {
+    const library = makeLibrary();
+    expect(libraryModuleNeighbours(library, WEATHER, ADVANCED_MODULE)).toEqual({
+      prevModuleId: BASICS_MODULE,
+      nextModuleId: null,
+    });
+    expect(libraryModuleNeighbours(library, WEATHER, BASICS_MODULE)).toEqual({
+      prevModuleId: null,
+      nextModuleId: ADVANCED_MODULE,
+    });
   });
 });

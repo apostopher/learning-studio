@@ -4,7 +4,10 @@ import {
   courseDndId,
   disciplineDndId,
   lessonDndId,
+  libraryContainerDndId,
   libraryLessonDndId,
+  libraryModuleDndId,
+  libraryUntitledDndId,
   moduleDndId,
   parseDndId,
 } from '#/lib/dnd-ids';
@@ -44,6 +47,16 @@ describe('dnd id builders', () => {
     expect(disciplineDndId(123)).toBe('discipline-123');
     expect(courseDndId(0)).toBe('course-0');
     expect(courseDndId(123)).toBe('course-123');
+  });
+
+  // Task 6: the three flat library-side kinds — a discipline module, its
+  // lesson container, and a discipline's Untitled group. All three are
+  // already unique across the whole library, with no course to qualify them
+  // by, so they stay single-numbered like `library-lesson`/`discipline`.
+  it('produce the expected prefixed string for each of the three library-side kinds', () => {
+    expect(libraryModuleDndId(7)).toBe('library-module-7');
+    expect(libraryContainerDndId(8)).toBe('library-container-8');
+    expect(libraryUntitledDndId(4)).toBe('library-untitled-4');
   });
 
   it('gives the same module a different id in every course it is shown in', () => {
@@ -112,6 +125,30 @@ describe('parseDndId round-trips', () => {
 
   it('gives a library-lesson id the type "library-lesson", spelled out on its own', () => {
     expect(parseDndId('library-lesson-5')?.type).not.toBe('lesson');
+  });
+
+  it('round-trips the three new library-side kinds as flat kinds', () => {
+    expect(parseDndId(libraryModuleDndId(7))).toEqual({
+      type: 'library-module',
+      id: 7,
+    });
+    expect(parseDndId(libraryContainerDndId(8))).toEqual({
+      type: 'library-container',
+      id: 8,
+    });
+    expect(parseDndId(libraryUntitledDndId(4))).toEqual({
+      type: 'library-untitled',
+      id: 4,
+    });
+  });
+
+  it("parses 'library-module-7' as { type: 'library-module', id: 7 }", () => {
+    // Pinned literally, not just via the builder: catches a rail/flat pattern
+    // regression the same way the library-lesson literal test above does.
+    expect(parseDndId('library-module-7')).toEqual({
+      type: 'library-module',
+      id: 7,
+    });
   });
 });
 
