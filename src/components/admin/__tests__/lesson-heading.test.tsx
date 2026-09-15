@@ -82,6 +82,11 @@ describe('LessonHeading', () => {
     );
     expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.getByLabelText('Lesson name')).toBeTruthy();
+    // The eye sits on the same centre line as Save and Cancel, not pinned
+    // to the top of the taller field row.
+    const row = screen.getByLabelText('Lesson name').closest('form')
+      ?.parentElement as HTMLElement;
+    expect(row.className).toContain('items-center');
     expect(screen.queryByRole('button', { name: 'Rename lesson' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     expect(onSubmit).toHaveBeenCalledOnce();
