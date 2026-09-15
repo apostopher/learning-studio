@@ -53,53 +53,61 @@ export const CourseColumnActions = ({
   onEditCourse: () => void;
   onDeleteCourse: () => void;
 }) => (
-  <div className="flex items-center gap-0.5">
-    {remix && (
-      <Button
-        type="button"
-        disabled={remix.isPending}
-        onClick={remix.isRemixed ? remix.onUnremix : remix.onRemix}
-        aria-label={
-          remix.isPending
-            ? `${remix.isRemixed ? 'Un-remixing' : 'Remixing'} ${remix.sourceName}…`
-            : remix.isRemixed
-              ? `Un-remix ${remix.sourceName} from ${courseName}`
-              : `Remix ${remix.sourceName} into ${courseName}`
-        }
-        className={cn(
-          'me-1 inline-flex h-7 items-center gap-1.5 rounded-md px-2 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-60',
-          remix.isRemixed
-            ? 'bg-apple-3 text-apple-text hover:bg-apple-4'
-            : 'bg-gray-3 text-secondary hover:bg-gray-4 hover:text-primary',
-        )}
-      >
-        {remix.isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-        ) : (
-          <Shuffle className="h-3.5 w-3.5" aria-hidden="true" />
-        )}
-        {remix.isRemixed ? 'Un-remix' : 'Remix'} {remix.sourceName}
-      </Button>
-    )}
-    <TooltipIconButton
-      label={`Add a module to ${courseName}`}
-      onClick={onAddModule}
-    >
-      <Plus className="h-4 w-4" aria-hidden="true" />
-    </TooltipIconButton>
-    {canEditCourse && (
-      <TooltipIconButton label={`Edit ${courseName}`} onClick={onEditCourse}>
-        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-      </TooltipIconButton>
-    )}
-    {canDeleteCourse && (
+  // Two groups pushed apart: the remix control reads as a course-level
+  // statement ("this course borrows from X") and sits at the far start; the
+  // icon actions keep the far end. `w-full` so the parent's justify-end
+  // cannot pull the whole bar right.
+  <div className="flex w-full items-center justify-between gap-2">
+    <div className="flex items-center">
+      {remix && (
+        <Button
+          type="button"
+          disabled={remix.isPending}
+          onClick={remix.isRemixed ? remix.onUnremix : remix.onRemix}
+          aria-label={
+            remix.isPending
+              ? `${remix.isRemixed ? 'Un-remixing' : 'Remixing'} ${remix.sourceName}…`
+              : remix.isRemixed
+                ? `Un-remix ${remix.sourceName} from ${courseName}`
+                : `Remix ${remix.sourceName} into ${courseName}`
+          }
+          className={cn(
+            'inline-flex h-7 items-center gap-1.5 rounded-md px-2 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-60',
+            remix.isRemixed
+              ? 'bg-apple-3 text-apple-text hover:bg-apple-4'
+              : 'bg-gray-3 text-secondary hover:bg-gray-4 hover:text-primary',
+          )}
+        >
+          {remix.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Shuffle className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {remix.isRemixed ? 'Un-remix' : 'Remix'} {remix.sourceName}
+        </Button>
+      )}
+    </div>
+    <div className="flex items-center gap-0.5">
       <TooltipIconButton
-        label={`Delete ${courseName}`}
-        variant="danger"
-        onClick={onDeleteCourse}
+        label={`Add a module to ${courseName}`}
+        onClick={onAddModule}
       >
-        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        <Plus className="h-4 w-4" aria-hidden="true" />
       </TooltipIconButton>
-    )}
+      {canEditCourse && (
+        <TooltipIconButton label={`Edit ${courseName}`} onClick={onEditCourse}>
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+        </TooltipIconButton>
+      )}
+      {canDeleteCourse && (
+        <TooltipIconButton
+          label={`Delete ${courseName}`}
+          variant="danger"
+          onClick={onDeleteCourse}
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        </TooltipIconButton>
+      )}
+    </div>
   </div>
 );

@@ -156,6 +156,13 @@ describe('remix button', () => {
     expect(buttons[0].getAttribute('aria-label')).toBe(
       'Remix 3D Airmanship into 2 Week Intensive',
     );
+    // Far start, with the icon actions pushed to the far end: the bar is a
+    // full-width justify-between of two groups, and the remix control is
+    // alone in the first. Mutant: one flat group with the icons beside it.
+    const bar = buttons[0].parentElement?.parentElement as HTMLElement;
+    expect(bar.className).toContain('justify-between');
+    expect(bar.className).toContain('w-full');
+    expect(buttons[0].parentElement?.childElementCount).toBe(1);
     expect(buttons[0].textContent).toContain('Remix 3D Airmanship');
     fireEvent.click(buttons[0]);
     expect(onRemix).toHaveBeenCalledOnce();
