@@ -26,7 +26,7 @@ export const LessonLibrary = ({
   <section className="flex h-full flex-col bg-gray-2">
     <header className="flex items-center justify-between gap-2 border-gray-6 border-b bg-gray-1 px-4 py-3">
       <h2 className="font-semibold text-primary text-sm uppercase tracking-wide">
-        Library
+        Disciplines
       </h2>
       {headerAction}
     </header>

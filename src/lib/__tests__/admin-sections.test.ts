@@ -23,10 +23,10 @@ describe('admin section order and default', () => {
    * lives. Pinned as a whole rather than "schedule comes after people", so
    * inserting a section in the wrong slot is what goes red.
    */
-  it('reads knowledge library, 3D airmanship, schedule, people', () => {
+  it('reads knowledge library, courses, schedule, people', () => {
     expect(ADMIN_SECTION_IDS).toEqual([
       'knowledge-library',
-      '3d-airmanship',
+      'courses',
       'schedule',
       'people',
     ]);
@@ -144,7 +144,7 @@ describe('adminSectionGates', () => {
    * (the schedule's condition, copied) — the SME loses the one screen built
    * for them while every endpoint behind it serves them happily.
    */
-  it('gives the library and 3D airmanship to everyone the shell admits', () => {
+  it('gives the library to everyone the shell admits', () => {
     for (const admitted of [
       { isStaffAnywhere: true },
       { isStaffAnywhere: true, isCourseStaffAnywhere: true },
@@ -152,8 +152,30 @@ describe('adminSectionGates', () => {
     ]) {
       const gates = context(admitted);
       expect(gates[DEFAULT_ADMIN_SECTION]).toBe(true);
-      expect(gates['3d-airmanship']).toBe(true);
     }
+  });
+
+  /**
+   * Courses reads the same endpoint the schedule's rail does, so it opens
+   * for exactly the same actors — and NOT for a discipline-only SME, who
+   * would see an empty grid. Mutant: `courses` gated on the library's
+   * condition (the retired placeholder's gate).
+   */
+  it('gives courses to whoever the schedule is given to, and to no one else', () => {
+    for (const ctx of [
+      { isStaffAnywhere: true },
+      { isStaffAnywhere: true, isCourseStaffAnywhere: true },
+      { roles: ['admin'], permissions: ['course:read'] },
+      { roles: ['admin'] },
+      {},
+    ]) {
+      const gates = context(ctx);
+      expect(gates.courses, JSON.stringify(ctx)).toBe(gates.schedule);
+    }
+    expect(context({ isStaffAnywhere: true }).courses).toBe(false);
+    expect(
+      context({ isStaffAnywhere: true, isCourseStaffAnywhere: true }).courses,
+    ).toBe(true);
   });
 
   /**
@@ -176,15 +198,20 @@ describe('adminSectionGates', () => {
 
 describe('visibleAdminSections', () => {
   it('keeps nav order and drops what is closed', () => {
-    const sections = visibleAdminSections(context({ isStaffAnywhere: true }));
+    // Course staff: library, courses and schedule open; people closed.
+    const sections = visibleAdminSections(
+      context({ isStaffAnywhere: true, isCourseStaffAnywhere: true }),
+    );
 
     expect(sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      '3d-airmanship',
+      'courses',
+      'schedule',
     ]);
     expect(sections.map((s) => s.label)).toEqual([
       'Knowledge library',
-      '3D airmanship',
+      'Courses',
+      'Schedule',
     ]);
   });
 

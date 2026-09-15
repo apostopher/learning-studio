@@ -25,6 +25,9 @@ vi.mock('#/components/admin/schedule/schedule-page-container', () => ({
     return <div data-testid="schedule" />;
   },
 }));
+vi.mock('#/components/admin/courses-section-container', () => ({
+  CoursesSectionContainer: () => <div data-testid="courses" />,
+}));
 vi.mock('#/components/admin/users/users-page-container', () => ({
   UsersPageContainer: (props: Record<string, unknown>) => {
     m.users(props);
@@ -161,13 +164,10 @@ describe('/admin — which section renders', () => {
     expect(screen.queryByTestId('org-editor')).toBeNull();
   });
 
-  it('renders the 3D airmanship placeholder at ?section=3d-airmanship', async () => {
-    await mountSection('3d-airmanship');
+  it('renders the Courses screen at ?section=courses', async () => {
+    await mountSection('courses');
 
-    // It says it is unbuilt rather than rendering an empty shell: every other
-    // section can be empty because of what the actor may see, so "nothing
-    // here" without a reason reads as a permissions problem.
-    expect(await screen.findByText('Not built yet')).toBeDefined();
+    expect(await screen.findByTestId('courses')).toBeDefined();
     expect(screen.queryByTestId('org-editor')).toBeNull();
   });
 });
@@ -374,7 +374,7 @@ describe('/admin — priming People', () => {
   it('primes nothing for the sections that never read it', () => {
     expect(prime('schedule')).not.toHaveBeenCalled();
     expect(prime('knowledge-library')).not.toHaveBeenCalled();
-    expect(prime('3d-airmanship')).not.toHaveBeenCalled();
+    expect(prime('courses')).not.toHaveBeenCalled();
   });
 });
 
@@ -439,10 +439,13 @@ describe('/admin — entering a section by URL', () => {
     );
   });
 
-  it('admits everyone the shell admits to 3D airmanship', () => {
-    expect(enter('3d-airmanship', { isStaffAnywhere: true })).toBe('allowed');
+  it('admits course staff and course readers to courses, and turns a discipline-only SME back', () => {
+    expect(enter('courses', { isCourseStaffAnywhere: true })).toBe('allowed');
+    expect(enter('courses', { isStaffAnywhere: true })).toBe(
+      '/admin?section=knowledge-library',
+    );
     // And withholds it from someone with no standing — the shell turns them
     // away first, but this must not be the thing that would have let them in.
-    expect(enter('3d-airmanship', {})).toBe('/admin?section=knowledge-library');
+    expect(enter('courses', {})).toBe('/admin?section=knowledge-library');
   });
 });

@@ -93,7 +93,7 @@ describe('/admin shell nav', () => {
    * Mutant seen RED: the shell filtering on `isStaffAnywhere` alone, which
    * hands a discipline-only SME a Schedule link to an empty board.
    */
-  it('offers a discipline-only SME the library and 3D airmanship, and no more', async () => {
+  it('offers a discipline-only SME the library and no more', async () => {
     const props = await navProps({
       roles: [],
       permissions: [],
@@ -101,10 +101,9 @@ describe('/admin shell nav', () => {
       isCourseStaffAnywhere: false,
     });
 
-    expect(props.sections.map((s) => s.id)).toEqual([
-      'knowledge-library',
-      '3d-airmanship',
-    ]);
+    // Not Courses: they staff no course, so the catalogue would be empty
+    // for them — same reason the schedule is withheld.
+    expect(props.sections.map((s) => s.id)).toEqual(['knowledge-library']);
   });
 
   it('offers an admin every section, in nav order', async () => {
@@ -117,7 +116,7 @@ describe('/admin shell nav', () => {
 
     expect(props.sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      '3d-airmanship',
+      'courses',
       'schedule',
       'people',
     ]);
@@ -131,7 +130,7 @@ describe('/admin shell nav', () => {
 
     expect(props.sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      '3d-airmanship',
+      'courses',
       'schedule',
     ]);
   });

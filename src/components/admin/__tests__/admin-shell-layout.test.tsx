@@ -32,7 +32,7 @@ vi.mock('../../../styles/theme.generated', () => ({
 /** Every section, in nav order — what an admin is offered. */
 const ALL = visibleAdminSections({
   'knowledge-library': true,
-  '3d-airmanship': true,
+  courses: true,
   schedule: true,
   people: true,
 });
@@ -139,12 +139,12 @@ describe('AdminShellLayout', () => {
    * `admin-sections.test.ts` pins the order itself. This is the test that goes
    * red if the layout sorts, groups or reverses them on the way out.
    */
-  it('reads knowledge library, 3D airmanship, schedule, people — in that order', async () => {
+  it('reads knowledge library, courses, schedule, people — in that order', async () => {
     await renderAdmin();
 
     expect(navLinks().map((a) => a.textContent?.trim())).toEqual([
       'Knowledge library',
-      '3D airmanship',
+      'Courses',
       'Schedule',
       'People',
     ]);
@@ -165,7 +165,7 @@ describe('AdminShellLayout', () => {
 
     expect(navLinks().map((a) => a.getAttribute('href'))).toEqual([
       '/admin?section=knowledge-library',
-      '/admin?section=3d-airmanship',
+      '/admin?section=courses',
       '/admin?section=schedule',
       '/admin?section=people',
     ]);
@@ -263,13 +263,13 @@ describe('AdminShellLayout', () => {
    * Mutant this catches: either link being restored as part of "adding back" a
    * nav item someone assumes went missing.
    */
-  it('offers no Courses or Disciplines link — both are the library now', async () => {
+  it('offers no Disciplines link — disciplines are the library now; Courses is the catalogue of course editors', async () => {
     await renderAdmin();
 
-    expect(screen.queryByRole('link', { name: 'Courses' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Disciplines' })).toBeNull();
     expect(
       screen.getByRole('link', { name: 'Knowledge library' }),
     ).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Courses' })).toBeDefined();
   });
 });

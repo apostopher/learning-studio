@@ -17,7 +17,7 @@ import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
  */
 export const ADMIN_SECTION_IDS = [
   'knowledge-library',
-  '3d-airmanship',
+  'courses',
   'schedule',
   'people',
 ] as const;
@@ -35,7 +35,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
   // a nav item sharing the name would read as a link to the pane rather than
   // to the screen holding it.
   'knowledge-library': 'Knowledge library',
-  '3d-airmanship': '3D airmanship',
+  courses: 'Courses',
   schedule: 'Schedule',
   people: 'People',
 };
@@ -116,22 +116,22 @@ export function adminSectionGates(
 
   // `course:read` covers the whole catalogue; a staff-only actor holds no such
   // grant but still gets their own courses back from the same endpoint. So the
-  // condition is "the board has content for you", not one permission.
+  // condition is "the list has content for you", not one permission. Shared
+  // by the Courses screen and the schedule, which read that one endpoint.
   //
   // Course staffing specifically: a discipline-only SME is inside this shell
   // but staffs no course, so the board would come back empty for them.
-  const schedule =
+  const courseCatalogue =
     hasOrgPermission(roles, permissions, 'course', 'read') ||
     isCourseStaffAnywhere;
 
   return {
     'knowledge-library': knowledgeLibrary,
-    // A placeholder with no data behind it, so there is nothing that could
-    // come back empty for anyone: the honest condition is the one that
-    // admitted the actor to the shell. It gets a gate of its own when it gets
-    // content.
-    '3d-airmanship': knowledgeLibrary,
-    schedule,
+    // The Courses screen reads the same endpoint the schedule's rail does,
+    // so it has the same "the list has content for you" condition — a
+    // discipline-only SME would otherwise open it to an empty grid.
+    courses: courseCatalogue,
+    schedule: courseCatalogue,
     // `hasOrgPermission`, not the bare grant: `GET /api/admin/users` goes
     // through `requirePermission`, which refuses anyone who is not admin or
     // owner before it looks at a grant. Gated on the grant alone, an owner

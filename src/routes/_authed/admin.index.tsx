@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useQueryState } from 'nuqs';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
-import { AirmanshipPlaceholder } from '#/components/admin/airmanship-placeholder';
+import { CoursesSectionContainer } from '#/components/admin/courses-section-container';
 import { EditorContainer } from '#/components/admin/editor-container';
 import { SchedulePageContainer } from '#/components/admin/schedule/schedule-page-container';
 import { UsersPageContainer } from '#/components/admin/users/users-page-container';
@@ -115,7 +115,7 @@ function AdminSectionScreen() {
   // admitted.
   const [section] = useQueryState('section', adminSectionParser);
 
-  if (section === '3d-airmanship') return <AirmanshipPlaceholder />;
+  if (section === 'courses') return <CoursesSectionContainer />;
 
   if (section === 'schedule') {
     return (
