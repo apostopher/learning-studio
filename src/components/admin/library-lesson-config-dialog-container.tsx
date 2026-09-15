@@ -4,6 +4,7 @@ import { editLibraryLessonIdAtom, resetVideoSectionAtom } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { LibraryDetailsSectionContainer } from './lesson-config/library-details-section-container';
+import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
 import {
@@ -89,6 +90,10 @@ export const LibraryLessonConfigDialogContainer = () => {
           />
           <MaterialSectionContainer key={lesson.id} lesson={lesson} />
         </div>
+      ),
+      // Pinned under the tabs so it never scrolls away with the material.
+      sidebarFooter: lesson && (
+        <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
       ),
     },
   ];

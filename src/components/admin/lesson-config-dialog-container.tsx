@@ -3,6 +3,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { configureLessonIdAtom, resetVideoSectionAtom } from '@/atoms/admin';
 import type { BoardModule } from '@/lib/admin-schemas';
 import { ConfigSectionContainer } from './lesson-config/config-section-container';
+import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
 import {
@@ -47,6 +48,10 @@ export const LessonConfigDialogContainer = ({
           />
           <MaterialSectionContainer key={lesson.id} lesson={lesson} />
         </div>
+      ),
+      // Pinned under the tabs so it never scrolls away with the material.
+      sidebarFooter: lesson && (
+        <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
       ),
     },
     {

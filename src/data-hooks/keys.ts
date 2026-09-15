@@ -50,6 +50,9 @@ export const dataKeys = {
   allLessonPosters: () => ['admin', 'lesson-posters'] as const,
   lessonPosters: (courseId: number) =>
     [...dataKeys.allLessonPosters(), courseId] as const,
+  /** Mutation key for saving material — read by the sidebar's Save button via `useIsMutating`. */
+  lessonMaterialSave: (lessonId: number) =>
+    ['admin', 'lesson-material-save', lessonId] as const,
   lessonMaterial: (lessonId: number) =>
     ['admin', 'lesson-material', lessonId] as const,
   courseEmbeddings: (courseId: number) =>

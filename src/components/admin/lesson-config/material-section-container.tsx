@@ -7,6 +7,7 @@ import type { LessonMaterialGeneration } from '#/types';
 import { LessonMaterialGenerationSchema } from '#/types';
 import { AttachmentsList } from './attachments-list';
 import { MaterialForm } from './material-form';
+import { lessonMaterialFormId } from './material-form-id';
 import { MaterialUpload } from './material-upload';
 
 const EMPTY: LessonMaterialGeneration = {
@@ -90,11 +91,11 @@ export const MaterialSectionContainer = ({
       />
       <AttachmentsList attachments={attachments} />
       <MaterialForm
+        formId={lessonMaterialFormId(lesson.id)}
         register={form.register}
         control={form.control}
         errors={form.formState.errors}
         onSubmit={onSubmit}
-        isSaving={save.isPending}
         saveError={save.error?.message}
       />
     </div>

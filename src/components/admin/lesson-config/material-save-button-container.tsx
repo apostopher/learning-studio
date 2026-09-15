@@ -1,0 +1,29 @@
+import { useIsMutating } from '@tanstack/react-query';
+import { dataKeys } from '#/data-hooks/keys';
+import { lessonMaterialFormId } from './material-form-id';
+import { MaterialSaveButton } from './material-save-button';
+
+/**
+ * The sidebar's Save button for a lesson's material.
+ *
+ * It does not own the mutation — `MaterialSectionContainer` does, inside the
+ * panel, and the button reaches that form through its id. What it needs from
+ * the mutation is only whether one is in flight, which `useIsMutating` reads
+ * off the mutation KEY the save hook registers — so two components can agree
+ * on "saving" without threading state between panel and sidebar.
+ */
+export const MaterialSaveButtonContainer = ({
+  lessonId,
+}: {
+  lessonId: number;
+}) => {
+  const saving = useIsMutating({
+    mutationKey: dataKeys.lessonMaterialSave(lessonId),
+  });
+  return (
+    <MaterialSaveButton
+      formId={lessonMaterialFormId(lessonId)}
+      isSaving={saving > 0}
+    />
+  );
+};

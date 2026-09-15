@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createStore, Provider } from 'jotai';
+import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 // ScrollArea carries hooks; react-compiler nulls the dispatcher for this
@@ -12,6 +14,11 @@ vi.mock('#/components/scroll-area', () => ({
 }));
 
 import { SectionedConfigModal } from '../sectioned-config-modal';
+
+/** A fresh jotai store per render: the open tab is remembered in an atom. */
+function renderIsolated(ui: ReactElement) {
+  return render(<Provider store={createStore()}>{ui}</Provider>);
+}
 
 const sections = [
   { value: 'video', title: 'Video', content: <p>video body</p> },
@@ -27,7 +34,7 @@ function selectedTab(): string | undefined {
 
 describe('SectionedConfigModal default section', () => {
   it('opens on the first section when none is named', () => {
-    render(
+    renderIsolated(
       <SectionedConfigModal
         open
         onOpenChange={() => {}}
@@ -45,7 +52,7 @@ describe('SectionedConfigModal default section', () => {
    * keeps `sections[0]`), which compiles and passes the test above.
    */
   it('opens on the named section, leaving the tab order alone', () => {
-    render(
+    renderIsolated(
       <SectionedConfigModal
         open
         onOpenChange={() => {}}
@@ -64,8 +71,49 @@ describe('SectionedConfigModal default section', () => {
     ]);
   });
 
+  /**
+   * Mutant this catches: rendering every section's footer at once, or none —
+   * the footer is the ACTIVE section's primary action, pinned under the tab
+   * list so it stays visible however far the panel scrolls.
+   */
+  it('pins only the active section’s sidebar footer under the tab list, and follows the tab', () => {
+    renderIsolated(
+      <SectionedConfigModal
+        open
+        onOpenChange={() => {}}
+        title="Configure lesson"
+        heading="Preflight"
+        sections={[
+          { value: 'video', title: 'Video', content: <p>video body</p> },
+          {
+            value: 'material',
+            title: 'Content',
+            content: <p>content body</p>,
+            sidebarFooter: <button type="button">Save material</button>,
+          },
+          {
+            value: 'config',
+            title: 'Config',
+            content: <p>config body</p>,
+            sidebarFooter: <button type="button">Save config</button>,
+          },
+        ]}
+        defaultSection="material"
+      />,
+    );
+    const footer = screen.getByRole('button', { name: 'Save material' });
+    expect(screen.queryByRole('button', { name: 'Save config' })).toBeNull();
+    // It sits in the sidebar column, not inside the scrolling panel.
+    expect(footer.closest('[data-sidebar]')).toBeTruthy();
+    expect(footer.closest('[role="tabpanel"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Config' }));
+    expect(screen.getByRole('button', { name: 'Save config' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save material' })).toBeNull();
+  });
+
   it('falls back to the first section when the named one does not exist', () => {
-    render(
+    renderIsolated(
       <SectionedConfigModal
         open
         onOpenChange={() => {}}

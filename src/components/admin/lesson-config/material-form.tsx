@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react';
 import type { FormEventHandler } from 'react';
 import {
   type Control,
@@ -19,26 +18,33 @@ const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
  * Presentational body of the material edit form. Prose fields (text, proTips,
  * assignments) and key points use RichTextEditor via Controller; jobOfTheDay is
  * a plain URL input; quiz keeps its control and links use LinkListField
- * (name + URL per row). The container owns
- * useForm and submission.
+ * (name + URL per row). The container owns useForm and submission; the
+ * Save button lives in the modal's sidebar (`MaterialSaveButton`) and reaches
+ * this form by id.
  */
 export const MaterialForm = ({
+  formId,
   register,
   control,
   errors,
   onSubmit,
-  isSaving,
   saveError,
 }: {
+  /**
+   * The form's DOM id — its Save button is not a child of this form but
+   * sits in the modal's sidebar and submits it by `form={formId}`
+   * (`MaterialSaveButton`), so that it stays visible however far this
+   * form scrolls.
+   */
+  formId: string;
   register: UseFormRegister<LessonMaterialGeneration>;
   control: Control<LessonMaterialGeneration>;
   errors: FieldErrors<LessonMaterialGeneration>;
   onSubmit: FormEventHandler<HTMLFormElement>;
-  isSaving: boolean;
   saveError?: string;
 }) => {
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-6">
+    <form id={formId} onSubmit={onSubmit} className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <span className={labelCls}>Text</span>
         <Controller
@@ -148,17 +154,6 @@ export const MaterialForm = ({
           {saveError}
         </p>
       )}
-
-      <button
-        type="submit"
-        disabled={isSaving}
-        className="inline-flex w-fit items-center gap-2 rounded-md bg-apple-9 px-4 py-2 font-medium text-apple-contrast text-sm transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
-      >
-        {isSaving && (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        )}
-        Save material
-      </button>
     </form>
   );
 };

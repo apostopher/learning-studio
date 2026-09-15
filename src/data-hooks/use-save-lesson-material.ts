@@ -6,6 +6,9 @@ import { dataKeys } from './keys';
 export function useSaveLessonMaterial(lessonId: number) {
   const queryClient = useQueryClient();
   return useMutation<unknown, Error, LessonMaterialGeneration>({
+    // Keyed so the sidebar's Save button can read "in flight" with
+    // `useIsMutating` without holding this mutation itself.
+    mutationKey: dataKeys.lessonMaterialSave(lessonId),
     mutationFn: async (values) => {
       const res = await fetch(`/api/admin/lessons/${lessonId}/material`, {
         method: 'POST',

@@ -266,6 +266,16 @@ export const videoDraftDetectionAtom = atom<{
 export const videoPlaybackForbiddenLessonIdAtom = atom<number | null>(null);
 
 /**
+ * The open tab of the sectioned config modal (`SectionedConfigModal`), by
+ * section value. One atom, not one per dialog: only one such modal is open
+ * at a time, and a value that names no section of the dialog now open is
+ * ignored in favour of that dialog's default — so the lesson dialog leaving
+ * "material" selected does not strand the course dialog, which has no such
+ * tab, on nothing.
+ */
+export const configModalSectionAtom = atom<string | null>(null);
+
+/**
  * Clear the video block's transient state. Called when a lesson dialog
  * closes, so reopening the same lesson starts clean rather than carrying a
  * stale URL detection or a dead-key verdict across.

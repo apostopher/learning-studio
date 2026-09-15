@@ -1,7 +1,9 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { Tabs } from '@base-ui/react/tabs';
+import { useAtom } from 'jotai';
 import { X } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
+import { configModalSectionAtom } from '#/atoms/admin';
 import { ScrollArea } from '#/components/scroll-area';
 
 export interface ConfigModalSection {
@@ -28,6 +30,13 @@ export interface ConfigModalSection {
   fill?: boolean;
   /** Panel body, rendered in the main area when this section is active. */
   content: ReactNode;
+  /**
+   * Pinned under the tab list while this section is active — the place for
+   * the section's primary action (a Save button), so it stays in view however
+   * far the panel scrolls. The section keeps its own form; a button here
+   * reaches it through the `form` attribute.
+   */
+  sidebarFooter?: ReactNode;
 }
 
 interface SectionedConfigModalProps {
@@ -71,6 +80,16 @@ export const SectionedConfigModal = ({
   const firstValue =
     sections.find((section) => section.value === defaultSection)?.value ??
     sections[0]?.value;
+  // Which tab is open, held in an atom (jotai, per the project's state rule;
+  // and this shell is rendered by tests, where a first-party React hook
+  // trips the compiler's dispatcher) so the sidebar can pin the ACTIVE
+  // section's footer — Base UI would otherwise keep the choice to itself. A
+  // remembered value that names no section of THIS dialog falls back to its
+  // default, so one atom serves every dialog without stranding any of them.
+  const [chosenValue, setChosenValue] = useAtom(configModalSectionAtom);
+  const active =
+    sections.find((section) => section.value === chosenValue) ??
+    sections.find((section) => section.value === firstValue);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -91,22 +110,33 @@ export const SectionedConfigModal = ({
 
           {firstValue && (
             <Tabs.Root
-              defaultValue={firstValue}
+              value={active?.value}
+              onValueChange={(value) => setChosenValue(String(value))}
               orientation="vertical"
               style={{ gridTemplateColumns: `${sidebarWidth} minmax(0, 1fr)` }}
               className="grid min-h-0"
             >
-              <Tabs.List className="flex min-h-0 flex-col overflow-y-auto border-gray-6 border-e bg-gray-1">
-                {sections.map((section) => (
-                  <Tabs.Tab
-                    key={section.value}
-                    value={section.value}
-                    className="border-gray-6 border-b px-4 py-3 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
-                  >
-                    {section.title}
-                  </Tabs.Tab>
-                ))}
-              </Tabs.List>
+              <div
+                data-sidebar
+                className="flex min-h-0 flex-col border-gray-6 border-e bg-gray-1"
+              >
+                <Tabs.List className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                  {sections.map((section) => (
+                    <Tabs.Tab
+                      key={section.value}
+                      value={section.value}
+                      className="border-gray-6 border-b px-4 py-3 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
+                    >
+                      {section.title}
+                    </Tabs.Tab>
+                  ))}
+                </Tabs.List>
+                {active?.sidebarFooter && (
+                  <div className="border-gray-6 border-t p-4">
+                    {active.sidebarFooter}
+                  </div>
+                )}
+              </div>
 
               {/*
                 Both panel groups occupy the same grid cell; Base UI hides
