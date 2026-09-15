@@ -58,6 +58,29 @@ export const deleteDisciplineTargetAtom = atom<{
 } | null>(null);
 
 /**
+ * Open discipline-module accordions in the library pane — a sibling of
+ * `expandedEditorModuleIdsAtom`, not the same list: discipline module ids
+ * and course module ids come from different tables and would collide.
+ */
+export const expandedLibraryModuleIdsAtom = atom<number[]>([]);
+/** The discipline getting a new module, or null. */
+export const createDisciplineModuleTargetAtom = atom<{
+  disciplineId: number;
+  disciplineName: string;
+} | null>(null);
+/** The discipline module being renamed, or null. */
+export const renameDisciplineModuleTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+/** The discipline module pending deletion; `lessonCount` is what the confirm quotes. */
+export const deleteDisciplineModuleTargetAtom = atom<{
+  id: number;
+  name: string;
+  lessonCount: number;
+} | null>(null);
+
+/**
  * The library lesson being edited from `/admin/editor`, or null.
  *
  * Distinct from `configureLessonIdAtom`, which drives the per-course configure

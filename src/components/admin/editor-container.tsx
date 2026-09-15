@@ -50,9 +50,11 @@ import { inlineDirSign } from '#/lib/inline-direction';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
+import { CreateDisciplineModuleDialogContainer } from './create-discipline-module-dialog-container';
 import { CreateLibraryLessonDialogContainer } from './create-library-lesson-dialog-container';
 import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { DeleteDisciplineDialogContainer } from './delete-discipline-dialog-container';
+import { DeleteDisciplineModuleDialogContainer } from './delete-discipline-module-dialog-container';
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import {
   DisciplineColumnContainer,
@@ -85,6 +87,7 @@ import { LibraryLessonCard } from './library-lesson-card';
 import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dialog-container';
 import { ModuleAccordionItem } from './module-accordion-item';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
+import { RenameDisciplineModuleDialogContainer } from './rename-discipline-module-dialog-container';
 import { type DragOrigin, resolveDrop } from './resolve-drop';
 import { UnremixCourseDialogContainer } from './unremix-course-dialog-container';
 
@@ -824,7 +827,7 @@ export const EditorContainer = ({
               <DisciplineColumnContainer
                 disciplineId={UNTITLED_DISCIPLINE_ID}
                 name="Untitled"
-                lessons={library.untitled}
+                discipline={{ modules: [], untitled: library.untitled }}
               />
             )}
             {library.disciplines.map((discipline) => (
@@ -832,7 +835,7 @@ export const EditorContainer = ({
                 key={discipline.id}
                 disciplineId={discipline.id}
                 name={discipline.name}
-                lessons={disciplineLessons(discipline)}
+                discipline={discipline}
                 canManageDisciplines={capabilities.canManageDisciplines}
               />
             ))}
@@ -955,6 +958,14 @@ export const EditorContainer = ({
       />
       <RenameDisciplineDialogContainer />
       <DeleteDisciplineDialogContainer />
+      {/*
+        The three discipline-MODULE dialogs, mounted once for the same
+        reason as the discipline ones above — each is driven by an atom
+        naming the module (or discipline) that opened it.
+      */}
+      <CreateDisciplineModuleDialogContainer />
+      <RenameDisciplineModuleDialogContainer />
+      <DeleteDisciplineModuleDialogContainer />
     </DndContext>
   );
 };

@@ -3,13 +3,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { describe, expect, it, vi } from 'vitest';
 
-// dnd-kit needs a DndContext ancestor; the card's draggable wiring is not what
+// dnd-kit needs a DndContext ancestor; the card's sortable wiring is not what
 // this suite is about.
-vi.mock('@dnd-kit/core', () => ({
-  useDraggable: () => ({
+vi.mock('@dnd-kit/sortable', () => ({
+  useSortable: () => ({
     attributes: {},
     listeners: {},
     setNodeRef: () => {},
+    transform: null,
+    transition: undefined,
+    isSorting: false,
     isDragging: false,
   }),
 }));

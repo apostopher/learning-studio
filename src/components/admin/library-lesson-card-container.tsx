@@ -1,4 +1,5 @@
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { editLibraryLessonIdAtom } from '#/atoms/admin';
 import type { LibraryLesson } from '#/lib/admin-schemas';
@@ -7,12 +8,14 @@ import { libraryLessonDndId } from '#/lib/dnd-ids';
 import { LibraryLessonCard } from './library-lesson-card';
 
 /**
- * A library lesson made draggable inside the editor's shared DndContext.
+ * A library lesson made sortable inside the editor's shared DndContext.
  *
- * `useDraggable`, not `useSortable`: the library is a source list, not a
- * sortable one. Registering these cards as droppables too would make one
- * library card a legal target for another and put a meaningless drop on the
- * board that the whitelist would then have to explain away.
+ * `useSortable`, not `useDraggable`: a discipline's lessons now have an order
+ * within their module (or Untitled), so this card must also be a droppable
+ * among its siblings — the same double duty `EditorLessonCardContainer` and
+ * `LibraryModuleContainer` carry. Dragging one into a course still LINKS it
+ * rather than moving a placement; `resolveDrop` tells the two apart by where
+ * the drop lands, not by how the drag started.
  */
 export const LibraryLessonCardContainer = ({
   lesson,
@@ -27,14 +30,34 @@ export const LibraryLessonCardContainer = ({
    */
   disciplineId: number;
 }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isSorting,
+    isDragging,
+  } = useSortable({
     id: libraryLessonDndId(lesson.id),
-    data: { type: 'library-lesson', lessonId: lesson.id, disciplineId },
+    data: {
+      type: 'library-lesson',
+      lessonId: lesson.id,
+      disciplineId,
+      disciplineModuleId: lesson.disciplineModuleId,
+    },
   });
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
 
   return (
-    <div ref={setNodeRef} className={cn(isDragging && 'opacity-40')}>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: isSorting ? transition : undefined,
+      }}
+      className={cn(isDragging && 'opacity-40')}
+    >
       <LibraryLessonCard
         lesson={lesson}
         dragHandleProps={{ ...attributes, ...listeners }}

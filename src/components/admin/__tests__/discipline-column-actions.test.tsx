@@ -21,15 +21,18 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 
 import { DisciplineColumnActions } from '../discipline-column-actions';
 
-function renderActions(overrides: { canManage?: boolean } = {}) {
+function renderActions(
+  overrides: { canManage?: boolean; onAddModule?: () => void } = {},
+) {
   const handlers = {
+    onAddModule: overrides.onAddModule ?? vi.fn(),
     onAddLesson: vi.fn(),
     onRename: vi.fn(),
     onDelete: vi.fn(),
   };
   render(
     <DisciplineColumnActions
-      disciplineName="Aerobatics"
+      disciplineName="Weather"
       canManage={overrides.canManage ?? true}
       {...handlers}
     />,
@@ -44,14 +47,10 @@ describe('DisciplineColumnActions', () => {
     // screen-reader user nothing about WHICH column is about to be deleted.
     renderActions();
     expect(
-      screen.getByRole('button', { name: 'Add a lesson to Aerobatics' }),
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Edit Aerobatics' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Delete Aerobatics' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit Weather' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete Weather' })).toBeTruthy();
   });
 
   it('calls each handler from its own button', () => {
@@ -61,17 +60,17 @@ describe('DisciplineColumnActions', () => {
     const handlers = renderActions();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Add a lesson to Aerobatics' }),
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
     );
     expect(handlers.onAddLesson).toHaveBeenCalledTimes(1);
     expect(handlers.onRename).not.toHaveBeenCalled();
     expect(handlers.onDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Aerobatics' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Weather' }));
     expect(handlers.onRename).toHaveBeenCalledTimes(1);
     expect(handlers.onDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Aerobatics' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Weather' }));
     expect(handlers.onDelete).toHaveBeenCalledTimes(1);
   });
 
@@ -82,15 +81,22 @@ describe('DisciplineColumnActions', () => {
     // otherwise pass the first half.
     const handlers = renderActions({ canManage: false });
 
-    expect(screen.queryByRole('button', { name: 'Edit Aerobatics' })).toBe(
-      null,
-    );
-    expect(screen.queryByRole('button', { name: 'Delete Aerobatics' })).toBe(
-      null,
-    );
+    expect(screen.queryByRole('button', { name: 'Edit Weather' })).toBe(null);
+    expect(screen.queryByRole('button', { name: 'Delete Weather' })).toBe(null);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Add a lesson to Aerobatics' }),
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
     );
     expect(handlers.onAddLesson).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to add a module, first in the bar, naming the discipline', () => {
+    const onAddModule = vi.fn();
+    renderActions({ onAddModule });
+    const buttons = screen.getAllByRole('button');
+    expect(buttons[0].getAttribute('aria-label')).toBe(
+      'Add a module to Weather',
+    );
+    fireEvent.click(buttons[0]);
+    expect(onAddModule).toHaveBeenCalledOnce();
   });
 });

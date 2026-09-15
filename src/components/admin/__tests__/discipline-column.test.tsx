@@ -63,4 +63,22 @@ describe('DisciplineColumn', () => {
     );
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('wraps its children in a controlled accordion, accepting the lifted expanded-ids props', () => {
+    // Light on purpose — the accordion's open/close behaviour is Base UI's
+    // to test. This only pins that the column still renders what it is
+    // given once it is wired up to the lifted state, and that the two props
+    // type-check without a caller needing to pass either.
+    render(
+      <DisciplineColumn
+        name="UAS"
+        lessonCount={1}
+        expandedModuleIds={[1]}
+        onExpandedModuleIdsChange={() => {}}
+      >
+        <span>child</span>
+      </DisciplineColumn>,
+    );
+    expect(screen.getByText('child')).toBeTruthy();
+  });
 });

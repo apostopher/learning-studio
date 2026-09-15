@@ -1,3 +1,4 @@
+import { Accordion } from '@base-ui/react/accordion';
 import type { ReactNode } from 'react';
 import { ScrollArea } from '../scroll-area';
 
@@ -20,11 +21,26 @@ export const DisciplineColumn = ({
   name,
   lessonCount,
   actions,
+  expandedModuleIds,
+  onExpandedModuleIdsChange,
   children,
 }: {
   name: string;
   lessonCount: number;
   actions?: ReactNode;
+  /**
+   * Which modules are open, when the caller drives the accordion.
+   *
+   * Lifted out of the accordion for the same reason `CourseColumn` lifts it: a
+   * closed `Accordion.Panel` is `hidden`, so the droppable inside it measures
+   * 0×0 and a dragged lesson can never hit it. The library has to be able to
+   * open a module a drag is hovering, which it can only do from outside.
+   * Omit both props and the accordion stays uncontrolled — Base UI reads
+   * `value={undefined}` as uncontrolled, so a caller with no interest in drag
+   * never has to manage this state.
+   */
+  expandedModuleIds?: number[];
+  onExpandedModuleIdsChange?: (moduleIds: number[]) => void;
   children: ReactNode;
 }) => {
   const lessonNoun = lessonCount === 1 ? 'lesson' : 'lessons';
@@ -52,7 +68,14 @@ export const DisciplineColumn = ({
         className="flex-1"
         viewportClassName="h-full"
       >
-        <div className="flex flex-col gap-2 p-3">{children}</div>
+        <Accordion.Root
+          multiple
+          value={expandedModuleIds}
+          onValueChange={onExpandedModuleIdsChange}
+          className="flex flex-col"
+        >
+          {children}
+        </Accordion.Root>
       </ScrollArea>
     </section>
   );

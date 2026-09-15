@@ -1,16 +1,23 @@
 import { useDroppable } from '@dnd-kit/core';
-import { useSetAtom } from 'jotai';
 import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  createDisciplineModuleTargetAtom,
   createLibraryLessonTargetAtom,
   deleteDisciplineTargetAtom,
+  expandedLibraryModuleIdsAtom,
   renameDisciplineTargetAtom,
 } from '#/atoms/admin';
-import type { LibraryLesson } from '#/lib/admin-schemas';
+import { disciplineLessons, type LibraryDiscipline } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
-import { disciplineDndId } from '#/lib/dnd-ids';
+import { disciplineDndId, libraryModuleDndId } from '#/lib/dnd-ids';
 import { DisciplineColumn } from './discipline-column';
 import { DisciplineColumnActions } from './discipline-column-actions';
-import { LibraryLessonCardContainer } from './library-lesson-card-container';
+import { LibraryModuleContainer } from './library-module-container';
+import { LibraryUntitledContainer } from './library-untitled-container';
 
 /**
  * `disciplineId` for the leftmost "Untitled" column, whose lessons have no
@@ -28,16 +35,21 @@ export const UNTITLED_DISCIPLINE_ID = 0;
  * library is over *something*, and the only way to answer "you cannot put it
  * back here, and here is why" is to be a real target that `resolveDrop`
  * refuses by name.
+ *
+ * `discipline` carries its modules and its Untitled group — never a flat
+ * lesson list — because `disciplineLessons` is the ONE definition of "every
+ * lesson in this discipline, in display order", and this column and the drop
+ * resolver must never be able to disagree about membership.
  */
 export const DisciplineColumnContainer = ({
   disciplineId,
   name,
-  lessons,
+  discipline,
   canManageDisciplines = false,
 }: {
   disciplineId: number;
   name: string;
-  lessons: LibraryLesson[];
+  discipline: Pick<LibraryDiscipline, 'modules' | 'untitled'>;
   /**
    * Whether this actor may rename or delete a discipline — both `requireAdmin`
    * on the server. Add-lesson is not gated here: authority over a lesson
@@ -51,13 +63,22 @@ export const DisciplineColumnContainer = ({
     data: { type: 'discipline', disciplineId },
   });
   const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
+  const openAddModule = useSetAtom(createDisciplineModuleTargetAtom);
   const openRename = useSetAtom(renameDisciplineTargetAtom);
   const openDelete = useSetAtom(deleteDisciplineTargetAtom);
 
   // The "Untitled" column is not a discipline: there is nothing to rename or
   // delete, and a lesson filed under nothing is a triage-queue entry rather
-  // than something to create on purpose. It gets no action row at all.
+  // than something to create on purpose. It gets no action row at all, and
+  // its lessons stay draggable with no Untitled droppable of their own — see
+  // `LibraryUntitledContainer`'s `isOrgLevel`.
   const isUntitled = disciplineId === UNTITLED_DISCIPLINE_ID;
+
+  const [expandedModuleIds, setExpandedModuleIds] = useAtom(
+    expandedLibraryModuleIdsAtom,
+  );
+  const ownModuleIds = new Set(discipline.modules.map((m) => m.id));
+  const lessonCount = disciplineLessons(discipline).length;
 
   return (
     <div
@@ -71,38 +92,57 @@ export const DisciplineColumnContainer = ({
     >
       <DisciplineColumn
         name={name}
-        lessonCount={lessons.length}
+        lessonCount={lessonCount}
         actions={
           isUntitled ? undefined : (
             <DisciplineColumnActions
               disciplineName={name}
               canManage={canManageDisciplines}
+              onAddModule={() =>
+                openAddModule({
+                  disciplineId,
+                  disciplineName: name,
+                })
+              }
               onAddLesson={() => openAddLesson({ id: disciplineId, name })}
               onRename={() => openRename({ id: disciplineId, name })}
               onDelete={() =>
                 openDelete({
                   id: disciplineId,
                   name,
-                  lessonCount: lessons.length,
+                  lessonCount,
                 })
               }
             />
           )
         }
+        expandedModuleIds={expandedModuleIds.filter((id) =>
+          ownModuleIds.has(id),
+        )}
+        onExpandedModuleIdsChange={(next) => {
+          setExpandedModuleIds((prev) => [
+            ...prev.filter((id) => !ownModuleIds.has(id)),
+            ...next,
+          ]);
+        }}
       >
-        {lessons.length === 0 ? (
-          <p className="px-1 py-4 text-center text-tertiary text-xs">
-            No lessons
-          </p>
-        ) : (
-          lessons.map((lesson) => (
-            <LibraryLessonCardContainer
-              key={lesson.id}
-              lesson={lesson}
+        <SortableContext
+          items={discipline.modules.map((m) => libraryModuleDndId(m.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          {discipline.modules.map((mod) => (
+            <LibraryModuleContainer
+              key={mod.id}
+              module={mod}
               disciplineId={disciplineId}
             />
-          ))
-        )}
+          ))}
+        </SortableContext>
+        <LibraryUntitledContainer
+          disciplineId={disciplineId}
+          lessons={discipline.untitled}
+          isOrgLevel={isUntitled}
+        />
       </DisciplineColumn>
     </div>
   );
