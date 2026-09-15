@@ -45,12 +45,7 @@ import { useLinkLesson } from '#/data-hooks/use-link-lesson';
 import { useMovePlacement } from '#/data-hooks/use-move-placement';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
-import {
-  disciplineLessons,
-  type LibraryLesson,
-  type OrgEditorBoard,
-  type OrgLibrary,
-} from '#/lib/admin-schemas';
+import type { OrgEditorBoard, OrgLibrary } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
@@ -69,6 +64,7 @@ import { DeleteCourseDialogContainer } from './delete-course-dialog-container';
 import { DeleteDisciplineDialogContainer } from './delete-discipline-dialog-container';
 import { DeleteDisciplineModuleDialogContainer } from './delete-discipline-module-dialog-container';
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
+import { describeDndTarget, findLibraryLesson } from './describe-dnd-target';
 import {
   DisciplineColumnContainer,
   UNTITLED_DISCIPLINE_ID,
@@ -334,28 +330,28 @@ export const EditorContainer = ({
     }
 
     if (activeType === 'library-module') {
-      // Every droppable is a candidate except the drag's OWN discipline
-      // column — the same rule `library-lesson` drags use below (a card
-      // released back on the column it came from is "never mind", not a
-      // mistake). Nothing else is filtered by kind, on purpose:
-      // `resolveDrop` refuses EVERY rail target ("organises the library, not
-      // a course") and every cross-discipline library target (naming both
-      // disciplines) — a refusal has to be reachable to be a refusal, the
-      // same reasoning `acceptsModuleDrag` documents for the rail's own
-      // module drags. An earlier version of this filter kept only the rail's
-      // `module`/`course` ids and excluded cross-discipline library
-      // lesson/container ids, which made both of those refusals
+      // Every droppable is a candidate EXCEPT `discipline` column ids — ALL
+      // of them, not just the drag's own. Unlike a library-lesson drag
+      // (where even a DIFFERENT discipline's column carries a written
+      // refusal — "a discipline column only groups the library"),
+      // `resolveDrop` answers a discipline module dropped on ANY discipline
+      // column with `null` regardless of which one, the same as
+      // `library-untitled` — there is no refusal there to keep reachable.
+      //
+      // Everything else stays in, and nothing else is filtered by kind, on
+      // purpose: `resolveDrop` refuses EVERY rail target ("organises the
+      // library, not a course") and every cross-discipline library target
+      // (naming both disciplines) — a refusal has to be reachable to be a
+      // refusal, the same reasoning `acceptsModuleDrag` documents for the
+      // rail's own module drags. An earlier version of this filter kept
+      // only the rail's `module`/`course` ids and excluded cross-discipline
+      // library lesson/container ids, which made both of those refusals
       // unreachable through a course module's per-slot droppables or a
       // sibling discipline's lesson cards — springing the drag back with no
       // note, no announcement and no toast.
-      const disciplineId = activeData?.disciplineId as number | undefined;
-      const libraryModuleTargets = args.droppableContainers.filter((c) => {
-        const type = c.data.current?.type as DndType | undefined;
-        if (type === 'discipline') {
-          return c.data.current?.disciplineId !== disciplineId;
-        }
-        return true;
-      });
+      const libraryModuleTargets = args.droppableContainers.filter(
+        (c) => (c.data.current?.type as DndType | undefined) !== 'discipline',
+      );
       if (missed(libraryModuleTargets)) return [];
       return closestCenter({
         ...args,
@@ -537,33 +533,42 @@ export const EditorContainer = ({
   };
 
   /**
-   * Restores a SPECIFIC snapshot, passed in by the caller — never reads
-   * `snapshotRef.current` itself. `snapshotRef` is one shared slot, but a
-   * drag's `mutate(...).onError` callback can still fire after a SECOND drag
-   * has already begun and overwritten that slot with its own pre-drag board
-   * (which, if the first drag's optimistic write already landed, now
-   * contains the first drag's write baked in as "the board before"). Reading
-   * the live ref at that point would restore the second drag's snapshot —
-   * which does not undo the first drag's failed write, it cements it. Every
-   * caller below captures its own drag's snapshot into a local `const` at
-   * the top of `onDragEnd`/`onDragCancel` and threads that value through, so
-   * a later drag overwriting the ref cannot affect an in-flight rollback that
-   * belongs to an earlier one.
+   * Restores SPECIFIC snapshots, passed in by the caller — never reads
+   * `snapshotRef.current`/`librarySnapshotRef.current` itself. Those refs are
+   * one shared slot apiece, but a drag's `mutate(...).onError` callback can
+   * still fire after a SECOND drag has already begun and overwritten a slot
+   * with its own pre-drag state (which, if the first drag's optimistic write
+   * already landed, now contains the first drag's write baked in as "the
+   * board/library before"). Reading a live ref at that point would restore
+   * the second drag's snapshot — which does not undo the first drag's failed
+   * write, it cements it. Every caller below captures its own drag's
+   * snapshots into local `const`s at the top of `onDragEnd`/`onDragCancel`
+   * and threads those values through, so a later drag overwriting a ref
+   * cannot affect an in-flight rollback that belongs to an earlier one.
    *
-   * `librarySnapshot` is the library-side twin of `snapshot`, restored the
-   * same way and for the same reason — a library-lesson/library-module drag's
-   * live preview is written into the library query's cache, never the
-   * board's, so undoing it means restoring THAT cache.
+   * Takes `board`/`library` as two INDEPENDENT, optional slots — pass only
+   * the one(s) THIS drag actually wrote. A rail drag (`module`/`lesson`
+   * active) never writes the library cache, and a library drag
+   * (`library-lesson`/`library-module` active) never writes the board's; a
+   * blanket "restore both, always" call would revert the untouched pane to
+   * how it looked at drag-start every time the OTHER pane's drag failed —
+   * discarding any refetch that landed there in the meantime, with nothing
+   * left to invalidate it back afterwards. Every call site below names
+   * exactly what it wrote: a value written just above in the SAME branch is
+   * passed unconditionally, and a value that may have been written earlier
+   * in the drag (by `onDragOver`'s live preview) is passed only when the
+   * tracker for that (`transferApplied` for the board, `libraryPreview` for
+   * the library) says it actually happened.
    */
-  const rollback = (
-    snapshot: OrgEditorBoard | null,
-    librarySnapshot: OrgLibrary | null,
-  ) => {
-    if (snapshot) {
-      queryClient.setQueryData(boardKey, snapshot);
+  const rollback = (snapshots: {
+    board?: OrgEditorBoard | null;
+    library?: OrgLibrary | null;
+  }) => {
+    if (snapshots.board) {
+      queryClient.setQueryData(boardKey, snapshots.board);
     }
-    if (librarySnapshot) {
-      queryClient.setQueryData(libraryKey, librarySnapshot);
+    if (snapshots.library) {
+      queryClient.setQueryData(libraryKey, snapshots.library);
     }
   };
 
@@ -756,8 +761,16 @@ export const EditorContainer = ({
     const current = readBoard();
     if (!over || !current) {
       // A genuine miss — released over no target at all. That is the "never
-      // mind" gesture, so it cancels: undo the preview, say nothing.
-      rollback(dragSnapshot, dragLibrarySnapshot);
+      // mind" gesture, so it cancels: undo the preview, say nothing. Only
+      // the pane THIS drag actually wrote: `transferApplied`/`libraryPreview`
+      // are mutually exclusive (a rail drag can only ever have set the
+      // former, a library drag only ever the latter — the active element,
+      // and so which pane's live preview code path could even run, is fixed
+      // for the whole drag), so at most one of these is ever non-null.
+      rollback({
+        board: transferApplied ? dragSnapshot : undefined,
+        library: libraryPreview ? dragLibrarySnapshot : undefined,
+      });
       return;
     }
     const currentLibrary = readLibrary();
@@ -765,7 +778,8 @@ export const EditorContainer = ({
     /**
      * Commits a `library-move`/`reorder-library-module` resolution — shared
      * by the ordinary path below and the self-drop rescue, so the mutation
-     * and its rollback are written once.
+     * and its rollback are written once. Library-only: this resolution never
+     * touches the board, so its `onError` restores the library alone.
      */
     const commitLibraryResolution = (
       libraryResolution: LibraryDropResolution,
@@ -775,14 +789,14 @@ export const EditorContainer = ({
       if (commit.kind === 'place') {
         placeLibraryLesson.mutate(commit.vars, {
           onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
+            rollback({ library: dragLibrarySnapshot });
             toast.error(error.message);
           },
         });
       } else {
         reorderDisciplineModule.mutate(commit.vars, {
           onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
+            rollback({ library: dragLibrarySnapshot });
             toast.error(error.message);
           },
         });
@@ -821,8 +835,11 @@ export const EditorContainer = ({
               nextLessonId: commit.nextLessonId,
             },
             {
+              // Board-only: `commit` is non-null only when `transferApplied`
+              // was true, and this is a rail-lesson drag, which never
+              // touches the library.
               onError: (error) => {
-                rollback(dragSnapshot, dragLibrarySnapshot);
+                rollback({ board: dragSnapshot });
                 toast.error(error.message);
               },
             },
@@ -842,16 +859,43 @@ export const EditorContainer = ({
         commitLibraryResolution(rescued, currentLibrary);
         return;
       }
-      rollback(dragSnapshot, dragLibrarySnapshot);
+      rollback({
+        board: transferApplied ? dragSnapshot : undefined,
+        library: libraryPreview ? dragLibrarySnapshot : undefined,
+      });
       return;
     }
 
     if (resolution.kind === 'forbidden') {
-      // Covers a library-side refusal too — see `rollback`: restoring the
-      // library snapshot is a no-op when this drag never touched it.
-      rollback(dragSnapshot, dragLibrarySnapshot);
+      // Only the pane this drag actually wrote — see the genuine-miss branch
+      // above for why at most one of these is ever non-null. Restoring the
+      // OTHER pane's drag-start snapshot here, unconditionally, would revert
+      // a cache this drag never touched to how it looked when the drag
+      // began, discarding any refetch that landed there in the meantime with
+      // nothing left to invalidate it back afterwards.
+      rollback({
+        board: transferApplied ? dragSnapshot : undefined,
+        library: libraryPreview ? dragLibrarySnapshot : undefined,
+      });
       toast.error(resolution.reason);
       return;
+    }
+
+    // Every resolution reached beyond this point commits a NON-library
+    // change (`reorder-module`, `move`, or the `link` fall-through). A
+    // library-lesson drag can still have a `library-move` preview standing
+    // from EARLIER in this same drag — it hovered a discipline module before
+    // landing on a course container, say — and nothing about committing a
+    // board-side change (or nothing at all) will ever confirm or invalidate
+    // that preview. Undo it now, synchronously, before whatever follows: the
+    // library must not keep showing a move that was never made.
+    if (
+      libraryPreview &&
+      dragLibrarySnapshot &&
+      resolution.kind !== 'library-move' &&
+      resolution.kind !== 'reorder-library-module'
+    ) {
+      queryClient.setQueryData(libraryKey, dragLibrarySnapshot);
     }
 
     if (resolution.kind === 'reorder-module') {
@@ -870,7 +914,10 @@ export const EditorContainer = ({
         },
         {
           onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
+            rollback({
+              board: dragSnapshot,
+              library: libraryPreview ? dragLibrarySnapshot : undefined,
+            });
             toast.error(error.message);
           },
         },
@@ -883,7 +930,10 @@ export const EditorContainer = ({
       // `move` to — it refuses one without an origin — so this is a type
       // narrowing, not a reachable branch.
       if (!lessonDrag) {
-        rollback(dragSnapshot, dragLibrarySnapshot);
+        rollback({
+          board: transferApplied ? dragSnapshot : undefined,
+          library: libraryPreview ? dragLibrarySnapshot : undefined,
+        });
         return;
       }
       const next = moveLessonOnBoard(
@@ -903,7 +953,10 @@ export const EditorContainer = ({
         },
         {
           onError: (error) => {
-            rollback(dragSnapshot, dragLibrarySnapshot);
+            rollback({
+              board: dragSnapshot,
+              library: libraryPreview ? dragLibrarySnapshot : undefined,
+            });
             toast.error(error.message);
           },
         },
@@ -921,7 +974,7 @@ export const EditorContainer = ({
       // they watched happen. `currentLibrary` above is that same read, taken
       // before anything in this branch writes to the cache again.
       if (!currentLibrary) {
-        rollback(dragSnapshot, dragLibrarySnapshot);
+        rollback({ library: dragLibrarySnapshot });
         return;
       }
       commitLibraryResolution(resolution, currentLibrary);
@@ -943,7 +996,10 @@ export const EditorContainer = ({
       { moduleId: resolution.moduleId, lessonId: resolution.lessonId },
       {
         onError: (error) => {
-          rollback(dragSnapshot, dragLibrarySnapshot);
+          rollback({
+            board: dragSnapshot,
+            library: libraryPreview ? dragLibrarySnapshot : undefined,
+          });
           toast.error(error.message);
         },
       },
@@ -954,11 +1010,20 @@ export const EditorContainer = ({
     // Synchronous and scoped to the drag currently in progress — no other
     // drag can have started yet to overwrite `snapshotRef.current` here —
     // but captured into a local for the same reason as `onDragEnd`: so
-    // `rollback` never reads the shared ref directly.
+    // `rollback` never reads the shared refs directly. `transferApplied` and
+    // `libraryPreview` are read the same way, and for the same reason as in
+    // `onDragEnd`: they say which of the two panes this drag actually wrote,
+    // so cancelling one never clobbers the other's cache with a stale
+    // drag-start snapshot.
     const dragSnapshot = snapshotRef.current;
     const dragLibrarySnapshot = librarySnapshotRef.current;
+    const transferApplied = transferAppliedRef.current;
+    const libraryPreview = libraryPreviewRef.current;
     clearActive();
-    rollback(dragSnapshot, dragLibrarySnapshot);
+    rollback({
+      board: transferApplied ? dragSnapshot : undefined,
+      library: libraryPreview ? dragLibrarySnapshot : undefined,
+    });
   };
 
   /**
@@ -1320,93 +1385,4 @@ function pointerIsNear(
     pointer.y >= rect.top - DROP_SLOP_PX &&
     pointer.y <= rect.top + rect.height + DROP_SLOP_PX
   );
-}
-
-/** The library card for a lesson id, across disciplines and the untitled column. */
-function findLibraryLesson(
-  library: OrgLibrary | undefined,
-  lessonId: number | null,
-): LibraryLesson | undefined {
-  if (!library || lessonId == null) return undefined;
-  return [
-    ...library.untitled,
-    ...library.disciplines.flatMap((d) => disciplineLessons(d)),
-  ].find((l) => l.id === lessonId);
-}
-
-/** A discipline module found by walking every discipline, with the
- *  discipline that owns it — for naming it in an announcement. */
-function findLibraryModuleWithDiscipline(
-  library: OrgLibrary | undefined,
-  moduleId: number,
-) {
-  if (!library) return null;
-  for (const discipline of library.disciplines) {
-    const module = discipline.modules.find((m) => m.id === moduleId);
-    if (module) return { discipline, module };
-  }
-  return null;
-}
-
-/** A dnd id as a phrase a screen reader can read back. */
-function describeDndTarget(
-  id: string | number,
-  board: OrgEditorBoard | null,
-  library: OrgLibrary | undefined,
-): string {
-  const parsed = parseDndId(id);
-  if (!parsed) return 'nothing';
-  if (parsed.type === 'library-lesson') {
-    return `library lesson ${findLibraryLesson(library, parsed.id)?.name ?? parsed.id}`;
-  }
-  if (parsed.type === 'library-module' || parsed.type === 'library-container') {
-    // Found by walking the library, never by trusting anything about the id
-    // beyond what it names — the same reasoning `resolveDrop` follows.
-    const found = findLibraryModuleWithDiscipline(library, parsed.id);
-    return found
-      ? `${found.module.name} in ${found.discipline.name}`
-      : String(id);
-  }
-  if (parsed.type === 'library-untitled') {
-    const name =
-      library?.disciplines.find((d) => d.id === parsed.id)?.name ??
-      String(parsed.id);
-    return `Untitled in ${name}`;
-  }
-  if (parsed.type === 'discipline') {
-    const name =
-      parsed.id === UNTITLED_DISCIPLINE_ID
-        ? 'Untitled'
-        : (library?.disciplines.find((d) => d.id === parsed.id)?.name ??
-          String(parsed.id));
-    return `the ${name} discipline column`;
-  }
-  if (!board) return String(id);
-  if (parsed.type === 'course') {
-    // Named explicitly rather than falling through to the module loop below,
-    // which would match a MODULE whose id happened to equal this course's and
-    // announce the wrong thing. Reachable now that a module drag can land on
-    // an empty course column.
-    const courseBoard = board.find((cb) => cb.course.id === parsed.id);
-    return courseBoard ? `the ${courseBoard.course.name} column` : String(id);
-  }
-  if (parsed.type === 'lesson') {
-    // A remixed module — and its lessons — can render in two columns; name
-    // the course the dragged/hovered CARD actually belongs to, not whichever
-    // column happens to appear first on the board.
-    for (const cb of board) {
-      if (cb.course.id !== parsed.courseId) continue;
-      for (const mod of cb.modules) {
-        const lesson = mod.lessons.find((l) => l.id === parsed.id);
-        if (lesson) return `${lesson.name} in ${mod.name}, ${cb.course.name}`;
-      }
-    }
-    return String(id);
-  }
-  for (const cb of board) {
-    if (cb.course.id !== parsed.courseId) continue;
-    const mod = cb.modules.find((m) => m.id === parsed.id);
-    if (mod) return `${mod.name} in ${cb.course.name}`;
-  }
-  return String(id);
 }
