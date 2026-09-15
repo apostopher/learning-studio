@@ -147,4 +147,22 @@ describe('discipline module hooks', () => {
       "Only an admin or one of this discipline's subject experts can organise it.",
     );
   });
+
+  it('uses a server sentence from 403 JSON over the fallback', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'Custom sentence from the server',
+        }),
+        { status: 403 },
+      ),
+    );
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useCreateDisciplineModule(), {
+      wrapper,
+    });
+    await expect(
+      act(() => result.current.mutateAsync({ disciplineId: 4, name: 'x' })),
+    ).rejects.toThrow('Custom sentence from the server');
+  });
 });
