@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
-import { setLessonVideo } from '#/db/admin';
+import { getLessonVideo, setLessonVideo } from '#/db/admin';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { setLessonVideoInputSchema } from '#/lib/admin-schemas';
@@ -24,6 +24,7 @@ import {
 async function guard(
   request: Request,
   lessonId: number,
+  action: 'read' | 'update' = 'update',
 ): Promise<Response | null> {
   const lookup = await getDisciplineIdForLessonId(lessonId);
   if (!lookup.found) {
@@ -33,7 +34,7 @@ async function guard(
     await requireLessonContentPermission(
       request.headers,
       lookup.disciplineId,
-      'update',
+      action,
     );
     return null;
   } catch (error) {
@@ -47,6 +48,28 @@ async function guard(
 function parseLessonId(raw: string): number | null {
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Which video the lesson has, for the dialog's prefilled URL field. The
+ * same discipline guard as the write, on READ: whoever may edit the
+ * lesson's content may see what is attached. This is the only path a video
+ * ref takes to the browser — the library and editor-board payloads omit it,
+ * since a bare Mux ref is streamable.
+ */
+export async function getVideoHandler(
+  request: Request,
+  lessonIdRaw: string,
+): Promise<Response> {
+  const lessonId = parseLessonId(lessonIdRaw);
+  if (lessonId === null) {
+    return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
+  }
+  const denied = await guard(request, lessonId, 'read');
+  if (denied) return denied;
+  const video = await getLessonVideo(lessonId);
+  if (!video) return new Response('Not found', { status: 404 });
+  return Response.json(video);
 }
 
 export async function putVideoHandler(
@@ -84,6 +107,7 @@ export async function putVideoHandler(
 export const Route = createFileRoute('/api/admin/lessons/$lessonId/video')({
   server: {
     handlers: {
+      GET: ({ request, params }) => getVideoHandler(request, params.lessonId),
       PUT: ({ request, params }) => putVideoHandler(request, params.lessonId),
     },
   },

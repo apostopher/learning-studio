@@ -836,6 +836,26 @@ export async function resolveCourseProvider(
   return row ? decryptJson(row.secrets as SecretEnvelope) : null;
 }
 
+/**
+ * Which video a lesson has — provider and ref — for the dialog's prefilled
+ * field. `null` for no such lesson; a lesson with no video answers nulls.
+ * Read per lesson under the content guard (route), never shipped on a
+ * board or library payload: a bare Mux ref is streamable.
+ */
+export async function getLessonVideo(
+  lessonId: number,
+): Promise<{ provider: ProviderId | null; ref: string | null } | null> {
+  const [row] = await db
+    .select({
+      provider: lessonsTable.videoProvider,
+      ref: lessonsTable.videoRef,
+    })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId));
+  if (!row) return null;
+  return { provider: row.provider as ProviderId | null, ref: row.ref };
+}
+
 export async function setLessonVideo(
   lessonId: number,
   provider: ProviderId,

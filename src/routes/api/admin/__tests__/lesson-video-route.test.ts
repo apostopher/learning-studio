@@ -14,6 +14,7 @@ const m = vi.hoisted(() => {
     absentResourceResponse: vi.fn(),
     getDisciplineIdForLessonId: vi.fn(),
     setLessonVideo: vi.fn(),
+    getLessonVideo: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -26,9 +27,12 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/lesson-access', () => ({
   getDisciplineIdForLessonId: m.getDisciplineIdForLessonId,
 }));
-vi.mock('#/db/admin', () => ({ setLessonVideo: m.setLessonVideo }));
+vi.mock('#/db/admin', () => ({
+  setLessonVideo: m.setLessonVideo,
+  getLessonVideo: m.getLessonVideo,
+}));
 
-import { putVideoHandler } from '../lessons.$lessonId.video';
+import { getVideoHandler, putVideoHandler } from '../lessons.$lessonId.video';
 
 function req(body: unknown = { provider: 'mux', ref: 'abc123' }): Request {
   return new Request('http://test/api/admin/lessons/10/video', {
@@ -155,5 +159,57 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
       null,
       'update',
     );
+  });
+});
+
+describe('GET /api/admin/lessons/:lessonId/video', () => {
+  const get = () => new Request('http://test/api/admin/lessons/10/video');
+
+  /**
+   * The video field is prefilled from this. Guarded like the write, but on
+   * READ: whoever may edit the lesson's content may see which video it has.
+   * The ref is not in the library payload (a bare Mux ref streams), so this
+   * per-lesson, per-actor read is the only way it reaches the dialog.
+   */
+  it('asks for content:read on the lesson’s discipline, then answers the provider and ref', async () => {
+    m.getDisciplineIdForLessonId.mockResolvedValue({
+      found: true,
+      disciplineId: 4,
+    });
+    m.requireLessonContentPermission.mockResolvedValue(undefined);
+    m.getLessonVideo.mockResolvedValue({ provider: 'mux', ref: 'abc123' });
+    const res = await getVideoHandler(get(), '10');
+    expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      4,
+      'read',
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      provider: 'mux',
+      ref: 'abc123',
+    });
+  });
+
+  it('answers nulls for a lesson with no video', async () => {
+    m.getDisciplineIdForLessonId.mockResolvedValue({
+      found: true,
+      disciplineId: 4,
+    });
+    m.requireLessonContentPermission.mockResolvedValue(undefined);
+    m.getLessonVideo.mockResolvedValue({ provider: null, ref: null });
+    const res = await getVideoHandler(get(), '10');
+    await expect(res.json()).resolves.toEqual({ provider: null, ref: null });
+  });
+
+  it('403s when refused, without reading', async () => {
+    m.getDisciplineIdForLessonId.mockResolvedValue({
+      found: true,
+      disciplineId: 4,
+    });
+    m.requireLessonContentPermission.mockRejectedValue(new m.ForbiddenError());
+    const res = await getVideoHandler(get(), '10');
+    expect(res.status).toBe(403);
+    expect(m.getLessonVideo).not.toHaveBeenCalled();
   });
 });

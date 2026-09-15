@@ -41,6 +41,9 @@ export function useSetLessonVideo(courseId: number | null) {
             ? dataKeys.courseBoards()
             : dataKeys.courseBoard(courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: dataKeys.lessonVideo(input.lessonId),
+      });
       queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
       // The prefix, not this course's entry: a new video is a new video in

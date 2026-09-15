@@ -22,3 +22,23 @@ describe('detectVideoUrl', () => {
     expect(detectVideoUrl('not a url')).toBeNull();
   });
 });
+
+describe('toUrl', () => {
+  /**
+   * The URL the video field is prefilled with must be one the same
+   * provider's detector reads back to the same ref — otherwise the field
+   * would open on a value the form calls unsupported.
+   */
+  it('round-trips through detect for every provider', async () => {
+    const { PROVIDER_IDS, VIDEO_PROVIDERS } = await import('../index');
+    const refs = {
+      mux: 'abc123XYZ',
+      synthesia: '123e4567-e89b-12d3-a456-426614174000',
+    };
+    for (const id of PROVIDER_IDS) {
+      const url = VIDEO_PROVIDERS[id].toUrl(refs[id]);
+      expect(url, id).toMatch(/^https:\/\//);
+      expect(VIDEO_PROVIDERS[id].detect(url), id).toEqual({ ref: refs[id] });
+    }
+  });
+});

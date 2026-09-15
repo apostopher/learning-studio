@@ -15,6 +15,10 @@ const hooks = vi.hoisted(() => ({
   credentials: vi.fn(),
   playback: vi.fn(),
   setVideo: vi.fn(),
+  video: vi.fn(),
+}));
+vi.mock('#/data-hooks/use-lesson-video', () => ({
+  useLessonVideo: hooks.video,
 }));
 vi.mock('#/data-hooks/use-course-credentials', () => ({
   useCourseCredentials: hooks.credentials,
@@ -40,7 +44,15 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   </QueryClientProvider>
 );
 
-function stubHooks(opts: { configured?: boolean } = {}) {
+function stubHooks(
+  opts: {
+    configured?: boolean;
+    video?: { provider: 'mux' | 'synthesia'; ref: string } | null;
+  } = {},
+) {
+  hooks.video.mockReturnValue({
+    data: opts.video === undefined ? null : opts.video,
+  });
   hooks.credentials.mockReturnValue({
     data: [{ provider: 'mux', configured: opts.configured ?? true }],
     isLoading: false,
@@ -142,5 +154,40 @@ describe('VideoSectionContainer with a course', () => {
       { lessonId: 10, courseId: 7 },
       false,
     );
+  });
+
+  /**
+   * A lesson that has a video opens with its URL already in the field — the
+   * canonical URL for its provider, which the same detector reads back —
+   * so the admin sees what is attached and can edit it in place rather than
+   * paste from scratch. Mutant: `defaultValues: { url: '' }` alone.
+   */
+  it('prefills the URL field from the lesson’s current video', () => {
+    stubHooks({ video: { provider: 'mux', ref: 'abc123' } });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc123' }}
+      />,
+      { wrapper },
+    );
+    const input = screen.getByLabelText('Video URL or ID') as HTMLInputElement;
+    expect(input.value).toBe('https://stream.mux.com/abc123.m3u8');
+    expect(hooks.video).toHaveBeenCalledWith(10, true);
+  });
+
+  it('leaves the field empty, and asks for nothing, when the lesson has no video', () => {
+    stubHooks();
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: null }}
+      />,
+      { wrapper },
+    );
+    expect(
+      (screen.getByLabelText('Video URL or ID') as HTMLInputElement).value,
+    ).toBe('');
+    expect(hooks.video).toHaveBeenCalledWith(10, false);
   });
 });

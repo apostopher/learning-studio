@@ -9,6 +9,7 @@ import {
   videoPlaybackForbiddenLessonIdAtom,
 } from '#/atoms/admin';
 import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
+import { useLessonVideo } from '#/data-hooks/use-lesson-video';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
 import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
@@ -129,10 +130,24 @@ export const VideoSectionContainer = ({
   );
   const previewState = computeVideoPreviewState(playback.data);
 
+  // The current video's canonical URL, for the field's prefill: read per
+  // lesson under the content guard (the library payload carries no ref).
+  // Only asked for when there is a video to show.
+  const currentVideo = useLessonVideo(lesson.id, hasVideo);
+  const currentUrl =
+    currentVideo.data?.provider && currentVideo.data.ref
+      ? VIDEO_PROVIDERS[currentVideo.data.provider].toUrl(currentVideo.data.ref)
+      : '';
+
+  // Hydrated by react-hook-form's own `values`, not an effect: the field
+  // fills when the current video arrives and again after a replace lands,
+  // while `keepDirtyValues` leaves anything the admin has typed alone.
   const urlForm = useForm<VideoUrlFormValues>({
     resolver: zodResolver(videoUrlFormSchema),
     mode: 'onSubmit',
     defaultValues: { url: '' },
+    values: { url: currentUrl },
+    resetOptions: { keepDirtyValues: true },
   });
   const urlValue = urlForm.watch('url');
   const detected = urlValue.trim() ? detectVideoUrl(urlValue) : null;
@@ -144,7 +159,9 @@ export const VideoSectionContainer = ({
     setLessonVideo.mutate(
       { lessonId: lesson.id, provider: hit.provider, ref: hit.ref },
       {
-        onSuccess: () => urlForm.reset({ url: '' }),
+        // Back to pristine: the refetched current video then flows into the
+        // field through `values` above, so it shows what was just saved.
+        onSuccess: () => urlForm.reset(),
         onError: () => setDraftDetection(null),
       },
     );

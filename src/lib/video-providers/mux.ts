@@ -27,6 +27,9 @@ export const muxProvider: VideoProviderMeta = {
       return null;
     }
   },
+  toUrl(ref) {
+    return `https://stream.mux.com/${ref}.m3u8`;
+  },
   credentialSchema: muxCredentialSchema,
   credentialDisplay(creds) {
     const { keyId } = muxCredentialSchema.parse(creds);

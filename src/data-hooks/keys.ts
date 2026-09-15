@@ -53,6 +53,9 @@ export const dataKeys = {
   /** Mutation key for saving material — read by the sidebar's Save button via `useIsMutating`. */
   lessonMaterialSave: (lessonId: number) =>
     ['admin', 'lesson-material-save', lessonId] as const,
+  /** Which video a lesson has (provider + ref) — the dialog's prefill. */
+  lessonVideo: (lessonId: number) =>
+    ['admin', 'lesson-video', lessonId] as const,
   lessonMaterial: (lessonId: number) =>
     ['admin', 'lesson-material', lessonId] as const,
   courseEmbeddings: (courseId: number) =>

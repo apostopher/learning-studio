@@ -22,6 +22,9 @@ export const synthesiaProvider: VideoProviderMeta = {
       return null;
     }
   },
+  toUrl(ref) {
+    return `https://share.synthesia.io/${ref}`;
+  },
   credentialSchema: synthesiaCredentialSchema,
   credentialDisplay(creds) {
     const { apiKey } = synthesiaCredentialSchema.parse(creds);
