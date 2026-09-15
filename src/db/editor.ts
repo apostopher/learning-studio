@@ -167,7 +167,11 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
     libraryRank: number | null;
   };
   const untitled: LibraryLesson[] = [];
-  const rankedByModuleId = new Map<number, RankedLesson[]>();
+  // Keyed by discipline id THEN module id — not a flat `Map<moduleId, ...>`
+  // — so a lesson can only ever land in a module that is actually one of
+  // ITS OWN discipline's modules, never one belonging to another discipline
+  // (module ids are org-wide, not scoped per discipline in the schema).
+  const rankedByModuleId = new Map<number, Map<number, RankedLesson[]>>();
   const rankedUntitledByDisciplineId = new Map<number, RankedLesson[]>();
 
   for (const row of rows) {
@@ -204,7 +208,11 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
     // The left join guarantees a matching discipline row whenever
     // `disciplineId` is non-null (an FK, never dangling) — the `?? ''` only
     // satisfies drizzle's outer-join nullability typing.
-    disciplineFor(row.disciplineId, row.disciplineName, row.disciplineSlug);
+    const discipline = disciplineFor(
+      row.disciplineId,
+      row.disciplineName,
+      row.disciplineSlug,
+    );
 
     const libraryRank =
       row.libraryRank === null || row.libraryRank === undefined
@@ -212,14 +220,29 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
         : Number(row.libraryRank);
     const ranked: RankedLesson = { id: card.id, card, libraryRank };
 
-    if (disciplineModuleId !== null) {
-      const list = rankedByModuleId.get(disciplineModuleId) ?? [];
+    // The bucket is decided only now that the discipline's modules are
+    // fully known (they were all filed above, before any lesson row): a
+    // `disciplineModuleId` naming a module the modules query did NOT return
+    // for this discipline — a deleted module, a race with a concurrent
+    // create-then-file, or just data drift — is treated exactly like `null`
+    // and lands in Untitled. The global rule is that no lesson is ever
+    // dropped from the payload; a card with nowhere to be filed still needs
+    // somewhere to land.
+    const targetModule =
+      disciplineModuleId === null
+        ? undefined
+        : discipline.modules.find((m) => m.id === disciplineModuleId);
+
+    if (targetModule) {
+      const byModule = rankedByModuleId.get(discipline.id) ?? new Map();
+      const list = byModule.get(targetModule.id) ?? [];
       list.push(ranked);
-      rankedByModuleId.set(disciplineModuleId, list);
+      byModule.set(targetModule.id, list);
+      rankedByModuleId.set(discipline.id, byModule);
     } else {
-      const list = rankedUntitledByDisciplineId.get(row.disciplineId) ?? [];
+      const list = rankedUntitledByDisciplineId.get(discipline.id) ?? [];
       list.push(ranked);
-      rankedUntitledByDisciplineId.set(row.disciplineId, list);
+      rankedUntitledByDisciplineId.set(discipline.id, list);
     }
   }
 
@@ -230,8 +253,9 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
     // otherwise unordered row source cannot be trusted to preserve that —
     // sort here too rather than assuming the query already did it.
     discipline.modules.sort((a, b) => a.rank - b.rank || a.id - b.id);
+    const byModule = rankedByModuleId.get(discipline.id);
     for (const libraryModule of discipline.modules) {
-      libraryModule.lessons = (rankedByModuleId.get(libraryModule.id) ?? [])
+      libraryModule.lessons = (byModule?.get(libraryModule.id) ?? [])
         .sort(byLibraryOrder)
         .map((r) => r.card);
     }

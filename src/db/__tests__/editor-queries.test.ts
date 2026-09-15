@@ -462,6 +462,37 @@ describe('getOrgLibrary', () => {
     ]);
     expect(lib.disciplines[0].untitled).toEqual([]);
   });
+
+  it('files a lesson whose module the seed did not return under Untitled rather than dropping it', async () => {
+    db.select
+      .mockReturnValueOnce(
+        makeChain([row({ id: 1, disciplineId: 4, disciplineModuleId: 99 })]),
+      )
+      .mockReturnValueOnce(
+        makeChain([{ id: 4, name: 'Weather', slug: 'weather' }]),
+      )
+      .mockReturnValueOnce(
+        makeChain([{ id: 7, disciplineId: 4, name: 'Basics', rank: '1' }]),
+      );
+    mockGetCourseIds.mockResolvedValue(new Map());
+
+    const lib = await getOrgLibrary(1);
+    const weather = lib.disciplines[0];
+
+    // Mutant this catches: keying the ranked-lessons map by module id alone
+    // (`disciplineModuleId`) rather than deciding the bucket from the
+    // discipline's ACTUAL modules — lesson 1 would be filed under a key
+    // (99) nothing ever reads and vanish from the whole payload.
+    expect(weather.untitled.map((l) => l.id)).toEqual([1]);
+    expect(weather.modules).toEqual([
+      { id: 7, name: 'Basics', rank: 1, lessons: [] },
+    ]);
+    const all = [
+      ...weather.modules.flatMap((m) => m.lessons),
+      ...weather.untitled,
+    ].map((l) => l.id);
+    expect(all).toEqual([1]);
+  });
 });
 
 describe('getOrgEditorBoard', () => {
