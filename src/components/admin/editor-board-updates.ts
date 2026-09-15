@@ -436,27 +436,69 @@ export function reorderLibraryModules(
   };
 }
 
+/**
+ * Where a library lesson is CURRENTLY shown, by walking the buckets in the
+ * order the pane renders them — every discipline's modules, then its own
+ * Untitled group, then the org-level Untitled column. Never read off the
+ * card's own `disciplineModuleId`: that field is an OUTPUT of
+ * `moveLessonInLibrary` and can go stale while the payload has already
+ * re-bucketed the lesson (its module was deleted, say).
+ */
+function locateLibraryLesson(
+  library: OrgLibrary,
+  lessonId: number,
+): {
+  bucket: LibraryLesson[];
+  at: number;
+  disciplineId: number | null;
+  boxId: number | null;
+} | null {
+  for (const d of library.disciplines) {
+    for (const m of d.modules) {
+      const at = m.lessons.findIndex((l) => l.id === lessonId);
+      if (at !== -1)
+        return { bucket: m.lessons, at, disciplineId: d.id, boxId: m.id };
+    }
+    const at = d.untitled.findIndex((l) => l.id === lessonId);
+    if (at !== -1)
+      return { bucket: d.untitled, at, disciplineId: d.id, boxId: null };
+  }
+  const at = library.untitled.findIndex((l) => l.id === lessonId);
+  if (at !== -1)
+    return { bucket: library.untitled, at, disciplineId: null, boxId: null };
+  return null;
+}
+
+/**
+ * The box a library lesson sits in: its discipline and module, `boxId: null`
+ * for that discipline's own Untitled group, `disciplineId: null` for the
+ * org-level Untitled column, and `null` for a lesson the library does not
+ * show at all. What `onDragOver` compares a `library-move`'s target box
+ * against: a hover within the lesson's CURRENT box is the sortable's to
+ * animate and gets no live write — written live, the card and the sibling
+ * it displaced would swap back on the next pointer move over unequal card
+ * heights — while a cross-box hover is carried over live.
+ */
+export function libraryLessonBox(
+  library: OrgLibrary,
+  lessonId: number,
+): { disciplineId: number | null; boxId: number | null } | null {
+  const located = locateLibraryLesson(library, lessonId);
+  if (!located) return null;
+  return { disciplineId: located.disciplineId, boxId: located.boxId };
+}
+
 /** The library lesson's neighbours in whichever bucket holds it — a
  *  discipline module's lessons, a discipline's own Untitled group, or the
- *  org-level Untitled column. */
+ *  org-level Untitled column. A lesson no bucket holds has no neighbours —
+ *  never `bucket[0]` off an index of -1. */
 export function libraryLessonNeighbours(
   library: OrgLibrary,
   lessonId: number,
 ): { prevLessonId: number | null; nextLessonId: number | null } {
-  let bucket: LibraryLesson[] = library.untitled;
-  outer: for (const d of library.disciplines) {
-    for (const m of d.modules) {
-      if (m.lessons.some((l) => l.id === lessonId)) {
-        bucket = m.lessons;
-        break outer;
-      }
-    }
-    if (d.untitled.some((l) => l.id === lessonId)) {
-      bucket = d.untitled;
-      break;
-    }
-  }
-  const at = bucket.findIndex((l) => l.id === lessonId);
+  const located = locateLibraryLesson(library, lessonId);
+  if (!located) return { prevLessonId: null, nextLessonId: null };
+  const { bucket, at } = located;
   return {
     prevLessonId: bucket[at - 1]?.id ?? null,
     nextLessonId: bucket[at + 1]?.id ?? null,

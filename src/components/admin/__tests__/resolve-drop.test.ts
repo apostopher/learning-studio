@@ -1139,3 +1139,99 @@ describe('resolveDrop — library-side drops', () => {
     });
   });
 });
+
+/**
+ * A RAIL item (a placed lesson, or a course module) released on a library
+ * box that holds no lesson card to land on — an empty discipline module's
+ * container, or a discipline's empty Untitled droppable — used to fall
+ * through to `resolveOverModule`, which knows nothing of library ids, and
+ * answer `null`: a silent snap-back, with the note, announcement and toast
+ * every other library-bound rail drop gets all missing. Mutant seen RED:
+ * the refusal branches listing `discipline`/`library-lesson` only.
+ */
+describe('resolveDrop — rail items released on an EMPTY library box', () => {
+  const NAV_UNTITLED = NAVIGATION; // Navigation's Untitled group holds nothing.
+
+  it('refuses a placed lesson over an empty library module container, with the library sentence', () => {
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      libraryContainerDndId(ADVANCED_MODULE),
+      from(FUNDAMENTALS),
+      libraryFixture(),
+    );
+    expect(result?.kind).toBe('forbidden');
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain('The library already holds "Stalls"');
+    expect(reason).toContain(
+      `"${removeLessonLabel('Stalls', 'Fundamentals')}"`,
+    );
+  });
+
+  it('refuses a placed lesson over an empty Untitled group, with the library sentence', () => {
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      libraryUntitledDndId(NAV_UNTITLED),
+      from(FUNDAMENTALS),
+      libraryFixture(),
+    );
+    expect(result?.kind).toBe('forbidden');
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain('The library already holds "Stalls"');
+  });
+
+  it('refuses a placed lesson over a library module header too', () => {
+    const result = resolveDrop(
+      board,
+      lessonDndId(1, STALLS),
+      libraryModuleDndId(ADVANCED_MODULE),
+      from(FUNDAMENTALS),
+      libraryFixture(),
+    );
+    expect(result?.kind).toBe('forbidden');
+    const reason = result?.kind === 'forbidden' ? result.reason : '';
+    expect(reason).toContain('The library already holds "Stalls"');
+  });
+
+  it('refuses a course module over an empty library module container, with the existing library sentence', () => {
+    const result = resolveDrop(
+      board,
+      moduleDndId(1, FUNDAMENTALS),
+      libraryContainerDndId(ADVANCED_MODULE),
+      undefined,
+      libraryFixture(),
+    );
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Fundamentals" is a module of Two-Week Course, and the library holds lessons, not modules. Drop it on another module in Two-Week Course to reorder it.',
+    });
+  });
+
+  it('refuses a course module over an empty Untitled group, with the existing library sentence', () => {
+    const result = resolveDrop(
+      board,
+      moduleDndId(1, FUNDAMENTALS),
+      libraryUntitledDndId(NAV_UNTITLED),
+      undefined,
+      libraryFixture(),
+    );
+    expect(result).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Fundamentals" is a module of Two-Week Course, and the library holds lessons, not modules. Drop it on another module in Two-Week Course to reorder it.',
+    });
+  });
+
+  it('refuses a course module over a library module header too', () => {
+    const result = resolveDrop(
+      board,
+      moduleDndId(1, FUNDAMENTALS),
+      libraryModuleDndId(ADVANCED_MODULE),
+      undefined,
+      libraryFixture(),
+    );
+    expect(result?.kind).toBe('forbidden');
+  });
+});

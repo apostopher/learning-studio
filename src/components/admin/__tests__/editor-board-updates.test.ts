@@ -17,6 +17,7 @@ import {
   boardLessonFromLibrary,
   commitTransferredLesson,
   lessonNeighbours,
+  libraryLessonBox,
   libraryLessonNeighbours,
   libraryModuleNeighbours,
   linkLessonOnBoard,
@@ -601,6 +602,28 @@ describe('the rank anchors sent to the API — library side', () => {
     });
   });
 
+  /**
+   * Mutant this catches: `at = -1` for a lesson no bucket holds, so
+   * `bucket[at + 1]` — `bucket[0]` — was handed to the server as the "next"
+   * neighbour of a lesson that isn't there. Both anchors are null instead.
+   */
+  it('answers null neighbours for a lesson no bucket holds, never bucket[0]', () => {
+    const library = makeLibrary();
+    expect(libraryLessonNeighbours(library, 999)).toEqual({
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    // Nor the org-level Untitled's first lesson, when that is the fallback.
+    const withOrphan: OrgLibrary = {
+      ...library,
+      untitled: [libLesson(50, null)],
+    };
+    expect(libraryLessonNeighbours(withOrphan, 999)).toEqual({
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+  });
+
   it("reads a discipline module's neighbours within its own discipline, never across disciplines", () => {
     const library = makeLibrary();
     expect(libraryModuleNeighbours(library, WEATHER, ADVANCED_MODULE)).toEqual({
@@ -611,5 +634,57 @@ describe('the rank anchors sent to the API — library side', () => {
       prevModuleId: null,
       nextModuleId: ADVANCED_MODULE,
     });
+  });
+});
+
+/**
+ * The box a library lesson is CURRENTLY shown in, by walking the buckets —
+ * what `onDragOver` compares the target box against to tell a same-box
+ * hover (the sortable animates it; no live write, or the card and its
+ * displaced sibling swap on every pointer move) from a cross-box one (the
+ * live write carries the card over).
+ */
+describe('libraryLessonBox', () => {
+  it('names the module and discipline a filed lesson sits in', () => {
+    expect(libraryLessonBox(makeLibrary(), 6)).toEqual({
+      disciplineId: WEATHER,
+      boxId: ADVANCED_MODULE,
+    });
+  });
+
+  it("names a discipline's own Untitled group as boxId null", () => {
+    expect(libraryLessonBox(makeLibrary(), 3)).toEqual({
+      disciplineId: WEATHER,
+      boxId: null,
+    });
+  });
+
+  it('reads the bucket, not the card’s own disciplineModuleId', () => {
+    // A stale card claims module 8 but is filed under Untitled.
+    const library = makeLibrary();
+    const stale: OrgLibrary = {
+      ...library,
+      disciplines: library.disciplines.map((d) =>
+        d.id === WEATHER
+          ? { ...d, untitled: [libLesson(3, ADVANCED_MODULE)] }
+          : d,
+      ),
+    };
+    expect(libraryLessonBox(stale, 3)).toEqual({
+      disciplineId: WEATHER,
+      boxId: null,
+    });
+  });
+
+  it('answers disciplineId null for the org-level Untitled column, and null for a lesson nowhere', () => {
+    const library: OrgLibrary = {
+      ...makeLibrary(),
+      untitled: [libLesson(50, null)],
+    };
+    expect(libraryLessonBox(library, 50)).toEqual({
+      disciplineId: null,
+      boxId: null,
+    });
+    expect(libraryLessonBox(library, 999)).toBeNull();
   });
 });

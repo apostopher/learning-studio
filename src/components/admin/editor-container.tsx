@@ -46,7 +46,11 @@ import { useMovePlacement } from '#/data-hooks/use-move-placement';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
 import type { OrgEditorBoard, OrgLibrary } from '#/lib/admin-schemas';
-import { type DndType, parseDndId } from '#/lib/dnd-ids';
+import {
+  type DndType,
+  parseDndId,
+  UNTITLED_DISCIPLINE_ID,
+} from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
 import {
@@ -65,10 +69,7 @@ import { DeleteDisciplineDialogContainer } from './delete-discipline-dialog-cont
 import { DeleteDisciplineModuleDialogContainer } from './delete-discipline-module-dialog-container';
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import { describeDndTarget, findLibraryLesson } from './describe-dnd-target';
-import {
-  DisciplineColumnContainer,
-  UNTITLED_DISCIPLINE_ID,
-} from './discipline-column-container';
+import { DisciplineColumnContainer } from './discipline-column-container';
 import {
   acceptsLessonDrag,
   acceptsModuleDrag,
@@ -80,6 +81,7 @@ import {
   boardLessonFromLibrary,
   commitTransferredLesson,
   lessonNeighbours,
+  libraryLessonBox,
   linkLessonOnBoard,
   moduleNeighbours,
   moveLessonInLibrary,
@@ -695,16 +697,30 @@ export const EditorContainer = ({
 
     // The library-side live preview — written to the LIBRARY query, never the
     // board's, so a lesson (or a discipline module) renders where it is
-    // going without waiting for the drop. `moveLessonInLibrary` handles a
-    // same-box hover (a reorder within a module) the same way it handles a
-    // cross-box one; there is nothing here to special-case.
+    // going without waiting for the drop.
+    //
+    // Only a CROSS-box move is carried live, exactly as the rail above only
+    // carries a cross-module one: a hover within the lesson's current box is
+    // a reorder the sortable already animates, and is settled at drop. Written
+    // live, it oscillated — with unequal card heights the pointer lands on
+    // the sibling the write just displaced, the next `onDragOver` resolves
+    // against that sibling and swaps the two back, and so on every pointer
+    // move. The current box is found by walking the buckets of the library
+    // as it stands NOW (an earlier cross-box preview in this same drag has
+    // already re-bucketed the card), never off the card's own field.
     //
     // `libraryPreviewRef` records what was just applied — never the ever-
     // changing `overId`/`overModuleId`, only what identifies the card and
     // where it landed — so `onDragEnd` can rebuild this exact resolution if
     // the drag is released on the card's own (now-relocated) droppable. See
-    // `libraryDropFromPreview`.
-    if (resolution?.kind === 'library-move' && currentLibrary) {
+    // `libraryDropFromPreview`. A same-box hover applies nothing, so it
+    // records nothing: released on its own card after one, there is no
+    // preview to rescue and nothing to roll back or commit.
+    if (
+      resolution?.kind === 'library-move' &&
+      currentLibrary &&
+      !isSameLibraryBox(currentLibrary, resolution)
+    ) {
       queryClient.setQueryData(
         libraryKey,
         moveLessonInLibrary(
@@ -739,6 +755,27 @@ export const EditorContainer = ({
         moduleId: resolution.moduleId,
       };
     }
+  };
+
+  /**
+   * Whether a `library-move` names the box the dragged lesson is ALREADY
+   * shown in — a same-box reorder, which the sortable animates and the drop
+   * settles, as opposed to a cross-box move the live preview carries over.
+   */
+  const isSameLibraryBox = (
+    lib: OrgLibrary,
+    resolution: {
+      lessonId: number;
+      disciplineId: number;
+      disciplineModuleId: number | null;
+    },
+  ) => {
+    const box = libraryLessonBox(lib, resolution.lessonId);
+    return (
+      box !== null &&
+      box.disciplineId === resolution.disciplineId &&
+      box.boxId === resolution.disciplineModuleId
+    );
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -964,14 +1001,33 @@ export const EditorContainer = ({
       return;
     }
 
-    if (
-      resolution.kind === 'library-move' ||
-      resolution.kind === 'reorder-library-module'
-    ) {
+    if (resolution.kind === 'library-move') {
+      if (!currentLibrary) {
+        rollback({ library: dragLibrarySnapshot });
+        return;
+      }
+      // Settle the drop into the cache FIRST, then read the neighbours off
+      // that — exactly how the rail commits a `move` above. A same-box
+      // reorder was deliberately not written live (see `onDragOver`), so
+      // this is the write that puts the card in the slot the sortable was
+      // showing; and the neighbours sent to the server must be the ones the
+      // admin saw the lesson land between, or the persisted order would
+      // disagree with what they watched happen.
+      const next = moveLessonInLibrary(
+        currentLibrary,
+        resolution.lessonId,
+        resolution.disciplineModuleId,
+        resolution.overId,
+      );
+      queryClient.setQueryData(libraryKey, next);
+      commitLibraryResolution(resolution, next);
+      return;
+    }
+
+    if (resolution.kind === 'reorder-library-module') {
       // Read off the PREVIEWED library, not the drag-start snapshot: the
       // neighbours sent to the server must be the ones `onDragOver` already
-      // showed the admin, or the persisted order would disagree with what
-      // they watched happen. `currentLibrary` above is that same read, taken
+      // showed the admin. `currentLibrary` above is that same read, taken
       // before anything in this branch writes to the cache again.
       if (!currentLibrary) {
         rollback({ library: dragLibrarySnapshot });

@@ -442,7 +442,13 @@ export function resolveDrop(
     const from = findModule(board, active.courseId, active.id);
     if (!from) return null;
 
-    if (over.type === 'discipline' || over.type === 'library-lesson') {
+    // EVERY library-side target — a discipline column, a lesson card, a
+    // module header/container, an Untitled droppable — is refused by name.
+    // An empty module's container and an empty Untitled group are the only
+    // things a module dragged over an empty box can land on; left off this
+    // list they fell through to `resolveOverModule`, which knows no library
+    // id, and the drag sprang back in silence.
+    if (over.type === 'discipline' || isLibraryTarget(over)) {
       return {
         kind: 'forbidden',
         reason: `"${from.module.name}" is a module of ${from.courseBoard.course.name}, and the library holds lessons, not modules. Drop it on another module in ${from.courseBoard.course.name} to reorder it.`,
@@ -496,7 +502,11 @@ export function resolveDrop(
     if (isBorrowed(from))
       return { kind: 'forbidden', reason: borrowedRefusal(from, false) };
 
-    if (over.type === 'discipline' || over.type === 'library-lesson') {
+    // Every library-side target, not just a column or a lesson card: an
+    // EMPTY discipline module (only its container to land on) and an empty
+    // Untitled group otherwise fell through to `resolveOverModule` and a
+    // silent `null` — the one thing a refusal is not allowed to be.
+    if (over.type === 'discipline' || isLibraryTarget(over)) {
       return {
         kind: 'forbidden',
         // Names the control by the EXACT accessible name it wears, built from
