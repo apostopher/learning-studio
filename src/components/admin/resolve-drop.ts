@@ -444,10 +444,9 @@ export function resolveDrop(
 
     // EVERY library-side target — a discipline column, a lesson card, a
     // module header/container, an Untitled droppable — is refused by name.
-    // An empty module's container and an empty Untitled group are the only
-    // things a module dragged over an empty box can land on; left off this
-    // list they fell through to `resolveOverModule`, which knows no library
-    // id, and the drag sprang back in silence.
+    // The collision filter only ever offers a rail module the column itself
+    // (`acceptsModuleDrag`), so the finer library kinds are listed for
+    // symmetry with the lesson branch below, where they ARE reachable.
     if (over.type === 'discipline' || isLibraryTarget(over)) {
       return {
         kind: 'forbidden',

@@ -382,9 +382,9 @@ export const EditorContainer = ({
       ) {
         // Not `discipline` ids, so they pass through here unchanged — a
         // library-lesson drag's real targets (`resolveDrop` files it into a
-        // module, Untitled, or refuses a cross-discipline one by name), and a
-        // harmless miss for anything else (`resolveDrop` answers those
-        // `null`, same as dropping on nothing).
+        // module, Untitled, or refuses a cross-discipline one by name), and
+        // for a rail lesson a refusal by name ("the library already holds
+        // it") rather than a silent miss.
         return true;
       }
       // `course` is the empty-course region. It is a target so the drop can
