@@ -41,7 +41,7 @@ import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
 import type { LibraryLesson, OrgEditorBoard } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
-import { findFlagshipCourse } from '#/lib/flagship-course';
+import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
@@ -867,7 +867,8 @@ export const EditorContainer = ({
               ) : undefined
             }
           >
-            {board.map((courseBoard) => (
+            {/* Not the flagship — see `courseRailBoards`. */}
+            {courseRailBoards(board).map((courseBoard) => (
               <EditorCourseColumnContainer
                 key={courseBoard.course.id}
                 courseBoard={courseBoard}

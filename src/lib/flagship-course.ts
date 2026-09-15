@@ -22,3 +22,23 @@ export function findFlagshipCourse<
     boards.find((b) => b.course.slug === FLAGSHIP_COURSE_SLUG)?.course ?? null
   );
 }
+
+/**
+ * The boards the editor's course rail draws: every course EXCEPT the
+ * flagship.
+ *
+ * The flagship is the library, not a course among courses: its lessons are
+ * filed under the discipline of the same name in the left pane, and the
+ * courses on the rail borrow its modules through "Remix". Drawn as a column
+ * too, it would sit beside the very courses that remix it, its modules on
+ * screen twice. It is edited on its own board (`/admin/$courseId/editor`,
+ * reached from the Courses screen and from every "Edited in …" link).
+ *
+ * The full board still feeds `findFlagshipCourse` and the drag resolver —
+ * only what is DRAWN is filtered.
+ */
+export function courseRailBoards<
+  C extends { course: { id: number; name: string; slug: string } },
+>(boards: readonly C[]): C[] {
+  return boards.filter((b) => b.course.slug !== FLAGSHIP_COURSE_SLUG);
+}
