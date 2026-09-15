@@ -52,6 +52,18 @@ interface SectionedConfigModalProps {
   /** Sidebar (tab list) column width; defaults to 320px. */
   sidebarWidth?: string;
   /**
+   * Rendered in the header between the title and Close — the dialog's
+   * primary action when it has no sidebar to pin one under (a single-section
+   * dialog), so Save sits where the eye already goes to leave.
+   */
+  headerActions?: ReactNode;
+  /**
+   * Replaces the plain `<h2>{heading}</h2>` above the panel with a node the
+   * caller owns — an editable name with its own controls. The slot renders
+   * its own heading element; `heading` is ignored while it is set.
+   */
+  headingSlot?: ReactNode;
+  /**
    * The section to open on, by `value`. Defaults to the first section; a
    * value that matches no section also falls back to the first, so a stale
    * caller cannot open the modal on an empty panel. Tab ORDER is untouched —
@@ -76,7 +88,12 @@ export const SectionedConfigModal = ({
   width = '1280px',
   sidebarWidth = '320px',
   defaultSection,
+  headerActions,
+  headingSlot,
 }: SectionedConfigModalProps) => {
+  // One section has nothing to tab between: no sidebar, no footer. The
+  // grid collapses to the panel alone.
+  const hasSidebar = sections.length > 1;
   const firstValue =
     sections.find((section) => section.value === defaultSection)?.value ??
     sections[0]?.value;
@@ -99,11 +116,15 @@ export const SectionedConfigModal = ({
           style={{ '--modal-dialog-width': width } as CSSProperties}
           className="dialog-popup fixed inset-0 z-40 m-auto grid h-[85vh] max-h-[calc(100vh-2rem)] w-[var(--modal-dialog-width)] max-w-[calc(100vw-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl"
         >
-          <div className="flex items-center justify-between gap-4 border-gray-6 border-b px-6 py-4">
+          <div className="flex items-center gap-4 border-gray-6 border-b px-6 py-4 [&>:first-child]:flex-1">
             <Dialog.Title className="font-semibold text-primary text-lg">
               {title}
             </Dialog.Title>
-            <Dialog.Close className="shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
+            {headerActions}
+            <Dialog.Close
+              aria-label="Close"
+              className="shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            >
               <X className="h-5 w-5" aria-hidden="true" />
             </Dialog.Close>
           </div>
@@ -113,30 +134,36 @@ export const SectionedConfigModal = ({
               value={active?.value}
               onValueChange={(value) => setChosenValue(String(value))}
               orientation="vertical"
-              style={{ gridTemplateColumns: `${sidebarWidth} minmax(0, 1fr)` }}
+              style={{
+                gridTemplateColumns: hasSidebar
+                  ? `${sidebarWidth} minmax(0, 1fr)`
+                  : 'minmax(0, 1fr)',
+              }}
               className="grid min-h-0"
             >
-              <div
-                data-sidebar
-                className="flex min-h-0 flex-col border-gray-6 border-e bg-gray-1"
-              >
-                <Tabs.List className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-                  {sections.map((section) => (
-                    <Tabs.Tab
-                      key={section.value}
-                      value={section.value}
-                      className="border-gray-6 border-b px-4 py-3 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
-                    >
-                      {section.title}
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-                {active?.sidebarFooter && (
-                  <div className="border-gray-6 border-t p-4">
-                    {active.sidebarFooter}
-                  </div>
-                )}
-              </div>
+              {hasSidebar && (
+                <div
+                  data-sidebar
+                  className="flex min-h-0 flex-col border-gray-6 border-e bg-gray-1"
+                >
+                  <Tabs.List className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                    {sections.map((section) => (
+                      <Tabs.Tab
+                        key={section.value}
+                        value={section.value}
+                        className="border-gray-6 border-b px-4 py-3 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
+                      >
+                        {section.title}
+                      </Tabs.Tab>
+                    ))}
+                  </Tabs.List>
+                  {active?.sidebarFooter && (
+                    <div className="border-gray-6 border-t p-4">
+                      {active.sidebarFooter}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/*
                 Both panel groups occupy the same grid cell; Base UI hides
@@ -166,9 +193,11 @@ export const SectionedConfigModal = ({
                           className="flex-1"
                         >
                           <div className="flex flex-col gap-6">
-                            <h2 className="break-words font-semibold text-2xl text-primary">
-                              {section.heading ?? heading}
-                            </h2>
+                            {headingSlot ?? (
+                              <h2 className="break-words font-semibold text-2xl text-primary">
+                                {section.heading ?? heading}
+                              </h2>
+                            )}
                             {section.content}
                           </div>
                         </Tabs.Panel>

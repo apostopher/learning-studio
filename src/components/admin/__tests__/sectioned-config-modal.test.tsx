@@ -125,4 +125,46 @@ describe('SectionedConfigModal default section', () => {
     );
     expect(selectedTab()).toBe('Video');
   });
+
+  /**
+   * A dialog with ONE section has nothing to tab between: no sidebar, no
+   * footer — the section's primary action lives in the header instead
+   * (`headerActions`, beside Close), and `headingSlot` replaces the plain
+   * text heading with something the caller owns (an editable name).
+   * Mutant: a one-item tab list drawn anyway, or the header slot dropped.
+   */
+  it('with a single section draws no sidebar, and puts header actions beside Close', () => {
+    renderIsolated(
+      <SectionedConfigModal
+        open
+        onOpenChange={() => {}}
+        title="Edit lesson"
+        heading="Preflight"
+        sections={[
+          {
+            value: 'material',
+            title: 'Content',
+            content: <p>content body</p>,
+            sidebarFooter: <button type="button">Save (footer)</button>,
+          },
+        ]}
+        headerActions={<button type="button">Save material</button>}
+        headingSlot={<h2>Preflight (editable)</h2>}
+      />,
+    );
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save (footer)' })).toBeNull();
+    expect(screen.getByText('content body')).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'Preflight (editable)' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Preflight' })).toBeNull();
+    const save = screen.getByRole('button', { name: 'Save material' });
+    const close = screen.getByRole('button', { name: /close/i });
+    // Same header row, save before close.
+    expect(save.parentElement).toBe(close.parentElement);
+    expect(
+      save.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

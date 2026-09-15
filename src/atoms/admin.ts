@@ -266,6 +266,13 @@ export const videoDraftDetectionAtom = atom<{
 export const videoPlaybackForbiddenLessonIdAtom = atom<number | null>(null);
 
 /**
+ * The lesson whose name is being edited inline in the library's "Edit
+ * lesson" heading, or null. Carries the id so a stale value from a previous
+ * opening cannot put a different lesson into rename mode.
+ */
+export const renamingLibraryLessonIdAtom = atom<number | null>(null);
+
+/**
  * The open tab of the sectioned config modal (`SectionedConfigModal`), by
  * section value. One atom, not one per dialog: only one such modal is open
  * at a time, and a value that names no section of the dialog now open is

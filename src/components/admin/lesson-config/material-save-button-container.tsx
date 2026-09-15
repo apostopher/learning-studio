@@ -14,8 +14,11 @@ import { MaterialSaveButton } from './material-save-button';
  */
 export const MaterialSaveButtonContainer = ({
   lessonId,
+  fullWidth = false,
 }: {
   lessonId: number;
+  /** See `MaterialSaveButton`. */
+  fullWidth?: boolean;
 }) => {
   const saving = useIsMutating({
     mutationKey: dataKeys.lessonMaterialSave(lessonId),
@@ -24,6 +27,7 @@ export const MaterialSaveButtonContainer = ({
     <MaterialSaveButton
       formId={lessonMaterialFormId(lessonId)}
       isSaving={saving > 0}
+      fullWidth={fullWidth}
     />
   );
 };

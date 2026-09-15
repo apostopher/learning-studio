@@ -51,7 +51,11 @@ export const LessonConfigDialogContainer = ({
       ),
       // Pinned under the tabs so it never scrolls away with the material.
       sidebarFooter: lesson && (
-        <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
+        <MaterialSaveButtonContainer
+          key={lesson.id}
+          lessonId={lesson.id}
+          fullWidth
+        />
       ),
     },
     {

@@ -3,10 +3,10 @@ import { useAtom, useSetAtom } from 'jotai';
 import { editLibraryLessonIdAtom, resetVideoSectionAtom } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import type { LibraryLesson } from '#/lib/admin-schemas';
-import { LibraryDetailsSectionContainer } from './lesson-config/library-details-section-container';
 import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
+import { LibraryLessonHeadingContainer } from './library-lesson-heading-container';
 import {
   type ConfigModalSection,
   SectionedConfigModal,
@@ -60,19 +60,14 @@ export const LibraryLessonConfigDialogContainer = () => {
   const { data: library } = useOrgLibrary();
   const lesson = findLesson(library, lessonId);
 
+  // One section and no sidebar: the name and availability that were a
+  // Details tab now live in the heading, and Save sits in the header beside
+  // Close. `key` is load-bearing, not a list artefact: this modal is mounted
+  // once for the whole editor and re-pointed at a different lesson, so
+  // without it the sections would keep the previous lesson's form state.
+  // Keying on the id is what docs/use-effect-rules.md prescribes in place of
+  // an effect that resets state when a prop changes.
   const sections: ConfigModalSection[] = [
-    {
-      value: 'details',
-      title: 'Details',
-      // `key` is load-bearing, not a list artefact: this modal is mounted once
-      // for the whole editor and re-pointed at a different lesson, so without
-      // it the sections would keep the previous lesson's form state. Keying on
-      // the id is what docs/use-effect-rules.md prescribes in place of an
-      // effect that resets state when a prop changes.
-      content: lesson && (
-        <LibraryDetailsSectionContainer key={lesson.id} lesson={lesson} />
-      ),
-    },
     {
       value: 'material',
       title: 'Content',
@@ -91,10 +86,6 @@ export const LibraryLessonConfigDialogContainer = () => {
           <MaterialSectionContainer key={lesson.id} lesson={lesson} />
         </div>
       ),
-      // Pinned under the tabs so it never scrolls away with the material.
-      sidebarFooter: lesson && (
-        <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
-      ),
     },
   ];
 
@@ -111,10 +102,17 @@ export const LibraryLessonConfigDialogContainer = () => {
       }}
       title="Edit lesson"
       heading={lesson?.name ?? ''}
+      headingSlot={
+        lesson && (
+          <LibraryLessonHeadingContainer key={lesson.id} lesson={lesson} />
+        )
+      }
+      headerActions={
+        lesson && (
+          <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
+        )
+      }
       sections={sections}
-      // Content is what an admin opens a lesson to work on; details are set
-      // once and rarely revisited.
-      defaultSection="material"
     />
   );
 };
