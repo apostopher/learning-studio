@@ -363,60 +363,112 @@ export const disciplinesTableRelations = relations(
   }),
 );
 
-export const lessonsTable = pgTable('lessons', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  otherVideoIds: jsonb('other_video_ids')
-    .$type<z.infer<typeof OtherVideoIdsSchema>>()
-    .default([]),
-  videoProvider: text('video_provider'), // 'mux' | 'synthesia' | null
-  videoRef: text('video_ref'),
-  requiredSubscriptions: text('required_subscriptions').array().notNull(),
-  /**
-   * Which competence tiers see this lesson. **Empty means every tier** — so the
-   * pre-existing catalogue stays fully visible and authors opt lessons in one
-   * at a time. Matching is exact, not a ceiling: an `advanced` pilot does not
-   * see a `['basic']` lesson.
-   */
-  levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
-  isAvailable: boolean('is_available').notNull().default(false),
-  exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
-  hasDebrief: boolean('has_debrief').notNull().default(true),
-  disciplineId: integer('discipline_id').references(() => disciplinesTable.id, {
-    onDelete: 'no action',
-  }),
-  /**
-   * The org that owns this lesson. Lessons are org-level library items now,
-   * so an UNPLACED lesson — new, or removed from every course — still has a
-   * home and still appears in the library.
-   *
-   * One owner, deliberately. `course_orgs` allows a course to belong to
-   * several orgs, so the backfill takes the lowest. If genuine cross-org
-   * sharing arrives it becomes a join table, not a rework of this column.
-   */
-  orgId: integer('org_id')
-    .notNull()
-    .references(() => orgsTable.id, {
-      onDelete: 'cascade',
-    }),
-  /**
-   * PRESERVED FOR PARITY — no learner-side consumer yet.
-   *
-   * Re-added so the `iTPS UAS Remote` import could carry the old platform's
-   * per-lesson setting across losslessly (13 of its 102 lessons had it
-   * deliberately false, and the old database is not guaranteed to remain
-   * available). Now editable from the lesson Config tab's "Video watch" row.
-   *
-   * The old app gated lesson completion on it — a lesson did not count as
-   * complete until its video had been watched. Whatever reinstates that
-   * behaviour is the intended consumer; until then this is admin-config only,
-   * exactly like `hasDebrief` above, which has no learner-side reader either.
-   */
-  needsVideoWatch: boolean('needs_video_watch').notNull().default(true),
-  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-});
+/**
+ * `discipline_modules` — how the library is FILED, not what a course
+ * teaches.
+ *
+ * A discipline may hold named, ordered modules and a lesson in that
+ * discipline sits in at most one of them (`lessons.discipline_module_id`),
+ * or in none — its discipline's "Untitled" group. Nothing here reaches a
+ * learner, gates anything, or travels on a remix; `course_modules` and
+ * `module_lessons` are untouched. `rank` orders modules within the
+ * discipline. Deleting a module sets its lessons' column to null: a box is
+ * thrown away, never its contents.
+ */
+export const disciplineModulesTable = pgTable(
+  'discipline_modules',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    disciplineId: integer('discipline_id')
+      .notNull()
+      .references(() => disciplinesTable.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('discipline_modules_discipline_id_idx').on(table.disciplineId),
+  ],
+);
+
+export const lessonsTable = pgTable(
+  'lessons',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull().unique(),
+    otherVideoIds: jsonb('other_video_ids')
+      .$type<z.infer<typeof OtherVideoIdsSchema>>()
+      .default([]),
+    videoProvider: text('video_provider'), // 'mux' | 'synthesia' | null
+    videoRef: text('video_ref'),
+    requiredSubscriptions: text('required_subscriptions').array().notNull(),
+    /**
+     * Which competence tiers see this lesson. **Empty means every tier** — so the
+     * pre-existing catalogue stays fully visible and authors opt lessons in one
+     * at a time. Matching is exact, not a ceiling: an `advanced` pilot does not
+     * see a `['basic']` lesson.
+     */
+    levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
+    isAvailable: boolean('is_available').notNull().default(false),
+    exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
+    hasDebrief: boolean('has_debrief').notNull().default(true),
+    disciplineId: integer('discipline_id').references(
+      () => disciplinesTable.id,
+      {
+        onDelete: 'no action',
+      },
+    ),
+    /**
+     * The discipline module this lesson is filed in, or null for its
+     * discipline's Untitled group. Must belong to `disciplineId`'s discipline
+     * — enforced by `placeLessonInLibrary`, the one write that sets it.
+     */
+    disciplineModuleId: integer('discipline_module_id').references(
+      () => disciplineModulesTable.id,
+      { onDelete: 'set null' },
+    ),
+    /**
+     * Order within its discipline module (or within Untitled). Null until the
+     * lesson is first dragged; unranked lessons sort after ranked ones, by id.
+     */
+    libraryRank: numeric('library_rank', { precision: 30, scale: 15 }),
+    /**
+     * The org that owns this lesson. Lessons are org-level library items now,
+     * so an UNPLACED lesson — new, or removed from every course — still has a
+     * home and still appears in the library.
+     *
+     * One owner, deliberately. `course_orgs` allows a course to belong to
+     * several orgs, so the backfill takes the lowest. If genuine cross-org
+     * sharing arrives it becomes a join table, not a rework of this column.
+     */
+    orgId: integer('org_id')
+      .notNull()
+      .references(() => orgsTable.id, {
+        onDelete: 'cascade',
+      }),
+    /**
+     * PRESERVED FOR PARITY — no learner-side consumer yet.
+     *
+     * Re-added so the `iTPS UAS Remote` import could carry the old platform's
+     * per-lesson setting across losslessly (13 of its 102 lessons had it
+     * deliberately false, and the old database is not guaranteed to remain
+     * available). Now editable from the lesson Config tab's "Video watch" row.
+     *
+     * The old app gated lesson completion on it — a lesson did not count as
+     * complete until its video had been watched. Whatever reinstates that
+     * behaviour is the intended consumer; until then this is admin-config only,
+     * exactly like `hasDebrief` above, which has no learner-side reader either.
+     */
+    needsVideoWatch: boolean('needs_video_watch').notNull().default(true),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('lessons_discipline_module_id_idx').on(table.disciplineModuleId),
+  ],
+);
 
 export const dbLessonSchema = createSelectSchema(lessonsTable, {
   requiredSubscriptions: SubscriptionsSchema,
