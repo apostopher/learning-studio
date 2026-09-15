@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dataKeys } from './keys';
 
 const FORBIDDEN =
-  "Only an admin or one of this discipline's subject experts can organise it.";
+  "Only an admin or one of this discipline’s subject experts can organise it.";
 
 /** The server's own sentence when it sent one; the discipline sentence for a bare 403; else a coded fallback. */
 async function readError(res: Response, fallback: string): Promise<never> {
