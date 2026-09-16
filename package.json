@@ -32,6 +32,7 @@
     "db:migrate-drop-module-rank": "dotenv -e .env.local -- tsx src/db/migrate-drop-module-rank.ts",
     "db:migrate-course-remixes": "dotenv -e .env.local -- tsx src/db/migrate-course-remixes.ts",
     "db:migrate-discipline-modules": "dotenv -e .env.local -- tsx src/db/migrate-discipline-modules.ts",
+    "db:import-discipline-library": "dotenv -e .env.local -- tsx scripts/import-discipline-library.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
