@@ -891,6 +891,15 @@ export async function setLessonVideo(
  * ref (the route's content:read): a bare Mux ref is streamable, so this never
  * rides on a board or library payload. `null` for no such lesson.
  */
+// A column that fails the schema reads as empty rather than erroring the
+// tab: the admin's fix is to add rows, which overwrite it. Shared by the
+// plain GET read and the locked read-modify-write below, so the rule can't
+// drift between the two.
+function parseAlternates(raw: unknown): OtherVideoIds {
+  const parsed = OtherVideoIdsSchema.safeParse(raw);
+  return parsed.success ? parsed.data : [];
+}
+
 export async function getLessonAlternateVideos(
   lessonId: number,
 ): Promise<OtherVideoIds | null> {
@@ -899,26 +908,42 @@ export async function getLessonAlternateVideos(
     .from(lessonsTable)
     .where(eq(lessonsTable.id, lessonId));
   if (!row) return null;
-  // A column that fails the schema reads as empty rather than erroring the
-  // tab: the admin's fix is to add rows, which overwrite it.
-  const parsed = OtherVideoIdsSchema.safeParse(row.otherVideoIds);
-  return parsed.success ? parsed.data : [];
+  return parseAlternates(row.otherVideoIds);
 }
 
+/**
+ * Read-modify-write under a row lock: two concurrent PUTs for different
+ * languages on the same lesson would otherwise both read the same `current`
+ * array and each write back their own upsert, silently clobbering whichever
+ * one commits first. `for('update')` inside the transaction serialises them
+ * on the lesson row, so the second writer's `next` sees the first writer's
+ * result — same pattern as `remixCourse`/`unremixCourse` in
+ * `db/course-remixes.ts`.
+ */
 async function writeLessonAlternateVideos(
   lessonId: number,
   next: (current: OtherVideoIds) => OtherVideoIds,
 ): Promise<{ id: number } | null> {
-  const current = await getLessonAlternateVideos(lessonId);
-  if (current === null) return null;
-  const [updated] = await db
-    .update(lessonsTable)
-    .set({ otherVideoIds: next(current), updatedAt: sql`now()` })
-    .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ otherVideoIds: lessonsTable.otherVideoIds })
+      .from(lessonsTable)
+      .where(eq(lessonsTable.id, lessonId))
+      .for('update');
+    if (!row) return null;
+    const current = parseAlternates(row.otherVideoIds);
+    const [u] = await tx
+      .update(lessonsTable)
+      .set({ otherVideoIds: next(current), updatedAt: sql`now()` })
+      .where(eq(lessonsTable.id, lessonId))
+      .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
+    return u ?? null;
+  });
   if (!updated) return null;
   // The languages list rides on every cached playback entry, in every
-  // language — see getLessonPlayback.invalidate.
+  // language — see getLessonPlayback.invalidate. Outside the transaction:
+  // cache eviction is not part of the row's atomicity, and Redis has none of
+  // its own to join.
   await invalidateLessonPlaybackCache(updated.slug);
   return { id: updated.id };
 }
