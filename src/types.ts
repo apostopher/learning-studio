@@ -1,5 +1,7 @@
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
+import { alternateLangSchema } from '#/lib/video-languages';
+import { PROVIDER_IDS } from '#/lib/video-providers';
 
 export const SubscriptionSchema = z.enum(['associate', 'candidate', 'rpoc']);
 export const SubscriptionsSchema = z.array(SubscriptionSchema);
@@ -85,13 +87,24 @@ export function isVideoNotReady(obj: unknown): obj is VideoNotReady {
 // `parseVideosPage` in integrations/synthesia/videos.ts, which validates the
 // envelope strictly and each record individually.
 
+/**
+ * A translated video attached to a lesson under one language. Same
+ * provider/ref pair as the primary video, so it goes through the same
+ * `resolvePlayback`; stored on `lessons.other_video_ids`. One row per lang.
+ */
 export const OtherVideoIdSchema = z.object({
-  lang: z.enum(['FR', 'JP']),
-  videoId: z.url('Video ID must be a valid URL'),
+  lang: alternateLangSchema,
+  provider: z.enum(PROVIDER_IDS),
+  ref: z.string().trim().min(1),
 });
 export type OtherVideoId = z.infer<typeof OtherVideoIdSchema>;
 
-export const OtherVideoIdsSchema = z.array(OtherVideoIdSchema);
+export const OtherVideoIdsSchema = z
+  .array(OtherVideoIdSchema)
+  .refine(
+    (rows) => new Set(rows.map((r) => r.lang)).size === rows.length,
+    'One video per language',
+  );
 export type OtherVideoIds = z.infer<typeof OtherVideoIdsSchema>;
 
 export const OnboardingQuestionSchema = z.object({
