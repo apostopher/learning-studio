@@ -16,7 +16,9 @@ export const synthesiaProvider: VideoProviderMeta = {
     try {
       const u = new URL(url);
       if (!/(^|\.)synthesia\.io$/.test(u.hostname)) return null;
-      const seg = u.pathname.split('/').filter(Boolean).at(-1);
+      // The editor (app.synthesia.io/#/video-edit/<id>) is a hash router, so
+      // the id sits in the fragment; share links keep it in the path.
+      const seg = `${u.pathname}${u.hash}`.split('/').filter(Boolean).at(-1);
       return seg && UUID_RE.test(seg) ? { ref: seg } : null;
     } catch {
       return null;

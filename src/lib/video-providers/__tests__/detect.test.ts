@@ -12,6 +12,16 @@ describe('detectVideoUrl', () => {
       ref: '11111111-2222-3333-4444-555555555555',
     });
   });
+  it('detects a Synthesia editor URL, whose id lives in the hash route', () => {
+    expect(
+      detectVideoUrl(
+        'https://app.synthesia.io/#/video-edit/16c1e1f9-eae0-4ed1-aed9-d6d4e661d093',
+      ),
+    ).toEqual({
+      provider: 'synthesia',
+      ref: '16c1e1f9-eae0-4ed1-aed9-d6d4e661d093',
+    });
+  });
   it('detects a Mux stream URL and strips extension/query', () => {
     expect(
       detectVideoUrl('https://stream.mux.com/AbCd1234Ef.m3u8?token=x'),
