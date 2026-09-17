@@ -2,6 +2,7 @@
 import type { SQL } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
+import { PRIMARY_VIDEO_LANG, VIDEO_LANGUAGES } from '#/lib/video-languages';
 import type { Captured } from './support/capture-db';
 
 /**
@@ -241,10 +242,15 @@ describe('getLessonPlayback is scoped and cached per course', () => {
 
     await getLessonPlayback('l1', { courseId: 6 });
 
-    expect(redis.get).toHaveBeenCalledWith('lesson-playback:6:l1');
+    // No `lang` was requested, so it resolves under the default (`en`) —
+    // the key names the language too, not just the course. The cached
+    // payload also carries which language it resolved and which the lesson
+    // offers (`resolveLessonPlaybackUncached` merges these in) — this lesson
+    // has no alternates, so both are just `en`.
+    expect(redis.get).toHaveBeenCalledWith('lesson-playback:6:l1:en');
     expect(redis.set).toHaveBeenCalledWith(
-      'lesson-playback:6:l1',
-      JSON.stringify(ready),
+      'lesson-playback:6:l1:en',
+      JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 60 },
     );
   });
@@ -259,11 +265,11 @@ describe('getLessonPlayback is scoped and cached per course', () => {
 
   /**
    * An admin video swap must evict the entry for EVERY course teaching the
-   * lesson — one `del` per course id the plural helper reports, each under
-   * the per-course key. The mutant deletes the old single per-lesson key,
-   * which no reader consults any more.
+   * lesson, in EVERY language — one `del` per (course id, language) pair,
+   * each under the per-course-per-language key. The mutant deletes only the
+   * old single per-course key, which no reader consults any more.
    */
-  it('invalidate evicts one key per course teaching the lesson', async () => {
+  it('invalidate evicts every language key per course teaching the lesson', async () => {
     cap.results.push([{ id: 42 }]);
     playback.getCourseIdsForLesson.mockResolvedValueOnce([2, 6]);
 
@@ -274,10 +280,11 @@ describe('getLessonPlayback is scoped and cached per course', () => {
     );
     expect(renderSqlParams(cap.captured.where[0] as SQL)).toEqual(['l1']);
     expect(playback.getCourseIdsForLesson).toHaveBeenCalledWith(42);
-    expect(redis.del.mock.calls).toEqual([
-      ['lesson-playback:2:l1'],
-      ['lesson-playback:6:l1'],
-    ]);
+    const allLangs = [PRIMARY_VIDEO_LANG, ...VIDEO_LANGUAGES];
+    const expectedCalls = [2, 6].flatMap((courseId) =>
+      allLangs.map((lang) => [`lesson-playback:${courseId}:l1:${lang}`]),
+    );
+    expect(redis.del.mock.calls).toEqual(expectedCalls);
   });
 
   it('invalidate deletes nothing for a slug that matches no lesson', async () => {
