@@ -112,6 +112,7 @@ describe('getLessonPlaybackHandler', () => {
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
       courseId: 7,
       skipCache: false,
+      lang: 'en',
     });
   });
 
@@ -164,6 +165,7 @@ describe('getLessonPlaybackHandler', () => {
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
       courseId: 42,
       skipCache: false,
+      lang: 'en',
     });
   });
 
@@ -181,6 +183,7 @@ describe('getLessonPlaybackHandler', () => {
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
       courseId: 7,
       skipCache: true,
+      lang: 'en',
     });
   });
 
@@ -193,6 +196,7 @@ describe('getLessonPlaybackHandler', () => {
     expect(m.getLessonPlayback).toHaveBeenCalledWith('l1', {
       courseId: 7,
       skipCache: false,
+      lang: 'en',
     });
   });
 
@@ -219,5 +223,36 @@ describe('getLessonPlaybackHandler', () => {
     expect(locked.status).toBe(403);
     expect(noVideo.status).toBe(403);
     expect(await locked.text()).toBe(await noVideo.text());
+  });
+});
+
+describe('lang', () => {
+  it('passes a known lang through to getLessonPlayback', async () => {
+    await getLessonPlaybackHandler(
+      new Request(
+        'http://t/api/lesson/playback?lessonSlug=l1&courseSlug=c1&lang=fr-CA',
+      ),
+    );
+    expect(m.getLessonPlayback).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({ courseId: 7, lang: 'fr-CA' }),
+    );
+  });
+
+  it('treats an unknown or absent lang as en rather than refusing', async () => {
+    await getLessonPlaybackHandler(
+      new Request(
+        'http://t/api/lesson/playback?lessonSlug=l1&courseSlug=c1&lang=klingon',
+      ),
+    );
+    expect(m.getLessonPlayback).toHaveBeenLastCalledWith(
+      'l1',
+      expect.objectContaining({ lang: 'en' }),
+    );
+    await getLessonPlaybackHandler(req('l1'));
+    expect(m.getLessonPlayback).toHaveBeenLastCalledWith(
+      'l1',
+      expect.objectContaining({ lang: 'en' }),
+    );
   });
 });

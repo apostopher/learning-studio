@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import { isVideoLang, PRIMARY_VIDEO_LANG } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 
 /**
@@ -38,6 +39,12 @@ export async function getLessonPlaybackHandler(
   // behind it) without authorization.
   const fresh = url.searchParams.get('fresh') === '1';
 
+  // The learner's language preference is global and most lessons will not
+  // carry it, so an unknown or unattached lang is never a refusal — the
+  // resolver falls back to English and reports which language it played.
+  const rawLang = url.searchParams.get('lang');
+  const lang = isVideoLang(rawLang) ? rawLang : PRIMARY_VIDEO_LANG;
+
   try {
     const gate = await evaluateLessonGate({
       userId: session.user.id,
@@ -66,6 +73,7 @@ export async function getLessonPlaybackHandler(
     const playback = await getLessonPlayback(lessonSlug, {
       courseId: gate.courseId,
       skipCache: fresh,
+      lang,
     });
     if (!playback) return new Response('Forbidden', { status: 403 });
     return Response.json(playback);
