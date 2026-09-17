@@ -70,10 +70,17 @@ Shown under the existing URL row, only once the lesson has a primary video:
 ## Playback
 
 - `resolveLessonPlayback(lessonSlug, courseId, lang)`. For `en` the current
-  path. Otherwise the alternate row is read from `other_video_ids`; missing
-  lang → `null` (the route's uniform 403). Resolved via `resolvePlayback`
-  with the course's credentials for **that row's** provider. Redis cache key
-  includes the lang.
+  path. Otherwise the alternate row is read from `other_video_ids`; a
+  requested lang the lesson lacks falls back to the primary video and the
+  response reports `lang: 'en'`. Resolved via `resolvePlayback` with the
+  course's credentials for **that row's** provider. Redis cache key includes
+  the lang.
+- Debrief transcripts (`getLessonTranscript`) are generated from the English
+  video's captions regardless of the learner's language; alternates writes
+  deliberately leave that cache alone.
+- Admin read/write live as HTTP route handlers guarded by
+  `requireLessonContentPermission` (matching the sibling
+  `lessons.$lessonId.video.ts`), not `createServerFn` + `requireAdmin`.
 - The playback response adds `languages: VideoLang[]` — `['en', ...alternate langs]`,
   always in `VIDEO_LANGUAGES` order — so the menu renders on first load.
 - `/api/lesson/playback` accepts `?lang=`; invalid or absent → `en`.
