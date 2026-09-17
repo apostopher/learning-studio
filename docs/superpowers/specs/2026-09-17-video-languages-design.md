@@ -60,9 +60,11 @@ Shown under the existing URL row, only once the lesson has a primary video:
   the same `detectVideoUrl` feedback as the primary field, and an "Add"
   button disabled until detection succeeds. Saves immediately (same pattern
   as `setLessonVideo`), then the list refetches.
-- Server functions (each self-guarded with `requireAdmin`, per memory):
-  `getLessonAlternateVideos(lessonId)`, `setLessonAlternateVideo({ lessonId, lang, provider, ref })`
-  (upsert by lang), `removeLessonAlternateVideo({ lessonId, lang })`.
+- Server side: `GET/PUT/DELETE /api/admin/lessons/:lessonId/alternate-videos`,
+  guarded by `requireLessonContentPermission` on the lesson's discipline
+  (same shape as `lessons.$lessonId.video.ts`), backed by
+  `getLessonAlternateVideos(lessonId)`, `setLessonAlternateVideo(lessonId, { lang, provider, ref })`
+  (upsert by lang, row-locked) and `removeLessonAlternateVideo(lessonId, lang)`.
 - Data hooks: `useLessonAlternateVideos`, `useSetLessonAlternateVideo`,
   `useRemoveLessonAlternateVideo`, invalidating the alternates query and
   the lesson's playback query.
