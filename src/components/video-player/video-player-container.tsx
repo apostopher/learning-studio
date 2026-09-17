@@ -7,6 +7,7 @@ import { useVideoPlayer } from './hooks';
 import {
   applyRestorePoint,
   captureRestorePoint,
+  isLanguageSwitch,
   type RestorePoint,
 } from './restore-point';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
@@ -346,6 +347,10 @@ export const VideoPlayerContainer = ({
     onKeyboardShortcut,
     onLanguageChange: onLanguageChange
       ? (code) => {
+          // The active menu item fires this too. Capturing for it would
+          // pause the video with no new `src` coming and leave a stale
+          // resume-on-next-loadedmetadata — see `isLanguageSwitch`.
+          if (!isLanguageSwitch(code, rest.activeLanguage)) return;
           const v = videoRef.current;
           if (v) pendingLanguageRestoreRef.current = captureRestorePoint(v);
           onLanguageChange(code);

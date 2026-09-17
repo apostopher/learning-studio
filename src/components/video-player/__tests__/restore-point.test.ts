@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyRestorePoint, captureRestorePoint } from '../restore-point';
+import {
+  applyRestorePoint,
+  captureRestorePoint,
+  isLanguageSwitch,
+} from '../restore-point';
 
 describe('restore point', () => {
   it('pauses on capture so the playhead stops advancing while the swap is in flight, and remembers it was playing', () => {
@@ -36,5 +40,24 @@ describe('restore point', () => {
     applyRestorePoint(video, { time: 12, resume: false });
     expect(video.currentTime).toBe(12);
     expect(play).not.toHaveBeenCalled();
+  });
+});
+
+describe('isLanguageSwitch', () => {
+  // The active Menu.Item fires onChange too. Capturing a restore point for
+  // it pauses the video with no new `src` ever coming, and leaves a stale
+  // `{time, resume: true}` that the NEXT loadedmetadata — a fatal-error
+  // recovery reattachment — would apply, seeking and auto-playing where
+  // recovery must never auto-play.
+  it('is false when the chosen language is the one already playing', () => {
+    expect(isLanguageSwitch('en', 'en')).toBe(false);
+  });
+
+  it('is true when the chosen language differs from the active one', () => {
+    expect(isLanguageSwitch('fr-CA', 'en')).toBe(true);
+  });
+
+  it('is false when no active language is known — nothing to switch from', () => {
+    expect(isLanguageSwitch('fr-CA', undefined)).toBe(false);
   });
 });

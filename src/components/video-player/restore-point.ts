@@ -5,6 +5,20 @@ export type RestorePoint = {
 };
 
 /**
+ * Whether choosing `next` from the language menu is a real switch. The menu
+ * fires for the active item too, and a restore point captured for a
+ * non-switch pauses the video with no new source ever arriving, then gets
+ * applied — seek AND auto-play — to whatever `loadedmetadata` comes next,
+ * which may be a fatal-error recovery reattachment that must never
+ * auto-play. Unknown `active` counts as no switch: there is nothing to
+ * carry a playhead across from.
+ */
+export const isLanguageSwitch = (
+  next: string,
+  active: string | undefined,
+): boolean => active !== undefined && next !== active;
+
+/**
  * Taken the moment BEFORE a source swap is requested. The media element
  * resets `currentTime` to 0 synchronously when its `src` changes, so this
  * cannot be read afterwards — and the swap itself waits on a network round

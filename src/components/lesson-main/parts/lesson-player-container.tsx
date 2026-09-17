@@ -71,9 +71,13 @@ export const LessonPlayerContainer = ({
   }));
   const onLanguageChange = useCallback(
     (code: string) => {
-      if (isVideoLang(code)) setVideoLanguage(code);
+      // Re-choosing the playing language is a no-op: the container already
+      // skips its restore point for it, and the atom must not be rewritten
+      // with the same value either.
+      if (!isVideoLang(code) || code === videoState.lang) return;
+      setVideoLanguage(code);
     },
-    [setVideoLanguage],
+    [setVideoLanguage, videoState.lang],
   );
   const isGenerating = useIsGenerating();
   const currentTest = useCurrentTest();
