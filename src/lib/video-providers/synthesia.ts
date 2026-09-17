@@ -16,10 +16,15 @@ export const synthesiaProvider: VideoProviderMeta = {
     try {
       const u = new URL(url);
       if (!/(^|\.)synthesia\.io$/.test(u.hostname)) return null;
-      // The editor (app.synthesia.io/#/video-edit/<id>) is a hash router, so
-      // the id sits in the fragment; share links keep it in the path.
-      const seg = `${u.pathname}${u.hash}`.split('/').filter(Boolean).at(-1);
-      return seg && UUID_RE.test(seg) ? { ref: seg } : null;
+      // Share links keep the id in the path; the editor
+      // (app.synthesia.io/#/video-edit/<id>) is a hash router, so there it
+      // sits in the fragment. Tested separately — joining the two made a
+      // share link with any fragment fail.
+      const lastSegment = (s: string) => s.split('/').filter(Boolean).at(-1);
+      const fromPath = lastSegment(u.pathname);
+      if (fromPath && UUID_RE.test(fromPath)) return { ref: fromPath };
+      const fromHash = lastSegment(u.hash);
+      return fromHash && UUID_RE.test(fromHash) ? { ref: fromHash } : null;
     } catch {
       return null;
     }

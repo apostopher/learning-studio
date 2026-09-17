@@ -22,6 +22,18 @@ describe('detectVideoUrl', () => {
       ref: '16c1e1f9-eae0-4ed1-aed9-d6d4e661d093',
     });
   });
+  it('still detects a Synthesia share URL that carries a fragment', () => {
+    // The hash-router fix for editor links must not break the plain share
+    // link: `pathname + hash` joined the fragment onto the id.
+    expect(
+      detectVideoUrl(
+        'https://share.synthesia.io/11111111-2222-3333-4444-555555555555#foo',
+      ),
+    ).toEqual({
+      provider: 'synthesia',
+      ref: '11111111-2222-3333-4444-555555555555',
+    });
+  });
   it('detects a Mux stream URL and strips extension/query', () => {
     expect(
       detectVideoUrl('https://stream.mux.com/AbCd1234Ef.m3u8?token=x'),
