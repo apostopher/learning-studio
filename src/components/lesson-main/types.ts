@@ -1,5 +1,6 @@
 import type { ComponentPropsWithoutRef } from 'react';
 import type { LockedMaterialResponse } from '#/lib/lesson-gating';
+import type { VideoLang } from '#/lib/video-languages';
 
 export type TrackProps = ComponentPropsWithoutRef<'track'>;
 
@@ -16,6 +17,10 @@ export type VideoFetchState =
       tracks: TrackProps[];
       /** True when the provider has no caption track at all for this video (e.g. Mux). */
       captionsUnavailable: boolean;
+      /** The language actually playing (`en` when the preference had no match). */
+      lang: VideoLang;
+      /** Every language this lesson offers, `en` first — drives the player's menu. */
+      languages: VideoLang[];
       /**
        * Re-resolves this video's playback (fetches a fresh signed URL/token
        * from the server). Both providers' URLs are signed and expire —

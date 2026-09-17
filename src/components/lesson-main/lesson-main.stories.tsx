@@ -139,6 +139,8 @@ export const ReadyPlaying: Story = {
         kind: 'file',
         tracks: [],
         captionsUnavailable: false,
+        lang: 'en',
+        languages: ['en'],
         onRetry: noop,
       },
     },

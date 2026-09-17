@@ -66,4 +66,25 @@ describe('playbackToState', () => {
     if (state.status !== 'error') throw new Error('expected error');
     expect(state.onRetry).toBe(onRetry);
   });
+
+  it('labels the caption track with the played language and carries the language list', () => {
+    const state = playbackToState(
+      { ...ready, lang: 'fr-CA', languages: ['en', 'fr-CA'] },
+      vi.fn(),
+    );
+    if (state.status !== 'ready') throw new Error('expected ready');
+    expect(state.lang).toBe('fr-CA');
+    expect(state.languages).toEqual(['en', 'fr-CA']);
+    expect(state.tracks[0]).toMatchObject({
+      srcLang: 'fr-CA',
+      label: 'Canadian French',
+    });
+  });
+
+  it('defaults to English when a result carries no language (older callers)', () => {
+    const state = playbackToState(ready, vi.fn());
+    if (state.status !== 'ready') throw new Error('expected ready');
+    expect(state.lang).toBe('en');
+    expect(state.languages).toEqual(['en']);
+  });
 });

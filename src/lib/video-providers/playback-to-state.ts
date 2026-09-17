@@ -2,7 +2,17 @@ import type {
   TrackProps,
   VideoFetchState,
 } from '#/components/lesson-main/types';
+import {
+  labelForLang,
+  PRIMARY_VIDEO_LANG,
+  type VideoLang,
+} from '#/lib/video-languages';
 import type { PlaybackResult } from './resolve.server';
+
+type PlaybackWithLanguage = PlaybackResult & {
+  lang?: VideoLang;
+  languages?: VideoLang[];
+};
 
 /**
  * Playback → player state. Pure, and the only place a provider's absence of
@@ -10,7 +20,7 @@ import type { PlaybackResult } from './resolve.server';
  * place rather than implied across the player.
  */
 export const playbackToState = (
-  result: PlaybackResult | undefined,
+  result: PlaybackWithLanguage | undefined,
   onRetry: () => void,
 ): VideoFetchState => {
   if (!result) return { status: 'fetching' };
@@ -24,12 +34,14 @@ export const playbackToState = (
       ? { status: 'rendering' }
       : { status: 'error', message: 'This video failed to render', onRetry };
   }
+  const lang = result.lang ?? PRIMARY_VIDEO_LANG;
+  const languages = result.languages ?? [PRIMARY_VIDEO_LANG];
   const tracks: TrackProps[] = result.captions
     ? [
         {
           src: result.captions.vtt,
-          srcLang: 'en',
-          label: 'English',
+          srcLang: lang,
+          label: labelForLang(lang),
           kind: 'subtitles',
           default: true,
         },
@@ -42,6 +54,8 @@ export const playbackToState = (
     poster: result.poster ?? undefined,
     tracks,
     captionsUnavailable: result.captions === null,
+    lang,
+    languages,
     onRetry,
   };
 };
