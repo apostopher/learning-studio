@@ -4,6 +4,11 @@ import { videoPlayerStateAtomFamily } from './atoms';
 import { attachMedia } from './attach-media';
 import { computeRecoveryDecision } from './compute-recovery-action';
 import { useVideoPlayer } from './hooks';
+import {
+  applyRestorePoint,
+  captureRestorePoint,
+  type RestorePoint,
+} from './restore-point';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
 import { VideoPlayer } from './video-player';
 
@@ -29,6 +34,13 @@ type ContainerProps = Omit<
    * field's comment for why this exists and why it is never timer-driven.
    */
   onSourceExpired?: () => void;
+  /**
+   * The learner picked another language. The container pauses and records
+   * the playhead BEFORE calling this (see `restore-point.ts`); the caller's
+   * job is to make a new `src` arrive, on whose `loadedmetadata` the
+   * playhead is restored and playback resumed.
+   */
+  onLanguageChange?: (code: string) => void;
 };
 
 export const VideoPlayerContainer = ({
@@ -37,6 +49,7 @@ export const VideoPlayerContainer = ({
   overlay,
   captionsUnavailable,
   onSourceExpired,
+  onLanguageChange,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -93,6 +106,11 @@ export const VideoPlayerContainer = ({
   // depends on watch coverage is worse than the error it was recovering
   // from. `null` means "nothing pending".
   const pendingRestoreTimeRef = useRef<number | null>(null);
+  // A language swap's restore point. Separate from `pendingRestoreTimeRef`
+  // (the recovery path), which never resumes playback on its own — a
+  // recovery from a fatal error should not auto-play, a language switch
+  // should.
+  const pendingLanguageRestoreRef = useRef<RestorePoint | null>(null);
 
   // Registered once, independent of `rest.src`: the video element itself
   // never unmounts across a reattachment (only its `src`/hls.js instance
@@ -102,6 +120,12 @@ export const VideoPlayerContainer = ({
     const video = videoRef.current;
     if (!video) return;
     const onLoadedMetadata = () => {
+      const langPoint = pendingLanguageRestoreRef.current;
+      if (langPoint) {
+        pendingLanguageRestoreRef.current = null;
+        applyRestorePoint(video, langPoint);
+        return;
+      }
       // Deliberately does NOT reset `recoveryAttemptsRef` here — see that
       // ref's own comment for why reaching metadata is not sufficient proof
       // that a mid-playback failure won't recur.
@@ -320,6 +344,13 @@ export const VideoPlayerContainer = ({
       armHideTimer(!state.paused);
     },
     onKeyboardShortcut,
+    onLanguageChange: onLanguageChange
+      ? (code) => {
+          const v = videoRef.current;
+          if (v) pendingLanguageRestoreRef.current = captureRestorePoint(v);
+          onLanguageChange(code);
+        }
+      : undefined,
   };
 
   return (
