@@ -56,6 +56,9 @@ export const dataKeys = {
   /** Which video a lesson has (provider + ref) — the dialog's prefill. */
   lessonVideo: (lessonId: number) =>
     ['admin', 'lesson-video', lessonId] as const,
+  /** A lesson's translated videos (`{ lang, provider, ref }[]`) — the Video tab's list. */
+  lessonAlternateVideos: (lessonId: number) =>
+    ['admin', 'lesson-alternate-videos', lessonId] as const,
   lessonMaterial: (lessonId: number) =>
     ['admin', 'lesson-material', lessonId] as const,
   courseEmbeddings: (courseId: number) =>
