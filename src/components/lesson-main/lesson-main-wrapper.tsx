@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { refetchLessonPlaybackFresh } from '#/atoms/lesson-video';
 import { outOfTierNoticeAtom } from '#/atoms/out-of-tier-notice';
+import { videoLanguageAtom } from '#/atoms/video-language';
 import { useRecordLastViewedLesson } from '#/data-hooks/use-record-last-viewed';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
@@ -34,7 +35,8 @@ export const LessonMainWrapper = ({
   // per course, since the same lesson in another course is gated and signed
   // differently (see `LessonRef`).
   const lesson = { courseSlug, lessonSlug };
-  const video = useLessonVideo(lesson);
+  const videoLang = useAtomValue(videoLanguageAtom);
+  const video = useLessonVideo(lesson, videoLang);
   const material = useLessonMaterial(lesson);
 
   // A never-completed out-of-tier lesson: /api/lesson/material 403s rather
@@ -106,7 +108,9 @@ export const LessonMainWrapper = ({
       // video just broke) would additionally log an unhandled promise
       // rejection on every failure, which is noise, not signal, on a path
       // that already has a real error handler.
-      void refetchLessonPlaybackFresh(queryClient, lesson).catch(() => {});
+      void refetchLessonPlaybackFresh(queryClient, lesson, videoLang).catch(
+        () => {},
+      );
     },
   });
 

@@ -2,6 +2,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
 import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
+import { videoLanguageAtom } from '#/atoms/video-language';
 import { canDebriefFromTranscript } from '#/components/lesson-material/compute-transcript-debrief';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
@@ -17,6 +18,7 @@ import {
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { isMaterialReadOnly } from '#/lib/lesson-gating';
+import { badgeForLang, isVideoLang, labelForLang } from '#/lib/video-languages';
 import type { VideoFetchState } from '../types';
 import { computePlayerOverlay } from './compute-player-overlay';
 import { videoReachedEndAtomFamily } from './lesson-player-atoms';
@@ -61,6 +63,18 @@ export const LessonPlayerContainer = ({
   // from computePlayerOverlay, which is the drift this feature keeps paying for.
   const playerState = useAtomValue(videoPlayerStateAtomFamily(playerId));
   const setActiveTab = useSetAtom(activeTabAtom);
+  const setVideoLanguage = useSetAtom(videoLanguageAtom);
+  const languageOptions = videoState.languages.map((code) => ({
+    code,
+    badge: badgeForLang(code),
+    label: labelForLang(code),
+  }));
+  const onLanguageChange = useCallback(
+    (code: string) => {
+      if (isVideoLang(code)) setVideoLanguage(code);
+    },
+    [setVideoLanguage],
+  );
   const isGenerating = useIsGenerating();
   const currentTest = useCurrentTest();
   const generateTest = useGenerateTest();
@@ -142,6 +156,9 @@ export const LessonPlayerContainer = ({
       captionsUnavailable={videoState.captionsUnavailable}
       onSourceExpired={videoState.onRetry}
       onEnded={onEnded}
+      languages={languageOptions}
+      activeLanguage={videoState.lang}
+      onLanguageChange={onLanguageChange}
       overlay={
         <AnimatePresence>
           {/* Neither overlay makes sense on an archive view: 'coverage' nudges
