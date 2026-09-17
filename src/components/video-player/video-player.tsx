@@ -95,6 +95,14 @@ export const VideoPlayer = ({
           ref={videoRef}
           src={kind === 'file' ? src : undefined}
           playsInline
+          // Captions come from another origin (Synthesia serves the VTT from
+          // S3). A <track> is only fetched cross-origin when its parent media
+          // element opts into CORS — without this the browser blocks the
+          // track silently and the CC button toggles a track that never
+          // loaded. Both providers' media and caption hosts answer with
+          // `Access-Control-Allow-Origin: *`, so the media fetch (which the
+          // attribute also governs) keeps working.
+          crossOrigin="anonymous"
           {...nativeRest}
         >
           {tracks?.map((t) => (

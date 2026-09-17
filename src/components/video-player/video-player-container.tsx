@@ -231,6 +231,12 @@ export const VideoPlayerContainer = ({
     return () => v.removeEventListener('ended', onEnded);
   }, [onEnded]);
 
+  // Re-applied whenever the track LIST changes too, not only the flag: a
+  // language switch (or a recovery reattachment) mounts a fresh <track>,
+  // whose TextTrack starts `disabled` regardless of what the learner had
+  // chosen — without this dependency captions that were on would silently
+  // drop after every swap while the button still read "on".
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.tracks intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -238,7 +244,7 @@ export const VideoPlayerContainer = ({
       v.textTracks[i].mode =
         state.captionsEnabled && i === 0 ? 'showing' : 'disabled';
     }
-  }, [state.captionsEnabled]);
+  }, [state.captionsEnabled, rest.tracks]);
 
   const onKeyboardShortcut = (key: string) => {
     const v = videoRef.current;

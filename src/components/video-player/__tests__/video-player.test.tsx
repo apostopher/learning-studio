@@ -18,6 +18,16 @@ describe('VideoPlayer', () => {
     expect(bigPlay.length).toBeGreaterThan(0);
   });
 
+  it('asks for CORS on the media element so a cross-origin caption track is allowed to load', () => {
+    // Both providers serve captions from another origin (Synthesia: S3).
+    // Without `crossorigin` the browser refuses to fetch the <track> at all —
+    // the CC button then toggles a track that never loaded.
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(<VideoPlayer {...MIN_PROPS} videoRef={ref} />);
+    const video = container.querySelector('video');
+    expect(video?.getAttribute('crossorigin')).toBe('anonymous');
+  });
+
   it('hides captions button when no tracks are provided', () => {
     const ref = createRef<HTMLVideoElement>();
     render(
