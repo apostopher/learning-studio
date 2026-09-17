@@ -16,6 +16,7 @@ import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
+import { AlternateVideosContainer } from './alternate-videos-container';
 import { computeVideoPreviewState } from './compute-video-preview-state';
 import { CredentialFlowContainer } from './credential-flow-container';
 import { VideoPreview } from './video-preview';
@@ -232,6 +233,8 @@ export const VideoSectionContainer = ({
           />
         </div>
       </div>
+
+      {hasVideo && <AlternateVideosContainer lessonId={lesson.id} />}
 
       {hasVideo &&
         (courseId === null ? (

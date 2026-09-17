@@ -35,6 +35,13 @@ vi.mock('../video-preview', () => ({
 vi.mock('../credential-flow-container', () => ({
   CredentialFlowContainer: () => <div data-testid="credential-flow" />,
 }));
+// Stubbed like the credential flow: it has its own data hooks, and what this
+// file cares about is only WHEN the section mounts it (a lesson with a video).
+vi.mock('../alternate-videos-container', () => ({
+  AlternateVideosContainer: ({ lessonId }: { lessonId: number }) => (
+    <div data-testid="alternate-videos" data-lesson-id={lessonId} />
+  ),
+}));
 
 import { VideoSectionContainer } from '../video-section-container';
 
@@ -90,6 +97,8 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
     expect(hooks.setVideo).toHaveBeenCalledWith(null);
     expect(hooks.playback).toHaveBeenCalledWith(null, false);
     expect(screen.queryByTestId('credential-flow')).toBeNull();
+    // No primary video → nothing for a translation to be an alternate to.
+    expect(screen.queryByTestId('alternate-videos')).toBeNull();
   });
 
   it('names the current video, keeps the URL field open, and says why there is no preview', () => {
@@ -113,6 +122,11 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       ),
     ).toBeTruthy();
     expect(screen.queryByTestId('credential-flow')).toBeNull();
+    // Other languages are a property of the lesson's video, not of a
+    // course, so the section is offered even before the lesson is placed.
+    expect(
+      screen.getByTestId('alternate-videos').getAttribute('data-lesson-id'),
+    ).toBe('10');
   });
 });
 
