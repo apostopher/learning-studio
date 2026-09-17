@@ -169,4 +169,44 @@ describe('VideoPlayer', () => {
     );
     expect(screen.getByRole('region', { name: 'Lesson video' })).toBeTruthy();
   });
+
+  const LANGS = [
+    { code: 'en', badge: 'EN', label: 'English' },
+    { code: 'fr-CA', badge: 'FR-CA', label: 'Canadian French' },
+  ];
+
+  it('hides the language menu when only one language is offered', () => {
+    const ref = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        languages={[LANGS[0]]}
+        activeLanguage="en"
+        actions={{ onLanguageChange: vi.fn() }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /language/i })).toBeNull();
+  });
+
+  it('names the active language on the trigger and calls onLanguageChange with the chosen code', async () => {
+    const ref = createRef<HTMLVideoElement>();
+    const onLanguageChange = vi.fn();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        languages={LANGS}
+        activeLanguage="en"
+        actions={{ onLanguageChange }}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Language: English' });
+    expect(trigger.textContent).toContain('EN');
+    await userEvent.click(trigger);
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: /Canadian French/ }),
+    );
+    expect(onLanguageChange).toHaveBeenCalledWith('fr-CA');
+  });
 });

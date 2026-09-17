@@ -47,6 +47,14 @@ export type VideoPlayerActions = {
   onRetry?: () => void;
   onPointerActivity?: () => void;
   onKeyboardShortcut?: (key: string) => void;
+  onLanguageChange?: (code: string) => void;
+};
+
+/** One entry of the player's language menu — already labelled, the player knows no codes. */
+export type VideoLanguageOption = {
+  code: string;
+  badge: string;
+  label: string;
 };
 
 export type VideoPlayerLabelKey =
@@ -67,7 +75,8 @@ export type VideoPlayerLabelKey =
   | 'retry'
   | 'loading'
   | 'buffering'
-  | 'error';
+  | 'error'
+  | 'language';
 
 export type VideoPlayerLabels = Record<VideoPlayerLabelKey, string>;
 
@@ -94,4 +103,8 @@ export type VideoPlayerProps = Omit<
   playbackRates?: number[];
   labels?: Partial<VideoPlayerLabels>;
   overlay?: React.ReactNode;
+  /** Languages this video is offered in. The menu renders only with two or more. */
+  languages?: VideoLanguageOption[];
+  /** `code` of the language currently playing. */
+  activeLanguage?: string;
 };

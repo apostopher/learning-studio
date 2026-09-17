@@ -19,6 +19,7 @@ export const DEFAULT_LABELS: VideoPlayerLabels = {
   volume: 'Volume',
   seek: 'Seek',
   playbackRate: 'Playback rate',
+  language: 'Language',
   retry: 'Retry',
   loading: 'Loading',
   buffering: 'Buffering',

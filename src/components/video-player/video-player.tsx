@@ -4,6 +4,7 @@ import { BigPlayButton } from './parts/big-play-button';
 import { CaptionsButton } from './parts/captions-button';
 import { ErrorOverlay } from './parts/error-overlay';
 import { FullscreenButton } from './parts/fullscreen-button';
+import { LanguageMenu } from './parts/language-menu';
 import { PlayPauseButton } from './parts/play-pause-button';
 import { PlaybackRateMenu } from './parts/playback-rate-menu';
 import { Scrubber } from './parts/scrubber';
@@ -23,6 +24,8 @@ export const VideoPlayer = ({
   playbackRates = [...PLAYBACK_RATES],
   labels: labelOverrides,
   overlay,
+  languages,
+  activeLanguage,
   ...nativeRest
 }: VideoPlayerProps) => {
   const labels = { ...DEFAULT_LABELS, ...labelOverrides };
@@ -175,6 +178,14 @@ export const VideoPlayer = ({
             onVolumeChange={a.onVolumeChange}
           />
           <span style={{ flex: 1 }} />
+          {languages && languages.length > 1 && a.onLanguageChange ? (
+            <LanguageMenu
+              languages={languages}
+              active={activeLanguage ?? languages[0].code}
+              label={labels.language}
+              onChange={a.onLanguageChange}
+            />
+          ) : null}
           {a.onPlaybackRateChange ? (
             <PlaybackRateMenu
               rate={playbackRate}
