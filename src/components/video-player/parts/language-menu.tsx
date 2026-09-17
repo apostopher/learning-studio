@@ -70,9 +70,11 @@ export const LanguageMenu = ({
                 <span style={{ flex: 1 }}>{l.label}</span>
                 <span
                   style={{
-                    fontSize: '0.7rem',
+                    // Matches the trigger's badge; `-text` is the measured
+                    // AAA token, never a raw step 11.
+                    fontSize: '0.75rem',
                     fontWeight: 600,
-                    color: 'var(--color-gray-11)',
+                    color: 'var(--color-gray-text)',
                   }}
                 >
                   {l.badge}
