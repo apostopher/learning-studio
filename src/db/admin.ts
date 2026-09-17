@@ -61,6 +61,11 @@ import {
 } from '#/lib/crypto.server';
 import { cyclicPrerequisites } from '#/lib/module-dependency-graph';
 import { slugify } from '#/lib/slugify';
+import {
+  type AlternateLang,
+  removeAlternate,
+  upsertAlternate,
+} from '#/lib/video-languages';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { buildLessonPosters } from '#/lib/video-providers/posters.server';
@@ -72,9 +77,12 @@ import {
 import type {
   CourseLessonDependency,
   OnboardingQuestions,
+  OtherVideoId,
+  OtherVideoIds,
   SubscriptionType,
   UserLevel,
 } from '#/types';
+import { OtherVideoIdsSchema } from '#/types';
 import { db } from '.';
 
 // re-export so existing importers of AdminCourseSummary from "@/db/admin" keep working
@@ -876,6 +884,62 @@ export async function setLessonVideo(
   await invalidateLessonPlaybackCache(updated.slug);
 
   return { id: updated.id };
+}
+
+/**
+ * A lesson's translated videos, for the Video tab. Same guard as the primary
+ * ref (the route's content:read): a bare Mux ref is streamable, so this never
+ * rides on a board or library payload. `null` for no such lesson.
+ */
+export async function getLessonAlternateVideos(
+  lessonId: number,
+): Promise<OtherVideoIds | null> {
+  const [row] = await db
+    .select({ otherVideoIds: lessonsTable.otherVideoIds })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId));
+  if (!row) return null;
+  // A column that fails the schema reads as empty rather than erroring the
+  // tab: the admin's fix is to add rows, which overwrite it.
+  const parsed = OtherVideoIdsSchema.safeParse(row.otherVideoIds);
+  return parsed.success ? parsed.data : [];
+}
+
+async function writeLessonAlternateVideos(
+  lessonId: number,
+  next: (current: OtherVideoIds) => OtherVideoIds,
+): Promise<{ id: number } | null> {
+  const current = await getLessonAlternateVideos(lessonId);
+  if (current === null) return null;
+  const [updated] = await db
+    .update(lessonsTable)
+    .set({ otherVideoIds: next(current), updatedAt: sql`now()` })
+    .where(eq(lessonsTable.id, lessonId))
+    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
+  if (!updated) return null;
+  // The languages list rides on every cached playback entry, in every
+  // language — see getLessonPlayback.invalidate.
+  await invalidateLessonPlaybackCache(updated.slug);
+  return { id: updated.id };
+}
+
+/** Attach (or replace) the video for one language. */
+export function setLessonAlternateVideo(
+  lessonId: number,
+  entry: OtherVideoId,
+): Promise<{ id: number } | null> {
+  return writeLessonAlternateVideos(lessonId, (current) =>
+    upsertAlternate(current, entry),
+  );
+}
+
+export function removeLessonAlternateVideo(
+  lessonId: number,
+  lang: AlternateLang,
+): Promise<{ id: number } | null> {
+  return writeLessonAlternateVideos(lessonId, (current) =>
+    removeAlternate(current, lang),
+  );
 }
 
 export async function resolveLessonPlayback(

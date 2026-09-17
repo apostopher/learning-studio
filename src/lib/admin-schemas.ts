@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { videoLangSchema } from '#/lib/video-languages';
+import { alternateLangSchema, videoLangSchema } from '#/lib/video-languages';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
 import {
   CourseLessonDependencySchema,
+  OtherVideoIdSchema,
   SubscriptionsSchema,
   UserLevelSchema,
   UserLevelsSchema,
@@ -414,6 +415,14 @@ export const setLessonVideoInputSchema = z.object({
   ref: z.string().trim().min(1),
 });
 export type SetLessonVideoInput = z.infer<typeof setLessonVideoInputSchema>;
+
+export const setLessonAlternateVideoInputSchema = OtherVideoIdSchema;
+export type SetLessonAlternateVideoInput = z.infer<
+  typeof setLessonAlternateVideoInputSchema
+>;
+export const removeLessonAlternateVideoInputSchema = z.object({
+  lang: alternateLangSchema,
+});
 
 /** A resolved, playable video. Mirrors `Playback` in `#/lib/video-providers/resolve.server`. */
 export const lessonPlaybackReadySchema = z.object({
