@@ -35,8 +35,10 @@ export const LessonMainWrapper = ({
   // per course, since the same lesson in another course is gated and signed
   // differently (see `LessonRef`).
   const lesson = { courseSlug, lessonSlug };
+  const video = useLessonVideo(lesson);
+  // Read here only to aim the fresh refetch below at the language the atom
+  // is currently serving; `useLessonVideo` reads the preference itself.
   const videoLang = useAtomValue(videoLanguageAtom);
-  const video = useLessonVideo(lesson, videoLang);
   const material = useLessonMaterial(lesson);
 
   // A never-completed out-of-tier lesson: /api/lesson/material 403s rather

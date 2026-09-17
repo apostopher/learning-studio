@@ -1,6 +1,7 @@
 import { keepPreviousData, type QueryClient } from '@tanstack/react-query';
 import { atomFamily } from 'jotai-family';
 import { atomWithQuery } from 'jotai-tanstack-query';
+import { videoLanguageAtom } from '#/atoms/video-language';
 import { queryKeys } from '#/hooks/data/keys';
 import {
   type LearnerPlayback,
@@ -53,24 +54,36 @@ export const fetchLessonPlayback = async (
   return learnerPlaybackSchema.parse(await r.json());
 };
 
-export type LessonPlaybackKey = LessonRef & { lang: VideoLang };
-
+/**
+ * Keyed by lesson ONLY. The language is read inside `getOptions`, not put in
+ * the family key, and that is load-bearing: `keepPreviousData` only carries
+ * data across a key change on ONE `QueryObserver`. A family keyed by
+ * language would hand back a different atom — a fresh observer with no
+ * previous data — on every switch, so `data` would go undefined, the player
+ * would unmount, and the playhead restore point would die with it.
+ * `jotai-tanstack-query` re-runs `getOptions` when `videoLanguageAtom`
+ * changes and calls `setOptions` on the same cached observer, which is
+ * exactly the one-observer key change `keepPreviousData` needs.
+ */
 export const lessonPlaybackAtomFamily = atomFamily(
-  (key: LessonPlaybackKey) =>
-    atomWithQuery<LearnerPlayback>(() => ({
-      queryKey: queryKeys.lessonPlayback(key, key.lang),
-      queryFn: () => fetchLessonPlayback(key, { lang: key.lang }),
-      enabled: !!key.lessonSlug && !!key.courseSlug,
-      staleTime: 1000 * 60 * 30,
-      gcTime: 1000 * 60 * 60,
-      retry: 1,
-      // A language switch changes the key. Keeping the previous language's
-      // data during the fetch keeps the player mounted (and the playhead
-      // capture in VideoPlayerContainer meaningful) instead of dropping to
-      // the loading skeleton and back.
-      placeholderData: keepPreviousData,
-    })),
-  (a, b) => sameLessonRef(a, b) && a.lang === b.lang,
+  (lesson: LessonRef) =>
+    atomWithQuery<LearnerPlayback>((get) => {
+      const lang = get(videoLanguageAtom);
+      return {
+        queryKey: queryKeys.lessonPlayback(lesson, lang),
+        queryFn: () => fetchLessonPlayback(lesson, { lang }),
+        enabled: !!lesson.lessonSlug && !!lesson.courseSlug,
+        staleTime: 1000 * 60 * 30,
+        gcTime: 1000 * 60 * 60,
+        retry: 1,
+        // A language switch changes the key. Keeping the previous language's
+        // data during the fetch keeps the player mounted (and the playhead
+        // capture in VideoPlayerContainer meaningful) instead of dropping to
+        // the loading skeleton and back.
+        placeholderData: keepPreviousData,
+      };
+    }),
+  sameLessonRef,
 );
 
 /**
