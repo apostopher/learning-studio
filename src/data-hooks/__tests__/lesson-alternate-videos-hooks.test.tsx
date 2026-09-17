@@ -51,12 +51,12 @@ describe('useSetLessonAlternateVideo', () => {
     expect(url).toBe('/api/admin/lessons/10/alternate-videos');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string)).toEqual(entry);
-    expect(invalidate).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: dataKeys.lessonAlternateVideos(10) }),
-    );
-    expect(invalidate).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: dataKeys.lessonPlaybacks(10) }),
-    );
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonAlternateVideos(10),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonPlaybacks(10),
+    });
   });
 });
 
@@ -72,8 +72,11 @@ describe('useRemoveLessonAlternateVideo', () => {
     const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(init.method).toBe('DELETE');
     expect(JSON.parse(init.body as string)).toEqual({ lang: 'fr-CA' });
-    expect(invalidate).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: dataKeys.lessonAlternateVideos(10) }),
-    );
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonAlternateVideos(10),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonPlaybacks(10),
+    });
   });
 });
