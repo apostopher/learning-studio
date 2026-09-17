@@ -17,6 +17,8 @@ const readyBody = {
   expiresInSeconds: 3600,
   poster: null,
   captions: null,
+  lang: 'en',
+  languages: ['en'],
 };
 
 // The lesson as the route names it: the course is part of the identity now
@@ -43,9 +45,9 @@ describe('refetchLessonPlaybackFresh', () => {
     // fetch that only updated `result` and never touched the query cache
     // would leave `useLessonVideo` (and everything downstream of it)
     // rendering the stale value forever.
-    expect(queryClient.getQueryData(queryKeys.lessonPlayback(lesson))).toEqual(
-      readyBody,
-    );
+    expect(
+      queryClient.getQueryData(queryKeys.lessonPlayback(lesson, 'en')),
+    ).toEqual(readyBody);
   });
 
   it('rejects and writes nothing when the route responds non-OK', async () => {
@@ -56,7 +58,7 @@ describe('refetchLessonPlaybackFresh', () => {
       refetchLessonPlaybackFresh(queryClient, lesson),
     ).rejects.toThrow();
     expect(
-      queryClient.getQueryData(queryKeys.lessonPlayback(lesson)),
+      queryClient.getQueryData(queryKeys.lessonPlayback(lesson, 'en')),
     ).toBeUndefined();
   });
 });
@@ -106,7 +108,7 @@ describe('fetchLessonPlayback', () => {
     await fetchLessonPlayback({ courseSlug: 'course-b', lessonSlug: 'l-1' });
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      '/api/lesson/playback?lessonSlug=l-1&courseSlug=course-b',
+      '/api/lesson/playback?lessonSlug=l-1&courseSlug=course-b&lang=en',
     );
   });
 });
@@ -116,9 +118,9 @@ describe('lessonPlayback query key', () => {
     // Two courses teaching one lesson must never share a cache entry: the
     // signed URL, and whether it is served at all, depend on the course.
     expect(
-      queryKeys.lessonPlayback({ courseSlug: 'a', lessonSlug: 'l' }),
+      queryKeys.lessonPlayback({ courseSlug: 'a', lessonSlug: 'l' }, 'en'),
     ).not.toEqual(
-      queryKeys.lessonPlayback({ courseSlug: 'b', lessonSlug: 'l' }),
+      queryKeys.lessonPlayback({ courseSlug: 'b', lessonSlug: 'l' }, 'en'),
     );
   });
 });
@@ -169,6 +171,37 @@ describe('fetchLessonPlayback failures', () => {
       }),
     );
 
+    await expect(fetchLessonPlayback(lesson)).rejects.toThrow();
+  });
+});
+
+describe('language', () => {
+  it('sends lang on the wire and keys the cache entry by it', async () => {
+    const body = { ...readyBody, lang: 'fr-CA', languages: ['en', 'fr-CA'] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+    const queryClient = new QueryClient();
+
+    await refetchLessonPlaybackFresh(queryClient, lesson, 'fr-CA');
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('lang=fr-CA');
+    expect(
+      queryClient.getQueryData(queryKeys.lessonPlayback(lesson, 'fr-CA')),
+    ).toEqual(body);
+    expect(
+      queryClient.getQueryData(queryKeys.lessonPlayback(lesson, 'en')),
+    ).toBeUndefined();
+  });
+
+  it('rejects a body without lang/languages — the route now always sends them', async () => {
+    const { lang: _l, languages: _ls, ...legacy } = readyBody;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => legacy }),
+    );
     await expect(fetchLessonPlayback(lesson)).rejects.toThrow();
   });
 });

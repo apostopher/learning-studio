@@ -1,11 +1,15 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, type QueryClient } from '@tanstack/react-query';
 import { atomFamily } from 'jotai-family';
 import { atomWithQuery } from 'jotai-tanstack-query';
 import { queryKeys } from '#/hooks/data/keys';
-import { lessonPlaybackSchema, playbackErrorSchema } from '#/lib/admin-schemas';
+import {
+  type LearnerPlayback,
+  learnerPlaybackSchema,
+  playbackErrorSchema,
+} from '#/lib/admin-schemas';
 import { type LessonRef, sameLessonRef } from '#/lib/lesson-ref';
+import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
-import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 /**
  * `opts.fresh` maps to the playback route's `fresh=1` query flag, which
@@ -24,9 +28,13 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
  */
 export const fetchLessonPlayback = async (
   { courseSlug, lessonSlug }: LessonRef,
-  opts?: { fresh?: boolean },
-): Promise<PlaybackResult> => {
-  const params = new URLSearchParams({ lessonSlug, courseSlug });
+  opts?: { fresh?: boolean; lang?: VideoLang },
+): Promise<LearnerPlayback> => {
+  const params = new URLSearchParams({
+    lessonSlug,
+    courseSlug,
+    lang: opts?.lang ?? PRIMARY_VIDEO_LANG,
+  });
   if (opts?.fresh) params.set('fresh', '1');
   const r = await fetch(`/api/lesson/playback?${params.toString()}`);
   if (!r.ok) {
@@ -42,20 +50,27 @@ export const fetchLessonPlayback = async (
     }
     throw new Error('Failed to fetch playback');
   }
-  return lessonPlaybackSchema.parse(await r.json());
+  return learnerPlaybackSchema.parse(await r.json());
 };
 
+export type LessonPlaybackKey = LessonRef & { lang: VideoLang };
+
 export const lessonPlaybackAtomFamily = atomFamily(
-  (lesson: LessonRef) =>
-    atomWithQuery<PlaybackResult>(() => ({
-      queryKey: queryKeys.lessonPlayback(lesson),
-      queryFn: () => fetchLessonPlayback(lesson),
-      enabled: !!lesson.lessonSlug && !!lesson.courseSlug,
+  (key: LessonPlaybackKey) =>
+    atomWithQuery<LearnerPlayback>(() => ({
+      queryKey: queryKeys.lessonPlayback(key, key.lang),
+      queryFn: () => fetchLessonPlayback(key, { lang: key.lang }),
+      enabled: !!key.lessonSlug && !!key.courseSlug,
       staleTime: 1000 * 60 * 30,
       gcTime: 1000 * 60 * 60,
       retry: 1,
+      // A language switch changes the key. Keeping the previous language's
+      // data during the fetch keeps the player mounted (and the playhead
+      // capture in VideoPlayerContainer meaningful) instead of dropping to
+      // the loading skeleton and back.
+      placeholderData: keepPreviousData,
     })),
-  sameLessonRef,
+  (a, b) => sameLessonRef(a, b) && a.lang === b.lang,
 );
 
 /**
@@ -77,10 +92,11 @@ export const lessonPlaybackAtomFamily = atomFamily(
 export const refetchLessonPlaybackFresh = (
   queryClient: QueryClient,
   lesson: LessonRef,
+  lang: VideoLang = PRIMARY_VIDEO_LANG,
 ) =>
   queryClient.fetchQuery({
-    queryKey: queryKeys.lessonPlayback(lesson),
-    queryFn: () => fetchLessonPlayback(lesson, { fresh: true }),
+    queryKey: queryKeys.lessonPlayback(lesson, lang),
+    queryFn: () => fetchLessonPlayback(lesson, { fresh: true, lang }),
     // No internal retry: the caller (`compute-recovery-action.ts`'s
     // `MAX_RECOVERY_ATTEMPTS`) already owns a small, deliberate retry
     // budget for this exact failure. TanStack Query's own default retry

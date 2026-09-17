@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { videoLangSchema } from '#/lib/video-languages';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
 import {
@@ -440,6 +441,21 @@ export const lessonPlaybackSchema = z.discriminatedUnion('status', [
   lessonPlaybackPendingSchema,
 ]);
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
+
+const playbackLanguageFields = {
+  lang: videoLangSchema,
+  languages: z.array(videoLangSchema).min(1),
+};
+
+/**
+ * The LEARNER route's body: playback plus which language it is and which
+ * the lesson offers. The admin preview route keeps `lessonPlaybackSchema`.
+ */
+export const learnerPlaybackSchema = z.discriminatedUnion('status', [
+  lessonPlaybackReadySchema.extend(playbackLanguageFields),
+  lessonPlaybackPendingSchema.extend(playbackLanguageFields),
+]);
+export type LearnerPlayback = z.infer<typeof learnerPlaybackSchema>;
 
 /**
  * Hostnames a news source URL may not point at.
