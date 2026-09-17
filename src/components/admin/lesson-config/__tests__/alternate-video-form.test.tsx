@@ -56,4 +56,16 @@ describe('AlternateVideoForm', () => {
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add language' })).toBeNull();
   });
+
+  it('still shows a server error when every language is taken', () => {
+    render(
+      <AlternateVideoForm
+        {...base}
+        lang={null}
+        langOptions={[]}
+        serverError="boom"
+      />,
+    );
+    expect(screen.getByRole('alert').textContent).toBe('boom');
+  });
 });

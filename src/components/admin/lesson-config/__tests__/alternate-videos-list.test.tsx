@@ -32,4 +32,26 @@ describe('AlternateVideosList', () => {
     );
     expect(onRemove).toHaveBeenCalledWith('fr-CA');
   });
+
+  it('says a row is being removed, and marks the button busy, while its removal is in flight', () => {
+    render(
+      <AlternateVideosList
+        rows={[
+          {
+            lang: 'fr-CA',
+            label: 'Canadian French',
+            providerLabel: 'Synthesia',
+            removing: true,
+          },
+        ]}
+        onRemove={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole('button', {
+      name: 'Remove Canadian French',
+    }) as HTMLButtonElement;
+    expect(button.textContent).toContain('Removing…');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.disabled).toBe(true);
+  });
 });

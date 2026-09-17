@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useLessonAlternateVideos } from '#/data-hooks/use-lesson-alternate-videos';
@@ -79,6 +80,12 @@ export const AlternateVideosContainer = ({
   const removingLang = removeAlternate.isPending
     ? removeAlternate.variables?.lang
     : undefined;
+  // A failed remove belongs beside the list it concerns, named by language —
+  // not under the add form, which is gone once every language is attached.
+  const removeFailure =
+    removeAlternate.error && removeAlternate.variables
+      ? `Couldn't remove ${labelForLang(removeAlternate.variables.lang)}: ${removeAlternate.error.message}`
+      : null;
 
   return (
     <section
@@ -95,33 +102,46 @@ export const AlternateVideosContainer = ({
         <p role="alert" className="text-error-text text-sm">
           Couldn't load languages: {alternates.error.message}
         </p>
+      ) : alternates.isPending ? (
+        // Not the empty state: until the list arrives we cannot say which
+        // languages are free, so neither the "none yet" line nor the form
+        // shows — the form would otherwise offer a code already attached.
+        <p className="flex items-center gap-1.5 text-tertiary text-sm">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          Loading languages…
+        </p>
       ) : (
-        <AlternateVideosList
-          rows={(alternates.data ?? []).map((a) => ({
-            lang: a.lang,
-            label: labelForLang(a.lang),
-            providerLabel: VIDEO_PROVIDERS[a.provider].label,
-            removing: removingLang === a.lang,
-          }))}
-          onRemove={(l) => removeAlternate.mutate({ lessonId, lang: l })}
-        />
+        <>
+          <AlternateVideosList
+            rows={alternates.data.map((a) => ({
+              lang: a.lang,
+              label: labelForLang(a.lang),
+              providerLabel: VIDEO_PROVIDERS[a.provider].label,
+              removing: removingLang === a.lang,
+            }))}
+            onRemove={(l) => removeAlternate.mutate({ lessonId, lang: l })}
+          />
+          {removeFailure && (
+            <p role="alert" className="text-error-text text-sm">
+              {removeFailure}
+            </p>
+          )}
+          <AlternateVideoForm
+            onSubmit={onSubmit}
+            lang={lang}
+            langOptions={options}
+            onLangChange={(code) => form.setValue('lang', code)}
+            registerUrl={form.register('url')}
+            urlError={form.formState.errors.url?.message}
+            detectedLabel={
+              detected ? VIDEO_PROVIDERS[detected.provider].label : null
+            }
+            showUnsupported={urlValue.trim().length > 0 && !detected}
+            isPending={setAlternate.isPending}
+            serverError={setAlternate.error?.message}
+          />
+        </>
       )}
-      <AlternateVideoForm
-        onSubmit={onSubmit}
-        lang={lang}
-        langOptions={options}
-        onLangChange={(code) => form.setValue('lang', code)}
-        registerUrl={form.register('url')}
-        urlError={form.formState.errors.url?.message}
-        detectedLabel={
-          detected ? VIDEO_PROVIDERS[detected.provider].label : null
-        }
-        showUnsupported={urlValue.trim().length > 0 && !detected}
-        isPending={setAlternate.isPending}
-        serverError={
-          setAlternate.error?.message ?? removeAlternate.error?.message
-        }
-      />
     </section>
   );
 };

@@ -40,13 +40,26 @@ export const AlternateVideoForm = ({
   isPending,
   serverError,
 }: AlternateVideoFormProps) => {
+  // One alert markup for both branches: an add that failed just before the
+  // last language was taken must still be visible after the list refetches.
+  const serverAlert = serverError && (
+    <p
+      role="alert"
+      className="rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-error-text text-sm"
+    >
+      {serverError}
+    </p>
+  );
   if (lang === null) {
     // Visible text, not a disabled form: the reason is real content so it
     // reaches assistive tech the same way it reaches sighted users.
     return (
-      <p className="text-tertiary text-sm">
-        Every supported language is attached. Remove one to replace its video.
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="text-tertiary text-sm">
+          Every supported language is attached. Remove one to replace its video.
+        </p>
+        {serverAlert}
+      </div>
     );
   }
   const current = langOptions.find((o) => o.code === lang) ?? langOptions[0];
@@ -152,14 +165,7 @@ export const AlternateVideoForm = ({
           Add language
         </button>
       </div>
-      {serverError && (
-        <p
-          role="alert"
-          className="rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-error-text text-sm"
-        >
-          {serverError}
-        </p>
-      )}
+      {serverAlert}
     </form>
   );
 };
