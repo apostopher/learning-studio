@@ -6,14 +6,27 @@ import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getCourseIdsForLesson } from '#/db/placements';
 import { lessonsTable, moduleLessonsTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
+import {
+  PRIMARY_VIDEO_LANG,
+  VIDEO_LANGUAGES,
+  type VideoLang,
+} from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import {
   type PlaybackResult,
   resolvePlayback,
 } from '#/lib/video-providers/resolve.server';
+import { selectVideoForLang } from '#/lib/video-providers/select-video-for-lang';
 import type { ProviderId } from '#/lib/video-providers/types';
+import { OtherVideoIdsSchema } from '#/types';
 
 const CACHE_KEY_PREFIX = 'lesson-playback';
+
+/** A `PlaybackResult` plus which language it is and which the lesson offers. */
+export type LessonPlaybackResult = PlaybackResult & {
+  lang: VideoLang;
+  languages: VideoLang[];
+};
 
 /**
  * Playback for a lesson AS TAUGHT BY one course, resolved through that
@@ -34,11 +47,13 @@ const CACHE_KEY_PREFIX = 'lesson-playback';
 async function resolveLessonPlaybackUncached(
   lessonSlug: string,
   courseId: number,
-): Promise<PlaybackResult | null> {
+  lang: VideoLang,
+): Promise<LessonPlaybackResult | null> {
   const [lesson] = await db
     .select({
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
+      otherVideoIds: lessonsTable.otherVideoIds,
     })
     .from(lessonsTable)
     .innerJoin(
@@ -54,8 +69,20 @@ async function resolveLessonPlaybackUncached(
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
-  const provider = lesson.videoProvider as ProviderId;
-  const creds = await resolveCourseProvider(courseId, provider);
+  // A column that fails the schema (a row written under the old
+  // `{ lang: 'FR', videoId }` shape, or by hand) must not take the English
+  // video down with it — it simply offers no alternates.
+  const alternates = OtherVideoIdsSchema.safeParse(lesson.otherVideoIds);
+  const selection = selectVideoForLang({
+    primary: {
+      provider: lesson.videoProvider as ProviderId,
+      ref: lesson.videoRef,
+    },
+    alternates: alternates.success ? alternates.data : [],
+    requested: lang,
+  });
+
+  const creds = await resolveCourseProvider(courseId, selection.provider);
   // Throws rather than returning null: null here is indistinguishable from
   // "no such lesson" and "no video assigned", which the route deliberately
   // renders as an opaque 403. A missing course credential is neither — it is
@@ -67,10 +94,15 @@ async function resolveLessonPlaybackUncached(
   if (!creds) {
     throw new PlaybackError(
       'PROVIDER_NOT_CONFIGURED',
-      `This course has no ${provider} credentials configured.`,
+      `This course has no ${selection.provider} credentials configured.`,
     );
   }
-  return resolvePlayback(provider, lesson.videoRef, creds);
+  const playback = await resolvePlayback(
+    selection.provider,
+    selection.ref,
+    creds,
+  );
+  return { ...playback, lang: selection.lang, languages: selection.languages };
 }
 
 /**
@@ -122,33 +154,44 @@ type LessonPlaybackOptions = {
   /** The course the learner is in — the one whose credentials sign the URL. */
   courseId: number;
   skipCache?: boolean;
+  /** The learner's requested language; `en` when absent. */
+  lang?: VideoLang;
 };
 
 type LessonPlaybackReader = ((
   lessonSlug: string,
   options: LessonPlaybackOptions,
-) => Promise<PlaybackResult | null>) & {
+) => Promise<LessonPlaybackResult | null>) & {
   invalidate: (lessonSlug: string) => Promise<void>;
 };
 
-const cacheKey = (courseId: number, lessonSlug: string) =>
-  `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}`;
+const ALL_LANGS: readonly VideoLang[] = [
+  PRIMARY_VIDEO_LANG,
+  ...VIDEO_LANGUAGES,
+];
+
+// Keyed per language as well: a cached French result must never answer an
+// English request, and vice versa.
+const cacheKey = (courseId: number, lessonSlug: string, lang: VideoLang) =>
+  `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}:${lang}`;
 
 export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   async (
     lessonSlug: string,
     options: LessonPlaybackOptions,
-  ): Promise<PlaybackResult | null> => {
-    const key = cacheKey(options.courseId, lessonSlug);
+  ): Promise<LessonPlaybackResult | null> => {
+    const lang = options.lang ?? PRIMARY_VIDEO_LANG;
+    const key = cacheKey(options.courseId, lessonSlug, lang);
 
     if (!options.skipCache) {
-      const cached = await redis.get<PlaybackResult>(key);
+      const cached = await redis.get<LessonPlaybackResult>(key);
       if (cached) return cached;
     }
 
     const result = await resolveLessonPlaybackUncached(
       lessonSlug,
       options.courseId,
+      lang,
     );
 
     if (result?.status === 'ready' && result.expiresInSeconds !== null) {
@@ -171,8 +214,14 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
       const lessonId = await getLessonIdBySlug(lessonSlug);
       if (lessonId === null) return;
       const courseIds = await getCourseIdsForLesson(lessonId);
+      // Every language, not just the one that changed: an alternate added or
+      // removed changes the `languages` list carried by ALL of them.
       await Promise.all(
-        courseIds.map((courseId) => redis.del(cacheKey(courseId, lessonSlug))),
+        courseIds.flatMap((courseId) =>
+          ALL_LANGS.map((lang) =>
+            redis.del(cacheKey(courseId, lessonSlug, lang)),
+          ),
+        ),
       );
     },
   },

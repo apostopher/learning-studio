@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Real pgTable columns (not plain object stubs) so `eq()` in the module under
@@ -15,6 +15,7 @@ const lessonsTable = pgTable('lessons', {
   slug: text('slug'),
   videoProvider: text('video_provider'),
   videoRef: text('video_ref'),
+  otherVideoIds: jsonb('other_video_ids'),
 });
 const moduleLessonsTable = pgTable('module_lessons', {
   id: integer('id').primaryKey(),
@@ -46,7 +47,11 @@ function makeChain(result: unknown) {
 
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 const admin = vi.hoisted(() => ({ resolveCourseProvider: vi.fn() }));
-const redisMock = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
+const redisMock = vi.hoisted(() => ({
+  get: vi.fn(),
+  set: vi.fn(),
+  del: vi.fn(),
+}));
 const providers = vi.hoisted(() => ({ resolvePlayback: vi.fn() }));
 
 vi.mock('#/db', () => ({ db }));
@@ -67,7 +72,11 @@ vi.mock('#/db/placements', () => ({ getCourseIdsForLesson: vi.fn() }));
 
 const { getLessonPlayback } = await import('#/db/lesson-playback');
 
-const lessonRow = { videoProvider: 'mux', videoRef: 'ref-1' };
+const lessonRow = {
+  videoProvider: 'mux',
+  videoRef: 'ref-1',
+  otherVideoIds: [],
+};
 const inCourse = { courseId: 3 };
 
 beforeEach(() => {
@@ -90,7 +99,7 @@ describe('getLessonPlayback', () => {
     const result = await getLessonPlayback('l1', inCourse);
 
     expect(result).toEqual(cached);
-    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1');
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1:en');
     expect(db.select).not.toHaveBeenCalled();
     expect(redisMock.set).not.toHaveBeenCalled();
   });
@@ -102,7 +111,11 @@ describe('getLessonPlayback', () => {
 
     const result = await getLessonPlayback('l1', inCourse);
 
-    expect(result).toEqual({ status: 'rendering' });
+    expect(result).toEqual({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
     // The Critical this test guards: a pending result must never be written,
     // not written-with-a-wrong-TTL. `cacheWithRedis` could not express this
     // (its extractor's `null` fell back to a 6h default and `set` still ran).
@@ -116,7 +129,7 @@ describe('getLessonPlayback', () => {
 
     const result = await getLessonPlayback('l1', inCourse);
 
-    expect(result).toEqual({ status: 'failed' });
+    expect(result).toEqual({ status: 'failed', lang: 'en', languages: ['en'] });
     expect(redisMock.set).not.toHaveBeenCalled();
   });
 
@@ -135,10 +148,10 @@ describe('getLessonPlayback', () => {
 
     const result = await getLessonPlayback('l1', inCourse);
 
-    expect(result).toEqual(ready);
+    expect(result).toEqual({ ...ready, lang: 'en', languages: ['en'] });
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:3:l1',
-      JSON.stringify(ready),
+      'lesson-playback:3:l1:en',
+      JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 60 }, // 90 - 30
     );
   });
@@ -159,8 +172,8 @@ describe('getLessonPlayback', () => {
     await getLessonPlayback('l1', inCourse);
 
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:3:l1',
-      JSON.stringify(ready),
+      'lesson-playback:3:l1:en',
+      JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 1 },
     );
   });
@@ -180,7 +193,7 @@ describe('getLessonPlayback', () => {
 
     const result = await getLessonPlayback('l1', inCourse);
 
-    expect(result).toEqual(ready);
+    expect(result).toEqual({ ...ready, lang: 'en', languages: ['en'] });
     expect(redisMock.set).not.toHaveBeenCalled();
   });
 
@@ -216,12 +229,12 @@ describe('getLessonPlayback', () => {
       skipCache: true,
     });
 
-    expect(result).toEqual(fresh);
+    expect(result).toEqual({ ...fresh, lang: 'en', languages: ['en'] });
     expect(redisMock.get).not.toHaveBeenCalled();
     // Still writes a fresh cache entry under the normal TTL rules.
     expect(redisMock.set).toHaveBeenCalledWith(
-      'lesson-playback:3:l1',
-      JSON.stringify(fresh),
+      'lesson-playback:3:l1:en',
+      JSON.stringify({ ...fresh, lang: 'en', languages: ['en'] }),
       { ex: 3570 },
     );
   });
@@ -243,7 +256,100 @@ describe('getLessonPlayback', () => {
     });
 
     expect(result).toEqual(cached);
-    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1');
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1:en');
     expect(db.select).not.toHaveBeenCalled();
+  });
+});
+
+describe('getLessonPlayback with a language', () => {
+  const rowWithFrench = {
+    videoProvider: 'synthesia',
+    videoRef: 'en-ref',
+    otherVideoIds: [{ lang: 'fr-CA', provider: 'mux', ref: 'fr-ref' }],
+  };
+  const ready = {
+    status: 'ready' as const,
+    url: 'https://cdn/v.m3u8',
+    kind: 'hls' as const,
+    expiresInSeconds: 90,
+    poster: null,
+    captions: null,
+  };
+
+  it("resolves the alternate with THAT row's provider credentials and caches under the lang", async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([rowWithFrench]));
+    admin.resolveCourseProvider.mockResolvedValueOnce({ keyId: 'mux-key' });
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    const result = await getLessonPlayback('l1', {
+      ...inCourse,
+      lang: 'fr-CA',
+    });
+
+    expect(admin.resolveCourseProvider).toHaveBeenCalledWith(3, 'mux');
+    expect(providers.resolvePlayback).toHaveBeenCalledWith('mux', 'fr-ref', {
+      keyId: 'mux-key',
+    });
+    expect(result).toEqual({
+      ...ready,
+      lang: 'fr-CA',
+      languages: ['en', 'fr-CA'],
+    });
+    expect(redisMock.get).toHaveBeenCalledWith('lesson-playback:3:l1:fr-CA');
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:3:l1:fr-CA',
+      JSON.stringify({ ...ready, lang: 'fr-CA', languages: ['en', 'fr-CA'] }),
+      { ex: 60 },
+    );
+  });
+
+  it('falls back to the primary video, reporting lang en, for a language the lesson lacks', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([rowWithFrench]));
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    const result = await getLessonPlayback('l1', { ...inCourse, lang: 'ja' });
+
+    expect(providers.resolvePlayback).toHaveBeenCalledWith(
+      'synthesia',
+      'en-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr-CA'] });
+  });
+
+  it('treats an unparseable other_video_ids column as no alternates rather than failing playback', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(
+      makeChain([
+        {
+          ...rowWithFrench,
+          otherVideoIds: [{ lang: 'FR', videoId: 'legacy' }],
+        },
+      ]),
+    );
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    const result = await getLessonPlayback('l1', { ...inCourse, lang: 'fr' });
+
+    expect(result).toMatchObject({ lang: 'en', languages: ['en'] });
+  });
+});
+
+describe('getLessonPlayback.invalidate', () => {
+  it('evicts every language key for every course teaching the lesson', async () => {
+    const access = await import('#/db/lesson-access');
+    const placements = await import('#/db/placements');
+    vi.mocked(access.getLessonIdBySlug).mockResolvedValueOnce(9);
+    vi.mocked(placements.getCourseIdsForLesson).mockResolvedValueOnce([3, 4]);
+
+    await getLessonPlayback.invalidate('l1');
+
+    expect(redisMock.del).toHaveBeenCalledWith('lesson-playback:3:l1:en');
+    expect(redisMock.del).toHaveBeenCalledWith('lesson-playback:3:l1:fr-CA');
+    expect(redisMock.del).toHaveBeenCalledWith('lesson-playback:4:l1:ja');
+    // 2 courses × (en + 11 alternates)
+    expect(redisMock.del).toHaveBeenCalledTimes(24);
   });
 });
