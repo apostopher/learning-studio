@@ -34,6 +34,7 @@
     "db:migrate-discipline-modules": "dotenv -e .env.local -- tsx src/db/migrate-discipline-modules.ts",
     "db:import-discipline-library": "dotenv -e .env.local -- tsx scripts/import-discipline-library.ts",
     "db:migrate-other-video-ids": "dotenv -e .env.local -- tsx scripts/migrate-other-video-ids-run.ts",
+    "db:duplicate-lessons": "dotenv -e .env.local -- tsx scripts/duplicate-lessons-run.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
