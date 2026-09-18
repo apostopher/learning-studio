@@ -25,9 +25,12 @@ export const LibraryLessonCard = ({
   lesson,
   dragHandleProps,
   onEdit,
+  posterUrl,
 }: {
   lesson: LibraryLesson;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
+  /** The lesson's poster frame when its shelf has one; absent, the tile draws its plain placeholder. */
+  posterUrl?: string | null;
   onEdit?: () => void;
 }) => {
   return (
@@ -45,6 +48,7 @@ export const LibraryLessonCard = ({
       <LessonVideoTile
         hasVideo={lesson.isConfigured}
         lessonName={lesson.name}
+        posterUrl={posterUrl}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center gap-2">

@@ -108,6 +108,27 @@ describe('LibraryLessonCard', () => {
     expect(wrapper?.className ?? '').not.toMatch(/(?:^|\s)opacity-\S+/);
   });
 
+  it('paints the poster frame it is given onto the video tile', () => {
+    const { container } = render(
+      <LibraryLessonCard
+        lesson={lesson({ isConfigured: true })}
+        posterUrl="https://posters.test/frame.jpg"
+      />,
+    );
+    const frame = container.querySelector(
+      'img[src="https://posters.test/frame.jpg"]',
+    );
+    expect(frame).not.toBeNull();
+  });
+
+  it('draws the plain tile when no poster is known — a poster is decoration', () => {
+    const { container } = render(
+      <LibraryLessonCard lesson={lesson({ isConfigured: true })} />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Has a video' })).toBeTruthy();
+  });
+
   it('marks an unpublished lesson as a draft, in words', () => {
     // Mutant: the condition is inverted (`lesson.isAvailable &&` instead of
     // `!lesson.isAvailable &&`), so an unpublished lesson shows no marker —

@@ -93,6 +93,7 @@ import { Route as ApiAdminLessonsLessonIdAlternateVideosRouteImport } from './ro
 import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
 import { Route as ApiAdminDisciplinesDisciplineIdModulesRouteImport } from './routes/api/admin/disciplines.$disciplineId.modules'
 import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
+import { Route as ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport } from './routes/api/admin/disciplines.$disciplineId.lesson-posters'
 import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
 import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
 import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
@@ -563,6 +564,12 @@ const ApiAdminDisciplinesDisciplineIdLessonsRoute =
     path: '/lessons',
     getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
   } as any)
+const ApiAdminDisciplinesDisciplineIdLessonPostersRoute =
+  ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport.update({
+    id: '/lesson-posters',
+    path: '/lesson-posters',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdStaffRoute =
   ApiAdminCoursesCourseIdStaffRouteImport.update({
     id: '/staff',
@@ -731,6 +738,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lesson-posters': typeof ApiAdminDisciplinesDisciplineIdLessonPostersRoute
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -829,6 +837,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lesson-posters': typeof ApiAdminDisciplinesDisciplineIdLessonPostersRoute
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -931,6 +940,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  '/api/admin/disciplines/$disciplineId/lesson-posters': typeof ApiAdminDisciplinesDisciplineIdLessonPostersRoute
   '/api/admin/disciplines/$disciplineId/lessons': typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   '/api/admin/disciplines/$disciplineId/modules': typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   '/api/admin/disciplines/$disciplineId/staff': typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -1033,6 +1043,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lesson-posters'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -1131,6 +1142,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lesson-posters'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -1232,6 +1244,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
+    | '/api/admin/disciplines/$disciplineId/lesson-posters'
     | '/api/admin/disciplines/$disciplineId/lessons'
     | '/api/admin/disciplines/$disciplineId/modules'
     | '/api/admin/disciplines/$disciplineId/staff'
@@ -1897,6 +1910,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRouteImport
       parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
     }
+    '/api/admin/disciplines/$disciplineId/lesson-posters': {
+      id: '/api/admin/disciplines/$disciplineId/lesson-posters'
+      path: '/lesson-posters'
+      fullPath: '/api/admin/disciplines/$disciplineId/lesson-posters'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
     '/api/admin/courses/$courseId/staff': {
       id: '/api/admin/courses/$courseId/staff'
       path: '/staff'
@@ -2198,6 +2218,7 @@ const ApiAdminCoursesRouteWithChildren = ApiAdminCoursesRoute._addFileChildren(
 )
 
 interface ApiAdminDisciplinesDisciplineIdRouteChildren {
+  ApiAdminDisciplinesDisciplineIdLessonPostersRoute: typeof ApiAdminDisciplinesDisciplineIdLessonPostersRoute
   ApiAdminDisciplinesDisciplineIdLessonsRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRoute
   ApiAdminDisciplinesDisciplineIdModulesRoute: typeof ApiAdminDisciplinesDisciplineIdModulesRoute
   ApiAdminDisciplinesDisciplineIdStaffRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRoute
@@ -2205,6 +2226,8 @@ interface ApiAdminDisciplinesDisciplineIdRouteChildren {
 
 const ApiAdminDisciplinesDisciplineIdRouteChildren: ApiAdminDisciplinesDisciplineIdRouteChildren =
   {
+    ApiAdminDisciplinesDisciplineIdLessonPostersRoute:
+      ApiAdminDisciplinesDisciplineIdLessonPostersRoute,
     ApiAdminDisciplinesDisciplineIdLessonsRoute:
       ApiAdminDisciplinesDisciplineIdLessonsRoute,
     ApiAdminDisciplinesDisciplineIdModulesRoute:

@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { editLibraryLessonIdAtom } from '#/atoms/admin';
+import { useDisciplineLessonPosters } from '#/data-hooks/use-discipline-lesson-posters';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { libraryLessonDndId } from '#/lib/dnd-ids';
@@ -70,6 +71,11 @@ export const LibraryLessonCardContainer = ({
     disabled: { draggable: false, droppable: !sortable },
   });
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
+  // One entry per shelf, shared by every card on it (TanStack dedupes the
+  // request); read here rather than threaded down three containers because
+  // the card container already knows its shelf. Unknown or refused posters
+  // leave the tile on its placeholder — decoration, never a dependency.
+  const { data: posters } = useDisciplineLessonPosters(disciplineId);
 
   return (
     <div
@@ -90,6 +96,7 @@ export const LibraryLessonCardContainer = ({
         // router context cannot answer for any particular lesson, so the
         // server decides and the mutation turns its 403 into a sentence.
         onEdit={() => editLesson(lesson.id)}
+        posterUrl={posters?.[String(lesson.id)]}
       />
     </div>
   );

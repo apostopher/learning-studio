@@ -50,6 +50,14 @@ export const dataKeys = {
   allLessonPosters: () => ['admin', 'lesson-posters'] as const,
   lessonPosters: (courseId: number) =>
     [...dataKeys.allLessonPosters(), courseId] as const,
+  /**
+   * A discipline shelf's posters (`UNTITLED_DISCIPLINE_ID` for the org bag).
+   * Under the same prefix as the course keys so `useSetLessonVideo`'s
+   * prefix invalidation refreshes the library too — a new video is a new
+   * poster on every shelf and board that shows the lesson.
+   */
+  disciplineLessonPosters: (disciplineId: number) =>
+    [...dataKeys.allLessonPosters(), 'discipline', disciplineId] as const,
   /** Mutation key for saving material — read by the sidebar's Save button via `useIsMutating`. */
   lessonMaterialSave: (lessonId: number) =>
     ['admin', 'lesson-material-save', lessonId] as const,

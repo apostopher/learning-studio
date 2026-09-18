@@ -40,9 +40,19 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
     </button>
   ),
 }));
+const tile = vi.hoisted(() => ({ received: vi.fn() }));
 vi.mock('../lesson-video-tile', () => ({
-  LessonVideoTile: () => <div />,
+  LessonVideoTile: (props: { posterUrl?: string | null }) => {
+    tile.received(props.posterUrl);
+    return <div />;
+  },
 }));
+const postersHook = vi.hoisted(() => ({
+  useDisciplineLessonPosters: vi.fn(
+    (): { data: Record<string, string> | undefined } => ({ data: undefined }),
+  ),
+}));
+vi.mock('#/data-hooks/use-discipline-lesson-posters', () => postersHook);
 
 import { editLibraryLessonIdAtom } from '#/atoms/admin';
 import { LibraryLessonCardContainer } from '../library-lesson-card-container';
@@ -65,6 +75,8 @@ const LESSON = {
 
 beforeEach(() => {
   sortable.useSortable.mockClear();
+  tile.received.mockClear();
+  postersHook.useDisciplineLessonPosters.mockReturnValue({ data: undefined });
 });
 
 describe('LibraryLessonCardContainer', () => {
@@ -178,5 +190,30 @@ describe('LibraryLessonCardContainer', () => {
     expect(store.get(editLibraryLessonIdAtom)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Edit lesson' }));
     expect(store.get(editLibraryLessonIdAtom)).toBe(42);
+  });
+  it("reads its shelf's posters once per discipline and hands the card THIS lesson's frame", () => {
+    postersHook.useDisciplineLessonPosters.mockReturnValue({
+      data: { '42': 'https://p/42.jpg', '7': 'https://p/7.jpg' },
+    });
+    render(
+      <LibraryLessonCardContainer
+        lesson={LESSON}
+        disciplineId={4}
+        boxId={null}
+      />,
+    );
+    expect(postersHook.useDisciplineLessonPosters).toHaveBeenCalledWith(4);
+    expect(tile.received).toHaveBeenLastCalledWith('https://p/42.jpg');
+  });
+
+  it('hands the card no frame while posters are unknown', () => {
+    render(
+      <LibraryLessonCardContainer
+        lesson={LESSON}
+        disciplineId={4}
+        boxId={null}
+      />,
+    );
+    expect(tile.received).toHaveBeenLastCalledWith(undefined);
   });
 });
