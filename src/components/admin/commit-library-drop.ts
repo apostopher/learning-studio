@@ -20,6 +20,8 @@ export type LibraryCommit =
       kind: 'place';
       vars: {
         lessonId: number;
+        /** Destination discipline; null releases the lesson to the org-level Untitled bag. */
+        disciplineId: number | null;
         disciplineModuleId: number | null;
         prevLessonId: number | null;
         nextLessonId: number | null;
@@ -49,8 +51,13 @@ export function commitLibraryDrop(
       kind: 'place',
       vars: {
         lessonId: resolution.lessonId,
+        disciplineId: resolution.disciplineId,
         disciplineModuleId: resolution.disciplineModuleId,
-        ...libraryLessonNeighbours(previewed, resolution.lessonId),
+        // The bag keeps no order, so a release names no neighbours — the
+        // server clears the rank rather than computing one.
+        ...(resolution.disciplineId === null
+          ? { prevLessonId: null, nextLessonId: null }
+          : libraryLessonNeighbours(previewed, resolution.lessonId)),
       },
     };
   }
@@ -78,7 +85,7 @@ export type LibraryPreview =
   | {
       kind: 'library-move';
       lessonId: number;
-      disciplineId: number;
+      disciplineId: number | null;
       disciplineModuleId: number | null;
     }
   | { kind: 'reorder-library-module'; disciplineId: number; moduleId: number };

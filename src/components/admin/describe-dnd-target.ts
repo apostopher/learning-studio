@@ -104,11 +104,12 @@ export function describeDndTarget(
     return `Untitled in ${name}`;
   }
   if (parsed.type === 'discipline') {
+    // The org-level column is the Untitled bag itself — a real drop target
+    // (a lesson released there loses its discipline), not a grouping.
+    if (parsed.id === UNTITLED_DISCIPLINE_ID) return 'Untitled';
     const name =
-      parsed.id === UNTITLED_DISCIPLINE_ID
-        ? 'Untitled'
-        : (library?.disciplines.find((d) => d.id === parsed.id)?.name ??
-          String(parsed.id));
+      library?.disciplines.find((d) => d.id === parsed.id)?.name ??
+      String(parsed.id);
     return `the ${name} discipline column`;
   }
   if (!board) return String(id);

@@ -152,7 +152,8 @@ export async function deleteDisciplineModule(
 }
 
 export type PlaceLessonResult =
-  | { ok: true; rank: number }
+  /** `rank` is null after a release to the bag, which keeps no order. */
+  | { ok: true; rank: number | null }
   | { ok: false; reason: 'not-found' }
   | {
       ok: false;
@@ -162,13 +163,17 @@ export type PlaceLessonResult =
     };
 
 /**
- * File a lesson: into a module (`disciplineModuleId`) or back to its
- * discipline's Untitled group (`null`), at a midpoint `library_rank`
- * between the named neighbours.
+ * File a lesson into `disciplineId`: into a module (`disciplineModuleId`) or
+ * that discipline's Untitled group (`null`), at a midpoint `library_rank`
+ * between the named neighbours — or, with `disciplineId: null`, release it
+ * to the org-level Untitled bag, clearing discipline, module and rank.
  *
- * The one invariant this feature has — a lesson's module belongs to the
- * lesson's own discipline — is enforced here, the only write that sets the
- * column, by reading both disciplines first and refusing with both names.
+ * The bag is the ONLY way a lesson changes discipline: out of it into any
+ * discipline, or from a discipline back into it. A lesson already in one
+ * discipline is refused a different one by name — which SME owns a lesson
+ * is a deliberate two-step, not a slip of the pointer. The other invariant —
+ * a lesson's module belongs to the lesson's discipline — is enforced in the
+ * same read: the module must belong to the DESTINATION discipline.
  * Neighbour ranks are scoped to the SAME box (module, or Untitled of the
  * same discipline), so a neighbour id from another box never lends its rank
  * to this list.
@@ -190,6 +195,8 @@ export type PlaceLessonResult =
  */
 export async function placeLessonInLibrary(input: {
   lessonId: number;
+  /** Destination discipline; null releases the lesson to the org-level bag. */
+  disciplineId: number | null;
   disciplineModuleId: number | null;
   prevLessonId: number | null;
   nextLessonId: number | null;
@@ -207,6 +214,45 @@ export async function placeLessonInLibrary(input: {
     .where(eq(lessonsTable.id, input.lessonId));
   if (!lesson) return { ok: false, reason: 'not-found' };
 
+  // Release to the bag: nothing to rank, nothing to check beyond the row
+  // existing — the route has already required the right to touch it.
+  if (input.disciplineId === null) {
+    const [released] = await db
+      .update(lessonsTable)
+      .set({
+        disciplineId: null,
+        disciplineModuleId: null,
+        libraryRank: null,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(lessonsTable.id, input.lessonId))
+      .returning({
+        id: lessonsTable.id,
+        libraryRank: lessonsTable.libraryRank,
+      });
+    if (!released) return { ok: false, reason: 'not-found' };
+    return { ok: true, rank: null };
+  }
+
+  // A disciplined lesson only ever files within its own discipline; a bag
+  // lesson (no discipline yet) may enter any.
+  if (
+    lesson.disciplineId !== null &&
+    lesson.disciplineId !== input.disciplineId
+  ) {
+    const [destination] = await db
+      .select({ name: disciplinesTable.name })
+      .from(disciplinesTable)
+      .where(eq(disciplinesTable.id, input.disciplineId));
+    if (!destination) return { ok: false, reason: 'not-found' };
+    return {
+      ok: false,
+      reason: 'wrong-discipline',
+      lessonDiscipline: lesson.disciplineName ?? 'Untitled',
+      moduleDiscipline: destination.name,
+    };
+  }
+
   if (input.disciplineModuleId !== null) {
     const [module] = await db
       .select({
@@ -220,7 +266,7 @@ export async function placeLessonInLibrary(input: {
       )
       .where(eq(disciplineModulesTable.id, input.disciplineModuleId));
     if (!module) return { ok: false, reason: 'not-found' };
-    if (module.disciplineId !== lesson.disciplineId) {
+    if (module.disciplineId !== input.disciplineId) {
       return {
         ok: false,
         reason: 'wrong-discipline',
@@ -233,7 +279,7 @@ export async function placeLessonInLibrary(input: {
   // Neighbours live in the SAME box as the destination.
   const inBox =
     input.disciplineModuleId === null
-      ? sql`${lessonsTable.disciplineModuleId} is null and ${lessonsTable.disciplineId} = ${lesson.disciplineId}`
+      ? sql`${lessonsTable.disciplineModuleId} is null and ${lessonsTable.disciplineId} = ${input.disciplineId}`
       : sql`${lessonsTable.disciplineModuleId} = ${input.disciplineModuleId}`;
   const rankOf = (id: number) =>
     sql`coalesce((select ${lessonsTable.libraryRank} from ${lessonsTable} where ${lessonsTable.id} = ${id} and ${inBox}), ${unrankedLibraryRank(id)})`;
@@ -249,6 +295,7 @@ export async function placeLessonInLibrary(input: {
   const [updated] = await db
     .update(lessonsTable)
     .set({
+      disciplineId: input.disciplineId,
       disciplineModuleId: input.disciplineModuleId,
       libraryRank: rankExpr,
       updatedAt: sql`now()`,

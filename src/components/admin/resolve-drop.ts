@@ -10,7 +10,11 @@ import type {
   OrgEditorBoard,
   OrgLibrary,
 } from '#/lib/admin-schemas';
-import { type ParsedDndId, parseDndId } from '#/lib/dnd-ids';
+import {
+  type ParsedDndId,
+  parseDndId,
+  UNTITLED_DISCIPLINE_ID,
+} from '#/lib/dnd-ids';
 import { removeLessonLabel } from './lesson-card-labels';
 
 /**
@@ -64,9 +68,16 @@ export type DropResolution =
   | {
       kind: 'library-move';
       lessonId: number;
-      /** The discipline the DRAGGED lesson belongs to — found by locating it, never read off its (possibly stale) `disciplineModuleId`. */
-      disciplineId: number;
-      /** The destination box: a discipline module's id, or null for that discipline's Untitled group. */
+      /**
+       * The DESTINATION discipline, or null for the org-level Untitled bag.
+       * Equal to the dragged lesson's own discipline for a move within it;
+       * differs only for the two moves that change a lesson's discipline —
+       * out of the bag into a discipline, or from a discipline back to the
+       * bag. Found by locating things, never read off a lesson's (possibly
+       * stale) `disciplineModuleId`.
+       */
+      disciplineId: number | null;
+      /** The destination box: a discipline module's id, or null for that discipline's Untitled group (and always null for the bag). */
       disciplineModuleId: number | null;
       /** The raw over id, so the caller can read the exact slot to insert at. */
       overId: string | number;
@@ -292,11 +303,10 @@ function findLibraryModule(
   return null;
 }
 
-/** Why a library lesson with no discipline cannot be filed into a module —
- *  there is no discipline's module list to file it into. Its `link` onto a
- *  course module is unaffected; this only guards library-side targets. */
-function noDisciplineRefusal(lesson: LibraryLesson): string {
-  return `"${lesson.name}" has no discipline yet, so there are no modules to file it in. Drag it onto a course module to teach it there.`;
+/** Why a bag lesson dropped back on the bag is refused rather than silently
+ *  snapped back: it changes nothing, and this editor says so. */
+function alreadyInBagRefusal(lesson: LibraryLesson): string {
+  return `"${lesson.name}" is already in Untitled. Drag it onto a discipline’s module to file it there, or onto a course module to teach it.`;
 }
 
 /** Why a lesson may not be filed into a module of a DIFFERENT discipline
@@ -345,21 +355,27 @@ function isLibraryTarget(over: ParsedDndId): over is LibraryTarget {
 function resolveLibraryTarget(
   library: OrgLibrary,
   over: LibraryTarget,
-): { disciplineId: number; boxId: number | null } | null {
+): { disciplineId: number | null; boxId: number | null } | null {
   if (over.type === 'library-module' || over.type === 'library-container') {
     const found = findLibraryModule(library, over.id);
     if (!found) return null;
     return { disciplineId: found.discipline.id, boxId: found.module.id };
   }
   if (over.type === 'library-untitled') {
+    // The org-level column — the bag of lessons with no discipline — is
+    // registered under `UNTITLED_DISCIPLINE_ID`, not a real discipline id.
+    if (over.id === UNTITLED_DISCIPLINE_ID)
+      return { disciplineId: null, boxId: null };
     const discipline = library.disciplines.find((d) => d.id === over.id);
     if (!discipline) return null;
     return { disciplineId: discipline.id, boxId: null };
   }
   // over.type === 'library-lesson': the target's box is wherever THAT lesson
-  // is found — its module, or null for its discipline's Untitled.
+  // is found — its module, null for its discipline's Untitled, or the bag
+  // when the card itself has no discipline.
   const target = findLibraryLesson(library, over.id);
-  if (!target || !target.discipline) return null;
+  if (!target) return null;
+  if (!target.discipline) return { disciplineId: null, boxId: null };
   return { disciplineId: target.discipline.id, boxId: target.boxId };
 }
 
@@ -555,6 +571,27 @@ export function resolveDrop(
 
   if (active.type === 'library-lesson') {
     if (over.type === 'discipline') {
+      // The org-level Untitled column IS the bag: it registers no inner
+      // droppable of its own (see `LibraryUntitledContainer`), so the column
+      // is the release target. Any other discipline column only groups.
+      if (over.id === UNTITLED_DISCIPLINE_ID) {
+        if (!library) return null;
+        const from = findLibraryLesson(library, active.id);
+        if (!from) return null;
+        if (!from.discipline) {
+          return {
+            kind: 'forbidden',
+            reason: alreadyInBagRefusal(from.lesson),
+          };
+        }
+        return {
+          kind: 'library-move',
+          lessonId: from.lesson.id,
+          disciplineId: null,
+          disciplineModuleId: null,
+          overId,
+        };
+      }
       return {
         kind: 'forbidden',
         reason:
@@ -571,15 +608,23 @@ export function resolveDrop(
       if (!library) return null;
       const from = findLibraryLesson(library, active.id);
       if (!from) return null;
-      // A lesson with no discipline at all has no discipline's modules to
-      // file it into — its `link` onto a course container, below, is
-      // unaffected by this refusal.
-      if (!from.discipline)
-        return { kind: 'forbidden', reason: noDisciplineRefusal(from.lesson) };
-
       const target = resolveLibraryTarget(library, over);
       if (!target) return null;
-      if (target.disciplineId !== from.discipline.id) {
+
+      // The bag (org-level Untitled) is the only way a lesson changes
+      // discipline: out of it into any discipline, or from a discipline back
+      // into it. Discipline-to-discipline directly stays refused by name —
+      // which SME owns a lesson is a deliberate two-step, not a slip of the
+      // pointer.
+      const fromDisciplineId = from.discipline?.id ?? null;
+      if (fromDisciplineId === null && target.disciplineId === null) {
+        return { kind: 'forbidden', reason: alreadyInBagRefusal(from.lesson) };
+      }
+      if (
+        fromDisciplineId !== null &&
+        target.disciplineId !== null &&
+        target.disciplineId !== fromDisciplineId
+      ) {
         return {
           kind: 'forbidden',
           reason: crossDisciplineLessonRefusal(from),
@@ -588,7 +633,7 @@ export function resolveDrop(
       return {
         kind: 'library-move',
         lessonId: from.lesson.id,
-        disciplineId: from.discipline.id,
+        disciplineId: target.disciplineId,
         disciplineModuleId: target.boxId,
         overId,
       };

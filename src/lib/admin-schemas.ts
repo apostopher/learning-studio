@@ -98,11 +98,22 @@ export type ReorderDisciplineModuleInput = z.infer<
 /** Input accepted by PATCH /api/admin/lessons/:id/library-placement. */
 export const libraryPlacementInputSchema = z
   .object({
+    /** Destination discipline; null releases the lesson to the org-level Untitled bag. */
+    disciplineId: z.number().int().positive().nullable(),
     disciplineModuleId: z.number().int().positive().nullable(),
     prevLessonId: z.number().int().positive().nullable(),
     nextLessonId: z.number().int().positive().nullable(),
   })
-  .strict();
+  .strict()
+  // The bag has no boxes and keeps no order.
+  .refine(
+    (v) =>
+      v.disciplineId !== null ||
+      (v.disciplineModuleId === null &&
+        v.prevLessonId === null &&
+        v.nextLessonId === null),
+    'A lesson released to Untitled names no module or neighbours',
+  );
 export type LibraryPlacementInput = z.infer<typeof libraryPlacementInputSchema>;
 
 export const remixCourseInputSchema = z.object({

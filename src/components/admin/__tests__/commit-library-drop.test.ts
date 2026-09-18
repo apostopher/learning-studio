@@ -71,9 +71,44 @@ describe('commitLibraryDrop', () => {
       kind: 'place',
       vars: {
         lessonId: 1,
+        disciplineId: 4,
         disciplineModuleId: 7,
         prevLessonId: 2,
         nextLessonId: 5,
+      },
+    });
+  });
+  it('a release to the bag commits disciplineId null and no neighbours — the bag keeps no order', () => {
+    const released = {
+      ...previewed,
+      disciplines: previewed.disciplines.map((d) => ({
+        ...d,
+        modules: d.modules.map((m) => ({
+          ...m,
+          lessons: m.lessons.filter((l) => l.id !== 1),
+        })),
+      })),
+      untitled: [lesson(9, null), lesson(1, null)],
+    };
+    expect(
+      commitLibraryDrop(
+        {
+          kind: 'library-move',
+          lessonId: 1,
+          disciplineId: null,
+          disciplineModuleId: null,
+          overId: 'library-untitled-0',
+        },
+        released,
+      ),
+    ).toEqual({
+      kind: 'place',
+      vars: {
+        lessonId: 1,
+        disciplineId: null,
+        disciplineModuleId: null,
+        prevLessonId: null,
+        nextLessonId: null,
       },
     });
   });

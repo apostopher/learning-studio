@@ -193,6 +193,7 @@ describe('placeLessonInLibrary', () => {
     ]); // module
     const out = await placeLessonInLibrary({
       lessonId: 10,
+      disciplineId: 4,
       disciplineModuleId: 7,
       prevLessonId: null,
       nextLessonId: null,
@@ -217,6 +218,7 @@ describe('placeLessonInLibrary', () => {
     fake.state.results.push([{ id: 10, libraryRank: '1.5' }]);
     const out = await placeLessonInLibrary({
       lessonId: 10,
+      disciplineId: 4,
       disciplineModuleId: 7,
       prevLessonId: 11,
       nextLessonId: 12,
@@ -248,6 +250,7 @@ describe('placeLessonInLibrary', () => {
     fake.state.results.push([{ id: 10, libraryRank: '3' }]);
     const out = await placeLessonInLibrary({
       lessonId: 10,
+      disciplineId: 4,
       disciplineModuleId: null,
       prevLessonId: 11,
       nextLessonId: null,
@@ -326,7 +329,11 @@ describe('placeLessonInLibrary', () => {
       fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
       fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
       fake.state.results.push([{ id: input.lessonId, libraryRank: '0' }]);
-      await placeLessonInLibrary({ disciplineModuleId: 7, ...input });
+      await placeLessonInLibrary({
+        disciplineId: 4,
+        disciplineModuleId: 7,
+        ...input,
+      });
       const set = fake.state.updates[0].set as { libraryRank: SQL };
       return {
         expr: set.libraryRank,
@@ -427,11 +434,76 @@ describe('placeLessonInLibrary', () => {
     });
   });
 
+  describe('the Untitled bag', () => {
+    it('assigns the destination discipline to a bag lesson filed into one of its modules', async () => {
+      fake.state.results.push([{ disciplineId: null, disciplineName: null }]); // lesson: in the bag
+      fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]); // module 7 is Weather's
+      fake.state.results.push([{ id: 10, libraryRank: '1' }]);
+      const out = await placeLessonInLibrary({
+        lessonId: 10,
+        disciplineId: 4,
+        disciplineModuleId: 7,
+        prevLessonId: null,
+        nextLessonId: null,
+      });
+      const set = fake.state.updates[0].set as {
+        disciplineId: number | null;
+        disciplineModuleId: number | null;
+      };
+      expect(set.disciplineId).toBe(4);
+      expect(set.disciplineModuleId).toBe(7);
+      expect(out).toEqual({ ok: true, rank: 1 });
+    });
+
+    it('releases a disciplined lesson to the bag: discipline, module and rank all cleared, no neighbour read', async () => {
+      fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
+      fake.state.results.push([{ id: 10, libraryRank: null }]);
+      const out = await placeLessonInLibrary({
+        lessonId: 10,
+        disciplineId: null,
+        disciplineModuleId: null,
+        prevLessonId: null,
+        nextLessonId: null,
+      });
+      const upd = fake.state.updates[0];
+      expect(renderSql(upd.where as SQL)).toBe('"lessons"."id" = $1');
+      const set = upd.set as {
+        disciplineId: number | null;
+        disciplineModuleId: number | null;
+        libraryRank: SQL | null;
+      };
+      expect(set.disciplineId).toBeNull();
+      expect(set.disciplineModuleId).toBeNull();
+      expect(set.libraryRank).toBeNull();
+      expect(out).toEqual({ ok: true, rank: null });
+    });
+
+    it('still refuses moving a disciplined lesson straight into ANOTHER discipline, naming both, and writes nothing', async () => {
+      fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]); // lesson
+      fake.state.results.push([{ name: 'Navigation' }]); // destination discipline
+      const out = await placeLessonInLibrary({
+        lessonId: 10,
+        disciplineId: 9,
+        disciplineModuleId: null,
+        prevLessonId: null,
+        nextLessonId: null,
+      });
+      expect(out).toEqual({
+        ok: false,
+        reason: 'wrong-discipline',
+        lessonDiscipline: 'Weather',
+        moduleDiscipline: 'Navigation',
+      });
+      expect(fake.state.updates).toHaveLength(0);
+    });
+  });
+
   it('answers not-found for an unknown lesson', async () => {
     fake.state.results.push([]);
     expect(
       await placeLessonInLibrary({
         lessonId: 10,
+        disciplineId: 4,
         disciplineModuleId: null,
         prevLessonId: null,
         nextLessonId: null,

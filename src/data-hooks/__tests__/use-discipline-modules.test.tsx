@@ -114,6 +114,7 @@ describe('discipline module hooks', () => {
       act(() =>
         result.current.mutateAsync({
           lessonId: 10,
+          disciplineId: 4,
           disciplineModuleId: 7,
           prevLessonId: null,
           nextLessonId: 12,
@@ -126,6 +127,7 @@ describe('discipline module hooks', () => {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          disciplineId: 4,
           disciplineModuleId: 7,
           prevLessonId: null,
           nextLessonId: 12,

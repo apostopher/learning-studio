@@ -12,6 +12,7 @@ import {
   libraryContainerDndId,
   libraryLessonDndId,
   libraryUntitledDndId,
+  UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
 import {
   boardLessonFromLibrary,
@@ -447,7 +448,7 @@ const makeLibrary = (): OrgLibrary => ({
       untitled: [],
     },
   ],
-  untitled: [],
+  untitled: [libLesson(50, null)],
 });
 
 const idsInModule = (library: OrgLibrary, moduleId: number) =>
@@ -467,6 +468,7 @@ describe('moveLessonInLibrary', () => {
     const next = moveLessonInLibrary(
       library,
       3,
+      WEATHER,
       ADVANCED_MODULE,
       libraryLessonDndId(6),
     );
@@ -485,6 +487,7 @@ describe('moveLessonInLibrary', () => {
     const next = moveLessonInLibrary(
       library,
       3,
+      WEATHER,
       ADVANCED_MODULE,
       libraryContainerDndId(ADVANCED_MODULE),
     );
@@ -497,6 +500,7 @@ describe('moveLessonInLibrary', () => {
     const next = moveLessonInLibrary(
       library,
       1,
+      WEATHER,
       null,
       libraryUntitledDndId(WEATHER),
     );
@@ -516,6 +520,7 @@ describe('moveLessonInLibrary', () => {
     const next = moveLessonInLibrary(
       library,
       1,
+      WEATHER,
       BASICS_MODULE,
       libraryLessonDndId(2),
     );
@@ -529,6 +534,7 @@ describe('moveLessonInLibrary', () => {
     const next = moveLessonInLibrary(
       library,
       3,
+      WEATHER,
       ADVANCED_MODULE,
       libraryLessonDndId(6),
     );
@@ -538,10 +544,51 @@ describe('moveLessonInLibrary', () => {
 
   it('leaves the library it was given untouched', () => {
     const library = makeLibrary();
-    moveLessonInLibrary(library, 3, ADVANCED_MODULE, libraryLessonDndId(6));
+    moveLessonInLibrary(
+      library,
+      3,
+      WEATHER,
+      ADVANCED_MODULE,
+      libraryLessonDndId(6),
+    );
 
     expect(idsInUntitled(library, WEATHER)).toEqual([3]);
     expect(idsInModule(library, ADVANCED_MODULE)).toEqual([6]);
+  });
+  it('assigns a discipline: a bag lesson dropped on a module leaves the org bag and lands in that module', () => {
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      50,
+      WEATHER,
+      ADVANCED_MODULE,
+      libraryContainerDndId(ADVANCED_MODULE),
+    );
+
+    expect(next.untitled.map((l) => l.id)).toEqual([]);
+    expect(idsInModule(next, ADVANCED_MODULE)).toEqual([6, 50]);
+    const moved = next.disciplines
+      .flatMap((d) => d.modules)
+      .flatMap((m) => m.lessons)
+      .find((l) => l.id === 50);
+    expect(moved?.disciplineModuleId).toBe(ADVANCED_MODULE);
+  });
+
+  it('releases to the bag: a disciplined lesson dropped on the org-level Untitled leaves its module and joins the bag', () => {
+    const library = makeLibrary();
+    const next = moveLessonInLibrary(
+      library,
+      1,
+      null,
+      null,
+      libraryUntitledDndId(UNTITLED_DISCIPLINE_ID),
+    );
+
+    expect(idsInModule(next, BASICS_MODULE)).toEqual([2]);
+    expect(next.untitled.map((l) => l.id)).toEqual([50, 1]);
+    expect(
+      next.untitled.find((l) => l.id === 1)?.disciplineModuleId,
+    ).toBeNull();
   });
 });
 

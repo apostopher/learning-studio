@@ -183,6 +183,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     m.placeLessonInLibrary.mockResolvedValue({ ok: true, rank: 1.5 });
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: 7,
         prevLessonId: 11,
         nextLessonId: null,
@@ -198,6 +199,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     );
     expect(m.placeLessonInLibrary).toHaveBeenCalledWith({
       lessonId: 10,
+      disciplineId: 4,
       disciplineModuleId: 7,
       prevLessonId: 11,
       nextLessonId: null,
@@ -213,6 +215,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     });
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: 7,
         prevLessonId: null,
         nextLessonId: null,
@@ -250,6 +253,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     });
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: 99,
         prevLessonId: null,
         nextLessonId: null,
@@ -272,6 +276,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     m.getDisciplineIdForDisciplineModule.mockResolvedValue(null);
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: 99,
         prevLessonId: null,
         nextLessonId: null,
@@ -285,6 +290,7 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     m.placeLessonInLibrary.mockResolvedValue({ ok: true, rank: 1 });
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: null,
         prevLessonId: null,
         nextLessonId: null,
@@ -295,25 +301,135 @@ describe('PATCH /api/admin/lessons/:id/library-placement', () => {
     expect(m.getDisciplineIdForDisciplineModule).not.toHaveBeenCalled();
     expect(m.placeLessonInLibrary).toHaveBeenCalledWith({
       lessonId: 10,
+      disciplineId: 4,
       disciplineModuleId: null,
       prevLessonId: null,
       nextLessonId: null,
     });
   });
-  it('an Untitled (null) lesson has no discipline to guard — 404, and nothing is written', async () => {
+  it('a bag lesson whose admin guard refuses is 403, and nothing is written', async () => {
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
       disciplineId: null,
     });
+    m.requireLessonContentPermission.mockRejectedValueOnce(
+      new m.ForbiddenError(),
+    );
     const res = await patchLibraryPlacementHandler(
       json('PATCH', {
+        disciplineId: 4,
         disciplineModuleId: null,
         prevLessonId: null,
         nextLessonId: null,
       }),
       '10',
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      'update',
+    );
     expect(m.placeLessonInLibrary).not.toHaveBeenCalled();
+  });
+  describe('the Untitled bag', () => {
+    /**
+     * A bag lesson has no discipline, which used to 404 here. It is a real
+     * lesson the org admin may file: `requireLessonContentPermission(null)`
+     * is the admin check, and the DESTINATION discipline is org-checked
+     * before the writer can name it in a refusal.
+     */
+    it('files a bag lesson into a discipline under the admin guard, org-checking the destination', async () => {
+      m.getDisciplineIdForLessonId.mockResolvedValue({
+        found: true,
+        disciplineId: null,
+      });
+      m.placeLessonInLibrary.mockResolvedValue({ ok: true, rank: 1 });
+      const res = await patchLibraryPlacementHandler(
+        json('PATCH', {
+          disciplineId: 4,
+          disciplineModuleId: 7,
+          prevLessonId: null,
+          nextLessonId: null,
+        }),
+        '10',
+      );
+      expect(res.status).toBe(200);
+      expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
+        expect.anything(),
+        null,
+        'update',
+      );
+      expect(m.findDisciplineInOrg).toHaveBeenCalledWith(1, 4);
+      expect(m.placeLessonInLibrary).toHaveBeenCalledWith({
+        lessonId: 10,
+        disciplineId: 4,
+        disciplineModuleId: 7,
+        prevLessonId: null,
+        nextLessonId: null,
+      });
+    });
+
+    it('releases a disciplined lesson to the bag under its own discipline’s guard', async () => {
+      m.placeLessonInLibrary.mockResolvedValue({ ok: true, rank: null });
+      const res = await patchLibraryPlacementHandler(
+        json('PATCH', {
+          disciplineId: null,
+          disciplineModuleId: null,
+          prevLessonId: null,
+          nextLessonId: null,
+        }),
+        '10',
+      );
+      expect(res.status).toBe(200);
+      expect(m.requireLessonContentPermission).toHaveBeenCalledWith(
+        expect.anything(),
+        4,
+        'update',
+      );
+      expect(m.placeLessonInLibrary).toHaveBeenCalledWith({
+        lessonId: 10,
+        disciplineId: null,
+        disciplineModuleId: null,
+        prevLessonId: null,
+        nextLessonId: null,
+      });
+    });
+
+    it('404s a destination discipline of another org without naming it, writing nothing', async () => {
+      m.getDisciplineIdForLessonId.mockResolvedValue({
+        found: true,
+        disciplineId: null,
+      });
+      m.findDisciplineInOrg.mockImplementation(
+        async (_orgId: number, disciplineId: number) =>
+          disciplineId === 4 ? { id: 4 } : null,
+      );
+      const res = await patchLibraryPlacementHandler(
+        json('PATCH', {
+          disciplineId: 77,
+          disciplineModuleId: null,
+          prevLessonId: null,
+          nextLessonId: null,
+        }),
+        '10',
+      );
+      expect(res.status).toBe(404);
+      expect(m.placeLessonInLibrary).not.toHaveBeenCalled();
+    });
+
+    it('400s a body that names a module for the bag — the bag has no boxes', async () => {
+      const res = await patchLibraryPlacementHandler(
+        json('PATCH', {
+          disciplineId: null,
+          disciplineModuleId: 7,
+          prevLessonId: null,
+          nextLessonId: null,
+        }),
+        '10',
+      );
+      expect(res.status).toBe(400);
+      expect(m.placeLessonInLibrary).not.toHaveBeenCalled();
+    });
   });
 });

@@ -43,10 +43,18 @@ export async function patchLibraryPlacementHandler(
   if (lessonId === null)
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   const lookup = await getDisciplineIdForLessonId(lessonId);
-  if (!lookup.found || lookup.disciplineId === null) {
+  if (!lookup.found) {
     return absentResourceResponse(request.headers, 'Lesson not found');
   }
-  if (!(await findDisciplineInOrg(getActiveOrgId(), lookup.disciplineId))) {
+  // A lesson with no discipline is in the org-level Untitled bag — a real
+  // lesson, not an absent one. Its guard below is the admin check
+  // (`requireLessonContentPermission(null)`); a disciplined lesson's is its
+  // discipline's content:update, which is what lets an SME release one of
+  // their lessons to the bag.
+  if (
+    lookup.disciplineId !== null &&
+    !(await findDisciplineInOrg(getActiveOrgId(), lookup.disciplineId))
+  ) {
     return absentResourceResponse(request.headers, 'Lesson not found');
   }
   try {
@@ -69,6 +77,15 @@ export async function patchLibraryPlacementHandler(
   const parsed = libraryPlacementInputSchema.safeParse(body);
   if (!parsed.success)
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  // The DESTINATION discipline is org-checked for the same reason the
+  // module is: the writer's refusal names it.
+  if (
+    parsed.data.disciplineId !== null &&
+    !(await findDisciplineInOrg(getActiveOrgId(), parsed.data.disciplineId))
+  ) {
+    return absentResourceResponse(request.headers, 'Discipline not found');
+  }
 
   if (parsed.data.disciplineModuleId !== null) {
     const moduleDisciplineId = await getDisciplineIdForDisciplineModule(

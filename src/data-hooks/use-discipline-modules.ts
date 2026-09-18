@@ -110,6 +110,8 @@ export function usePlaceLibraryLesson() {
   return useLibraryMutation(
     (vars: {
       lessonId: number;
+      /** Destination discipline; null releases the lesson to the org-level Untitled bag. */
+      disciplineId: number | null;
       disciplineModuleId: number | null;
       prevLessonId: number | null;
       nextLessonId: number | null;
@@ -117,6 +119,7 @@ export function usePlaceLibraryLesson() {
       fetch(
         `/api/admin/lessons/${vars.lessonId}/library-placement`,
         json('PATCH', {
+          disciplineId: vars.disciplineId,
           disciplineModuleId: vars.disciplineModuleId,
           prevLessonId: vars.prevLessonId,
           nextLessonId: vars.nextLessonId,

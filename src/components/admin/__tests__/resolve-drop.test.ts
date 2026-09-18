@@ -18,6 +18,7 @@ import {
   libraryModuleDndId,
   libraryUntitledDndId,
   moduleDndId,
+  UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
 import { removeLessonLabel } from '../lesson-card-labels';
 import { resolveDrop } from '../resolve-drop';
@@ -1014,25 +1015,150 @@ describe('resolveDrop — library-side drops', () => {
   });
 
   /**
-   * Ruling 2: a library lesson found in the ORG-LEVEL `library.untitled`
-   * (no discipline at all, distinct from a discipline's OWN Untitled group)
-   * has no discipline's modules to file it into. Every library-side target
-   * refuses it the same way; its `link` onto a course container is
-   * unaffected (not re-tested here — that path never consults `library`).
+   * The org-level `library.untitled` is the bag of unassigned lessons. A
+   * lesson in it may be dragged into any discipline (onto a module, that
+   * discipline's own Untitled group, or one of its lesson cards), which
+   * assigns the discipline; a disciplined lesson may be dropped back onto
+   * the bag, which clears it. Only the bag changes a lesson's discipline —
+   * a direct discipline-to-discipline drop stays refused by name.
    */
-  it('refuses a library lesson with no discipline dragged onto any library-side target', () => {
-    const result = resolveDrop(
-      board,
-      libraryLessonDndId(ORPHAN),
-      libraryContainerDndId(ADVANCED_MODULE),
-      undefined,
-      libraryFixture(),
-    );
+  describe('the Untitled bag', () => {
+    it('assigns a discipline when a bag lesson is dropped on one of its modules', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(ORPHAN),
+          libraryContainerDndId(ADVANCED_MODULE),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'library-move',
+        lessonId: ORPHAN,
+        disciplineId: WEATHER,
+        disciplineModuleId: ADVANCED_MODULE,
+        overId: libraryContainerDndId(ADVANCED_MODULE),
+      });
+    });
 
-    expect(result).toEqual({
-      kind: 'forbidden',
-      reason:
-        '"Orphan" has no discipline yet, so there are no modules to file it in. Drag it onto a course module to teach it there.',
+    it('assigns a discipline when a bag lesson is dropped on that discipline’s Untitled group', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(ORPHAN),
+          libraryUntitledDndId(WEATHER),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'library-move',
+        lessonId: ORPHAN,
+        disciplineId: WEATHER,
+        disciplineModuleId: null,
+        overId: libraryUntitledDndId(WEATHER),
+      });
+    });
+
+    it('assigns a discipline when a bag lesson is dropped on one of its lesson cards, into that card’s box', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(ORPHAN),
+          libraryLessonDndId(L2),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'library-move',
+        lessonId: ORPHAN,
+        disciplineId: WEATHER,
+        disciplineModuleId: BASICS_MODULE,
+        overId: libraryLessonDndId(L2),
+      });
+    });
+
+    it('releases a disciplined lesson to the bag when dropped on the org-level Untitled column', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(L1),
+          libraryUntitledDndId(UNTITLED_DISCIPLINE_ID),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'library-move',
+        lessonId: L1,
+        disciplineId: null,
+        disciplineModuleId: null,
+        overId: libraryUntitledDndId(UNTITLED_DISCIPLINE_ID),
+      });
+    });
+
+    it('releases a disciplined lesson to the bag when dropped on a bag lesson’s card', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(L1),
+          libraryLessonDndId(ORPHAN),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toMatchObject({
+        kind: 'library-move',
+        lessonId: L1,
+        disciplineId: null,
+        disciplineModuleId: null,
+      });
+    });
+
+    it('releases a disciplined lesson to the bag when dropped on the org-level column itself — the bag registers no inner droppable', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(L1),
+          disciplineDndId(UNTITLED_DISCIPLINE_ID),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'library-move',
+        lessonId: L1,
+        disciplineId: null,
+        disciplineModuleId: null,
+        overId: disciplineDndId(UNTITLED_DISCIPLINE_ID),
+      });
+    });
+
+    it('refuses a bag lesson dropped back on the bag column — it changes nothing', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(ORPHAN),
+          disciplineDndId(UNTITLED_DISCIPLINE_ID),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toMatchObject({
+        kind: 'forbidden',
+        reason: expect.stringContaining('already in Untitled'),
+      });
+    });
+
+    it('refuses a bag lesson dropped back on the bag — it changes nothing', () => {
+      expect(
+        resolveDrop(
+          board,
+          libraryLessonDndId(ORPHAN),
+          libraryUntitledDndId(UNTITLED_DISCIPLINE_ID),
+          undefined,
+          libraryFixture(),
+        ),
+      ).toEqual({
+        kind: 'forbidden',
+        reason:
+          '"Orphan" is already in Untitled. Drag it onto a discipline’s module to file it there, or onto a course module to teach it.',
+      });
     });
   });
 

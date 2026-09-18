@@ -264,54 +264,12 @@ export function boardLessonFromLibrary(
  * under Untitled. The field is an OUTPUT here (set on the moved lesson to
  * wherever it lands), never an input for finding anything.
  *
- * `resolveDrop`'s `library-move` never crosses disciplines (Ruling 4: a
- * cross-discipline target is `forbidden`), so a move only ever touches ONE
- * discipline — every other discipline is returned untouched, at the same
- * object reference, exactly as `reorderModulesOnBoard` leaves every other
- * course's column alone.
+ * A move touches at most the discipline it leaves and the one it enters
+ * (the same one for a move within a discipline; the org-level bag for the
+ * two moves that change a lesson's discipline) — every other discipline is
+ * returned untouched, at the same object reference, exactly as
+ * `reorderModulesOnBoard` leaves every other course's column alone.
  */
-
-/** The discipline that owns a discipline module id, or null when it names no
- *  module on this library. */
-function disciplineOwningModule(
-  library: OrgLibrary,
-  moduleId: number,
-): OrgLibrary['disciplines'][number] | null {
-  return (
-    library.disciplines.find((d) => d.modules.some((m) => m.id === moduleId)) ??
-    null
-  );
-}
-
-/**
- * Which discipline a `moveLessonInLibrary` call is filing INTO. A non-null
- * `disciplineModuleId` names its own discipline unambiguously. `null` means
- * "that discipline's own Untitled group", which `disciplineModuleId` alone
- * cannot name — so the over id supplies it: a `library-untitled` id names
- * the discipline directly, and a `library-lesson` id resolves through
- * wherever THAT (different) lesson currently sits, mirroring Ruling 4 in
- * `resolveDrop`.
- */
-function libraryMoveTargetDiscipline(
-  library: OrgLibrary,
-  disciplineModuleId: number | null,
-  overId: string | number,
-): number | null {
-  if (disciplineModuleId !== null) {
-    return disciplineOwningModule(library, disciplineModuleId)?.id ?? null;
-  }
-  const over = parseDndId(overId);
-  if (over?.type === 'library-untitled') return over.id;
-  if (over?.type === 'library-lesson') {
-    for (const d of library.disciplines) {
-      for (const m of d.modules) {
-        if (m.lessons.some((l) => l.id === over.id)) return d.id;
-      }
-      if (d.untitled.some((l) => l.id === over.id)) return d.id;
-    }
-  }
-  return null;
-}
 
 /**
  * Where in a library bucket a drop lands: a `library-lesson` over id names
@@ -330,75 +288,99 @@ function overIndexInLibrary(
 }
 
 /**
- * Move a library lesson to `disciplineModuleId` (a discipline module's id,
- * or null for that discipline's own Untitled group), at `overId`'s slot.
+ * Move a library lesson into `disciplineId` (or the org-level Untitled bag
+ * when null) at box `disciplineModuleId` (a discipline module's id, or null
+ * for that discipline's own Untitled group — always null for the bag), at
+ * `overId`'s slot.
+ *
+ * The destination discipline is explicit — it is what `resolveDrop` decided
+ * — because it can differ from where the lesson currently sits: the bag is
+ * how a lesson gains or loses its discipline. The lesson is pulled out of
+ * WHEREVER it is found by walking every bucket (an earlier preview in the
+ * same drag may already have re-bucketed it), never off its own (possibly
+ * stale) `disciplineModuleId`.
  *
  * The insertion index is read from the target bucket AS IT STANDS NOW,
  * before the dragged lesson is pulled out of it — same reasoning as
  * `moveLessonOnBoard`: a same-bucket downward move must land in the slot
- * under the pointer, not one above it.
+ * under the pointer, not one above it. The bag keeps no order, so a drop
+ * into it appends.
  */
 export function moveLessonInLibrary(
   library: OrgLibrary,
   lessonId: number,
+  disciplineId: number | null,
   disciplineModuleId: number | null,
   overId: string | number,
 ): OrgLibrary {
-  const toDisciplineId = libraryMoveTargetDiscipline(
-    library,
-    disciplineModuleId,
-    overId,
-  );
-  if (toDisciplineId === null) return library;
-  const discipline = library.disciplines.find((d) => d.id === toDisciplineId);
-  if (!discipline) return library;
+  const destination =
+    disciplineId === null
+      ? null
+      : (library.disciplines.find((d) => d.id === disciplineId) ?? null);
+  if (disciplineId !== null && !destination) return library;
 
-  const beforeStrip =
-    disciplineModuleId === null
-      ? discipline.untitled
-      : (discipline.modules.find((m) => m.id === disciplineModuleId)?.lessons ??
-        []);
-  const index = overIndexInLibrary(beforeStrip, overId);
+  const targetBucket =
+    destination === null
+      ? library.untitled
+      : disciplineModuleId === null
+        ? destination.untitled
+        : (destination.modules.find((m) => m.id === disciplineModuleId)
+            ?.lessons ?? []);
+  const index = overIndexInLibrary(targetBucket, overId);
 
-  // Located by walking THIS discipline's own buckets — never by trusting the
-  // lesson's own (possibly stale) `disciplineModuleId`.
+  // Strip the lesson from wherever it is.
   let moved: LibraryLesson | undefined;
-  let untitled = discipline.untitled;
-  const untitledAt = discipline.untitled.findIndex((l) => l.id === lessonId);
-  if (untitledAt !== -1) {
-    moved = discipline.untitled[untitledAt];
-    untitled = discipline.untitled.filter((l) => l.id !== lessonId);
-  }
-  const modules = discipline.modules.map((m) => {
-    const at = m.lessons.findIndex((l) => l.id === lessonId);
-    if (at === -1) return m;
-    moved = m.lessons[at];
-    return { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) };
+  const take = (bucket: LibraryLesson[]): LibraryLesson[] => {
+    const at = bucket.findIndex((l) => l.id === lessonId);
+    if (at === -1) return bucket;
+    moved = bucket[at];
+    return bucket.filter((l) => l.id !== lessonId);
+  };
+  const strippedDisciplines = library.disciplines.map((d) => {
+    const modules = d.modules.map((m) => {
+      const lessons = take(m.lessons);
+      return lessons === m.lessons ? m : { ...m, lessons };
+    });
+    const untitled = take(d.untitled);
+    return modules.every((m, i) => m === d.modules[i]) &&
+      untitled === d.untitled
+      ? d
+      : { ...d, modules, untitled };
   });
+  const strippedBag = take(library.untitled);
   if (!moved) return library;
 
   const placed: LibraryLesson = { ...moved, disciplineModuleId };
-  let nextModules = modules;
-  let nextUntitled = untitled;
-  if (disciplineModuleId === null) {
-    nextUntitled = [...untitled];
-    nextUntitled.splice(Math.min(index, nextUntitled.length), 0, placed);
-  } else {
-    nextModules = modules.map((m) => {
-      if (m.id !== disciplineModuleId) return m;
-      const lessons = [...m.lessons];
-      lessons.splice(Math.min(index, lessons.length), 0, placed);
-      return { ...m, lessons };
-    });
-  }
+  const insert = (bucket: LibraryLesson[]): LibraryLesson[] => {
+    const next = [...bucket];
+    next.splice(Math.min(index, next.length), 0, placed);
+    return next;
+  };
 
+  if (destination === null) {
+    return {
+      ...library,
+      disciplines: strippedDisciplines,
+      untitled: insert(strippedBag),
+    };
+  }
   return {
     ...library,
-    disciplines: library.disciplines.map((d) =>
-      d.id === toDisciplineId
-        ? { ...discipline, modules: nextModules, untitled: nextUntitled }
-        : d,
-    ),
+    untitled: strippedBag,
+    disciplines: strippedDisciplines.map((d) => {
+      if (d.id !== destination.id) return d;
+      if (disciplineModuleId === null) {
+        return { ...d, untitled: insert(d.untitled) };
+      }
+      return {
+        ...d,
+        modules: d.modules.map((m) =>
+          m.id === disciplineModuleId
+            ? { ...m, lessons: insert(m.lessons) }
+            : m,
+        ),
+      };
+    }),
   };
 }
 

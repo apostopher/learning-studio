@@ -726,6 +726,7 @@ export const EditorContainer = ({
         moveLessonInLibrary(
           currentLibrary,
           resolution.lessonId,
+          resolution.disciplineId,
           resolution.disciplineModuleId,
           over.id,
         ),
@@ -766,7 +767,7 @@ export const EditorContainer = ({
     lib: OrgLibrary,
     resolution: {
       lessonId: number;
-      disciplineId: number;
+      disciplineId: number | null;
       disciplineModuleId: number | null;
     },
   ) => {
@@ -1016,6 +1017,7 @@ export const EditorContainer = ({
       const next = moveLessonInLibrary(
         currentLibrary,
         resolution.lessonId,
+        resolution.disciplineId,
         resolution.disciplineModuleId,
         resolution.overId,
       );
