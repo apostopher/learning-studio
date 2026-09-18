@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 // imported directly by its component test.
 import { deleteModuleAtom } from '#/atoms/admin';
 import { useDeleteModule } from '#/data-hooks/use-delete-module';
+import { matchesConfirmPhrase } from '#/lib/confirm-phrase';
 import { DeleteConfirmForm } from './delete-confirm-form';
 
 export const DeleteModuleDialogContainer = ({
@@ -21,7 +22,7 @@ export const DeleteModuleDialogContainer = ({
     mode: 'onChange',
   });
   const confirmValue = form.watch('confirm');
-  const canSubmit = confirmValue.trim().toLowerCase() === 'permanently delete';
+  const canSubmit = matchesConfirmPhrase(confirmValue, target?.name ?? '');
 
   const onOpenChange = (next: boolean) => {
     if (!next) {
@@ -51,6 +52,7 @@ export const DeleteModuleDialogContainer = ({
           </Dialog.Title>
           <div className="mt-4">
             <DeleteConfirmForm
+              confirmPhrase={target?.name ?? ''}
               warning={
                 <>
                   Deleting{' '}

@@ -4,14 +4,27 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DeleteDisciplineConfirm } from '../delete-discipline-confirm';
 
-function renderConfirm(overrides: Partial<{ lessonCount: number }> = {}) {
-  const onConfirm = vi.fn();
+const registerConfirm = {
+  name: 'confirm' as const,
+  onChange: vi.fn(),
+  onBlur: vi.fn(),
+  ref: vi.fn(),
+};
+
+function renderConfirm(
+  overrides: Partial<{ lessonCount: number; canSubmit: boolean }> = {},
+) {
+  const onConfirm = vi.fn((e: { preventDefault: () => void }) =>
+    e.preventDefault(),
+  );
   const onCancel = vi.fn();
   render(
     <DeleteDisciplineConfirm
       disciplineName="Aerobatics"
       lessonCount={overrides.lessonCount ?? 0}
       isPending={false}
+      registerConfirm={registerConfirm}
+      canSubmit={overrides.canSubmit ?? false}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />,
@@ -20,10 +33,20 @@ function renderConfirm(overrides: Partial<{ lessonCount: number }> = {}) {
 }
 
 describe('DeleteDisciplineConfirm', () => {
-  it('names the discipline and lets an empty one be deleted', () => {
+  it('names the discipline and asks for its name back before an empty one can be deleted', () => {
     const { onConfirm } = renderConfirm({ lessonCount: 0 });
 
-    expect(screen.getByText('Aerobatics')).toBeTruthy();
+    expect(
+      screen.getByLabelText(/Type\s+Aerobatics\s+to confirm/i),
+    ).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Delete discipline' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('submits once the name matches', () => {
+    const { onConfirm } = renderConfirm({ lessonCount: 0, canSubmit: true });
     fireEvent.click(screen.getByRole('button', { name: 'Delete discipline' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });

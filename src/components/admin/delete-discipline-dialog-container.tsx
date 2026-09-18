@@ -1,5 +1,6 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { useAtom } from 'jotai';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { deleteDisciplineTargetAtom } from '#/atoms/admin';
@@ -7,6 +8,7 @@ import {
   DisciplineRequestError,
   useDeleteDiscipline,
 } from '#/data-hooks/use-disciplines';
+import { matchesConfirmPhrase } from '#/lib/confirm-phrase';
 import { DeleteDisciplineConfirm } from './delete-discipline-confirm';
 
 /**
@@ -22,23 +24,32 @@ import { DeleteDisciplineConfirm } from './delete-discipline-confirm';
 export const DeleteDisciplineDialogContainer = () => {
   const [target, setTarget] = useAtom(deleteDisciplineTargetAtom);
   const remove = useDeleteDiscipline();
+  const form = useForm<{ confirm: string }>({
+    defaultValues: { confirm: '' },
+    mode: 'onChange',
+  });
+  const canSubmit = matchesConfirmPhrase(
+    form.watch('confirm'),
+    target?.name ?? '',
+  );
 
   const onOpenChange = (next: boolean) => {
     if (!next) {
       setTarget(null);
+      form.reset();
       remove.reset();
     }
   };
 
-  const onConfirm = () => {
-    if (!target) return;
+  const onConfirm = form.handleSubmit(() => {
+    if (!target || !canSubmit) return;
     remove.mutate(target.id, {
       onSuccess: () => {
         toast.success(`${target.name} deleted`);
         onOpenChange(false);
       },
     });
-  };
+  });
 
   return (
     <Dialog.Root open={target !== null} onOpenChange={onOpenChange}>
@@ -52,6 +63,8 @@ export const DeleteDisciplineDialogContainer = () => {
             <DeleteDisciplineConfirm
               disciplineName={target?.name ?? ''}
               lessonCount={target?.lessonCount ?? 0}
+              registerConfirm={form.register('confirm')}
+              canSubmit={canSubmit}
               serverError={
                 remove.isError
                   ? remove.error instanceof DisciplineRequestError

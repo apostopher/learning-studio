@@ -1,5 +1,7 @@
 import { Loader2 } from 'lucide-react';
+import type { UseFormRegisterReturn } from 'react-hook-form';
 import { cn } from '#/lib/cn';
+import { DeleteConfirmForm } from './delete-confirm-form';
 
 interface DeleteDisciplineConfirmProps {
   disciplineName: string;
@@ -7,7 +9,12 @@ interface DeleteDisciplineConfirmProps {
   lessonCount: number;
   serverError?: string;
   isPending: boolean;
-  onConfirm: () => void;
+  /** The typed-name field, from the container's form. */
+  registerConfirm: UseFormRegisterReturn<'confirm'>;
+  /** Whether what was typed names the discipline — the container decides. */
+  canSubmit: boolean;
+  /** The form submit; only reachable once `canSubmit`. */
+  onConfirm: React.FormEventHandler<HTMLFormElement>;
   onCancel: () => void;
 }
 
@@ -27,18 +34,46 @@ interface DeleteDisciplineConfirmProps {
  *
  * The confirm button is `aria-disabled` as well as `disabled` so the reason
  * above it is announced with the control rather than only seen next to it.
+ *
+ * When nothing blocks it, the confirmation is `DeleteConfirmForm` — the
+ * same typed-name gate every other delete in the admin uses.
  */
 export const DeleteDisciplineConfirm = ({
   disciplineName,
   lessonCount,
   serverError,
   isPending,
+  registerConfirm,
+  canSubmit,
   onConfirm,
   onCancel,
 }: DeleteDisciplineConfirmProps) => {
   const blocked = lessonCount > 0;
   const lessonNoun = lessonCount === 1 ? 'lesson' : 'lessons';
   const blockedReason = `${disciplineName} still has ${lessonCount} ${lessonNoun}. Move them to another discipline first, then delete it.`;
+
+  if (!blocked) {
+    return (
+      <DeleteConfirmForm
+        confirmPhrase={disciplineName}
+        warning={
+          <>
+            Delete{' '}
+            <span className="font-medium text-primary">{disciplineName}</span>?
+            It holds no lessons, so nothing else is removed. This can't be
+            undone.
+          </>
+        }
+        submitLabel="Delete discipline"
+        onSubmit={onConfirm}
+        registerConfirm={registerConfirm}
+        canSubmit={canSubmit}
+        isPending={isPending}
+        serverError={serverError}
+        onCancel={onCancel}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,12 +117,11 @@ export const DeleteDisciplineConfirm = ({
         </button>
         <button
           type="button"
-          onClick={blocked || isPending ? undefined : onConfirm}
-          disabled={blocked || isPending}
-          aria-disabled={blocked || isPending || undefined}
+          disabled
+          aria-disabled
           // The refusal is the button's own description, not just text nearby:
           // a screen-reader user who tabs straight to it hears why it is dead.
-          aria-describedby={blocked ? 'delete-discipline-reason' : undefined}
+          aria-describedby="delete-discipline-reason"
           className={cn(
             'inline-flex items-center justify-center gap-2 rounded-lg bg-error px-4 py-2.5 font-medium text-on-error text-sm',
             'transition-colors hover:bg-error-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 focus-visible:ring-offset-2',

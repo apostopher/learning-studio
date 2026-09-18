@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 
@@ -127,6 +127,17 @@ describe('LibraryLessonCard', () => {
     );
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByRole('img', { name: 'Has a video' })).toBeTruthy();
+  });
+
+  it('offers a Delete lesson control when given a handler, and none otherwise', () => {
+    const onDelete = vi.fn();
+    const { rerender } = render(
+      <LibraryLessonCard lesson={lesson()} onDelete={onDelete} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete lesson' }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    rerender(<LibraryLessonCard lesson={lesson()} />);
+    expect(screen.queryByRole('button', { name: 'Delete lesson' })).toBeNull();
   });
 
   it('marks an unpublished lesson as a draft, in words', () => {

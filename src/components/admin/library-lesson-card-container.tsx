@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import { editLibraryLessonIdAtom } from '#/atoms/admin';
+import { deleteLessonAtom, editLibraryLessonIdAtom } from '#/atoms/admin';
 import { useDisciplineLessonPosters } from '#/data-hooks/use-discipline-lesson-posters';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
@@ -71,6 +71,7 @@ export const LibraryLessonCardContainer = ({
     disabled: { draggable: false, droppable: !sortable },
   });
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
+  const deleteLesson = useSetAtom(deleteLessonAtom);
   // One entry per shelf, shared by every card on it (TanStack dedupes the
   // request); read here rather than threaded down three containers because
   // the card container already knows its shelf. Unknown or refused posters
@@ -96,6 +97,19 @@ export const LibraryLessonCardContainer = ({
         // router context cannot answer for any particular lesson, so the
         // server decides and the mutation turns its 403 into a sentence.
         onEdit={() => editLesson(lesson.id)}
+        // The library payload already carries the course count, so the
+        // confirmation can state its blast radius without a second query.
+        // Authority follows the lesson's discipline; the server decides and
+        // the dialog turns a refusal into a sentence.
+        onDelete={() =>
+          deleteLesson({
+            id: lesson.id,
+            name: lesson.name,
+            courseCount: lesson.courseCount,
+            // No "remove from module" control on a library card to point at.
+            removeControlLabel: null,
+          })
+        }
         posterUrl={posters?.[String(lesson.id)]}
       />
     </div>

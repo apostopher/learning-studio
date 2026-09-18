@@ -54,7 +54,7 @@ const postersHook = vi.hoisted(() => ({
 }));
 vi.mock('#/data-hooks/use-discipline-lesson-posters', () => postersHook);
 
-import { editLibraryLessonIdAtom } from '#/atoms/admin';
+import { deleteLessonAtom, editLibraryLessonIdAtom } from '#/atoms/admin';
 import { LibraryLessonCardContainer } from '../library-lesson-card-container';
 
 const LESSON = {
@@ -215,5 +215,26 @@ describe('LibraryLessonCardContainer', () => {
       />,
     );
     expect(tile.received).toHaveBeenLastCalledWith(undefined);
+  });
+  it('opens the delete confirmation for THIS lesson with its own name and course count — the blast radius the dialog states', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <LibraryLessonCardContainer
+          lesson={{ ...LESSON, courseCount: 3 }}
+          disciplineId={7}
+          boxId={null}
+        />
+      </Provider>,
+    );
+    expect(store.get(deleteLessonAtom)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete lesson' }));
+    expect(store.get(deleteLessonAtom)).toEqual({
+      id: 42,
+      name: 'Stalls',
+      courseCount: 3,
+      // A library card has no "remove from module" control to point at.
+      removeControlLabel: null,
+    });
   });
 });

@@ -11,6 +11,7 @@ import {
   CourseRequestError,
   useDeleteCourse,
 } from '#/data-hooks/use-delete-course';
+import { matchesConfirmPhrase } from '#/lib/confirm-phrase';
 import { DeleteConfirmForm } from './delete-confirm-form';
 
 export const DeleteCourseDialogContainer = ({
@@ -35,7 +36,7 @@ export const DeleteCourseDialogContainer = ({
     mode: 'onChange',
   });
   const confirmValue = form.watch('confirm');
-  const canSubmit = confirmValue.trim().toLowerCase() === 'permanently delete';
+  const canSubmit = matchesConfirmPhrase(confirmValue, target?.name ?? '');
 
   const onOpenChange = (next: boolean) => {
     if (!next) {
@@ -69,6 +70,7 @@ export const DeleteCourseDialogContainer = ({
           </Dialog.Title>
           <div className="mt-4">
             <DeleteConfirmForm
+              confirmPhrase={target?.name ?? ''}
               warning={
                 <>
                   Deleting{' '}

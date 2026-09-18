@@ -5,9 +5,9 @@ import type { UseFormRegisterReturn } from 'react-hook-form';
 // dependency of dialog containers imported directly by their component tests.
 import { cn } from '#/lib/cn';
 
-const CONFIRM_PHRASE = 'permanently delete';
-
 interface DeleteConfirmFormProps {
+  /** What the user must type — the NAME of the thing being deleted. */
+  confirmPhrase: string;
   /** Warning copy shown above the confirmation input (entity-specific). */
   warning: ReactNode;
   submitLabel: string;
@@ -21,9 +21,13 @@ interface DeleteConfirmFormProps {
 
 /**
  * Destructive-action confirmation form: the submit button stays disabled until
- * the user types "permanently delete". Reused for module and course deletion.
+ * the user types the deleted thing's own name (`confirmPhrase`; the container
+ * decides what counts as a match with `matchesConfirmPhrase`). Shared by
+ * lesson, module, discipline and course deletion — one rule everywhere: you
+ * confirm by naming what you are about to lose, not by reciting a phrase.
  */
 export const DeleteConfirmForm = ({
+  confirmPhrase,
   warning,
   submitLabel,
   onSubmit,
@@ -42,9 +46,8 @@ export const DeleteConfirmForm = ({
           htmlFor="delete-confirm"
           className="text-sm font-medium text-primary"
         >
-          Type{' '}
-          <span className="font-mono text-secondary">{CONFIRM_PHRASE}</span> to
-          confirm
+          Type <span className="font-medium text-primary">{confirmPhrase}</span>{' '}
+          to confirm
         </label>
         <input
           {...registerConfirm}
@@ -53,7 +56,7 @@ export const DeleteConfirmForm = ({
           // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened, where focus belongs on the first field rather than the popup container
           autoFocus
           autoComplete="off"
-          placeholder={CONFIRM_PHRASE}
+          placeholder={confirmPhrase}
           className={cn(
             'min-w-0 w-full rounded-lg border border-gray-6 bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors placeholder:text-tertiary',
             'hover:border-gray-8 focus-visible:ring-2 focus-visible:ring-error-9 focus-visible:border-error-9',

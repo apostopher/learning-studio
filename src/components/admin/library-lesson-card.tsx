@@ -1,4 +1,4 @@
-import { GripVertical, Pencil } from 'lucide-react';
+import { GripVertical, Pencil, Trash2 } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
@@ -25,10 +25,13 @@ export const LibraryLessonCard = ({
   lesson,
   dragHandleProps,
   onEdit,
+  onDelete,
   posterUrl,
 }: {
   lesson: LibraryLesson;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
+  /** Opens the delete confirmation — the same typed-name dialog the course boards use. */
+  onDelete?: () => void;
   /** The lesson's poster frame when its shelf has one; absent, the tile draws its plain placeholder. */
   posterUrl?: string | null;
   onEdit?: () => void;
@@ -61,6 +64,11 @@ export const LibraryLessonCard = ({
           {onEdit && (
             <TooltipIconButton label="Edit lesson" onClick={onEdit}>
               <Pencil className="h-4 w-4" aria-hidden="true" />
+            </TooltipIconButton>
+          )}
+          {onDelete && (
+            <TooltipIconButton label="Delete lesson" onClick={onDelete}>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
           <button
