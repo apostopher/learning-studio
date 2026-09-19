@@ -1,5 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useSetAtom } from 'jotai';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
@@ -70,6 +73,24 @@ export const MaterialSectionContainer = ({
   });
 
   const attachments = form.watch('attachments') ?? [];
+
+  /**
+   * Publish "has unsaved edits" for the Save button, which lives in the
+   * modal's sidebar — outside this subtree, so it cannot read `formState`.
+   * This IS the synchronise-with-a-store-elsewhere case an effect is for:
+   * react-hook-form owns dirtiness, the atom is the wire, and the cleanup
+   * withdraws the flag when the panel unmounts (modal closed, lesson
+   * switched) so the button is never lit for a form that no longer exists.
+   *
+   * Reading `isDirty` here subscribes to it through RHF's formState proxy,
+   * so the panel re-renders when it FLIPS, not on every keystroke.
+   */
+  const { isDirty } = form.formState;
+  const setDirty = useSetAtom(lessonMaterialDirtyAtomFamily(lesson.id));
+  useEffect(() => {
+    setDirty(isDirty);
+    return () => setDirty(false);
+  }, [isDirty, setDirty]);
 
   const onSubmit = form.handleSubmit((values) => save.mutate(values));
 

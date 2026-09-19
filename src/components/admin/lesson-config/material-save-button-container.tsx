@@ -1,4 +1,6 @@
 import { useIsMutating } from '@tanstack/react-query';
+import { useAtomValue } from 'jotai';
+import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import { lessonMaterialFormId } from './material-form-id';
 import { MaterialSaveButton } from './material-save-button';
@@ -10,7 +12,8 @@ import { MaterialSaveButton } from './material-save-button';
  * panel, and the button reaches that form through its id. What it needs from
  * the mutation is only whether one is in flight, which `useIsMutating` reads
  * off the mutation KEY the save hook registers — so two components can agree
- * on "saving" without threading state between panel and sidebar.
+ * on "saving" without threading state between panel and sidebar. Whether the
+ * form is dirty comes the same way, through a per-lesson atom the panel writes.
  */
 export const MaterialSaveButtonContainer = ({
   lessonId,
@@ -23,10 +26,12 @@ export const MaterialSaveButtonContainer = ({
   const saving = useIsMutating({
     mutationKey: dataKeys.lessonMaterialSave(lessonId),
   });
+  const isDirty = useAtomValue(lessonMaterialDirtyAtomFamily(lessonId));
   return (
     <MaterialSaveButton
       formId={lessonMaterialFormId(lessonId)}
       isSaving={saving > 0}
+      isDirty={isDirty}
       fullWidth={fullWidth}
     />
   );

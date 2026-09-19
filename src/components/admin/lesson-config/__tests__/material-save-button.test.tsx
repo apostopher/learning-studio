@@ -36,4 +36,32 @@ describe('MaterialSaveButton', () => {
     }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
+
+  /**
+   * Dirty is a cue the admin acts on — "you have edits, press me" — so it
+   * must reach them by more than colour (WCAG 1.4.1): the accessible name
+   * says so, and the accent class is what carries the colour.
+   */
+  it('turns accent and says it has unsaved changes when the form is dirty', () => {
+    render(<MaterialSaveButton formId="f" isSaving={false} isDirty />);
+    const button = screen.getByRole('button', {
+      name: 'Save material — unsaved changes',
+    });
+    expect(button.className).toContain('bg-accent-9');
+    expect(button.className).not.toContain('bg-apple-9');
+  });
+
+  it('stays the plain primary when the form is clean', () => {
+    render(<MaterialSaveButton formId="f" isSaving={false} isDirty={false} />);
+    const button = screen.getByRole('button', { name: 'Save material' });
+    expect(button.className).toContain('bg-apple-9');
+    expect(button.className).not.toContain('bg-accent-9');
+  });
+
+  it('reads as saving, not dirty, once the save is in flight', () => {
+    render(<MaterialSaveButton formId="f" isSaving isDirty />);
+    expect(
+      screen.getByRole('button', { name: 'Saving material…' }),
+    ).toBeTruthy();
+  });
 });

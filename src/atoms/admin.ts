@@ -500,3 +500,16 @@ export const editorDragRefusalAtom = atom<string | null>(null);
  * pane splitter. Clamped by the splitter's handlers, not here.
  */
 export const editorSplitPercentAtom = atom(40);
+
+/**
+ * Whether a lesson's material form holds edits that are not yet saved.
+ *
+ * Written by `MaterialSectionContainer` (which owns the form) and read by
+ * `MaterialSaveButtonContainer`, which lives in the modal's sidebar or header
+ * — a different subtree, so the form's own `formState` cannot reach it. Keyed
+ * per lesson for the same reason as `credentialSaveErrorAtomFamily`: one
+ * lesson's edits must never light up another's Save button.
+ */
+export const lessonMaterialDirtyAtomFamily = atomFamily((_lessonId: number) =>
+  atom(false),
+);
