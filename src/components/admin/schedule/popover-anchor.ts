@@ -24,7 +24,12 @@ export function toVirtualElement(anchor: PopoverAnchor): VirtualAnchor {
         contextElement: anchor.element,
         getBoundingClientRect: () => {
           const box = anchor.element.getBoundingClientRect();
-          return new DOMRect(box.left + anchor.offsetX, box.top + anchor.offsetY, 0, 0);
+          return new DOMRect(
+            box.left + anchor.offsetX,
+            box.top + anchor.offsetY,
+            0,
+            0,
+          );
         },
       };
     case 'element':

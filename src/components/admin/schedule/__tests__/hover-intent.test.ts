@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHoverIntent, HOVER_CLOSE_GRACE_MS, HOVER_OPEN_DELAY_MS } from '../hover-intent';
+import {
+  createHoverIntent,
+  HOVER_CLOSE_GRACE_MS,
+  HOVER_OPEN_DELAY_MS,
+} from '../hover-intent';
 
 describe('createHoverIntent', () => {
   beforeEach(() => vi.useFakeTimers());

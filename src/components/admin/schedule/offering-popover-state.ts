@@ -51,7 +51,11 @@ export function reduceOfferingPopover(
       // preceded this click, so reaching here means it is dirty and asking —
       // swapping in another offering would bury the question.
       if (state.status === 'pinned') return state;
-      return { status: 'pinned', target: event.target, confirmingDiscard: false };
+      return {
+        status: 'pinned',
+        target: event.target,
+        confirmingDiscard: false,
+      };
 
     case 'dismiss':
       if (state.status === 'closed') return state;

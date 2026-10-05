@@ -17,7 +17,11 @@ export const HOVER_OPEN_DELAY_MS = 300;
 export const HOVER_CLOSE_GRACE_MS = 120;
 
 export type HoverIntent = {
-  enter: (offeringId: number, pointerType: string, isPreviewing: boolean) => void;
+  enter: (
+    offeringId: number,
+    pointerType: string,
+    isPreviewing: boolean,
+  ) => void;
   leave: (offeringId: number, pointerType: string) => void;
   cancel: () => void;
 };

@@ -12,12 +12,13 @@ import {
 } from '@dnd-kit/core';
 import { addDays, format } from 'date-fns';
 import { atom, useAtom, useSetAtom, useStore } from 'jotai';
-import { useEffect, useRef } from 'react';
+import { type PointerEvent, useEffect, useRef } from 'react';
 import {
   dispatchOfferingPopoverAtom,
   offeringPopoverAnchorAtom,
   offeringPopoverAtom,
   offeringPopoverReturnFocusAtom,
+  offeringPopoverSuppressFocusPreviewAtom,
   SCHEDULE_STEP_WEEKS,
   SCHEDULE_WEEKS,
   scheduleWindowStartAtom,
@@ -103,12 +104,30 @@ export const SchedulePageContainer = ({
   const pendingAnchor = useRef<PopoverAnchor | null>(null);
   const moveFrame = useRef<number | null>(null);
   const focusFrame = useRef<number | null>(null);
+  // Whether the last drop was refused because a dirty popover is pinned and
+  // asking. Written in onDragEnd and read by the drop announcement, which
+  // dnd-kit runs right AFTER onDragEnd — by then a successful drop has pinned
+  // too, so the popover state alone cannot tell the two apart.
+  const dropRefused = useRef(false);
+  /**
+   * Hover anchors pass coordinates ONLY: pointer events always report
+   * `detail` 0, which `anchorFromPointerEvent` reads as a keyboard click and
+   * would anchor to the whole segment instead of the cursor.
+   */
+  const cursorAnchor = (event: PointerEvent<HTMLButtonElement>) =>
+    anchorFromPointerEvent(event.currentTarget, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  /** A course is being dragged: hover previews would open under the overlay. */
+  const isDragging = () => store.get(draggingCourseAtom) !== null;
 
   // Created once (lazy init). Its callbacks read the store, not this render.
   const hoverRef = useRef<HoverIntent | null>(null);
   hoverRef.current ??= createHoverIntent({
     onOpen: (offeringId) => {
       if (store.get(offeringPopoverAtom).status === 'pinned') return;
+      if (isDragging()) return;
       if (pendingAnchor.current) setAnchor(pendingAnchor.current);
       dispatch({ type: 'preview', offeringId });
     },
@@ -127,12 +146,15 @@ export const SchedulePageContainer = ({
     [],
   );
 
-  /** Pin, then put focus in the popover — Base UI's initialFocus only runs on open. */
-  const pin = (target: PopoverTarget, anchor: PopoverAnchor) => {
+  /**
+   * Pin, then put focus in the popover — Base UI's initialFocus only runs on
+   * open. Returns false when refused.
+   */
+  const pin = (target: PopoverTarget, anchor: PopoverAnchor): boolean => {
     hover.cancel();
     // Pinning while another offering is pinned is refused by the reducer (it
     // is asking about unsaved edits); do not move the anchor out from under it.
-    if (popoverStatus() === 'pinned') return;
+    if (popoverStatus() === 'pinned') return false;
     setAnchor(anchor);
     // Only a keyboard pin returns focus to the segment on close. A mouse,
     // touch or drop pin leaves focus wherever the user puts it next.
@@ -147,15 +169,13 @@ export const SchedulePageContainer = ({
       focusFrame.current = null;
       offeringPopoverFirstField.current?.focus();
     });
+    return true;
   };
 
   const segmentHandlers = (offeringId: number): SegmentHandlers => ({
     onPointerEnter: (event) => {
-      if (event.pointerType !== 'mouse') return;
-      pendingAnchor.current = anchorFromPointerEvent(
-        event.currentTarget,
-        event,
-      );
+      if (event.pointerType !== 'mouse' || isDragging()) return;
+      pendingAnchor.current = cursorAnchor(event);
       const isPreviewing = popoverStatus() === 'preview';
       // Moving onto another offering while one previews switches at once —
       // the anchor must move with it.
@@ -163,11 +183,8 @@ export const SchedulePageContainer = ({
       hover.enter(offeringId, event.pointerType, isPreviewing);
     },
     onPointerMove: (event) => {
-      if (event.pointerType !== 'mouse') return;
-      pendingAnchor.current = anchorFromPointerEvent(
-        event.currentTarget,
-        event,
-      );
+      if (event.pointerType !== 'mouse' || isDragging()) return;
+      pendingAnchor.current = cursorAnchor(event);
       const state = store.get(offeringPopoverAtom);
       if (state.status !== 'preview' || state.offeringId !== offeringId) return;
       // One anchor write per frame: pointermove can fire faster than paint.
@@ -184,6 +201,10 @@ export const SchedulePageContainer = ({
       // Keyboard only: a mouse click also focuses the button, and that path
       // is handled by hover + click. `:focus-visible` is the browser's own
       // "this came from the keyboard" signal.
+      // One-shot: the popover just closed and is handing focus back here.
+      const suppressed = store.get(offeringPopoverSuppressFocusPreviewAtom);
+      store.set(offeringPopoverSuppressFocusPreviewAtom, null);
+      if (suppressed === event.currentTarget) return;
       if (!event.currentTarget.matches(':focus-visible')) return;
       if (popoverStatus() === 'pinned') return;
       setAnchor({ kind: 'element', element: event.currentTarget });
@@ -198,11 +219,12 @@ export const SchedulePageContainer = ({
     },
     // Not gated on `canSchedule`: every user could open an offering before
     // the popover replaced the dialog, and still can.
-    onClick: (event) =>
+    onClick: (event) => {
       pin(
         { mode: 'edit', offeringId },
         anchorFromPointerEvent(event.currentTarget, event),
-      ),
+      );
+    },
   });
   const [draggingCourse, setDraggingCourse] = useAtom(draggingCourseAtom);
 
@@ -239,6 +261,7 @@ export const SchedulePageContainer = ({
 
   const onDragEnd = (event: DragEndEvent) => {
     setDraggingCourse(null);
+    dropRefused.current = false;
     if (!canSchedule) return;
 
     const courseId = parseScheduleCourseDndId(event.active.id);
@@ -253,7 +276,7 @@ export const SchedulePageContainer = ({
     // The day dropped on, captured once: a fixed rect is enough — the popover
     // pins immediately and is about to take focus, not follow anything.
     const r = event.over.rect;
-    pin(
+    dropRefused.current = !pin(
       { mode: 'create', courseId, courseName: course.name, startsOn: dayKey },
       {
         kind: 'rect',
@@ -291,9 +314,11 @@ export const SchedulePageContainer = ({
               ? `Over ${parseScheduleDayDndId(over.id) ?? 'no day'}.`
               : 'Not over a day.',
           onDragEnd: ({ over }) =>
-            over
-              ? `Dropped on ${parseScheduleDayDndId(over.id)}. Set the end date to finish scheduling.`
-              : 'Cancelled. Nothing was scheduled.',
+            !over
+              ? 'Cancelled. Nothing was scheduled.'
+              : dropRefused.current
+                ? 'Nothing was scheduled. The open offering has unsaved changes — save or discard them first.'
+                : `Dropped on ${parseScheduleDayDndId(over.id)}. Set the end date to finish scheduling.`,
           onDragCancel: () => 'Cancelled. Nothing was scheduled.',
         },
       }}

@@ -71,14 +71,18 @@ describe('reduceOfferingPopover', () => {
   });
 
   it('dirty dismiss asks first, keepEditing withdraws the question', () => {
-    const asking = r(pinned7, { type: 'dismiss', reason: 'escape', dirty: true });
+    const asking = r(pinned7, {
+      type: 'dismiss',
+      reason: 'escape',
+      dirty: true,
+    });
     expect(asking).toEqual({ ...pinned7, confirmingDiscard: true });
     expect(r(asking, { type: 'keepEditing' })).toEqual(pinned7);
   });
 
   it('close always closes', () => {
-    expect(r({ ...pinned7, confirmingDiscard: true }, { type: 'close' })).toEqual(
-      CLOSED,
-    );
+    expect(
+      r({ ...pinned7, confirmingDiscard: true }, { type: 'close' }),
+    ).toEqual(CLOSED);
   });
 });

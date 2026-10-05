@@ -5,6 +5,7 @@ import { addDays, format } from 'date-fns';
 import { createStore, Provider } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  offeringPopoverAnchorAtom,
   offeringPopoverAtom,
   offeringPopoverReturnFocusAtom,
   scheduleWindowStartAtom,
@@ -77,6 +78,7 @@ const renderPage = () => {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -149,5 +151,67 @@ describe('SchedulePageContainer wiring', () => {
 
     expect(store.get(offeringPopoverAtom).status).toBe('closed');
     expect(document.activeElement).toBe(button);
+  });
+
+  /**
+   * Regression: in a real browser the segment `finalFocus` refocuses after a
+   * keyboard pin matches `:focus-visible` (the last input was a key), so its
+   * onFocus used to re-preview the offering the user had just closed. jsdom
+   * never matches `:focus-visible`, so pretend it does.
+   */
+  it('closing a keyboard pin does not re-preview from the focus it returns', async () => {
+    const realMatches = Element.prototype.matches;
+    vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
+      this: Element,
+      selector: string,
+    ) {
+      return selector === ':focus-visible'
+        ? true
+        : realMatches.call(this, selector);
+    });
+    const { store, segment } = renderPage();
+    const button = segment();
+    fireEvent.click(button, { detail: 0 });
+    await nextFrame();
+
+    fireEvent.keyDown(screen.getByLabelText('Start date'), { key: 'Escape' });
+    await nextFrame();
+    await act(() => Promise.resolve());
+
+    expect(document.activeElement).toBe(button);
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
+    await nextFrame();
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
+  });
+
+  it('a mouse resting on a segment previews it at the cursor after 300 ms', () => {
+    const { store, segment } = renderPage();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+    fireEvent.pointerEnter(segment(), {
+      pointerType: 'mouse',
+      clientX: 30,
+      clientY: 10,
+    });
+    act(() => vi.advanceTimersByTime(299));
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
+    act(() => vi.advanceTimersByTime(1));
+
+    expect(store.get(offeringPopoverAtom)).toEqual({
+      status: 'preview',
+      offeringId: 7,
+    });
+    expect(store.get(offeringPopoverAnchorAtom)?.kind).toBe('cursor');
+  });
+
+  it('a touch on a segment never previews it', () => {
+    const { store, segment } = renderPage();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+    fireEvent.pointerEnter(segment(), { pointerType: 'touch' });
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
+    expect(store.get(offeringPopoverAnchorAtom)).toBeNull();
   });
 });

@@ -60,3 +60,13 @@ export const offeringPopoverAnchorAtom = atom<PopoverAnchor | null>(null);
  * where the user put it" — the mouse and drop cases.
  */
 export const offeringPopoverReturnFocusAtom = atom<HTMLElement | null>(null);
+
+/**
+ * The element `finalFocus` is about to focus, one-shot. After a keyboard pin
+ * the browser treats that scripted focus as `:focus-visible` (the last input
+ * was a key), so without this the segment's onFocus would re-preview the
+ * offering the user just closed. The page reads-and-clears it in onFocus.
+ */
+export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
+  null,
+);

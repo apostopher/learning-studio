@@ -7,6 +7,7 @@ import {
   dispatchOfferingPopoverAtom,
   offeringPopoverAtom,
   offeringPopoverReturnFocusAtom,
+  offeringPopoverSuppressFocusPreviewAtom,
 } from '#/atoms/schedule';
 import { useAdminUsers } from '#/data-hooks/use-admin-users';
 import {
@@ -323,6 +324,9 @@ export const OfferingPopoverContainer = ({
             finalFocus={() => {
               const el = store.get(offeringPopoverReturnFocusAtom);
               store.set(offeringPopoverReturnFocusAtom, null);
+              // The focus this causes must not re-open a preview of the
+              // offering just closed (see the atom's doc).
+              store.set(offeringPopoverSuppressFocusPreviewAtom, el);
               return el ?? false;
             }}
             // A preview is a picture of the offering, not a form: inert
