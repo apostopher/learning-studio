@@ -57,14 +57,22 @@ export const OfferingRosterTable = ({
       accessorKey: 'name',
       header: 'Name',
       cell: ({ row }) => (
-        <span className="font-medium text-primary">{row.original.name}</span>
+        <span
+          className="block max-w-40 truncate font-medium text-primary"
+          title={row.original.name}
+        >
+          {row.original.name}
+        </span>
       ),
     },
     {
       accessorKey: 'email',
       header: 'Email',
       cell: ({ row }) => (
-        <span className="font-mono text-secondary text-xs">
+        <span
+          className="block max-w-56 truncate font-mono text-secondary text-xs"
+          title={row.original.email}
+        >
           {row.original.email}
         </span>
       ),
@@ -101,7 +109,7 @@ export const OfferingRosterTable = ({
           // Names the person: a column of twenty identical "Remove" buttons is
           // unusable to anyone navigating by control.
           aria-label={`Remove ${row.original.name} from this offering`}
-          className="rounded-md border border-gray-6 px-2 py-1 font-medium text-secondary text-xs transition-colors hover:border-error-9 hover:bg-error-3 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 disabled:cursor-not-allowed disabled:opacity-60"
+          className="whitespace-nowrap rounded-md border border-gray-6 px-2 py-1 font-medium text-secondary text-xs transition-colors hover:border-error-9 hover:bg-error-3 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Remove
         </button>
@@ -129,11 +137,14 @@ export const OfferingRosterTable = ({
     // which needs a definite-height parent, and this box is content-sized up
     // to a cap.
     <section
+      // Physical-axis overflow: Tailwind 4.1 has no overflow-block utility,
+      // the same reason as the sticky `top-0` exception below.
       className="overflow-y-auto overscroll-contain rounded-lg border border-gray-6"
       // Inline because Tailwind cannot build a class from these constants. The
-      // trailing px is one border per row, so the 10th row is fully visible.
+      // trailing 10px is one border per row, and the 2px is this box's own top and
+      // bottom border (border-box), so the 10th row is fully visible.
       style={{
-        maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px)`,
+        maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px + 2px)`,
       }}
       // Scrollable region must be reachable and named for keyboard users.
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region has to be focusable or keyboard users cannot scroll it
@@ -150,7 +161,7 @@ export const OfferingRosterTable = ({
                 <th
                   key={header.id}
                   scope="col"
-                  className="px-3 py-0 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
+                  className="whitespace-nowrap px-3 py-0 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
                 >
                   {flexRender(
                     header.column.columnDef.header,
