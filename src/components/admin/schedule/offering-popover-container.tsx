@@ -1,6 +1,7 @@
 import { Popover } from '@base-ui/react/popover';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
+import { X } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -25,6 +26,7 @@ import { OfferingAddPerson } from './offering-add-person';
 import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
 import { OfferingPopoverPositionerContainer } from './offering-popover-positioner-container';
+import type { PopoverTarget } from './offering-popover-state';
 import { levelSummary, OfferingRosterTable } from './offering-roster-table';
 import {
   endDateFromWindow,
@@ -50,6 +52,15 @@ const selectedPersonAtom = atom<string | null>(null);
 const EMPTY_SEED: OfferingFormValues = { startsOn: '', endsOn: '', users: [] };
 
 /**
+ * What Save writes to: a course to schedule, or the offering row being
+ * edited — the ROW, not its id, so a target that no longer resolves cannot be
+ * represented at all.
+ */
+type SaveTarget =
+  | Extract<PopoverTarget, { mode: 'create' }>
+  | { mode: 'edit'; offering: Offering };
+
+/**
  * The pinned popover's first field. The page focuses it right after a pin —
  * Base UI's `initialFocus` only runs on open, and a preview → pinned change
  * is not an open. A module ref is fine: the popover is a singleton.
@@ -69,8 +80,16 @@ export const offeringPopoverFirstField: { current: HTMLInputElement | null } = {
  */
 export const OfferingPopoverContainer = ({
   offerings,
+  isListSettled,
 }: {
   offerings: Offering[];
+  /**
+   * Whether `offerings` is the loaded answer for the window on screen — not
+   * the first load, and not the previous window's rows kept as placeholder
+   * while the next loads. Only then does an id missing from it mean the
+   * offering is gone.
+   */
+  isListSettled: boolean;
 }) => {
   const popover = useAtomValue(offeringPopoverAtom);
   const dispatch = useSetAtom(dispatchOfferingPopoverAtom);
@@ -99,6 +118,20 @@ export const OfferingPopoverContainer = ({
     dialog?.mode === 'edit'
       ? (offerings.find((row) => row.id === dialog.offeringId) ?? null)
       : null;
+
+  const saveTarget: SaveTarget | null =
+    dialog?.mode === 'create'
+      ? dialog
+      : editing
+        ? { mode: 'edit', offering: editing }
+        : null;
+
+  // The offering being edited left the list — the window moved past it, or
+  // someone else unscheduled it. The popover closes rather than showing a
+  // blank title over a Save with nothing to save to: `open` drops at once,
+  // and the state follows through `close` when Base UI reports the popup
+  // gone (onOpenChangeComplete — an event, not an effect).
+  const isOrphaned = dialog?.mode === 'edit' && !editing && isListSettled;
 
   const courseName =
     dialog?.mode === 'create' ? dialog.courseName : (editing?.courseName ?? '');
@@ -146,7 +179,10 @@ export const OfferingPopoverContainer = ({
   // otherwise carry a pinned A's edits into B. A preview is never dirty: inert.
   const close = () => {
     dispatch({ type: 'close' });
-    form.reset(EMPTY_SEED);
+    // `keepDirtyValues: false` explicitly: RHF merges the form's
+    // `resetOptions` into every reset, so a bare reset KEPT the dirty fields —
+    // "Discard changes" discarded nothing, and re-pinning showed the edits.
+    form.reset(EMPTY_SEED, { keepDirtyValues: false });
     setPersonQuery('');
     setSelectedPerson(null);
     create.reset();
@@ -218,11 +254,14 @@ export const OfferingPopoverContainer = ({
   };
 
   const handleSubmit = form.handleSubmit((values) => {
+    // Unreachable without a target: the popover is closed whenever there is
+    // none, and Base UI makes a closed positioner inert.
+    if (!saveTarget) return;
     const userIds = values.users.map((person) => person.userId);
-    if (dialog?.mode === 'create') {
+    if (saveTarget.mode === 'create') {
       create.mutate(
         {
-          courseId: dialog.courseId,
+          courseId: saveTarget.courseId,
           startsOn: values.startsOn,
           endsOn: values.endsOn,
           userIds,
@@ -237,10 +276,9 @@ export const OfferingPopoverContainer = ({
       );
       return;
     }
-    if (!editing) return;
     update.mutate(
       {
-        offeringId: editing.id,
+        offeringId: saveTarget.offering.id,
         startsOn: values.startsOn,
         endsOn: values.endsOn,
         userIds,
@@ -255,11 +293,10 @@ export const OfferingPopoverContainer = ({
     );
   });
 
-  const handleDelete = () => {
-    if (!editing) return;
-    remove.mutate(editing.id, {
+  const handleDelete = (offering: Offering) => {
+    remove.mutate(offering.id, {
       onSuccess: () => {
-        toast.success(`${editing.courseName} unscheduled`);
+        toast.success(`${offering.courseName} unscheduled`);
         close();
       },
       onError: (error) => toast.error(error.message),
@@ -271,9 +308,28 @@ export const OfferingPopoverContainer = ({
 
   const isDirty = form.formState.isDirty;
 
+  const keepEditing = () => {
+    dispatch({ type: 'keepEditing' });
+    // The confirm unmounts with the button that had focus, which would drop
+    // focus to <body>. Put it back on the first field once the footer is back.
+    requestAnimationFrame(() => offeringPopoverFirstField.current?.focus());
+  };
+
   return (
     <Popover.Root
-      open={dialog !== null}
+      open={saveTarget !== null}
+      // Unsaved edits make the popover modal (Base UI `true`: a backdrop takes
+      // outside presses, page scroll locks, and — with the Close part below —
+      // focus is trapped). A press outside then only raises the discard
+      // question instead of ALSO acting on what was under it: the calendar's
+      // arrows used to move the window out from under the form, and a nav
+      // link left the page with the popover stale. A clean pin stays
+      // non-modal so clicking another bar still switches to it.
+      // ('trap-focus' would leave outside pointer presses live.)
+      modal={isPinned && isDirty}
+      onOpenChangeComplete={(open) => {
+        if (!open && isOrphaned) close();
+      }}
       onOpenChange={(open, details) => {
         if (open) return;
         // A mouse click elsewhere put the user's attention THERE: even after a
@@ -288,7 +344,8 @@ export const OfferingPopoverContainer = ({
         // that is in fact still showing.
         if (
           details.reason !== 'escape-key' &&
-          details.reason !== 'outside-press'
+          details.reason !== 'outside-press' &&
+          details.reason !== 'close-press'
         ) {
           // e.g. focus-out: a pinned form must survive focus wandering off.
           details.cancel();
@@ -302,7 +359,9 @@ export const OfferingPopoverContainer = ({
         }
         // Everything else is the reducer's call: a dirty pin asks first, and a
         // preview ignores outside-press (the pointer leaving closes it).
-        const reason = details.reason === 'escape-key' ? 'escape' : 'outside';
+        // The Close button asks exactly what Esc asks.
+        const reason =
+          details.reason === 'outside-press' ? 'outside' : 'escape';
         const staysOpen =
           popover.status === 'pinned' ||
           (popover.status === 'preview' && reason === 'outside');
@@ -333,16 +392,30 @@ export const OfferingPopoverContainer = ({
             // removes it from the tab order and the accessibility tree. The
             // positioner turns off pointer events for it (see `isPreview`).
             inert={!isPinned || undefined}
-            className="offering-popover flex max-h-[var(--available-height)] w-[min(34rem,calc(100vw-2rem))] flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl"
+            // Physical-axis overflow: Tailwind has no overflow-block utility
+            // (the same exception as the roster table's scroller).
+            className="offering-popover flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
           >
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <Popover.Title className="font-semibold text-accent-text text-lg">
                 {courseName}
               </Popover.Title>
-              <Popover.Description className="max-w-[16rem] text-end text-secondary text-xs">
-                An offering is one dated run of a course. Each course can have
-                multiple offerings.
-              </Popover.Description>
+              <div className="flex items-start gap-2">
+                <Popover.Description className="text-end text-secondary text-xs [max-inline-size:16rem]">
+                  An offering is one dated run of a course. Each course can have
+                  multiple offerings.
+                </Popover.Description>
+                {/* Base UI traps focus in a modal popover only when a Close
+                    part is rendered. It is also a visible way out for touch
+                    and screen-reader users who have no Esc key; it asks the
+                    same discard question Esc does. */}
+                <Popover.Close
+                  aria-label="Close"
+                  className="-me-1.5 -mbs-1 shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Popover.Close>
+              </div>
             </div>
             <OfferingForm
               startsOnRef={(node) => {
@@ -391,14 +464,18 @@ export const OfferingPopoverContainer = ({
               }
               onSubmit={handleSubmit}
               onCancel={close}
-              onDelete={dialog?.mode === 'edit' ? handleDelete : undefined}
+              onDelete={
+                saveTarget?.mode === 'edit'
+                  ? () => handleDelete(saveTarget.offering)
+                  : undefined
+              }
               isSaving={isSaving}
               submitLabel={dialog?.mode === 'edit' ? 'Save' : 'Schedule'}
               saveError={saveError}
               discardConfirm={
                 popover.status === 'pinned' && popover.confirmingDiscard ? (
                   <OfferingDiscardConfirm
-                    onKeepEditing={() => dispatch({ type: 'keepEditing' })}
+                    onKeepEditing={keepEditing}
                     onDiscard={close}
                   />
                 ) : undefined

@@ -8,8 +8,10 @@ import {
   offeringPopoverAnchorAtom,
   offeringPopoverAtom,
   offeringPopoverReturnFocusAtom,
+  offeringPopoverSuppressFocusPreviewAtom,
   scheduleWindowStartAtom,
 } from '#/atoms/schedule';
+import type { OfferingPopoverState } from '#/components/admin/schedule/offering-popover-state';
 import type { Offering } from '#/lib/offering-schemas';
 
 /** Hook-using src components need the CJS react (see the container test). */
@@ -32,6 +34,8 @@ vi.mock('#/data-hooks/use-offerings', () => ({
   useOfferings: () => ({
     data: state.offerings,
     isLoading: false,
+    isSuccess: true,
+    isPlaceholderData: false,
     error: null,
   }),
   useCreateOffering: mutation,
@@ -53,8 +57,7 @@ const nextFrame = () =>
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
   );
 
-const renderPage = () => {
-  const store = createStore();
+const renderPage = (store = createStore()) => {
   const windowStart = store.get(scheduleWindowStartAtom);
   const offering: Offering = {
     id: 7,
@@ -65,16 +68,17 @@ const renderPage = () => {
     users: [],
   };
   state.offerings = [offering];
-  render(
+  const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
         <SchedulePageContainer canSchedule />
       </Provider>
     </QueryClientProvider>,
   );
-  const segment = () =>
-    screen.getAllByRole('button', { name: /Edit this offering/ })[0];
-  return { store, offering, segment };
+  const segments = () =>
+    screen.getAllByRole('button', { name: /Edit this offering/ });
+  const segment = () => segments()[0];
+  return { store, offering, segment, segments, unmount: view.unmount };
 };
 
 afterEach(() => {
@@ -213,5 +217,88 @@ describe('SchedulePageContainer wiring', () => {
 
     expect(store.get(offeringPopoverAtom).status).toBe('closed');
     expect(store.get(offeringPopoverAnchorAtom)).toBeNull();
+  });
+});
+
+/** jsdom never matches `:focus-visible`; keyboard focus does in a browser. */
+const pretendFocusVisible = () => {
+  const realMatches = Element.prototype.matches;
+  vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
+    this: Element,
+    selector: string,
+  ) {
+    return selector === ':focus-visible'
+      ? true
+      : realMatches.call(this, selector);
+  });
+};
+
+describe('SchedulePageContainer lifecycle and keyboard', () => {
+  /**
+   * Regression: the popover atoms live in the app-wide store, so leaving the
+   * page with a pinned offering (e.g. through a sidebar link) brought the same
+   * stale popover back on return.
+   */
+  it('leaving the page closes the popover, so coming back shows none', async () => {
+    const first = renderPage();
+    fireEvent.click(first.segment(), { detail: 0 });
+    await nextFrame();
+    expect(screen.getByLabelText('Start date')).toBeTruthy();
+
+    first.unmount();
+    renderPage(first.store);
+    await nextFrame();
+
+    expect(screen.queryByLabelText('Start date')).toBeNull();
+    expect(first.store.get(offeringPopoverAtom).status).toBe('closed');
+    expect(first.store.get(offeringPopoverAnchorAtom)).toBeNull();
+    expect(first.store.get(offeringPopoverReturnFocusAtom)).toBeNull();
+    expect(first.store.get(offeringPopoverSuppressFocusPreviewAtom)).toBeNull();
+  });
+
+  /**
+   * Regression: Tab between two days of ONE offering ran blur → leave (closed)
+   * → focus → preview, so the popover closed and reopened on every key.
+   */
+  it('Tab between days of one offering keeps the preview open', () => {
+    pretendFocusVisible();
+    const { store, segments } = renderPage();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const [day1, day2] = segments();
+    const seen: OfferingPopoverState['status'][] = [];
+    store.sub(offeringPopoverAtom, () =>
+      seen.push(store.get(offeringPopoverAtom).status),
+    );
+
+    act(() => {
+      fireEvent.focus(day1);
+    });
+    act(() => {
+      fireEvent.blur(day1);
+      fireEvent.focus(day2);
+    });
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(seen).toEqual(['preview']);
+    expect(store.get(offeringPopoverAtom).status).toBe('preview');
+    const anchor = store.get(offeringPopoverAnchorAtom);
+    expect(anchor?.kind === 'element' && anchor.element).toBe(day2);
+  });
+
+  it('Tab off the offering still closes its preview, after the grace', () => {
+    pretendFocusVisible();
+    const { store, segment } = renderPage();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+    act(() => {
+      fireEvent.focus(segment());
+    });
+    act(() => {
+      fireEvent.blur(segment());
+    });
+    expect(store.get(offeringPopoverAtom).status).toBe('preview');
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
   });
 });

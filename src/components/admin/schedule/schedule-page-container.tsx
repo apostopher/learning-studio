@@ -40,7 +40,7 @@ import {
   OfferingPopoverContainer,
   offeringPopoverFirstField,
 } from './offering-popover-container';
-import type { PopoverTarget } from './offering-popover-state';
+import { CLOSED, type PopoverTarget } from './offering-popover-state';
 import type { SegmentHandlers } from './offering-segment';
 import { anchorFromPointerEvent, type PopoverAnchor } from './popover-anchor';
 import { ScheduleCourseCard } from './schedule-course-card';
@@ -104,8 +104,9 @@ export const SchedulePageContainer = ({
   const pendingAnchor = useRef<PopoverAnchor | null>(null);
   const moveFrame = useRef<number | null>(null);
   const focusFrame = useRef<number | null>(null);
-  // Whether the last drop was refused because a dirty popover is pinned and
-  // asking. Written in onDragEnd and read by the drop announcement, which
+  // Whether the last drop was refused because a popover is pinned (dirty and
+  // asking, or clean but not dismissed — a keyboard drag never presses
+  // outside it). Written in onDragEnd and read by the drop announcement, which
   // dnd-kit runs right AFTER onDragEnd — by then a successful drop has pinned
   // too, so the popover state alone cannot tell the two apart.
   const dropRefused = useRef(false);
@@ -137,13 +138,22 @@ export const SchedulePageContainer = ({
 
   // Unmount only: the hover timers and animation frames live outside React
   // and would otherwise fire into a page that is gone.
+  //
+  // The popover atoms live in the app-wide store, so they outlive this page
+  // too: leaving with an offering pinned (a sidebar link, say) would bring
+  // the same popover back on return. A teardown, not a transition, so the
+  // state is set directly rather than through the reducer.
   useEffect(
     () => () => {
       hoverRef.current?.cancel();
       if (moveFrame.current !== null) cancelAnimationFrame(moveFrame.current);
       if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
+      store.set(offeringPopoverAtom, CLOSED);
+      store.set(offeringPopoverAnchorAtom, null);
+      store.set(offeringPopoverReturnFocusAtom, null);
+      store.set(offeringPopoverSuppressFocusPreviewAtom, null);
     },
-    [],
+    [store],
   );
 
   /**
@@ -152,8 +162,10 @@ export const SchedulePageContainer = ({
    */
   const pin = (target: PopoverTarget, anchor: PopoverAnchor): boolean => {
     hover.cancel();
-    // Pinning while another offering is pinned is refused by the reducer (it
-    // is asking about unsaved edits); do not move the anchor out from under it.
+    // Pinning while another offering is pinned is refused by the reducer (a
+    // mouse press outside a clean pin closes it first, so what is left is a
+    // dirty one asking, or a keyboard drag that never pressed outside); do
+    // not move the anchor out from under it.
     if (popoverStatus() === 'pinned') return false;
     setAnchor(anchor);
     // Only a keyboard pin returns focus to the segment on close. A mouse,
@@ -207,16 +219,17 @@ export const SchedulePageContainer = ({
       if (suppressed === event.currentTarget) return;
       if (!event.currentTarget.matches(':focus-visible')) return;
       if (popoverStatus() === 'pinned') return;
+      // Tabbing from another day of this same offering: its blur's close is
+      // still pending — cancel it, so the preview moves instead of blinking.
+      hover.keepOpen();
       setAnchor({ kind: 'element', element: event.currentTarget });
       dispatch({ type: 'preview', offeringId });
     },
-    onBlur: () => {
-      // Leaving the bar by keyboard closes its preview. If focus moved INTO
-      // the popover the state is pinned by then and `leave` is a no-op.
-      const state = store.get(offeringPopoverAtom);
-      if (state.status === 'preview' && state.offeringId === offeringId)
-        dispatch({ type: 'leave', offeringId });
-    },
+    // Leaving the bar by keyboard closes its preview, after the same grace a
+    // mouse gets. If focus moved INTO the popover the state is pinned by then
+    // and the eventual `leave` is a no-op; on another offering it previews
+    // that one, and the `leave` for this id is a no-op too.
+    onBlur: () => hover.blur(offeringId),
     // Not gated on `canSchedule`: every user could open an offering before
     // the popover replaced the dialog, and still can.
     onClick: (event) => {
@@ -317,7 +330,7 @@ export const SchedulePageContainer = ({
             !over
               ? 'Cancelled. Nothing was scheduled.'
               : dropRefused.current
-                ? 'Nothing was scheduled. The open offering has unsaved changes — save or discard them first.'
+                ? 'Nothing was scheduled. An offering is open. Close it, then drop again.'
                 : `Dropped on ${parseScheduleDayDndId(over.id)}. Set the end date to finish scheduling.`,
           onDragCancel: () => 'Cancelled. Nothing was scheduled.',
         },
@@ -415,7 +428,12 @@ export const SchedulePageContainer = ({
         )}
       </DragOverlay>
 
-      <OfferingPopoverContainer offerings={rows} />
+      <OfferingPopoverContainer
+        offerings={rows}
+        // Placeholder rows are the PREVIOUS window's, kept on screen while
+        // the new one loads: an offering missing from them proves nothing.
+        isListSettled={offerings.isSuccess && !offerings.isPlaceholderData}
+      />
     </DndContext>
   );
 };

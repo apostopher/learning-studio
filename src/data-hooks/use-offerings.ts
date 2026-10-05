@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   type CreateOfferingInput,
   type Offering,
@@ -34,6 +39,12 @@ async function readError(res: Response, fallback: string): Promise<never> {
  *
  * The window is part of the query key, so panning the calendar fetches the
  * new weeks and keeps the old ones cached for the way back.
+ *
+ * The previous window's rows stay as placeholder data while the next one
+ * loads. Without them the list went empty for the length of the request, and
+ * an offering pinned in the popover stopped resolving — it showed a blank
+ * title and its Save did nothing. Readers that must tell "not in this window"
+ * from "not loaded yet" check `isPlaceholderData`.
  */
 export function useOfferings(from: string, to: string) {
   return useQuery({
@@ -46,6 +57,7 @@ export function useOfferings(from: string, to: string) {
       return offeringListSchema.parse(await res.json());
     },
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     // A 403 cannot be retried into a success, and each attempt delays the
     // explanation the screen owes the reader.
     retry: (failureCount, error) =>

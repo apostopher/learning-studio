@@ -23,6 +23,14 @@ export type HoverIntent = {
     isPreviewing: boolean,
   ) => void;
   leave: (offeringId: number, pointerType: string) => void;
+  /**
+   * Keyboard focus left a day of this offering. Same close grace as the
+   * mouse: Tab between the days of one offering is a blur + focus per day,
+   * and closing at once would blink the preview on every key.
+   */
+  blur: (offeringId: number) => void;
+  /** Focus landed on the offering again: drop any pending close. */
+  keepOpen: () => void;
   cancel: () => void;
 };
 
@@ -48,6 +56,14 @@ export function createHoverIntent({
     closeTimer = null;
   };
 
+  const scheduleClose = (offeringId: number) => {
+    clearClose();
+    closeTimer = setTimer(() => {
+      closeTimer = null;
+      onClose(offeringId);
+    }, HOVER_CLOSE_GRACE_MS);
+  };
+
   return {
     enter(offeringId, pointerType, isPreviewing) {
       if (pointerType !== 'mouse') return;
@@ -67,11 +83,13 @@ export function createHoverIntent({
     leave(offeringId, pointerType) {
       if (pointerType !== 'mouse') return;
       clearOpen();
+      scheduleClose(offeringId);
+    },
+    blur(offeringId) {
+      scheduleClose(offeringId);
+    },
+    keepOpen() {
       clearClose();
-      closeTimer = setTimer(() => {
-        closeTimer = null;
-        onClose(offeringId);
-      }, HOVER_CLOSE_GRACE_MS);
     },
     cancel() {
       clearOpen();
