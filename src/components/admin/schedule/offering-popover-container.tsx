@@ -399,7 +399,7 @@ export const OfferingPopoverContainer = ({
             {/* A subtitle under the title, not a block beside it: course names
                 are long enough that a side-by-side explainer almost always
                 wrapped, leaving a narrow end-aligned column stranded below. */}
-            <div className="flex flex-col gap-1 pe-8">
+            <div className="flex flex-col gap-1 pe-8 pbe-3">
               <Popover.Title className="font-semibold text-accent-text text-lg">
                 {courseName}
               </Popover.Title>
