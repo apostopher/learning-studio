@@ -9,124 +9,129 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthLoginRouteImport } from './routes/auth/login'
-import { Route as ApiChatsRouteImport } from './routes/api/chats'
-import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
-import { Route as AuthedAppRouteImport } from './routes/_authed/app'
+import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
+import { Route as AuthedAppRouteImport } from './routes/_authed/app'
+import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiChatsRouteImport } from './routes/api/chats'
+import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.index'
-import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
-import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
-import { Route as ApiUserMyLevelRouteImport } from './routes/api/user/my-level'
-import { Route as ApiUserLevelAcknowledgeRouteImport } from './routes/api/user/level-acknowledge'
-import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/lesson-section'
-import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
-import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
-import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
-import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
-import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
-import { Route as ApiCourseSkaProfileRouteImport } from './routes/api/course/ska-profile'
-import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
-import { Route as ApiCourseNewsRouteImport } from './routes/api/course/news'
-import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
-import { Route as ApiCourseLibraryRouteImport } from './routes/api/course/library'
-import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
-import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
-import { Route as ApiChatTranscribeRouteImport } from './routes/api/chat/transcribe'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
-import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
-import { Route as ApiAdminRolePermissionsRouteImport } from './routes/api/admin/role-permissions'
-import { Route as ApiAdminPersonasRouteImport } from './routes/api/admin/personas'
-import { Route as ApiAdminOfferingsRouteImport } from './routes/api/admin/offerings'
-import { Route as ApiAdminLibraryRouteImport } from './routes/api/admin/library'
-import { Route as ApiAdminEditorRouteImport } from './routes/api/admin/editor'
-import { Route as ApiAdminDisciplinesRouteImport } from './routes/api/admin/disciplines'
-import { Route as ApiAdminDisciplineStaffCandidatesRouteImport } from './routes/api/admin/discipline-staff-candidates'
-import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
-import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
-import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
-import { Route as AuthedAdminScheduleRouteImport } from './routes/_authed/admin.schedule'
 import { Route as AuthedAdminEditorRouteImport } from './routes/_authed/admin.editor'
-import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
-import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
-import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
-import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
-import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
-import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
-import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
-import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
-import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/course/onboarding/status'
-import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/course/onboarding/start'
-import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
-import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
-import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
-import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
-import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
-import { Route as ApiAdminOfferingsOfferingIdRouteImport } from './routes/api/admin/offerings.$offeringId'
-import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
-import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
-import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
-import { Route as ApiAdminDisciplinesDisciplineIdRouteImport } from './routes/api/admin/disciplines.$disciplineId'
-import { Route as ApiAdminDisciplineModulesModuleIdRouteImport } from './routes/api/admin/discipline-modules.$moduleId'
-import { Route as ApiAdminCoursesCourseIdRouteImport } from './routes/api/admin/courses.$courseId'
-import { Route as AuthedCourseCourseSlugSettingsRouteImport } from './routes/_authed/course.$courseSlug.settings'
-import { Route as AuthedCourseCourseSlugNewsRouteImport } from './routes/_authed/course.$courseSlug.news'
-import { Route as AuthedCourseCourseSlugLibraryRouteImport } from './routes/_authed/course.$courseSlug.library'
+import { Route as AuthedAdminScheduleRouteImport } from './routes/_authed/admin.schedule'
+import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.users'
+import { Route as AuthedCourseCourseSlugRouteImport } from './routes/_authed/course.$courseSlug'
+import { Route as ApiAdminCoursesRouteImport } from './routes/api/admin/courses'
+import { Route as ApiAdminDisciplineStaffCandidatesRouteImport } from './routes/api/admin/discipline-staff-candidates'
+import { Route as ApiAdminDisciplinesRouteImport } from './routes/api/admin/disciplines'
+import { Route as ApiAdminEditorRouteImport } from './routes/api/admin/editor'
+import { Route as ApiAdminLibraryRouteImport } from './routes/api/admin/library'
+import { Route as ApiAdminOfferingsRouteImport } from './routes/api/admin/offerings'
+import { Route as ApiAdminPersonasRouteImport } from './routes/api/admin/personas'
+import { Route as ApiAdminRolePermissionsRouteImport } from './routes/api/admin/role-permissions'
+import { Route as ApiAdminUploadsRouteImport } from './routes/api/admin/uploads'
+import { Route as ApiAdminUsersRouteImport } from './routes/api/admin/users'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiChatTranscribeRouteImport } from './routes/api/chat/transcribe'
+import { Route as ApiChatsChatIdRouteImport } from './routes/api/chats.$chatId'
+import { Route as ApiCourseDetailsRouteImport } from './routes/api/course/details'
+import { Route as ApiCourseLibraryRouteImport } from './routes/api/course/library'
+import { Route as ApiCourseMyCoursesRouteImport } from './routes/api/course/my-courses'
+import { Route as ApiCourseNewsRouteImport } from './routes/api/course/news'
+import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/course/progress-summary'
+import { Route as ApiCourseSkaProfileRouteImport } from './routes/api/course/ska-profile'
+import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
+import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
+import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
+import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
+import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
+import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/lesson-section'
+import { Route as ApiUserLevelAcknowledgeRouteImport } from './routes/api/user/level-acknowledge'
+import { Route as ApiUserMyLevelRouteImport } from './routes/api/user/my-level'
+import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
+import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
+import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
+import { Route as AuthedCourseCourseSlugLibraryRouteImport } from './routes/_authed/course.$courseSlug.library'
+import { Route as AuthedCourseCourseSlugNewsRouteImport } from './routes/_authed/course.$courseSlug.news'
+import { Route as AuthedCourseCourseSlugSettingsRouteImport } from './routes/_authed/course.$courseSlug.settings'
+import { Route as ApiAdminCoursesCourseIdRouteImport } from './routes/api/admin/courses.$courseId'
+import { Route as ApiAdminDisciplineModulesModuleIdRouteImport } from './routes/api/admin/discipline-modules.$moduleId'
+import { Route as ApiAdminDisciplinesDisciplineIdRouteImport } from './routes/api/admin/disciplines.$disciplineId'
+import { Route as ApiAdminLessonMaterialParseRouteImport } from './routes/api/admin/lesson-material.parse'
+import { Route as ApiAdminLessonsLessonIdRouteImport } from './routes/api/admin/lessons.$lessonId'
+import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/modules.$moduleId'
+import { Route as ApiAdminOfferingsOfferingIdRouteImport } from './routes/api/admin/offerings.$offeringId'
+import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
+import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
+import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
+import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
+import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
+import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/course/onboarding/start'
+import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/course/onboarding/status'
+import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
+import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
+import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
+import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
+import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
+import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
+import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
 import { Route as AuthedCourseCourseSlugModulesIndexRouteImport } from './routes/_authed/course.$courseSlug.modules.index'
-import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
-import { Route as ApiAdminUsersProfileIdLevelsRouteImport } from './routes/api/admin/users.$profileId.levels'
-import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
-import { Route as ApiAdminPersonasPersonaIdPublishRouteImport } from './routes/api/admin/personas.$personaId.publish'
-import { Route as ApiAdminPersonasPersonaIdDraftRouteImport } from './routes/api/admin/personas.$personaId.draft'
-import { Route as ApiAdminPersonasPersonaIdDefaultRouteImport } from './routes/api/admin/personas.$personaId.default'
-import { Route as ApiAdminModulesModuleIdLessonsRouteImport } from './routes/api/admin/modules.$moduleId.lessons'
-import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './routes/api/admin/lessons.$lessonId.video-playback'
-import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
-import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
-import { Route as ApiAdminLessonsLessonIdLibraryPlacementRouteImport } from './routes/api/admin/lessons.$lessonId.library-placement'
-import { Route as ApiAdminLessonsLessonIdAlternateVideosRouteImport } from './routes/api/admin/lessons.$lessonId.alternate-videos'
-import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
-import { Route as ApiAdminDisciplinesDisciplineIdModulesRouteImport } from './routes/api/admin/disciplines.$disciplineId.modules'
-import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
-import { Route as ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport } from './routes/api/admin/disciplines.$disciplineId.lesson-posters'
-import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
-import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
-import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
-import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
-import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
-import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
-import { Route as ApiAdminCoursesCourseIdLessonPostersRouteImport } from './routes/api/admin/courses.$courseId.lesson-posters'
-import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes/api/admin/courses.$courseId.credentials'
 import { Route as ApiAdminCoursesCourseIdBoardRouteImport } from './routes/api/admin/courses.$courseId.board'
-import { Route as ApiAdminModulesModuleIdLessonsLessonIdRouteImport } from './routes/api/admin/modules.$moduleId.lessons.$lessonId'
-import { Route as ApiAdminCoursesCourseIdStaffCandidatesRouteImport } from './routes/api/admin/courses.$courseId.staff.candidates'
-import { Route as ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport } from './routes/api/admin/courses.$courseId.remixes.$sourceCourseId'
-import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
+import { Route as ApiAdminCoursesCourseIdCredentialsRouteImport } from './routes/api/admin/courses.$courseId.credentials'
+import { Route as ApiAdminCoursesCourseIdLessonPostersRouteImport } from './routes/api/admin/courses.$courseId.lesson-posters'
+import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
+import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
+import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
+import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
+import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
+import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
+import { Route as ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport } from './routes/api/admin/disciplines.$disciplineId.lesson-posters'
+import { Route as ApiAdminDisciplinesDisciplineIdLessonsRouteImport } from './routes/api/admin/disciplines.$disciplineId.lessons'
+import { Route as ApiAdminDisciplinesDisciplineIdModulesRouteImport } from './routes/api/admin/disciplines.$disciplineId.modules'
+import { Route as ApiAdminDisciplinesDisciplineIdStaffRouteImport } from './routes/api/admin/disciplines.$disciplineId.staff'
+import { Route as ApiAdminLessonsLessonIdAlternateVideosRouteImport } from './routes/api/admin/lessons.$lessonId.alternate-videos'
+import { Route as ApiAdminLessonsLessonIdLibraryPlacementRouteImport } from './routes/api/admin/lessons.$lessonId.library-placement'
+import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
+import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
+import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './routes/api/admin/lessons.$lessonId.video-playback'
+import { Route as ApiAdminModulesModuleIdLessonsRouteImport } from './routes/api/admin/modules.$moduleId.lessons'
+import { Route as ApiAdminPersonasPersonaIdDefaultRouteImport } from './routes/api/admin/personas.$personaId.default'
+import { Route as ApiAdminPersonasPersonaIdDraftRouteImport } from './routes/api/admin/personas.$personaId.draft'
+import { Route as ApiAdminPersonasPersonaIdPublishRouteImport } from './routes/api/admin/personas.$personaId.publish'
+import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
+import { Route as ApiAdminUsersProfileIdLevelsRouteImport } from './routes/api/admin/users.$profileId.levels'
+import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
+import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
+import { Route as ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport } from './routes/api/admin/courses.$courseId.remixes.$sourceCourseId'
+import { Route as ApiAdminCoursesCourseIdStaffCandidatesRouteImport } from './routes/api/admin/courses.$courseId.staff.candidates'
+import { Route as ApiAdminModulesModuleIdLessonsLessonIdRouteImport } from './routes/api/admin/modules.$moduleId.lessons.$lessonId'
 import { Route as AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/course.$courseSlug.modules.$moduleSlug.lessons.$lessonSlug'
 
-const AuthedRoute = AuthedRouteImport.update({
-  id: '/_authed',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthLoginRoute = AuthLoginRouteImport.update({
-  id: '/auth/login',
-  path: '/auth/login',
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiChatsRoute = ApiChatsRouteImport.update({
-  id: '/api/chats',
-  path: '/api/chats',
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAppRoute = AuthedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const ApiAiRagRoute = ApiAiRagRouteImport.update({
+  id: '/api/ai-rag',
+  path: '/api/ai-rag',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -134,161 +139,44 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAiRagRoute = ApiAiRagRouteImport.update({
-  id: '/api/ai-rag',
-  path: '/api/ai-rag',
+const ApiChatsRoute = ApiChatsRouteImport.update({
+  id: '/api/chats',
+  path: '/api/chats',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedAppRoute = AuthedAppRouteImport.update({
-  id: '/app',
-  path: '/app',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedAdminRoute = AuthedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthedRoute,
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/auth/login',
+  path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
-const ApiUserVideoProgressRoute = ApiUserVideoProgressRouteImport.update({
-  id: '/api/user/video-progress',
-  path: '/api/user/video-progress',
-  getParentRoute: () => rootRouteImport,
+const AuthedAdminEditorRoute = AuthedAdminEditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
-const ApiUserReportVideoProgressRoute =
-  ApiUserReportVideoProgressRouteImport.update({
-    id: '/api/user/report-video-progress',
-    path: '/api/user/report-video-progress',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiUserMyLevelRoute = ApiUserMyLevelRouteImport.update({
-  id: '/api/user/my-level',
-  path: '/api/user/my-level',
-  getParentRoute: () => rootRouteImport,
+const AuthedAdminScheduleRoute = AuthedAdminScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
-const ApiUserLevelAcknowledgeRoute = ApiUserLevelAcknowledgeRouteImport.update({
-  id: '/api/user/level-acknowledge',
-  path: '/api/user/level-acknowledge',
-  getParentRoute: () => rootRouteImport,
+const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
-const ApiUserLessonSectionRoute = ApiUserLessonSectionRouteImport.update({
-  id: '/api/user/lesson-section',
-  path: '/api/user/lesson-section',
-  getParentRoute: () => rootRouteImport,
+const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
+  id: '/course/$courseSlug',
+  path: '/course/$courseSlug',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const ApiUserLastViewedRoute = ApiUserLastViewedRouteImport.update({
-  id: '/api/user/last-viewed',
-  path: '/api/user/last-viewed',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonPlaybackRoute = ApiLessonPlaybackRouteImport.update({
-  id: '/api/lesson/playback',
-  path: '/api/lesson/playback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonMaterialRoute = ApiLessonMaterialRouteImport.update({
-  id: '/api/lesson/material',
-  path: '/api/lesson/material',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
-  id: '/api/cron/news-scrape',
-  path: '/api/cron/news-scrape',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
-  id: '/api/cron/blob-sweep',
-  path: '/api/cron/blob-sweep',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseSkaProfileRoute = ApiCourseSkaProfileRouteImport.update({
-  id: '/api/course/ska-profile',
-  path: '/api/course/ska-profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseProgressSummaryRoute =
-  ApiCourseProgressSummaryRouteImport.update({
-    id: '/api/course/progress-summary',
-    path: '/api/course/progress-summary',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCourseNewsRoute = ApiCourseNewsRouteImport.update({
-  id: '/api/course/news',
-  path: '/api/course/news',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseMyCoursesRoute = ApiCourseMyCoursesRouteImport.update({
-  id: '/api/course/my-courses',
-  path: '/api/course/my-courses',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseLibraryRoute = ApiCourseLibraryRouteImport.update({
-  id: '/api/course/library',
-  path: '/api/course/library',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
-  id: '/api/course/details',
-  path: '/api/course/details',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiChatsChatIdRoute = ApiChatsChatIdRouteImport.update({
-  id: '/$chatId',
-  path: '/$chatId',
-  getParentRoute: () => ApiChatsRoute,
-} as any)
-const ApiChatTranscribeRoute = ApiChatTranscribeRouteImport.update({
-  id: '/transcribe',
-  path: '/transcribe',
-  getParentRoute: () => ApiChatRoute,
-} as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
-  id: '/api/admin/users',
-  path: '/api/admin/users',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminUploadsRoute = ApiAdminUploadsRouteImport.update({
-  id: '/api/admin/uploads',
-  path: '/api/admin/uploads',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminRolePermissionsRoute = ApiAdminRolePermissionsRouteImport.update({
-  id: '/api/admin/role-permissions',
-  path: '/api/admin/role-permissions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminPersonasRoute = ApiAdminPersonasRouteImport.update({
-  id: '/api/admin/personas',
-  path: '/api/admin/personas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminOfferingsRoute = ApiAdminOfferingsRouteImport.update({
-  id: '/api/admin/offerings',
-  path: '/api/admin/offerings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminLibraryRoute = ApiAdminLibraryRouteImport.update({
-  id: '/api/admin/library',
-  path: '/api/admin/library',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminEditorRoute = ApiAdminEditorRouteImport.update({
-  id: '/api/admin/editor',
-  path: '/api/admin/editor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminDisciplinesRoute = ApiAdminDisciplinesRouteImport.update({
-  id: '/api/admin/disciplines',
-  path: '/api/admin/disciplines',
+const ApiAdminCoursesRoute = ApiAdminCoursesRouteImport.update({
+  id: '/api/admin/courses',
+  path: '/api/admin/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminDisciplineStaffCandidatesRoute =
@@ -297,163 +185,153 @@ const ApiAdminDisciplineStaffCandidatesRoute =
     path: '/api/admin/discipline-staff-candidates',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiAdminCoursesRoute = ApiAdminCoursesRouteImport.update({
-  id: '/api/admin/courses',
-  path: '/api/admin/courses',
+const ApiAdminDisciplinesRoute = ApiAdminDisciplinesRouteImport.update({
+  id: '/api/admin/disciplines',
+  path: '/api/admin/disciplines',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedCourseCourseSlugRoute = AuthedCourseCourseSlugRouteImport.update({
-  id: '/course/$courseSlug',
-  path: '/course/$courseSlug',
-  getParentRoute: () => AuthedRoute,
+const ApiAdminEditorRoute = ApiAdminEditorRouteImport.update({
+  id: '/api/admin/editor',
+  path: '/api/admin/editor',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AuthedAdminRoute,
+const ApiAdminLibraryRoute = ApiAdminLibraryRouteImport.update({
+  id: '/api/admin/library',
+  path: '/api/admin/library',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedAdminScheduleRoute = AuthedAdminScheduleRouteImport.update({
-  id: '/schedule',
-  path: '/schedule',
-  getParentRoute: () => AuthedAdminRoute,
+const ApiAdminOfferingsRoute = ApiAdminOfferingsRouteImport.update({
+  id: '/api/admin/offerings',
+  path: '/api/admin/offerings',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedAdminEditorRoute = AuthedAdminEditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
-  getParentRoute: () => AuthedAdminRoute,
+const ApiAdminPersonasRoute = ApiAdminPersonasRouteImport.update({
+  id: '/api/admin/personas',
+  path: '/api/admin/personas',
+  getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminRolePermissionsRoute = ApiAdminRolePermissionsRouteImport.update({
+  id: '/api/admin/role-permissions',
+  path: '/api/admin/role-permissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUploadsRoute = ApiAdminUploadsRouteImport.update({
+  id: '/api/admin/uploads',
+  path: '/api/admin/uploads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatTranscribeRoute = ApiChatTranscribeRouteImport.update({
+  id: '/transcribe',
+  path: '/transcribe',
+  getParentRoute: () => ApiChatRoute,
+} as any)
+const ApiChatsChatIdRoute = ApiChatsChatIdRouteImport.update({
+  id: '/$chatId',
+  path: '/$chatId',
+  getParentRoute: () => ApiChatsRoute,
+} as any)
+const ApiCourseDetailsRoute = ApiCourseDetailsRouteImport.update({
+  id: '/api/course/details',
+  path: '/api/course/details',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCourseLibraryRoute = ApiCourseLibraryRouteImport.update({
+  id: '/api/course/library',
+  path: '/api/course/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCourseMyCoursesRoute = ApiCourseMyCoursesRouteImport.update({
+  id: '/api/course/my-courses',
+  path: '/api/course/my-courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCourseNewsRoute = ApiCourseNewsRouteImport.update({
+  id: '/api/course/news',
+  path: '/api/course/news',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCourseProgressSummaryRoute =
+  ApiCourseProgressSummaryRouteImport.update({
+    id: '/api/course/progress-summary',
+    path: '/api/course/progress-summary',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseSkaProfileRoute = ApiCourseSkaProfileRouteImport.update({
+  id: '/api/course/ska-profile',
+  path: '/api/course/ska-profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
+  id: '/api/cron/blob-sweep',
+  path: '/api/cron/blob-sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
+  id: '/api/cron/news-scrape',
+  path: '/api/cron/news-scrape',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonMaterialRoute = ApiLessonMaterialRouteImport.update({
+  id: '/api/lesson/material',
+  path: '/api/lesson/material',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonPlaybackRoute = ApiLessonPlaybackRouteImport.update({
+  id: '/api/lesson/playback',
+  path: '/api/lesson/playback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserLastViewedRoute = ApiUserLastViewedRouteImport.update({
+  id: '/api/user/last-viewed',
+  path: '/api/user/last-viewed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserLessonSectionRoute = ApiUserLessonSectionRouteImport.update({
+  id: '/api/user/lesson-section',
+  path: '/api/user/lesson-section',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserLevelAcknowledgeRoute = ApiUserLevelAcknowledgeRouteImport.update({
+  id: '/api/user/level-acknowledge',
+  path: '/api/user/level-acknowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserMyLevelRoute = ApiUserMyLevelRouteImport.update({
+  id: '/api/user/my-level',
+  path: '/api/user/my-level',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserReportVideoProgressRoute =
+  ApiUserReportVideoProgressRouteImport.update({
+    id: '/api/user/report-video-progress',
+    path: '/api/user/report-video-progress',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiUserVideoProgressRoute = ApiUserVideoProgressRouteImport.update({
+  id: '/api/user/video-progress',
+  path: '/api/user/video-progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedAdminCourseIdEditorRoute =
+  AuthedAdminCourseIdEditorRouteImport.update({
+    id: '/$courseId/editor',
+    path: '/$courseId/editor',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 const AuthedCourseCourseSlugIndexRoute =
   AuthedCourseCourseSlugIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => AuthedCourseCourseSlugRoute,
-  } as any)
-const ApiLibraryDownloadFileIdRoute =
-  ApiLibraryDownloadFileIdRouteImport.update({
-    id: '/api/library/download/$fileId',
-    path: '/api/library/download/$fileId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiLessonQuizResultRoute = ApiLessonQuizResultRouteImport.update({
-  id: '/api/lesson/quiz/result',
-  path: '/api/lesson/quiz/result',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonQuizAnswersRoute = ApiLessonQuizAnswersRouteImport.update({
-  id: '/api/lesson/quiz/answers',
-  path: '/api/lesson/quiz/answers',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonAiTestSaveResultsRoute =
-  ApiLessonAiTestSaveResultsRouteImport.update({
-    id: '/api/lesson/ai-test/save-results',
-    path: '/api/lesson/ai-test/save-results',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiLessonAiTestResultsRoute = ApiLessonAiTestResultsRouteImport.update({
-  id: '/api/lesson/ai-test/results',
-  path: '/api/lesson/ai-test/results',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonAiTestGenerateRoute = ApiLessonAiTestGenerateRouteImport.update({
-  id: '/api/lesson/ai-test/generate',
-  path: '/api/lesson/ai-test/generate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
-  id: '/api/lesson/ai-test/evaluate',
-  path: '/api/lesson/ai-test/evaluate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCourseOnboardingStatusRoute =
-  ApiCourseOnboardingStatusRouteImport.update({
-    id: '/api/course/onboarding/status',
-    path: '/api/course/onboarding/status',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCourseOnboardingStartRoute =
-  ApiCourseOnboardingStartRouteImport.update({
-    id: '/api/course/onboarding/start',
-    path: '/api/course/onboarding/start',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCourseOnboardingReplyRoute =
-  ApiCourseOnboardingReplyRouteImport.update({
-    id: '/api/course/onboarding/reply',
-    path: '/api/course/onboarding/reply',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCourseOnboardingDeleteRoute =
-  ApiCourseOnboardingDeleteRouteImport.update({
-    id: '/api/course/onboarding/delete',
-    path: '/api/course/onboarding/delete',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
-  id: '/mute',
-  path: '/mute',
-  getParentRoute: () => ApiCourseNewsRoute,
-} as any)
-const ApiAdminUsersProfileIdRoute = ApiAdminUsersProfileIdRouteImport.update({
-  id: '/$profileId',
-  path: '/$profileId',
-  getParentRoute: () => ApiAdminUsersRoute,
-} as any)
-const ApiAdminPersonasPersonaIdRoute =
-  ApiAdminPersonasPersonaIdRouteImport.update({
-    id: '/$personaId',
-    path: '/$personaId',
-    getParentRoute: () => ApiAdminPersonasRoute,
-  } as any)
-const ApiAdminOfferingsOfferingIdRoute =
-  ApiAdminOfferingsOfferingIdRouteImport.update({
-    id: '/$offeringId',
-    path: '/$offeringId',
-    getParentRoute: () => ApiAdminOfferingsRoute,
-  } as any)
-const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
-  id: '/api/admin/modules/$moduleId',
-  path: '/api/admin/modules/$moduleId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminLessonsLessonIdRoute = ApiAdminLessonsLessonIdRouteImport.update({
-  id: '/api/admin/lessons/$lessonId',
-  path: '/api/admin/lessons/$lessonId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAdminLessonMaterialParseRoute =
-  ApiAdminLessonMaterialParseRouteImport.update({
-    id: '/api/admin/lesson-material/parse',
-    path: '/api/admin/lesson-material/parse',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiAdminDisciplinesDisciplineIdRoute =
-  ApiAdminDisciplinesDisciplineIdRouteImport.update({
-    id: '/$disciplineId',
-    path: '/$disciplineId',
-    getParentRoute: () => ApiAdminDisciplinesRoute,
-  } as any)
-const ApiAdminDisciplineModulesModuleIdRoute =
-  ApiAdminDisciplineModulesModuleIdRouteImport.update({
-    id: '/api/admin/discipline-modules/$moduleId',
-    path: '/api/admin/discipline-modules/$moduleId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiAdminCoursesCourseIdRoute = ApiAdminCoursesCourseIdRouteImport.update({
-  id: '/$courseId',
-  path: '/$courseId',
-  getParentRoute: () => ApiAdminCoursesRoute,
-} as any)
-const AuthedCourseCourseSlugSettingsRoute =
-  AuthedCourseCourseSlugSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => AuthedCourseCourseSlugRoute,
-  } as any)
-const AuthedCourseCourseSlugNewsRoute =
-  AuthedCourseCourseSlugNewsRouteImport.update({
-    id: '/news',
-    path: '/news',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
 const AuthedCourseCourseSlugLibraryRoute =
@@ -462,11 +340,133 @@ const AuthedCourseCourseSlugLibraryRoute =
     path: '/library',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
-const AuthedAdminCourseIdEditorRoute =
-  AuthedAdminCourseIdEditorRouteImport.update({
-    id: '/$courseId/editor',
-    path: '/$courseId/editor',
-    getParentRoute: () => AuthedAdminRoute,
+const AuthedCourseCourseSlugNewsRoute =
+  AuthedCourseCourseSlugNewsRouteImport.update({
+    id: '/news',
+    path: '/news',
+    getParentRoute: () => AuthedCourseCourseSlugRoute,
+  } as any)
+const AuthedCourseCourseSlugSettingsRoute =
+  AuthedCourseCourseSlugSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthedCourseCourseSlugRoute,
+  } as any)
+const ApiAdminCoursesCourseIdRoute = ApiAdminCoursesCourseIdRouteImport.update({
+  id: '/$courseId',
+  path: '/$courseId',
+  getParentRoute: () => ApiAdminCoursesRoute,
+} as any)
+const ApiAdminDisciplineModulesModuleIdRoute =
+  ApiAdminDisciplineModulesModuleIdRouteImport.update({
+    id: '/api/admin/discipline-modules/$moduleId',
+    path: '/api/admin/discipline-modules/$moduleId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdRoute =
+  ApiAdminDisciplinesDisciplineIdRouteImport.update({
+    id: '/$disciplineId',
+    path: '/$disciplineId',
+    getParentRoute: () => ApiAdminDisciplinesRoute,
+  } as any)
+const ApiAdminLessonMaterialParseRoute =
+  ApiAdminLessonMaterialParseRouteImport.update({
+    id: '/api/admin/lesson-material/parse',
+    path: '/api/admin/lesson-material/parse',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAdminLessonsLessonIdRoute = ApiAdminLessonsLessonIdRouteImport.update({
+  id: '/api/admin/lessons/$lessonId',
+  path: '/api/admin/lessons/$lessonId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminModulesModuleIdRoute = ApiAdminModulesModuleIdRouteImport.update({
+  id: '/api/admin/modules/$moduleId',
+  path: '/api/admin/modules/$moduleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminOfferingsOfferingIdRoute =
+  ApiAdminOfferingsOfferingIdRouteImport.update({
+    id: '/$offeringId',
+    path: '/$offeringId',
+    getParentRoute: () => ApiAdminOfferingsRoute,
+  } as any)
+const ApiAdminPersonasPersonaIdRoute =
+  ApiAdminPersonasPersonaIdRouteImport.update({
+    id: '/$personaId',
+    path: '/$personaId',
+    getParentRoute: () => ApiAdminPersonasRoute,
+  } as any)
+const ApiAdminUsersProfileIdRoute = ApiAdminUsersProfileIdRouteImport.update({
+  id: '/$profileId',
+  path: '/$profileId',
+  getParentRoute: () => ApiAdminUsersRoute,
+} as any)
+const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
+  id: '/mute',
+  path: '/mute',
+  getParentRoute: () => ApiCourseNewsRoute,
+} as any)
+const ApiCourseOnboardingDeleteRoute =
+  ApiCourseOnboardingDeleteRouteImport.update({
+    id: '/api/course/onboarding/delete',
+    path: '/api/course/onboarding/delete',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseOnboardingReplyRoute =
+  ApiCourseOnboardingReplyRouteImport.update({
+    id: '/api/course/onboarding/reply',
+    path: '/api/course/onboarding/reply',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseOnboardingStartRoute =
+  ApiCourseOnboardingStartRouteImport.update({
+    id: '/api/course/onboarding/start',
+    path: '/api/course/onboarding/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCourseOnboardingStatusRoute =
+  ApiCourseOnboardingStatusRouteImport.update({
+    id: '/api/course/onboarding/status',
+    path: '/api/course/onboarding/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
+  id: '/api/lesson/ai-test/evaluate',
+  path: '/api/lesson/ai-test/evaluate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonAiTestGenerateRoute = ApiLessonAiTestGenerateRouteImport.update({
+  id: '/api/lesson/ai-test/generate',
+  path: '/api/lesson/ai-test/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonAiTestResultsRoute = ApiLessonAiTestResultsRouteImport.update({
+  id: '/api/lesson/ai-test/results',
+  path: '/api/lesson/ai-test/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonAiTestSaveResultsRoute =
+  ApiLessonAiTestSaveResultsRouteImport.update({
+    id: '/api/lesson/ai-test/save-results',
+    path: '/api/lesson/ai-test/save-results',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiLessonQuizAnswersRoute = ApiLessonQuizAnswersRouteImport.update({
+  id: '/api/lesson/quiz/answers',
+  path: '/api/lesson/quiz/answers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonQuizResultRoute = ApiLessonQuizResultRouteImport.update({
+  id: '/api/lesson/quiz/result',
+  path: '/api/lesson/quiz/result',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLibraryDownloadFileIdRoute =
+  ApiLibraryDownloadFileIdRouteImport.update({
+    id: '/api/library/download/$fileId',
+    path: '/api/library/download/$fileId',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const AuthedCourseCourseSlugModulesIndexRoute =
   AuthedCourseCourseSlugModulesIndexRouteImport.update({
@@ -474,142 +474,10 @@ const AuthedCourseCourseSlugModulesIndexRoute =
     path: '/modules/',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
-const ApiAdminUsersProfileIdRolesRoute =
-  ApiAdminUsersProfileIdRolesRouteImport.update({
-    id: '/roles',
-    path: '/roles',
-    getParentRoute: () => ApiAdminUsersProfileIdRoute,
-  } as any)
-const ApiAdminUsersProfileIdLevelsRoute =
-  ApiAdminUsersProfileIdLevelsRouteImport.update({
-    id: '/levels',
-    path: '/levels',
-    getParentRoute: () => ApiAdminUsersProfileIdRoute,
-  } as any)
-const ApiAdminUsersProfileIdEnrolmentsRoute =
-  ApiAdminUsersProfileIdEnrolmentsRouteImport.update({
-    id: '/enrolments',
-    path: '/enrolments',
-    getParentRoute: () => ApiAdminUsersProfileIdRoute,
-  } as any)
-const ApiAdminPersonasPersonaIdPublishRoute =
-  ApiAdminPersonasPersonaIdPublishRouteImport.update({
-    id: '/publish',
-    path: '/publish',
-    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
-  } as any)
-const ApiAdminPersonasPersonaIdDraftRoute =
-  ApiAdminPersonasPersonaIdDraftRouteImport.update({
-    id: '/draft',
-    path: '/draft',
-    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
-  } as any)
-const ApiAdminPersonasPersonaIdDefaultRoute =
-  ApiAdminPersonasPersonaIdDefaultRouteImport.update({
-    id: '/default',
-    path: '/default',
-    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
-  } as any)
-const ApiAdminModulesModuleIdLessonsRoute =
-  ApiAdminModulesModuleIdLessonsRouteImport.update({
-    id: '/lessons',
-    path: '/lessons',
-    getParentRoute: () => ApiAdminModulesModuleIdRoute,
-  } as any)
-const ApiAdminLessonsLessonIdVideoPlaybackRoute =
-  ApiAdminLessonsLessonIdVideoPlaybackRouteImport.update({
-    id: '/video-playback',
-    path: '/video-playback',
-    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
-  } as any)
-const ApiAdminLessonsLessonIdVideoRoute =
-  ApiAdminLessonsLessonIdVideoRouteImport.update({
-    id: '/video',
-    path: '/video',
-    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
-  } as any)
-const ApiAdminLessonsLessonIdMaterialRoute =
-  ApiAdminLessonsLessonIdMaterialRouteImport.update({
-    id: '/material',
-    path: '/material',
-    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
-  } as any)
-const ApiAdminLessonsLessonIdLibraryPlacementRoute =
-  ApiAdminLessonsLessonIdLibraryPlacementRouteImport.update({
-    id: '/library-placement',
-    path: '/library-placement',
-    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
-  } as any)
-const ApiAdminLessonsLessonIdAlternateVideosRoute =
-  ApiAdminLessonsLessonIdAlternateVideosRouteImport.update({
-    id: '/alternate-videos',
-    path: '/alternate-videos',
-    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
-  } as any)
-const ApiAdminDisciplinesDisciplineIdStaffRoute =
-  ApiAdminDisciplinesDisciplineIdStaffRouteImport.update({
-    id: '/staff',
-    path: '/staff',
-    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
-  } as any)
-const ApiAdminDisciplinesDisciplineIdModulesRoute =
-  ApiAdminDisciplinesDisciplineIdModulesRouteImport.update({
-    id: '/modules',
-    path: '/modules',
-    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
-  } as any)
-const ApiAdminDisciplinesDisciplineIdLessonsRoute =
-  ApiAdminDisciplinesDisciplineIdLessonsRouteImport.update({
-    id: '/lessons',
-    path: '/lessons',
-    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
-  } as any)
-const ApiAdminDisciplinesDisciplineIdLessonPostersRoute =
-  ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport.update({
-    id: '/lesson-posters',
-    path: '/lesson-posters',
-    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdStaffRoute =
-  ApiAdminCoursesCourseIdStaffRouteImport.update({
-    id: '/staff',
-    path: '/staff',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdRemixesRoute =
-  ApiAdminCoursesCourseIdRemixesRouteImport.update({
-    id: '/remixes',
-    path: '/remixes',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdPersonaRoute =
-  ApiAdminCoursesCourseIdPersonaRouteImport.update({
-    id: '/persona',
-    path: '/persona',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdOnboardingRoute =
-  ApiAdminCoursesCourseIdOnboardingRouteImport.update({
-    id: '/onboarding',
-    path: '/onboarding',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdNewsSourcesRoute =
-  ApiAdminCoursesCourseIdNewsSourcesRouteImport.update({
-    id: '/news-sources',
-    path: '/news-sources',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdModulesRoute =
-  ApiAdminCoursesCourseIdModulesRouteImport.update({
-    id: '/modules',
-    path: '/modules',
-    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
-  } as any)
-const ApiAdminCoursesCourseIdLessonPostersRoute =
-  ApiAdminCoursesCourseIdLessonPostersRouteImport.update({
-    id: '/lesson-posters',
-    path: '/lesson-posters',
+const ApiAdminCoursesCourseIdBoardRoute =
+  ApiAdminCoursesCourseIdBoardRouteImport.update({
+    id: '/board',
+    path: '/board',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
 const ApiAdminCoursesCourseIdCredentialsRoute =
@@ -618,29 +486,149 @@ const ApiAdminCoursesCourseIdCredentialsRoute =
     path: '/credentials',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
-const ApiAdminCoursesCourseIdBoardRoute =
-  ApiAdminCoursesCourseIdBoardRouteImport.update({
-    id: '/board',
-    path: '/board',
+const ApiAdminCoursesCourseIdLessonPostersRoute =
+  ApiAdminCoursesCourseIdLessonPostersRouteImport.update({
+    id: '/lesson-posters',
+    path: '/lesson-posters',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
-const ApiAdminModulesModuleIdLessonsLessonIdRoute =
-  ApiAdminModulesModuleIdLessonsLessonIdRouteImport.update({
-    id: '/$lessonId',
-    path: '/$lessonId',
-    getParentRoute: () => ApiAdminModulesModuleIdLessonsRoute,
+const ApiAdminCoursesCourseIdModulesRoute =
+  ApiAdminCoursesCourseIdModulesRouteImport.update({
+    id: '/modules',
+    path: '/modules',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
-const ApiAdminCoursesCourseIdStaffCandidatesRoute =
-  ApiAdminCoursesCourseIdStaffCandidatesRouteImport.update({
-    id: '/candidates',
-    path: '/candidates',
-    getParentRoute: () => ApiAdminCoursesCourseIdStaffRoute,
+const ApiAdminCoursesCourseIdNewsSourcesRoute =
+  ApiAdminCoursesCourseIdNewsSourcesRouteImport.update({
+    id: '/news-sources',
+    path: '/news-sources',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
-const ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute =
-  ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport.update({
-    id: '/$sourceCourseId',
-    path: '/$sourceCourseId',
-    getParentRoute: () => ApiAdminCoursesCourseIdRemixesRoute,
+const ApiAdminCoursesCourseIdOnboardingRoute =
+  ApiAdminCoursesCourseIdOnboardingRouteImport.update({
+    id: '/onboarding',
+    path: '/onboarding',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
+const ApiAdminCoursesCourseIdPersonaRoute =
+  ApiAdminCoursesCourseIdPersonaRouteImport.update({
+    id: '/persona',
+    path: '/persona',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
+const ApiAdminCoursesCourseIdRemixesRoute =
+  ApiAdminCoursesCourseIdRemixesRouteImport.update({
+    id: '/remixes',
+    path: '/remixes',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
+const ApiAdminCoursesCourseIdStaffRoute =
+  ApiAdminCoursesCourseIdStaffRouteImport.update({
+    id: '/staff',
+    path: '/staff',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdLessonPostersRoute =
+  ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport.update({
+    id: '/lesson-posters',
+    path: '/lesson-posters',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdLessonsRoute =
+  ApiAdminDisciplinesDisciplineIdLessonsRouteImport.update({
+    id: '/lessons',
+    path: '/lessons',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdModulesRoute =
+  ApiAdminDisciplinesDisciplineIdModulesRouteImport.update({
+    id: '/modules',
+    path: '/modules',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
+const ApiAdminDisciplinesDisciplineIdStaffRoute =
+  ApiAdminDisciplinesDisciplineIdStaffRouteImport.update({
+    id: '/staff',
+    path: '/staff',
+    getParentRoute: () => ApiAdminDisciplinesDisciplineIdRoute,
+  } as any)
+const ApiAdminLessonsLessonIdAlternateVideosRoute =
+  ApiAdminLessonsLessonIdAlternateVideosRouteImport.update({
+    id: '/alternate-videos',
+    path: '/alternate-videos',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
+const ApiAdminLessonsLessonIdLibraryPlacementRoute =
+  ApiAdminLessonsLessonIdLibraryPlacementRouteImport.update({
+    id: '/library-placement',
+    path: '/library-placement',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
+const ApiAdminLessonsLessonIdMaterialRoute =
+  ApiAdminLessonsLessonIdMaterialRouteImport.update({
+    id: '/material',
+    path: '/material',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
+const ApiAdminLessonsLessonIdVideoRoute =
+  ApiAdminLessonsLessonIdVideoRouteImport.update({
+    id: '/video',
+    path: '/video',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
+const ApiAdminLessonsLessonIdVideoPlaybackRoute =
+  ApiAdminLessonsLessonIdVideoPlaybackRouteImport.update({
+    id: '/video-playback',
+    path: '/video-playback',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
+const ApiAdminModulesModuleIdLessonsRoute =
+  ApiAdminModulesModuleIdLessonsRouteImport.update({
+    id: '/lessons',
+    path: '/lessons',
+    getParentRoute: () => ApiAdminModulesModuleIdRoute,
+  } as any)
+const ApiAdminPersonasPersonaIdDefaultRoute =
+  ApiAdminPersonasPersonaIdDefaultRouteImport.update({
+    id: '/default',
+    path: '/default',
+    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
+  } as any)
+const ApiAdminPersonasPersonaIdDraftRoute =
+  ApiAdminPersonasPersonaIdDraftRouteImport.update({
+    id: '/draft',
+    path: '/draft',
+    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
+  } as any)
+const ApiAdminPersonasPersonaIdPublishRoute =
+  ApiAdminPersonasPersonaIdPublishRouteImport.update({
+    id: '/publish',
+    path: '/publish',
+    getParentRoute: () => ApiAdminPersonasPersonaIdRoute,
+  } as any)
+const ApiAdminUsersProfileIdEnrolmentsRoute =
+  ApiAdminUsersProfileIdEnrolmentsRouteImport.update({
+    id: '/enrolments',
+    path: '/enrolments',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
+  } as any)
+const ApiAdminUsersProfileIdLevelsRoute =
+  ApiAdminUsersProfileIdLevelsRouteImport.update({
+    id: '/levels',
+    path: '/levels',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
+  } as any)
+const ApiAdminUsersProfileIdRolesRoute =
+  ApiAdminUsersProfileIdRolesRouteImport.update({
+    id: '/roles',
+    path: '/roles',
+    getParentRoute: () => ApiAdminUsersProfileIdRoute,
+  } as any)
+const ApiAdminCoursesCourseIdCredentialsProviderRoute =
+  ApiAdminCoursesCourseIdCredentialsProviderRouteImport.update({
+    id: '/$provider',
+    path: '/$provider',
+    getParentRoute: () => ApiAdminCoursesCourseIdCredentialsRoute,
   } as any)
 const ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute =
   ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport.update({
@@ -648,11 +636,23 @@ const ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute =
     path: '/$sourceId',
     getParentRoute: () => ApiAdminCoursesCourseIdNewsSourcesRoute,
   } as any)
-const ApiAdminCoursesCourseIdCredentialsProviderRoute =
-  ApiAdminCoursesCourseIdCredentialsProviderRouteImport.update({
-    id: '/$provider',
-    path: '/$provider',
-    getParentRoute: () => ApiAdminCoursesCourseIdCredentialsRoute,
+const ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute =
+  ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport.update({
+    id: '/$sourceCourseId',
+    path: '/$sourceCourseId',
+    getParentRoute: () => ApiAdminCoursesCourseIdRemixesRoute,
+  } as any)
+const ApiAdminCoursesCourseIdStaffCandidatesRoute =
+  ApiAdminCoursesCourseIdStaffCandidatesRouteImport.update({
+    id: '/candidates',
+    path: '/candidates',
+    getParentRoute: () => ApiAdminCoursesCourseIdStaffRoute,
+  } as any)
+const ApiAdminModulesModuleIdLessonsLessonIdRoute =
+  ApiAdminModulesModuleIdLessonsLessonIdRouteImport.update({
+    id: '/$lessonId',
+    path: '/$lessonId',
+    getParentRoute: () => ApiAdminModulesModuleIdLessonsRoute,
   } as any)
 const AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute =
   AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport.update({
@@ -1322,13 +1322,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authed': {
-      id: '/_authed'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -1336,18 +1329,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/login': {
-      id: '/auth/login'
-      path: '/auth/login'
-      fullPath: '/auth/login'
-      preLoaderRoute: typeof AuthLoginRouteImport
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/chats': {
-      id: '/api/chats'
-      path: '/api/chats'
-      fullPath: '/api/chats'
-      preLoaderRoute: typeof ApiChatsRouteImport
+    '/_authed/admin': {
+      id: '/_authed/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/app': {
+      id: '/_authed/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthedAppRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/api/ai-rag': {
+      id: '/api/ai-rag'
+      path: '/api/ai-rag'
+      fullPath: '/api/ai-rag'
+      preLoaderRoute: typeof ApiAiRagRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -1357,256 +1364,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/ai-rag': {
-      id: '/api/ai-rag'
-      path: '/api/ai-rag'
-      fullPath: '/api/ai-rag'
-      preLoaderRoute: typeof ApiAiRagRouteImport
+    '/api/chats': {
+      id: '/api/chats'
+      path: '/api/chats'
+      fullPath: '/api/chats'
+      preLoaderRoute: typeof ApiChatsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authed/app': {
-      id: '/_authed/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AuthedAppRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/admin': {
-      id: '/_authed/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthedAdminRouteImport
-      parentRoute: typeof AuthedRoute
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/auth/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/admin/': {
       id: '/_authed/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
-      parentRoute: typeof AuthedAdminRoute
-    }
-    '/api/user/video-progress': {
-      id: '/api/user/video-progress'
-      path: '/api/user/video-progress'
-      fullPath: '/api/user/video-progress'
-      preLoaderRoute: typeof ApiUserVideoProgressRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/user/report-video-progress': {
-      id: '/api/user/report-video-progress'
-      path: '/api/user/report-video-progress'
-      fullPath: '/api/user/report-video-progress'
-      preLoaderRoute: typeof ApiUserReportVideoProgressRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/user/my-level': {
-      id: '/api/user/my-level'
-      path: '/api/user/my-level'
-      fullPath: '/api/user/my-level'
-      preLoaderRoute: typeof ApiUserMyLevelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/user/level-acknowledge': {
-      id: '/api/user/level-acknowledge'
-      path: '/api/user/level-acknowledge'
-      fullPath: '/api/user/level-acknowledge'
-      preLoaderRoute: typeof ApiUserLevelAcknowledgeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/user/lesson-section': {
-      id: '/api/user/lesson-section'
-      path: '/api/user/lesson-section'
-      fullPath: '/api/user/lesson-section'
-      preLoaderRoute: typeof ApiUserLessonSectionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/user/last-viewed': {
-      id: '/api/user/last-viewed'
-      path: '/api/user/last-viewed'
-      fullPath: '/api/user/last-viewed'
-      preLoaderRoute: typeof ApiUserLastViewedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/playback': {
-      id: '/api/lesson/playback'
-      path: '/api/lesson/playback'
-      fullPath: '/api/lesson/playback'
-      preLoaderRoute: typeof ApiLessonPlaybackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/material': {
-      id: '/api/lesson/material'
-      path: '/api/lesson/material'
-      fullPath: '/api/lesson/material'
-      preLoaderRoute: typeof ApiLessonMaterialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/cron/news-scrape': {
-      id: '/api/cron/news-scrape'
-      path: '/api/cron/news-scrape'
-      fullPath: '/api/cron/news-scrape'
-      preLoaderRoute: typeof ApiCronNewsScrapeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/cron/blob-sweep': {
-      id: '/api/cron/blob-sweep'
-      path: '/api/cron/blob-sweep'
-      fullPath: '/api/cron/blob-sweep'
-      preLoaderRoute: typeof ApiCronBlobSweepRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/ska-profile': {
-      id: '/api/course/ska-profile'
-      path: '/api/course/ska-profile'
-      fullPath: '/api/course/ska-profile'
-      preLoaderRoute: typeof ApiCourseSkaProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/progress-summary': {
-      id: '/api/course/progress-summary'
-      path: '/api/course/progress-summary'
-      fullPath: '/api/course/progress-summary'
-      preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/news': {
-      id: '/api/course/news'
-      path: '/api/course/news'
-      fullPath: '/api/course/news'
-      preLoaderRoute: typeof ApiCourseNewsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/my-courses': {
-      id: '/api/course/my-courses'
-      path: '/api/course/my-courses'
-      fullPath: '/api/course/my-courses'
-      preLoaderRoute: typeof ApiCourseMyCoursesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/library': {
-      id: '/api/course/library'
-      path: '/api/course/library'
-      fullPath: '/api/course/library'
-      preLoaderRoute: typeof ApiCourseLibraryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/details': {
-      id: '/api/course/details'
-      path: '/api/course/details'
-      fullPath: '/api/course/details'
-      preLoaderRoute: typeof ApiCourseDetailsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/chats/$chatId': {
-      id: '/api/chats/$chatId'
-      path: '/$chatId'
-      fullPath: '/api/chats/$chatId'
-      preLoaderRoute: typeof ApiChatsChatIdRouteImport
-      parentRoute: typeof ApiChatsRoute
-    }
-    '/api/chat/transcribe': {
-      id: '/api/chat/transcribe'
-      path: '/transcribe'
-      fullPath: '/api/chat/transcribe'
-      preLoaderRoute: typeof ApiChatTranscribeRouteImport
-      parentRoute: typeof ApiChatRoute
-    }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/users': {
-      id: '/api/admin/users'
-      path: '/api/admin/users'
-      fullPath: '/api/admin/users'
-      preLoaderRoute: typeof ApiAdminUsersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/uploads': {
-      id: '/api/admin/uploads'
-      path: '/api/admin/uploads'
-      fullPath: '/api/admin/uploads'
-      preLoaderRoute: typeof ApiAdminUploadsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/role-permissions': {
-      id: '/api/admin/role-permissions'
-      path: '/api/admin/role-permissions'
-      fullPath: '/api/admin/role-permissions'
-      preLoaderRoute: typeof ApiAdminRolePermissionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/personas': {
-      id: '/api/admin/personas'
-      path: '/api/admin/personas'
-      fullPath: '/api/admin/personas'
-      preLoaderRoute: typeof ApiAdminPersonasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/offerings': {
-      id: '/api/admin/offerings'
-      path: '/api/admin/offerings'
-      fullPath: '/api/admin/offerings'
-      preLoaderRoute: typeof ApiAdminOfferingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/library': {
-      id: '/api/admin/library'
-      path: '/api/admin/library'
-      fullPath: '/api/admin/library'
-      preLoaderRoute: typeof ApiAdminLibraryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/editor': {
-      id: '/api/admin/editor'
-      path: '/api/admin/editor'
-      fullPath: '/api/admin/editor'
-      preLoaderRoute: typeof ApiAdminEditorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/disciplines': {
-      id: '/api/admin/disciplines'
-      path: '/api/admin/disciplines'
-      fullPath: '/api/admin/disciplines'
-      preLoaderRoute: typeof ApiAdminDisciplinesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/discipline-staff-candidates': {
-      id: '/api/admin/discipline-staff-candidates'
-      path: '/api/admin/discipline-staff-candidates'
-      fullPath: '/api/admin/discipline-staff-candidates'
-      preLoaderRoute: typeof ApiAdminDisciplineStaffCandidatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/courses': {
-      id: '/api/admin/courses'
-      path: '/api/admin/courses'
-      fullPath: '/api/admin/courses'
-      preLoaderRoute: typeof ApiAdminCoursesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authed/course/$courseSlug': {
-      id: '/_authed/course/$courseSlug'
-      path: '/course/$courseSlug'
-      fullPath: '/course/$courseSlug'
-      preLoaderRoute: typeof AuthedCourseCourseSlugRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/admin/users': {
-      id: '/_authed/admin/users'
-      path: '/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AuthedAdminUsersRouteImport
-      parentRoute: typeof AuthedAdminRoute
-    }
-    '/_authed/admin/schedule': {
-      id: '/_authed/admin/schedule'
-      path: '/schedule'
-      fullPath: '/admin/schedule'
-      preLoaderRoute: typeof AuthedAdminScheduleRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/admin/editor': {
@@ -1616,172 +1392,242 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminEditorRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/schedule': {
+      id: '/_authed/admin/schedule'
+      path: '/schedule'
+      fullPath: '/admin/schedule'
+      preLoaderRoute: typeof AuthedAdminScheduleRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/users': {
+      id: '/_authed/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthedAdminUsersRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/course/$courseSlug': {
+      id: '/_authed/course/$courseSlug'
+      path: '/course/$courseSlug'
+      fullPath: '/course/$courseSlug'
+      preLoaderRoute: typeof AuthedCourseCourseSlugRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/api/admin/courses': {
+      id: '/api/admin/courses'
+      path: '/api/admin/courses'
+      fullPath: '/api/admin/courses'
+      preLoaderRoute: typeof ApiAdminCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/discipline-staff-candidates': {
+      id: '/api/admin/discipline-staff-candidates'
+      path: '/api/admin/discipline-staff-candidates'
+      fullPath: '/api/admin/discipline-staff-candidates'
+      preLoaderRoute: typeof ApiAdminDisciplineStaffCandidatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/disciplines': {
+      id: '/api/admin/disciplines'
+      path: '/api/admin/disciplines'
+      fullPath: '/api/admin/disciplines'
+      preLoaderRoute: typeof ApiAdminDisciplinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/editor': {
+      id: '/api/admin/editor'
+      path: '/api/admin/editor'
+      fullPath: '/api/admin/editor'
+      preLoaderRoute: typeof ApiAdminEditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/library': {
+      id: '/api/admin/library'
+      path: '/api/admin/library'
+      fullPath: '/api/admin/library'
+      preLoaderRoute: typeof ApiAdminLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/offerings': {
+      id: '/api/admin/offerings'
+      path: '/api/admin/offerings'
+      fullPath: '/api/admin/offerings'
+      preLoaderRoute: typeof ApiAdminOfferingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/personas': {
+      id: '/api/admin/personas'
+      path: '/api/admin/personas'
+      fullPath: '/api/admin/personas'
+      preLoaderRoute: typeof ApiAdminPersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/role-permissions': {
+      id: '/api/admin/role-permissions'
+      path: '/api/admin/role-permissions'
+      fullPath: '/api/admin/role-permissions'
+      preLoaderRoute: typeof ApiAdminRolePermissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/uploads': {
+      id: '/api/admin/uploads'
+      path: '/api/admin/uploads'
+      fullPath: '/api/admin/uploads'
+      preLoaderRoute: typeof ApiAdminUploadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat/transcribe': {
+      id: '/api/chat/transcribe'
+      path: '/transcribe'
+      fullPath: '/api/chat/transcribe'
+      preLoaderRoute: typeof ApiChatTranscribeRouteImport
+      parentRoute: typeof ApiChatRoute
+    }
+    '/api/chats/$chatId': {
+      id: '/api/chats/$chatId'
+      path: '/$chatId'
+      fullPath: '/api/chats/$chatId'
+      preLoaderRoute: typeof ApiChatsChatIdRouteImport
+      parentRoute: typeof ApiChatsRoute
+    }
+    '/api/course/details': {
+      id: '/api/course/details'
+      path: '/api/course/details'
+      fullPath: '/api/course/details'
+      preLoaderRoute: typeof ApiCourseDetailsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/library': {
+      id: '/api/course/library'
+      path: '/api/course/library'
+      fullPath: '/api/course/library'
+      preLoaderRoute: typeof ApiCourseLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/my-courses': {
+      id: '/api/course/my-courses'
+      path: '/api/course/my-courses'
+      fullPath: '/api/course/my-courses'
+      preLoaderRoute: typeof ApiCourseMyCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/news': {
+      id: '/api/course/news'
+      path: '/api/course/news'
+      fullPath: '/api/course/news'
+      preLoaderRoute: typeof ApiCourseNewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/progress-summary': {
+      id: '/api/course/progress-summary'
+      path: '/api/course/progress-summary'
+      fullPath: '/api/course/progress-summary'
+      preLoaderRoute: typeof ApiCourseProgressSummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/ska-profile': {
+      id: '/api/course/ska-profile'
+      path: '/api/course/ska-profile'
+      fullPath: '/api/course/ska-profile'
+      preLoaderRoute: typeof ApiCourseSkaProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/blob-sweep': {
+      id: '/api/cron/blob-sweep'
+      path: '/api/cron/blob-sweep'
+      fullPath: '/api/cron/blob-sweep'
+      preLoaderRoute: typeof ApiCronBlobSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/news-scrape': {
+      id: '/api/cron/news-scrape'
+      path: '/api/cron/news-scrape'
+      fullPath: '/api/cron/news-scrape'
+      preLoaderRoute: typeof ApiCronNewsScrapeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/material': {
+      id: '/api/lesson/material'
+      path: '/api/lesson/material'
+      fullPath: '/api/lesson/material'
+      preLoaderRoute: typeof ApiLessonMaterialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/playback': {
+      id: '/api/lesson/playback'
+      path: '/api/lesson/playback'
+      fullPath: '/api/lesson/playback'
+      preLoaderRoute: typeof ApiLessonPlaybackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/last-viewed': {
+      id: '/api/user/last-viewed'
+      path: '/api/user/last-viewed'
+      fullPath: '/api/user/last-viewed'
+      preLoaderRoute: typeof ApiUserLastViewedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/lesson-section': {
+      id: '/api/user/lesson-section'
+      path: '/api/user/lesson-section'
+      fullPath: '/api/user/lesson-section'
+      preLoaderRoute: typeof ApiUserLessonSectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/level-acknowledge': {
+      id: '/api/user/level-acknowledge'
+      path: '/api/user/level-acknowledge'
+      fullPath: '/api/user/level-acknowledge'
+      preLoaderRoute: typeof ApiUserLevelAcknowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/my-level': {
+      id: '/api/user/my-level'
+      path: '/api/user/my-level'
+      fullPath: '/api/user/my-level'
+      preLoaderRoute: typeof ApiUserMyLevelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/report-video-progress': {
+      id: '/api/user/report-video-progress'
+      path: '/api/user/report-video-progress'
+      fullPath: '/api/user/report-video-progress'
+      preLoaderRoute: typeof ApiUserReportVideoProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/video-progress': {
+      id: '/api/user/video-progress'
+      path: '/api/user/video-progress'
+      fullPath: '/api/user/video-progress'
+      preLoaderRoute: typeof ApiUserVideoProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed/admin/$courseId/editor': {
+      id: '/_authed/admin/$courseId/editor'
+      path: '/$courseId/editor'
+      fullPath: '/admin/$courseId/editor'
+      preLoaderRoute: typeof AuthedAdminCourseIdEditorRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/course/$courseSlug/': {
       id: '/_authed/course/$courseSlug/'
       path: '/'
       fullPath: '/course/$courseSlug/'
       preLoaderRoute: typeof AuthedCourseCourseSlugIndexRouteImport
-      parentRoute: typeof AuthedCourseCourseSlugRoute
-    }
-    '/api/library/download/$fileId': {
-      id: '/api/library/download/$fileId'
-      path: '/api/library/download/$fileId'
-      fullPath: '/api/library/download/$fileId'
-      preLoaderRoute: typeof ApiLibraryDownloadFileIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/quiz/result': {
-      id: '/api/lesson/quiz/result'
-      path: '/api/lesson/quiz/result'
-      fullPath: '/api/lesson/quiz/result'
-      preLoaderRoute: typeof ApiLessonQuizResultRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/quiz/answers': {
-      id: '/api/lesson/quiz/answers'
-      path: '/api/lesson/quiz/answers'
-      fullPath: '/api/lesson/quiz/answers'
-      preLoaderRoute: typeof ApiLessonQuizAnswersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/ai-test/save-results': {
-      id: '/api/lesson/ai-test/save-results'
-      path: '/api/lesson/ai-test/save-results'
-      fullPath: '/api/lesson/ai-test/save-results'
-      preLoaderRoute: typeof ApiLessonAiTestSaveResultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/ai-test/results': {
-      id: '/api/lesson/ai-test/results'
-      path: '/api/lesson/ai-test/results'
-      fullPath: '/api/lesson/ai-test/results'
-      preLoaderRoute: typeof ApiLessonAiTestResultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/ai-test/generate': {
-      id: '/api/lesson/ai-test/generate'
-      path: '/api/lesson/ai-test/generate'
-      fullPath: '/api/lesson/ai-test/generate'
-      preLoaderRoute: typeof ApiLessonAiTestGenerateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/ai-test/evaluate': {
-      id: '/api/lesson/ai-test/evaluate'
-      path: '/api/lesson/ai-test/evaluate'
-      fullPath: '/api/lesson/ai-test/evaluate'
-      preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/onboarding/status': {
-      id: '/api/course/onboarding/status'
-      path: '/api/course/onboarding/status'
-      fullPath: '/api/course/onboarding/status'
-      preLoaderRoute: typeof ApiCourseOnboardingStatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/onboarding/start': {
-      id: '/api/course/onboarding/start'
-      path: '/api/course/onboarding/start'
-      fullPath: '/api/course/onboarding/start'
-      preLoaderRoute: typeof ApiCourseOnboardingStartRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/onboarding/reply': {
-      id: '/api/course/onboarding/reply'
-      path: '/api/course/onboarding/reply'
-      fullPath: '/api/course/onboarding/reply'
-      preLoaderRoute: typeof ApiCourseOnboardingReplyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/onboarding/delete': {
-      id: '/api/course/onboarding/delete'
-      path: '/api/course/onboarding/delete'
-      fullPath: '/api/course/onboarding/delete'
-      preLoaderRoute: typeof ApiCourseOnboardingDeleteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/course/news/mute': {
-      id: '/api/course/news/mute'
-      path: '/mute'
-      fullPath: '/api/course/news/mute'
-      preLoaderRoute: typeof ApiCourseNewsMuteRouteImport
-      parentRoute: typeof ApiCourseNewsRoute
-    }
-    '/api/admin/users/$profileId': {
-      id: '/api/admin/users/$profileId'
-      path: '/$profileId'
-      fullPath: '/api/admin/users/$profileId'
-      preLoaderRoute: typeof ApiAdminUsersProfileIdRouteImport
-      parentRoute: typeof ApiAdminUsersRoute
-    }
-    '/api/admin/personas/$personaId': {
-      id: '/api/admin/personas/$personaId'
-      path: '/$personaId'
-      fullPath: '/api/admin/personas/$personaId'
-      preLoaderRoute: typeof ApiAdminPersonasPersonaIdRouteImport
-      parentRoute: typeof ApiAdminPersonasRoute
-    }
-    '/api/admin/offerings/$offeringId': {
-      id: '/api/admin/offerings/$offeringId'
-      path: '/$offeringId'
-      fullPath: '/api/admin/offerings/$offeringId'
-      preLoaderRoute: typeof ApiAdminOfferingsOfferingIdRouteImport
-      parentRoute: typeof ApiAdminOfferingsRoute
-    }
-    '/api/admin/modules/$moduleId': {
-      id: '/api/admin/modules/$moduleId'
-      path: '/api/admin/modules/$moduleId'
-      fullPath: '/api/admin/modules/$moduleId'
-      preLoaderRoute: typeof ApiAdminModulesModuleIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/lessons/$lessonId': {
-      id: '/api/admin/lessons/$lessonId'
-      path: '/api/admin/lessons/$lessonId'
-      fullPath: '/api/admin/lessons/$lessonId'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/lesson-material/parse': {
-      id: '/api/admin/lesson-material/parse'
-      path: '/api/admin/lesson-material/parse'
-      fullPath: '/api/admin/lesson-material/parse'
-      preLoaderRoute: typeof ApiAdminLessonMaterialParseRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/disciplines/$disciplineId': {
-      id: '/api/admin/disciplines/$disciplineId'
-      path: '/$disciplineId'
-      fullPath: '/api/admin/disciplines/$disciplineId'
-      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdRouteImport
-      parentRoute: typeof ApiAdminDisciplinesRoute
-    }
-    '/api/admin/discipline-modules/$moduleId': {
-      id: '/api/admin/discipline-modules/$moduleId'
-      path: '/api/admin/discipline-modules/$moduleId'
-      fullPath: '/api/admin/discipline-modules/$moduleId'
-      preLoaderRoute: typeof ApiAdminDisciplineModulesModuleIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/admin/courses/$courseId': {
-      id: '/api/admin/courses/$courseId'
-      path: '/$courseId'
-      fullPath: '/api/admin/courses/$courseId'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdRouteImport
-      parentRoute: typeof ApiAdminCoursesRoute
-    }
-    '/_authed/course/$courseSlug/settings': {
-      id: '/_authed/course/$courseSlug/settings'
-      path: '/settings'
-      fullPath: '/course/$courseSlug/settings'
-      preLoaderRoute: typeof AuthedCourseCourseSlugSettingsRouteImport
-      parentRoute: typeof AuthedCourseCourseSlugRoute
-    }
-    '/_authed/course/$courseSlug/news': {
-      id: '/_authed/course/$courseSlug/news'
-      path: '/news'
-      fullPath: '/course/$courseSlug/news'
-      preLoaderRoute: typeof AuthedCourseCourseSlugNewsRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
     }
     '/_authed/course/$courseSlug/library': {
@@ -1791,12 +1637,166 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCourseCourseSlugLibraryRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
     }
-    '/_authed/admin/$courseId/editor': {
-      id: '/_authed/admin/$courseId/editor'
-      path: '/$courseId/editor'
-      fullPath: '/admin/$courseId/editor'
-      preLoaderRoute: typeof AuthedAdminCourseIdEditorRouteImport
-      parentRoute: typeof AuthedAdminRoute
+    '/_authed/course/$courseSlug/news': {
+      id: '/_authed/course/$courseSlug/news'
+      path: '/news'
+      fullPath: '/course/$courseSlug/news'
+      preLoaderRoute: typeof AuthedCourseCourseSlugNewsRouteImport
+      parentRoute: typeof AuthedCourseCourseSlugRoute
+    }
+    '/_authed/course/$courseSlug/settings': {
+      id: '/_authed/course/$courseSlug/settings'
+      path: '/settings'
+      fullPath: '/course/$courseSlug/settings'
+      preLoaderRoute: typeof AuthedCourseCourseSlugSettingsRouteImport
+      parentRoute: typeof AuthedCourseCourseSlugRoute
+    }
+    '/api/admin/courses/$courseId': {
+      id: '/api/admin/courses/$courseId'
+      path: '/$courseId'
+      fullPath: '/api/admin/courses/$courseId'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdRouteImport
+      parentRoute: typeof ApiAdminCoursesRoute
+    }
+    '/api/admin/discipline-modules/$moduleId': {
+      id: '/api/admin/discipline-modules/$moduleId'
+      path: '/api/admin/discipline-modules/$moduleId'
+      fullPath: '/api/admin/discipline-modules/$moduleId'
+      preLoaderRoute: typeof ApiAdminDisciplineModulesModuleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/disciplines/$disciplineId': {
+      id: '/api/admin/disciplines/$disciplineId'
+      path: '/$disciplineId'
+      fullPath: '/api/admin/disciplines/$disciplineId'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdRouteImport
+      parentRoute: typeof ApiAdminDisciplinesRoute
+    }
+    '/api/admin/lesson-material/parse': {
+      id: '/api/admin/lesson-material/parse'
+      path: '/api/admin/lesson-material/parse'
+      fullPath: '/api/admin/lesson-material/parse'
+      preLoaderRoute: typeof ApiAdminLessonMaterialParseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/lessons/$lessonId': {
+      id: '/api/admin/lessons/$lessonId'
+      path: '/api/admin/lessons/$lessonId'
+      fullPath: '/api/admin/lessons/$lessonId'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/modules/$moduleId': {
+      id: '/api/admin/modules/$moduleId'
+      path: '/api/admin/modules/$moduleId'
+      fullPath: '/api/admin/modules/$moduleId'
+      preLoaderRoute: typeof ApiAdminModulesModuleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/offerings/$offeringId': {
+      id: '/api/admin/offerings/$offeringId'
+      path: '/$offeringId'
+      fullPath: '/api/admin/offerings/$offeringId'
+      preLoaderRoute: typeof ApiAdminOfferingsOfferingIdRouteImport
+      parentRoute: typeof ApiAdminOfferingsRoute
+    }
+    '/api/admin/personas/$personaId': {
+      id: '/api/admin/personas/$personaId'
+      path: '/$personaId'
+      fullPath: '/api/admin/personas/$personaId'
+      preLoaderRoute: typeof ApiAdminPersonasPersonaIdRouteImport
+      parentRoute: typeof ApiAdminPersonasRoute
+    }
+    '/api/admin/users/$profileId': {
+      id: '/api/admin/users/$profileId'
+      path: '/$profileId'
+      fullPath: '/api/admin/users/$profileId'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdRouteImport
+      parentRoute: typeof ApiAdminUsersRoute
+    }
+    '/api/course/news/mute': {
+      id: '/api/course/news/mute'
+      path: '/mute'
+      fullPath: '/api/course/news/mute'
+      preLoaderRoute: typeof ApiCourseNewsMuteRouteImport
+      parentRoute: typeof ApiCourseNewsRoute
+    }
+    '/api/course/onboarding/delete': {
+      id: '/api/course/onboarding/delete'
+      path: '/api/course/onboarding/delete'
+      fullPath: '/api/course/onboarding/delete'
+      preLoaderRoute: typeof ApiCourseOnboardingDeleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/reply': {
+      id: '/api/course/onboarding/reply'
+      path: '/api/course/onboarding/reply'
+      fullPath: '/api/course/onboarding/reply'
+      preLoaderRoute: typeof ApiCourseOnboardingReplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/start': {
+      id: '/api/course/onboarding/start'
+      path: '/api/course/onboarding/start'
+      fullPath: '/api/course/onboarding/start'
+      preLoaderRoute: typeof ApiCourseOnboardingStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/course/onboarding/status': {
+      id: '/api/course/onboarding/status'
+      path: '/api/course/onboarding/status'
+      fullPath: '/api/course/onboarding/status'
+      preLoaderRoute: typeof ApiCourseOnboardingStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/evaluate': {
+      id: '/api/lesson/ai-test/evaluate'
+      path: '/api/lesson/ai-test/evaluate'
+      fullPath: '/api/lesson/ai-test/evaluate'
+      preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/generate': {
+      id: '/api/lesson/ai-test/generate'
+      path: '/api/lesson/ai-test/generate'
+      fullPath: '/api/lesson/ai-test/generate'
+      preLoaderRoute: typeof ApiLessonAiTestGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/results': {
+      id: '/api/lesson/ai-test/results'
+      path: '/api/lesson/ai-test/results'
+      fullPath: '/api/lesson/ai-test/results'
+      preLoaderRoute: typeof ApiLessonAiTestResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/save-results': {
+      id: '/api/lesson/ai-test/save-results'
+      path: '/api/lesson/ai-test/save-results'
+      fullPath: '/api/lesson/ai-test/save-results'
+      preLoaderRoute: typeof ApiLessonAiTestSaveResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/quiz/answers': {
+      id: '/api/lesson/quiz/answers'
+      path: '/api/lesson/quiz/answers'
+      fullPath: '/api/lesson/quiz/answers'
+      preLoaderRoute: typeof ApiLessonQuizAnswersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/quiz/result': {
+      id: '/api/lesson/quiz/result'
+      path: '/api/lesson/quiz/result'
+      fullPath: '/api/lesson/quiz/result'
+      preLoaderRoute: typeof ApiLessonQuizResultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/library/download/$fileId': {
+      id: '/api/library/download/$fileId'
+      path: '/api/library/download/$fileId'
+      fullPath: '/api/library/download/$fileId'
+      preLoaderRoute: typeof ApiLibraryDownloadFileIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/course/$courseSlug/modules/': {
       id: '/_authed/course/$courseSlug/modules/'
@@ -1805,165 +1805,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCourseCourseSlugModulesIndexRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
     }
-    '/api/admin/users/$profileId/roles': {
-      id: '/api/admin/users/$profileId/roles'
-      path: '/roles'
-      fullPath: '/api/admin/users/$profileId/roles'
-      preLoaderRoute: typeof ApiAdminUsersProfileIdRolesRouteImport
-      parentRoute: typeof ApiAdminUsersProfileIdRoute
-    }
-    '/api/admin/users/$profileId/levels': {
-      id: '/api/admin/users/$profileId/levels'
-      path: '/levels'
-      fullPath: '/api/admin/users/$profileId/levels'
-      preLoaderRoute: typeof ApiAdminUsersProfileIdLevelsRouteImport
-      parentRoute: typeof ApiAdminUsersProfileIdRoute
-    }
-    '/api/admin/users/$profileId/enrolments': {
-      id: '/api/admin/users/$profileId/enrolments'
-      path: '/enrolments'
-      fullPath: '/api/admin/users/$profileId/enrolments'
-      preLoaderRoute: typeof ApiAdminUsersProfileIdEnrolmentsRouteImport
-      parentRoute: typeof ApiAdminUsersProfileIdRoute
-    }
-    '/api/admin/personas/$personaId/publish': {
-      id: '/api/admin/personas/$personaId/publish'
-      path: '/publish'
-      fullPath: '/api/admin/personas/$personaId/publish'
-      preLoaderRoute: typeof ApiAdminPersonasPersonaIdPublishRouteImport
-      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
-    }
-    '/api/admin/personas/$personaId/draft': {
-      id: '/api/admin/personas/$personaId/draft'
-      path: '/draft'
-      fullPath: '/api/admin/personas/$personaId/draft'
-      preLoaderRoute: typeof ApiAdminPersonasPersonaIdDraftRouteImport
-      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
-    }
-    '/api/admin/personas/$personaId/default': {
-      id: '/api/admin/personas/$personaId/default'
-      path: '/default'
-      fullPath: '/api/admin/personas/$personaId/default'
-      preLoaderRoute: typeof ApiAdminPersonasPersonaIdDefaultRouteImport
-      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
-    }
-    '/api/admin/modules/$moduleId/lessons': {
-      id: '/api/admin/modules/$moduleId/lessons'
-      path: '/lessons'
-      fullPath: '/api/admin/modules/$moduleId/lessons'
-      preLoaderRoute: typeof ApiAdminModulesModuleIdLessonsRouteImport
-      parentRoute: typeof ApiAdminModulesModuleIdRoute
-    }
-    '/api/admin/lessons/$lessonId/video-playback': {
-      id: '/api/admin/lessons/$lessonId/video-playback'
-      path: '/video-playback'
-      fullPath: '/api/admin/lessons/$lessonId/video-playback'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdVideoPlaybackRouteImport
-      parentRoute: typeof ApiAdminLessonsLessonIdRoute
-    }
-    '/api/admin/lessons/$lessonId/video': {
-      id: '/api/admin/lessons/$lessonId/video'
-      path: '/video'
-      fullPath: '/api/admin/lessons/$lessonId/video'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdVideoRouteImport
-      parentRoute: typeof ApiAdminLessonsLessonIdRoute
-    }
-    '/api/admin/lessons/$lessonId/material': {
-      id: '/api/admin/lessons/$lessonId/material'
-      path: '/material'
-      fullPath: '/api/admin/lessons/$lessonId/material'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdMaterialRouteImport
-      parentRoute: typeof ApiAdminLessonsLessonIdRoute
-    }
-    '/api/admin/lessons/$lessonId/library-placement': {
-      id: '/api/admin/lessons/$lessonId/library-placement'
-      path: '/library-placement'
-      fullPath: '/api/admin/lessons/$lessonId/library-placement'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdLibraryPlacementRouteImport
-      parentRoute: typeof ApiAdminLessonsLessonIdRoute
-    }
-    '/api/admin/lessons/$lessonId/alternate-videos': {
-      id: '/api/admin/lessons/$lessonId/alternate-videos'
-      path: '/alternate-videos'
-      fullPath: '/api/admin/lessons/$lessonId/alternate-videos'
-      preLoaderRoute: typeof ApiAdminLessonsLessonIdAlternateVideosRouteImport
-      parentRoute: typeof ApiAdminLessonsLessonIdRoute
-    }
-    '/api/admin/disciplines/$disciplineId/staff': {
-      id: '/api/admin/disciplines/$disciplineId/staff'
-      path: '/staff'
-      fullPath: '/api/admin/disciplines/$disciplineId/staff'
-      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRouteImport
-      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
-    }
-    '/api/admin/disciplines/$disciplineId/modules': {
-      id: '/api/admin/disciplines/$disciplineId/modules'
-      path: '/modules'
-      fullPath: '/api/admin/disciplines/$disciplineId/modules'
-      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdModulesRouteImport
-      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
-    }
-    '/api/admin/disciplines/$disciplineId/lessons': {
-      id: '/api/admin/disciplines/$disciplineId/lessons'
-      path: '/lessons'
-      fullPath: '/api/admin/disciplines/$disciplineId/lessons'
-      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRouteImport
-      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
-    }
-    '/api/admin/disciplines/$disciplineId/lesson-posters': {
-      id: '/api/admin/disciplines/$disciplineId/lesson-posters'
-      path: '/lesson-posters'
-      fullPath: '/api/admin/disciplines/$disciplineId/lesson-posters'
-      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport
-      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
-    }
-    '/api/admin/courses/$courseId/staff': {
-      id: '/api/admin/courses/$courseId/staff'
-      path: '/staff'
-      fullPath: '/api/admin/courses/$courseId/staff'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/remixes': {
-      id: '/api/admin/courses/$courseId/remixes'
-      path: '/remixes'
-      fullPath: '/api/admin/courses/$courseId/remixes'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/persona': {
-      id: '/api/admin/courses/$courseId/persona'
-      path: '/persona'
-      fullPath: '/api/admin/courses/$courseId/persona'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdPersonaRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/onboarding': {
-      id: '/api/admin/courses/$courseId/onboarding'
-      path: '/onboarding'
-      fullPath: '/api/admin/courses/$courseId/onboarding'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdOnboardingRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/news-sources': {
-      id: '/api/admin/courses/$courseId/news-sources'
-      path: '/news-sources'
-      fullPath: '/api/admin/courses/$courseId/news-sources'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/modules': {
-      id: '/api/admin/courses/$courseId/modules'
-      path: '/modules'
-      fullPath: '/api/admin/courses/$courseId/modules'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdModulesRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRoute
-    }
-    '/api/admin/courses/$courseId/lesson-posters': {
-      id: '/api/admin/courses/$courseId/lesson-posters'
-      path: '/lesson-posters'
-      fullPath: '/api/admin/courses/$courseId/lesson-posters'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdLessonPostersRouteImport
+    '/api/admin/courses/$courseId/board': {
+      id: '/api/admin/courses/$courseId/board'
+      path: '/board'
+      fullPath: '/api/admin/courses/$courseId/board'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdBoardRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
     '/api/admin/courses/$courseId/credentials': {
@@ -1973,33 +1819,173 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdCredentialsRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
-    '/api/admin/courses/$courseId/board': {
-      id: '/api/admin/courses/$courseId/board'
-      path: '/board'
-      fullPath: '/api/admin/courses/$courseId/board'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdBoardRouteImport
+    '/api/admin/courses/$courseId/lesson-posters': {
+      id: '/api/admin/courses/$courseId/lesson-posters'
+      path: '/lesson-posters'
+      fullPath: '/api/admin/courses/$courseId/lesson-posters'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdLessonPostersRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
-    '/api/admin/modules/$moduleId/lessons/$lessonId': {
-      id: '/api/admin/modules/$moduleId/lessons/$lessonId'
-      path: '/$lessonId'
-      fullPath: '/api/admin/modules/$moduleId/lessons/$lessonId'
-      preLoaderRoute: typeof ApiAdminModulesModuleIdLessonsLessonIdRouteImport
-      parentRoute: typeof ApiAdminModulesModuleIdLessonsRoute
+    '/api/admin/courses/$courseId/modules': {
+      id: '/api/admin/courses/$courseId/modules'
+      path: '/modules'
+      fullPath: '/api/admin/courses/$courseId/modules'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdModulesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
-    '/api/admin/courses/$courseId/staff/candidates': {
-      id: '/api/admin/courses/$courseId/staff/candidates'
-      path: '/candidates'
-      fullPath: '/api/admin/courses/$courseId/staff/candidates'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffCandidatesRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdStaffRoute
+    '/api/admin/courses/$courseId/news-sources': {
+      id: '/api/admin/courses/$courseId/news-sources'
+      path: '/news-sources'
+      fullPath: '/api/admin/courses/$courseId/news-sources'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
-    '/api/admin/courses/$courseId/remixes/$sourceCourseId': {
-      id: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
-      path: '/$sourceCourseId'
-      fullPath: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdRemixesRoute
+    '/api/admin/courses/$courseId/onboarding': {
+      id: '/api/admin/courses/$courseId/onboarding'
+      path: '/onboarding'
+      fullPath: '/api/admin/courses/$courseId/onboarding'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdOnboardingRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
+    '/api/admin/courses/$courseId/persona': {
+      id: '/api/admin/courses/$courseId/persona'
+      path: '/persona'
+      fullPath: '/api/admin/courses/$courseId/persona'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdPersonaRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
+    '/api/admin/courses/$courseId/remixes': {
+      id: '/api/admin/courses/$courseId/remixes'
+      path: '/remixes'
+      fullPath: '/api/admin/courses/$courseId/remixes'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
+    '/api/admin/courses/$courseId/staff': {
+      id: '/api/admin/courses/$courseId/staff'
+      path: '/staff'
+      fullPath: '/api/admin/courses/$courseId/staff'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
+    '/api/admin/disciplines/$disciplineId/lesson-posters': {
+      id: '/api/admin/disciplines/$disciplineId/lesson-posters'
+      path: '/lesson-posters'
+      fullPath: '/api/admin/disciplines/$disciplineId/lesson-posters'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonPostersRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
+    '/api/admin/disciplines/$disciplineId/lessons': {
+      id: '/api/admin/disciplines/$disciplineId/lessons'
+      path: '/lessons'
+      fullPath: '/api/admin/disciplines/$disciplineId/lessons'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdLessonsRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
+    '/api/admin/disciplines/$disciplineId/modules': {
+      id: '/api/admin/disciplines/$disciplineId/modules'
+      path: '/modules'
+      fullPath: '/api/admin/disciplines/$disciplineId/modules'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdModulesRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
+    '/api/admin/disciplines/$disciplineId/staff': {
+      id: '/api/admin/disciplines/$disciplineId/staff'
+      path: '/staff'
+      fullPath: '/api/admin/disciplines/$disciplineId/staff'
+      preLoaderRoute: typeof ApiAdminDisciplinesDisciplineIdStaffRouteImport
+      parentRoute: typeof ApiAdminDisciplinesDisciplineIdRoute
+    }
+    '/api/admin/lessons/$lessonId/alternate-videos': {
+      id: '/api/admin/lessons/$lessonId/alternate-videos'
+      path: '/alternate-videos'
+      fullPath: '/api/admin/lessons/$lessonId/alternate-videos'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdAlternateVideosRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
+    '/api/admin/lessons/$lessonId/library-placement': {
+      id: '/api/admin/lessons/$lessonId/library-placement'
+      path: '/library-placement'
+      fullPath: '/api/admin/lessons/$lessonId/library-placement'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdLibraryPlacementRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
+    '/api/admin/lessons/$lessonId/material': {
+      id: '/api/admin/lessons/$lessonId/material'
+      path: '/material'
+      fullPath: '/api/admin/lessons/$lessonId/material'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdMaterialRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
+    '/api/admin/lessons/$lessonId/video': {
+      id: '/api/admin/lessons/$lessonId/video'
+      path: '/video'
+      fullPath: '/api/admin/lessons/$lessonId/video'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdVideoRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
+    '/api/admin/lessons/$lessonId/video-playback': {
+      id: '/api/admin/lessons/$lessonId/video-playback'
+      path: '/video-playback'
+      fullPath: '/api/admin/lessons/$lessonId/video-playback'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdVideoPlaybackRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
+    '/api/admin/modules/$moduleId/lessons': {
+      id: '/api/admin/modules/$moduleId/lessons'
+      path: '/lessons'
+      fullPath: '/api/admin/modules/$moduleId/lessons'
+      preLoaderRoute: typeof ApiAdminModulesModuleIdLessonsRouteImport
+      parentRoute: typeof ApiAdminModulesModuleIdRoute
+    }
+    '/api/admin/personas/$personaId/default': {
+      id: '/api/admin/personas/$personaId/default'
+      path: '/default'
+      fullPath: '/api/admin/personas/$personaId/default'
+      preLoaderRoute: typeof ApiAdminPersonasPersonaIdDefaultRouteImport
+      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
+    }
+    '/api/admin/personas/$personaId/draft': {
+      id: '/api/admin/personas/$personaId/draft'
+      path: '/draft'
+      fullPath: '/api/admin/personas/$personaId/draft'
+      preLoaderRoute: typeof ApiAdminPersonasPersonaIdDraftRouteImport
+      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
+    }
+    '/api/admin/personas/$personaId/publish': {
+      id: '/api/admin/personas/$personaId/publish'
+      path: '/publish'
+      fullPath: '/api/admin/personas/$personaId/publish'
+      preLoaderRoute: typeof ApiAdminPersonasPersonaIdPublishRouteImport
+      parentRoute: typeof ApiAdminPersonasPersonaIdRoute
+    }
+    '/api/admin/users/$profileId/enrolments': {
+      id: '/api/admin/users/$profileId/enrolments'
+      path: '/enrolments'
+      fullPath: '/api/admin/users/$profileId/enrolments'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdEnrolmentsRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
+    '/api/admin/users/$profileId/levels': {
+      id: '/api/admin/users/$profileId/levels'
+      path: '/levels'
+      fullPath: '/api/admin/users/$profileId/levels'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdLevelsRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
+    '/api/admin/users/$profileId/roles': {
+      id: '/api/admin/users/$profileId/roles'
+      path: '/roles'
+      fullPath: '/api/admin/users/$profileId/roles'
+      preLoaderRoute: typeof ApiAdminUsersProfileIdRolesRouteImport
+      parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
+    '/api/admin/courses/$courseId/credentials/$provider': {
+      id: '/api/admin/courses/$courseId/credentials/$provider'
+      path: '/$provider'
+      fullPath: '/api/admin/courses/$courseId/credentials/$provider'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdCredentialsRoute
     }
     '/api/admin/courses/$courseId/news-sources/$sourceId': {
       id: '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -2008,12 +1994,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRoute
     }
-    '/api/admin/courses/$courseId/credentials/$provider': {
-      id: '/api/admin/courses/$courseId/credentials/$provider'
-      path: '/$provider'
-      fullPath: '/api/admin/courses/$courseId/credentials/$provider'
-      preLoaderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRouteImport
-      parentRoute: typeof ApiAdminCoursesCourseIdCredentialsRoute
+    '/api/admin/courses/$courseId/remixes/$sourceCourseId': {
+      id: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
+      path: '/$sourceCourseId'
+      fullPath: '/api/admin/courses/$courseId/remixes/$sourceCourseId'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRemixesRoute
+    }
+    '/api/admin/courses/$courseId/staff/candidates': {
+      id: '/api/admin/courses/$courseId/staff/candidates'
+      path: '/candidates'
+      fullPath: '/api/admin/courses/$courseId/staff/candidates'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdStaffCandidatesRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdStaffRoute
+    }
+    '/api/admin/modules/$moduleId/lessons/$lessonId': {
+      id: '/api/admin/modules/$moduleId/lessons/$lessonId'
+      path: '/$lessonId'
+      fullPath: '/api/admin/modules/$moduleId/lessons/$lessonId'
+      preLoaderRoute: typeof ApiAdminModulesModuleIdLessonsLessonIdRouteImport
+      parentRoute: typeof ApiAdminModulesModuleIdLessonsRoute
     }
     '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': {
       id: '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'

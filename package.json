@@ -69,7 +69,7 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/react-table": "8.21.3",
-    "@tanstack/router-plugin": "^1.132.0",
+    "@tanstack/router-plugin": "^1.168.42",
     "@tiptap/extensions": "3.27.3",
     "@tiptap/pm": "3.27.3",
     "@tiptap/react": "3.27.3",
