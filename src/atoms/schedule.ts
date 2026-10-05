@@ -1,12 +1,12 @@
 import { atom } from 'jotai';
-import { calendarWindowStart } from '#/components/calendar';
-import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
 import {
   CLOSED,
   type OfferingPopoverEvent,
   type OfferingPopoverState,
   reduceOfferingPopover,
 } from '#/components/admin/schedule/offering-popover-state';
+import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
+import { calendarWindowStart } from '#/components/calendar';
 
 /**
  * The first week drawn by the schedule calendar.
@@ -38,7 +38,10 @@ export const offeringPopoverAtom = atom<OfferingPopoverState>(CLOSED);
 export const dispatchOfferingPopoverAtom = atom(
   null,
   (get, set, event: OfferingPopoverEvent) => {
-    set(offeringPopoverAtom, reduceOfferingPopover(get(offeringPopoverAtom), event));
+    set(
+      offeringPopoverAtom,
+      reduceOfferingPopover(get(offeringPopoverAtom), event),
+    );
   },
 );
 
@@ -49,6 +52,14 @@ export const dispatchOfferingPopoverAtom = atom(
  * inside the popover must not re-render on every pixel.
  */
 export const offeringPopoverAnchorAtom = atom<PopoverAnchor | null>(null);
+
+/**
+ * Where focus goes when the offering popover closes. Set by the page ONLY
+ * when a popover is pinned from the keyboard (the segment it came from), and
+ * read-and-cleared by the popover's `finalFocus`. Null means "leave focus
+ * where the user put it" — the mouse and drop cases.
+ */
+export const offeringPopoverReturnFocusAtom = atom<HTMLElement | null>(null);
 
 // TEMPORARY — removed in Task 5 once nothing imports it.
 export type ScheduleDialogState =

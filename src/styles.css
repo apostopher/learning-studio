@@ -1544,14 +1544,20 @@
   .offering-popover {
     transform-origin: var(--transform-origin);
     transition:
-      opacity 120ms var(--ease-out, ease-out),
-      scale 120ms var(--ease-out, ease-out);
+      opacity 120ms var(--ease-dialog-enter),
+      scale 120ms var(--ease-dialog-enter);
   }
 
   .offering-popover[data-starting-style],
   .offering-popover[data-ending-style] {
     opacity: 0;
     scale: 0.97;
+  }
+
+  /* Same easing pair as `.dialog-popup`: arrive on the enter curve, leave
+     on the ease-in exit curve. Durations stay short — this opens on hover. */
+  .offering-popover[data-ending-style] {
+    transition-timing-function: var(--ease-dialog-exit);
   }
 }
 

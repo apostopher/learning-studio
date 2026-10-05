@@ -1,12 +1,12 @@
 import { Popover } from '@base-ui/react/popover';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
   dispatchOfferingPopoverAtom,
-  offeringPopoverAnchorAtom,
   offeringPopoverAtom,
+  offeringPopoverReturnFocusAtom,
 } from '#/atoms/schedule';
 import { useAdminUsers } from '#/data-hooks/use-admin-users';
 import {
@@ -14,7 +14,6 @@ import {
   useDeleteOffering,
   useUpdateOffering,
 } from '#/data-hooks/use-offerings';
-import { cn } from '#/lib/cn';
 import {
   type Offering,
   type OfferingFormValues,
@@ -46,6 +45,9 @@ const DEFAULT_WINDOW_DAYS = 45;
 const personQueryAtom = atom('');
 const selectedPersonAtom = atom<string | null>(null);
 
+/** The form with nothing open — also what `values` holds while closed. */
+const EMPTY_SEED: OfferingFormValues = { startsOn: '', endsOn: '', users: [] };
+
 /**
  * The pinned popover's first field. The page focuses it right after a pin —
  * Base UI's `initialFocus` only runs on open, and a preview → pinned change
@@ -71,7 +73,10 @@ export const OfferingPopoverContainer = ({
 }) => {
   const popover = useAtomValue(offeringPopoverAtom);
   const dispatch = useSetAtom(dispatchOfferingPopoverAtom);
-  const anchor = useAtomValue(offeringPopoverAnchorAtom);
+  // For atoms only callbacks need, read lazily via `store.get`. This container
+  // never subscribes to the anchor: it changes on every pointermove during a
+  // preview, and only the positioner may re-render for that.
+  const store = useStore();
 
   // The old dialog's two modes, read from whichever state is showing. A preview
   // is always an existing offering — you can only hover what is on the calendar.
@@ -108,19 +113,23 @@ export const OfferingPopoverContainer = ({
   const form = useForm<OfferingFormValues>({
     resolver: zodResolver(offeringFormSchema),
     mode: 'onSubmit',
-    defaultValues: { startsOn: '', endsOn: '', users: [] },
+    defaultValues: EMPTY_SEED,
     // Seeded by RHF rather than by an effect (docs/use-effect-rules.md). The
     // dialog is mounted once and re-pointed at whatever was dropped or
     // clicked, so `defaultValues` alone would only ever describe the first
     // one. `keepDirtyValues` protects fields already edited from a background
     // refetch of the offerings list underneath them.
+    //
+    // Always defined, empty while closed: RHF re-seeds only when `values`
+    // deep-changes, so `undefined` while closed meant reopening the SAME
+    // offering after Cancel matched the last seed and left the form blank.
     values: dialog
       ? {
           startsOn: seedStartsOn,
           endsOn: seedEndsOn,
           users: editing?.users ?? [],
         }
-      : undefined,
+      : EMPTY_SEED,
     resetOptions: { keepDirtyValues: true },
   });
 
@@ -136,7 +145,7 @@ export const OfferingPopoverContainer = ({
   // otherwise carry a pinned A's edits into B. A preview is never dirty: inert.
   const close = () => {
     dispatch({ type: 'close' });
-    form.reset({ startsOn: '', endsOn: '', users: [] });
+    form.reset(EMPTY_SEED);
     setPersonQuery('');
     setSelectedPerson(null);
     create.reset();
@@ -268,50 +277,57 @@ export const OfferingPopoverContainer = ({
         if (open) return;
         // Only dismissals reach here — this popover has no Trigger, so Base UI
         // never asks to open it. Every exit path goes through the reducer.
+        //
+        // Any path that leaves the popover open cancels Base UI's close, so it
+        // records no internal close (and no "skip return focus") for a popover
+        // that is in fact still showing.
         if (
-          details.reason === 'escape-key' ||
-          details.reason === 'outside-press'
+          details.reason !== 'escape-key' &&
+          details.reason !== 'outside-press'
         ) {
-          // A clean pinned popover closes through `close` so the form and the
-          // mutations reset; everything else (preview, or a dirty pin that
-          // must ask first) is the reducer's call.
-          if (popover.status === 'pinned' && !isDirty) close();
-          else
-            dispatch({
-              type: 'dismiss',
-              reason: details.reason === 'escape-key' ? 'escape' : 'outside',
-              dirty: isDirty,
-            });
+          // e.g. focus-out: a pinned form must survive focus wandering off.
+          details.cancel();
+          return;
         }
+        // A clean pinned popover closes through `close` so the form and the
+        // mutations reset.
+        if (popover.status === 'pinned' && !isDirty) {
+          close();
+          return;
+        }
+        // Everything else is the reducer's call: a dirty pin asks first, and a
+        // preview ignores outside-press (the pointer leaving closes it).
+        const reason = details.reason === 'escape-key' ? 'escape' : 'outside';
+        const staysOpen =
+          popover.status === 'pinned' ||
+          (popover.status === 'preview' && reason === 'outside');
+        if (staysOpen) details.cancel();
+        dispatch({ type: 'dismiss', reason, dirty: isDirty });
       }}
     >
       <Popover.Portal>
-        <OfferingPopoverPositionerContainer>
+        <OfferingPopoverPositionerContainer isPreview={!isPinned}>
           <Popover.Popup
             // A preview must not take focus from the bar the keyboard is on;
-            // pinning moves focus itself (see `pinAndFocus` in the page).
+            // the page focuses the first field after a pin.
             initialFocus={false}
-            // Back to the segment the popover came from when it was pinned
-            // from the keyboard; for a mouse or a drop there is nothing to
-            // return to.
-            finalFocus={() =>
-              anchor &&
-              anchor.kind !== 'rect' &&
-              anchor.element instanceof HTMLElement
-                ? anchor.element
-                : false
-            }
+            // Returns focus ONLY when the page recorded a segment, which it
+            // does only for a keyboard pin. Anything else returns false so
+            // Base UI leaves focus where the user put it — a mouse click
+            // elsewhere, or a preview unmounting as Tab moves past the last
+            // segment. Read-and-clear, so a stale element never comes back.
+            finalFocus={() => {
+              const el = store.get(offeringPopoverReturnFocusAtom);
+              store.set(offeringPopoverReturnFocusAtom, null);
+              return el ?? false;
+            }}
             // A preview is a picture of the offering, not a form: inert
-            // removes it from the tab order and the accessibility tree, and
-            // pointer-events-none keeps a cursor that catches up with it from
-            // hovering its controls.
+            // removes it from the tab order and the accessibility tree. The
+            // positioner turns off pointer events for it (see `isPreview`).
             inert={!isPinned || undefined}
-            className={cn(
-              'offering-popover flex max-h-[var(--available-height)] w-[min(34rem,calc(100vw-2rem))] flex-col overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl',
-              !isPinned && 'pointer-events-none',
-            )}
+            className="offering-popover flex max-h-[var(--available-height)] w-[min(34rem,calc(100vw-2rem))] flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl"
           >
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <Popover.Title className="font-semibold text-accent-text text-lg">
                 {courseName}
               </Popover.Title>
