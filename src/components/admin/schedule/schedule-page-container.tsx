@@ -432,7 +432,10 @@ export const SchedulePageContainer = ({
         offerings={rows}
         // Placeholder rows are the PREVIOUS window's, kept on screen while
         // the new one loads: an offering missing from them proves nothing.
-        isListSettled={offerings.isSuccess && !offerings.isPlaceholderData}
+        // Settled is "not pending, not placeholder" — an ERROR settles too
+        // (no data, nothing pending), else a failed fetch left the popover
+        // pinned but invisible and refusing every later click.
+        isListSettled={!offerings.isPending && !offerings.isPlaceholderData}
       />
     </DndContext>
   );

@@ -28,7 +28,11 @@ const { mutation, state } = vi.hoisted(() => ({
     isPending: false,
     error: null,
   }),
-  state: { offerings: [] as unknown[] },
+  state: {
+    offerings: [] as unknown[],
+    /** Overrides for the offerings query's status flags, per test. */
+    query: {} as Record<string, unknown>,
+  },
 }));
 vi.mock('#/data-hooks/use-offerings', () => ({
   useOfferings: () => ({
@@ -36,7 +40,9 @@ vi.mock('#/data-hooks/use-offerings', () => ({
     isLoading: false,
     isSuccess: true,
     isPlaceholderData: false,
+    isPending: false,
     error: null,
+    ...state.query,
   }),
   useCreateOffering: mutation,
   useUpdateOffering: mutation,
@@ -82,6 +88,7 @@ const renderPage = (store = createStore()) => {
 };
 
 afterEach(() => {
+  state.query = {};
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -232,6 +239,48 @@ const pretendFocusVisible = () => {
       : realMatches.call(this, selector);
   });
 };
+
+describe('SchedulePageContainer failed window fetch', () => {
+  /**
+   * Regression: the next window's fetch failed, so `data` was undefined (rows
+   * empty) and the old `isSuccess` gate never reported the list as settled.
+   * `open` dropped but the target was never orphaned, so the atom stayed
+   * `pinned` and `pin()` refused every later bar click.
+   */
+  it('a pinned edit closes when the list errors, and the next click pins again', async () => {
+    const { store, offering, segment } = renderPage();
+    fireEvent.click(segment(), { detail: 1, clientX: 40, clientY: 20 });
+    await nextFrame();
+    expect(store.get(offeringPopoverAtom).status).toBe('pinned');
+
+    // The query re-renders in an error state: no data, nothing pending.
+    state.offerings = undefined as unknown as unknown[];
+    state.query = { isSuccess: false, isError: true, error: new Error('x') };
+    act(() => {
+      store.set(
+        scheduleWindowStartAtom,
+        addDays(store.get(scheduleWindowStartAtom), 7),
+      );
+    });
+    await nextFrame();
+    await nextFrame();
+
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
+
+    // Recovered: the offering is back, and a click pins it.
+    state.offerings = [offering];
+    state.query = {};
+    act(() => {
+      store.set(
+        scheduleWindowStartAtom,
+        addDays(store.get(scheduleWindowStartAtom), -7),
+      );
+    });
+    fireEvent.click(segment(), { detail: 1, clientX: 40, clientY: 20 });
+    await nextFrame();
+    expect(store.get(offeringPopoverAtom).status).toBe('pinned');
+  });
+});
 
 describe('SchedulePageContainer lifecycle and keyboard', () => {
   /**
