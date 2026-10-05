@@ -4,6 +4,7 @@ import { generateTest } from '#/ai/generate-test';
 import { auth } from '#/lib/auth';
 import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import { takePreparedDebrief } from '#/lib/prepared-debrief.server';
 
 /**
  * `lessonSlug` and the course it is being read in. The body used to carry
@@ -62,6 +63,15 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     if (gate.outOfTier) {
       return new Response('Forbidden', { status: 403 });
     }
+
+    // Generated while the pilot watched the video (see `prepare.ts`). After
+    // the gate, never before it: a prepared debrief is still locked material.
+    const prepared = await takePreparedDebrief({
+      userId: session.user.id,
+      courseId: gate.courseId,
+      lessonSlug,
+    });
+    if (prepared) return Response.json(prepared);
 
     const source = await resolveDebriefSource(lessonSlug, gate.courseId);
     if (!source) {

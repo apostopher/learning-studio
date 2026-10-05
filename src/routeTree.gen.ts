@@ -72,6 +72,7 @@ import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/cours
 import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/course/onboarding/status'
 import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
 import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
+import { Route as ApiLessonAiTestPrepareRouteImport } from './routes/api/lesson/ai-test/prepare'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
 import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
 import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
@@ -441,6 +442,11 @@ const ApiLessonAiTestGenerateRoute = ApiLessonAiTestGenerateRouteImport.update({
   path: '/api/lesson/ai-test/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLessonAiTestPrepareRoute = ApiLessonAiTestPrepareRouteImport.update({
+  id: '/api/lesson/ai-test/prepare',
+  path: '/api/lesson/ai-test/prepare',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLessonAiTestResultsRoute = ApiLessonAiTestResultsRouteImport.update({
   id: '/api/lesson/ai-test/results',
   path: '/api/lesson/ai-test/results',
@@ -723,6 +729,7 @@ export interface FileRoutesByFullPath {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -822,6 +829,7 @@ export interface FileRoutesByTo {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -925,6 +933,7 @@ export interface FileRoutesById {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
   '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
+  '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
   '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -1028,6 +1037,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
     | '/api/lesson/quiz/answers'
@@ -1127,6 +1137,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
     | '/api/lesson/quiz/answers'
@@ -1229,6 +1240,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/evaluate'
     | '/api/lesson/ai-test/generate'
+    | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
     | '/api/lesson/ai-test/save-results'
     | '/api/lesson/quiz/answers'
@@ -1313,6 +1325,7 @@ export interface RootRouteChildren {
   ApiCourseOnboardingStatusRoute: typeof ApiCourseOnboardingStatusRoute
   ApiLessonAiTestEvaluateRoute: typeof ApiLessonAiTestEvaluateRoute
   ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
+  ApiLessonAiTestPrepareRoute: typeof ApiLessonAiTestPrepareRoute
   ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
   ApiLessonAiTestSaveResultsRoute: typeof ApiLessonAiTestSaveResultsRoute
   ApiLessonQuizAnswersRoute: typeof ApiLessonQuizAnswersRoute
@@ -1761,6 +1774,13 @@ declare module '@tanstack/react-router' {
       path: '/api/lesson/ai-test/generate'
       fullPath: '/api/lesson/ai-test/generate'
       preLoaderRoute: typeof ApiLessonAiTestGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/ai-test/prepare': {
+      id: '/api/lesson/ai-test/prepare'
+      path: '/api/lesson/ai-test/prepare'
+      fullPath: '/api/lesson/ai-test/prepare'
+      preLoaderRoute: typeof ApiLessonAiTestPrepareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/ai-test/results': {
@@ -2439,6 +2459,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseOnboardingStatusRoute: ApiCourseOnboardingStatusRoute,
   ApiLessonAiTestEvaluateRoute: ApiLessonAiTestEvaluateRoute,
   ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
+  ApiLessonAiTestPrepareRoute: ApiLessonAiTestPrepareRoute,
   ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
   ApiLessonAiTestSaveResultsRoute: ApiLessonAiTestSaveResultsRoute,
   ApiLessonQuizAnswersRoute: ApiLessonQuizAnswersRoute,
