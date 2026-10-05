@@ -396,11 +396,14 @@ export const OfferingPopoverContainer = ({
             // (the same exception as the roster table's scroller).
             className="offering-popover relative flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
           >
-            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 pe-8">
+            {/* A subtitle under the title, not a block beside it: course names
+                are long enough that a side-by-side explainer almost always
+                wrapped, leaving a narrow end-aligned column stranded below. */}
+            <div className="flex flex-col gap-1 pe-8">
               <Popover.Title className="font-semibold text-accent-text text-lg">
                 {courseName}
               </Popover.Title>
-              <Popover.Description className="ms-auto text-end text-secondary text-xs [max-inline-size:16rem]">
+              <Popover.Description className="text-secondary text-xs">
                 An offering is one dated run of a course. Each course can have
                 multiple offerings.
               </Popover.Description>
