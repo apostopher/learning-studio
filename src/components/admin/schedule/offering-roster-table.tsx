@@ -200,7 +200,7 @@ export const OfferingRosterTable = ({
   );
 };
 
-/** Exported for the dialog's count line — "8 on this offering, 3 advanced". */
+/** Exported for the popover's count line — "8 on this offering, 3 advanced". */
 export function levelSummary(users: OfferingUser[]): string {
   const counted = users.filter((user) => user.level !== null).length;
   if (users.length === 0) return 'Nobody yet';
