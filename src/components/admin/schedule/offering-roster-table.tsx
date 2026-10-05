@@ -10,6 +10,16 @@ import type { OfferingUser } from '#/lib/offering-schemas';
 import type { UserLevel } from '#/types';
 
 /**
+ * Rows the table shows before it scrolls. The popover's maximum size is
+ * defined as "the form plus this many people", so the row and header heights
+ * below are FIXED — a computed max height only means something if the rows
+ * it counts are a known size.
+ */
+export const ROSTER_VISIBLE_ROWS = 10;
+const ROW_REM = 2.5; // h-10
+const HEAD_REM = 2; // h-8
+
+/**
  * A level's chip tone.
  *
  * Four visually distinct tones for four states, all from the shared chip
@@ -115,16 +125,32 @@ export const OfferingRosterTable = ({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-6">
+    // Native overflow, not the shared ScrollArea: its root is block-size 100%,
+    // which needs a definite-height parent, and this box is content-sized up
+    // to a cap.
+    <section
+      className="overflow-y-auto overscroll-contain rounded-lg border border-gray-6"
+      // Inline because Tailwind cannot build a class from these constants. The
+      // trailing px is one border per row, so the 10th row is fully visible.
+      style={{
+        maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px)`,
+      }}
+      // Scrollable region must be reachable and named for keyboard users.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region has to be focusable or keyboard users cannot scroll it
+      tabIndex={0}
+      aria-label="People on this offering"
+    >
       <table className="w-full border-collapse text-sm">
-        <thead className="bg-gray-3">
+        {/* Physical `top`: sticky offset is block-axis here and Tailwind v4 has
+            no logical top utility. A CLAUDE.md-sanctioned exception. */}
+        <thead className="sticky top-0 z-[1] bg-gray-3">
           {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id}>
+            <tr key={headerGroup.id} className="h-8">
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
                   scope="col"
-                  className="px-3 py-2 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
+                  className="px-3 py-0 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
                 >
                   {flexRender(
                     header.column.columnDef.header,
@@ -139,10 +165,10 @@ export const OfferingRosterTable = ({
           {table.getRowModel().rows.map((row) => (
             <tr
               key={row.id}
-              className="border-gray-6 border-t bg-gray-1 hover:bg-gray-2"
+              className="h-10 border-gray-6 border-t bg-gray-1 hover:bg-gray-2"
             >
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-3 py-2 align-middle">
+                <td key={cell.id} className="px-3 py-0 align-middle">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}
@@ -150,7 +176,7 @@ export const OfferingRosterTable = ({
           ))}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 };
 

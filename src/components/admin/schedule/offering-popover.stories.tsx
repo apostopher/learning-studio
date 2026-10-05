@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import type { OfferingUser } from '#/lib/offering-schemas';
 import { OfferingAddPerson } from './offering-add-person';
+import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
 import { levelSummary, OfferingRosterTable } from './offering-roster-table';
 import {
@@ -11,7 +12,7 @@ import {
 } from './offering-window';
 
 const meta: Meta<typeof OfferingForm> = {
-  title: 'Admin/Schedule/OfferingDialog',
+  title: 'Admin/Schedule/OfferingPopover',
   component: OfferingForm,
 };
 export default meta;
@@ -70,7 +71,13 @@ const DIRECTORY: OfferingUser[] = [
   },
 ];
 
-const Harness = ({ initial }: { initial: OfferingUser[] }) => {
+const Harness = ({
+  initial,
+  discard = false,
+}: {
+  initial: OfferingUser[];
+  discard?: boolean;
+}) => {
   const [startsOn, setStartsOn] = useState('2026-07-06');
   const [endsOn, setEndsOn] = useState('2026-10-16');
   const [users, setUsers] = useState(initial);
@@ -89,14 +96,7 @@ const Harness = ({ initial }: { initial: OfferingUser[] }) => {
   );
 
   return (
-    <div className="mx-auto max-w-2xl rounded-xl border border-gray-6 bg-gray-2 p-6">
-      <h2 className="font-semibold text-accent-text text-lg">
-        UAS 16 Week Course
-      </h2>
-      <p className="mt-1 mb-5 text-secondary text-sm">
-        An offering is one dated run of a course. The same course can run again
-        later — that is a separate offering.
-      </p>
+    <div className="w-[34rem] rounded-xl border border-gray-6 bg-gray-2 p-5">
       <OfferingForm
         startsOn={startsOn}
         onStartsOnChange={(next) => {
@@ -145,6 +145,14 @@ const Harness = ({ initial }: { initial: OfferingUser[] }) => {
         onDelete={() => {}}
         isSaving={false}
         submitLabel="Save"
+        discardConfirm={
+          discard ? (
+            <OfferingDiscardConfirm
+              onKeepEditing={() => {}}
+              onDiscard={() => {}}
+            />
+          ) : undefined
+        }
       />
     </div>
   );
@@ -154,3 +162,22 @@ type Story = StoryObj<typeof OfferingForm>;
 
 export const Editing: Story = { render: () => <Harness initial={ROSTER} /> };
 export const EmptyRoster: Story = { render: () => <Harness initial={[]} /> };
+
+export const FourteenPeople: Story = {
+  render: () => (
+    <Harness
+      initial={[
+        ...ROSTER,
+        ...Array.from({ length: 9 }, (_, i) => ({
+          userId: `x${i}`,
+          name: `Student ${i + 6}`,
+          email: `student${i + 6}@example.com`,
+          level: null,
+        })),
+      ]}
+    />
+  ),
+};
+export const DiscardConfirm: Story = {
+  render: () => <Harness initial={ROSTER} discard />,
+};
