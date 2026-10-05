@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import { calendarWindowStart } from '#/components/calendar';
+import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
 import {
   CLOSED,
   type OfferingPopoverEvent,
@@ -40,6 +41,14 @@ export const dispatchOfferingPopoverAtom = atom(
     set(offeringPopoverAtom, reduceOfferingPopover(get(offeringPopoverAtom), event));
   },
 );
+
+/**
+ * Where the offering popover points. Its OWN atom, apart from
+ * `offeringPopoverAtom`, because a preview follows the mouse: pointermove
+ * writes here ~60 times a second, and only the positioner reads it — the form
+ * inside the popover must not re-render on every pixel.
+ */
+export const offeringPopoverAnchorAtom = atom<PopoverAnchor | null>(null);
 
 // TEMPORARY — removed in Task 5 once nothing imports it.
 export type ScheduleDialogState =
