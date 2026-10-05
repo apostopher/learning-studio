@@ -1,4 +1,56 @@
+import type { FocusEvent, MouseEvent, PointerEvent } from 'react';
 import { cn } from '#/lib/cn';
+
+export type OfferingSegmentProps = {
+  /** Course name and dates, shown on the first day only. */
+  label: string;
+  /** Background + matching contrast text, from `offeringTone`. */
+  tone: string;
+  isStart: boolean;
+  isEnd: boolean;
+  /**
+   * The offering began BEFORE the visible window and this is the first day on
+   * screen. It gets the caption too — a bar with no beginning otherwise says
+   * nothing about what it is or when it started.
+   */
+  isContinuation: boolean;
+  /** How many people are on it. Shown with the caption. */
+  headcount: number;
+  /**
+   * The full spoken name for THIS day's segment, ending "Edit this offering."
+   *
+   * Every day of an offering is a live click target — a bar you can see but
+   * cannot click on the day you happen to aim at is a dead control — so every
+   * day is a button and every button needs its own name. The visible caption
+   * is `aria-hidden` because it appears on one day only and would otherwise
+   * leave the other twenty announcing nothing.
+   *
+   * The hover/focus preview is an enhancement on top; click or Enter still
+   * does what the name says — opens the offering for editing (pinned).
+   */
+  accessibleName: string;
+  /** Mouse hover starts the preview's open delay. */
+  onPointerEnter: (event: PointerEvent<HTMLButtonElement>) => void;
+  /** Lets a showing preview follow the mouse. */
+  onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerLeave: (event: PointerEvent<HTMLButtonElement>) => void;
+  /** Keyboard focus previews the offering, anchored to this segment. */
+  onFocus: (event: FocusEvent<HTMLButtonElement>) => void;
+  onBlur: () => void;
+  /** Click, Enter, Space or tap pins the offering for editing. */
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+};
+
+/** The interaction half of the props — what a container wires per offering. */
+export type SegmentHandlers = Pick<
+  OfferingSegmentProps,
+  | 'onPointerEnter'
+  | 'onPointerMove'
+  | 'onPointerLeave'
+  | 'onFocus'
+  | 'onBlur'
+  | 'onClick'
+>;
 
 /**
  * One day of an offering, drawn inside a calendar cell.
@@ -22,40 +74,23 @@ export const OfferingSegment = ({
   isContinuation,
   headcount,
   accessibleName,
+  onPointerEnter,
+  onPointerMove,
+  onPointerLeave,
+  onFocus,
+  onBlur,
   onClick,
-}: {
-  /** Course name and dates, shown on the first day only. */
-  label: string;
-  /** Background + matching contrast text, from `offeringTone`. */
-  tone: string;
-  isStart: boolean;
-  isEnd: boolean;
-  /**
-   * The offering began BEFORE the visible window and this is the first day on
-   * screen. It gets the caption too — a bar with no beginning otherwise says
-   * nothing about what it is or when it started.
-   */
-  isContinuation: boolean;
-  /** How many people are on it. Shown with the caption. */
-  headcount: number;
-  /**
-   * The full spoken name for THIS day's segment, e.g.
-   * "2 Week, 7 Sep to 20 Sep 2026, 12 people. Day 3 of 14."
-   *
-   * Every day of an offering is a live click target — a bar you can see but
-   * cannot click on the day you happen to aim at is a dead control — so every
-   * day is a button and every button needs its own name. The visible caption
-   * is `aria-hidden` because it appears on one day only and would otherwise
-   * leave the other twenty announcing nothing.
-   */
-  accessibleName: string;
-  onClick: () => void;
-}) => {
+}: OfferingSegmentProps) => {
   const carriesLabel = isStart || isContinuation;
 
   return (
     <button
       type="button"
+      onPointerEnter={onPointerEnter}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onClick={onClick}
       aria-label={accessibleName}
       className={cn(

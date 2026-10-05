@@ -60,10 +60,3 @@ export const offeringPopoverAnchorAtom = atom<PopoverAnchor | null>(null);
  * where the user put it" — the mouse and drop cases.
  */
 export const offeringPopoverReturnFocusAtom = atom<HTMLElement | null>(null);
-
-// TEMPORARY — removed in Task 5 once nothing imports it.
-export type ScheduleDialogState =
-  | { mode: 'create'; courseId: number; courseName: string; startsOn: string }
-  | { mode: 'edit'; offeringId: number }
-  | null;
-export const scheduleDialogAtom = atom<ScheduleDialogState>(null);

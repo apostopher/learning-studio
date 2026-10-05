@@ -275,6 +275,10 @@ export const OfferingPopoverContainer = ({
       open={dialog !== null}
       onOpenChange={(open, details) => {
         if (open) return;
+        // A mouse click elsewhere put the user's attention THERE: even after a
+        // keyboard pin, focus must not be pulled back to the bar it came from.
+        if (details.reason === 'outside-press')
+          store.set(offeringPopoverReturnFocusAtom, null);
         // Only dismissals reach here — this popover has no Trigger, so Base UI
         // never asks to open it. Every exit path goes through the reducer.
         //

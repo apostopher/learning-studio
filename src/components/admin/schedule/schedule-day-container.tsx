@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { type CalendarDay, CalendarDayCell } from '#/components/calendar';
 import type { Offering } from '#/lib/offering-schemas';
-import { OfferingSegment } from './offering-segment';
+import { OfferingSegment, type SegmentHandlers } from './offering-segment';
 import { formatOfferingRange } from './offering-window';
 import { offeringTone, scheduleDayDndId } from './schedule-dnd';
 
@@ -16,12 +16,13 @@ import { offeringTone, scheduleDayDndId } from './schedule-dnd';
 export const ScheduleDayContainer = ({
   day,
   offerings,
-  onOpenOffering,
+  segmentHandlers,
 }: {
   day: CalendarDay;
   /** The offerings running on THIS day, in a stable order across days. */
   offerings: Offering[];
-  onOpenOffering: (offeringId: number) => void;
+  /** Hover, focus and click wiring for one offering's segments. */
+  segmentHandlers: (offeringId: number) => SegmentHandlers;
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: scheduleDayDndId(day.key),
@@ -47,7 +48,7 @@ export const ScheduleDayContainer = ({
             }
             headcount={offering.users.length}
             accessibleName={`${offering.courseName}, ${formatOfferingRange(offering)}, ${offering.users.length} ${offering.users.length === 1 ? 'person' : 'people'}. Edit this offering.`}
-            onClick={() => onOpenOffering(offering.id)}
+            {...segmentHandlers(offering.id)}
           />
         );
       })}
