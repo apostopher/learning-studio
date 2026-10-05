@@ -58,7 +58,7 @@ export const OfferingRosterTable = ({
       header: 'Name',
       cell: ({ row }) => (
         <span
-          className="block max-w-40 truncate font-medium text-primary"
+          className="block truncate font-medium text-primary"
           title={row.original.name}
         >
           {row.original.name}
@@ -70,7 +70,7 @@ export const OfferingRosterTable = ({
       header: 'Email',
       cell: ({ row }) => (
         <span
-          className="block max-w-56 truncate font-mono text-secondary text-xs"
+          className="block truncate font-mono text-secondary text-xs"
           title={row.original.email}
         >
           {row.original.email}
@@ -151,7 +151,16 @@ export const OfferingRosterTable = ({
       tabIndex={0}
       aria-label="People on this offering"
     >
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full table-fixed border-collapse text-sm">
+        {/* Fixed layout: column widths, not content, decide where long names
+            and emails truncate, so a row can never outgrow the popover. Name
+            takes 40%, Email the remainder after Level and actions. */}
+        <colgroup>
+          <col className="w-[40%]" />
+          <col />
+          <col className="w-20" />
+          <col className="w-24" />
+        </colgroup>
         {/* Physical `top`: sticky offset is block-axis here and Tailwind v4 has
             no logical top utility. A CLAUDE.md-sanctioned exception. */}
         <thead className="sticky top-0 z-[1] bg-gray-3">
