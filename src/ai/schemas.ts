@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Option for MCQ
 export const AITestOptionSchema = z.object({
@@ -9,8 +9,8 @@ export const AITestOptionSchema = z.object({
 // MCQ question
 export const AITestMCQQuestionSchema = z.object({
   id: z.string(),
-  type: z.literal("mcq"),
-  question: z.string().describe("Question text in markdown"),
+  type: z.literal('mcq'),
+  question: z.string().describe('Question text in markdown'),
   options: z.array(AITestOptionSchema).length(4),
   correctOptionId: z.string(),
   keyPointIndex: z.number().int().min(0),
@@ -19,14 +19,14 @@ export const AITestMCQQuestionSchema = z.object({
 // Free-text question
 export const AITestFreeTextQuestionSchema = z.object({
   id: z.string(),
-  type: z.literal("free-text"),
-  question: z.string().describe("Question text in markdown"),
-  expectedAnswer: z.string().describe("Reference answer for AI grading"),
+  type: z.literal('free-text'),
+  question: z.string().describe('Question text in markdown'),
+  expectedAnswer: z.string().describe('Reference answer for AI grading'),
   keyPointIndex: z.number().int().min(0),
 });
 
 // Discriminated union
-export const AITestQuestionSchema = z.discriminatedUnion("type", [
+export const AITestQuestionSchema = z.discriminatedUnion('type', [
   AITestMCQQuestionSchema,
   AITestFreeTextQuestionSchema,
 ]);
@@ -48,7 +48,7 @@ export const QuestionQualitySchema = z.object({
   pass: z.boolean(),
   reason: z
     .string()
-    .describe("Why this question passed or failed quality check"),
+    .describe('Why this question passed or failed quality check'),
 });
 
 // Evaluator output
@@ -58,15 +58,39 @@ export const EvaluatorOutputSchema = z.object({
 });
 
 // Free-text eval AI output
+//
+// Judgements, not a score: the grader decides what the answer MEANS, idea by
+// idea, and `scoreFreeTextEval` turns that into a number. Asking a model for a
+// holistic 0–100 against a reference answer anchors it on the reference's
+// wording, so correct answers phrased differently lost marks.
 export const AIFreeTextEvalOutputSchema = z.object({
-  score: z.number().int().min(0).max(100),
+  essentialIdeas: z
+    .array(
+      z.object({
+        idea: z
+          .string()
+          .describe('One idea a correct answer must convey, in plain words'),
+        conveyed: z
+          .enum(['fully', 'partly', 'not'])
+          .describe(
+            "Whether the student's answer conveys this idea, in any wording",
+          ),
+      }),
+    )
+    .min(1)
+    .max(5),
+  incorrectClaims: z
+    .array(z.string())
+    .describe(
+      "Statements in the student's answer that are factually wrong or unsafe according to the lesson. Empty if none.",
+    ),
   explanation: z.string(),
 });
 
 // Evaluation result per answer
 export const AIEvaluationResultSchema = z.object({
   questionId: z.string(),
-  type: z.enum(["mcq", "free-text"]),
+  type: z.enum(['mcq', 'free-text']),
   score: z.number().int().min(0).max(100),
   userAnswer: z.string(),
   explanation: z.string(),
