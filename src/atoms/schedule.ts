@@ -1,5 +1,11 @@
 import { atom } from 'jotai';
 import { calendarWindowStart } from '#/components/calendar';
+import {
+  CLOSED,
+  type OfferingPopoverEvent,
+  type OfferingPopoverState,
+  reduceOfferingPopover,
+} from '#/components/admin/schedule/offering-popover-state';
 
 /**
  * The first week drawn by the schedule calendar.
@@ -22,20 +28,22 @@ export const SCHEDULE_WEEKS = 10;
 export const SCHEDULE_STEP_WEEKS = 4;
 
 /**
- * What the schedule dialog is currently doing, or null when it is closed.
- *
- * One atom for both modes rather than two, because they are the same dialog
- * and the states are mutually exclusive — as separate atoms, "creating" and
- * "editing" could both be set and the dialog would have to pick a winner.
- *
- * `create` carries the drop: the course that was dragged and the day it
- * landed on. The start date is therefore decided by the gesture and shown
- * read-only in the dialog — making it editable there would mean the drop
- * decided nothing.
+ * The offering popover's state — closed, previewing on hover, or pinned for
+ * editing. Written only through `dispatchOfferingPopoverAtom` so every change
+ * passes the reducer's rules.
  */
+export const offeringPopoverAtom = atom<OfferingPopoverState>(CLOSED);
+
+export const dispatchOfferingPopoverAtom = atom(
+  null,
+  (get, set, event: OfferingPopoverEvent) => {
+    set(offeringPopoverAtom, reduceOfferingPopover(get(offeringPopoverAtom), event));
+  },
+);
+
+// TEMPORARY — removed in Task 5 once nothing imports it.
 export type ScheduleDialogState =
   | { mode: 'create'; courseId: number; courseName: string; startsOn: string }
   | { mode: 'edit'; offeringId: number }
   | null;
-
 export const scheduleDialogAtom = atom<ScheduleDialogState>(null);
