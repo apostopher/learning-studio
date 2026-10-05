@@ -9,6 +9,7 @@ import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
 import { DebriefOverlay } from '#/components/video-player/parts/debrief-overlay';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
+import { usePrepareDebriefOnPlay } from '#/data-hooks/use-prepare-debrief';
 import { useVideoProgress } from '#/data-hooks/use-video-progress';
 import {
   useCurrentTest,
@@ -117,6 +118,30 @@ export const LessonPlayerContainer = ({
     }
   }, [generateTest, courseSlug, lessonSlug, readOnly, setActiveTab]);
 
+  // A source the server can actually resolve: the authored material's body
+  // text, or — on a lesson with no material at all — this video's caption
+  // transcript. Without one, the button would generate nothing.
+  const canDebrief =
+    Boolean(material?.text) ||
+    canDebriefFromTranscript({
+      hasDebrief,
+      // Already resolved into this component's own props — the same
+      // `captions === null` the material panel reads off the query.
+      hasCaptions: !videoState.captionsUnavailable,
+    });
+
+  // viper7 starts writing the debrief as soon as the video plays, so it is
+  // waiting when the video unlocks it rather than generating on the button.
+  usePrepareDebriefOnPlay({
+    courseSlug,
+    lessonSlug,
+    playing: !playerState.paused,
+    hasDebrief,
+    canDebrief,
+    materialLocked,
+    readOnly,
+  });
+
   const overlayKind = computePlayerOverlay({
     reachedEnd,
     playback: {
@@ -127,17 +152,7 @@ export const LessonPlayerContainer = ({
     materialLocked,
     hasCurrentTest: Boolean(currentTest),
     hasDebrief,
-    // A source the server can actually resolve: the authored material's body
-    // text, or — on a lesson with no material at all — this video's caption
-    // transcript. Without one, the button would generate nothing.
-    canDebrief:
-      Boolean(material?.text) ||
-      canDebriefFromTranscript({
-        hasDebrief,
-        // Already resolved into this component's own props — the same
-        // `captions === null` the material panel reads off the query.
-        hasCaptions: !videoState.captionsUnavailable,
-      }),
+    canDebrief,
   });
 
   return (
