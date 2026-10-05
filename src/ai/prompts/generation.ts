@@ -7,9 +7,7 @@ export function generationPrompt(vars: {
 }): string {
   const { keyPoints, text, questionCount, mcqCount, freeTextCount } = vars;
 
-  const numberedKeyPoints = keyPoints
-    .map((kp, i) => `${i}. ${kp}`)
-    .join("\n");
+  const numberedKeyPoints = keyPoints.map((kp, i) => `${i}. ${kp}`).join('\n');
 
   return `You are an expert aviation knowledge assessment designer. Your task is to generate quiz questions for aviation training material.
 
@@ -30,6 +28,11 @@ Generate exactly ${questionCount} questions: ${mcqCount} multiple-choice (MCQ) a
 - Exactly 4 answer options
 - All distractors must be plausible but clearly distinguishable from the correct answer
 - Avoid "all of the above" / "none of the above" options
+- The correct option must NOT stand out from the distractors. A learner who does not know the material should not be able to guess it from its form:
+  - Write all four options at the same length and level of detail — the correct answer must not be the longest or most qualified option. Give distractors the same specifics (numbers, conditions, procedures) the correct answer has
+  - Match grammar and structure across options, so no option is the only one that fits the question's wording
+  - Do not let only the correct option echo key words from the question, or only the distractors use absolutes ("always", "never")
+- Option order does not matter — options are reordered after generation
 
 ### Free-text Requirements
 - Include a concise \`expectedAnswer\` (1–3 sentences) as a reference for grading
