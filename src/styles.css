@@ -1537,6 +1537,22 @@
     transition-duration: var(--duration-dialog-exit);
     transition-timing-function: var(--ease-dialog-exit);
   }
+
+  /* Offering popover: fade + slight scale on open/close only. Never
+     transitions position — a preview follows the cursor, and easing that
+     would make it lag. */
+  .offering-popover {
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity 120ms var(--ease-out, ease-out),
+      scale 120ms var(--ease-out, ease-out);
+  }
+
+  .offering-popover[data-starting-style],
+  .offering-popover[data-ending-style] {
+    opacity: 0;
+    scale: 0.97;
+  }
 }
 
 /* Reduced motion keeps the fade and drops the movement — gentler, not none.
@@ -1547,6 +1563,15 @@
   .dialog-popup,
   .dialog-popup[data-starting-style],
   .dialog-popup[data-ending-style] {
+    scale: 1;
+  }
+
+  /* All three selectors, as for the dialog: the base rule alone loses to the
+     [data-*-style] rule's specificity and the popover would still scale. */
+  .offering-popover,
+  .offering-popover[data-starting-style],
+  .offering-popover[data-ending-style] {
+    transition: opacity 80ms linear;
     scale: 1;
   }
 }

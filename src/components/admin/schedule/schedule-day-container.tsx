@@ -1,8 +1,8 @@
 import { useDroppable } from '@dnd-kit/core';
 import { type CalendarDay, CalendarDayCell } from '#/components/calendar';
 import type { Offering } from '#/lib/offering-schemas';
-import { formatOfferingRange } from './offering-dialog-container';
 import { OfferingSegment } from './offering-segment';
+import { formatOfferingRange } from './offering-window';
 import { offeringTone, scheduleDayDndId } from './schedule-dnd';
 
 /**

@@ -30,7 +30,7 @@ import { useOfferings } from '#/data-hooks/use-offerings';
 import type { Offering } from '#/lib/offering-schemas';
 import { CourseScheduleRail } from './course-schedule-rail';
 import { DraggableCourseContainer } from './draggable-course-container';
-import { OfferingDialogContainer } from './offering-dialog-container';
+import { OfferingPopoverContainer } from './offering-popover-container';
 import { ScheduleCourseCard } from './schedule-course-card';
 import { ScheduleDayContainer } from './schedule-day-container';
 import {
@@ -253,7 +253,7 @@ export const SchedulePageContainer = ({
         )}
       </DragOverlay>
 
-      <OfferingDialogContainer offerings={rows} />
+      <OfferingPopoverContainer offerings={rows} />
     </DndContext>
   );
 };

@@ -1,4 +1,5 @@
 import { addDays, differenceInCalendarDays, format } from 'date-fns';
+import type { Offering } from '#/lib/offering-schemas';
 
 /**
  * The arithmetic behind the offering dialog's three date controls.
@@ -75,4 +76,13 @@ export function formatWindowSummary(
       ? weekPart
       : `${weekPart} and ${remainder} ${remainder === 1 ? 'day' : 'days'}`;
   return `${days} calendar ${dayWord} — ${breakdown}`;
+}
+
+/** Exported for the schedule grid's bar captions. */
+export function formatOfferingRange(offering: Offering): string {
+  const from = parseDayKey(offering.startsOn);
+  const to = parseDayKey(offering.endsOn);
+  if (!from || !to) return '';
+  const sameYear = from.getFullYear() === to.getFullYear();
+  return `${format(from, sameYear ? 'd MMM' : 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`;
 }
