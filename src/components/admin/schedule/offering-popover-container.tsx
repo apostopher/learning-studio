@@ -394,29 +394,28 @@ export const OfferingPopoverContainer = ({
             inert={!isPinned || undefined}
             // Physical-axis overflow: Tailwind has no overflow-block utility
             // (the same exception as the roster table's scroller).
-            className="offering-popover flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
+            className="offering-popover relative flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
           >
-            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 pe-8">
               <Popover.Title className="font-semibold text-accent-text text-lg">
                 {courseName}
               </Popover.Title>
-              <div className="flex items-start gap-2">
-                <Popover.Description className="text-end text-secondary text-xs [max-inline-size:16rem]">
-                  An offering is one dated run of a course. Each course can have
-                  multiple offerings.
-                </Popover.Description>
-                {/* Base UI traps focus in a modal popover only when a Close
-                    part is rendered. It is also a visible way out for touch
-                    and screen-reader users who have no Esc key; it asks the
-                    same discard question Esc does. */}
-                <Popover.Close
-                  aria-label="Close"
-                  className="-me-1.5 -mbs-1 shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </Popover.Close>
-              </div>
+              <Popover.Description className="ms-auto text-end text-secondary text-xs [max-inline-size:16rem]">
+                An offering is one dated run of a course. Each course can have
+                multiple offerings.
+              </Popover.Description>
             </div>
+            {/* Base UI traps focus in a modal popover only when a Close
+                part is rendered. It is also a visible way out for touch
+                and screen-reader users who have no Esc key; it asks the
+                same discard question Esc does. Pinned to the corner, not
+                the header row, so a wrapping title cannot move it. */}
+            <Popover.Close
+              aria-label="Close"
+              className="absolute inset-bs-3 end-3 shrink-0 rounded-md p-2 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Popover.Close>
             <OfferingForm
               startsOnRef={(node) => {
                 offeringPopoverFirstField.current = node;

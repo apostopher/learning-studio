@@ -40,7 +40,7 @@ export const OfferingAddPerson = ({
     <div className="flex items-center gap-2">
       <div className="relative flex-1">
         <Search
-          className="-translate-y-1/2 pointer-events-none absolute start-3 top-1/2 h-4 w-4 text-tertiary"
+          className="-translate-y-1/2 pointer-events-none absolute inset-bs-1/2 start-3 h-4 w-4 text-tertiary"
           aria-hidden="true"
         />
         <input
