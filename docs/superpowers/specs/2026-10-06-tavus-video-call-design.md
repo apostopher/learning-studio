@@ -63,8 +63,9 @@ call was made.
 | --- | --- |
 | `TAVUS_API_KEY` | Tavus API key |
 | `TAVUS_REPLICA_ID` | replica (face), currently `r93ce3db27f8` |
-| `TAVUS_PERSONA_ID` | per-environment persona whose LLM layer points at us |
-| `TAVUS_LLM_SECRET` | random secret; the persona's `layers.llm.api_key`, and the webhook token |
+| `TAVUS_PERSONA_ID` | per-environment persona whose LLM layer points at us — **optional**: unset → the button is locked with "Video calls aren't set up on this server yet." (lets the dev server boot before `sync-persona` has run) |
+| `TAVUS_LLM_SECRET` | random secret (≥ 32 chars); the persona's `layers.llm.api_key`, and the webhook token |
+| `TAVUS_PUBLIC_URL` | public origin Tavus can reach (`https://…ngrok.app` in dev, the deployed origin in prod) — used for the persona's `base_url` and the webhook `callback_url` |
 
 **`pnpm tavus:sync-persona`** creates or updates the environment's persona:
 replica, `pipeline_mode: "full"`, `layers.llm` = `{ model: "viper7",
@@ -84,7 +85,7 @@ New table `video_calls`:
 | `user_id` | fk users |
 | `chat_id` | fk chats — the Viper chat the call belongs to (created if absent) |
 | `course_slug` | nullable — course in context when the call started |
-| `org_id` | active org at start (persona resolution) |
+| `user_name` | nullable — session name at start; the completions endpoint has no session |
 | `tavus_conversation_id` | unique |
 | `status` | `'active' \| 'ended'` |
 | `reserved_seconds` | `max_call_duration` sent to Tavus |
@@ -93,13 +94,16 @@ New table `video_calls`:
 | `end_reason` | `'user' \| 'time_limit' \| 'left' \| 'error' \| 'stale'` |
 | `transcript_saved_at` | idempotency guard for transcript append |
 
-Unique partial index on `user_id` where `status = 'active'`.
+Unique partial index on `user_id` where `status = 'active'`. No `org_id`:
+the org is deployment configuration (`getActiveOrgId()`), exactly as in
+`/api/chat`.
 
 **Daily usage** = Σ over today's (UTC) rows of `duration_seconds` for ended
 calls + `reserved_seconds` for active ones. Remaining = 1800 − usage.
 
-Schema change goes in via `db:push` reviewed by hand (see drizzle/ staleness
-and the docs-table truncation risk).
+Schema change goes in via a hand-written idempotent script
+(`pnpm db:migrate-video-calls`), never `db:push` — push offers to truncate
+`docs` over unrelated drift.
 
 ## Server
 
@@ -122,7 +126,16 @@ and the docs-table truncation risk).
    Tavus conversation, return `409 { reason: 'already_active' }`.
 6. Tavus failure → no row, `502 { reason: 'provider_unavailable' }`.
 
-Returns `{ id, conversationUrl, endsAt, chatId }`.
+Order: allowance and active-call checks → create Tavus conversation (with a
+fixed `custom_greeting`, so the greeting costs no LLM call) → `ensureChat` →
+insert. Returns `{ id, conversationUrl, endsAt, chatId }`.
+
+### `GET /api/video-call/:id` (session, owner only)
+
+`{ status, endReason, durationSeconds, transcriptSaved, chatId }`. While the
+transcript is unsaved it calls `reconcileVideoCall` first, so client polling
+after hang-up is what normally brings the transcript in (Tavus's
+transcription event lands seconds after shutdown).
 
 ### `GET /api/video-call/allowance` (session required)
 
@@ -148,14 +161,21 @@ Ends on Tavus (ignore "already ended"), then `reconcileVideoCall(id)`.
    passed to `buildChatStream` as an extra system block after our own
    prompt.
 5. Call `buildChatStream` with the row's user, course, org persona
-   (`resolvePersonaForChat`), SKA profile, the cleaned history, plus a short
-   voice-mode addendum (spoken style, short answers, no markdown, keep the
-   emotion tag rule).
+   (`resolvePersonaForChat`), SKA profile, and **the chat's persisted
+   messages (`getChat`) followed by the cleaned call history**, so Viper on
+   video knows what was said in text before the call. `buildChatStream`
+   gains a `voice` option: appends a voice-mode prompt (spoken style, short
+   answers, no markdown) plus Tavus's rules to the system prompt, and
+   switches `smoothStream` from `'line'` to `'word'` chunking (line chunking
+   would hold a newline-free spoken reply back until it finished). It also
+   gains `abortSignal`.
 6. Pipe through `toOpenAIChatCompletionStream` (new adapter): AI SDK text
    deltas → `chat.completion.chunk` SSE, final `finish_reason: "stop"`,
    `data: [DONE]`. Request `AbortSignal` is passed through so an interrupted
    turn stops generation.
-7. If generation throws before the first token, stream a spoken fallback
+   Until the first token, an SSE comment (`: keepalive`) is written every
+   2 s so a slow `searchKB` step can't trip Tavus's 10 s read timeout.
+7. If generation throws before the first token (or finishes with no text), stream a spoken fallback
    (`<emotion value="neutral"/>Sorry, I lost that. Could you say it again?`)
    and log the error. Nothing is persisted from this endpoint.
 
@@ -175,9 +195,12 @@ ids.
    `participant_left_timeout` → `left`, explicit end → `user`).
 3. If a transcript is present and `transcript_saved_at` is null: keep only
    `user`/`assistant` turns, drop the `custom_greeting`-only assistant turn
-   if empty, strip `<emotion …/>` and other SSML tags, and `appendMessages`
-   them to `chat_id` with message `metadata: { source: 'video-call',
-   videoCallId }`; set `transcript_saved_at` in the same transaction.
+   if empty, strip `<emotion …/>` and other SSML tags, and append them to
+   `chat_id`, bracketed by two `data-notification` messages ("Video call
+   with Viper7" / "Video call ended · 8 min") — the widget already renders
+   that part type as a muted status line, and `ai_messages` has no metadata
+   column. Claiming `transcript_saved_at` and inserting happen in one
+   transaction.
 4. Safe to call repeatedly.
 
 ## UI
@@ -218,9 +241,15 @@ with a slim bar "On a call · mm:ss · Bring video back". Closing the chat
 window while popped out leaves the call running; while docked, closing the
 chat window ends the call. Below 640 px viewport width there is no pop out.
 
-**After:** an inline "Video call ended · 8 min" (or "· time limit reached")
-row; "Transcript processing…" until the chat messages refetch shows the
-transcript turns.
+**After:** "Saving the call transcript…" in the chat window while the
+client polls `GET /api/video-call/:id` (every 3 s, up to 20 times). The
+Viper7 widget has no server rehydration (its `useChat` state is the only
+copy), so once `transcriptSaved` is true the container loads
+`/api/chats/:chatId` and replaces the widget's messages with the persisted
+history (`setMessages`) — the transcript and its bracketing status lines
+appear, and later text turns carry the call as context. The widget also
+adopts the call's `chatId`. If polling gives up: "The transcript will
+appear in this chat shortly." 
 
 **Motion:** open/close/pop-out on Motion springs; reduced motion → opacity
 only. Network reconnecting → "Reconnecting…" overlay.
