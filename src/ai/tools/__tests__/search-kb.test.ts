@@ -6,18 +6,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // full stub (not importOriginal) keeps this test isolated from the db layer.
 // makeSearchKBTool's tests below need the same mocks, but captured via
 // vi.hoisted so the test body can assert on what they were called with.
-const { getCourseContentForAgent, getAllHelpTopics, searchKB } = vi.hoisted(
-  () => ({
-    getCourseContentForAgent: vi.fn(),
-    getAllHelpTopics: vi.fn(),
-    searchKB: vi.fn(),
-  }),
-);
+const {
+  getCourseContentForAgent,
+  getAllHelpTopics,
+  searchKB,
+  resolveKBCourseId,
+} = vi.hoisted(() => ({
+  getCourseContentForAgent: vi.fn(),
+  getAllHelpTopics: vi.fn(),
+  searchKB: vi.fn(),
+  resolveKBCourseId: vi.fn(),
+}));
 vi.mock('#/db/course-content', () => ({ getCourseContentForAgent }));
 vi.mock('#/db/help-topics', () => ({ getAllHelpTopics }));
 vi.mock('#/db/knowledge-base', () => ({ searchKB }));
+vi.mock('#/db/knowledge-base-scope', () => ({ resolveKBCourseId }));
 
-import { buildKBContext, makeSearchKBTool } from '#/ai/tools/search-kb';
+import {
+  buildKBContext,
+  makeSearchKBTool,
+  SearchKBParamsSchema,
+} from '#/ai/tools/search-kb';
 
 describe('buildKBContext', () => {
   it('concatenates course content, KB chunks, and help topics', () => {
@@ -53,6 +62,7 @@ describe('makeSearchKBTool', () => {
     getCourseContentForAgent.mockResolvedValue('<h1>Course</h1>');
     getAllHelpTopics.mockResolvedValue([]);
     searchKB.mockResolvedValue([]);
+    resolveKBCourseId.mockResolvedValue(null);
   });
 
   it('passes the current courseSlug and userId to getCourseContentForAgent', async () => {
@@ -91,5 +101,50 @@ describe('makeSearchKBTool', () => {
       toolCallOptions,
     );
     expect(result).not.toContain('<h1>Course</h1>');
+  });
+
+  // The defect: the chat tool never passed a course, and searchKB with no
+  // course searched every course's documents. What matters is what searchKB
+  // is actually called with.
+  it('searches the course the access check resolved, for this user', async () => {
+    resolveKBCourseId.mockResolvedValue(2);
+    const kbTool = makeSearchKBTool({
+      courseSlug: 'itps-uas-remote',
+      userId: 'user-1',
+    });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'pre-flight checks' }, toolCallOptions);
+    expect(resolveKBCourseId).toHaveBeenCalledWith({
+      userId: 'user-1',
+      courseSlug: 'itps-uas-remote',
+    });
+    expect(searchKB).toHaveBeenCalledWith('pre-flight checks', { courseId: 2 });
+  });
+
+  it('searches org-wide docs only when the access check refuses the course', async () => {
+    resolveKBCourseId.mockResolvedValue(null);
+    const kbTool = makeSearchKBTool({
+      courseSlug: 'someone-elses-course',
+      userId: 'user-1',
+    });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'pre-flight checks' }, toolCallOptions);
+    expect(searchKB).toHaveBeenCalledWith('pre-flight checks', {
+      courseId: null,
+    });
+  });
+
+  it('gives the model no way to set the result count or relevance floor', async () => {
+    expect(Object.keys(SearchKBParamsSchema.shape)).toEqual(['query']);
+    const kbTool = makeSearchKBTool({ userId: 'user-1' });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!(
+      // What a model could have sent before: both are now ignored.
+      { query: 'pre-flight checks', maxResults: 500, minScore: -1 } as never,
+      toolCallOptions,
+    );
+    expect(searchKB).toHaveBeenCalledWith('pre-flight checks', {
+      courseId: null,
+    });
   });
 });
