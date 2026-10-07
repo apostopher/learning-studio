@@ -24,6 +24,9 @@ export function toOpenAIChatCompletionStream(
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let closed = false;
+  let teardown: (closeController: boolean) => void = () => {
+    closed = true;
+  };
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -51,10 +54,33 @@ export function toOpenAIChatCompletionStream(
         chunk(sentText ? { content } : { role: 'assistant', content }, null);
         sentText = true;
       };
+      const aborted = () => options.signal?.aborted === true;
+
+      // Idempotent teardown: clears the keepalive, detaches the abort listener
+      // and closes the controller at most once. A consumer cancel has already
+      // closed the stream, so it must not call controller.close() again.
       const keepalive = setInterval(() => {
         if (!sentText) send(': keepalive\n\n');
       }, options.keepaliveMs ?? 2000);
-      const aborted = () => options.signal?.aborted === true;
+      const onAbort = () => teardown(true);
+      teardown = (closeController) => {
+        clearInterval(keepalive);
+        options.signal?.removeEventListener('abort', onAbort);
+        if (closed) return;
+        closed = true;
+        if (!closeController) return;
+        try {
+          controller.close();
+        } catch {
+          // already closed or errored by the consumer
+        }
+      };
+
+      if (aborted()) {
+        teardown(true);
+        return;
+      }
+      options.signal?.addEventListener('abort', onAbort, { once: true });
 
       try {
         const stream = await produce();
@@ -64,8 +90,6 @@ export function toOpenAIChatCompletionStream(
         }
       } catch (err) {
         if (!aborted()) options.onError?.(err);
-      } finally {
-        clearInterval(keepalive);
       }
 
       if (!aborted()) {
@@ -73,11 +97,10 @@ export function toOpenAIChatCompletionStream(
         chunk({}, 'stop');
         send('data: [DONE]\n\n');
       }
-      closed = true;
-      controller.close();
+      teardown(true);
     },
     cancel() {
-      closed = true;
+      teardown(false);
     },
   });
 }

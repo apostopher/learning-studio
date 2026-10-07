@@ -95,25 +95,130 @@ describe('toOpenAIChatCompletionStream', () => {
     expect(out.text).toBe('');
   });
 
-  it('writes keepalive comments until the first token', async () => {
+  it('writes keepalive comments until the first token, then stops', async () => {
     vi.useFakeTimers();
-    let release: () => void = () => {};
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    const stream = toOpenAIChatCompletionStream(
-      async () => {
-        await gate;
-        return yieldAll(['Hi']);
-      },
-      { model: 'viper7', fallbackText: 'x', keepaliveMs: 1000 },
+    try {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => {
+        release = r;
+      });
+      const stream = toOpenAIChatCompletionStream(
+        async () => {
+          await gate;
+          return yieldAll(['Hi']);
+        },
+        { model: 'viper7', fallbackText: 'x', keepaliveMs: 1000 },
+      );
+      const reading = read(stream);
+      await vi.advanceTimersByTimeAsync(2500);
+      release();
+      await vi.advanceTimersByTimeAsync(5000);
+      const out = await reading;
+      expect(out.raw.match(/: keepalive/g)?.length).toBe(2);
+      expect(out.raw.lastIndexOf(': keepalive')).toBeLessThan(
+        out.raw.indexOf('data: '),
+      );
+      expect(out.text).toBe('Hi');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('abort while produce() is pending closes promptly with no further writes', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const onError = vi.fn();
+      const stream = toOpenAIChatCompletionStream(
+        () => new Promise<never>(() => {}),
+        {
+          model: 'viper7',
+          fallbackText: 'Sorry, say again?',
+          signal: controller.signal,
+          onError,
+          keepaliveMs: 1000,
+        },
+      );
+      const reading = read(stream);
+      await vi.advanceTimersByTimeAsync(1500);
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(5000);
+      const out = await reading;
+      expect(out.raw.match(/: keepalive/g)?.length).toBe(1);
+      expect(out.text).toBe('');
+      expect(out.done).toBe(false);
+      expect(onError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an already-aborted signal closes without calling produce', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const produce = vi.fn(async () => yieldAll(['x']));
+    const out = await read(
+      toOpenAIChatCompletionStream(produce, {
+        model: 'viper7',
+        fallbackText: 'f',
+        signal: controller.signal,
+      }),
     );
-    const reading = read(stream);
-    await vi.advanceTimersByTimeAsync(2500);
-    release();
-    vi.useRealTimers();
-    const out = await reading;
-    expect(out.raw.match(/: keepalive/g)?.length).toBe(2);
-    expect(out.text).toBe('Hi');
+    expect(produce).not.toHaveBeenCalled();
+    expect(out.raw).toBe('');
+  });
+
+  it('abort mid-iteration writes no more content, no stop and no [DONE]', async () => {
+    const controller = new AbortController();
+    const onError = vi.fn();
+    async function* source() {
+      yield 'one';
+      controller.abort();
+      yield 'two';
+      yield 'three';
+    }
+    const out = await read(
+      toOpenAIChatCompletionStream(async () => source(), {
+        model: 'viper7',
+        fallbackText: 'f',
+        signal: controller.signal,
+        onError,
+      }),
+    );
+    expect(out.text).toBe('one');
+    expect(out.done).toBe(false);
+    expect(out.chunks.some((c) => c.choices[0].finish_reason === 'stop')).toBe(
+      false,
+    );
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('consumer cancel mid-stream does not throw and stops keepalives', async () => {
+    vi.useFakeTimers();
+    try {
+      const clear = vi.spyOn(globalThis, 'clearInterval');
+      const onError = vi.fn();
+      const stream = toOpenAIChatCompletionStream(
+        () => new Promise<never>(() => {}),
+        {
+          model: 'viper7',
+          fallbackText: 'f',
+          onError,
+          keepaliveMs: 1000,
+        },
+      );
+      const reader = stream.getReader();
+      await vi.advanceTimersByTimeAsync(1500);
+      const first = await reader.read();
+      expect(new TextDecoder().decode(first.value)).toBe(': keepalive\n\n');
+      await expect(reader.cancel()).resolves.toBeUndefined();
+      expect(clear).toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(onError).not.toHaveBeenCalled();
+      clear.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
