@@ -14,8 +14,24 @@ import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 import { themePlugin } from './plugins/vite-theme';
 
+/**
+ * Tavus reaches our custom-LLM endpoint and webhook through a public tunnel
+ * (TAVUS_PUBLIC_URL — ngrok in dev). Vite's dev server rejects requests whose
+ * Host header it doesn't recognise (DNS-rebinding protection), so Tavus got a
+ * 403 on the first spoken turn and ended every call. Allow exactly that one
+ * host, never a wildcard. Dev-server only; production doesn't use this.
+ */
+const tavusTunnelHost = (() => {
+  try {
+    return new URL(process.env.TAVUS_PUBLIC_URL ?? '').hostname;
+  } catch {
+    return undefined;
+  }
+})();
+
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  server: { allowedHosts: tavusTunnelHost ? [tavusTunnelHost] : [] },
   // @jsquash ships emscripten glue that loads its own .wasm via import.meta.url.
   // Excluding it from dep pre-bundling keeps that wasm resolution intact.
   optimizeDeps: { exclude: ['@jsquash/webp', '@jsquash/avif'] },
