@@ -12,6 +12,7 @@ import { ChatWindow } from '#/components/chat-widget/chat-window';
 import { MessageCircle } from '#/components/chat-widget/message-circle';
 import { useChatWidget } from '#/components/chat-widget/use-chat-widget';
 import { SkaProfileCardContainer } from '#/components/ska-profile/ska-profile-card-container';
+import { useVideoCallController } from '#/components/video-call/use-video-call-controller';
 import { useOnboardingChat } from '#/data-hooks/use-onboarding-chat';
 import { authClient } from '#/lib/auth-client';
 import { cn } from '#/lib/cn';
@@ -41,31 +42,58 @@ interface ChatWindowChromeProps {
  * render the `<ChatWindow>` (with its own `AnimatePresence` for the
  * enter/exit spring); it never gates whether this component itself exists.
  *
+ * The same always-mounted guarantee is what keeps a popped-out video call
+ * (`useVideoCallController`) alive across a close and across route changes.
+ *
  * Contrast with `OnboardingChat` below, which mounts/unmounts freely — its
  * hook rehydrates the persisted transcript from the server on every mount by
  * design, specifically so pause/resume never loses data.
  */
 function Viper7Chat({
   isOpen,
+  videoEnabled,
   fontSize,
   onToggleFontSize,
   onClose,
-}: ChatWindowChromeProps) {
-  const { messages, sendMessage, isLoading } = useChatWidget();
+}: ChatWindowChromeProps & { videoEnabled: boolean }) {
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    setMessages,
+    getChatId,
+    adoptChatId,
+    courseSlug,
+  } = useChatWidget();
+  const video = useVideoCallController({
+    enabled: videoEnabled,
+    chatOpen: isOpen,
+    courseSlug,
+    getChatId,
+    adoptChatId,
+    replaceMessages: setMessages,
+  });
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <ChatWindow
-          fontSize={fontSize}
-          onToggleFontSize={onToggleFontSize}
-          onClose={onClose}
-          messages={messages}
-          sendMessage={sendMessage}
-          isLoading={isLoading}
-        />
-      )}
-    </AnimatePresence>
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <ChatWindow
+            fontSize={fontSize}
+            onToggleFontSize={onToggleFontSize}
+            onClose={() => video.closeChat(onClose)}
+            messages={messages}
+            sendMessage={sendMessage}
+            isLoading={isLoading}
+            videoCall={video.headerButton}
+            stage={video.stage}
+            topBar={video.topBar}
+            afterMessages={video.afterMessages}
+          />
+        )}
+      </AnimatePresence>
+      {video.floatingWindow}
+    </>
   );
 }
 
@@ -254,6 +282,7 @@ export function ChatWidget() {
             suppresses its window via `isOpen`, never the component itself. */}
         <Viper7Chat
           isOpen={!hidden && isOpen && mode.kind === 'viper7'}
+          videoEnabled={!hidden && mode.kind === 'viper7'}
           fontSize={fontSize}
           onToggleFontSize={toggleFontSize}
           onClose={onClose}
