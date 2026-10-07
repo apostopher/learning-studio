@@ -2358,3 +2358,54 @@ export const lessonTestResultsTableRelations = relations(
     }),
   }),
 );
+
+/**
+ * One row per Tavus video call (docs/superpowers/specs/2026-10-06-tavus-video-call-design.md).
+ * Created by migrate-video-calls.ts, not drizzle-kit push — keep the two in step.
+ * The `status in ('active','ended')` check constraint lives only in the DDL.
+ */
+export const videoCalls = pgTable(
+  'video_calls',
+  {
+    id: varchar('id', { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    /** Session name at start — the completions endpoint has no session. */
+    userName: varchar('user_name', { length: 255 }),
+    chatId: varchar('chat_id', { length: 255 })
+      .notNull()
+      .references(() => aiChats.id, { onDelete: 'cascade' }),
+    courseSlug: varchar('course_slug', { length: 255 }),
+    tavusConversationId: varchar('tavus_conversation_id', {
+      length: 255,
+    }).notNull(),
+    status: varchar('status', { length: 16 })
+      .$type<'active' | 'ended'>()
+      .notNull()
+      .default('active'),
+    reservedSeconds: integer('reserved_seconds').notNull(),
+    startedAt: timestamp('started_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    endedAt: timestamp('ended_at', { mode: 'date', withTimezone: true }),
+    durationSeconds: integer('duration_seconds'),
+    endReason: varchar('end_reason', { length: 16 }).$type<
+      'user' | 'time_limit' | 'left' | 'error' | 'stale'
+    >(),
+    transcriptSavedAt: timestamp('transcript_saved_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+  },
+  (t) => [
+    uniqueIndex('video_calls_tavus_conversation_idx').on(t.tavusConversationId),
+    uniqueIndex('video_calls_one_active_per_user_idx')
+      .on(t.userId)
+      .where(sql`${t.status} = 'active'`),
+    index('video_calls_user_started_idx').on(t.userId, t.startedAt),
+  ],
+);
