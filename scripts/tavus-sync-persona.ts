@@ -34,8 +34,9 @@ const llm = {
 };
 
 function redact(text: string): string {
-  let result = text.replace(new RegExp(cfg.TAVUS_LLM_SECRET, 'g'), '[redacted]');
-  result = result.replace(new RegExp(cfg.TAVUS_API_KEY, 'g'), '[redacted]');
+  // split/join, not RegExp: a secret may contain regex metacharacters.
+  let result = text.split(cfg.TAVUS_LLM_SECRET).join('[redacted]');
+  result = result.split(cfg.TAVUS_API_KEY).join('[redacted]');
   return result.length > 500 ? result.slice(0, 500) + '…' : result;
 }
 
