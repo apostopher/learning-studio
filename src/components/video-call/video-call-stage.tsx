@@ -20,6 +20,12 @@ const attachStream =
     if (el && el.srcObject !== stream) el.srcObject = stream;
   };
 
+/** Moves focus to the error panel's primary action when it mounts (ref
+ * callback, no effect) so the swap from the stage doesn't drop focus. */
+const focusOnMount = (el: HTMLButtonElement | null) => {
+  if (el && document.activeElement !== el) el.focus();
+};
+
 export interface VideoCallStageProps
   extends Omit<VideoCallControlsProps, 'disabled'> {
   phase: VideoCallPhase;
@@ -36,10 +42,13 @@ export function VideoCallStage(props: VideoCallStageProps) {
   if (props.errorMessage) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-primary text-sm">{props.errorMessage}</p>
+        <p role="alert" className="text-primary text-sm">
+          {props.errorMessage}
+        </p>
         <div className="flex gap-2">
           {props.canRetry && (
             <Button
+              ref={focusOnMount}
               onClick={props.onRetry}
               className="rounded-lg bg-accent-9 px-4 py-2 font-medium text-accent-contrast text-sm transition-colors hover:bg-accent-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9 focus-visible:ring-offset-2"
             >
@@ -47,6 +56,7 @@ export function VideoCallStage(props: VideoCallStageProps) {
             </Button>
           )}
           <Button
+            ref={props.canRetry ? undefined : focusOnMount}
             onClick={props.onDismiss}
             className="rounded-lg border border-gray-7 px-4 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9"
           >
@@ -70,11 +80,17 @@ export function VideoCallStage(props: VideoCallStageProps) {
           aria-label="Viper7"
           className="size-full object-contain"
         />
-        {status && (
-          <output className="absolute inset-0 flex items-center justify-center bg-gray-1/80 text-secondary text-sm">
-            {status}
-          </output>
-        )}
+        {/* Always mounted so screen readers announce text changes; the
+            overlay look and pointer capture apply only while there is text. */}
+        <output
+          className={
+            status
+              ? 'absolute inset-0 flex items-center justify-center bg-gray-1/80 text-secondary text-sm'
+              : 'sr-only'
+          }
+        >
+          {status}
+        </output>
         {props.localStream && props.isCameraOn && (
           <video
             ref={attachStream(props.localStream)}

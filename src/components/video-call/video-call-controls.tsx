@@ -22,41 +22,48 @@ interface CallControlButtonProps {
 
 /** Icon toggle for the call bar — Base UI Button + Tooltip, as in the chat
  * header, but a 40 px target since these are used mid-conversation. */
+const LOCKED_REASON = 'available once the call connects';
+
 const CallControlButton = ({
-  label,
+  label: baseLabel,
   pressed,
   disabled,
   onClick,
   children,
-}: CallControlButtonProps) => (
-  <Tooltip.Root disableHoverablePopup>
-    <Tooltip.Trigger
-      render={
-        <Button
-          onClick={onClick}
-          disabled={disabled}
-          aria-label={label}
-          aria-pressed={pressed}
-          className={cn(
-            'flex size-10 items-center justify-center rounded-full text-primary transition-colors',
-            'bg-gray-4 hover:bg-gray-5 aria-pressed:bg-gray-12 aria-pressed:text-gray-1',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-          )}
-        />
-      }
-    >
-      {children}
-    </Tooltip.Trigger>
-    <Tooltip.Portal>
-      <Tooltip.Positioner sideOffset={6} className="z-50">
-        <Tooltip.Popup className="rounded-md bg-inverted px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
-          {label}
-        </Tooltip.Popup>
-      </Tooltip.Positioner>
-    </Tooltip.Portal>
-  </Tooltip.Root>
-);
+}: CallControlButtonProps) => {
+  // A locked control states why and what unlocks it, in tooltip and name.
+  const label = disabled ? `${baseLabel} — ${LOCKED_REASON}` : baseLabel;
+  return (
+    <Tooltip.Root disableHoverablePopup>
+      <Tooltip.Trigger
+        render={
+          <Button
+            onClick={onClick}
+            disabled={disabled}
+            focusableWhenDisabled
+            aria-label={label}
+            aria-pressed={pressed}
+            className={cn(
+              'flex size-10 items-center justify-center rounded-full text-primary transition-colors',
+              'bg-gray-4 hover:bg-gray-5 aria-pressed:bg-gray-12 aria-pressed:text-gray-1',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
+              'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+            )}
+          />
+        }
+      >
+        {children}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={6} className="z-50">
+          <Tooltip.Popup className="rounded-md bg-inverted px-2 py-1 text-xs font-medium text-gray-1 shadow-md">
+            {label}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+};
 
 export interface VideoCallControlsProps {
   countdown: ReactNode;

@@ -18,7 +18,7 @@ export function OnCallBar({
       <Button
         onClick={onBringBack}
         className={cn(
-          'ms-auto rounded-md px-2 py-1 font-medium text-accent-text transition-colors hover:bg-gray-4',
+          'ms-auto inline-flex min-h-10 items-center rounded-md px-3 font-medium text-accent-text transition-colors hover:bg-gray-4',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
         )}
       >
