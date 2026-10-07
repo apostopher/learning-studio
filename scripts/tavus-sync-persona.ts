@@ -33,6 +33,12 @@ const llm = {
   speculative_inference: true,
 };
 
+function redact(text: string): string {
+  let result = text.replace(new RegExp(cfg.TAVUS_LLM_SECRET, 'g'), '[redacted]');
+  result = result.replace(new RegExp(cfg.TAVUS_API_KEY, 'g'), '[redacted]');
+  return result.length > 500 ? result.slice(0, 500) + '…' : result;
+}
+
 async function tavus(path: string, init: RequestInit): Promise<unknown> {
   const res = await fetch(`https://tavusapi.com/v2${path}`, {
     ...init,
@@ -40,9 +46,14 @@ async function tavus(path: string, init: RequestInit): Promise<unknown> {
   });
   const text = await res.text();
   if (!res.ok && res.status !== 304) {
-    throw new Error(`Tavus ${init.method} ${path} → ${res.status}: ${text}`);
+    throw new Error(`Tavus ${init.method} ${path} → ${res.status}: ${redact(text)}`);
   }
-  return text ? JSON.parse(text) : null;
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Tavus ${init.method} ${path} returned non-JSON: ${redact(text)}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -53,7 +64,7 @@ async function main(): Promise<void> {
       body: JSON.stringify([
         { op: 'replace', path: '/system_prompt', value: PERSONA_SENTINEL },
         { op: 'replace', path: '/default_replica_id', value: cfg.TAVUS_REPLICA_ID },
-        { op: 'replace', path: '/layers/llm', value: llm },
+        { op: 'add', path: '/layers/llm', value: llm },
       ]),
     });
     console.info(`Updated persona ${cfg.TAVUS_PERSONA_ID} → ${llm.base_url}`);
