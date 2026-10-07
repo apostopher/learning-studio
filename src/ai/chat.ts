@@ -10,6 +10,7 @@ import {
   type SkaProfileForPrompt,
   viper7SystemPrompt,
 } from '#/ai/prompts/viper7';
+import { VOICE_MODE_PROMPT } from '#/ai/prompts/voice-mode';
 import { makeCheckFlyabilityTool } from '#/ai/tools/check-flyability';
 import { makeSearchKBTool } from '#/ai/tools/search-kb';
 import { isAssociateFrom } from '#/lib/is-associate';
@@ -46,6 +47,15 @@ export type BuildChatStreamOptions = {
    * existed.
    */
   skaProfile?: SkaProfileForPrompt;
+  /**
+   * Tavus video call. Appends the voice prompt and Tavus's own rules
+   * (emotion tags, speech punctuation) to the system prompt, and switches
+   * `smoothStream` to word chunking — line chunking would hold a spoken
+   * reply, which has no newlines, back until it finished.
+   */
+  voice?: { tavusRules: string };
+  /** Cancels generation when Tavus abandons a (speculative) request. */
+  abortSignal?: AbortSignal;
 };
 
 /**
@@ -74,18 +84,27 @@ export async function buildChatStream({
   courseSlug,
   userId,
   skaProfile,
+  voice,
+  abortSignal,
 }: BuildChatStreamOptions) {
   const modelMessages = await convertToModelMessages(messages);
 
+  const basePrompt = viper7SystemPrompt({
+    isAssociate: isAssociateFrom(subscriptions),
+    persona,
+    userInfo,
+    skaProfile,
+  });
+
   return streamText({
     model: geminiFlash,
-    system: viper7SystemPrompt({
-      isAssociate: isAssociateFrom(subscriptions),
-      persona,
-      userInfo,
-      skaProfile,
-    }),
+    system: voice
+      ? [basePrompt, VOICE_MODE_PROMPT, voice.tavusRules]
+          .filter(Boolean)
+          .join('\n\n')
+      : basePrompt,
     messages: modelMessages,
+    abortSignal,
     tools: {
       searchKB: makeSearchKBTool({ writer, courseSlug, userId }),
       checkFlyability: makeCheckFlyabilityTool({
@@ -95,6 +114,8 @@ export async function buildChatStream({
     },
     toolChoice: 'auto',
     stopWhen: stepCountIs(4),
-    experimental_transform: [smoothStream({ delayInMs: 20, chunking: 'line' })],
+    experimental_transform: [
+      smoothStream({ delayInMs: 20, chunking: voice ? 'word' : 'line' }),
+    ],
   });
 }
