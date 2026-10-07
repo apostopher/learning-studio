@@ -1,7 +1,4 @@
-import Daily, {
-  type DailyCall,
-  type DailyEventObjectTrack,
-} from '@daily-co/daily-js';
+import type { DailyCall, DailyEventObjectTrack } from '@daily-co/daily-js';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useAtom, useAtomValue } from 'jotai';
@@ -259,10 +256,20 @@ export function useVideoCallController(input: {
 
     let daily: DailyCall;
     try {
+      // Loaded on demand: daily-js is large and this hook lives in the
+      // always-mounted chat widget, so only learners who start a call pay
+      // for it.
+      const { default: Daily } = await import('@daily-co/daily-js');
+      if (cancelled()) {
+        // Hung up while the library loaded: release the conversation.
+        endMutation.mutate(started.id);
+        return;
+      }
       daily = Daily.createCallObject({ subscribeToTracksAutomatically: true });
     } catch {
-      // e.g. a leftover call object (Daily allows one). Nothing was said, so
-      // there is no transcript to wait for — just release the conversation.
+      // The library failed to load (e.g. offline), or a leftover call object
+      // (Daily allows one). Nothing was said, so there is no transcript to
+      // wait for — just release the conversation.
       endMutation.mutate(started.id);
       setCall({
         ...IDLE_VIDEO_CALL,
