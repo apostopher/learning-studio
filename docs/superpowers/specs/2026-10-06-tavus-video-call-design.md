@@ -64,7 +64,7 @@ call was made.
 | `TAVUS_API_KEY` | Tavus API key |
 | `TAVUS_REPLICA_ID` | replica (face), currently `r93ce3db27f8` |
 | `TAVUS_PERSONA_ID` | per-environment persona whose LLM layer points at us — **optional**: unset → the button is locked with "Video calls aren't set up on this server yet." (lets the dev server boot before `sync-persona` has run) |
-| `TAVUS_LLM_SECRET` | random secret (≥ 32 chars); the persona's `layers.llm.api_key`, and the webhook token |
+| `TAVUS_LLM_SECRET` | random secret (≥ 32 chars); the persona's `layers.llm.api_key`; the webhook token is derived from it as `HMAC-SHA256(TAVUS_LLM_SECRET, 'tavus-webhook')` hex, so the raw secret never appears in a URL |
 | `TAVUS_PUBLIC_URL` | public origin Tavus can reach (`https://…ngrok.app` in dev, the deployed origin in prod) — used for the persona's `base_url` and the webhook `callback_url` |
 
 **`pnpm tavus:sync-persona`** creates or updates the environment's persona:
@@ -98,8 +98,11 @@ Unique partial index on `user_id` where `status = 'active'`. No `org_id`:
 the org is deployment configuration (`getActiveOrgId()`), exactly as in
 `/api/chat`.
 
-**Daily usage** = Σ over today's (UTC) rows of `duration_seconds` for ended
-calls + `reserved_seconds` for active ones. Remaining = 1800 − usage.
+**Daily usage** = Σ over today's (UTC) rows of `max(60, duration_seconds)`
+for ended calls + `reserved_seconds` for active ones. Remaining = 1800 −
+usage. The 60 s minimum charge per ended call matches Tavus's per-minute
+billing, so many very short calls can't each cost a billed minute while
+barely touching the daily limit.
 
 Schema change goes in via a hand-written idempotent script
 (`pnpm db:migrate-video-calls`), never `db:push` — push offers to truncate
@@ -119,7 +122,7 @@ Schema change goes in via a hand-written idempotent script
    passed, otherwise creates one titled from that text. The returned id goes
    back to the client so the widget switches to that chat.
 4. `reserved = min(600, remaining)`. Create the Tavus conversation:
-   `persona_id`, `replica_id`, `callback_url = <APP_URL>/api/tavus/webhook?token=<TAVUS_LLM_SECRET>`,
+   `persona_id`, `replica_id`, `callback_url = <TAVUS_PUBLIC_URL without trailing slash>/api/tavus/webhook?token=<HMAC-SHA256(TAVUS_LLM_SECRET, 'tavus-webhook') hex>`,
    `properties: { max_call_duration: reserved, participant_left_timeout: 30,
    participant_absent_timeout: 120 }`.
 5. Insert the `video_calls` row. Unique-index violation → end the just-made
@@ -152,8 +155,9 @@ Ends on Tavus (ignore "already ended"), then `reconcileVideoCall(id)`.
 2. `conversation-id === 'tavus-openai-compat-test'` → stream a fixed
    confirmation (Tavus's config check).
 3. Look up an **active** `video_calls` row by conversation id → else 401.
-4. Clean messages: drop system messages containing `<user_appearance>` or
-   `<user_emotions>`. `sync-persona` sets the Tavus persona's
+4. Clean messages: drop messages of any role containing a
+   `<user_appearance`, `<user_emotions` or `<user_screen` tag (with or
+   without attributes). `sync-persona` sets the Tavus persona's
    `system_prompt` to the sentinel line `[[VIPER7_PERSONA_PROMPT]]`, which
    Tavus places at the start of the first system message; remove that line,
    keeping the rest (Tavus's TTS/emotion rules) and the date/time message.
@@ -163,12 +167,18 @@ Ends on Tavus (ignore "already ended"), then `reconcileVideoCall(id)`.
 5. Call `buildChatStream` with the row's user, course, org persona
    (`resolvePersonaForChat`), SKA profile, and **the chat's persisted
    messages (`getChat`) followed by the cleaned call history**, so Viper on
-   video knows what was said in text before the call. `buildChatStream`
+   video knows what was said in text before the call. Only `user`/`assistant`
+   rows are replayed (a stored `system` row never becomes a system prompt),
+   capped to the last 30. `buildChatStream`
    gains a `voice` option: appends a voice-mode prompt (spoken style, short
    answers, no markdown) plus Tavus's rules to the system prompt, and
    switches `smoothStream` from `'line'` to `'word'` chunking (line chunking
    would hold a newline-free spoken reply back until it finished). It also
-   gains `abortSignal`.
+   gains `abortSignal`. For every caller (text chat and call turns),
+   `buildChatStream` converts `data-notification` parts to a bracketed text
+   part (`[Video call with Viper7]`), ignores incomplete tool calls, and drops
+   any model message left with no content — a data-only assistant turn would
+   otherwise reach Gemini as an empty `model` turn and 400.
 6. Pipe through `toOpenAIChatCompletionStream` (new adapter): AI SDK text
    deltas → `chat.completion.chunk` SSE, final `finish_reason: "stop"`,
    `data: [DONE]`. Request `AbortSignal` is passed through so an interrupted
@@ -181,7 +191,7 @@ Ends on Tavus (ignore "already ended"), then `reconcileVideoCall(id)`.
 
 ### `POST /api/tavus/webhook?token=…`
 
-Token must equal `TAVUS_LLM_SECRET`. Body is used only to read the
+Token must equal `HMAC-SHA256(TAVUS_LLM_SECRET, 'tavus-webhook')` hex (timing-safe). Body is used only to read the
 conversation id; on `system.shutdown` or `application.transcription_ready`
 it calls `reconcileVideoCall` for the matching row. Always 200 for unknown
 ids.
@@ -224,7 +234,9 @@ parameter; the chat window passes `chatWidgetRectAtom`, the video window
 `ChatWidgetHeader`, Viper7 mode only.
 - Locked: disabled; tooltip and accessible name both state the reason and
   the unlock — "Video call unavailable. You've used today's 30 minutes.
-  Resets at 00:00 UTC." / "…You're already on a call in another tab."
+  Resets at 00:00 UTC." / "…A previous call is still closing. Try again in
+  a minute." (typically a reload mid-call; while that reason shows, and this
+  tab has no call, the allowance is re-checked every 10 s).
 - Click → request microphone (camera off by default) → "Connecting to
   Viper…" → live. Mic denied → inline explanation of how to allow it; no
   call is created.
@@ -259,7 +271,7 @@ only. Network reconnecting → "Reconnecting…" overlay.
 | Case | Behaviour |
 | --- | --- |
 | Tavus create fails | no row; "Couldn't start the video call. Try again in a moment." |
-| Concurrent start | 409, locked reason "already on a call in another tab" |
+| Concurrent start | 409, locked reason "A previous call is still closing. Try again in a minute." |
 | Tab closed mid-call | Tavus ends after 30 s; webhook reconciles; stale sweep is the backstop |
 | Completions error | spoken fallback, logged |
 | Request for ended/unknown call | 401 |
