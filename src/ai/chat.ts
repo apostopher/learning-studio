@@ -1,4 +1,4 @@
-import type { UIMessage } from 'ai';
+import type { ModelMessage, TextPart, UIMessage } from 'ai';
 import {
   convertToModelMessages,
   smoothStream,
@@ -58,6 +58,24 @@ export type BuildChatStreamOptions = {
   abortSignal?: AbortSignal;
 };
 
+function notificationToText(data: unknown): TextPart | undefined {
+  const text =
+    data && typeof data === 'object' && 'text' in data
+      ? (data as { text: unknown }).text
+      : undefined;
+  return typeof text === 'string' && text.trim()
+    ? { type: 'text', text: `[${text.trim()}]` }
+    : undefined;
+}
+
+/** Belt-and-braces: never send a turn with no content (Gemini 400s on
+ * `{ role: 'model', parts: [] }`), whatever produced it. */
+function hasContent(message: ModelMessage): boolean {
+  return typeof message.content === 'string'
+    ? message.content.trim() !== ''
+    : message.content.length > 0;
+}
+
 /**
  * Assembles the `streamText` config the chat route streams from: viper7's
  * system prompt (gated on associate status), the searchKB + checkFlyability
@@ -87,7 +105,23 @@ export async function buildChatStream({
   voice,
   abortSignal,
 }: BuildChatStreamOptions) {
-  const modelMessages = await convertToModelMessages(messages);
+  const modelMessages = (
+    await convertToModelMessages(messages, {
+      // Persisted chats contain assistant turns whose only part is a
+      // `data-notification` status line (e.g. the "Video call with Viper7"
+      // brackets around a call transcript). Without this they convert to
+      // `{ role: 'assistant', content: [] }`, which Gemini rejects with a 400.
+      // Rendering them as bracketed text keeps the call's context visible to
+      // the model.
+      convertDataPart: (part) =>
+        part.type === 'data-notification'
+          ? notificationToText(part.data)
+          : undefined,
+      // A tool call cut off mid-stream (reload, abort) has no result; replaying
+      // it would fail the request rather than just losing that step.
+      ignoreIncompleteToolCalls: true,
+    })
+  ).filter(hasContent);
 
   const basePrompt = viper7SystemPrompt({
     isAssociate: isAssociateFrom(subscriptions),
