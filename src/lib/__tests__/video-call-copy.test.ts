@@ -39,7 +39,10 @@ describe('callEndedLabel', () => {
 describe('secondsUntil', () => {
   it('counts down to an ISO instant', () => {
     expect(
-      secondsUntil('2026-10-06T12:10:00.000Z', Date.parse('2026-10-06T12:09:00Z')),
+      secondsUntil(
+        '2026-10-06T12:10:00.000Z',
+        Date.parse('2026-10-06T12:09:00Z'),
+      ),
     ).toBe(60);
   });
 });
@@ -60,7 +63,9 @@ describe('videoButtonLabel', () => {
     ).toBe("Video call unavailable. You're already on a call in another tab.");
     expect(
       videoButtonLabel({ status: 'unavailable', reason: 'not_configured' }),
-    ).toBe("Video call unavailable. Video calls aren't set up on this server yet.");
+    ).toBe(
+      "Video call unavailable. Video calls aren't set up on this server yet.",
+    );
   });
 
   it('labels the other states', () => {
@@ -74,12 +79,24 @@ describe('videoButtonLabel', () => {
       'Video call in progress',
     );
   });
+
+  it('says a failed availability check can be retried by selecting it', () => {
+    expect(videoButtonLabel({ status: 'check-failed' })).toBe(
+      "Couldn't check video call availability. Select to try again.",
+    );
+  });
 });
 
 describe('callErrorMessage', () => {
   it('tells the learner how to allow the microphone', () => {
     expect(callErrorMessage('mic_denied', null)).toBe(
       "Viper needs your microphone for a video call. Allow microphone access in your browser's site settings, then try again.",
+    );
+  });
+
+  it('points an insecure (non-https) page at the connection, not permissions', () => {
+    expect(callErrorMessage('insecure_context', null)).toBe(
+      'Video calls need a secure (https) connection.',
     );
   });
 

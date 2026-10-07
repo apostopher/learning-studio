@@ -64,6 +64,7 @@ function Viper7Chat({
     getChatId,
     adoptChatId,
     courseSlug,
+    isBusy,
   } = useChatWidget();
   const video = useVideoCallController({
     enabled: videoEnabled,
@@ -72,6 +73,7 @@ function Viper7Chat({
     getChatId,
     adoptChatId,
     replaceMessages: setMessages,
+    isChatBusy: isBusy,
   });
 
   return (

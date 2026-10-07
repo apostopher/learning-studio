@@ -7,6 +7,7 @@ import type { UIMessage } from 'ai';
 import { useAtom, useAtomValue } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { type ReactNode, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   IDLE_VIDEO_CALL,
   videoCallAtom,
@@ -87,6 +88,8 @@ export function useVideoCallController(input: {
   getChatId: () => string | undefined;
   adoptChatId: (id: string) => void;
   replaceMessages: (messages: UIMessage[]) => void;
+  /** A text turn is submitted/streaming; replacing messages would drop it. */
+  isChatBusy: () => boolean;
 }) {
   const [call, setCall] = useAtom(videoCallAtom);
   const [docked, setDocked] = useAtom(videoDockedAtom);
@@ -139,6 +142,9 @@ export function useVideoCallController(input: {
           staleTime: 0,
         });
         if (!status.transcriptSaved) continue;
+        // Wait out an in-flight text turn: replacing now would drop it (its
+        // user message, or its reply, may not be persisted yet).
+        if (input.isChatBusy()) continue;
         // The widget's useChat state is the only client copy (no server
         // rehydration), so load the persisted chat — text turns, the call's
         // transcript and its status lines — and replace it wholesale.
@@ -148,6 +154,7 @@ export function useVideoCallController(input: {
           staleTime: 0,
         });
         if (attemptRef.current !== attempt) return;
+        if (input.isChatBusy()) continue;
         input.replaceMessages(chat.messages.map(toUIMessage));
         setTranscript('saved');
         return;
@@ -201,6 +208,16 @@ export function useVideoCallController(input: {
     setTranscript('idle');
     setCall({ ...IDLE_VIDEO_CALL, phase: 'requesting-media' });
 
+    // `mediaDevices` is undefined outside a secure context (plain http), which
+    // is not a permission problem — say so instead of blaming the mic.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCall({
+        ...IDLE_VIDEO_CALL,
+        phase: 'error',
+        error: 'insecure_context',
+      });
+      return;
+    }
     try {
       const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
       for (const track of probe.getTracks()) track.stop();
@@ -231,17 +248,31 @@ export function useVideoCallController(input: {
     }
 
     // The server may have created the chat row; later text turns continue it
-    // even if the learner hung up while this request was in flight.
-    input.adoptChatId(started.chatId);
+    // even if the learner hung up while this request was in flight. An
+    // existing id is never replaced (the server echoes it back when owned).
+    if (!input.getChatId()) input.adoptChatId(started.chatId);
     if (cancelled()) {
       // Hung up before Daily existed: release the server-side conversation.
       endMutation.mutate(started.id);
       return;
     }
 
-    const daily = Daily.createCallObject({
-      subscribeToTracksAutomatically: true,
-    });
+    let daily: DailyCall;
+    try {
+      daily = Daily.createCallObject({ subscribeToTracksAutomatically: true });
+    } catch {
+      // e.g. a leftover call object (Daily allows one). Nothing was said, so
+      // there is no transcript to wait for — just release the conversation.
+      endMutation.mutate(started.id);
+      setCall({
+        ...IDLE_VIDEO_CALL,
+        phase: 'error',
+        callId: started.id,
+        chatId: started.chatId,
+        error: 'connection_failed',
+      });
+      return;
+    }
     const session: DailySession = {
       daily,
       callId: started.id,
@@ -276,7 +307,12 @@ export function useVideoCallController(input: {
             : c,
         );
       })
-      .on('camera-error', () => setCameraOn(false))
+      .on('camera-error', () => {
+        setCameraOn(false);
+        toast.error(
+          "Camera unavailable. Check your browser's camera permission.",
+        );
+      })
       .on('error', () => end('connection_failed'));
 
     try {
@@ -369,25 +405,37 @@ export function useVideoCallController(input: {
     onClick: () => {},
   });
 
-  const headerButton: HeaderVideoCallProps | undefined = !input.enabled
-    ? undefined
-    : isActive
-      ? locked(videoButtonLabel({ status: 'in-call' }))
-      : !allowance.data
-        ? locked(videoButtonLabel({ status: 'loading' }))
-        : allowance.data.reason
-          ? locked(
-              videoButtonLabel({
-                status: 'unavailable',
-                reason: allowance.data.reason,
-                resetsAt: allowance.data.resetsAt,
-              }),
-            )
-          : {
-              label: videoButtonLabel({ status: 'available' }),
-              disabled: false,
-              onClick: () => void start(),
-            };
+  function headerButtonFor(): HeaderVideoCallProps | undefined {
+    if (!input.enabled) return undefined;
+    if (isActive) return locked(videoButtonLabel({ status: 'in-call' }));
+    const { data } = allowance;
+    if (!data) {
+      // A failed check must not read as "checking…" forever: say so, and let
+      // the learner retry. (With data cached, a failed refetch keeps it.)
+      return allowance.isError
+        ? {
+            label: videoButtonLabel({ status: 'check-failed' }),
+            disabled: false,
+            onClick: () => void allowance.refetch(),
+          }
+        : locked(videoButtonLabel({ status: 'loading' }));
+    }
+    if (data.reason) {
+      return locked(
+        videoButtonLabel({
+          status: 'unavailable',
+          reason: data.reason,
+          resetsAt: data.resetsAt,
+        }),
+      );
+    }
+    return {
+      label: videoButtonLabel({ status: 'available' }),
+      disabled: false,
+      onClick: () => void start(),
+    };
+  }
+  const headerButton = headerButtonFor();
 
   const floatingWindow: ReactNode = (
     <AnimatePresence>

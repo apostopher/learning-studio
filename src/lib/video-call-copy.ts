@@ -10,6 +10,7 @@ import {
 export type VideoCallErrorReason =
   | VideoCallStartErrorReason
   | 'mic_denied'
+  | 'insecure_context'
   | 'connection_failed';
 
 export function formatCountdown(seconds: number): string {
@@ -28,7 +29,8 @@ export function callEndedLabel(
   durationSeconds: number | null,
   endReason: VideoCallEndReason | null,
 ): string {
-  if (endReason === 'time_limit') return 'Video call ended · time limit reached';
+  if (endReason === 'time_limit')
+    return 'Video call ended · time limit reached';
   if (durationSeconds !== null) {
     return `Video call ended · ${formatCallDuration(durationSeconds)}`;
   }
@@ -61,7 +63,7 @@ function unavailableDetail(
 }
 
 export type VideoButtonLabelInput =
-  | { status: 'loading' | 'available' | 'in-call' }
+  | { status: 'loading' | 'available' | 'in-call' | 'check-failed' }
   | {
       status: 'unavailable';
       reason: VideoCallUnavailableReason;
@@ -78,6 +80,8 @@ export function videoButtonLabel(input: VideoButtonLabelInput): string {
       return 'Start a video call with Viper7';
     case 'in-call':
       return 'Video call in progress';
+    case 'check-failed':
+      return "Couldn't check video call availability. Select to try again.";
     case 'unavailable':
       return `Video call unavailable. ${unavailableDetail(input.reason, input.resetsAt)}`;
   }
@@ -90,6 +94,8 @@ export function callErrorMessage(
   switch (reason) {
     case 'mic_denied':
       return "Viper needs your microphone for a video call. Allow microphone access in your browser's site settings, then try again.";
+    case 'insecure_context':
+      return 'Video calls need a secure (https) connection.';
     case 'provider_unavailable':
       return "Couldn't start the video call. Try again in a moment.";
     case 'connection_failed':
