@@ -43,6 +43,7 @@
     "db:seed-org-links": "dotenv -e .env.local -- tsx src/db/seed-org-links.ts",
     "db:seed-persona": "dotenv -e .env.local -- tsx src/db/seed-persona.ts",
     "db:studio": "drizzle-kit studio",
+    "tavus:sync-persona": "dotenv -e .env.local -- tsx scripts/tavus-sync-persona.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
