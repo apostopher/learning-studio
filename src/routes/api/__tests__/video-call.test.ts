@@ -77,6 +77,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   m.envMock.TAVUS_PERSONA_ID = 'p1';
+  m.envMock.TAVUS_PUBLIC_URL = 'https://pub.example';
   m.getSession.mockResolvedValue({ user: { id: 'u1', name: 'Rahul' } });
   m.getActiveCallForUser.mockResolvedValue(null);
   m.listCallsSince.mockResolvedValue([]);
@@ -228,6 +229,14 @@ describe('POST /api/video-call', () => {
     const res = await startVideoCallHandler(post('/api/video-call'));
     expect(res.status).toBe(409);
     expect(m.endConversation).toHaveBeenCalledWith('conv-new');
+  });
+
+  it('callback url has no double slash when TAVUS_PUBLIC_URL ends in one', async () => {
+    m.envMock.TAVUS_PUBLIC_URL = 'https://pub.example/';
+    await startVideoCallHandler(post('/api/video-call'));
+    expect(m.createConversation.mock.calls[0][0].callbackUrl).toMatch(
+      /^https:\/\/pub\.example\/api\/tavus\/webhook\?token=[0-9a-f]{64}$/,
+    );
   });
 
   it('callback url never carries the raw LLM secret', async () => {

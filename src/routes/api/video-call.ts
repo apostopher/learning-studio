@@ -53,11 +53,13 @@ export async function startVideoCallHandler(
   }
 
   const reservedSeconds = allowance.reservedSecondsIfStarted;
+  // Same normalisation as scripts/tavus-sync-persona.ts.
+  const publicUrl = env.TAVUS_PUBLIC_URL.replace(/\/$/, '');
   let conversation: { conversationId: string; conversationUrl: string };
   try {
     conversation = await createConversation({
       personaId,
-      callbackUrl: `${env.TAVUS_PUBLIC_URL}/api/tavus/webhook?token=${tavusWebhookToken()}`,
+      callbackUrl: `${publicUrl}/api/tavus/webhook?token=${tavusWebhookToken()}`,
       maxCallDurationSeconds: reservedSeconds,
       customGreeting: VIDEO_CALL_GREETING,
     });
