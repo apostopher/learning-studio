@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clampPosition,
   computeDefaultRect,
+  computeDefaultVideoRect,
   computeResize,
   MARGIN,
   MIN_HEIGHT,
@@ -257,5 +258,22 @@ describe('useChatWindowGeometry', () => {
     act(() => result.current.dragBindings.onPointerUp(pointer(150, 150)));
     expect(result.current.left.get()).toBe(startLeft);
     expect(result.current.isDirty).toBe(false);
+  });
+});
+
+describe('computeDefaultVideoRect', () => {
+  it('sits to the left of the default chat window, bottom-aligned', () => {
+    expect(computeDefaultVideoRect({ width: 1440, height: 900 })).toEqual({
+      width: 480,
+      height: 360,
+      left: 1440 - 24 - 400 - 16 - 480,
+      top: 900 - 24 - 360,
+    });
+  });
+
+  it('never leaves the margin on a narrow viewport', () => {
+    const rect = computeDefaultVideoRect({ width: 700, height: 500 });
+    expect(rect.left).toBe(24);
+    expect(rect.width).toBe(480);
   });
 });
