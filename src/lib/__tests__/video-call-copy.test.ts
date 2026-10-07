@@ -60,7 +60,9 @@ describe('videoButtonLabel', () => {
     );
     expect(
       videoButtonLabel({ status: 'unavailable', reason: 'already_active' }),
-    ).toBe("Video call unavailable. You're already on a call in another tab.");
+    ).toBe(
+      'Video call unavailable. A previous call is still closing. Try again in a minute.',
+    );
     expect(
       videoButtonLabel({ status: 'unavailable', reason: 'not_configured' }),
     ).toBe(

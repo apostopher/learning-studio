@@ -20,10 +20,18 @@ export class VideoCallStartError extends Error {
   }
 }
 
+/** How often to re-check while a previous call is still closing. */
+const CLOSING_CALL_RECHECK_MS = 10_000;
+
 /** Whether the video button is available. The server re-checks on start, so
  * a stale answer can only ever show a button that then explains its 403.
- * No polling and no refocus refetch: while a call is active the server's
- * allowance route calls Tavus, so this must not fire on its own. */
+ *
+ * No refocus refetch, and no polling except in one case: `already_active`.
+ * After a reload mid-call the old call stays active until Tavus notices the
+ * learner left (~30 s); without a re-check the button would stay locked
+ * until some unrelated refetch. Callers pass `enabled: false` during this
+ * tab's own call, which also stops this interval — the allowance route calls
+ * Tavus while a call is active, so it must never poll then. */
 export function useVideoCallAllowance(enabled: boolean) {
   return useQuery({
     queryKey: dataKeys.videoCallAllowance(),
@@ -36,6 +44,10 @@ export function useVideoCallAllowance(enabled: boolean) {
     enabled,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    refetchInterval: (query) =>
+      query.state.data?.reason === 'already_active'
+        ? CLOSING_CALL_RECHECK_MS
+        : false,
   });
 }
 

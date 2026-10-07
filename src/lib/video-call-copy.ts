@@ -56,7 +56,9 @@ function unavailableDetail(
     case 'daily_limit':
       return `You've used today's ${DAILY_LIMIT_SECONDS / 60} minutes. Resets at ${resetsAtLabel(resetsAt)}.`;
     case 'already_active':
-      return "You're already on a call in another tab.";
+      // Usually a reload mid-call: the old call stays active until Tavus
+      // notices the learner left (~30 s). The widget re-checks meanwhile.
+      return 'A previous call is still closing. Try again in a minute.';
     case 'not_configured':
       return "Video calls aren't set up on this server yet.";
   }
