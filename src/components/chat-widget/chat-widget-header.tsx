@@ -1,10 +1,17 @@
 import { Button } from '@base-ui/react/button';
 import { Tooltip } from '@base-ui/react/tooltip';
-import { ALargeSmall, Shrink, X } from 'lucide-react';
+import { ALargeSmall, Shrink, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { brand } from '#/ai/prompts/brand';
 import type { DragBindings } from '#/components/chat-widget/use-chat-window-geometry';
 import { cn } from '#/lib/cn';
+
+export interface HeaderVideoCallProps {
+  /** Tooltip AND accessible name; when disabled it states why and what unlocks it. */
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}
 
 interface ChatWidgetHeaderProps {
   isDirty: boolean;
@@ -12,11 +19,13 @@ interface ChatWidgetHeaderProps {
   onToggleFontSize: () => void;
   onClose: () => void;
   dragBindings: DragBindings;
+  videoCall?: HeaderVideoCallProps;
 }
 
 interface HeaderControlButtonProps {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -26,6 +35,7 @@ interface HeaderControlButtonProps {
 const HeaderControlButton = ({
   label,
   onClick,
+  disabled,
   children,
 }: HeaderControlButtonProps) => (
   // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
@@ -34,11 +44,15 @@ const HeaderControlButton = ({
       render={
         <Button
           onClick={onClick}
+          disabled={disabled}
+          // Stays focusable/hoverable so the tooltip can explain the lock.
+          focusableWhenDisabled
           aria-label={label}
           className={cn(
             'flex size-7 items-center justify-center rounded-md text-secondary transition-colors',
             'hover:bg-gray-4 hover:text-primary',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9',
+            'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[disabled]:hover:bg-transparent data-[disabled]:hover:text-secondary',
           )}
         />
       }
@@ -67,6 +81,7 @@ export function ChatWidgetHeader({
   onToggleFontSize,
   onClose,
   dragBindings,
+  videoCall,
 }: ChatWidgetHeaderProps) {
   return (
     <div
@@ -98,6 +113,16 @@ export function ChatWidgetHeader({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {videoCall && (
+        <HeaderControlButton
+          label={videoCall.label}
+          onClick={videoCall.onClick}
+          disabled={videoCall.disabled}
+        >
+          <Video className="size-4" aria-hidden="true" />
+        </HeaderControlButton>
+      )}
 
       <HeaderControlButton label="Toggle font size" onClick={onToggleFontSize}>
         <ALargeSmall className="size-4" aria-hidden="true" />
