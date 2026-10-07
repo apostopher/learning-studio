@@ -12,18 +12,22 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as ApiVideoCallRouteImport } from './routes/api/video-call'
 import { Route as ApiChatsRouteImport } from './routes/api/chats'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiAiRagRouteImport } from './routes/api/ai-rag'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin.index'
+import { Route as ApiVideoCallAllowanceRouteImport } from './routes/api/video-call.allowance'
+import { Route as ApiVideoCallIdRouteImport } from './routes/api/video-call.$id'
 import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
 import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
 import { Route as ApiUserMyLevelRouteImport } from './routes/api/user/my-level'
 import { Route as ApiUserLevelAcknowledgeRouteImport } from './routes/api/user/level-acknowledge'
 import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/lesson-section'
 import { Route as ApiUserLastViewedRouteImport } from './routes/api/user/last-viewed'
+import { Route as ApiTavusWebhookRouteImport } from './routes/api/tavus/webhook'
 import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
@@ -52,6 +56,7 @@ import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin.use
 import { Route as AuthedAdminScheduleRouteImport } from './routes/_authed/admin.schedule'
 import { Route as AuthedAdminEditorRouteImport } from './routes/_authed/admin.editor'
 import { Route as AuthedCourseCourseSlugIndexRouteImport } from './routes/_authed/course.$courseSlug.index'
+import { Route as ApiVideoCallIdEndRouteImport } from './routes/api/video-call.$id.end'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
 import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
 import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
@@ -78,6 +83,7 @@ import { Route as AuthedCourseCourseSlugNewsRouteImport } from './routes/_authed
 import { Route as AuthedCourseCourseSlugLibraryRouteImport } from './routes/_authed/course.$courseSlug.library'
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
 import { Route as AuthedCourseCourseSlugModulesIndexRouteImport } from './routes/_authed/course.$courseSlug.modules.index'
+import { Route as ApiTavusV1ChatCompletionsRouteImport } from './routes/api/tavus/v1/chat/completions'
 import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
 import { Route as ApiAdminUsersProfileIdLevelsRouteImport } from './routes/api/admin/users.$profileId.levels'
 import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
@@ -124,6 +130,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVideoCallRoute = ApiVideoCallRouteImport.update({
+  id: '/api/video-call',
+  path: '/api/video-call',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatsRoute = ApiChatsRouteImport.update({
   id: '/api/chats',
   path: '/api/chats',
@@ -154,6 +165,16 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const ApiVideoCallAllowanceRoute = ApiVideoCallAllowanceRouteImport.update({
+  id: '/allowance',
+  path: '/allowance',
+  getParentRoute: () => ApiVideoCallRoute,
+} as any)
+const ApiVideoCallIdRoute = ApiVideoCallIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiVideoCallRoute,
+} as any)
 const ApiUserVideoProgressRoute = ApiUserVideoProgressRouteImport.update({
   id: '/api/user/video-progress',
   path: '/api/user/video-progress',
@@ -183,6 +204,11 @@ const ApiUserLessonSectionRoute = ApiUserLessonSectionRouteImport.update({
 const ApiUserLastViewedRoute = ApiUserLastViewedRouteImport.update({
   id: '/api/user/last-viewed',
   path: '/api/user/last-viewed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTavusWebhookRoute = ApiTavusWebhookRouteImport.update({
+  id: '/api/tavus/webhook',
+  path: '/api/tavus/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLessonPlaybackRoute = ApiLessonPlaybackRouteImport.update({
@@ -328,6 +354,11 @@ const AuthedCourseCourseSlugIndexRoute =
     path: '/',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
+const ApiVideoCallIdEndRoute = ApiVideoCallIdEndRouteImport.update({
+  id: '/end',
+  path: '/end',
+  getParentRoute: () => ApiVideoCallIdRoute,
+} as any)
 const ApiLibraryDownloadFileIdRoute =
   ApiLibraryDownloadFileIdRouteImport.update({
     id: '/api/library/download/$fileId',
@@ -473,6 +504,12 @@ const AuthedCourseCourseSlugModulesIndexRoute =
     id: '/modules/',
     path: '/modules/',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
+  } as any)
+const ApiTavusV1ChatCompletionsRoute =
+  ApiTavusV1ChatCompletionsRouteImport.update({
+    id: '/api/tavus/v1/chat/completions',
+    path: '/api/tavus/v1/chat/completions',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const ApiAdminUsersProfileIdRolesRoute =
   ApiAdminUsersProfileIdRolesRouteImport.update({
@@ -668,6 +705,7 @@ export interface FileRoutesByFullPath {
   '/api/ai-rag': typeof ApiAiRagRoute
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
+  '/api/video-call': typeof ApiVideoCallRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/schedule': typeof AuthedAdminScheduleRoute
@@ -696,12 +734,15 @@ export interface FileRoutesByFullPath {
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
+  '/api/tavus/webhook': typeof ApiTavusWebhookRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
+  '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/course/$courseSlug/library': typeof AuthedCourseCourseSlugLibraryRoute
@@ -728,6 +769,7 @@ export interface FileRoutesByFullPath {
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
+  '/api/video-call/$id/end': typeof ApiVideoCallIdEndRoute
   '/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -754,6 +796,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -768,6 +811,7 @@ export interface FileRoutesByTo {
   '/api/ai-rag': typeof ApiAiRagRoute
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
+  '/api/video-call': typeof ApiVideoCallRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/admin/editor': typeof AuthedAdminEditorRoute
   '/admin/schedule': typeof AuthedAdminScheduleRoute
@@ -795,12 +839,15 @@ export interface FileRoutesByTo {
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
+  '/api/tavus/webhook': typeof ApiTavusWebhookRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
+  '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/course/$courseSlug/library': typeof AuthedCourseCourseSlugLibraryRoute
@@ -827,6 +874,7 @@ export interface FileRoutesByTo {
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
+  '/api/video-call/$id/end': typeof ApiVideoCallIdEndRoute
   '/course/$courseSlug': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -853,6 +901,7 @@ export interface FileRoutesByTo {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -870,6 +919,7 @@ export interface FileRoutesById {
   '/api/ai-rag': typeof ApiAiRagRoute
   '/api/chat': typeof ApiChatRouteWithChildren
   '/api/chats': typeof ApiChatsRouteWithChildren
+  '/api/video-call': typeof ApiVideoCallRouteWithChildren
   '/auth/login': typeof AuthLoginRoute
   '/_authed/admin/editor': typeof AuthedAdminEditorRoute
   '/_authed/admin/schedule': typeof AuthedAdminScheduleRoute
@@ -898,12 +948,15 @@ export interface FileRoutesById {
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
+  '/api/tavus/webhook': typeof ApiTavusWebhookRoute
   '/api/user/last-viewed': typeof ApiUserLastViewedRoute
   '/api/user/lesson-section': typeof ApiUserLessonSectionRoute
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
+  '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/admin/$courseId/editor': typeof AuthedAdminCourseIdEditorRoute
   '/_authed/course/$courseSlug/library': typeof AuthedCourseCourseSlugLibraryRoute
@@ -930,6 +983,7 @@ export interface FileRoutesById {
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
+  '/api/video-call/$id/end': typeof ApiVideoCallIdEndRoute
   '/_authed/course/$courseSlug/': typeof AuthedCourseCourseSlugIndexRoute
   '/api/admin/courses/$courseId/board': typeof ApiAdminCoursesCourseIdBoardRoute
   '/api/admin/courses/$courseId/credentials': typeof ApiAdminCoursesCourseIdCredentialsRouteWithChildren
@@ -956,6 +1010,7 @@ export interface FileRoutesById {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
@@ -973,6 +1028,7 @@ export interface FileRouteTypes {
     | '/api/ai-rag'
     | '/api/chat'
     | '/api/chats'
+    | '/api/video-call'
     | '/auth/login'
     | '/admin/editor'
     | '/admin/schedule'
@@ -1001,12 +1057,15 @@ export interface FileRouteTypes {
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
+    | '/api/tavus/webhook'
     | '/api/user/last-viewed'
     | '/api/user/lesson-section'
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
+    | '/api/video-call/$id'
+    | '/api/video-call/allowance'
     | '/admin/'
     | '/admin/$courseId/editor'
     | '/course/$courseSlug/library'
@@ -1033,6 +1092,7 @@ export interface FileRouteTypes {
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
+    | '/api/video-call/$id/end'
     | '/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -1059,6 +1119,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -1073,6 +1134,7 @@ export interface FileRouteTypes {
     | '/api/ai-rag'
     | '/api/chat'
     | '/api/chats'
+    | '/api/video-call'
     | '/auth/login'
     | '/admin/editor'
     | '/admin/schedule'
@@ -1100,12 +1162,15 @@ export interface FileRouteTypes {
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
+    | '/api/tavus/webhook'
     | '/api/user/last-viewed'
     | '/api/user/lesson-section'
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
+    | '/api/video-call/$id'
+    | '/api/video-call/allowance'
     | '/admin'
     | '/admin/$courseId/editor'
     | '/course/$courseSlug/library'
@@ -1132,6 +1197,7 @@ export interface FileRouteTypes {
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
+    | '/api/video-call/$id/end'
     | '/course/$courseSlug'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -1158,6 +1224,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -1174,6 +1241,7 @@ export interface FileRouteTypes {
     | '/api/ai-rag'
     | '/api/chat'
     | '/api/chats'
+    | '/api/video-call'
     | '/auth/login'
     | '/_authed/admin/editor'
     | '/_authed/admin/schedule'
@@ -1202,12 +1270,15 @@ export interface FileRouteTypes {
     | '/api/cron/news-scrape'
     | '/api/lesson/material'
     | '/api/lesson/playback'
+    | '/api/tavus/webhook'
     | '/api/user/last-viewed'
     | '/api/user/lesson-section'
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
     | '/api/user/video-progress'
+    | '/api/video-call/$id'
+    | '/api/video-call/allowance'
     | '/_authed/admin/'
     | '/_authed/admin/$courseId/editor'
     | '/_authed/course/$courseSlug/library'
@@ -1234,6 +1305,7 @@ export interface FileRouteTypes {
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
+    | '/api/video-call/$id/end'
     | '/_authed/course/$courseSlug/'
     | '/api/admin/courses/$courseId/board'
     | '/api/admin/courses/$courseId/credentials'
@@ -1260,6 +1332,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/tavus/v1/chat/completions'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
@@ -1275,6 +1348,7 @@ export interface RootRouteChildren {
   ApiAiRagRoute: typeof ApiAiRagRoute
   ApiChatRoute: typeof ApiChatRouteWithChildren
   ApiChatsRoute: typeof ApiChatsRouteWithChildren
+  ApiVideoCallRoute: typeof ApiVideoCallRouteWithChildren
   AuthLoginRoute: typeof AuthLoginRoute
   ApiAdminCoursesRoute: typeof ApiAdminCoursesRouteWithChildren
   ApiAdminDisciplineStaffCandidatesRoute: typeof ApiAdminDisciplineStaffCandidatesRoute
@@ -1297,6 +1371,7 @@ export interface RootRouteChildren {
   ApiCronNewsScrapeRoute: typeof ApiCronNewsScrapeRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonPlaybackRoute: typeof ApiLessonPlaybackRoute
+  ApiTavusWebhookRoute: typeof ApiTavusWebhookRoute
   ApiUserLastViewedRoute: typeof ApiUserLastViewedRoute
   ApiUserLessonSectionRoute: typeof ApiUserLessonSectionRoute
   ApiUserLevelAcknowledgeRoute: typeof ApiUserLevelAcknowledgeRoute
@@ -1318,6 +1393,7 @@ export interface RootRouteChildren {
   ApiLessonQuizAnswersRoute: typeof ApiLessonQuizAnswersRoute
   ApiLessonQuizResultRoute: typeof ApiLessonQuizResultRoute
   ApiLibraryDownloadFileIdRoute: typeof ApiLibraryDownloadFileIdRoute
+  ApiTavusV1ChatCompletionsRoute: typeof ApiTavusV1ChatCompletionsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1341,6 +1417,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/login'
       fullPath: '/auth/login'
       preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/video-call': {
+      id: '/api/video-call'
+      path: '/api/video-call'
+      fullPath: '/api/video-call'
+      preLoaderRoute: typeof ApiVideoCallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chats': {
@@ -1385,6 +1468,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/api/video-call/allowance': {
+      id: '/api/video-call/allowance'
+      path: '/allowance'
+      fullPath: '/api/video-call/allowance'
+      preLoaderRoute: typeof ApiVideoCallAllowanceRouteImport
+      parentRoute: typeof ApiVideoCallRoute
+    }
+    '/api/video-call/$id': {
+      id: '/api/video-call/$id'
+      path: '/$id'
+      fullPath: '/api/video-call/$id'
+      preLoaderRoute: typeof ApiVideoCallIdRouteImport
+      parentRoute: typeof ApiVideoCallRoute
+    }
     '/api/user/video-progress': {
       id: '/api/user/video-progress'
       path: '/api/user/video-progress'
@@ -1425,6 +1522,13 @@ declare module '@tanstack/react-router' {
       path: '/api/user/last-viewed'
       fullPath: '/api/user/last-viewed'
       preLoaderRoute: typeof ApiUserLastViewedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tavus/webhook': {
+      id: '/api/tavus/webhook'
+      path: '/api/tavus/webhook'
+      fullPath: '/api/tavus/webhook'
+      preLoaderRoute: typeof ApiTavusWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/playback': {
@@ -1623,6 +1727,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCourseCourseSlugIndexRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
     }
+    '/api/video-call/$id/end': {
+      id: '/api/video-call/$id/end'
+      path: '/end'
+      fullPath: '/api/video-call/$id/end'
+      preLoaderRoute: typeof ApiVideoCallIdEndRouteImport
+      parentRoute: typeof ApiVideoCallIdRoute
+    }
     '/api/library/download/$fileId': {
       id: '/api/library/download/$fileId'
       path: '/api/library/download/$fileId'
@@ -1804,6 +1915,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/course/$courseSlug/modules/'
       preLoaderRoute: typeof AuthedCourseCourseSlugModulesIndexRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
+    }
+    '/api/tavus/v1/chat/completions': {
+      id: '/api/tavus/v1/chat/completions'
+      path: '/api/tavus/v1/chat/completions'
+      fullPath: '/api/tavus/v1/chat/completions'
+      preLoaderRoute: typeof ApiTavusV1ChatCompletionsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/admin/users/$profileId/roles': {
       id: '/api/admin/users/$profileId/roles'
@@ -2109,6 +2227,32 @@ const ApiChatsRouteWithChildren = ApiChatsRoute._addFileChildren(
   ApiChatsRouteChildren,
 )
 
+interface ApiVideoCallIdRouteChildren {
+  ApiVideoCallIdEndRoute: typeof ApiVideoCallIdEndRoute
+}
+
+const ApiVideoCallIdRouteChildren: ApiVideoCallIdRouteChildren = {
+  ApiVideoCallIdEndRoute: ApiVideoCallIdEndRoute,
+}
+
+const ApiVideoCallIdRouteWithChildren = ApiVideoCallIdRoute._addFileChildren(
+  ApiVideoCallIdRouteChildren,
+)
+
+interface ApiVideoCallRouteChildren {
+  ApiVideoCallIdRoute: typeof ApiVideoCallIdRouteWithChildren
+  ApiVideoCallAllowanceRoute: typeof ApiVideoCallAllowanceRoute
+}
+
+const ApiVideoCallRouteChildren: ApiVideoCallRouteChildren = {
+  ApiVideoCallIdRoute: ApiVideoCallIdRouteWithChildren,
+  ApiVideoCallAllowanceRoute: ApiVideoCallAllowanceRoute,
+}
+
+const ApiVideoCallRouteWithChildren = ApiVideoCallRoute._addFileChildren(
+  ApiVideoCallRouteChildren,
+)
+
 interface ApiAdminCoursesCourseIdCredentialsRouteChildren {
   ApiAdminCoursesCourseIdCredentialsProviderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
 }
@@ -2399,6 +2543,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAiRagRoute: ApiAiRagRoute,
   ApiChatRoute: ApiChatRouteWithChildren,
   ApiChatsRoute: ApiChatsRouteWithChildren,
+  ApiVideoCallRoute: ApiVideoCallRouteWithChildren,
   AuthLoginRoute: AuthLoginRoute,
   ApiAdminCoursesRoute: ApiAdminCoursesRouteWithChildren,
   ApiAdminDisciplineStaffCandidatesRoute:
@@ -2422,6 +2567,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronNewsScrapeRoute: ApiCronNewsScrapeRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonPlaybackRoute: ApiLessonPlaybackRoute,
+  ApiTavusWebhookRoute: ApiTavusWebhookRoute,
   ApiUserLastViewedRoute: ApiUserLastViewedRoute,
   ApiUserLessonSectionRoute: ApiUserLessonSectionRoute,
   ApiUserLevelAcknowledgeRoute: ApiUserLevelAcknowledgeRoute,
@@ -2444,6 +2590,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLessonQuizAnswersRoute: ApiLessonQuizAnswersRoute,
   ApiLessonQuizResultRoute: ApiLessonQuizResultRoute,
   ApiLibraryDownloadFileIdRoute: ApiLibraryDownloadFileIdRoute,
+  ApiTavusV1ChatCompletionsRoute: ApiTavusV1ChatCompletionsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
