@@ -46,6 +46,35 @@ describe('splitTavusMessages', () => {
     ]);
   });
 
+  it('drops a perception tag that carries attributes', () => {
+    const { tavusRules } = splitTavusMessages([
+      { role: 'system', content: 'Keep replies short.' },
+      {
+        role: 'system',
+        content: '<user_emotions confidence="0.8">\nAnxious.\n</user_emotions>',
+      },
+    ]);
+    expect(tavusRules).toBe('Keep replies short.');
+  });
+
+  it('drops perception sent under a user (or any) role', () => {
+    const { history } = splitTavusMessages([
+      {
+        role: 'user',
+        content:
+          '<user_appearance>\nAn adult with glasses.\n</user_appearance>',
+      },
+      {
+        role: 'assistant',
+        content: '<user_screen>\nA bank statement.\n</user_screen>',
+      },
+      { role: 'user', content: 'What is Vref?' },
+    ]);
+    expect(history.map((m) => m.parts)).toEqual([
+      [{ type: 'text', text: 'What is Vref?' }],
+    ]);
+  });
+
   it('reads array content parts and skips empty turns', () => {
     const { history } = splitTavusMessages([
       { role: 'user', content: [{ type: 'text', text: 'Hello' }] },

@@ -15,7 +15,8 @@ export const PERSONA_SENTINEL = '[[VIPER7_PERSONA_PROMPT]]';
 /** Tavus validates a custom LLM with this placeholder conversation id. */
 export const TAVUS_CONFIG_CHECK_ID = 'tavus-openai-compat-test';
 
-const PERCEPTION_TAG_RE = /<user_(?:appearance|emotions|screen)>/;
+// `\b` so a tag with attributes (`<user_emotions confidence="…">`) matches.
+const PERCEPTION_TAG_RE = /<user_(?:appearance|emotions|screen)\b/;
 // A tag must start with a letter, so "a < b" survives.
 const SSML_TAG_RE = /<\/?[a-zA-Z][\w-]*(?:\s[^<>]*)?\/?>/g;
 
@@ -56,8 +57,9 @@ export function splitTavusMessages(messages: OpenAIChatMessage[]): {
 
   messages.forEach((message, index) => {
     const text = contentText(message.content);
+    // Perception is dropped whatever role Tavus files it under.
+    if (PERCEPTION_TAG_RE.test(text)) return;
     if (message.role === 'system' || message.role === 'developer') {
-      if (PERCEPTION_TAG_RE.test(text)) return;
       const kept = text
         .split('\n')
         .filter((line) => line.trim() !== PERSONA_SENTINEL)
