@@ -49,7 +49,9 @@ describe('createConversation', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://tavusapi.com/v2/conversations');
     expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>)['x-api-key']).toBe('test-key');
+    expect((init.headers as Record<string, string>)['x-api-key']).toBe(
+      'test-key',
+    );
     expect(JSON.parse(init.body as string)).toEqual({
       persona_id: 'p1',
       replica_id: 'r93ce3db27f8',
@@ -73,6 +75,34 @@ describe('createConversation', () => {
         customGreeting: 'Hi',
       }),
     ).rejects.toMatchObject({ name: 'TavusError', status: 402 });
+  });
+});
+
+describe('timeouts', () => {
+  it('gives every Tavus request an abort signal', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await endConversation('c1');
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('turns a timed-out request into a TavusError the callers already handle', async () => {
+    fetchMock.mockRejectedValueOnce(
+      new DOMException('The operation timed out.', 'TimeoutError'),
+    );
+    await expect(
+      createConversation({
+        personaId: 'p1',
+        callbackUrl: 'https://x.example',
+        maxCallDurationSeconds: 60,
+        customGreeting: 'Hi',
+      }),
+    ).rejects.toMatchObject({ name: 'TavusError', status: 504 });
+  });
+
+  it('turns a network failure into a TavusError', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(endConversation('c1')).rejects.toBeInstanceOf(TavusError);
   });
 });
 
@@ -135,9 +165,15 @@ describe('getConversation', () => {
   });
 
   it('reports no shutdown and no transcript while active', async () => {
-    fetchMock.mockResolvedValueOnce(json({ conversation_id: 'c1', status: 'active' }));
+    fetchMock.mockResolvedValueOnce(
+      json({ conversation_id: 'c1', status: 'active' }),
+    );
     const conv = await getConversation('c1');
-    expect(conv).toEqual({ status: 'active', shutdown: null, transcript: null });
+    expect(conv).toEqual({
+      status: 'active',
+      shutdown: null,
+      transcript: null,
+    });
   });
 
   it('is a TavusError on 404', async () => {

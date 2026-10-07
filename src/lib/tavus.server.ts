@@ -19,19 +19,40 @@ export class TavusError extends Error {
   }
 }
 
-async function tavusFetch(path: string, init: RequestInit = {}): Promise<unknown> {
-  const res = await fetch(`${TAVUS_API}${path}`, {
-    ...init,
-    headers: {
-      'x-api-key': env.TAVUS_API_KEY,
-      'content-type': 'application/json',
-    },
-  });
-  const text = await res.text();
+/** Every Tavus call sits on a learner's click or a webhook/reconcile path; a
+ * hung request must fail fast rather than hold those open. */
+const TAVUS_TIMEOUT_MS = 8000;
+
+async function tavusFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
+  const label = `Tavus ${init.method ?? 'GET'} ${path}`;
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${TAVUS_API}${path}`, {
+      ...init,
+      headers: {
+        'x-api-key': env.TAVUS_API_KEY,
+        'content-type': 'application/json',
+      },
+      signal: AbortSignal.timeout(TAVUS_TIMEOUT_MS),
+    });
+    text = await res.text();
+  } catch (err) {
+    // Timeouts and network failures surface as TavusError, which every
+    // caller already handles (start → 502; reconcile paths catch and retry).
+    const timedOut = err instanceof Error && err.name === 'TimeoutError';
+    throw new TavusError(
+      timedOut ? 504 : 502,
+      `${label} → ${timedOut ? `timed out after ${TAVUS_TIMEOUT_MS} ms` : `failed: ${err instanceof Error ? err.message : String(err)}`}`,
+    );
+  }
   if (!res.ok) {
     throw new TavusError(
       res.status,
-      `Tavus ${init.method ?? 'GET'} ${path} → ${res.status}: ${text.slice(0, 300)}`,
+      `${label} → ${res.status}: ${text.slice(0, 300)}`,
     );
   }
   return text ? (JSON.parse(text) as unknown) : null;
@@ -78,7 +99,10 @@ export async function endConversation(conversationId: string): Promise<void> {
   });
 }
 
-const transcriptTurnSchema = z.object({ role: z.string(), content: z.string() });
+const transcriptTurnSchema = z.object({
+  role: z.string(),
+  content: z.string(),
+});
 export type TranscriptTurn = z.infer<typeof transcriptTurnSchema>;
 
 const conversationSchema = z.object({
@@ -104,7 +128,9 @@ export async function getConversation(
   conversationId: string,
 ): Promise<TavusConversation> {
   const body = conversationSchema.parse(
-    await tavusFetch(`/conversations/${encodeURIComponent(conversationId)}?verbose=true`),
+    await tavusFetch(
+      `/conversations/${encodeURIComponent(conversationId)}?verbose=true`,
+    ),
   );
   const events = body.events ?? [];
   const shutdownEvent = events.find((e) => e.event_type === 'system.shutdown');
