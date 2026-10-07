@@ -29,15 +29,25 @@ export function utcDayWindow(now: Date): { start: Date; resetsAt: Date } {
   return { start, resetsAt: addDays(start, 1, { in: utc }) };
 }
 
+/** The least an ended call is charged — see `usedSeconds`. */
+export const MIN_CHARGED_SECONDS = 60;
+
 /** Ended calls count what they used; active ones count their whole
- * reservation until they end (unused time is given back then). */
+ * reservation until they end (unused time is given back then).
+ *
+ * Each ended call counts at least `MIN_CHARGED_SECONDS`: Tavus bills by the
+ * minute, so without a floor many very short calls would each cost us a
+ * billed minute while barely touching the learner's daily limit. */
 export function usedSeconds(rows: UsageRow[]): number {
   return rows.reduce(
     (sum, row) =>
       sum +
       (row.status === 'active'
         ? row.reservedSeconds
-        : (row.durationSeconds ?? row.reservedSeconds)),
+        : Math.max(
+            MIN_CHARGED_SECONDS,
+            row.durationSeconds ?? row.reservedSeconds,
+          )),
     0,
   );
 }
@@ -49,7 +59,10 @@ export function computeAllowance(rows: UsageRow[], now: Date): Allowance {
     remainingSeconds,
     resetsAt: utcDayWindow(now).resetsAt,
     canStart: remainingSeconds >= MIN_START_SECONDS,
-    reservedSecondsIfStarted: Math.min(PER_CALL_LIMIT_SECONDS, remainingSeconds),
+    reservedSecondsIfStarted: Math.min(
+      PER_CALL_LIMIT_SECONDS,
+      remainingSeconds,
+    ),
   };
 }
 

@@ -42,6 +42,19 @@ describe('computeAllowance', () => {
     expect(a.reservedSecondsIfStarted).toBe(600);
   });
 
+  it('charges every ended call at least a minute, so many short calls cannot dodge the limit', () => {
+    const a = computeAllowance(
+      [
+        { status: 'ended', reservedSeconds: 600, durationSeconds: 5 },
+        { status: 'ended', reservedSeconds: 600, durationSeconds: 0 },
+        { status: 'ended', reservedSeconds: 600, durationSeconds: 59 },
+        { status: 'ended', reservedSeconds: 600, durationSeconds: 61 },
+      ],
+      now,
+    );
+    expect(a.remainingSeconds).toBe(1800 - (60 + 60 + 60 + 61));
+  });
+
   it('caps the next call at what is left today', () => {
     const a = computeAllowance(
       [{ status: 'ended', reservedSeconds: 600, durationSeconds: 1500 }],
