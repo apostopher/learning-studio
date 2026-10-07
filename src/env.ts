@@ -104,6 +104,18 @@ export const env = createEnv({
     // preview build fails with "Invalid environment variables" before
     // anything compiles (there's no .env.example and .env is gitignored).
     ELEVENLABS_API_KEY: z.string().min(1).optional(),
+    // Tavus video calls (docs/superpowers/specs/2026-10-06-tavus-video-call-design.md).
+    TAVUS_API_KEY: z.string().min(1),
+    TAVUS_REPLICA_ID: z
+      .string()
+      .regex(/^r[0-9a-z]+$/, 'TAVUS_REPLICA_ID must be a replica id (r…), not a persona id (p…)'),
+    // Optional so the dev server boots before `pnpm tavus:sync-persona` has
+    // created the persona; unset → the video button says calls aren't set up.
+    TAVUS_PERSONA_ID: z.string().regex(/^p[0-9a-z]+$/).optional(),
+    // Bearer secret Tavus sends to our completions endpoint, and the webhook token.
+    TAVUS_LLM_SECRET: z.string().min(32),
+    // Public origin Tavus can reach (ngrok in dev).
+    TAVUS_PUBLIC_URL: z.url(),
   },
 
   clientPrefix: 'VITE_',
