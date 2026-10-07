@@ -291,48 +291,37 @@ describe("AIEvaluationResultSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("AIFreeTextEvalOutputSchema", () => {
-  it("accepts a valid free-text eval output", () => {
-    const result = AIFreeTextEvalOutputSchema.safeParse({
-      score: 85,
-      explanation: "The answer covers the main concept but lacks detail.",
-    });
-    expect(result.success).toBe(true);
+  const valid = {
+    essentialIdeas: [
+      { idea: "Squawk 7600", conveyed: "fully" },
+      { idea: "Follow the last clearance", conveyed: "partly" },
+    ],
+    incorrectClaims: [],
+    explanation: "You covered the transponder code.",
+  };
+
+  it("accepts per-idea judgements", () => {
+    expect(AIFreeTextEvalOutputSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts boundary scores of 0 and 100", () => {
+  it("rejects a judgement other than fully / partly / not", () => {
     expect(
       AIFreeTextEvalOutputSchema.safeParse({
-        score: 0,
-        explanation: "Completely incorrect.",
+        ...valid,
+        essentialIdeas: [{ idea: "x", conveyed: "mostly" }],
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+  });
 
+  it("requires at least one essential idea", () => {
     expect(
-      AIFreeTextEvalOutputSchema.safeParse({
-        score: 100,
-        explanation: "Perfect answer.",
-      }).success,
-    ).toBe(true);
-  });
-
-  it("rejects a score above 100", () => {
-    const result = AIFreeTextEvalOutputSchema.safeParse({
-      score: 101,
-      explanation: "Over the limit.",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a score below 0", () => {
-    const result = AIFreeTextEvalOutputSchema.safeParse({
-      score: -5,
-      explanation: "Below zero.",
-    });
-    expect(result.success).toBe(false);
+      AIFreeTextEvalOutputSchema.safeParse({ ...valid, essentialIdeas: [] })
+        .success,
+    ).toBe(false);
   });
 
   it("rejects when explanation is missing", () => {
-    const result = AIFreeTextEvalOutputSchema.safeParse({ score: 50 });
-    expect(result.success).toBe(false);
+    const { explanation: _, ...rest } = valid;
+    expect(AIFreeTextEvalOutputSchema.safeParse(rest).success).toBe(false);
   });
 });

@@ -43,6 +43,10 @@ export async function ensureChat({
   return row.id;
 }
 
+/** `db` itself or a transaction handle — lets callers append inside their own
+ * transaction (saveTranscriptOnce claims and inserts atomically). */
+type ChatExecutor = Pick<typeof db, "select" | "insert" | "update">;
+
 /**
  * Append messages to a chat, ordering them after whatever is already there.
  * Order starts at `max(order)+1` for the chat (0 if the chat has no messages
@@ -51,17 +55,18 @@ export async function ensureChat({
 export async function appendMessages(
   chatId: string,
   msgs: Array<{ role: string; parts: unknown }>,
+  executor: ChatExecutor = db,
 ): Promise<void> {
   if (msgs.length === 0) return;
 
-  const [row] = await db
+  const [row] = await executor
     .select({ maxOrder: max(aiMessages.order) })
     .from(aiMessages)
     .where(eq(aiMessages.chatId, chatId));
 
   const startOrder = (row?.maxOrder ?? -1) + 1;
 
-  await db.insert(aiMessages).values(
+  await executor.insert(aiMessages).values(
     msgs.map((msg, i) => ({
       chatId,
       role: msg.role,
@@ -70,7 +75,7 @@ export async function appendMessages(
     })),
   );
 
-  await db
+  await executor
     .update(aiChats)
     .set({ updatedAt: sql`CURRENT_TIMESTAMP` })
     .where(eq(aiChats.id, chatId));

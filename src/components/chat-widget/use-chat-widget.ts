@@ -78,7 +78,17 @@ export function useChatWidget() {
   // `courseSlug` is `undefined` there, which is expected).
   const { courseSlug } = useParams({ strict: false });
 
-  const { messages, status, sendMessage } = useChat({
+  // Text turns submitted or streaming right now. Written only inside the
+  // `sendMessage` wrapper below (an event-handler path, never render), whose
+  // promise settles once the turn's stream has finished, failed or aborted.
+  const inFlightRef = useRef(0);
+
+  const {
+    messages,
+    status,
+    sendMessage: sendChatMessage,
+    setMessages,
+  } = useChat({
     id: 'viper7-widget',
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -153,6 +163,15 @@ export function useChatWidget() {
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
+  const sendMessage: typeof sendChatMessage = async (...args) => {
+    inFlightRef.current++;
+    try {
+      return await sendChatMessage(...args);
+    } finally {
+      inFlightRef.current--;
+    }
+  };
+
   return {
     isOpen,
     setIsOpen,
@@ -161,5 +180,16 @@ export function useChatWidget() {
     status,
     isLoading,
     chatId: chatIdRef.current,
+    setMessages,
+    courseSlug,
+    /** Read at call time (event handlers), never during render. */
+    getChatId: () => chatIdRef.current,
+    /** A video call may create the chat row; later text turns must continue it. */
+    adoptChatId: (id: string) => {
+      chatIdRef.current = id;
+    },
+    /** Whether a text turn is submitted/streaming; read at call time, so a
+     * wholesale message replace can wait rather than drop that turn. */
+    isBusy: () => inFlightRef.current > 0,
   };
 }

@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   evaluateMCQ: vi.fn(),
   saveTestResult: vi.fn(),
   maybePromote: vi.fn(),
+  takePreparedDebrief: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -20,6 +21,9 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
+vi.mock('#/lib/prepared-debrief.server', () => ({
+  takePreparedDebrief: m.takePreparedDebrief,
+}));
 vi.mock('#/db/lesson-test', () => ({ saveTestResult: m.saveTestResult }));
 vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: m.evaluateFreeText,
@@ -71,6 +75,7 @@ beforeEach(() => {
   m.evaluateFreeText.mockResolvedValue({ score: 80 });
   m.saveTestResult.mockResolvedValue({ id: 1 });
   m.maybePromote.mockResolvedValue(null);
+  m.takePreparedDebrief.mockResolvedValue(null);
 });
 
 /**
@@ -372,5 +377,61 @@ describe('the course comes from the request', () => {
       lessonSlug: 'l1',
       courseSlug: 'c-real',
     });
+  });
+});
+
+/**
+ * A debrief prepared while the video played is served by `generate` — but only
+ * through the same gate, since it is still locked material until the video is
+ * watched.
+ */
+describe('generate serves a prepared debrief', () => {
+  const prepared = { lessonSlug: 'l1', questions: [freeTextQuestion] };
+
+  it('returns the prepared test without running the model', async () => {
+    m.takePreparedDebrief.mockResolvedValue(prepared);
+    const res = await generateTestHandler(
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(prepared);
+    expect(m.takePreparedDebrief).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      lessonSlug: 'l1',
+    });
+    expect(m.generateTest).not.toHaveBeenCalled();
+    expect(m.resolveDebriefSource).not.toHaveBeenCalled();
+  });
+
+  it('never takes it while the material is still video-locked', async () => {
+    m.takePreparedDebrief.mockResolvedValue(prepared);
+    m.evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      materialLock: { kind: 'video-locked' },
+    });
+    const res = await generateTestHandler(
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+      }),
+    );
+    expect(res.status).toBe(403);
+    // Not taken, so it is still there once the video unlocks it.
+    expect(m.takePreparedDebrief).not.toHaveBeenCalled();
+  });
+
+  it('generates on demand when nothing was prepared', async () => {
+    const res = await generateTestHandler(
+      post('/api/lesson/ai-test/generate', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(m.generateTest).toHaveBeenCalledWith('l1', ['k'], 'body');
   });
 });

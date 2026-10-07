@@ -3,7 +3,10 @@ import type { UIMessage } from 'ai';
 import type { MotionStyle } from 'motion/react';
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
-import { ChatWidgetHeader } from '#/components/chat-widget/chat-widget-header';
+import {
+  ChatWidgetHeader,
+  type HeaderVideoCallProps,
+} from '#/components/chat-widget/chat-widget-header';
 import { ChatWidgetInput } from '#/components/chat-widget/chat-widget-input';
 import { ChatWidgetMessages } from '#/components/chat-widget/chat-widget-messages';
 import { ChatWidgetResizeHandles } from '#/components/chat-widget/chat-widget-resize-handles';
@@ -42,6 +45,13 @@ interface ChatWindowProps {
    * by the Viper7 container, so the shared path is unchanged.
    */
   afterMessages?: ReactNode;
+  /** Viper7 only: the header's video-call button. */
+  videoCall?: HeaderVideoCallProps;
+  /** Viper7 only: a docked video call. Replaces the messages, the confirm
+   * affordance and the input while present. */
+  stage?: ReactNode;
+  /** Viper7 only: rendered above the messages (the "On a call" bar). */
+  topBar?: ReactNode;
 }
 
 /**
@@ -80,6 +90,9 @@ export function ChatWindow({
   status,
   onConfirm,
   afterMessages,
+  videoCall,
+  stage,
+  topBar,
 }: ChatWindowProps) {
   const {
     left,
@@ -120,32 +133,38 @@ export function ChatWindow({
         onToggleFontSize={onToggleFontSize}
         onClose={onClose}
         dragBindings={dragBindings}
+        videoCall={videoCall}
       />
-      <ChatWidgetMessages
-        messages={messages}
-        isLoading={isLoading}
-        trailing={afterMessages}
-      />
-      {status === 'confirming' && onConfirm && (
-        <div className="border-gray-6 border-t px-4 py-3">
-          <Button
-            type="button"
-            onClick={onConfirm}
-            disabled={isLoading}
-            className={cn(
-              'inline-flex w-full items-center justify-center rounded-lg bg-accent-9 px-4 py-2',
-              'font-medium text-accent-contrast text-sm transition-colors hover:bg-accent-10',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-            )}
-          >
-            Looks good
-          </Button>
-        </div>
+      {stage ?? (
+        <>
+          {topBar}
+          <ChatWidgetMessages
+            messages={messages}
+            isLoading={isLoading}
+            trailing={afterMessages}
+          />
+          {status === 'confirming' && onConfirm && (
+            <div className="border-gray-6 border-t px-4 py-3">
+              <Button
+                type="button"
+                onClick={onConfirm}
+                disabled={isLoading}
+                className={cn(
+                  'inline-flex w-full items-center justify-center rounded-lg bg-accent-9 px-4 py-2',
+                  'font-medium text-accent-contrast text-sm transition-colors hover:bg-accent-10',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                Looks good
+              </Button>
+            </div>
+          )}
+          <ChatWidgetInput
+            onSend={(text) => sendMessage({ text })}
+            isLoading={isLoading}
+          />
+        </>
       )}
-      <ChatWidgetInput
-        onSend={(text) => sendMessage({ text })}
-        isLoading={isLoading}
-      />
     </motion.div>
   );
 }

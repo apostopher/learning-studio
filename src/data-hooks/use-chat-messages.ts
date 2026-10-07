@@ -33,6 +33,16 @@ const chatWithMessagesSchema = z.object({
 export type ChatWithMessages = z.infer<typeof chatWithMessagesSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
+export async function fetchChatWithMessages(
+  chatId: string,
+): Promise<ChatWithMessages> {
+  const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
+  if (!res.ok) {
+    throw new Error(`Failed to load chat (${res.status})`);
+  }
+  return chatWithMessagesSchema.parse(await res.json());
+}
+
 /**
  * A single chat with its messages in order, for resuming a conversation.
  * Backed by GET /api/chats/:chatId. Disabled until `chatId` is non-empty.
@@ -40,13 +50,7 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export function useChatMessages(chatId: string) {
   return useQuery({
     queryKey: dataKeys.chatMessages(chatId),
-    queryFn: async () => {
-      const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
-      if (!res.ok) {
-        throw new Error(`Failed to load chat (${res.status})`);
-      }
-      return chatWithMessagesSchema.parse(await res.json());
-    },
+    queryFn: () => fetchChatWithMessages(chatId),
     enabled: chatId.length > 0,
     staleTime: 30_000,
   });

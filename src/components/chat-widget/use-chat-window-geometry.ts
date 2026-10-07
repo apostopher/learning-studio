@@ -42,6 +42,28 @@ export function computeDefaultRect(vp: Viewport): ChatWindowRect {
   };
 }
 
+export const VIDEO_DEFAULT_WIDTH = 480;
+export const VIDEO_DEFAULT_HEIGHT = 360;
+export const WINDOW_GAP = 16;
+
+/** Default rect for the popped-out video window: beside the chat window's
+ * default spot (to its inline-start side on screen), so popping out doesn't
+ * cover the conversation. Physical `left` for the same reason as
+ * computeDefaultRect: it's a viewport anchor, not a flow direction. */
+export function computeDefaultVideoRect(vp: Viewport): ChatWindowRect {
+  const width = Math.min(VIDEO_DEFAULT_WIDTH, vp.width - 2 * MARGIN);
+  const height = Math.min(VIDEO_DEFAULT_HEIGHT, vp.height - 2 * MARGIN);
+  return {
+    width,
+    height,
+    left: Math.max(
+      MARGIN,
+      vp.width - MARGIN - DEFAULT_WIDTH - WINDOW_GAP - width,
+    ),
+    top: Math.max(MARGIN, vp.height - MARGIN - height),
+  };
+}
+
 /** Edge-based resize: pinned edges stay, moving edges move, each clamped once
  * against the min-size floor and the viewport margin simultaneously. */
 export function computeResize(
@@ -133,8 +155,18 @@ function getViewport(): Viewport {
   return { width: window.innerWidth, height: window.innerHeight };
 }
 
-export function useChatWindowGeometry(): UseChatWindowGeometry {
-  const [rect, setRect] = useAtom(chatWidgetRectAtom);
+export interface UseChatWindowGeometryOptions {
+  /** Where this window's rect persists. Defaults to the chat window's. */
+  rectAtom?: typeof chatWidgetRectAtom;
+  /** Where this window opens before the user has moved it. */
+  computeDefault?: (vp: Viewport) => ChatWindowRect;
+}
+
+export function useChatWindowGeometry({
+  rectAtom = chatWidgetRectAtom,
+  computeDefault = computeDefaultRect,
+}: UseChatWindowGeometryOptions = {}): UseChatWindowGeometry {
+  const [rect, setRect] = useAtom(rectAtom);
   const reducedMotion = useReducedMotion() ?? false;
 
   const left = useMotionValue(rect?.left ?? 0);
@@ -182,9 +214,9 @@ export function useChatWindowGeometry(): UseChatWindowGeometry {
     applyRect(
       rect
         ? reconcileToViewport(rect, getViewport())
-        : computeDefaultRect(getViewport()),
+        : computeDefault(getViewport()),
     );
-  }, [rect, applyRect]);
+  }, [rect, applyRect, computeDefault]);
 
   // Re-reconcile to the viewport when the browser window resizes (or zooms)
   // while the chat window is open, so it can never be left stranded off-screen.
@@ -196,12 +228,12 @@ export function useChatWindowGeometry(): UseChatWindowGeometry {
       applyRect(
         rect
           ? reconcileToViewport(rect, getViewport())
-          : computeDefaultRect(getViewport()),
+          : computeDefault(getViewport()),
       );
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [rect, applyRect]);
+  }, [rect, applyRect, computeDefault]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -271,7 +303,7 @@ export function useChatWindowGeometry(): UseChatWindowGeometry {
   );
 
   const reset = useCallback(() => {
-    const target = computeDefaultRect(getViewport());
+    const target = computeDefault(getViewport());
     if (reducedMotion) {
       applyRect(target);
       setRect(null);
@@ -285,7 +317,16 @@ export function useChatWindowGeometry(): UseChatWindowGeometry {
       ...spring,
       onComplete: () => setRect(null),
     });
-  }, [reducedMotion, applyRect, setRect, left, top, width, height]);
+  }, [
+    reducedMotion,
+    applyRect,
+    setRect,
+    computeDefault,
+    left,
+    top,
+    width,
+    height,
+  ]);
 
   const dragBindings: DragBindings = {
     onPointerDown: startDrag,
