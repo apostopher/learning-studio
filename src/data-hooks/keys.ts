@@ -105,6 +105,8 @@ export const dataKeys = {
     ['user', 'ska-profile', courseSlug] as const,
   chats: () => ['user', 'chats'] as const,
   chatMessages: (chatId: string) => ['user', 'chat-messages', chatId] as const,
+  videoCallAllowance: () => ['video-call', 'allowance'] as const,
+  videoCall: (id: string) => ['video-call', id] as const,
   subscribedSlugs: () => ['user', 'subscribed-slugs'] as const,
   courseResume: (courseSlug: string) =>
     ['course', 'resume', courseSlug] as const,

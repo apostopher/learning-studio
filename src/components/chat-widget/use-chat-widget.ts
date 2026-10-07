@@ -78,7 +78,7 @@ export function useChatWidget() {
   // `courseSlug` is `undefined` there, which is expected).
   const { courseSlug } = useParams({ strict: false });
 
-  const { messages, status, sendMessage } = useChat({
+  const { messages, status, sendMessage, setMessages } = useChat({
     id: 'viper7-widget',
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -161,5 +161,13 @@ export function useChatWidget() {
     status,
     isLoading,
     chatId: chatIdRef.current,
+    setMessages,
+    courseSlug,
+    /** Read at call time (event handlers), never during render. */
+    getChatId: () => chatIdRef.current,
+    /** A video call may create the chat row; later text turns must continue it. */
+    adoptChatId: (id: string) => {
+      chatIdRef.current = id;
+    },
   };
 }
