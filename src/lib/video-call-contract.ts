@@ -51,8 +51,8 @@ export const allowanceResponseSchema = z.object({
 export type AllowanceResponse = z.infer<typeof allowanceResponseSchema>;
 
 export const startRequestSchema = z.object({
-  chatId: z.string().min(1).optional(),
-  courseSlug: z.string().min(1).optional(),
+  chatId: z.string().min(1).max(255).optional(),
+  courseSlug: z.string().min(1).max(255).optional(),
 });
 export type StartRequest = z.infer<typeof startRequestSchema>;
 

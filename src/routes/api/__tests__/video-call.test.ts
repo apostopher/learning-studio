@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
@@ -144,7 +145,7 @@ describe('POST /api/video-call', () => {
     expect(res.status).toBe(200);
     expect(m.createConversation).toHaveBeenCalledWith({
       personaId: 'p1',
-      callbackUrl: `https://pub.example/api/tavus/webhook?token=${'s'.repeat(32)}`,
+      callbackUrl: `https://pub.example/api/tavus/webhook?token=${createHmac('sha256', 's'.repeat(32)).update('tavus-webhook').digest('hex')}`,
       maxCallDurationSeconds: 300,
       customGreeting: VIDEO_CALL_GREETING,
     });
@@ -229,6 +230,39 @@ describe('POST /api/video-call', () => {
     expect(m.endConversation).toHaveBeenCalledWith('conv-new');
   });
 
+  it('callback url never carries the raw LLM secret', async () => {
+    await startVideoCallHandler(post('/api/video-call'));
+    expect(m.createConversation.mock.calls[0][0].callbackUrl).not.toContain(
+      's'.repeat(32),
+    );
+  });
+
+  it('502 and ends the Tavus call when the row cannot be inserted', async () => {
+    m.insertActiveCall.mockRejectedValue(new Error('value too long'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await startVideoCallHandler(post('/api/video-call'));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ reason: 'provider_unavailable' });
+    expect(m.endConversation).toHaveBeenCalledWith('conv-new');
+  });
+
+  it('502 and ends the Tavus call when ensureChat fails', async () => {
+    m.ensureChat.mockRejectedValue(new Error('db down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await startVideoCallHandler(post('/api/video-call'));
+    expect(res.status).toBe(502);
+    expect(m.endConversation).toHaveBeenCalledWith('conv-new');
+    expect(m.insertActiveCall).not.toHaveBeenCalled();
+  });
+
+  it('400 for an oversize courseSlug without creating a Tavus call', async () => {
+    const res = await startVideoCallHandler(
+      post('/api/video-call', { courseSlug: 'x'.repeat(256) }),
+    );
+    expect(res.status).toBe(400);
+    expect(m.createConversation).not.toHaveBeenCalled();
+  });
+
   it('502 and no chat or row when Tavus refuses', async () => {
     m.createConversation.mockRejectedValue(new Error('402'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -303,6 +337,31 @@ describe('POST /api/video-call/:id/end', () => {
     expect(await res.json()).toMatchObject({
       status: 'ended',
       durationSeconds: 90,
+    });
+  });
+
+  it('leaves a call Tavus already ended at the time limit alone', async () => {
+    const done = {
+      ...CALL,
+      status: 'ended' as const,
+      endReason: 'time_limit' as const,
+      durationSeconds: 600,
+    };
+    m.getCallForUser.mockResolvedValue(CALL);
+    m.reconcileVideoCall.mockResolvedValueOnce(done);
+    m.getCallById.mockResolvedValue(done);
+    const res = await endVideoCallHandler(
+      post('/api/video-call/vc1/end'),
+      'vc1',
+    );
+
+    expect(m.reconcileVideoCall).toHaveBeenCalledWith(CALL);
+    expect(m.endConversation).not.toHaveBeenCalled();
+    expect(m.markCallEnded).not.toHaveBeenCalled();
+    expect(await res.json()).toMatchObject({
+      status: 'ended',
+      endReason: 'time_limit',
+      durationSeconds: 600,
     });
   });
 });

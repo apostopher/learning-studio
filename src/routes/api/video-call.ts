@@ -6,6 +6,7 @@ import { insertActiveCall } from '#/db/video-calls';
 import { env } from '#/env';
 import { auth } from '#/lib/auth';
 import { createConversation, endConversation } from '#/lib/tavus.server';
+import { tavusWebhookToken } from '#/lib/tavus-webhook-token.server';
 import {
   type StartResponse,
   startRequestSchema,
@@ -56,7 +57,7 @@ export async function startVideoCallHandler(
   try {
     conversation = await createConversation({
       personaId,
-      callbackUrl: `${env.TAVUS_PUBLIC_URL}/api/tavus/webhook?token=${encodeURIComponent(env.TAVUS_LLM_SECRET)}`,
+      callbackUrl: `${env.TAVUS_PUBLIC_URL}/api/tavus/webhook?token=${tavusWebhookToken()}`,
       maxCallDurationSeconds: reservedSeconds,
       customGreeting: VIDEO_CALL_GREETING,
     });
@@ -65,24 +66,36 @@ export async function startVideoCallHandler(
     return Response.json({ reason: 'provider_unavailable' }, { status: 502 });
   }
 
-  const chatId = await ensureChat({
-    chatId: parsed.data.chatId,
-    userId,
-    firstUserText: 'Video call with Viper7',
-  });
-
-  const inserted = await insertActiveCall({
-    userId,
-    userName: session.user.name ?? null,
-    chatId,
-    courseSlug: parsed.data.courseSlug ?? null,
-    tavusConversationId: conversation.conversationId,
-    reservedSeconds,
-  });
-  if (inserted === 'already_active') {
-    await endConversation(conversation.conversationId).catch((err) =>
+  const endOrphan = () =>
+    endConversation(conversation.conversationId).catch((err) =>
       console.error('tavus end orphaned conversation failed', err),
     );
+
+  // Tavus is already running (and billing) a conversation: any failure from
+  // here on must end it, or it runs with no row to count it against the day.
+  let chatId: string;
+  let inserted: Awaited<ReturnType<typeof insertActiveCall>>;
+  try {
+    chatId = await ensureChat({
+      chatId: parsed.data.chatId,
+      userId,
+      firstUserText: 'Video call with Viper7',
+    });
+    inserted = await insertActiveCall({
+      userId,
+      userName: session.user.name ?? null,
+      chatId,
+      courseSlug: parsed.data.courseSlug ?? null,
+      tavusConversationId: conversation.conversationId,
+      reservedSeconds,
+    });
+  } catch (err) {
+    console.error('video call persist failed after tavus create', err);
+    await endOrphan();
+    return Response.json({ reason: 'provider_unavailable' }, { status: 502 });
+  }
+  if (inserted === 'already_active') {
+    await endOrphan();
     return Response.json({ reason: 'already_active' }, { status: 409 });
   }
 

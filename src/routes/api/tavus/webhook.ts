@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { getCallByConversation } from '#/db/video-calls';
-import { env } from '#/env';
 import { secretMatches } from '#/lib/secret-matches.server';
+import { tavusWebhookToken } from '#/lib/tavus-webhook-token.server';
 import { reconcileVideoCall } from '#/lib/video-call-reconcile.server';
 
 const RECONCILE_EVENTS = new Set([
@@ -21,7 +21,7 @@ const webhookSchema = z.object({
  */
 export async function tavusWebhookHandler(request: Request): Promise<Response> {
   const token = new URL(request.url).searchParams.get('token') ?? '';
-  if (!secretMatches(token, env.TAVUS_LLM_SECRET)) {
+  if (!secretMatches(token, tavusWebhookToken())) {
     return new Response('Unauthorized', { status: 401 });
   }
 
