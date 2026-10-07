@@ -1,4 +1,4 @@
-import type { AITestQuestion } from "../schemas";
+import type { AITestQuestion } from '../schemas';
 
 export function evaluatorPrompt(vars: {
   keyPoints: string[];
@@ -7,9 +7,7 @@ export function evaluatorPrompt(vars: {
 }): string {
   const { keyPoints, text, questions } = vars;
 
-  const numberedKeyPoints = keyPoints
-    .map((kp, i) => `${i}. ${kp}`)
-    .join("\n");
+  const numberedKeyPoints = keyPoints.map((kp, i) => `${i}. ${kp}`).join('\n');
 
   return `You are a senior aviation training quality assessor. Evaluate each quiz question against the criteria below and return a structured quality report.
 
@@ -22,6 +20,7 @@ For each question, assess ALL of the following:
 3. **Plausibility** — For MCQ: all distractors must be plausible in context but clearly distinguishable from the correct answer. Avoid trivially wrong options.
 4. **Clarity** — The question must be unambiguous. A competent student should not be confused about what is being asked.
 5. **Coverage** — The question must genuinely test the key point it is mapped to (via \`keyPointIndex\`).
+6. **No giveaways** — For MCQ: a learner who does not know the material must not be able to pick the correct option from its form. Fail it if the correct option is noticeably longer, more detailed or more carefully qualified than the distractors; if it is the only one that grammatically fits the question; if it alone echoes key words from the question; or if the distractors alone use absolutes like "always" or "never".
 
 ## Output Format
 

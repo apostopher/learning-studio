@@ -1,24 +1,25 @@
-import type { AITestQuestion } from "../schemas";
-import type { EvaluatorOutput } from "../schemas";
+import type { AITestQuestion, EvaluatorOutput } from '../schemas';
 
 export function optimizerPrompt(vars: {
   keyPoints: string[];
   text: string;
   failedQuestions: AITestQuestion[];
-  evaluatorFeedback: EvaluatorOutput["results"];
+  evaluatorFeedback: EvaluatorOutput['results'];
 }): string {
   const { keyPoints, text, failedQuestions, evaluatorFeedback } = vars;
 
-  const numberedKeyPoints = keyPoints
-    .map((kp, i) => `${i}. ${kp}`)
-    .join("\n");
+  const numberedKeyPoints = keyPoints.map((kp, i) => `${i}. ${kp}`).join('\n');
 
   // Pair each failed question with its evaluator feedback
   const pairedItems = failedQuestions.map((q) => {
     const feedback = evaluatorFeedback.find((f) => f.questionId === q.id);
     return {
       question: q,
-      feedback: feedback ?? { questionId: q.id, pass: false, reason: "No feedback available" },
+      feedback: feedback ?? {
+        questionId: q.id,
+        pass: false,
+        reason: 'No feedback available',
+      },
     };
   });
 
@@ -33,7 +34,7 @@ export function optimizerPrompt(vars: {
 - Follow all original generation rules:
   - NEVER directly quote or reference the key point text
   - Scenario-based, application-focused questions
-  - MCQ: exactly 4 plausible but distinguishable options
+  - MCQ: exactly 4 plausible but distinguishable options, all of similar length and detail — the correct option must not be the longest or most qualified, or otherwise identifiable from its form
   - Free-text: concise \`expectedAnswer\` (1–3 sentences)
   - Question text in markdown
 
@@ -55,5 +56,5 @@ ${pairedItems
 ${JSON.stringify(question, null, 2)}
 \`\`\``,
   )
-  .join("\n\n")}`;
+  .join('\n\n')}`;
 }

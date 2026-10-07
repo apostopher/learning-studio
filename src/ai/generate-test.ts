@@ -1,15 +1,16 @@
-import { generateText, Output } from "ai";
-import { sonnet, haiku } from "./ai-provider";
-import { generationPrompt } from "./prompts/generation";
-import { evaluatorPrompt } from "./prompts/evaluator";
-import { optimizerPrompt } from "./prompts/optimizer";
+import { generateText, Output } from 'ai';
+import { haiku, sonnet } from './ai-provider';
+import { balanceAnswerPositions, withLengthGiveaways } from './mcq-answer-bias';
+import { evaluatorPrompt } from './prompts/evaluator';
+import { generationPrompt } from './prompts/generation';
+import { optimizerPrompt } from './prompts/optimizer';
 import {
-  AITestGenerationOutputSchema,
-  EvaluatorOutputSchema,
   type AITest,
+  AITestGenerationOutputSchema,
   type AITestQuestion,
   type EvaluatorOutput,
-} from "./schemas";
+  EvaluatorOutputSchema,
+} from './schemas';
 
 const MAX_RETRIES = 2;
 
@@ -55,7 +56,7 @@ async function optimize(
   keyPoints: string[],
   text: string,
   failedQuestions: AITestQuestion[],
-  evaluatorFeedback: EvaluatorOutput["results"],
+  evaluatorFeedback: EvaluatorOutput['results'],
 ): Promise<AITestQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
@@ -93,16 +94,19 @@ export async function generateTest(
   // Step 2-3: Evaluate with Haiku, optimize failures with Sonnet (max 2 retries)
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const evaluation = await evaluate(keyPoints, text, questions);
+    // The model judges quality; length is measured, so a correct option that
+    // is visibly the longest is caught even when the evaluator lets it pass.
+    const results = withLengthGiveaways(evaluation.results, questions);
 
-    const hasFailed = evaluation.results.some((r) => !r.pass);
+    const hasFailed = results.some((r) => !r.pass);
     if (!hasFailed) break;
 
     const failedIds = new Set(
-      evaluation.results.filter((r) => !r.pass).map((r) => r.questionId),
+      results.filter((r) => !r.pass).map((r) => r.questionId),
     );
     const failedQuestions = questions.filter((q) => failedIds.has(q.id));
     const passedQuestions = questions.filter((q) => !failedIds.has(q.id));
-    const failedFeedback = evaluation.results.filter((r) => !r.pass);
+    const failedFeedback = results.filter((r) => !r.pass);
 
     const regenerated = await optimize(
       keyPoints,
@@ -113,5 +117,7 @@ export async function generateTest(
     questions = [...passedQuestions, ...regenerated];
   }
 
-  return { lessonSlug, questions };
+  // Last, so regenerated questions are placed too: the model's own ordering
+  // (correct answer mostly B) never reaches the learner.
+  return { lessonSlug, questions: balanceAnswerPositions(questions) };
 }
