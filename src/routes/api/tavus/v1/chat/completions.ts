@@ -24,6 +24,14 @@ import {
 
 const MODEL = 'viper7';
 
+/**
+ * How much of the stored text chat a call turn replays. Every spoken turn is
+ * a fresh completion, so an unbounded history would grow latency (time to
+ * first word) and cost with the chat's age; the last 30 messages carry the
+ * conversation that led into the call.
+ */
+const PRIOR_HISTORY_LIMIT = 30;
+
 async function* once(text: string) {
   yield text;
 }
@@ -91,11 +99,17 @@ export async function tavusCompletionsHandler(
         resolveChatSkaProfile({ userId: call.userId, courseSlug }),
         getChat(call.userId, call.chatId),
       ]);
-      const prior: UIMessage[] = (chat?.messages ?? []).map((m) => ({
-        id: m.id,
-        role: m.role as UIMessage['role'],
-        parts: m.parts as UIMessage['parts'],
-      }));
+      // Only learner/viper7 turns: a stored `system` row (rows are written
+      // from client-sent messages; role is free text) must never replay as a
+      // system prompt.
+      const prior: UIMessage[] = (chat?.messages ?? [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-PRIOR_HISTORY_LIMIT)
+        .map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          parts: m.parts as UIMessage['parts'],
+        }));
       const messages = [...prior, ...history];
 
       const result = await buildChatStream({
