@@ -626,14 +626,28 @@
     background: var(--color-gray-1);
   }
 
+  /* No box behind captions — just light text. With no backing plate the text
+     sits directly on the footage, so a dark outline + soft halo keeps it
+     legible over bright frames (sky, snow, white cockpits). The browser's
+     default cue background is a translucent black, so it must be cleared
+     explicitly. Light theme: gray-1 is white, gray-12 near-black. */
   .video-player ::cue {
-    background: var(--color-gray-a12);
+    background: transparent;
     color: var(--color-gray-1);
     font-family: var(--font-sans);
+    text-shadow:
+      0 0 2px var(--color-gray-12),
+      0 0 2px var(--color-gray-12),
+      0 1px 4px var(--color-gray-12);
   }
 
+  /* Dark theme flips the scale: gray-12 is the light end, gray-1 black. */
   .dark .video-player ::cue {
     color: var(--color-gray-12);
+    text-shadow:
+      0 0 2px var(--color-gray-1),
+      0 0 2px var(--color-gray-1),
+      0 1px 4px var(--color-gray-1);
   }
 
   .video-player .vp-controls {
