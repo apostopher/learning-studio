@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
+import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
 import {
   useRemixCourse,
   useUnremixCourse,
@@ -47,6 +48,39 @@ describe('useRemixCourse', () => {
       expect(keys).toContain(JSON.stringify(dataKeys.courseBoards()));
       expect(keys).toContain(JSON.stringify(dataKeys.adminCourses()));
     });
+  });
+
+  it('refetches the remixer’s posters, so its borrowed lessons get their thumbnails', async () => {
+    // Before the remix the remixer's poster map covers only its own lessons.
+    // It is fresh for 30 minutes, so without an invalidation every borrowed
+    // lesson draws the grey tile until then.
+    const posterResponses = [
+      { 1: 'own.jpg' },
+      { 1: 'own.jpg', 9: 'borrowed.jpg' },
+    ];
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/admin/courses/2/lesson-posters'
+        ? new Response(JSON.stringify(posterResponses.shift()))
+        : new Response(JSON.stringify({ moduleCount: 7 }), { status: 201 }),
+    );
+    const client = new QueryClient();
+    const { result } = renderHook(
+      () => ({ posters: useLessonPosters(2), remix: useRemixCourse() }),
+      { wrapper: wrapper(client) },
+    );
+    await waitFor(() => expect(result.current.posters.data).toBeDefined());
+    expect(result.current.posters.data?.['9']).toBeUndefined();
+
+    await act(async () => {
+      await result.current.remix.mutateAsync({
+        courseId: 2,
+        sourceCourseId: 6,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.posters.data?.['9']).toBe('borrowed.jpg'),
+    );
   });
 
   it('surfaces the server’s sentence on failure', async () => {
