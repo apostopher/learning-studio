@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
-import { createStore, Provider } from 'jotai';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLibraryLessonTargetAtom } from '#/atoms/admin';
 
 // The card is the consumer of what this container decides; recorded rather
 // than rendered, since its own registration has its own suite.
@@ -13,21 +11,16 @@ vi.mock('../library-lesson-card-container', () => ({
     return <div />;
   },
 }));
+// What is being dragged right now — `null` at rest.
+const drag = vi.hoisted(() => ({ activeType: null as string | null }));
 vi.mock('@dnd-kit/core', () => ({
-  useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
-}));
-vi.mock('../../ui/tooltip-icon-button', () => ({
-  TooltipIconButton: ({
-    label,
-    onClick,
-  }: {
-    label: string;
-    onClick?: () => void;
-  }) => (
-    <button type="button" aria-label={label} onClick={onClick}>
-      {label}
-    </button>
-  ),
+  useDroppable: () => ({
+    setNodeRef: () => {},
+    isOver: false,
+    active: drag.activeType
+      ? { data: { current: { type: drag.activeType } } }
+      : null,
+  }),
 }));
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: ({ children }: { children: React.ReactNode }) => (
@@ -57,10 +50,13 @@ const lesson = (id: number): LibraryLesson => ({
   needsVideoWatch: false,
 });
 
-beforeEach(() => card.render.mockClear());
+beforeEach(() => {
+  card.render.mockClear();
+  drag.activeType = null;
+});
 
 describe('LibraryUntitledContainer', () => {
-  it("hands each card the Untitled bucket (null) and keeps a discipline's cards sortable", () => {
+  it('hands each card the root bucket (null) and keeps it sortable', () => {
     render(
       <LibraryUntitledContainer
         disciplineId={4}
@@ -73,54 +69,31 @@ describe('LibraryUntitledContainer', () => {
         lesson: expect.objectContaining({ id: 1 }),
         disciplineId: 4,
         boxId: null,
-        sortable: true,
       }),
     );
+    // Sortable by the card's default — never switched off for a discipline.
+    expect(
+      card.render.mock.calls.every(
+        ([props]) => (props as { sortable?: boolean }).sortable !== false,
+      ),
+    ).toBe(true);
   });
 
-  /**
-   * "Add lesson" from Untitled opens the create dialog aimed at THIS
-   * discipline with no module — the dialog is the consumer, and it reads
-   * the atom, so the atom's value is what is asserted.
-   */
-  it('aims the create-lesson dialog at this discipline and no module', () => {
-    const store = createStore();
-    render(
-      <Provider store={store}>
-        <LibraryUntitledContainer
-          disciplineId={4}
-          disciplineName="Weather"
-          lessons={[]}
-        />
-      </Provider>,
+  it('invites a drop on an empty shelf only while a library lesson is dragged', () => {
+    const { rerender } = render(
+      <LibraryUntitledContainer disciplineId={4} lessons={[]} />,
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add lesson to Untitled' }),
-    );
-    expect(store.get(createLibraryLessonTargetAtom)).toEqual({
-      id: 4,
-      name: 'Weather',
-      module: null,
-    });
-  });
+    expect(screen.queryByText(/Drop here/)).toBeNull();
 
-  it('offers no Add lesson on the org-level column', () => {
-    render(
-      <LibraryUntitledContainer disciplineId={0} lessons={[]} isOrgLevel />,
-    );
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
-  });
+    // A module drag can never land here, so it gets no invitation.
+    drag.activeType = 'library-module';
+    rerender(<LibraryUntitledContainer disciplineId={4} lessons={[]} />);
+    expect(screen.queryByText(/Drop here/)).toBeNull();
 
-  it('turns sorting off for the org-level column, whose cards keep no order', () => {
-    render(
-      <LibraryUntitledContainer
-        disciplineId={0}
-        lessons={[lesson(1)]}
-        isOrgLevel
-      />,
-    );
-    expect(card.render).toHaveBeenCalledWith(
-      expect.objectContaining({ boxId: null, sortable: false }),
-    );
+    drag.activeType = 'library-lesson';
+    rerender(<LibraryUntitledContainer disciplineId={4} lessons={[]} />);
+    expect(
+      screen.getByText('Drop here to take it out of its module'),
+    ).toBeTruthy();
   });
 });

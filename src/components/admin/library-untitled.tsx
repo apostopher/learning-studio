@@ -1,54 +1,51 @@
-import { Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { TooltipIconButton } from '../ui/tooltip-icon-button';
+import { cn } from '#/lib/cn';
 
 /**
- * A discipline's Untitled group: the lessons filed in no module. Deliberately
- * not a module — no rename, no delete, no drag handle, always last — so the
- * difference between "a box the SME made" and "the shelf itself" is visible.
- * Its one control is "Add lesson", the same action a module header offers,
- * so a discipline with no modules yet can still grow.
+ * A discipline's root-level lessons: the ones filed in no module, listed
+ * straight in the column below its modules with no heading of their own — a
+ * lesson outside every module simply sits on the shelf.
+ *
+ * Still a drop target (the container wraps it), because dragging a lesson
+ * here is how it leaves its module. With no root lessons there is nothing to
+ * aim at, so while a library lesson is being dragged an empty shelf shows a
+ * dashed zone saying what dropping does; at rest it takes no space.
  */
 export const LibraryUntitled = ({
   lessonCount,
-  showHeading = true,
-  onAddLesson,
+  showDropZone = false,
+  isOver = false,
   children,
 }: {
   lessonCount: number;
-  /** False on the org-level Untitled column, whose header already says it. */
-  showHeading?: boolean;
-  /** Absent on the org-level column: a lesson filed under no discipline is a triage entry, not something to create on purpose. */
-  onAddLesson?: () => void;
+  /** A library lesson is mid-drag — the only time an empty shelf needs a target. */
+  showDropZone?: boolean;
+  /** The dragged lesson is over this shelf. */
+  isOver?: boolean;
   children?: ReactNode;
-}) => (
-  <section className="flex flex-col">
-    {showHeading && (
-      <div className="flex items-center gap-2 py-1 ps-3 pe-2">
-        <span className="min-w-0 flex-1 font-medium text-secondary text-sm">
-          Untitled
-        </span>
-        <span className="shrink-0 text-tertiary text-xs tabular-nums">
-          {lessonCount} {lessonCount === 1 ? 'lesson' : 'lessons'}
-        </span>
-        {onAddLesson && (
-          <TooltipIconButton
-            label="Add lesson to Untitled"
-            onClick={onAddLesson}
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </TooltipIconButton>
-        )}
-      </div>
-    )}
-    <div className="flex flex-col gap-2 px-3 pt-1 pb-3">
-      {lessonCount === 0 ? (
-        <p className="px-1 py-3 text-center text-tertiary text-xs">
-          Every lesson is in a module
-        </p>
-      ) : (
-        children
+}) =>
+  lessonCount > 0 ? (
+    <div
+      className={cn(
+        'flex flex-col gap-2 rounded-lg px-3 pt-1 pb-3 transition-colors',
+        isOver && 'bg-gray-3',
       )}
+    >
+      {children}
     </div>
-  </section>
-);
+  ) : showDropZone ? (
+    <div className="px-3 pt-1 pb-3">
+      <p
+        className={cn(
+          'rounded-lg border border-dashed px-3 py-3 text-center text-secondary text-xs transition-colors',
+          isOver ? 'border-apple-8 bg-gray-3' : 'border-gray-7',
+        )}
+      >
+        Drop here to take it out of its module
+      </p>
+    </div>
+  ) : (
+    // Keeps a sliver of droppable height at rest, so the shelf is never a
+    // 0×0 target the moment a drag begins and the zone above has to appear.
+    <div className="h-3" />
+  );

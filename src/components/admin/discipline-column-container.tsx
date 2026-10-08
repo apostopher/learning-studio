@@ -6,17 +6,14 @@ import {
 import { useAtom, useSetAtom } from 'jotai';
 import {
   createDisciplineModuleTargetAtom,
+  createLibraryLessonTargetAtom,
   deleteDisciplineTargetAtom,
   expandedLibraryModuleIdsAtom,
   renameDisciplineTargetAtom,
 } from '#/atoms/admin';
 import { disciplineLessons, type LibraryDiscipline } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
-import {
-  disciplineDndId,
-  libraryModuleDndId,
-  UNTITLED_DISCIPLINE_ID,
-} from '#/lib/dnd-ids';
+import { disciplineDndId, libraryModuleDndId } from '#/lib/dnd-ids';
 import { DisciplineColumn } from './discipline-column';
 import { DisciplineColumnActions } from './discipline-column-actions';
 import { LibraryModuleContainer } from './library-module-container';
@@ -31,7 +28,7 @@ import { LibraryUntitledContainer } from './library-untitled-container';
  * back here, and here is why" is to be a real target that `resolveDrop`
  * refuses by name.
  *
- * `discipline` carries its modules and its Untitled group — never a flat
+ * `discipline` carries its modules and its root-level lessons — never a flat
  * lesson list — because `disciplineLessons` is the ONE definition of "every
  * lesson in this discipline, in display order", and this column and the drop
  * resolver must never be able to disagree about membership.
@@ -61,12 +58,7 @@ export const DisciplineColumnContainer = ({
   const openRename = useSetAtom(renameDisciplineTargetAtom);
   const openDelete = useSetAtom(deleteDisciplineTargetAtom);
 
-  // The "Untitled" column is not a discipline: there is nothing to rename or
-  // delete, and a lesson filed under nothing is a triage-queue entry rather
-  // than something to create on purpose. It gets no action row at all, and
-  // its lessons stay draggable with no Untitled droppable of their own — see
-  // `LibraryUntitledContainer`'s `isOrgLevel`.
-  const isUntitled = disciplineId === UNTITLED_DISCIPLINE_ID;
+  const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
 
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedLibraryModuleIdsAtom,
@@ -88,26 +80,27 @@ export const DisciplineColumnContainer = ({
         name={name}
         lessonCount={lessonCount}
         actions={
-          isUntitled ? undefined : (
-            <DisciplineColumnActions
-              disciplineName={name}
-              canManage={canManageDisciplines}
-              onAddModule={() =>
-                openAddModule({
-                  disciplineId,
-                  disciplineName: name,
-                })
-              }
-              onRename={() => openRename({ id: disciplineId, name })}
-              onDelete={() =>
-                openDelete({
-                  id: disciplineId,
-                  name,
-                  lessonCount,
-                })
-              }
-            />
-          )
+          <DisciplineColumnActions
+            disciplineName={name}
+            canManage={canManageDisciplines}
+            onAddLesson={() =>
+              openAddLesson({ id: disciplineId, name, module: null })
+            }
+            onAddModule={() =>
+              openAddModule({
+                disciplineId,
+                disciplineName: name,
+              })
+            }
+            onRename={() => openRename({ id: disciplineId, name })}
+            onDelete={() =>
+              openDelete({
+                id: disciplineId,
+                name,
+                lessonCount,
+              })
+            }
+          />
         }
         expandedModuleIds={expandedModuleIds.filter((id) =>
           ownModuleIds.has(id),
@@ -134,9 +127,7 @@ export const DisciplineColumnContainer = ({
         </SortableContext>
         <LibraryUntitledContainer
           disciplineId={disciplineId}
-          disciplineName={name}
           lessons={discipline.untitled}
-          isOrgLevel={isUntitled}
         />
       </DisciplineColumn>
     </div>

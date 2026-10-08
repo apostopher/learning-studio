@@ -23,6 +23,7 @@ import { DisciplineColumnActions } from '../discipline-column-actions';
 
 function renderActions(overrides: { canManage?: boolean } = {}) {
   const handlers = {
+    onAddLesson: vi.fn(),
     onAddModule: vi.fn(),
     onRename: vi.fn(),
     onDelete: vi.fn(),
@@ -44,6 +45,9 @@ describe('DisciplineColumnActions', () => {
     // screen-reader user nothing about WHICH column is about to be deleted.
     renderActions();
     expect(
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+    ).toBeTruthy();
+    expect(
       screen.getByRole('button', { name: 'Add a module to Weather' }),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit Weather' })).toBeTruthy();
@@ -51,15 +55,20 @@ describe('DisciplineColumnActions', () => {
   });
 
   /**
-   * Lessons are added from inside a module (or Untitled), the way the course
-   * rail adds lessons from inside a course module — the column bar's "+" is
-   * the module, and there is no column-level "add lesson" to mis-file one.
+   * With no Untitled heading to carry it, the column header is the only
+   * place to add a root-level lesson — and the only way to add a lesson at
+   * all to a discipline that has no modules yet.
    */
-  it('has exactly three actions: add a module (first), edit, delete', () => {
+  it('has exactly four actions: add a lesson, add a module, edit, delete', () => {
     renderActions();
     expect(
       screen.getAllByRole('button').map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Add a module to Weather', 'Edit Weather', 'Delete Weather']);
+    ).toEqual([
+      'Add a lesson to Weather',
+      'Add a module to Weather',
+      'Edit Weather',
+      'Delete Weather',
+    ]);
   });
 
   it('calls each handler from its own button', () => {
@@ -67,6 +76,12 @@ describe('DisciplineColumnActions', () => {
     // button still renders and still fires something, so a test that only
     // asserted "some handler was called" would pass.
     const handlers = renderActions();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+    );
+    expect(handlers.onAddLesson).toHaveBeenCalledTimes(1);
+    expect(handlers.onAddModule).not.toHaveBeenCalled();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Add a module to Weather' }),

@@ -48,9 +48,9 @@ describe('describeDndTarget', () => {
     );
   });
 
-  it("names a library lesson in a discipline's own Untitled group", () => {
+  it('names a root-level library lesson by its discipline alone', () => {
     expect(describeDndTarget(libraryLessonDndId(2), null, library)).toBe(
-      'library lesson L2 in Untitled, Weather',
+      'library lesson L2 in Weather',
     );
   });
 

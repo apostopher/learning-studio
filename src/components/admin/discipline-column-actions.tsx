@@ -1,12 +1,12 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { FilePlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /**
- * The three actions on a discipline column: add a module to it, edit it (its
- * name and its subject experts), delete it. Lessons are added from INSIDE a
- * module or the Untitled group — the same place the course rail adds them —
- * so a new lesson lands where the SME was looking, never in a column-level
- * inbox they then have to file from.
+ * The actions on a discipline column: add a lesson to it, add a module to it,
+ * edit it (its name and its subject experts), delete it. A lesson added here
+ * lands at the column's root level, outside every module — the only way to
+ * add one to a discipline that has no modules yet. To add straight into a
+ * module, use that module's own button.
  *
  * Icon-only with tooltips, and every tooltip names the DISCIPLINE. A library
  * pane holds many of these rows side by side, so a bare "Delete" tells a
@@ -31,17 +31,25 @@ import { TooltipIconButton } from '../ui/tooltip-icon-button';
 export const DisciplineColumnActions = ({
   disciplineName,
   canManage,
+  onAddLesson,
   onAddModule,
   onRename,
   onDelete,
 }: {
   disciplineName: string;
   canManage: boolean;
+  onAddLesson: () => void;
   onAddModule: () => void;
   onRename: () => void;
   onDelete: () => void;
 }) => (
   <div className="flex items-center gap-0.5">
+    <TooltipIconButton
+      label={`Add a lesson to ${disciplineName}`}
+      onClick={onAddLesson}
+    >
+      <FilePlus className="h-4 w-4" aria-hidden="true" />
+    </TooltipIconButton>
     <TooltipIconButton
       label={`Add a module to ${disciplineName}`}
       onClick={onAddModule}
