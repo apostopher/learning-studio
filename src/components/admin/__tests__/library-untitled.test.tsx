@@ -1,57 +1,46 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-
-// TooltipIconButton needs a Base UI `Tooltip.Provider` ancestor and renders
-// its label into a portal-only popup — stubbed to a plain button keyed by its
-// accessible name, matching `module-accordion-item.test.tsx`.
-vi.mock('../../ui/tooltip-icon-button', () => ({
-  TooltipIconButton: ({
-    label,
-    onClick,
-  }: {
-    label: string;
-    onClick?: () => void;
-  }) => (
-    <button type="button" aria-label={label} onClick={onClick}>
-      {label}
-    </button>
-  ),
-}));
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
 import { LibraryUntitled } from '../library-untitled';
 
 describe('LibraryUntitled', () => {
-  it('is titled Untitled, holds what it is given, and offers no rename, delete, or handle', () => {
+  it('lists root-level lessons with no Untitled heading and no controls', () => {
     render(
       <LibraryUntitled lessonCount={2}>
         <p>card a</p>
         <p>card b</p>
       </LibraryUntitled>,
     );
-    expect(screen.getByText('Untitled')).toBeTruthy();
-    expect(screen.getByText('2 lessons')).toBeTruthy();
     expect(screen.getByText('card a')).toBeTruthy();
+    expect(screen.getByText('card b')).toBeTruthy();
+    expect(screen.queryByText(/Untitled/)).toBeNull();
+    expect(screen.queryByText(/lessons?$/)).toBeNull();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
-  it('says every lesson is in a module when empty', () => {
-    render(<LibraryUntitled lessonCount={0} />);
-    expect(screen.getByText('Every lesson is in a module')).toBeTruthy();
+
+  it('says nothing at rest when every lesson is in a module', () => {
+    const { container } = render(<LibraryUntitled lessonCount={0} />);
+    expect(container.textContent).toBe('');
   });
 
   /**
-   * The one control Untitled may carry: "Add lesson", the same action a
-   * module header offers, so a discipline with no modules yet can still
-   * grow. It is the ONLY button — rename/delete/handle stay absent.
+   * An empty shelf is still where a lesson goes to leave its module, so while
+   * one is being dragged it must show a target that says what dropping does.
    */
-  it('offers Add lesson when given the callback, and nothing else', () => {
-    const onAddLesson = vi.fn();
-    render(<LibraryUntitled lessonCount={0} onAddLesson={onAddLesson} />);
-    const buttons = screen.getAllByRole('button');
-    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Add lesson to Untitled',
-    ]);
-    fireEvent.click(buttons[0]);
-    expect(onAddLesson).toHaveBeenCalledOnce();
+  it('shows a drop zone on an empty shelf while a lesson is dragged', () => {
+    render(<LibraryUntitled lessonCount={0} showDropZone />);
+    expect(
+      screen.getByText('Drop here to take it out of its module'),
+    ).toBeTruthy();
+  });
+
+  it('never shows the drop zone over lessons already on the shelf', () => {
+    render(
+      <LibraryUntitled lessonCount={1} showDropZone>
+        <p>card a</p>
+      </LibraryUntitled>,
+    );
+    expect(screen.queryByText(/Drop here/)).toBeNull();
   });
 });

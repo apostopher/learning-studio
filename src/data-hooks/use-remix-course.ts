@@ -18,14 +18,20 @@ async function readError(res: Response, fallback: string): Promise<Error> {
 /**
  * After either mutation the remixer's rail changed shape: the org editor
  * (`editorBoard`), that course's own board (`courseBoards` prefix — cheaper
- * than threading the id in) and the courses list's module count.
+ * than threading the id in), the courses list's module count, and the
+ * remixer's posters. The poster map is per course and scoped to the lessons
+ * the course showed when it was fetched, so without this every borrowed
+ * lesson draws the grey tile for the map's 30-minute staleTime.
  */
 function useInvalidateRemixReaders() {
   const queryClient = useQueryClient();
-  return () => {
+  return (_data: unknown, { courseId }: RemixVars) => {
     queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
     queryClient.invalidateQueries({ queryKey: dataKeys.courseBoards() });
     queryClient.invalidateQueries({ queryKey: dataKeys.adminCourses() });
+    queryClient.invalidateQueries({
+      queryKey: dataKeys.lessonPosters(courseId),
+    });
   };
 }
 

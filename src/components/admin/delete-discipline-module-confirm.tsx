@@ -4,7 +4,7 @@ import { Loader2, TriangleAlert } from 'lucide-react';
  * Delete confirmation for one discipline module.
  *
  * Light on purpose, like `NewsSourceDeleteConfirm`: deleting the module does
- * not delete its lessons — they return to the discipline's Untitled group —
+ * not delete its lessons — they stay in the discipline, outside any module —
  * so this asks nothing more than a plain "are you sure", stated as what
  * actually happens rather than a generic warning.
  */
@@ -27,7 +27,8 @@ export const DeleteDisciplineModuleConfirm = ({
       <p>
         <strong>
           {lessonCount} {lessonCount === 1 ? 'lesson' : 'lessons'} in{' '}
-          {moduleName} {lessonCount === 1 ? 'returns' : 'return'} to Untitled.
+          {moduleName} {lessonCount === 1 ? 'stays' : 'stay'} in the discipline,
+          outside any module.
         </strong>{' '}
         Nothing is deleted — only the box goes.
       </p>

@@ -1,9 +1,14 @@
 import { Link } from '@tanstack/react-router';
+import { useSetAtom } from 'jotai';
+import { Pencil } from 'lucide-react';
+import { editCourseAtom } from '#/atoms/admin';
 import {
   AdminCoursesRequestError,
   useAdminCourses,
 } from '#/data-hooks/use-admin-courses';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { CourseTile } from './course-tile';
+import { EditCourseDialogContainer } from './edit-course-dialog-container';
 
 /**
  * The Courses screen: every course this actor may see, as tiles that open
@@ -15,9 +20,21 @@ import { CourseTile } from './course-tile';
  * `course:read`, otherwise the courses the actor is staffed on. The server
  * answers 403 — never `[]` — to someone with neither, and that refusal is
  * shown as a reason, not an empty grid.
+ *
+ * With `course:update`, each tile also carries an "Edit course" button in its
+ * top-right corner that opens the same Edit course modal the editor uses —
+ * name, description, cover and the course's other settings. Hidden, not
+ * disabled, without the grant: the PATCH behind it is org-level with no
+ * course-scoped fallback, so it would refuse every time.
  */
-export const CoursesSectionContainer = () => {
+export const CoursesSectionContainer = ({
+  canEditCourse = false,
+}: {
+  /** `course:update` — resolved by the route, which holds the permissions. */
+  canEditCourse?: boolean;
+}) => {
   const courses = useAdminCourses();
+  const setEditCourse = useSetAtom(editCourseAtom);
   const refused =
     courses.error instanceof AdminCoursesRequestError &&
     courses.error.status === 403;
@@ -61,7 +78,10 @@ export const CoursesSectionContainer = () => {
         {courses.data && courses.data.length > 0 && (
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {courses.data.map((course) => (
-              <li key={course.id}>
+              // `relative` anchors the edit button. It is the link's SIBLING,
+              // not its child: a button inside an `<a>` is invalid nesting,
+              // and a click on it would also follow the link.
+              <li key={course.id} className="relative">
                 <Link
                   to="/admin/$courseId/editor"
                   params={{ courseId: String(course.id) }}
@@ -78,11 +98,34 @@ export const CoursesSectionContainer = () => {
                     lessonCount={course.lessonCount}
                   />
                 </Link>
+                {canEditCourse && (
+                  <TooltipIconButton
+                    label={`Edit ${course.name}`}
+                    onClick={() =>
+                      setEditCourse({
+                        id: course.id,
+                        name: course.name,
+                        description: course.description,
+                        imageUrlAvif: course.imageUrlAvif,
+                        imageUrlWebp: course.imageUrlWebp,
+                      })
+                    }
+                    // Sits on top of an arbitrary cover photo, so it carries
+                    // its own opaque surface and border rather than the
+                    // toolbar's bare icon — legible over light and dark
+                    // images alike. Always visible: touch has no hover to
+                    // reveal it on. 36px, larger than the dense toolbar's 28.
+                    className="absolute end-2 h-9 w-9 border border-gray-6 bg-gray-1 text-primary shadow-sm [inset-block-start:--spacing(2)] hover:bg-gray-3"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </TooltipIconButton>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+      {canEditCourse && <EditCourseDialogContainer />}
     </div>
   );
 };

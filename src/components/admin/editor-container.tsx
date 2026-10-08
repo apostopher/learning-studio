@@ -46,11 +46,7 @@ import { useMovePlacement } from '#/data-hooks/use-move-placement';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
 import type { OrgEditorBoard, OrgLibrary } from '#/lib/admin-schemas';
-import {
-  type DndType,
-  parseDndId,
-  UNTITLED_DISCIPLINE_ID,
-} from '#/lib/dnd-ids';
+import { type DndType, parseDndId } from '#/lib/dnd-ids';
 import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
 import {
@@ -1270,13 +1266,10 @@ export const EditorContainer = ({
               ) : undefined
             }
           >
-            {library.untitled.length > 0 && (
-              <DisciplineColumnContainer
-                disciplineId={UNTITLED_DISCIPLINE_ID}
-                name="Untitled"
-                discipline={{ modules: [], untitled: library.untitled }}
-              />
-            )}
+            {/* The org-level "Untitled" column (lessons filed under no
+                discipline) is deliberately not shown — the library lists
+                disciplines only. `library.untitled` is still fetched and
+                still counted by the drag helpers; it just has no column. */}
             {library.disciplines.map((discipline) => (
               <DisciplineColumnContainer
                 key={discipline.id}

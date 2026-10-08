@@ -85,7 +85,9 @@ export function describeDndTarget(
     const located = locateLibraryLesson(library, parsed.id);
     if (!located) return `library lesson ${parsed.id}`;
     const box = located.discipline
-      ? `${located.moduleName ?? 'Untitled'}, ${located.discipline.name}`
+      ? located.moduleName
+        ? `${located.moduleName}, ${located.discipline.name}`
+        : located.discipline.name
       : 'Untitled';
     return `library lesson ${located.lesson.name} in ${box}`;
   }
@@ -101,7 +103,7 @@ export function describeDndTarget(
     const name =
       library?.disciplines.find((d) => d.id === parsed.id)?.name ??
       String(parsed.id);
-    return `Untitled in ${name}`;
+    return `${name}, outside any module`;
   }
   if (parsed.type === 'discipline') {
     // The org-level column is the Untitled bag itself — a real drop target

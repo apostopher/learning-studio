@@ -626,14 +626,28 @@
     background: var(--color-gray-1);
   }
 
+  /* No box behind captions — just light text. With no backing plate the text
+     sits directly on the footage, so a dark outline + soft halo keeps it
+     legible over bright frames (sky, snow, white cockpits). The browser's
+     default cue background is a translucent black, so it must be cleared
+     explicitly. Light theme: gray-1 is white, gray-12 near-black. */
   .video-player ::cue {
-    background: var(--color-gray-a12);
+    background: transparent;
     color: var(--color-gray-1);
     font-family: var(--font-sans);
+    text-shadow:
+      0 0 2px var(--color-gray-12),
+      0 0 2px var(--color-gray-12),
+      0 1px 4px var(--color-gray-12);
   }
 
+  /* Dark theme flips the scale: gray-12 is the light end, gray-1 black. */
   .dark .video-player ::cue {
     color: var(--color-gray-12);
+    text-shadow:
+      0 0 2px var(--color-gray-1),
+      0 0 2px var(--color-gray-1),
+      0 1px 4px var(--color-gray-1);
   }
 
   .video-player .vp-controls {
@@ -1537,6 +1551,28 @@
     transition-duration: var(--duration-dialog-exit);
     transition-timing-function: var(--ease-dialog-exit);
   }
+
+  /* Offering popover: fade + slight scale on open/close only. Never
+     transitions position — a preview follows the cursor, and easing that
+     would make it lag. */
+  .offering-popover {
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity 120ms var(--ease-dialog-enter),
+      scale 120ms var(--ease-dialog-enter);
+  }
+
+  .offering-popover[data-starting-style],
+  .offering-popover[data-ending-style] {
+    opacity: 0;
+    scale: 0.97;
+  }
+
+  /* Same easing pair as `.dialog-popup`: arrive on the enter curve, leave
+     on the ease-in exit curve. Durations stay short — this opens on hover. */
+  .offering-popover[data-ending-style] {
+    transition-timing-function: var(--ease-dialog-exit);
+  }
 }
 
 /* Reduced motion keeps the fade and drops the movement — gentler, not none.
@@ -1547,6 +1583,15 @@
   .dialog-popup,
   .dialog-popup[data-starting-style],
   .dialog-popup[data-ending-style] {
+    scale: 1;
+  }
+
+  /* All three selectors, as for the dialog: the base rule alone loses to the
+     [data-*-style] rule's specificity and the popover would still scale. */
+  .offering-popover,
+  .offering-popover[data-starting-style],
+  .offering-popover[data-ending-style] {
+    transition: opacity 80ms linear;
     scale: 1;
   }
 }

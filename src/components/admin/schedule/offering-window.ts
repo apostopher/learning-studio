@@ -1,11 +1,12 @@
 import { addDays, differenceInCalendarDays, format } from 'date-fns';
+import type { Offering } from '#/lib/offering-schemas';
 
 /**
- * The arithmetic behind the offering dialog's three date controls.
+ * The arithmetic behind the offering popover's three date controls.
  *
  * Start, end and window-in-days are two facts and a convenience: the window
  * is always `end - start`, never stored. Kept here as pure functions rather
- * than inline in the dialog because inclusive date maths is exactly the kind
+ * than inline in the popover because inclusive date maths is exactly the kind
  * of off-by-one that needs its own tests.
  *
  * Every date is `yyyy-MM-dd` in local time. Parsed from parts rather than
@@ -75,4 +76,13 @@ export function formatWindowSummary(
       ? weekPart
       : `${weekPart} and ${remainder} ${remainder === 1 ? 'day' : 'days'}`;
   return `${days} calendar ${dayWord} — ${breakdown}`;
+}
+
+/** Exported for the schedule grid's bar captions. */
+export function formatOfferingRange(offering: Offering): string {
+  const from = parseDayKey(offering.startsOn);
+  const to = parseDayKey(offering.endsOn);
+  if (!from || !to) return '';
+  const sameYear = from.getFullYear() === to.getFullYear();
+  return `${format(from, sameYear ? 'd MMM' : 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`;
 }

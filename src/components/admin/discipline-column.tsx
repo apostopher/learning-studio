@@ -5,17 +5,12 @@ import { ScrollArea } from '../scroll-area';
 /**
  * One discipline's column in the library pane: a header naming the
  * discipline and how many lessons it holds, above a vertically scrolling
- * list of lesson cards. Used both for a real discipline and for the
- * leftmost "Untitled" column (lessons with no discipline assigned) — this
- * component doesn't know the difference, it only renders whatever `name` and
- * `children` it's given.
+ * list of lesson cards. It only renders whatever `name` and `children` it's
+ * given.
  *
  * `actions` is an optional SUBHEADER, below the name row rather than beside
  * it: the name is truncated to fit and three icon buttons on the same line
- * would eat the width that truncation is already fighting for. It is optional
- * because the "Untitled" column has nothing to act on — there is no discipline
- * there to rename or delete, and a lesson filed under nothing is a triage
- * queue entry, not something to add to on purpose.
+ * would eat the width that truncation is already fighting for.
  */
 export const DisciplineColumn = ({
   name,

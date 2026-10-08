@@ -1,10 +1,10 @@
 import { Loader2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { cn } from '#/lib/cn';
 
 const fieldClassName = (invalid: boolean) =>
   cn(
-    'w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 font-mono text-primary text-sm outline-none transition-colors',
+    'w-full rounded-lg border bg-gray-1 px-3 py-2 font-mono text-primary text-sm outline-none transition-colors',
     invalid
       ? 'border-error-9 focus-visible:ring-2 focus-visible:ring-error-9'
       : 'border-gray-6 hover:border-gray-8 focus-visible:border-apple-9 focus-visible:ring-2 focus-visible:ring-apple-9',
@@ -14,7 +14,7 @@ const labelClassName =
   'font-semibold text-secondary text-xs uppercase tracking-wider';
 
 /**
- * The offering dialog's body.
+ * The offering popover's body.
  *
  * Three date controls that are really TWO facts plus a convenience: the start,
  * the end, and the number of days between them. The window is offered because
@@ -29,6 +29,7 @@ export const OfferingForm = ({
   startsOn,
   onStartsOnChange,
   startsOnError,
+  startsOnRef,
   windowDays,
   onWindowDaysChange,
   endsOn,
@@ -44,10 +45,13 @@ export const OfferingForm = ({
   isSaving,
   submitLabel,
   saveError,
+  discardConfirm,
 }: {
   startsOn: string;
   onStartsOnChange: (next: string) => void;
   startsOnError?: string;
+  /** The container focuses this input when the popover pins. */
+  startsOnRef?: Ref<HTMLInputElement>;
   /** Days from start to end, both ends included. Empty while being retyped. */
   windowDays: string;
   onWindowDaysChange: (next: string) => void;
@@ -67,6 +71,8 @@ export const OfferingForm = ({
   isSaving: boolean;
   submitLabel: string;
   saveError?: string;
+  /** When present it replaces the footer button row. */
+  discardConfirm?: ReactNode;
 }) => (
   <form
     noValidate
@@ -74,74 +80,82 @@ export const OfferingForm = ({
       event.preventDefault();
       onSubmit();
     }}
-    className="flex flex-col gap-5"
+    className="flex flex-col gap-4"
   >
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="offering-starts-on" className={labelClassName}>
-        Start date
-      </label>
-      <input
-        id="offering-starts-on"
-        type="date"
-        value={startsOn}
-        onChange={(event) => onStartsOnChange(event.target.value)}
-        aria-invalid={startsOnError ? true : undefined}
-        aria-describedby={
-          startsOnError ? 'offering-starts-on-error' : undefined
-        }
-        className={fieldClassName(Boolean(startsOnError))}
-      />
-      {startsOnError && (
-        <p
-          id="offering-starts-on-error"
-          role="alert"
-          className="text-error-text text-sm"
-        >
-          {startsOnError}
-        </p>
-      )}
+    <div className="grid grid-cols-[minmax(0,1fr)_6rem_minmax(0,1fr)] items-start gap-2.5">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="offering-starts-on" className={labelClassName}>
+          Start date
+        </label>
+        <input
+          ref={startsOnRef}
+          id="offering-starts-on"
+          type="date"
+          value={startsOn}
+          onChange={(event) => onStartsOnChange(event.target.value)}
+          aria-invalid={startsOnError ? true : undefined}
+          aria-describedby={
+            startsOnError ? 'offering-starts-on-error' : undefined
+          }
+          className={fieldClassName(Boolean(startsOnError))}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {/* "Window" alone on screen; the unit is spoken via the hint the input
+            is described by, and printed in the summary line beneath. */}
+        <label htmlFor="offering-window-days" className={labelClassName}>
+          Window
+        </label>
+        <input
+          id="offering-window-days"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={windowDays}
+          onChange={(event) => onWindowDaysChange(event.target.value)}
+          aria-describedby="offering-window-unit offering-window-hint"
+          className={fieldClassName(false)}
+        />
+        <span id="offering-window-unit" className="sr-only">
+          calendar days
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="offering-ends-on" className={labelClassName}>
+          Complete by
+        </label>
+        <input
+          id="offering-ends-on"
+          type="date"
+          value={endsOn}
+          min={startsOn || undefined}
+          onChange={(event) => onEndsOnChange(event.target.value)}
+          aria-invalid={endsOnError ? true : undefined}
+          aria-describedby={endsOnError ? 'offering-ends-on-error' : undefined}
+          className={fieldClassName(Boolean(endsOnError))}
+        />
+      </div>
     </div>
-
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="offering-window-days" className={labelClassName}>
-        Completion window — calendar days
-      </label>
-      <input
-        id="offering-window-days"
-        type="number"
-        inputMode="numeric"
-        min={1}
-        value={windowDays}
-        onChange={(event) => onWindowDaysChange(event.target.value)}
-        aria-describedby="offering-window-hint"
-        className={fieldClassName(false)}
-      />
-    </div>
-
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="offering-ends-on" className={labelClassName}>
-        Must be complete by
-      </label>
-      <input
-        id="offering-ends-on"
-        type="date"
-        value={endsOn}
-        min={startsOn || undefined}
-        onChange={(event) => onEndsOnChange(event.target.value)}
-        aria-invalid={endsOnError ? true : undefined}
-        aria-describedby={endsOnError ? 'offering-ends-on-error' : undefined}
-        className={fieldClassName(Boolean(endsOnError))}
-      />
-      {endsOnError && (
-        <p
-          id="offering-ends-on-error"
-          role="alert"
-          className="text-error-text text-sm"
-        >
-          {endsOnError}
-        </p>
-      )}
-    </div>
+    {/* Errors under the row, full width: in a 3-column row a message under one
+        narrow field would wrap to a word per line. */}
+    {startsOnError && (
+      <p
+        id="offering-starts-on-error"
+        role="alert"
+        className="text-error-text text-sm"
+      >
+        {startsOnError}
+      </p>
+    )}
+    {endsOnError && (
+      <p
+        id="offering-ends-on-error"
+        role="alert"
+        className="text-error-text text-sm"
+      >
+        {endsOnError}
+      </p>
+    )}
 
     {summaryLine && (
       <p className="font-mono font-semibold text-primary text-sm">
@@ -157,7 +171,7 @@ export const OfferingForm = ({
       merely keeping up.
     </p>
 
-    <div className="flex flex-col gap-3 border-gray-6 border-t pt-5">
+    <div className="flex flex-col gap-3">
       <h3 className={labelClassName}>On this offering · {rosterCount}</h3>
       {addPerson}
       {rosterTable}
@@ -169,35 +183,37 @@ export const OfferingForm = ({
       </p>
     )}
 
-    <div className="flex items-center gap-2 pt-1">
-      {onDelete && (
+    {discardConfirm ?? (
+      <div className="flex items-center gap-2 pbs-1">
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isSaving}
+            className="me-auto rounded-lg px-3 py-2 font-medium text-error-text text-sm transition-colors hover:bg-error-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 disabled:opacity-60"
+          >
+            Unschedule
+          </button>
+        )}
         <button
           type="button"
-          onClick={onDelete}
+          onClick={onCancel}
           disabled={isSaving}
-          className="me-auto rounded-lg px-3 py-2 font-medium text-error-text text-sm transition-colors hover:bg-error-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 disabled:opacity-60"
+          className="ms-auto rounded-lg border border-gray-6 px-4 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9 disabled:opacity-60"
         >
-          Unschedule
+          Cancel
         </button>
-      )}
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={isSaving}
-        className="ms-auto rounded-lg border border-gray-6 px-4 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9 disabled:opacity-60"
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        disabled={isSaving}
-        className="inline-flex items-center gap-2 rounded-lg bg-apple-9 px-4 py-2 font-medium text-apple-contrast text-sm transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 disabled:opacity-60"
-      >
-        {isSaving && (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        )}
-        {submitLabel}
-      </button>
-    </div>
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="inline-flex items-center gap-2 rounded-lg bg-apple-9 px-4 py-2 font-medium text-apple-contrast text-sm transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 disabled:opacity-60"
+        >
+          {isSaving && (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
+          {submitLabel}
+        </button>
+      </div>
+    )}
   </form>
 );

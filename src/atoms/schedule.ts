@@ -1,4 +1,11 @@
 import { atom } from 'jotai';
+import {
+  CLOSED,
+  type OfferingPopoverEvent,
+  type OfferingPopoverState,
+  reduceOfferingPopover,
+} from '#/components/admin/schedule/offering-popover-state';
+import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
 import { calendarWindowStart } from '#/components/calendar';
 
 /**
@@ -22,20 +29,44 @@ export const SCHEDULE_WEEKS = 10;
 export const SCHEDULE_STEP_WEEKS = 4;
 
 /**
- * What the schedule dialog is currently doing, or null when it is closed.
- *
- * One atom for both modes rather than two, because they are the same dialog
- * and the states are mutually exclusive — as separate atoms, "creating" and
- * "editing" could both be set and the dialog would have to pick a winner.
- *
- * `create` carries the drop: the course that was dragged and the day it
- * landed on. The start date is therefore decided by the gesture and shown
- * read-only in the dialog — making it editable there would mean the drop
- * decided nothing.
+ * The offering popover's state — closed, previewing on hover, or pinned for
+ * editing. Written only through `dispatchOfferingPopoverAtom` so every change
+ * passes the reducer's rules.
  */
-export type ScheduleDialogState =
-  | { mode: 'create'; courseId: number; courseName: string; startsOn: string }
-  | { mode: 'edit'; offeringId: number }
-  | null;
+export const offeringPopoverAtom = atom<OfferingPopoverState>(CLOSED);
 
-export const scheduleDialogAtom = atom<ScheduleDialogState>(null);
+export const dispatchOfferingPopoverAtom = atom(
+  null,
+  (get, set, event: OfferingPopoverEvent) => {
+    set(
+      offeringPopoverAtom,
+      reduceOfferingPopover(get(offeringPopoverAtom), event),
+    );
+  },
+);
+
+/**
+ * Where the offering popover points. Its OWN atom, apart from
+ * `offeringPopoverAtom`, because a preview follows the mouse: pointermove
+ * writes here ~60 times a second, and only the positioner reads it — the form
+ * inside the popover must not re-render on every pixel.
+ */
+export const offeringPopoverAnchorAtom = atom<PopoverAnchor | null>(null);
+
+/**
+ * Where focus goes when the offering popover closes. Set by the page ONLY
+ * when a popover is pinned from the keyboard (the segment it came from), and
+ * read-and-cleared by the popover's `finalFocus`. Null means "leave focus
+ * where the user put it" — the mouse and drop cases.
+ */
+export const offeringPopoverReturnFocusAtom = atom<HTMLElement | null>(null);
+
+/**
+ * The element `finalFocus` is about to focus, one-shot. After a keyboard pin
+ * the browser treats that scripted focus as `:focus-visible` (the last input
+ * was a key), so without this the segment's onFocus would re-preview the
+ * offering the user just closed. The page reads-and-clears it in onFocus.
+ */
+export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
+  null,
+);

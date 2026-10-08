@@ -18,8 +18,8 @@ import { CreateLessonForm } from './create-lesson-form';
 /**
  * "Add lesson" from a library column — the same dialog as the course board's
  * add-lesson, down to reusing `CreateLessonForm`, with one difference: the
- * lesson is filed under this DISCIPLINE — in the module (or Untitled) whose
- * "Add lesson" was pressed — and placed in no course.
+ * lesson is filed under this DISCIPLINE — in the module whose "Add lesson"
+ * was pressed, or at its root level from the column header, — and placed in no course.
  *
  * Reusing the form component rather than copying its markup is what keeps the
  * two dialogs identical as either changes.
@@ -68,9 +68,12 @@ export const CreateLibraryLessonDialogContainer = () => {
             Create lesson
           </Dialog.Title>
           <Dialog.Description className="mt-1 mb-5 text-secondary text-sm">
-            Add a lesson to {target?.module?.name ?? 'Untitled'} in{' '}
-            {target?.name ?? 'this discipline'}. It joins the library straight
-            away and teaches no course until you drag it into one.
+            Add a lesson to{' '}
+            {target?.module
+              ? `${target.module.name} in ${target.name}`
+              : (target?.name ?? 'this discipline')}
+            . It joins the library straight away and teaches no course until you
+            drag it into one.
           </Dialog.Description>
           <CreateLessonForm
             onSubmit={handleSubmit}

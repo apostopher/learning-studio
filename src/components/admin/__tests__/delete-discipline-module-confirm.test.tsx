@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DeleteDisciplineModuleConfirm } from '../delete-discipline-module-confirm';
 
 describe('DeleteDisciplineModuleConfirm', () => {
-  it('names how many lessons return to Untitled and that nothing is deleted', () => {
+  it('names how many lessons stay in the discipline and that nothing is deleted', () => {
     const onConfirm = vi.fn();
     render(
       <DeleteDisciplineModuleConfirm
@@ -16,7 +16,9 @@ describe('DeleteDisciplineModuleConfirm', () => {
       />,
     );
     expect(
-      screen.getByText(/2 lessons in Basics return to Untitled/),
+      screen.getByText(
+        /2 lessons in Basics stay in the discipline, outside any module/,
+      ),
     ).toBeTruthy();
     expect(screen.getByText(/Nothing is deleted/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Delete module' }));
@@ -33,7 +35,7 @@ describe('DeleteDisciplineModuleConfirm', () => {
       />,
     );
     expect(
-      screen.getByText(/1 lesson in Basics returns to Untitled/),
+      screen.getByText(/1 lesson in Basics stays in the discipline/),
     ).toBeTruthy();
   });
 });

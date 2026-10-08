@@ -115,7 +115,15 @@ function AdminSectionScreen() {
   // admitted.
   const [section] = useQueryState('section', adminSectionParser);
 
-  if (section === 'courses') return <CoursesSectionContainer />;
+  if (section === 'courses') {
+    return (
+      <CoursesSectionContainer
+        // `course:update` behind `requirePermission` — the same guard the
+        // PATCH endpoint uses, so the edit button never offers a sure 403.
+        canEditCourse={hasOrgPermission(roles, permissions, 'course', 'update')}
+      />
+    );
+  }
 
   if (section === 'schedule') {
     return (

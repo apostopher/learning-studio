@@ -17,6 +17,9 @@ export const adminCourseSummarySchema = z.object({
   id: z.number(),
   name: z.string(),
   slug: z.string(),
+  // Carried so the Courses screen's edit modal can prefill it — without it,
+  // saving name or cover from that screen would blank the description.
+  description: z.string().nullable(),
   imageUrlAvif: z.string().nullable(),
   imageUrlWebp: z.string().nullable(),
   updatedAt: z.coerce.date(),
