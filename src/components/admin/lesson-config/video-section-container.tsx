@@ -188,12 +188,13 @@ export const VideoSectionContainer = ({
   const canPlay = isProviderConfigured && keyRejection === null;
 
   /**
-   * One compact row: the thumbnail on the left, the URL field on the right,
-   * always. There is no "Replace" toggle to find first — pasting a new URL
-   * IS replacing — and no full-width player: the admin came here to work on
-   * the lesson's content, and a small preview is enough to confirm the right
-   * video is attached. Status lines (rendering, failed, dead key, connect the
-   * provider) sit under the row at full width so their controls have room.
+   * Two equal columns: the thumbnail on the left, large enough to actually
+   * recognise the video; on the right, the main URL field and the per-language
+   * alternates under it — every way of setting this lesson's video in one
+   * stack. There is no "Replace" toggle to find first — pasting a new URL IS
+   * replacing. Status lines (rendering, failed, dead key, connect the
+   * provider) sit under both columns at full width so their controls have
+   * room. Stacks to one column on a narrow screen.
    */
   const thumbnailPlayback =
     courseId !== null && canPlay && previewState.kind === 'ready'
@@ -202,8 +203,8 @@ export const VideoSectionContainer = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="w-full shrink-0 sm:w-44">
+      <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
+        <div className="min-w-0">
           <VideoPreview
             playback={thumbnailPlayback}
             onForbidden={() => setPlaybackForbidden(true)}
@@ -218,7 +219,10 @@ export const VideoSectionContainer = ({
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
+        {/* `@container`: the alternates' language/URL row lays itself out by
+            this column's width, not the viewport's — at half a modal, a
+            side-by-side row would crush the URL field. */}
+        <div className="@container flex min-w-0 flex-col gap-6">
           <VideoUrlForm
             onSubmit={handleUrlSubmit}
             registerUrl={urlForm.register('url')}
@@ -231,10 +235,9 @@ export const VideoSectionContainer = ({
             serverError={setLessonVideo.error?.message}
             submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
           />
+          {hasVideo && <AlternateVideosContainer lessonId={lesson.id} />}
         </div>
       </div>
-
-      {hasVideo && <AlternateVideosContainer lessonId={lesson.id} />}
 
       {hasVideo &&
         (courseId === null ? (

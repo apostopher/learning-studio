@@ -65,7 +65,7 @@ export const AlternateVideoForm = ({
   const current = langOptions.find((o) => o.code === lang) ?? langOptions[0];
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+      <div className="flex flex-col gap-2 @lg:flex-row @lg:items-start">
         <Select.Root
           value={lang}
           onValueChange={(v) => onLangChange(v as AlternateLang)}
@@ -73,7 +73,7 @@ export const AlternateVideoForm = ({
         >
           <Select.Trigger
             aria-label="Language"
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-gray-6 bg-gray-1 px-3 text-primary text-sm transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60 sm:w-48"
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-gray-6 bg-gray-1 px-3 text-primary text-sm transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60 @lg:w-48"
           >
             <Select.Value>{() => current.label}</Select.Value>
             <Select.Icon className="ms-auto">
@@ -151,6 +151,10 @@ export const AlternateVideoForm = ({
         <button
           type="submit"
           disabled={!detectedLabel || isPending}
+          // Visibly just "Add" so the URL field beside it gets the width; the
+          // accessible name keeps the object, and starts with the visible
+          // word (WCAG 2.5.3, label in name).
+          aria-label="Add language"
           className={cn(
             'inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-apple-9 px-4 font-medium text-apple-contrast text-sm',
             'transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2',
@@ -162,7 +166,7 @@ export const AlternateVideoForm = ({
           ) : (
             <Plus className="h-4 w-4" aria-hidden="true" />
           )}
-          Add language
+          Add
         </button>
       </div>
       {serverAlert}
