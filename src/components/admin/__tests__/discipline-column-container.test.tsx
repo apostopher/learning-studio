@@ -3,8 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { createLibraryLessonTargetAtom } from '#/atoms/admin';
+import {
+  createLibraryLessonTargetAtom,
+  disciplineLevelsTargetAtom,
+} from '#/atoms/admin';
 
+const posters = vi.hoisted(() => ({ useDisciplineLessonPosters: vi.fn() }));
+vi.mock('#/data-hooks/use-discipline-lesson-posters', () => posters);
 vi.mock('@dnd-kit/core', () => ({
   useDroppable: () => ({ setNodeRef: () => {}, isOver: false, active: null }),
 }));
@@ -73,5 +78,39 @@ describe('DisciplineColumnContainer', () => {
       name: 'Weather',
       module: null,
     });
+  });
+
+  // The levels board reads this atom to know which discipline to lay out.
+  it('opens the levels board on THIS discipline', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DisciplineColumnContainer
+          disciplineId={4}
+          name="Weather"
+          discipline={{ modules: [], untitled: [] }}
+        />
+      </Provider>,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Update levels in Weather' }),
+    );
+    expect(store.get(disciplineLevelsTargetAtom)).toEqual({
+      id: 4,
+      name: 'Weather',
+    });
+  });
+
+  it("starts loading this shelf's posters as soon as the column renders", () => {
+    render(
+      <Provider store={createStore()}>
+        <DisciplineColumnContainer
+          disciplineId={4}
+          name="Weather"
+          discipline={{ modules: [], untitled: [] }}
+        />
+      </Provider>,
+    );
+    expect(posters.useDisciplineLessonPosters).toHaveBeenCalledWith(4);
   });
 });

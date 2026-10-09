@@ -60,6 +60,14 @@ function renderQuickshot(
 }
 
 describe('LessonQuickshot toggles', () => {
+  // Levels are set per discipline, on the library's Update levels board —
+  // never from a course's lesson card.
+  it('offers no level control, even on a lesson that has levels', () => {
+    renderQuickshot({ levels: ['basic', 'advanced'] });
+    expect(screen.queryByRole('button', { name: /level/i })).toBeNull();
+    expect(screen.queryByRole('group', { name: /level/i })).toBeNull();
+  });
+
   it('turns a debrief on and sends only that field', async () => {
     const user = userEvent.setup();
     const onPatch = renderQuickshot();

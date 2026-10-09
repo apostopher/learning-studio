@@ -23,6 +23,7 @@ import { DisciplineColumnActions } from '../discipline-column-actions';
 
 function renderActions(overrides: { canManage?: boolean } = {}) {
   const handlers = {
+    onUpdateLevels: vi.fn(),
     onAddLesson: vi.fn(),
     onAddModule: vi.fn(),
     onRename: vi.fn(),
@@ -59,11 +60,12 @@ describe('DisciplineColumnActions', () => {
    * place to add a root-level lesson — and the only way to add a lesson at
    * all to a discipline that has no modules yet.
    */
-  it('has exactly four actions: add a lesson, add a module, edit, delete', () => {
+  it('has exactly five actions: levels, add a lesson, add a module, edit, delete', () => {
     renderActions();
     expect(
       screen.getAllByRole('button').map((b) => b.getAttribute('aria-label')),
     ).toEqual([
+      'Update levels in Weather',
       'Add a lesson to Weather',
       'Add a module to Weather',
       'Edit Weather',
@@ -76,6 +78,12 @@ describe('DisciplineColumnActions', () => {
     // button still renders and still fires something, so a test that only
     // asserted "some handler was called" would pass.
     const handlers = renderActions();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Update levels in Weather' }),
+    );
+    expect(handlers.onUpdateLevels).toHaveBeenCalledTimes(1);
+    expect(handlers.onAddLesson).not.toHaveBeenCalled();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Add a lesson to Weather' }),

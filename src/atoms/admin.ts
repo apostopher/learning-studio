@@ -44,6 +44,22 @@ export const createLibraryLessonTargetAtom = atom<{
   module: { id: number; name: string } | null;
 } | null>(null);
 
+/**
+ * The discipline whose lessons are open on the full-screen "Update levels"
+ * board, or null when it is closed.
+ */
+export const disciplineLevelsTargetAtom = atom<{
+  id: number;
+  name: string;
+} | null>(null);
+
+/**
+ * Which level a press on the Update levels board adds or removes. Kept across
+ * openings: an SME tagging one level tends to work through several
+ * disciplines at that level.
+ */
+export const levelsBoardModeAtom = atom<UserLevel>('basic');
+
 /** The discipline being renamed from the library column, or null. */
 export const renameDisciplineTargetAtom = atom<{
   id: number;

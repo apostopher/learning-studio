@@ -66,6 +66,7 @@ import { DeleteDisciplineModuleDialogContainer } from './delete-discipline-modul
 import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import { describeDndTarget, findLibraryLesson } from './describe-dnd-target';
 import { DisciplineColumnContainer } from './discipline-column-container';
+import { DisciplineLevelsDialogContainer } from './discipline-levels-dialog-container';
 import {
   acceptsLessonDrag,
   acceptsModuleDrag,
@@ -1409,6 +1410,7 @@ export const EditorContainer = ({
         modules={board.flatMap((courseBoard) => courseBoard.modules)}
       />
       <RenameDisciplineDialogContainer />
+      <DisciplineLevelsDialogContainer />
       <DeleteDisciplineDialogContainer />
       {/*
         The three discipline-MODULE dialogs, mounted once for the same

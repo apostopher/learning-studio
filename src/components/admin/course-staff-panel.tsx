@@ -303,7 +303,7 @@ export const CourseStaffPanel = ({
                       No <Combobox.Label> here: it only associates with
                       <Combobox.Trigger>, and this picker's form control is
                       <Combobox.Input> directly (Base UI logs a dev warning if
-                      a label is added without a trigger) — see LevelPicker.
+                      a label is added without a trigger).
                       The accessible name is set on the input itself instead.
                     */}
                     <Combobox.Input
