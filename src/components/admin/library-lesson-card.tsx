@@ -1,4 +1,4 @@
-import { GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { GripVertical, Trash2 } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
@@ -45,13 +45,16 @@ export const LibraryLessonCard = ({
     // transform on the hover target moves it out from under the cursor.
     // `has-focus-visible`, not `focus-within`: the card is not focusable,
     // its buttons are, and only KEYBOARD focus on one of them should light
-    // the whole card — a mouse click on Edit would otherwise leave the
+    // the whole card — a mouse click on the thumbnail would otherwise leave the
     // outline stuck on until blur.
     <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary outline outline-2 outline-offset-0 outline-transparent transition-[outline-color,background-color] duration-150 hover:bg-gray-2 hover:outline-warning-9 has-focus-visible:outline-warning-9">
       <LessonVideoTile
         hasVideo={lesson.isConfigured}
         lessonName={lesson.name}
         posterUrl={posterUrl}
+        // The thumbnail IS the Edit button — there is no separate pencil, so
+        // the name gets the width it used to share with one.
+        onEdit={onEdit}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center gap-2">
@@ -60,11 +63,6 @@ export const LibraryLessonCard = ({
             <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
               Draft
             </span>
-          )}
-          {onEdit && (
-            <TooltipIconButton label="Edit lesson" onClick={onEdit}>
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-            </TooltipIconButton>
           )}
           {onDelete && (
             <TooltipIconButton label="Delete lesson" onClick={onDelete}>

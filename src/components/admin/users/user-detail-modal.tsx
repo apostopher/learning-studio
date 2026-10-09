@@ -6,7 +6,10 @@ import { ScrollArea } from '#/components/scroll-area';
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
 import { cn } from '#/lib/cn';
 import type { UserLevel } from '#/types';
-import { UserCourseLevelRow } from './user-course-level-row';
+import {
+  UserCourseLevelHistory,
+  UserCourseLevelSelect,
+} from './user-course-level-row';
 import type { UserRow } from './users-table';
 
 export interface CourseOption {
@@ -167,49 +170,74 @@ export const UserDetailModal = ({
                       const enrolled = enrolledIds.has(course.id);
                       return (
                         <li key={course.id}>
-                          <label
+                          {/*
+                            One line per course: the enrolment checkbox and,
+                            once enrolled, its level at the far end. The box
+                            is a div holding the label and the select as
+                            SIBLINGS — a select inside the label would be
+                            invalid nesting, and clicking it would also
+                            toggle enrolment.
+
+                            The level is absent without level:read AND
+                            level:update — same convention as the checkbox.
+                            Also absent for a pending row: there is no
+                            profile, and so no level rows, until they sign
+                            in. level:read alone still renders it, read-only
+                            (see canEdit on the select).
+                          */}
+                          <div
                             className={cn(
-                              'flex items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5',
-                              canEditEnrolments && 'cursor-pointer',
+                              'flex items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 pe-3',
                               enrolled && 'border-apple-8 bg-gray-3',
                             )}
                           >
-                            <input
-                              type="checkbox"
-                              checked={enrolled}
-                              // Pending rows are edited through the add form,
-                              // not here: there is no profile to attach an
-                              // entitlement to until they sign in.
-                              disabled={!canEditEnrolments || isPending}
-                              onChange={(event) =>
-                                onToggleCourse(course.id, event.target.checked)
-                              }
-                              className="h-4 w-4 accent-apple-9 disabled:opacity-40"
-                            />
-                            <span className="flex-1 text-primary text-sm">
-                              {course.name}
-                            </span>
-                            {pendingCourseId === course.id && (
-                              <Loader2
-                                className="h-4 w-4 animate-spin text-secondary"
-                                aria-hidden="true"
+                            <label
+                              className={cn(
+                                'flex min-w-0 flex-1 items-center gap-3 py-2.5 ps-3',
+                                canEditEnrolments && 'cursor-pointer',
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={enrolled}
+                                // Pending rows are edited through the add
+                                // form, not here: there is no profile to
+                                // attach an entitlement to until they sign in.
+                                disabled={!canEditEnrolments || isPending}
+                                onChange={(event) =>
+                                  onToggleCourse(
+                                    course.id,
+                                    event.target.checked,
+                                  )
+                                }
+                                className="h-4 w-4 shrink-0 accent-apple-9 disabled:opacity-40"
                               />
-                            )}
-                          </label>
-
-                          {/*
-                            Absent without level:read AND level:update —
-                            same convention as the checkbox above. Also absent
-                            for a pending row: there is no profile, and so no
-                            level rows, until they sign in. level:read alone
-                            still renders the row (see canEdit on the row
-                            itself, below).
-                          */}
-                          {enrolled && canViewLevels && !isPending && (
-                            <div className="mt-2 ps-3">
-                              <UserCourseLevelRow
+                              <span className="min-w-0 flex-1 text-primary text-sm">
+                                {course.name}
+                              </span>
+                              {pendingCourseId === course.id && (
+                                <Loader2
+                                  className="h-4 w-4 shrink-0 animate-spin text-secondary"
+                                  aria-hidden="true"
+                                />
+                              )}
+                            </label>
+                            {enrolled && canViewLevels && !isPending && (
+                              <UserCourseLevelSelect
                                 courseName={course.name}
                                 level={levels[course.id] ?? 'basic'}
+                                canEdit={canEditLevels}
+                                saving={savingLevelCourseId === course.id}
+                                onLevelChange={(next) =>
+                                  onLevelChange(course.id, course.name, next)
+                                }
+                              />
+                            )}
+                          </div>
+
+                          {enrolled && canReadLevels && !isPending && (
+                            <div className="mt-1 ps-3">
+                              <UserCourseLevelHistory
                                 history={
                                   openLevelHistoryCourseId === course.id
                                     ? levelHistory
@@ -222,14 +250,8 @@ export const UserDetailModal = ({
                                   openLevelHistoryCourseId === course.id &&
                                   isLevelHistoryLoading
                                 }
-                                canEdit={canEditLevels}
-                                canViewHistory={canReadLevels}
-                                saving={savingLevelCourseId === course.id}
                                 onToggleHistory={() =>
                                   onToggleLevelHistory(course.id)
-                                }
-                                onLevelChange={(next) =>
-                                  onLevelChange(course.id, course.name, next)
                                 }
                               />
                             </div>
