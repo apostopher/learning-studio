@@ -8,9 +8,11 @@ import {
   createDisciplineModuleTargetAtom,
   createLibraryLessonTargetAtom,
   deleteDisciplineTargetAtom,
+  disciplineLevelsTargetAtom,
   expandedLibraryModuleIdsAtom,
   renameDisciplineTargetAtom,
 } from '#/atoms/admin';
+import { useDisciplineLessonPosters } from '#/data-hooks/use-discipline-lesson-posters';
 import { disciplineLessons, type LibraryDiscipline } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { disciplineDndId, libraryModuleDndId } from '#/lib/dnd-ids';
@@ -59,6 +61,12 @@ export const DisciplineColumnContainer = ({
   const openDelete = useSetAtom(deleteDisciplineTargetAtom);
 
   const openAddLesson = useSetAtom(createLibraryLessonTargetAtom);
+  const openLevels = useSetAtom(disciplineLevelsTargetAtom);
+  // Warms this shelf's posters as soon as the column is on screen. The
+  // request takes seconds (it lists videos at the provider), and both the
+  // lesson cards and the Update levels board read this same cache entry —
+  // started only when one of them mounted, the board opened onto blank tiles.
+  useDisciplineLessonPosters(disciplineId);
 
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedLibraryModuleIdsAtom,
@@ -83,6 +91,7 @@ export const DisciplineColumnContainer = ({
           <DisciplineColumnActions
             disciplineName={name}
             canManage={canManageDisciplines}
+            onUpdateLevels={() => openLevels({ id: disciplineId, name })}
             onAddLesson={() =>
               openAddLesson({ id: disciplineId, name, module: null })
             }
