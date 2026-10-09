@@ -134,4 +134,41 @@ describe('LessonVideoTile', () => {
 
     expect(container.querySelector('img')).toBeNull();
   });
+
+  it('is the Edit control, not a play control, when given onEdit', async () => {
+    const onEdit = vi.fn();
+    const onPlay = vi.fn();
+    render(
+      <LessonVideoTile
+        hasVideo
+        lessonName="Crosswind landings"
+        posterUrl="https://p/1.jpg"
+        onEdit={onEdit}
+        onPlay={onPlay}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /play/i })).toBeNull();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit Crosswind landings' }),
+    );
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('still opens the editor for a lesson with no video yet', async () => {
+    const onEdit = vi.fn();
+    render(
+      <LessonVideoTile
+        hasVideo={false}
+        lessonName="Crosswind landings"
+        onEdit={onEdit}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit Crosswind landings' }),
+    );
+    expect(onEdit).toHaveBeenCalledOnce();
+  });
 });

@@ -1,4 +1,4 @@
-import { Play, Video } from 'lucide-react';
+import { Pencil, Play, Video } from 'lucide-react';
 
 type LessonVideoTileProps = {
   /** Whether a video is assigned to this lesson. */
@@ -10,6 +10,12 @@ type LessonVideoTileProps = {
   posterUrl?: string | null;
   /** Omitted when the board has no way to play (e.g. the drag overlay). */
   onPlay?: () => void;
+  /**
+   * Makes the whole tile the lesson's Edit button instead — the library card,
+   * which has no player. Takes precedence over `onPlay`, and works with or
+   * without a video: the edit modal is where a video gets added.
+   */
+  onEdit?: () => void;
 };
 
 const TILE =
@@ -77,8 +83,37 @@ export const LessonVideoTile = ({
   lessonName,
   posterUrl,
   onPlay,
+  onEdit,
 }: LessonVideoTileProps) => {
   const poster = hasVideo && posterUrl ? posterUrl : null;
+
+  if (onEdit) {
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${lessonName}`}
+        className="group shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+      >
+        <span className={`${TILE} text-gray-8`}>
+          {poster && <PosterFrame src={poster} />}
+          {/* No play glyph: pressing this edits, it does not play, and a
+              play triangle would promise the wrong thing. The pencil comes
+              up on hover and keyboard focus — on the same opaque disc the
+              play glyph uses, for the same contrast reason. */}
+          {!poster && !hasVideo && (
+            <Video
+              className="h-4 w-4 transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0"
+              aria-hidden="true"
+            />
+          )}
+          <span className="absolute flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        </span>
+      </button>
+    );
+  }
 
   if (!hasVideo || !onPlay) {
     return (

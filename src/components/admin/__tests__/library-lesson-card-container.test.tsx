@@ -41,10 +41,25 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
   ),
 }));
 const tile = vi.hoisted(() => ({ received: vi.fn() }));
+// The tile is now the card's Edit button: the stub renders the button it is
+// asked for, named the way the real tile names it, so the click below reaches
+// the handler the card passed.
 vi.mock('../lesson-video-tile', () => ({
-  LessonVideoTile: (props: { posterUrl?: string | null }) => {
+  LessonVideoTile: (props: {
+    posterUrl?: string | null;
+    lessonName: string;
+    onEdit?: () => void;
+  }) => {
     tile.received(props.posterUrl);
-    return <div />;
+    return props.onEdit ? (
+      <button
+        type="button"
+        aria-label={`Edit ${props.lessonName}`}
+        onClick={props.onEdit}
+      />
+    ) : (
+      <div />
+    );
   },
 }));
 const postersHook = vi.hoisted(() => ({
@@ -172,8 +187,8 @@ describe('LibraryLessonCardContainer', () => {
 
   it('opens the lesson-level editor for THIS lesson', () => {
     // The regression this pins: `LibraryLessonCard` accepted `onEdit` from the
-    // day it was written and this container never passed it, so the pencil
-    // never rendered and the library had no way to edit a lesson at all.
+    // day it was written and this container never passed it, so the library
+    // had no way to edit a lesson at all. The thumbnail is that control now.
     // Asserting the atom holds this lesson's id — not merely that a button
     // exists — is what catches a hardcoded or wrong id reaching the modal.
     const store = createStore();
@@ -188,7 +203,11 @@ describe('LibraryLessonCardContainer', () => {
     );
 
     expect(store.get(editLibraryLessonIdAtom)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit lesson' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: `Edit ${LESSON.name}` }),
+    );
+    // The pencil it replaced is gone — one Edit control, not two.
+    expect(screen.queryByRole('button', { name: 'Edit lesson' })).toBeNull();
     expect(store.get(editLibraryLessonIdAtom)).toBe(42);
   });
   it("reads its shelf's posters once per discipline and hands the card THIS lesson's frame", () => {
