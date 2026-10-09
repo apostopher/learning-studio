@@ -8,7 +8,6 @@ import {
   isVideoWatchRequiredDisabled,
   videoWatchWarning,
 } from '#/components/admin/lesson-config/config-mappings';
-import { LessonLevelChip } from '#/components/admin/lesson-level-chip';
 import { type ChipTone, chipClassName } from '#/components/ui/chip';
 import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
 import type {
@@ -16,7 +15,6 @@ import type {
   EditorBoardModule,
   UpdateLessonConfigInput,
 } from '#/lib/admin-schemas';
-import type { UserLevel } from '#/types';
 
 /**
  * Fast enough to feel like the chip answered, slow enough to be seen. A quarter
@@ -100,8 +98,11 @@ const QuickshotToggle = ({
 /**
  * The lesson's settings, as a row of chips you can hit without opening a dialog.
  *
+ * No level chip: a lesson's levels belong to its discipline and are set on
+ * the library's Update levels board, not per course.
+ *
  * **The colour system carries meaning, so don't pick tones by taste:**
- * - *warning* (brown) — narrows **who may see** the lesson: its levels, and paid access.
+ * - *warning* (brown) — narrows **who may see** the lesson: paid access.
  * - *success* (green) — demands something **of the learner**: a debrief, a watched video.
  * - *muted* (grey) — unrestricted, or not required. The resting state of everything.
  *
@@ -141,13 +142,6 @@ export const LessonQuickshot = ({
     // colour, which is the right reading of "gentler, not none".
     <MotionConfig reducedMotion="user">
       <div className="flex flex-wrap items-center gap-1 font-semibold">
-        <LessonLevelChip
-          value={lesson.levels}
-          lessonName={lesson.name}
-          disabled={disabled}
-          onValueChange={(levels: UserLevel[]) => onPatch({ levels })}
-        />
-
         <QuickshotToggle
           label={isPaid ? 'Paid' : 'Free'}
           tooltip={
