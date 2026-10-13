@@ -12,6 +12,7 @@ import { appendMessages, ensureChat, loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
+import { HISTORY_HARD_CAP } from '#/lib/chat-history';
 import { resolveChatSkaProfile } from '#/lib/ska-profile.server';
 
 const chatRequestSchema = z.object({
@@ -161,7 +162,13 @@ export async function chatHandler(request: Request): Promise<Response> {
       // Compaction is scheduled, never awaited: `onFinish` runs before the
       // response closes, so awaiting it would hold the learner's input
       // disabled while a summary is written.
-      if (shouldCompact(await firstStepInputTokens)) {
+      // Also compact when the history window hit its cap: the cap drops
+      // messages from the model's view, so they must be folded in before
+      // they fall out entirely.
+      if (
+        shouldCompact(await firstStepInputTokens) ||
+        (context?.entries.length ?? 0) >= HISTORY_HARD_CAP
+      ) {
         waitUntil(
           compactChat({ userId: session.user.id, chatId }).then(
             () => undefined,

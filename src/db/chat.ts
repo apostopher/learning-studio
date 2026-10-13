@@ -146,6 +146,7 @@ export type ChatContext = {
 export async function loadChatContext(
   userId: string,
   chatId: string,
+  { cap = HISTORY_HARD_CAP }: { cap?: number } = {},
 ): Promise<ChatContext | null> {
   const [chat] = await db
     .select({
@@ -160,7 +161,9 @@ export async function loadChatContext(
   const through = chat.summarizedThroughOrder;
   // Newest first so the cap keeps the most recent rows; toHistoryEntries
   // re-sorts oldest first. The 2x leaves room for filtered-out non-turn rows.
-  const rows = await db
+  // `cap: Infinity` is the compactor's read: every unsummarized row, no limit,
+  // so nothing between the summary and the window is skipped.
+  const query = db
     .select({
       id: aiMessages.id,
       role: aiMessages.role,
@@ -173,13 +176,13 @@ export async function loadChatContext(
         ? eq(aiMessages.chatId, chatId)
         : and(eq(aiMessages.chatId, chatId), gt(aiMessages.order, through)),
     )
-    .orderBy(desc(aiMessages.order))
-    .limit(HISTORY_HARD_CAP * 2);
+    .orderBy(desc(aiMessages.order));
+  const rows = await (Number.isFinite(cap) ? query.limit(cap * 2) : query);
 
   return {
     summary: chat.summary,
     summarizedThroughOrder: through,
-    entries: toHistoryEntries(rows),
+    entries: toHistoryEntries(rows, cap),
   };
 }
 

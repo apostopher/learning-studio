@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const s = vi.hoisted(() => ({
   results: [] as unknown[][],
   wheres: [] as unknown[],
+  limits: [] as number[],
   updateResult: [] as unknown[],
   updateSet: undefined as unknown,
   updateWhere: undefined as unknown,
@@ -22,7 +23,14 @@ vi.mock('#/db', () => {
         return c;
       },
       orderBy: () => c,
-      limit: async () => s.results.shift() ?? [],
+      limit: async (n: number) => {
+        s.limits.push(n);
+        return s.results.shift() ?? [];
+      },
+      // An unlimited query is awaited directly, so the chain is a thenable.
+      // biome-ignore lint/suspicious/noThenProperty: stubbing drizzle's awaitable query builder
+      then: (resolve: (v: unknown[]) => void) =>
+        resolve(s.results.shift() ?? []),
     };
     return c;
   };
@@ -44,6 +52,7 @@ vi.mock('#/db', () => {
 });
 vi.mock('#/lib/chat-title', () => ({ chatTitleFromText: (t: string) => t }));
 
+import { HISTORY_HARD_CAP } from '#/lib/chat-history';
 import { loadChatContext, saveChatSummary } from '../chat';
 
 const rendered = (i: number) => new PgDialect().sqlToQuery(s.wheres[i] as SQL);
@@ -51,6 +60,7 @@ const rendered = (i: number) => new PgDialect().sqlToQuery(s.wheres[i] as SQL);
 beforeEach(() => {
   s.results = [];
   s.wheres = [];
+  s.limits = [];
 });
 
 describe('loadChatContext', () => {
@@ -82,6 +92,29 @@ describe('loadChatContext', () => {
       summarizedThroughOrder: 9,
       entries: [],
     });
+  });
+});
+
+describe('loadChatContext uncapped (compactor read)', () => {
+  it('applies no row limit and returns more than HISTORY_HARD_CAP entries', async () => {
+    const rows = Array.from({ length: HISTORY_HARD_CAP + 10 }, (_, i) => ({
+      id: `m${i}`,
+      role: 'user',
+      order: i + 1,
+      parts: [],
+    }));
+    s.results = [[{ summary: null, summarizedThroughOrder: null }], rows];
+    const ctx = await loadChatContext('u1', 'c1', { cap: Infinity });
+    expect(ctx?.entries).toHaveLength(HISTORY_HARD_CAP + 10);
+    expect(ctx?.entries[0].order).toBe(1);
+    // Only the ownership lookup's .limit(1); the message query has none.
+    expect(s.limits).toEqual([1]);
+  });
+
+  it('the default read is still capped', async () => {
+    s.results = [[{ summary: null, summarizedThroughOrder: null }], []];
+    await loadChatContext('u1', 'c1');
+    expect(s.limits).toEqual([1, HISTORY_HARD_CAP * 2]);
   });
 });
 

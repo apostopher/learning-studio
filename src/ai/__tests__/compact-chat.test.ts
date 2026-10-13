@@ -94,6 +94,18 @@ describe('compactChat', () => {
   });
 });
 
+describe('compactChat — long unsummarized history', () => {
+  it('reads uncapped and folds the oldest entries, beyond the capped window', async () => {
+    const d = deps(Array.from({ length: 60 }, (_, i) => entry(i + 1)));
+    await compactChat({ userId: 'u', chatId: 'c' }, d);
+    expect(d.load).toHaveBeenCalledWith('u', 'c', {
+      cap: Number.POSITIVE_INFINITY,
+    });
+    expect(d.summarize.mock.calls[0][0].transcript).toContain('text 1\n');
+    expect(d.save.mock.calls[0][0].throughOrder).toBe(53);
+  });
+});
+
 describe('helpers', () => {
   it('shouldCompact trips only above the budget', () => {
     expect(shouldCompact(undefined)).toBe(false);

@@ -29,4 +29,11 @@ describe('toHistoryEntries', () => {
     expect(out).toHaveLength(HISTORY_HARD_CAP);
     expect(out[0].order).toBe(5);
   });
+
+  it('an infinite cap returns every turn (the compactor read)', () => {
+    const rows = Array.from({ length: HISTORY_HARD_CAP + 5 }, (_, i) => row(i));
+    const out = toHistoryEntries(rows, Number.POSITIVE_INFINITY);
+    expect(out).toHaveLength(HISTORY_HARD_CAP + 5);
+    expect(out[0].order).toBe(0);
+  });
 });

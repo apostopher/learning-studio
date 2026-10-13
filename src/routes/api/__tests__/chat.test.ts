@@ -39,6 +39,7 @@ vi.mock('#/db/chat', () => ({ ensureChat, appendMessages, loadChatContext }));
 // which is mocked too, so nothing here depends on its internals.
 vi.mock('#/lib/ska-profile.server', () => ({ resolveChatSkaProfile }));
 
+import { HISTORY_HARD_CAP } from '#/lib/chat-history';
 import { chatHandler } from '../chat';
 
 function postReq(body: unknown): Request {
@@ -423,5 +424,51 @@ describe('chatHandler — server-owned history', () => {
       expect.any(Error),
     );
     logged.mockRestore();
+  });
+
+  it('compacts when the history window hit its cap, even under the token budget', async () => {
+    const entries = Array.from({ length: HISTORY_HARD_CAP }, (_, i) => ({
+      order: i + 1,
+      message: {
+        id: `m${i}`,
+        role: i % 2 ? 'assistant' : 'user',
+        parts: [],
+      },
+    }));
+    loadChatContext.mockResolvedValue({
+      summary: null,
+      summarizedThroughOrder: null,
+      entries,
+    });
+    ensureChat.mockResolvedValue('chat-1');
+    buildChatStream.mockResolvedValueOnce(streamWith(5));
+    compactChat.mockResolvedValue('compacted');
+    const res = await chatHandler(
+      postReq({
+        chatId: 'chat-1',
+        messages: [
+          { id: 'n', role: 'user', parts: [{ type: 'text', text: 'q' }] },
+        ],
+      }),
+    );
+    await res.text();
+    expect(compactChat).toHaveBeenCalledWith({
+      userId: 'u1',
+      chatId: 'chat-1',
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+  });
+
+  it('never awaits compaction on the response path', {
+    timeout: 3000,
+  }, async () => {
+    buildChatStream.mockResolvedValueOnce(streamWith(101));
+    compactChat.mockReturnValue(new Promise(() => {}));
+    const res = await chatHandler(overBudgetReq());
+    await res.text();
+    expect(waitUntil.mock.calls[0][0]).toBeInstanceOf(Promise);
+    expect(appendMessages.mock.invocationCallOrder[0]).toBeLessThan(
+      compactChat.mock.invocationCallOrder[0],
+    );
   });
 });

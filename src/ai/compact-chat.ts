@@ -78,7 +78,11 @@ async function summarizeWithGemini({
 }
 
 export type CompactDeps = {
-  load: (userId: string, chatId: string) => Promise<ChatContext | null>;
+  load: (
+    userId: string,
+    chatId: string,
+    options: { cap: number },
+  ) => Promise<ChatContext | null>;
   summarize: typeof summarizeWithGemini;
   save: typeof saveChatSummary;
 };
@@ -90,7 +94,8 @@ const defaultDeps: CompactDeps = {
 };
 
 /**
- * Fold everything but the recent tail into `ai_chats.summary`. Runs in the
+ * Fold everything but the recent tail (reading ALL unsummarized rows, not the
+ * capped model view, so none are skipped) into `ai_chats.summary`. Runs in the
  * background (waitUntil) after a turn is saved; never on the response path.
  * Throws on failure — the caller logs it; nothing is written, and the next
  * over-budget turn retries.
@@ -99,7 +104,9 @@ export async function compactChat(
   { userId, chatId }: { userId: string; chatId: string },
   deps: CompactDeps = defaultDeps,
 ): Promise<'compacted' | 'nothing-to-do' | 'lost-race'> {
-  const ctx = await deps.load(userId, chatId);
+  const ctx = await deps.load(userId, chatId, {
+    cap: Number.POSITIVE_INFINITY,
+  });
   if (!ctx) return 'nothing-to-do';
 
   let keepFrom = Math.max(0, ctx.entries.length - KEEP_RECENT_MESSAGES);

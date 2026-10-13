@@ -16,11 +16,12 @@ export type HistoryEntry = { order: number; message: UIMessage };
  */
 export function toHistoryEntries(
   rows: Array<{ id: string; role: string; parts: unknown; order: number }>,
+  cap: number = HISTORY_HARD_CAP,
 ): HistoryEntry[] {
   return rows
     .filter((r) => r.role === 'user' || r.role === 'assistant')
     .sort((a, b) => a.order - b.order)
-    .slice(-HISTORY_HARD_CAP)
+    .slice(Number.isFinite(cap) ? -cap : 0)
     .map((r) => ({
       order: r.order,
       message: {
