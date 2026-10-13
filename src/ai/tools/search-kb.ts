@@ -1,9 +1,10 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { getCourseContentForAgent } from '#/db/course-content';
+import { getGatedCourseForAgent } from '#/db/course-content';
 import { getAllHelpTopics } from '#/db/help-topics';
 import { type KBResult, searchKB } from '#/db/knowledge-base';
 import { resolveKBCourseId } from '#/db/knowledge-base-scope';
+import { allowedLessonSlugs, courseOutline } from '#/lib/course-content';
 
 // The query only. How many results and how relevant they must be are fixed in
 // `searchKB`, not offered to the model: as tool parameters it could ask for
@@ -14,14 +15,14 @@ export const SearchKBParamsSchema = z.object({
 
 export function buildKBContext(input: {
   kbResults: KBResult[];
-  courseHtml: string;
+  outline: string;
   helpTopics: { title: string; content: string }[];
 }): string {
   const kb = input.kbResults.map((r) => r.chunk).join('\n\n');
   const help = input.helpTopics
     .map((h) => `<h2>${h.title}</h2>${h.content}`)
     .join('\n\n');
-  return [input.courseHtml, kb, `<h1>Help</h1>\n${help}`]
+  return [input.outline, kb, `<h1>Help</h1>\n${help}`]
     .filter(Boolean)
     .join('\n\n');
 }
@@ -30,7 +31,7 @@ export function makeSearchKBTool(opts: {
   writer?: { write: (p: unknown) => void };
   courseSlug?: string;
   /**
-   * Required: `getCourseContentForAgent` gates every lesson against it, and
+   * Required: `getGatedCourseForAgent` gates every lesson against it, and
    * `resolveKBCourseId` decides from it whether this course's documents are
    * readable at all.
    */
@@ -53,17 +54,25 @@ export function makeSearchKBTool(opts: {
       // route matched) means no course content — never substitute a default
       // slug, guess from subscriptions, or fall back to every subscribed
       // course. The tool answers from org-wide documents + help topics only.
-      const [kbResults, courseHtml, helpTopics] = await Promise.all([
-        resolveKBCourseId({
-          userId: opts.userId,
-          courseSlug: opts.courseSlug,
-        }).then((courseId) => searchKB(query, { courseId })),
+      const [courseId, gated, helpTopics] = await Promise.all([
+        resolveKBCourseId({ userId: opts.userId, courseSlug: opts.courseSlug }),
         opts.courseSlug
-          ? getCourseContentForAgent(opts.courseSlug, { userId: opts.userId })
-          : Promise.resolve(''),
+          ? getGatedCourseForAgent(opts.courseSlug, { userId: opts.userId })
+          : Promise.resolve(null),
         getAllHelpTopics(),
       ]);
-      return buildKBContext({ kbResults, courseHtml, helpTopics });
+      // Relevant chunks from the lessons this learner may open, not the whole
+      // course: the old full-course dump was re-sent on every search and was
+      // most of every long chat's input.
+      const kbResults = await searchKB(query, {
+        courseId,
+        lessonSlugs: gated ? allowedLessonSlugs(gated) : [],
+      });
+      return buildKBContext({
+        kbResults,
+        outline: gated ? courseOutline(gated) : '',
+        helpTopics,
+      });
     },
   });
 }
