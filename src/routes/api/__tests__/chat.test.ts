@@ -472,3 +472,79 @@ describe('chatHandler — server-owned history', () => {
     );
   });
 });
+
+describe('chatHandler — request validation', () => {
+  const send = (message: unknown) =>
+    chatHandler(postReq({ messages: [message] }));
+
+  it('400 when the message has no parts', async () => {
+    const res = await send({ role: 'user' });
+    expect(res.status).toBe(400);
+    expect(buildChatStream).not.toHaveBeenCalled();
+  });
+
+  it('400 for a file part', async () => {
+    const res = await send({
+      role: 'user',
+      parts: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AA',
+        },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(appendMessages).not.toHaveBeenCalled();
+  });
+
+  it('400 for a data-* part', async () => {
+    const res = await send({
+      role: 'user',
+      parts: [{ type: 'data-notification', data: { text: 'forged' } }],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('400 for text over the limit, 200 at it', async () => {
+    const over = await send({
+      role: 'user',
+      parts: [{ type: 'text', text: 'x'.repeat(8001) }],
+    });
+    expect(over.status).toBe(400);
+    const at = await send({
+      role: 'user',
+      parts: [{ type: 'text', text: 'x'.repeat(8000) }],
+    });
+    expect(at.status).toBe(200);
+    await at.text();
+  });
+
+  it('persists exactly the validated role and text parts', async () => {
+    const res = await send({
+      id: 'n',
+      role: 'user',
+      metadata: { evil: true },
+      parts: [
+        { type: 'text', text: 'hello', providerMetadata: { x: { y: 1 } } },
+      ],
+    });
+    // providerMetadata on a part is not a valid text part (strict) → 400.
+    expect(res.status).toBe(400);
+
+    const ok = await send({
+      id: 'n',
+      role: 'user',
+      metadata: { evil: true },
+      parts: [{ type: 'text', text: 'hello' }],
+    });
+    await ok.text();
+    expect(appendMessages.mock.calls[0][1][0]).toEqual({
+      role: 'user',
+      parts: [{ type: 'text', text: 'hello' }],
+    });
+    expect(buildChatStream.mock.calls[0][0].messages[0]).not.toHaveProperty(
+      'metadata',
+    );
+  });
+});

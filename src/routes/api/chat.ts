@@ -15,12 +15,34 @@ import { auth } from '#/lib/auth';
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
 import { resolveChatSkaProfile } from '#/lib/ska-profile.server';
 
+/** Longest learner message accepted, in characters. The widget sends plain
+ * typed text; this bounds what is persisted and replayed to the model on every
+ * later turn. */
+const MAX_USER_TEXT = 8000;
+
 const chatRequestSchema = z.object({
   chatId: z.string().optional(),
   // Exactly the new learner turn. History comes from the database
   // (loadChatContext): a client-supplied history both grew without bound
-  // (Vercel 413s) and let a client put words in Viper's mouth.
-  messages: z.array(z.looseObject({ role: z.literal('user') })).length(1),
+  // (Vercel 413s) and let a client put words in Viper's mouth. Only text parts
+  // are accepted: `file`, `data-*` and `providerMetadata` would otherwise be
+  // persisted and replayed server-side on every turn.
+  messages: z
+    .array(
+      z.looseObject({
+        id: z.string().optional(),
+        role: z.literal('user'),
+        parts: z
+          .array(
+            z.strictObject({
+              type: z.literal('text'),
+              text: z.string().min(1).max(MAX_USER_TEXT),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .length(1),
   courseSlug: z.string().optional(),
 });
 
@@ -64,15 +86,7 @@ export async function chatHandler(request: Request): Promise<Response> {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const {
-    chatId: requestChatId,
-    messages,
-    courseSlug,
-  } = parsed.data as unknown as {
-    chatId?: string;
-    messages: UIMessage[];
-    courseSlug?: string;
-  };
+  const { chatId: requestChatId, messages, courseSlug } = parsed.data;
 
   const [persona, skaProfile] = await Promise.all([
     // Personas are org-level and a course may pin its own: this resolves
@@ -98,7 +112,13 @@ export async function chatHandler(request: Request): Promise<Response> {
   // which is the correct default until subscriptions are available.
   const subscriptions: string[] = [];
 
-  const lastUserMessage = messages[messages.length - 1];
+  // Built from the validated fields only, so nothing else the client put on
+  // the message (extra keys, metadata) reaches the database or the model.
+  const lastUserMessage: UIMessage = {
+    id: messages[0].id ?? crypto.randomUUID(),
+    role: 'user',
+    parts: messages[0].parts,
+  };
 
   // Resolve (continue-or-create) the chat row up front, before the stream
   // starts, so the id is stable for the whole turn: it's what `onFinish`
