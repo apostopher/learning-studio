@@ -47,9 +47,15 @@ export async function generateHTMLEmbeddings({
   // Delete-then-insert happens atomically so a failed re-ingest never wipes
   // existing rows without replacing them.
   await db.transaction(async (tx) => {
-    await tx
-      .delete(docs)
-      .where(and(eq(docs.sourcePath, sourcePath), courseFilter));
+    await tx.delete(docs).where(
+      and(
+        eq(docs.sourcePath, sourcePath),
+        courseFilter,
+        // Lesson chunks (lesson_slug set) are owned by generateLessonEmbeddings;
+        // the document path must never delete them.
+        isNull(docs.lessonSlug),
+      ),
+    );
 
     await Promise.all(
       toEmbed.map((c, i) =>

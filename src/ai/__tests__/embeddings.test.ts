@@ -96,7 +96,11 @@ describe('generateHTMLEmbeddings', () => {
       html: '<p>x</p>',
     });
     expect(deleteWhereArg()).toEqual({
-      and: [{ eq: ['source_path', 'file-x'] }, { eq: ['course_id', 2] }],
+      and: [
+        { eq: ['source_path', 'file-x'] },
+        { eq: ['course_id', 2] },
+        { isNull: 'lesson_slug' },
+      ],
     });
   });
 
@@ -109,7 +113,11 @@ describe('generateHTMLEmbeddings', () => {
       html: '<p>x</p>',
     });
     expect(deleteWhereArg()).toEqual({
-      and: [{ eq: ['source_path', 'file-x'] }, { isNull: 'course_id' }],
+      and: [
+        { eq: ['source_path', 'file-x'] },
+        { isNull: 'course_id' },
+        { isNull: 'lesson_slug' },
+      ],
     });
   });
 });
