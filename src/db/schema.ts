@@ -1928,6 +1928,12 @@ export const docs = pgTable(
     courseId: integer('course_id').references(() => coursesTable.id, {
       onDelete: 'cascade',
     }),
+    // Set = a chunk of one lesson's material (course_id is then null: a lesson
+    // can be placed in several courses, and access is decided per lesson by
+    // getGatedCourseForAgent). Null = an uploaded document.
+    lessonSlug: text('lesson_slug').references(() => lessonsTable.slug, {
+      onDelete: 'cascade',
+    }),
     sourcePath: text('source_path').notNull(),
     heading: text('heading'),
     chunk: text('chunk').notNull(),
@@ -1945,6 +1951,7 @@ export const docs = pgTable(
       .nullsNotDistinct(),
     // Filter embeddings by course before similarity search.
     index('docs_course_id_idx').on(t.courseId),
+    index('docs_lesson_slug_idx').on(t.lessonSlug),
   ],
 );
 
@@ -2003,6 +2010,10 @@ export const aiChats = pgTable(
       .notNull()
       .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
     title: varchar('title', { length: 255 }).notNull(),
+    // Rolling summary of messages with order <= summarizedThroughOrder; see
+    // compactChat. Both null until the chat first passes the token budget.
+    summary: text('summary'),
+    summarizedThroughOrder: integer('summarized_through_order'),
     createdAt: timestamp('created_at', {
       mode: 'date',
       withTimezone: true,
