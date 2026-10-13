@@ -271,8 +271,25 @@ kept.
 
 ## Rollout
 
-1. Hand-written SQL (in `src/db/migrate-viper-context.ts`) for `docs.lesson_slug` and the `ai_chats` columns, applied
-   to dev then prod before deploy.
-2. Run the backfill against dev, then prod.
-3. Deploy. Watch the token/latency logs and Vercel 413s.
-4. Tune `COMPACT_AT_INPUT_TOKENS` and the KB threshold from real numbers.
+Order matters, in both directions.
+
+- Main's `searchKB` scopes with `isNull(docs.courseId)` /
+  `or(eq(courseId), isNull(courseId))`. Lesson chunks have `course_id NULL`,
+  so with the old code live they match every learner's search: locked,
+  out-of-tier, unsubscribed and WIP lessons would leak.
+- The new code selects/inserts `docs.lesson_slug` and the `ai_chats` summary
+  columns. Deployed before the migration, `ensureChat`, `getChat`,
+  `loadChatContext`, `searchKB` and doc ingest all 500.
+
+1. Apply `pnpm db:migrate-viper-context` (hand-written SQL in
+   `src/db/migrate-viper-context.ts`: `docs.lesson_slug` and the `ai_chats`
+   columns) to the target DB, dev then prod, BEFORE merging or deploying.
+   Merging to main may auto-deploy.
+2. Merge and deploy; confirm the new code is live.
+3. Only then run `pnpm db:migrate-lesson-embeddings` (dev, then prod). Until
+   it runs, lessons have no chunks: degraded answers, but no leak.
+4. Rollback: run `delete from docs where lesson_slug is not null` BEFORE
+   reverting the code. Old code would otherwise serve lesson chunks ungated.
+5. After the backfill, re-measure `KB_MIN_SIMILARITY` against lesson chunks
+   (section C), watch the token/latency logs and Vercel 413s, and tune
+   `COMPACT_AT_INPUT_TOKENS` from real numbers.

@@ -1757,4 +1757,9 @@ git commit -m "refactor(tavus): load call history through loadChatContext, with 
   4. Server log `viper7 usage` lines: `inputTokens` roughly flat across turns; `cachedInputTokens` non-zero from the second turn.
   5. Lower `COMPACT_AT_INPUT_TOKENS` locally to ~2 000, chat ~10 turns, confirm `ai_chats.summary` fills and the next turn's prompt carries it; restore the constant.
 
-- [ ] **Step 4:** Hand off rollout to the user (needs their credentials): run `db:migrate-viper-context` and `db:migrate-lesson-embeddings` against **prod** before the deploy reaches it; after deploy, watch Vercel for `FUNCTION_PAYLOAD_TOO_LARGE` and the `viper7 usage` logs.
+- [ ] **Step 4:** Hand off rollout to the user (needs their credentials). Order is load-bearing: main's `searchKB` treats `course_id IS NULL` as org-wide, and lesson chunks are `course_id NULL`, so backfilling before the new gated code is live leaks locked/out-of-tier lessons; deploying before the migration 500s `ensureChat`, `getChat`, `loadChatContext`, `searchKB` and doc ingest (missing columns).
+  1. Run `pnpm db:migrate-viper-context` against dev, then prod, BEFORE merging or deploying (merging to main may auto-deploy).
+  2. Merge and deploy; confirm the new code is live.
+  3. Only then run `pnpm db:migrate-lesson-embeddings` (dev, then prod). Until it runs lessons have no chunks: degraded answers, no leak.
+  4. Rollback: run `delete from docs where lesson_slug is not null` BEFORE reverting code, or old code serves lesson chunks ungated.
+  5. After the backfill, re-measure `KB_MIN_SIMILARITY` against lesson chunks (spec section C); watch Vercel for `FUNCTION_PAYLOAD_TOO_LARGE` and the `viper7 usage` logs.
