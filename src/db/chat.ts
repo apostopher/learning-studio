@@ -112,11 +112,19 @@ export async function getChat(
   userId: string,
   chatId: string,
 ): Promise<{
-  chat: typeof aiChats.$inferSelect;
+  chat: Omit<typeof aiChats.$inferSelect, 'summary' | 'summarizedThroughOrder'>;
   messages: Array<typeof aiMessages.$inferSelect>;
 } | null> {
+  // Explicit columns: the rolling summary is the model's memory, never shown
+  // in the UI, and this result is served as JSON by /api/chats/$chatId.
   const [chat] = await db
-    .select()
+    .select({
+      id: aiChats.id,
+      userId: aiChats.userId,
+      title: aiChats.title,
+      createdAt: aiChats.createdAt,
+      updatedAt: aiChats.updatedAt,
+    })
     .from(aiChats)
     .where(and(eq(aiChats.id, chatId), eq(aiChats.userId, userId)));
 

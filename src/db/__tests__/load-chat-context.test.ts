@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const s = vi.hoisted(() => ({
   results: [] as unknown[][],
   wheres: [] as unknown[],
+  selects: [] as unknown[],
   limits: [] as number[],
   updateResult: [] as unknown[],
   updateSet: undefined as unknown,
@@ -48,18 +49,27 @@ vi.mock('#/db', () => {
     };
     return u;
   };
-  return { db: { select: chain, update } };
+  return {
+    db: {
+      select: (fields?: unknown) => {
+        s.selects.push(fields);
+        return chain();
+      },
+      update,
+    },
+  };
 });
 vi.mock('#/lib/chat-title', () => ({ chatTitleFromText: (t: string) => t }));
 
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
-import { loadChatContext, saveChatSummary } from '../chat';
+import { getChat, loadChatContext, saveChatSummary } from '../chat';
 
 const rendered = (i: number) => new PgDialect().sqlToQuery(s.wheres[i] as SQL);
 
 beforeEach(() => {
   s.results = [];
   s.wheres = [];
+  s.selects = [];
   s.limits = [];
 });
 
@@ -144,5 +154,28 @@ describe('saveChatSummary', () => {
         expectedThroughOrder: 3,
       }),
     ).toBe(false);
+  });
+});
+
+describe('getChat', () => {
+  it('selects the chat without the summary columns, which are model-only', async () => {
+    s.results = [[{ id: 'c1', userId: 'u1', title: 't' }], []];
+    const result = await getChat('u1', 'c1');
+    const projection = s.selects[0] as Record<string, unknown>;
+    // An explicit projection: a bare select() would return every column,
+    // including the rolling summary the UI must never see.
+    expect(projection).toBeDefined();
+    expect(Object.keys(projection)).toEqual(
+      expect.arrayContaining([
+        'id',
+        'userId',
+        'title',
+        'createdAt',
+        'updatedAt',
+      ]),
+    );
+    expect(Object.keys(projection)).not.toContain('summary');
+    expect(Object.keys(projection)).not.toContain('summarizedThroughOrder');
+    expect(result?.chat).toEqual({ id: 'c1', userId: 'u1', title: 't' });
   });
 });
