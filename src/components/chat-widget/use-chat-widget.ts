@@ -26,6 +26,10 @@ import { AIWriterDataSchema } from '#/types';
  * default body (it does NOT merge), so every field the route needs —
  * `id`/`messages`/`trigger`/`messageId` from the transport, plus `chatId`
  * and `courseSlug` from the hook — must be reconstructed here explicitly.
+ *
+ * Only the newest message is sent. The server loads history from
+ * `ai_messages` (`loadChatContext`), so request size stays flat however long
+ * the chat runs (the whole transcript used to trip Vercel's 413).
  */
 export function buildChatRequestBody(input: {
   id: string;
@@ -37,7 +41,15 @@ export function buildChatRequestBody(input: {
   courseSlug: string | undefined;
 }) {
   const { id, messages, trigger, messageId, body, chatId, courseSlug } = input;
-  return { id, messages, trigger, messageId, ...body, chatId, courseSlug };
+  return {
+    id,
+    messages: messages.slice(-1),
+    trigger,
+    messageId,
+    ...body,
+    chatId,
+    courseSlug,
+  };
 }
 
 /**

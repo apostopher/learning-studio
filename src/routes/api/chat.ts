@@ -6,7 +6,7 @@ import {
 } from 'ai';
 import { z } from 'zod';
 import { buildChatStream } from '#/ai/chat';
-import { appendMessages, ensureChat } from '#/db/chat';
+import { appendMessages, ensureChat, loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
@@ -14,7 +14,10 @@ import { resolveChatSkaProfile } from '#/lib/ska-profile.server';
 
 const chatRequestSchema = z.object({
   chatId: z.string().optional(),
-  messages: z.array(z.any()).min(1),
+  // Exactly the new learner turn. History comes from the database
+  // (loadChatContext): a client-supplied history both grew without bound
+  // (Vercel 413s) and let a client put words in Viper's mouth.
+  messages: z.array(z.looseObject({ role: z.literal('user') })).length(1),
   courseSlug: z.string().optional(),
 });
 
@@ -32,7 +35,9 @@ function textOf(message: UIMessage): string {
 /**
  * Streaming chat endpoint: authenticates, loads the viper7 persona, then
  * hands off to `buildChatStream` (ai@6 `streamText`) and pipes its output
- * back as a UI message stream. Persistence (creating/continuing the chat
+ * back as a UI message stream. The request carries only the new user turn;
+ * prior history (and the rolling summary) is loaded server-side from the
+ * database via `loadChatContext`. Persistence (creating/continuing the chat
  * row and appending the user + assistant turn) happens in `onFinish`,
  * after the stream has already been sent to the client —
  * a persistence failure is logged and swallowed so it can never surface as
@@ -60,7 +65,7 @@ export async function chatHandler(request: Request): Promise<Response> {
     chatId: requestChatId,
     messages,
     courseSlug,
-  } = parsed.data as {
+  } = parsed.data as unknown as {
     chatId?: string;
     messages: UIMessage[];
     courseSlug?: string;
@@ -103,11 +108,21 @@ export async function chatHandler(request: Request): Promise<Response> {
     firstUserText: textOf(lastUserMessage),
   });
 
+  // Load history on the resolved id, so a foreign `chatId` (which `ensureChat`
+  // replaced with a new row) can never be read.
+  const context =
+    requestChatId === chatId
+      ? await loadChatContext(session.user.id, chatId)
+      : null;
+  const history = context?.entries.map((e) => e.message) ?? [];
+  const modelMessages = [...history, lastUserMessage];
+
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const result = await buildChatStream({
-        messages,
-        uiMessages: messages,
+        messages: modelMessages,
+        uiMessages: modelMessages,
+        conversationSummary: context?.summary ?? null,
         persona: persona?.content,
         // (`persona` is the resolved published content, never a draft.)
         userInfo,

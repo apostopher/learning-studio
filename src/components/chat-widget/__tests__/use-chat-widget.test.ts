@@ -64,4 +64,27 @@ describe('buildChatRequestBody', () => {
       messageId: 'm1',
     });
   });
+
+  it("sends only the newest message — history is the server's", () => {
+    const body = buildChatRequestBody({
+      id: 'w',
+      trigger: 'submit-message',
+      messageId: undefined,
+      body: undefined,
+      chatId: 'c1',
+      courseSlug: undefined,
+      messages: [
+        { id: '1', role: 'user', parts: [{ type: 'text', text: 'old' }] },
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'reply' }],
+        },
+        { id: '3', role: 'user', parts: [{ type: 'text', text: 'new' }] },
+      ],
+    });
+    expect(body.messages).toEqual([
+      { id: '3', role: 'user', parts: [{ type: 'text', text: 'new' }] },
+    ]);
+  });
 });
