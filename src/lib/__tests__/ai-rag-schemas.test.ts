@@ -5,6 +5,23 @@ import {
   parseCourseIdParam,
 } from '#/lib/ai-rag-schemas';
 
+describe('reserved lesson: sourcePath', () => {
+  it('rejects a text-mode sourcePath starting with lesson: and accepts a normal one', () => {
+    const base = { mode: 'text', html: '<p>hello</p>' };
+    expect(
+      aiRagPostSchema.safeParse({ ...base, sourcePath: 'lesson:x' }).success,
+    ).toBe(false);
+    expect(
+      aiRagPostSchema.safeParse({ ...base, sourcePath: 'doc-1' }).success,
+    ).toBe(true);
+  });
+  it('rejects deleting a lesson: sourcePath', () => {
+    expect(aiRagDeleteSchema.safeParse({ sourcePath: 'lesson:x' }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe('aiRagPostSchema', () => {
   it('accepts text mode without courseId', () => {
     const r = aiRagPostSchema.safeParse({

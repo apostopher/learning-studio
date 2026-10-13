@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   gt,
+  inArray,
   isNull,
   or,
   sql,
@@ -46,21 +47,34 @@ export const KB_MIN_SIMILARITY = 0.56;
  * optional, and omitting it searched EVERY course's documents — which is what
  * the chat tool did, since it never passed one. Resolve it with
  * `resolveKBCourseId`, which checks the caller may read that course.
+ *
+ * `lessonSlugs` are the lessons whose chunks may be returned. They MUST come
+ * from the gate (`allowedLessonSlugs(getGatedCourseForAgent(...))`); never pass
+ * slugs from anywhere else. Empty means no lesson chunks at all.
  */
 export async function searchKB(
   query: string,
-  { courseId }: { courseId: number | null },
+  { courseId, lessonSlugs }: { courseId: number | null; lessonSlugs: string[] },
 ): Promise<KBResult[]> {
   const { embedding } = await embed({ model: embeddingModel, value: query });
   const similarity = sql<number>`1 - (${cosineDistance(docs.embedding, embedding)})`;
-  const courseScope =
+  // Uploaded documents. `lesson_slug IS NULL` is load-bearing: lesson chunks
+  // also have course_id NULL, so without it every org-wide search would
+  // return every lesson's material, gated or not.
+  const documents = and(
+    isNull(docs.lessonSlug),
     courseId === null
       ? isNull(docs.courseId)
-      : or(eq(docs.courseId, courseId), isNull(docs.courseId));
+      : or(eq(docs.courseId, courseId), isNull(docs.courseId)),
+  );
+  // Lesson chunks: only lessons the caller's gate allowed. Empty = none.
+  const scope = lessonSlugs.length
+    ? or(documents, inArray(docs.lessonSlug, lessonSlugs))
+    : documents;
   return db
     .select({ chunk: docs.chunk, heading: docs.heading, similarity })
     .from(docs)
-    .where(and(courseScope, gt(similarity, KB_MIN_SIMILARITY)))
+    .where(and(scope, gt(similarity, KB_MIN_SIMILARITY)))
     .orderBy((t) => desc(t.similarity))
     .limit(KB_MAX_RESULTS);
 }

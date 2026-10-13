@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
-import type { UIMessage } from 'ai';
 import { buildChatStream } from '#/ai/chat';
 import {
   VOICE_FALLBACK_REPLY,
   VOICE_NO_TURN_REPLY,
 } from '#/ai/prompts/voice-mode';
-import { getChat } from '#/db/chat';
+import { loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { getCallByConversation } from '#/db/video-calls';
 import { env } from '#/env';
@@ -24,14 +23,6 @@ import {
 
 const MODEL = 'viper7';
 
-/**
- * How much of the stored text chat a call turn replays. Every spoken turn is
- * a fresh completion, so an unbounded history would grow latency (time to
- * first word) and cost with the chat's age; the last 30 messages carry the
- * conversation that led into the call.
- */
-const PRIOR_HISTORY_LIMIT = 30;
-
 async function* once(text: string) {
   yield text;
 }
@@ -43,9 +34,10 @@ async function* once(text: string) {
  * header (verified in the spike) looked up against an ACTIVE `video_calls`
  * row, behind the persona's bearer secret. From there it is `/api/chat`'s
  * context — org persona, SKA profile, course-scoped searchKB with gating —
- * plus the chat's persisted messages so the call knows the text conversation
- * that preceded it. Nothing is persisted here: replies can be interrupted
- * mid-stream, so the transcript is taken from Tavus after the call.
+ * plus the chat's rolling summary and unsummarized messages so the call knows
+ * the text conversation that preceded it. Nothing is persisted here: replies
+ * can be interrupted mid-stream, so the transcript is taken from Tavus after
+ * the call.
  */
 export async function tavusCompletionsHandler(
   request: Request,
@@ -94,22 +86,13 @@ export async function tavusCompletionsHandler(
       if (!history.some((m) => m.role === 'user'))
         return once(VOICE_NO_TURN_REPLY);
 
-      const [persona, skaProfile, chat] = await Promise.all([
+      const [persona, skaProfile, context] = await Promise.all([
         resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
         resolveChatSkaProfile({ userId: call.userId, courseSlug }),
-        getChat(call.userId, call.chatId),
+        loadChatContext(call.userId, call.chatId),
       ]);
-      // Only learner/viper7 turns: a stored `system` row (rows are written
-      // from client-sent messages; role is free text) must never replay as a
-      // system prompt.
-      const prior: UIMessage[] = (chat?.messages ?? [])
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .slice(-PRIOR_HISTORY_LIMIT)
-        .map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          parts: m.parts as UIMessage['parts'],
-        }));
+      // loadChatContext already keeps only user/assistant rows and caps them.
+      const prior = context?.entries.map((e) => e.message) ?? [];
       const messages = [...prior, ...history];
 
       const result = await buildChatStream({
@@ -123,6 +106,8 @@ export async function tavusCompletionsHandler(
         },
         // Same as /api/chat until a subscriptions reader exists.
         subscriptions: [],
+        conversationSummary: context?.summary ?? null,
+        chatId: call.chatId,
         courseSlug,
         userId: call.userId,
         skaProfile,

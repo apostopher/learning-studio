@@ -61,6 +61,7 @@ vi.mock('#/db/user-levels', () => ({ getCurrentLevel }));
 import {
   filterGatedLessons,
   getCourseContentForAgent,
+  getGatedCourseForAgent,
 } from '#/db/course-content';
 
 const row = (
@@ -362,6 +363,68 @@ describe('getCourseContentForAgent subscription gate', () => {
 
     expect(html).toContain('B body');
     expect(html).not.toContain('A body');
+  });
+
+  it('exposes exactly the lessons the agent may read, with their slugs', async () => {
+    // Same arrange as the per-lesson-lock test above: A needs a video watch
+    // (locked), B is open.
+    dbState.rows = [row('a', 'A body', 10), row('b', 'B body', 11)];
+    getUserRoleNames.mockResolvedValue([]);
+    isSubscribedToCourseSlug.mockResolvedValue(true);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'a',
+          name: 'A',
+          isAvailable: true,
+          hasVideo: true,
+          needsVideoWatch: true,
+          dependsOn: [],
+        },
+        {
+          id: 11,
+          slug: 'b',
+          name: 'B',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+        },
+      ]),
+    );
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+
+    const gated = await getGatedCourseForAgent('course-b', { userId: 'u2' });
+    const slugs = gated?.modules.flatMap((m) => m.lessons.map((l) => l.slug));
+
+    expect(slugs).toContain('b');
+    expect(slugs).not.toContain('a'); // the locked one
+  });
+
+  it('returns null where the HTML path returned empty (not subscribed)', async () => {
+    // Same arrange as the non-subscriber test at the top of this describe.
+    dbState.rows = [row('b', 'B body')];
+    getUserRoleNames.mockResolvedValue([]);
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'b',
+          name: 'B',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+        },
+      ]),
+    );
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+
+    expect(
+      await getGatedCourseForAgent('course-b', { userId: 'u1' }),
+    ).toBeNull();
   });
 });
 

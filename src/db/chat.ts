@@ -1,9 +1,14 @@
-import { db } from "@/db";
-import { aiChats, aiMessages } from "@/db/schema";
-import { chatTitleFromText } from "@/lib/chat-title";
-import { and, asc, desc, eq, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, max, sql } from 'drizzle-orm';
+import { db } from '#/db';
+import { aiChats, aiMessages } from '#/db/schema';
+import {
+  HISTORY_HARD_CAP,
+  type HistoryEntry,
+  toHistoryEntries,
+} from '#/lib/chat-history';
+import { chatTitleFromText } from '#/lib/chat-title';
 
-export { chatTitleFromText } from "@/lib/chat-title";
+export { chatTitleFromText } from '#/lib/chat-title';
 
 /**
  * Resolve the chat id for a streaming turn, ownership-checked: if the caller
@@ -39,13 +44,13 @@ export async function ensureChat({
     .values({ userId, title: chatTitleFromText(firstUserText) })
     .returning({ id: aiChats.id });
 
-  if (!row) throw new Error("ensureChat: insert returned no row");
+  if (!row) throw new Error('ensureChat: insert returned no row');
   return row.id;
 }
 
 /** `db` itself or a transaction handle — lets callers append inside their own
  * transaction (saveTranscriptOnce claims and inserts atomically). */
-type ChatExecutor = Pick<typeof db, "select" | "insert" | "update">;
+type ChatExecutor = Pick<typeof db, 'select' | 'insert' | 'update'>;
 
 /**
  * Append messages to a chat, ordering them after whatever is already there.
@@ -107,11 +112,19 @@ export async function getChat(
   userId: string,
   chatId: string,
 ): Promise<{
-  chat: typeof aiChats.$inferSelect;
+  chat: Omit<typeof aiChats.$inferSelect, 'summary' | 'summarizedThroughOrder'>;
   messages: Array<typeof aiMessages.$inferSelect>;
 } | null> {
+  // Explicit columns: the rolling summary is the model's memory, never shown
+  // in the UI, and this result is served as JSON by /api/chats/$chatId.
   const [chat] = await db
-    .select()
+    .select({
+      id: aiChats.id,
+      userId: aiChats.userId,
+      title: aiChats.title,
+      createdAt: aiChats.createdAt,
+      updatedAt: aiChats.updatedAt,
+    })
     .from(aiChats)
     .where(and(eq(aiChats.id, chatId), eq(aiChats.userId, userId)));
 
@@ -124,4 +137,88 @@ export async function getChat(
     .orderBy(asc(aiMessages.order));
 
   return { chat, messages };
+}
+
+export type ChatContext = {
+  summary: string | null;
+  summarizedThroughOrder: number | null;
+  entries: HistoryEntry[];
+};
+
+/**
+ * What the model sees of a chat: the rolling summary plus the messages it
+ * does not cover. Ownership-checked like `getChat`; null when the chat is
+ * missing or not this user's. The full transcript stays in `ai_messages` —
+ * this is only the model's view.
+ */
+export async function loadChatContext(
+  userId: string,
+  chatId: string,
+  { cap = HISTORY_HARD_CAP }: { cap?: number } = {},
+): Promise<ChatContext | null> {
+  const [chat] = await db
+    .select({
+      summary: aiChats.summary,
+      summarizedThroughOrder: aiChats.summarizedThroughOrder,
+    })
+    .from(aiChats)
+    .where(and(eq(aiChats.id, chatId), eq(aiChats.userId, userId)))
+    .limit(1);
+  if (!chat) return null;
+
+  const through = chat.summarizedThroughOrder;
+  // Newest first so the cap keeps the most recent rows; toHistoryEntries
+  // re-sorts oldest first. The 2x leaves room for filtered-out non-turn rows.
+  // `cap: Infinity` is the compactor's read: every unsummarized row, no limit,
+  // so nothing between the summary and the window is skipped.
+  const query = db
+    .select({
+      id: aiMessages.id,
+      role: aiMessages.role,
+      parts: aiMessages.parts,
+      order: aiMessages.order,
+    })
+    .from(aiMessages)
+    .where(
+      through === null
+        ? eq(aiMessages.chatId, chatId)
+        : and(eq(aiMessages.chatId, chatId), gt(aiMessages.order, through)),
+    )
+    .orderBy(desc(aiMessages.order));
+  const rows = await (Number.isFinite(cap) ? query.limit(cap * 2) : query);
+
+  return {
+    summary: chat.summary,
+    summarizedThroughOrder: through,
+    entries: toHistoryEntries(rows, cap),
+  };
+}
+
+/**
+ * Write a new rolling summary — only if `summarized_through_order` is still
+ * what the compactor read. Two overlapping compactions: one wins, the other
+ * writes nothing (returns false).
+ */
+export async function saveChatSummary({
+  chatId,
+  summary,
+  throughOrder,
+  expectedThroughOrder,
+}: {
+  chatId: string;
+  summary: string;
+  throughOrder: number;
+  expectedThroughOrder: number | null;
+}): Promise<boolean> {
+  const updated = await db
+    .update(aiChats)
+    .set({ summary, summarizedThroughOrder: throughOrder })
+    .where(
+      and(
+        eq(aiChats.id, chatId),
+        sql`${aiChats.summarizedThroughOrder} is not distinct from ${expectedThroughOrder}`,
+      ),
+    )
+    .returning({ id: aiChats.id });
+  return updated.length > 0;
 }

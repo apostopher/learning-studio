@@ -42,7 +42,7 @@ beforeEach(() => {
 
 describe('searchKB', () => {
   it('reads org-wide docs only when no course is resolved', async () => {
-    await searchKB('q', { courseId: null });
+    await searchKB('q', { courseId: null, lessonSlugs: [] });
     const { sql, params } = rendered();
     expect(sql).toContain('"docs"."course_id" is null');
     expect(sql).not.toMatch(/"docs"\."course_id" = /);
@@ -50,7 +50,7 @@ describe('searchKB', () => {
   });
 
   it("reads one course's docs plus org-wide ones — never every course's", async () => {
-    await searchKB('q', { courseId: 2 });
+    await searchKB('q', { courseId: 2, lessonSlugs: [] });
     const { sql, params } = rendered();
     expect(sql).toMatch(
       /\("docs"\."course_id" = \$\d+ or "docs"\."course_id" is null\)/,
@@ -59,11 +59,24 @@ describe('searchKB', () => {
   });
 
   it('applies the fixed relevance floor and result cap', async () => {
-    await searchKB('q', { courseId: null });
+    await searchKB('q', { courseId: null, lessonSlugs: [] });
     const { sql, params } = rendered();
     expect(sql).toMatch(/> \$\d+/);
     expect(params).toContain(KB_MIN_SIMILARITY);
     expect(m.limit).toBe(KB_MAX_RESULTS);
+  });
+
+  it('never returns lesson chunks from an org-wide search', async () => {
+    await searchKB('q', { courseId: null, lessonSlugs: [] });
+    expect(rendered().sql).toContain('"docs"."lesson_slug" is null');
+  });
+
+  it('adds exactly the allowed lessons', async () => {
+    await searchKB('q', { courseId: 2, lessonSlugs: ['wx-1', 'wx-2'] });
+    const { sql, params } = rendered();
+    expect(sql).toMatch(/"docs"\."lesson_slug" in \(\$\d+, \$\d+\)/);
+    expect(params).toEqual(expect.arrayContaining(['wx-1', 'wx-2']));
+    expect(sql).toContain('"docs"."lesson_slug" is null'); // docs half still excludes lessons
   });
 
   it('keeps the floor between measured off-topic and on-topic scores', () => {

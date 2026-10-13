@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { viper7Quotes, viper7SystemPrompt } from '#/ai/prompts/viper7';
 
 describe('viper7SystemPrompt', () => {
@@ -195,5 +195,69 @@ describe('viper7SystemPrompt — persona quotes', () => {
   it('falls back to the built-in quotes when there is no persona at all', () => {
     const s = viper7SystemPrompt({ isAssociate: false });
     expect(s).toContain(viper7Quotes[0]);
+  });
+});
+
+describe('viper7SystemPrompt caching shape', () => {
+  afterEach(() => vi.useRealTimers());
+
+  const learner = (name: string) => ({
+    name,
+    callSign: 'unknown',
+    location: 'unknown',
+  });
+
+  it('is byte-identical for one learner seconds apart', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-13T10:00:01Z'));
+    const a = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: learner('A'),
+    });
+    vi.setSystemTime(new Date('2026-10-13T10:00:59Z'));
+    const b = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: learner('A'),
+    });
+    expect(a).toBe(b);
+  });
+
+  it('carries the date but not the time of day', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-13T10:11:12Z'));
+    const s = viper7SystemPrompt({ isAssociate: false });
+    expect(s).toContain('2026-Oct-13');
+    expect(s).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+  });
+
+  it('shares everything before the per-learner tail across learners', () => {
+    const a = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: learner('Alpha'),
+    });
+    const b = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: learner('Bravo'),
+    });
+    const tail = a.indexOf('Alpha');
+    expect(tail).toBeGreaterThan(a.indexOf('Security & Privacy'));
+    expect(b.slice(0, tail - 200)).toBe(a.slice(0, tail - 200));
+  });
+
+  it('renders the conversation summary after the learner details', () => {
+    const s = viper7SystemPrompt({
+      isAssociate: false,
+      userInfo: learner('Alpha'),
+      conversationSummary: 'Learner is preparing for a BVLOS checkride.',
+    });
+    expect(s).toContain('Earlier in this conversation');
+    expect(s).toContain('BVLOS checkride');
+    expect(s.indexOf('BVLOS checkride')).toBeGreaterThan(s.indexOf('Alpha'));
+  });
+
+  it('omits the summary section when there is none', () => {
+    expect(viper7SystemPrompt({ isAssociate: false })).not.toContain(
+      'Earlier in this conversation',
+    );
   });
 });

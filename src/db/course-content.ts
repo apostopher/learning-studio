@@ -15,11 +15,7 @@ import {
 } from '#/db/schema';
 import { getCurrentLevel } from '#/db/user-levels';
 import { hasAdminAccess } from '#/lib/admin-schemas';
-import {
-  type CourseContent,
-  courseContentToHtml,
-  type ModuleContent,
-} from '#/lib/course-content';
+import { courseContentToHtml, type GatedCourse } from '#/lib/course-content';
 import {
   evaluateLessonLock,
   evaluateMaterialLock,
@@ -107,10 +103,10 @@ export function filterGatedLessons<T extends GatedRow>(
  * short way. The sole caller always had a session, so nothing needed that
  * escape, and now no future caller can reach it by omission.
  */
-export async function getCourseContentForAgent(
+export async function getGatedCourseForAgent(
   slug: string,
   { userId }: { userId: string },
-): Promise<string> {
+): Promise<GatedCourse | null> {
   const rows = await db
     .select({
       courseId: coursesTable.id,
@@ -152,7 +148,7 @@ export async function getCourseContentForAgent(
     // then the lesson's position in its module.
     .orderBy(asc(courseModulesTable.rank), asc(moduleLessonsTable.rank));
 
-  if (rows.length === 0) return '';
+  if (rows.length === 0) return null;
 
   // Filter 1: WIP lessons, before any gate runs. `isAvailable` is notNull on
   // lessonsTable, so it is only ever null for a module-only row (no lesson
@@ -183,7 +179,7 @@ export async function getCourseContentForAgent(
   // partial content: a non-admin, non-subscriber gets nothing from this
   // course's corpus, same as when no courseSlug is in context at all.
   if (!viewingAsAuthor && !subscribed) {
-    return '';
+    return null;
   }
 
   const [details, progress] = await Promise.all([
@@ -265,8 +261,8 @@ export async function getCourseContentForAgent(
   // `rows[0]` (not `gatedRows[0]`) — a user with every lesson locked still
   // gets a course name back, just with no modules underneath it.
   const courseName = rows[0].courseName;
-  const modules: ModuleContent[] = [];
-  const moduleMap = new Map<number, ModuleContent>();
+  const modules: GatedCourse['modules'] = [];
+  const moduleMap = new Map<number, GatedCourse['modules'][number]>();
   // lesson_material.lesson_slug has no unique constraint, so the left-join
   // above can return >1 material row per lesson — key lessons by lessons.id
   // and keep only the first material row seen for each, so a lesson never
@@ -281,16 +277,30 @@ export async function getCourseContentForAgent(
       moduleMap.set(row.moduleId, mod);
       modules.push(mod);
     }
-    if (row.lessonId === null || row.lessonName === null) continue;
+    if (
+      row.lessonId === null ||
+      row.lessonName === null ||
+      row.lessonSlug === null
+    )
+      continue;
     if (seenLessonIds.has(row.lessonId)) continue;
     seenLessonIds.add(row.lessonId);
     mod.lessons.push({
+      slug: row.lessonSlug,
       name: row.lessonName,
       text: row.text,
       proTips: row.proTips,
     });
   }
 
-  const course: CourseContent = { name: courseName, modules };
-  return courseContentToHtml(course);
+  return { name: courseName, modules };
+}
+
+/** The gated course rendered as HTML. Same gate as getGatedCourseForAgent. */
+export async function getCourseContentForAgent(
+  slug: string,
+  { userId }: { userId: string },
+): Promise<string> {
+  const course = await getGatedCourseForAgent(slug, { userId });
+  return course ? courseContentToHtml(course) : '';
 }

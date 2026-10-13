@@ -1,4 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { waitUntil } from '@vercel/functions';
+import { generateLessonEmbeddings, lessonMaterialHtml } from '#/ai/embeddings';
 import { getLessonMaterialByLessonId, upsertLessonMaterial } from '#/db/lesson';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
@@ -96,6 +98,19 @@ export async function saveMaterialHandler(
     );
   }
   if (!saved) return new Response('Not found', { status: 404 });
+
+  // Viper searches lesson chunks, so the index follows every save. In the
+  // background: embedding takes seconds and a failure must not fail the save
+  // (the previous chunks stay until the next successful one).
+  waitUntil(
+    generateLessonEmbeddings({
+      lessonSlug: saved.lessonSlug,
+      html: lessonMaterialHtml(saved),
+    }).then(
+      () => undefined,
+      (err) => console.error('Failed to re-embed lesson material:', err),
+    ),
+  );
   return Response.json(saved);
 }
 
