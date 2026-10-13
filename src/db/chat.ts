@@ -182,3 +182,32 @@ export async function loadChatContext(
     entries: toHistoryEntries(rows),
   };
 }
+
+/**
+ * Write a new rolling summary — only if `summarized_through_order` is still
+ * what the compactor read. Two overlapping compactions: one wins, the other
+ * writes nothing (returns false).
+ */
+export async function saveChatSummary({
+  chatId,
+  summary,
+  throughOrder,
+  expectedThroughOrder,
+}: {
+  chatId: string;
+  summary: string;
+  throughOrder: number;
+  expectedThroughOrder: number | null;
+}): Promise<boolean> {
+  const updated = await db
+    .update(aiChats)
+    .set({ summary, summarizedThroughOrder: throughOrder })
+    .where(
+      and(
+        eq(aiChats.id, chatId),
+        sql`${aiChats.summarizedThroughOrder} is not distinct from ${expectedThroughOrder}`,
+      ),
+    )
+    .returning({ id: aiChats.id });
+  return updated.length > 0;
+}

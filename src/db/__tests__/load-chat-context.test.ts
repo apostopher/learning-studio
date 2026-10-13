@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const s = vi.hoisted(() => ({
   results: [] as unknown[][],
   wheres: [] as unknown[],
+  updateResult: [] as unknown[],
+  updateSet: undefined as unknown,
+  updateWhere: undefined as unknown,
 }));
 // The real schema tables, so the rendered SQL names real columns; only the
 // client is stubbed. Every query here ends in `.limit()`, which serves the
@@ -23,11 +26,25 @@ vi.mock('#/db', () => {
     };
     return c;
   };
-  return { db: { select: chain } };
+  const update = () => {
+    const u = {
+      set: (v: unknown) => {
+        s.updateSet = v;
+        return u;
+      },
+      where: (w: unknown) => {
+        s.updateWhere = w;
+        return u;
+      },
+      returning: async () => s.updateResult,
+    };
+    return u;
+  };
+  return { db: { select: chain, update } };
 });
 vi.mock('#/lib/chat-title', () => ({ chatTitleFromText: (t: string) => t }));
 
-import { loadChatContext } from '../chat';
+import { loadChatContext, saveChatSummary } from '../chat';
 
 const rendered = (i: number) => new PgDialect().sqlToQuery(s.wheres[i] as SQL);
 
@@ -65,5 +82,34 @@ describe('loadChatContext', () => {
       summarizedThroughOrder: 9,
       entries: [],
     });
+  });
+});
+
+describe('saveChatSummary', () => {
+  it('only writes if nobody compacted in between', async () => {
+    s.updateResult = [{ id: 'c1' }];
+    expect(
+      await saveChatSummary({
+        chatId: 'c1',
+        summary: 'S',
+        throughOrder: 9,
+        expectedThroughOrder: 3,
+      }),
+    ).toBe(true);
+    const { sql, params } = new PgDialect().sqlToQuery(s.updateWhere as SQL);
+    expect(sql).toMatch(
+      /"ai_chats"\."summarized_through_order" is not distinct from \$\d+/,
+    );
+    expect(params).toEqual(expect.arrayContaining(['c1', 3]));
+    expect(s.updateSet).toEqual({ summary: 'S', summarizedThroughOrder: 9 });
+    s.updateResult = [];
+    expect(
+      await saveChatSummary({
+        chatId: 'c1',
+        summary: 'S',
+        throughOrder: 9,
+        expectedThroughOrder: 3,
+      }),
+    ).toBe(false);
   });
 });

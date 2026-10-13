@@ -9,6 +9,8 @@ const {
   appendMessages,
   resolveChatSkaProfile,
   loadChatContext,
+  waitUntil,
+  compactChat,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   buildChatStream: vi.fn(),
@@ -17,6 +19,13 @@ const {
   appendMessages: vi.fn(),
   resolveChatSkaProfile: vi.fn(),
   loadChatContext: vi.fn(),
+  waitUntil: vi.fn(),
+  compactChat: vi.fn(),
+}));
+vi.mock('@vercel/functions', () => ({ waitUntil }));
+vi.mock('#/ai/compact-chat', () => ({
+  compactChat,
+  shouldCompact: (n?: number) => (n ?? 0) > 100,
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/ai/chat', () => ({ buildChatStream, isAssociateFrom: () => false }));
@@ -52,7 +61,13 @@ beforeEach(() => {
   loadChatContext.mockResolvedValue(null);
   buildChatStream.mockResolvedValue({
     toUIMessageStream: () => (async function* () {})(),
+    steps: Promise.resolve([]),
   });
+});
+
+const streamWith = (inputTokens: number) => ({
+  toUIMessageStream: () => (async function* () {})(),
+  steps: Promise.resolve([{ usage: { inputTokens } }]),
 });
 
 describe('chatHandler', () => {
@@ -366,5 +381,47 @@ describe('chatHandler — server-owned history', () => {
     await drain(res);
     expect(loadChatContext).not.toHaveBeenCalled();
     expect(buildChatStream.mock.calls[0][0].messages).toHaveLength(1);
+  });
+
+  const overBudgetReq = () =>
+    postReq({
+      messages: [
+        { id: 'n', role: 'user', parts: [{ type: 'text', text: 'q' }] },
+      ],
+    });
+
+  it('schedules compaction in the background once the turn is over budget', async () => {
+    buildChatStream.mockResolvedValueOnce(streamWith(101));
+    compactChat.mockResolvedValue('compacted');
+    const res = await chatHandler(overBudgetReq());
+    await res.text();
+    expect(appendMessages).toHaveBeenCalled();
+    expect(compactChat).toHaveBeenCalledWith({
+      userId: 'u1',
+      chatId: 'chat-1',
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not compact under budget', async () => {
+    buildChatStream.mockResolvedValueOnce(streamWith(50));
+    const res = await chatHandler(overBudgetReq());
+    await res.text();
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('a compaction failure never breaks the response', async () => {
+    buildChatStream.mockResolvedValueOnce(streamWith(101));
+    compactChat.mockRejectedValue(new Error('boom'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await chatHandler(overBudgetReq());
+    expect(res.status).toBe(200);
+    await res.text();
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+    expect(logged).toHaveBeenCalledWith(
+      'chat compaction failed',
+      expect.any(Error),
+    );
+    logged.mockRestore();
   });
 });

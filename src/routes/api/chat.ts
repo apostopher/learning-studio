@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { waitUntil } from '@vercel/functions';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -6,6 +7,7 @@ import {
 } from 'ai';
 import { z } from 'zod';
 import { buildChatStream } from '#/ai/chat';
+import { compactChat, shouldCompact } from '#/ai/compact-chat';
 import { appendMessages, ensureChat, loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { getActiveOrgId } from '#/lib/active-org.server';
@@ -117,6 +119,9 @@ export async function chatHandler(request: Request): Promise<Response> {
   const history = context?.entries.map((e) => e.message) ?? [];
   const modelMessages = [...history, lastUserMessage];
 
+  let firstStepInputTokens: Promise<number | undefined> =
+    Promise.resolve(undefined);
+
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const result = await buildChatStream({
@@ -137,6 +142,10 @@ export async function chatHandler(request: Request): Promise<Response> {
         // `.write` and more), so this cast is safe at runtime.
         writer: writer as unknown as { write: (p: unknown) => void },
       });
+      firstStepInputTokens = Promise.resolve(result.steps).then(
+        (s) => s[0]?.usage.inputTokens,
+        () => undefined,
+      );
       writer.merge(result.toUIMessageStream());
     },
     onFinish: async ({ responseMessage }) => {
@@ -147,6 +156,18 @@ export async function chatHandler(request: Request): Promise<Response> {
         ]);
       } catch (err) {
         console.error('chat persist failed', err);
+      }
+
+      // Compaction is scheduled, never awaited: `onFinish` runs before the
+      // response closes, so awaiting it would hold the learner's input
+      // disabled while a summary is written.
+      if (shouldCompact(await firstStepInputTokens)) {
+        waitUntil(
+          compactChat({ userId: session.user.id, chatId }).then(
+            () => undefined,
+            (err) => console.error('chat compaction failed', err),
+          ),
+        );
       }
     },
   });
