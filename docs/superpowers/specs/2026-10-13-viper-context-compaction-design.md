@@ -112,8 +112,10 @@ Applied with a hand-written `ALTER TABLE` (+ `CREATE INDEX`), **not**
 
 ### Indexing
 
-- `upsertLessonMaterial` (`src/db/lesson.ts`, the only writer of
-  `lesson_material`) re-embeds that lesson after its transaction commits:
+- The admin material save route (the only caller of `upsertLessonMaterial`,
+  itself the only writer of `lesson_material`) re-embeds that lesson after the
+  save commits, in the background via `waitUntil` (keeps `src/db/lesson.ts`
+  free of AI imports):
   HTML of `text` + `proTips`, `sourcePath = lesson:<slug>`, via a lesson
   variant of `generateHTMLEmbeddings` that deletes/inserts by `lesson_slug`
   atomically. An embedding failure is logged and does not fail the material
@@ -128,11 +130,12 @@ Extract the four filters in `getCourseContentForAgent`
 locks — into:
 
 ```ts
-getAllowedLessonsForAgent(slug, { userId }): Promise<{
-  outline: { moduleName: string; lessons: { slug: string; name: string }[] }[];
-  allowedSlugs: Set<string>;
-}>
+getGatedCourseForAgent(slug, { userId }): Promise<GatedCourse | null>
+// GatedCourse = { name, modules: { name, lessons: { slug, name, text, proTips }[] }[] }
 ```
+
+The outline and the allowed slug set are derived from it by pure helpers
+(`courseOutline`, `allowedLessonSlugs` in `src/lib/course-content.ts`).
 
 `getCourseContentForAgent` is rewritten on top of it, so there is exactly one
 gate. Fail-closed behaviour is preserved: unsubscribed non-author → empty;
