@@ -1,6 +1,7 @@
 import type { ModelMessage, TextPart, UIMessage } from 'ai';
 import {
   convertToModelMessages,
+  pruneMessages,
   smoothStream,
   stepCountIs,
   streamText,
@@ -56,6 +57,8 @@ export type BuildChatStreamOptions = {
   voice?: { tavusRules: string };
   /** Cancels generation when Tavus abandons a (speculative) request. */
   abortSignal?: AbortSignal;
+  /** Rolling summary of turns older than `messages` (see `loadChatContext`). */
+  conversationSummary?: string | null;
 };
 
 function notificationToText(data: unknown): TextPart | undefined {
@@ -104,8 +107,9 @@ export async function buildChatStream({
   skaProfile,
   voice,
   abortSignal,
+  conversationSummary,
 }: BuildChatStreamOptions) {
-  const modelMessages = (
+  const convertedMessages = (
     await convertToModelMessages(messages, {
       // Persisted chats contain assistant turns whose only part is a
       // `data-notification` status line (e.g. the "Video call with Viper7"
@@ -123,11 +127,24 @@ export async function buildChatStream({
     })
   ).filter(hasContent);
 
+  // Earlier turns keep Viper's answers; their tool calls and results go.
+  // A searchKB result is only useful to the turn that asked for it, and
+  // replaying every one of them was what pushed long chats past Vercel's
+  // 4.5 MB body limit. The current turn's tool loop is unaffected — its
+  // calls live in the response, not in this input.
+  const modelMessages = pruneMessages({
+    messages: convertedMessages,
+    toolCalls: 'before-last-message',
+    reasoning: 'before-last-message',
+    emptyMessages: 'remove',
+  });
+
   const basePrompt = viper7SystemPrompt({
     isAssociate: isAssociateFrom(subscriptions),
     persona,
     userInfo,
     skaProfile,
+    conversationSummary,
   });
 
   return streamText({
@@ -151,5 +168,16 @@ export async function buildChatStream({
     experimental_transform: [
       smoothStream({ delayInMs: 20, chunking: voice ? 'word' : 'line' }),
     ],
+    onFinish: ({ totalUsage, steps }) => {
+      // Measured, not assumed: these are the numbers the compaction and
+      // caching work is judged by.
+      console.info('viper7 usage', {
+        steps: steps.length,
+        inputTokens: totalUsage.inputTokens,
+        cachedInputTokens: totalUsage.inputTokenDetails?.cacheReadTokens,
+        outputTokens: totalUsage.outputTokens,
+        firstStepInputTokens: steps[0]?.usage.inputTokens,
+      });
+    },
   });
 }

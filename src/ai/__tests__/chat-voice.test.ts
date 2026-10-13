@@ -9,6 +9,7 @@ const { streamText, smoothStream } = vi.hoisted(() => ({
 }));
 vi.mock('ai', () => ({
   convertToModelMessages: vi.fn(async (m: unknown) => m),
+  pruneMessages: vi.fn((o: { messages: unknown }) => o.messages),
   smoothStream,
   stepCountIs: vi.fn((n: number) => ({ steps: n })),
   streamText,

@@ -20,7 +20,8 @@ vi.mock('ai', async (importOriginal) => {
 });
 vi.mock('#/ai/ai-provider', () => ({ geminiFlash: 'model' }));
 vi.mock('#/ai/prompts/viper7', () => ({
-  viper7SystemPrompt: () => 'BASE PROMPT',
+  viper7SystemPrompt: (o: { conversationSummary?: string | null }) =>
+    `BASE PROMPT${o.conversationSummary ? ` | ${o.conversationSummary}` : ''}`,
 }));
 vi.mock('#/ai/tools/search-kb', () => ({ makeSearchKBTool: () => 'searchKB' }));
 vi.mock('#/ai/tools/check-flyability', () => ({
@@ -90,5 +91,58 @@ describe('buildChatStream history conversion', () => {
     expect(allText).toContain('[Video call ended · 2 min]');
     // The incomplete searchKB call is dropped, not replayed without a result.
     expect(allText).not.toContain('call-1');
+  });
+});
+
+const toolTurn = (id: string, query: string): UIMessage =>
+  ({
+    id,
+    role: 'assistant',
+    parts: [
+      {
+        type: 'tool-searchKB',
+        toolCallId: `call-${id}`,
+        state: 'output-available',
+        input: { query },
+        output: `HUGE COURSE DUMP ${id}`,
+      },
+      { type: 'text', text: `answer ${id}` },
+    ],
+  }) as UIMessage;
+
+describe('buildChatStream history pruning', () => {
+  it('drops tool calls and results from earlier turns but keeps their text', async () => {
+    await buildChatStream({
+      messages: [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'q1' }] },
+        toolTurn('a1', 'q1'),
+        { id: 'u2', role: 'user', parts: [{ type: 'text', text: 'q2' }] },
+      ],
+      uiMessages: [],
+      subscriptions: [],
+      userId: 'u',
+    });
+    const sent = JSON.stringify(
+      (streamText.mock.calls.at(-1)?.[0] as Record<string, unknown>).messages,
+    );
+    expect(sent).not.toContain('HUGE COURSE DUMP');
+    expect(sent).not.toContain('tool-call');
+    expect(sent).toContain('answer a1');
+    expect(sent).toContain('q2');
+  });
+
+  it('hands the conversation summary to the system prompt', async () => {
+    await buildChatStream({
+      messages: [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'q' }] },
+      ],
+      uiMessages: [],
+      subscriptions: [],
+      userId: 'u',
+      conversationSummary: 'SUMMARY-XYZ',
+    });
+    expect(
+      (streamText.mock.calls.at(-1)?.[0] as Record<string, unknown>).system,
+    ).toContain('SUMMARY-XYZ');
   });
 });
