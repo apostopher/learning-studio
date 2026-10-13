@@ -477,6 +477,15 @@ describe('chatHandler — request validation', () => {
   const send = (message: unknown) =>
     chatHandler(postReq({ messages: [message] }));
 
+  it('tags the model call with the resolved chat id', async () => {
+    const res = await send({
+      role: 'user',
+      parts: [{ type: 'text', text: 'hi' }],
+    });
+    await res.text();
+    expect(buildChatStream.mock.calls[0][0].chatId).toBe('chat-1');
+  });
+
   it('400 when the message has no parts', async () => {
     const res = await send({ role: 'user' });
     expect(res.status).toBe(400);

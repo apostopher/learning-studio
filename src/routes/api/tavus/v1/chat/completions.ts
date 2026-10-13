@@ -107,6 +107,7 @@ export async function tavusCompletionsHandler(
         // Same as /api/chat until a subscriptions reader exists.
         subscriptions: [],
         conversationSummary: context?.summary ?? null,
+        chatId: call.chatId,
         courseSlug,
         userId: call.userId,
         skaProfile,

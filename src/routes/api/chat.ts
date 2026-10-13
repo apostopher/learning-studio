@@ -149,6 +149,7 @@ export async function chatHandler(request: Request): Promise<Response> {
         messages: modelMessages,
         uiMessages: modelMessages,
         conversationSummary: context?.summary ?? null,
+        chatId,
         persona: persona?.content,
         // (`persona` is the resolved published content, never a draft.)
         userInfo,

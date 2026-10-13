@@ -177,6 +177,7 @@ describe('tavusCompletionsHandler', () => {
       persona: { basicInfo: 'published' },
       userInfo: { name: 'Rahul', callSign: 'unknown', location: 'unknown' },
       subscriptions: [],
+      chatId: 'chat-1',
     });
     expect(args.voice.tavusRules).toContain('EMOTION TAG');
     expect(args.voice.tavusRules).not.toContain(PERSONA_SENTINEL);
