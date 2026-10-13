@@ -81,6 +81,7 @@
     "@tiptap/starter-kit": "3.27.3",
     "@upstash/redis": "1.37.0",
     "@vercel/blob": "2.6.1",
+    "@vercel/functions": "3.9.11",
     "@xstate/react": "^6.1.0",
     "ai": "6.0.168",
     "better-auth": "^1.5.3",

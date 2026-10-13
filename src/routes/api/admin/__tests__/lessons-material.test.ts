@@ -11,6 +11,8 @@ const {
   getDisciplineIdForLessonId,
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
+  waitUntil,
+  generateLessonEmbeddings,
 } = vi.hoisted(() => {
   class ForbiddenError extends Error {
     constructor() {
@@ -25,12 +27,19 @@ const {
     getDisciplineIdForLessonId: vi.fn(),
     getLessonMaterialByLessonId: vi.fn(),
     upsertLessonMaterial: vi.fn(),
+    waitUntil: vi.fn(),
+    generateLessonEmbeddings: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
 vi.mock('#/lib/permissions.server', () => ({
   requireLessonContentPermission,
   absentResourceResponse,
+}));
+vi.mock('@vercel/functions', () => ({ waitUntil }));
+vi.mock('#/ai/embeddings', () => ({
+  generateLessonEmbeddings,
+  lessonMaterialHtml: (m: { text: string }) => m.text,
 }));
 vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
 vi.mock('#/db/lesson', () => ({
@@ -70,6 +79,7 @@ beforeEach(() => {
   // the teaching side and a flat 403 to everyone else, so a missing row
   // cannot be used to enumerate ids.
   absentResourceResponse.mockResolvedValue(new Response(null, { status: 404 }));
+  generateLessonEmbeddings.mockResolvedValue({ chunks: 1 });
 });
 
 describe('lessons material route', () => {
@@ -215,6 +225,37 @@ describe('lessons material route', () => {
     expect((await saveMaterialHandler(postReq(material), '1')).status).toBe(
       500,
     );
+  });
+
+  it('re-embeds the saved lesson in the background', async () => {
+    upsertLessonMaterial.mockResolvedValueOnce({
+      id: 7,
+      lessonSlug: 'wx-1',
+      ...material,
+      text: 'T',
+    });
+    const res = await saveMaterialHandler(postReq(material), '1');
+    expect(res.status).toBe(200);
+    expect(generateLessonEmbeddings).toHaveBeenCalledWith({
+      lessonSlug: 'wx-1',
+      html: 'T',
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed re-embed never fails the save', async () => {
+    generateLessonEmbeddings.mockRejectedValue(new Error('quota'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    upsertLessonMaterial.mockResolvedValueOnce({
+      id: 7,
+      lessonSlug: 'wx-1',
+      ...material,
+    });
+    const res = await saveMaterialHandler(postReq(material), '1');
+    expect(res.status).toBe(200);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   // Requirement 4 (route half): a null-discipline ("Untitled") lesson
