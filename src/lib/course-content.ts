@@ -5,6 +5,28 @@ export type LessonContent = {
 };
 export type ModuleContent = { name: string; lessons: LessonContent[] };
 export type CourseContent = { name: string; modules: ModuleContent[] };
+export type GatedLesson = LessonContent & { slug: string };
+export type GatedCourse = {
+  name: string;
+  modules: { name: string; lessons: GatedLesson[] }[];
+};
+
+/** Lessons the learner may read — the only lesson chunks searchKB may return. */
+export function allowedLessonSlugs(course: GatedCourse): string[] {
+  return course.modules.flatMap((m) => m.lessons.map((l) => l.slug));
+}
+
+/**
+ * Names only — enough for "what's in module 3?" without shipping material.
+ * Built from the gated course, so a hidden lesson is not even named.
+ */
+export function courseOutline(course: GatedCourse): string {
+  const lines = course.modules.map(
+    (m) =>
+      `- ${m.name}: ${m.lessons.length ? m.lessons.map((l) => l.name).join('; ') : '(no lessons available)'}`,
+  );
+  return `Course: ${course.name}\n${lines.join('\n')}`;
+}
 
 /**
  * Pure HTML builder for a course's full structure + lesson material, used to
