@@ -588,6 +588,10 @@
     overflow: hidden;
     color: var(--color-gray-1);
     font-family: var(--font-sans);
+    /* Inline-size containment so the control bar can adapt to the player's
+       own width (half-width admin column) via @container vp. */
+    container-type: inline-size;
+    container-name: vp;
   }
 
   .dark .video-player {
@@ -673,6 +677,18 @@
     display: flex;
     align-items: center;
     gap: calc(var(--spacing) * 2);
+  }
+
+  /* Half-width admin columns and phones: drop the volume slider (mute stays)
+     and the elapsed/total readout before the row can overflow. */
+  @container vp (max-width: 420px) {
+    .video-player .vp-volume-slider,
+    .video-player .vp-time {
+      display: none;
+    }
+    .video-player .vp-controls-row {
+      gap: calc(var(--spacing) * 1);
+    }
   }
 
   .video-player .vp-icon-button {

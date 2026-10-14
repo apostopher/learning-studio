@@ -279,4 +279,17 @@ describe('VideoPlayer', () => {
     fireEvent.error(video);
     expect(onCaptionsError).not.toHaveBeenCalled();
   });
+
+  it('marks the volume slider so narrow players can drop it (mute stays)', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        actions={{ onVolumeChange: vi.fn(), onMuteToggle: vi.fn() }}
+      />,
+    );
+    expect(container.querySelector('.vp-volume-slider')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /mute/i })).toBeTruthy();
+  });
 });
