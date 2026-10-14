@@ -30,6 +30,7 @@ export const CourseColumn = ({
   actions,
   emptySlot,
   configureSlot,
+  note,
   expandedModuleIds,
   onExpandedModuleIdsChange,
 }: {
@@ -53,6 +54,12 @@ export const CourseColumn = ({
    * free of a `RouterProvider`). Omitted where there is nowhere to go.
    */
   configureSlot?: ReactNode;
+  /**
+   * One line above the modules saying what the column holds but does not
+   * draw — the flagship modules every course borrows (`flagshipRailNote`).
+   * Null or omitted renders nothing.
+   */
+  note?: string | null;
   /**
    * Which modules are open, when the caller drives the accordion.
    *
@@ -115,6 +122,9 @@ export const CourseColumn = ({
         className="flex-1"
         viewportClassName="h-full"
       >
+        {note && (
+          <p className="px-3 pbs-3 pbe-1 text-secondary text-xs">{note}</p>
+        )}
         <Accordion.Root
           multiple
           value={expandedModuleIds}

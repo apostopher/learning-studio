@@ -256,6 +256,13 @@ vi.mock('#/db/course', () => ({
 vi.mock('#/db/lesson-access', () => lessonAccess);
 vi.mock('#/db/course-modules', () => membership);
 vi.mock('#/db/course-remixes', () => remixes);
+// createCourse remixes the org's flagship into every new course. Stubbed
+// whole: what it does is `flagship-remix.test.ts`'s job; here it only matters
+// that createCourse hands it the course it just created and the org.
+const flagshipRemix = vi.hoisted(() => ({
+  remixFlagshipIntoNewCourse: vi.fn(async () => undefined),
+}));
+vi.mock('#/db/flagship-remix', () => flagshipRemix);
 // moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
 // Same reasoning as `#/db/course` above: admin.ts calls
@@ -385,6 +392,34 @@ describe('course-details cache invalidation', () => {
 
     expect(db.insert).toHaveBeenNthCalledWith(2, courseOrgsTable);
     expect(linkChain.valuesArg).toEqual({ courseId: 5, orgId: 1 });
+  });
+
+  // The flagship is always remixed into every course: a new course must reach
+  // the remix with ITS id and the org it was linked to — and only after that
+  // link, since `remixCourse` refuses a course that is not in the org.
+  it('createCourse remixes the flagship into the new course, after linking it to the org', async () => {
+    db.select.mockReturnValueOnce(makeChain([])); // taken slugs
+    db.insert
+      .mockReturnValueOnce(
+        makeChain([
+          {
+            id: 5,
+            name: 'Flight Basics',
+            slug: 'flight-basics',
+            description: null,
+            imageUrlAvif: null,
+            imageUrlWebp: null,
+          },
+        ]),
+      )
+      .mockReturnValueOnce(makeChain(undefined));
+
+    await createCourse({ name: 'Flight Basics' }, 1);
+
+    expect(flagshipRemix.remixFlagshipIntoNewCourse).toHaveBeenCalledWith(5, 1);
+    expect(
+      flagshipRemix.remixFlagshipIntoNewCourse.mock.invocationCallOrder[0],
+    ).toBeGreaterThan(db.insert.mock.invocationCallOrder[1]);
   });
 
   it('createModule invalidates the owning course, resolved from courseId', async () => {

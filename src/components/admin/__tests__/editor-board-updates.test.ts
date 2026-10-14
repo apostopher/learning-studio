@@ -14,6 +14,7 @@ import {
   libraryUntitledDndId,
   UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
+import { railModules } from '#/lib/flagship-course';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
@@ -217,6 +218,106 @@ describe('reorderModulesOnBoard', () => {
       prevModuleId: null,
       nextModuleId: 11,
     });
+  });
+});
+
+/**
+ * The rail hides the modules a course borrows from the flagship
+ * (`railModules`), but the reorder runs on the FULL column in the cache.
+ * These pin the two things that must hold for that to be right:
+ *
+ * 1. What the admin sees after the drop is exactly what the sortable showed —
+ *    the visible list with the dragged module moved onto the drop target.
+ * 2. The rank the server writes from the neighbours puts the module exactly
+ *    where the optimistic board put it — re-sorting the column by the
+ *    server's rank formula (`reorderModule` in `#/db/admin`) reproduces the
+ *    optimistic order, hidden modules included.
+ *
+ * Mutant seen RED: neighbours read off the VISIBLE list
+ * (`railModules(next…)` instead of the full column). The midpoint of two
+ * visible modules then lands inside the hidden flagship block, splitting it
+ * for learners and disagreeing with the optimistic board.
+ */
+describe('reordering a rail column that hides flagship modules', () => {
+  const FLAGSHIP = { id: 6, name: '3D Airmanship' };
+  const ranked = (m: BoardModule, rank: number): BoardModule => ({
+    ...m,
+    rank,
+  });
+  // Course 2 borrows 10, 11, 12 from the flagship; owns 21, 22, 23.
+  const board = (): OrgEditorBoard => [
+    courseBoard(2, 'ITPS', [
+      ranked(mod(10, [], FLAGSHIP), 1),
+      ranked(mod(21, []), 2),
+      ranked(mod(22, []), 3),
+      ranked(mod(11, [], FLAGSHIP), 4),
+      ranked(mod(12, [], FLAGSHIP), 5),
+      ranked(mod(23, []), 6),
+    ]),
+  ];
+
+  /** The order the server leaves the column in, per `reorderModule`. */
+  const serverOrder = (
+    before: OrgEditorBoard,
+    moduleId: number,
+    n: { prevModuleId: number | null; nextModuleId: number | null },
+  ) => {
+    const modules = before[0].modules;
+    const rankOf = (id: number | null) =>
+      id === null ? null : (modules.find((m) => m.id === id)?.rank ?? null);
+    const prev = rankOf(n.prevModuleId);
+    const next = rankOf(n.nextModuleId);
+    const rank =
+      prev !== null && next !== null
+        ? (prev + next) / 2
+        : next !== null
+          ? next / 2
+          : (prev ?? 0) + 1;
+    return modules
+      .map((m) => (m.id === moduleId ? { ...m, rank } : m))
+      .sort((a, b) => a.rank - b.rank)
+      .map((m) => m.id);
+  };
+
+  const drop = (moduleId: number, overModuleId: number) => {
+    const before = board();
+    const next = reorderModulesOnBoard(before, 2, moduleId, overModuleId);
+    const neighbours = moduleNeighbours(next, 2, moduleId);
+    return { before, next, neighbours };
+  };
+
+  it('dragging down: lands right after the drop target, ahead of the hidden block', () => {
+    const { before, next, neighbours } = drop(21, 22);
+    expect(railModules(next[0], FLAGSHIP.id).map((m) => m.id)).toEqual([
+      22, 21, 23,
+    ]);
+    expect(neighbours).toEqual({ prevModuleId: 22, nextModuleId: 11 });
+    expect(serverOrder(before, 21, neighbours)).toEqual(
+      next[0].modules.map((m) => m.id),
+    );
+    expect(next[0].modules.map((m) => m.id)).toEqual([10, 22, 21, 11, 12, 23]);
+  });
+
+  it('dragging up past a hidden block: lands right before the drop target', () => {
+    const { before, next, neighbours } = drop(23, 22);
+    expect(railModules(next[0], FLAGSHIP.id).map((m) => m.id)).toEqual([
+      21, 23, 22,
+    ]);
+    expect(neighbours).toEqual({ prevModuleId: 21, nextModuleId: 22 });
+    expect(serverOrder(before, 23, neighbours)).toEqual(
+      next[0].modules.map((m) => m.id),
+    );
+  });
+
+  it('dragging to the top of the visible list: stays after the leading flagship module', () => {
+    const { before, next, neighbours } = drop(23, 21);
+    expect(railModules(next[0], FLAGSHIP.id).map((m) => m.id)).toEqual([
+      23, 21, 22,
+    ]);
+    expect(neighbours).toEqual({ prevModuleId: 10, nextModuleId: 21 });
+    expect(serverOrder(before, 23, neighbours)).toEqual(
+      next[0].modules.map((m) => m.id),
+    );
   });
 });
 

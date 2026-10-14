@@ -20,8 +20,15 @@ import { PaneActionButton } from './pane-action-button';
  */
 export const EditorCourseEmptyContainer = ({
   course,
+  hasBorrowedModules = false,
 }: {
   course: { id: number; name: string };
+  /**
+   * The course holds modules the rail does not draw (the flagship's, see
+   * `railModules`), so "no modules yet" would be false — it has none of its
+   * OWN.
+   */
+  hasBorrowedModules?: boolean;
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: courseDndId(course.id),
@@ -36,7 +43,7 @@ export const EditorCourseEmptyContainer = ({
         // filled rather than a column that failed to load — and so there is a
         // target big enough to aim a dragged lesson at.
         className="min-h-40"
-        message={`${course.name} has no modules yet. Lessons live inside modules, so create one — then drag lessons into it from the library.`}
+        message={`${course.name} has no modules${hasBorrowedModules ? ' of its own' : ''} yet. Lessons live inside modules, so create one — then drag lessons into it from the library.`}
         isOver={isOver}
         action={
           <PaneActionButton

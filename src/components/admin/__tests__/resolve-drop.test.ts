@@ -508,6 +508,43 @@ describe('resolveDrop — dropping on a course column itself', () => {
     });
   });
 
+  /**
+   * The rail hides the modules a course borrows from the flagship
+   * (`railModules`), so a course holding ONLY those shows the empty drop
+   * zone. Pointing the reader at "one of its modules" there would name
+   * modules they cannot see. Mutant: counting `courseBoard.modules` (which
+   * includes the hidden flagship modules) instead of the drawn ones.
+   */
+  it('treats a course holding only flagship modules as having none of its own', () => {
+    const FLAGSHIP = { id: 6, name: '3D Airmanship' };
+    const withFlagship: OrgEditorBoard = [
+      {
+        ...courseBoard(6, '3D Airmanship', [
+          mod(60, 'Upset Recovery', [], FLAGSHIP),
+        ]),
+        course: {
+          ...courseBoard(6, '3D Airmanship', []).course,
+          slug: '3d-airmanship',
+        },
+      },
+      courseBoard(3, 'Weekend Refresher', [
+        mod(60, 'Upset Recovery', [], FLAGSHIP),
+      ]),
+    ];
+
+    expect(
+      resolveDrop(
+        withFlagship,
+        libraryLessonDndId(WAKE_TURBULENCE),
+        courseDndId(3),
+      ),
+    ).toEqual({
+      kind: 'forbidden',
+      reason:
+        'Weekend Refresher has no modules of its own yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.',
+    });
+  });
+
   it('points at the existing modules when the course has some', () => {
     // The target is not rendered in this state, but the function does not
     // assume that — and a reason telling someone to create a module when

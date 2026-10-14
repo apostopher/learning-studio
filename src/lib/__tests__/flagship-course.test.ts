@@ -3,6 +3,8 @@ import {
   courseRailBoards,
   FLAGSHIP_COURSE_SLUG,
   findFlagshipCourse,
+  flagshipRailNote,
+  railModules,
 } from '#/lib/flagship-course';
 
 describe('findFlagshipCourse', () => {
@@ -38,5 +40,64 @@ describe('findFlagshipCourse', () => {
     expect(courseRailBoards(boards).map((b) => b.course.id)).toEqual([2, 3]);
     // No flagship → nothing to drop.
     expect(courseRailBoards(boards.slice(0, 1))).toEqual(boards.slice(0, 1));
+  });
+});
+
+describe('railModules', () => {
+  const board = {
+    modules: [
+      { id: 10, owner: { id: 6 } },
+      { id: 21, owner: { id: 2 } },
+      { id: 11, owner: { id: 6 } },
+      { id: 30, owner: { id: 3 } },
+    ],
+  };
+
+  /**
+   * Every course borrows the whole flagship, so drawing its modules in every
+   * column would repeat the same seven modules down the rail. Mutant: the
+   * column drawing `courseBoard.modules` unfiltered.
+   */
+  it('drops the modules the course borrows from the flagship, keeping the rest in order', () => {
+    expect(railModules(board, 6).map((m) => m.id)).toEqual([21, 30]);
+  });
+
+  it('keeps every module when there is no flagship', () => {
+    expect(railModules(board, null)).toEqual(board.modules);
+  });
+});
+
+describe('flagshipRailNote', () => {
+  const flagship = { id: 6, name: '3D Airmanship' };
+  const column = (id: number, sources: number[]) => ({
+    course: { id },
+    remixes: sources.map((sourceCourseId) => ({ sourceCourseId })),
+  });
+
+  it('says the column includes every flagship module when it remixes the flagship', () => {
+    expect(flagshipRailNote(flagship, column(2, [6]))).toBe(
+      'Includes all 3D Airmanship modules',
+    );
+  });
+
+  /**
+   * Before the backfill runs, or after a create-time remix failed, a course
+   * holds none of the flagship's modules. Claiming it "includes all" of them
+   * would hide exactly the gap an admin needs to see. Mutant: ignoring
+   * `remixes` and always claiming inclusion.
+   */
+  it('says the column is not yet linked when it does not remix the flagship', () => {
+    expect(flagshipRailNote(flagship, column(2, []))).toBe(
+      'Not yet linked to 3D Airmanship modules',
+    );
+    // Remixing some OTHER course is not remixing the flagship.
+    expect(flagshipRailNote(flagship, column(2, [9]))).toBe(
+      'Not yet linked to 3D Airmanship modules',
+    );
+  });
+
+  it('says nothing without a flagship, or in the flagship itself', () => {
+    expect(flagshipRailNote(null, column(2, []))).toBeNull();
+    expect(flagshipRailNote(flagship, column(6, []))).toBeNull();
   });
 });

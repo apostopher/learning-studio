@@ -99,7 +99,6 @@ import { ModuleAccordionItem } from './module-accordion-item';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { RenameDisciplineModuleDialogContainer } from './rename-discipline-module-dialog-container';
 import { type DragOrigin, resolveDrop } from './resolve-drop';
-import { UnremixCourseDialogContainer } from './unremix-course-dialog-container';
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
@@ -1405,7 +1404,6 @@ export const EditorContainer = ({
       <EditorCreateModuleDialogContainer />
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer navigateAfterDelete={false} />
-      <UnremixCourseDialogContainer />
       <LessonVideoModalContainer
         modules={board.flatMap((courseBoard) => courseBoard.modules)}
       />
