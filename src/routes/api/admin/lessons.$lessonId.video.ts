@@ -3,12 +3,14 @@ import { createFileRoute } from '@tanstack/react-router';
 // imported directly by its route test.
 import { getLessonVideo, setLessonVideo } from '#/db/admin';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
+import { requestLessonCaptionsSafely } from '#/db/video-captions';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { setLessonVideoInputSchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
+import { PRIMARY_VIDEO_LANG } from '#/lib/video-languages';
 
 /**
  * Video is lesson content: it changes what EVERY course teaching this lesson
@@ -101,6 +103,21 @@ export async function putVideoHandler(
     parsed.data.ref,
   );
   if (!updated) return new Response('Not found', { status: 404 });
+
+  // Auto-captions for a Mux video. Awaited (a serverless response may end
+  // the work) but never allowed to fail the save — the outcome is stored on
+  // `video_captions` and shown, with Retry, in the video section.
+  if (parsed.data.provider === 'mux') {
+    try {
+      await requestLessonCaptionsSafely({
+        lessonId,
+        playbackId: parsed.data.ref,
+        lang: PRIMARY_VIDEO_LANG,
+      });
+    } catch (error) {
+      console.error('Captions request failed after a video save:', error);
+    }
+  }
   return Response.json({ ok: true });
 }
 
