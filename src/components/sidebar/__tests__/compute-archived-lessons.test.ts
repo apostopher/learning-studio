@@ -104,3 +104,35 @@ describe('computeArchivedLessons', () => {
     ]);
   });
 });
+
+describe("computeArchivedLessons — a lesson tagged 'none'", () => {
+  it('is not archived even when the pilot completed it: None means withdrawn', () => {
+    const withdrawn = {
+      modules: [
+        {
+          slug: 'm1',
+          lessons: [
+            { id: 9, slug: 'ditching', name: 'Ditching', levels: ['none'] },
+            {
+              id: 2,
+              slug: 'basic-only',
+              name: 'Basic Only',
+              levels: ['basic'],
+            },
+          ],
+        },
+      ],
+    };
+    const progress = {
+      lessons: [
+        { lessonId: 9, percent: 100 },
+        { lessonId: 2, percent: 100 },
+      ],
+    };
+    expect(
+      computeArchivedLessons(withdrawn, progress, 'intermediate').map(
+        (l) => l.slug,
+      ),
+    ).toEqual(['basic-only']);
+  });
+});

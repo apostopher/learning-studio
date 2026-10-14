@@ -240,6 +240,26 @@ describe('/admin — what each section is handed', () => {
     expect(m.schedule.mock.lastCall?.[0].canEditLevels).toBe(true);
   });
 
+  it('tells the schedule whether the actor is the owner', async () => {
+    await mountSection('schedule', {
+      roles: ['admin'],
+      permissions: ['*'],
+      isStaffAnywhere: true,
+      isCourseManagerAnywhere: false,
+    });
+    await screen.findByTestId('schedule');
+    expect(m.schedule.mock.lastCall?.[0].actorIsOwner).toBe(false);
+
+    await mountSection('schedule', {
+      roles: ['owner'],
+      permissions: ['*'],
+      isStaffAnywhere: true,
+      isCourseManagerAnywhere: false,
+    });
+    await screen.findByTestId('schedule');
+    expect(m.schedule.mock.lastCall?.[0].actorIsOwner).toBe(true);
+  });
+
   it('gives People the roles and permissions it filters on', async () => {
     await mountSection('people', {
       roles: ['admin'],

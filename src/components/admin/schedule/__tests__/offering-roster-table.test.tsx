@@ -58,7 +58,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels
-        levelEditable={() => true}
+        levelLockReason={() => null}
         onLevelChange={vi.fn()}
       />,
     );
@@ -80,7 +80,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[ada]}
         onRemove={vi.fn()}
         canEditLevels
-        levelEditable={() => true}
+        levelLockReason={() => null}
         onLevelChange={onLevelChange}
       />,
     );
@@ -97,7 +97,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[bob]}
         onRemove={vi.fn()}
         canEditLevels
-        levelEditable={() => true}
+        levelLockReason={() => null}
         onLevelChange={vi.fn()}
       />,
     );
@@ -118,7 +118,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels
-        levelEditable={() => true}
+        levelLockReason={() => null}
         onLevelChange={vi.fn()}
         savingUserId="u1"
       />,
@@ -141,7 +141,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels={false}
-        levelEditable={() => true}
+        levelLockReason={() => null}
         onLevelChange={vi.fn()}
       />,
     );
@@ -151,13 +151,17 @@ describe('OfferingRosterTable level cell', () => {
     expect(screen.getByText(/Levels are view only/)).toBeTruthy();
   });
 
-  it('renders a read-only chip for a row whose profile cannot be resolved', () => {
+  it('renders a read-only chip with its visible reason for a locked row', () => {
     render(
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels
-        levelEditable={(userId) => userId !== 'u1'}
+        levelLockReason={(userId) =>
+          userId === 'u1'
+            ? { short: 'Not in directory', full: 'Not in the user directory' }
+            : null
+        }
         onLevelChange={vi.fn()}
       />,
     );
@@ -165,8 +169,46 @@ describe('OfferingRosterTable level cell', () => {
       screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
     ).toBeNull();
     expect(screen.getByText('INTER')).toBeTruthy();
+    // Visible, and complete for assistive tech.
+    expect(screen.getByText('Not in directory')).toBeTruthy();
+    expect(screen.getByText('Not in the user directory')).toBeTruthy();
     expect(
       screen.getByRole('combobox', { name: 'Level for Bob Hoover' }),
     ).toBeTruthy();
+  });
+
+  it('states the view-only reason in the reviewed words', () => {
+    render(
+      <OfferingRosterTable
+        users={[ada]}
+        onRemove={vi.fn()}
+        canEditLevels={false}
+        onLevelChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        'Levels are view only here. Changing them needs an admin with the Levels “update” permission.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('greys a locked select with AA-safe tokens, not opacity', () => {
+    render(
+      <OfferingRosterTable
+        users={[ada]}
+        onRemove={vi.fn()}
+        canEditLevels
+        levelLockReason={() => null}
+        onLevelChange={vi.fn()}
+        disabled
+      />,
+    );
+    const select = screen.getByRole('combobox', {
+      name: 'Level for Ada Lovelace',
+    });
+    expect(select.hasAttribute('data-disabled')).toBe(true);
+    expect(select.className).not.toMatch(/opacity/);
+    expect(select.className).toContain('data-[disabled]:text-secondary');
   });
 });

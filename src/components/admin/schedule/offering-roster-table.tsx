@@ -28,6 +28,8 @@ const HEAD_REM = 2; // h-8
  * colour per level. `null` is muted on purpose: "not levelled yet" is an
  * absence, and dressing it in a hue would make it look like a fourth rung.
  */
+export type LevelLockReason = { short: string; full: string };
+
 const LEVEL_TONES: Record<UserLevel, ChipTone> = {
   basic: 'soft-warning',
   intermediate: 'soft-apple',
@@ -50,7 +52,7 @@ export const OfferingRosterTable = ({
   onRemove,
   disabled = false,
   canEditLevels = false,
-  levelEditable = () => false,
+  levelLockReason = () => null,
   onLevelChange,
   savingUserId = null,
 }: {
@@ -60,10 +62,12 @@ export const OfferingRosterTable = ({
   /** `level:update` — without it every level is a read-only chip. */
   canEditLevels?: boolean;
   /**
-   * Whether this row's level can be written — false when the person cannot
-   * be resolved to a profile, which the level endpoint is keyed on.
+   * Why this row's level cannot be written here, or null when it can — e.g.
+   * the person is not in the user directory (the endpoint is keyed on their
+   * profile), or they hold a staff role and only an owner may change it.
+   * `short` is shown in the cell; `full` is what assistive tech reads.
    */
-  levelEditable?: (userId: string) => boolean;
+  levelLockReason?: (userId: string) => LevelLockReason | null;
   /** A level was picked. The container confirms it before anything saves. */
   onLevelChange?: (userId: string, level: UserLevel) => void;
   /** The row whose level change is in flight, if any. */
@@ -99,7 +103,8 @@ export const OfferingRosterTable = ({
       header: 'Level',
       cell: ({ row }) => {
         const { userId, name, level } = row.original;
-        if (canEditLevels && onLevelChange && levelEditable(userId)) {
+        const lock = canEditLevels ? levelLockReason(userId) : null;
+        if (canEditLevels && onLevelChange && lock === null) {
           return (
             <LevelSelect
               value={level}
@@ -113,7 +118,7 @@ export const OfferingRosterTable = ({
             />
           );
         }
-        return level ? (
+        const chip = level ? (
           <span
             className={chipClassName(LEVEL_TONES[level])}
             title={LEVEL_LABELS[level]}
@@ -128,6 +133,22 @@ export const OfferingRosterTable = ({
             title="No level set for this course yet"
           >
             No level
+          </span>
+        );
+        if (!lock) return chip;
+        // A locked state states its reason, visibly: short in the cell (the
+        // column is narrow), whole for assistive tech.
+        return (
+          <span className="flex flex-col items-start gap-0.5 leading-tight">
+            {chip}
+            <span
+              className="max-w-full truncate text-secondary text-xs"
+              title={lock.full}
+              aria-hidden="true"
+            >
+              {lock.short}
+            </span>
+            <span className="sr-only">{lock.full}</span>
           </span>
         );
       },
@@ -236,8 +257,8 @@ export const OfferingRosterTable = ({
       {!canEditLevels && (
         // A locked control states why and what unlocks it, in visible text.
         <p className="text-secondary text-xs">
-          Levels are view only. Changing them needs the Levels “update”
-          permission.
+          Levels are view only here. Changing them needs an admin with the
+          Levels “update” permission.
         </p>
       )}
     </div>

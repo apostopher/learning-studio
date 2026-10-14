@@ -72,8 +72,14 @@ describe('useSetUserCourseLevel', () => {
       },
     });
     const { result } = renderHook(() => useSetUserCourseLevel(), { wrapper });
-    await expect(act(() => result.current.mutateAsync(input))).rejects.toThrow(
-      'You do not have permission to change levels.',
+    let failure: unknown;
+    await act(async () => {
+      failure = await result.current.mutateAsync(input).catch((e) => e);
+    });
+    // The UI already hides the select without `level:update`, so a 403 here
+    // is the endpoint's other refusal: a staff target and a non-owner actor.
+    expect((failure as Error).message).toBe(
+      'Only an owner can change the level of someone with a staff role.',
     );
   });
 });

@@ -80,7 +80,11 @@ const renderPage = (store = createStore()) => {
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
-        <SchedulePageContainer canSchedule canEditLevels={false} />
+        <SchedulePageContainer
+          canSchedule
+          canEditLevels={false}
+          actorIsOwner={false}
+        />
       </Provider>
     </QueryClientProvider>,
   );

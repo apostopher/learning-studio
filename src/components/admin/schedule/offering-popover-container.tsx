@@ -33,7 +33,11 @@ import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
 import { OfferingPopoverPositionerContainer } from './offering-popover-positioner-container';
 import type { PopoverTarget } from './offering-popover-state';
-import { levelSummary, OfferingRosterTable } from './offering-roster-table';
+import {
+  type LevelLockReason,
+  levelSummary,
+  OfferingRosterTable,
+} from './offering-roster-table';
 import {
   endDateFromWindow,
   formatWindowSummary,
@@ -99,6 +103,7 @@ export const OfferingPopoverContainer = ({
   offerings,
   isListSettled,
   canEditLevels,
+  actorIsOwner,
 }: {
   offerings: Offering[];
   /**
@@ -113,6 +118,12 @@ export const OfferingPopoverContainer = ({
    * endpoint. Without it the roster's levels are read-only chips.
    */
   canEditLevels: boolean;
+  /**
+   * The level endpoint also runs `assertCanActOnProfile`: only an owner may
+   * act on someone holding a staff role. Mirrored here so the roster never
+   * offers a select that answers 403.
+   */
+  actorIsOwner: boolean;
 }) => {
   const popover = useAtomValue(offeringPopoverAtom);
   const dispatch = useSetAtom(dispatchOfferingPopoverAtom);
@@ -215,6 +226,7 @@ export const OfferingPopoverContainer = ({
     setPersonQuery('');
     setSelectedPerson(null);
     setLevelDraft(null);
+    setCourseLevel.reset();
     create.reset();
     update.reset();
     remove.reset();
@@ -285,9 +297,27 @@ export const OfferingPopoverContainer = ({
 
   // The level endpoint is keyed on the profile; the roster only carries the
   // auth user id. A row missing from the directory stays a read-only chip.
-  const profileIdByUserId = new Map(
-    (directory.data?.users ?? []).map((user) => [user.userId, user.profileId]),
+  const directoryByUserId = new Map(
+    (directory.data?.users ?? []).map((user) => [user.userId, user]),
   );
+  const levelLockReason = (userId: string): LevelLockReason | null => {
+    if (courseId === null) return null;
+    const person = directoryByUserId.get(userId);
+    if (!person) {
+      return {
+        short: 'Not in directory',
+        full: 'Not in the user directory, so their level cannot be changed here.',
+      };
+    }
+    // Mirrors `assertCanActOnProfile`: global roles only, owner exempt.
+    if (!actorIsOwner && person.roles.length > 0) {
+      return {
+        short: 'Owner only',
+        full: 'Only an owner can change the level of someone with a staff role.',
+      };
+    }
+    return null;
+  };
   const savingProfileId = setCourseLevel.isPending
     ? (setCourseLevel.variables?.profileId ?? null)
     : null;
@@ -301,20 +331,43 @@ export const OfferingPopoverContainer = ({
   // A pick only opens the confirm. The select stays on the saved level —
   // it is controlled by the roster row — so Cancel needs no undo.
   const handleLevelChange = (userId: string, level: UserLevel) => {
-    const profileId = profileIdByUserId.get(userId);
+    const profileId = directoryByUserId.get(userId)?.profileId;
     const person = users.find((row) => row.userId === userId);
-    if (profileId === undefined || !person) return;
+    if (profileId === undefined || !person || courseId === null) return;
     levelForm.reset(EMPTY_LEVEL_FORM);
-    setLevelDraft({ userId, profileId, name: person.name, level });
+    // A fresh confirm: the last attempt's error belongs to someone else.
+    setCourseLevel.reset();
+    setLevelDraft({
+      offeringId: saveTarget?.mode === 'edit' ? saveTarget.offering.id : null,
+      courseId,
+      userId,
+      profileId,
+      name: person.name,
+      level,
+    });
+  };
+
+  /** Whether the popover still shows what `draft` was picked in. */
+  const isStillOpen = (draft: {
+    offeringId: number | null;
+    courseId: number;
+  }) => {
+    const current = store.get(offeringPopoverAtom);
+    if (current.status !== 'pinned') return false;
+    const target = current.target;
+    return target.mode === 'edit'
+      ? draft.offeringId === target.offeringId
+      : draft.offeringId === null && draft.courseId === target.courseId;
   };
 
   const handleSetLevel = levelForm.handleSubmit((values) => {
-    if (!levelDraft || courseId === null) return;
+    if (!levelDraft) return;
     const draft = levelDraft;
+    const draftCourseName = courseName;
     setCourseLevel.mutate(
       {
         profileId: draft.profileId,
-        courseId,
+        courseId: draft.courseId,
         level: draft.level,
         message: values.message,
         note: values.note || undefined,
@@ -322,8 +375,12 @@ export const OfferingPopoverContainer = ({
       {
         onSuccess: () => {
           toast.success(
-            `${draft.name} is now ${LEVEL_LABELS[draft.level]} in ${courseName}`,
+            `${draft.name} is now ${LEVEL_LABELS[draft.level]} in ${draftCourseName}`,
           );
+          // The level is saved either way; the roster is only patched if it
+          // is still the one the level was picked in (the invalidation
+          // refreshes the rest).
+          if (!isStillOpen(draft)) return;
           // Already saved, so not an unsaved edit of the offering: no
           // `shouldDirty`, or the popover would ask to discard it.
           form.setValue(
@@ -558,9 +615,7 @@ export const OfferingPopoverContainer = ({
                         onRemove={handleRemove}
                         disabled={isSaving}
                         canEditLevels={canEditLevels}
-                        levelEditable={(userId) =>
-                          courseId !== null && profileIdByUserId.has(userId)
-                        }
+                        levelLockReason={levelLockReason}
                         onLevelChange={handleLevelChange}
                         savingUserId={savingUserId}
                       />

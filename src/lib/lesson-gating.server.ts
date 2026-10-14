@@ -15,6 +15,7 @@ import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
   isLessonVisibleAtLevel,
+  isLessonWithdrawn,
 } from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
@@ -173,9 +174,14 @@ export async function evaluateLessonGate({
     // Out-of-tier work you already finished stays readable; out-of-tier work
     // you never did is not yours. `percent` is the aggregate across every
     // component of the lesson, so 100 is the only honest reading of "done".
-    const completed = progress.lessons.some(
-      (row) => row.lessonId === target.id && row.percent === 100,
-    );
+    //
+    // Except a lesson tagged None: that is withdrawn, not out-of-tier, so it
+    // is closed even to a pilot who completed it.
+    const completed =
+      !isLessonWithdrawn(target.levels) &&
+      progress.lessons.some(
+        (row) => row.lessonId === target.id && row.percent === 100,
+      );
     return {
       ...course,
       isAdmin: false,

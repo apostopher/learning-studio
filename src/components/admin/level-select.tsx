@@ -47,7 +47,11 @@ export const LevelSelect = ({
       aria-label={ariaLabel}
       aria-busy={saving || undefined}
       className={cn(
-        'flex items-center gap-1.5 rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60',
+        'flex items-center gap-1.5 rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
+        // Locked, without opacity: 60% of the label over gray-1 measures
+        // about 4.2:1, under AA. The secondary text token on gray-2 is a
+        // measured AA pair, so the label stays legible while it reads as off.
+        'data-[disabled]:cursor-not-allowed data-[disabled]:border-gray-6 data-[disabled]:bg-gray-2 data-[disabled]:text-secondary data-[disabled]:hover:bg-gray-2',
         className,
       )}
     >

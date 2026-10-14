@@ -223,4 +223,32 @@ describe("a lesson tagged 'none'", () => {
       expect(result?.outOfTier).toEqual({ readOnly: false });
     }
   });
+
+  it('stays closed even for a pilot who completed it: None means withdrawn', async () => {
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...DETAILS.modules[0],
+          lessons: [
+            {
+              ...DETAILS.modules[0].lessons[0],
+              id: 12,
+              slug: 'none-1',
+              levels: ['none'],
+            },
+          ],
+        },
+      ],
+    });
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 12, moduleId: 1, percent: 100, watched: true }],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'none-1',
+      courseSlug: 'c1',
+    });
+    expect(result?.outOfTier).toEqual({ readOnly: false });
+  });
 });

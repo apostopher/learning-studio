@@ -78,6 +78,13 @@ export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
  * is submitted; cancelling just clears this.
  */
 export const rosterLevelDraftAtom = atom<{
+  /**
+   * What the popover had open when the level was picked — the offering being
+   * edited (null while scheduling a new one) and its course. A save that
+   * lands after the popover moved on must not patch the roster now showing.
+   */
+  offeringId: number | null;
+  courseId: number;
   userId: string;
   profileId: number;
   name: string;

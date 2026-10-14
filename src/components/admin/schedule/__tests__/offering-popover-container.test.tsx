@@ -50,11 +50,18 @@ vi.mock('#/data-hooks/use-admin-users', () => ({
 }));
 // The level write is the consumer of the confirm dialog: recorded, and its
 // arguments asserted.
-const levelWrite = vi.hoisted(() => ({
-  mutate: vi.fn(),
-  isPending: false,
-  variables: undefined as unknown,
-}));
+const levelWrite = vi.hoisted(() => {
+  const write = {
+    mutate: vi.fn(),
+    isPending: false,
+    variables: undefined as unknown,
+    error: null as Error | null,
+    reset: vi.fn(() => {
+      write.error = null;
+    }),
+  };
+  return write;
+});
 vi.mock('#/data-hooks/use-user-levels', () => ({
   useSetUserCourseLevel: () => levelWrite,
 }));
@@ -75,6 +82,7 @@ const offeringA: Offering = {
 const renderPopover = (
   initial: Offering[] = [offeringA],
   canEditLevels = false,
+  actorIsOwner = false,
 ) => {
   const store = createStore();
   const tree = (offerings: Offering[], isListSettled = true) => (
@@ -87,6 +95,7 @@ const renderPopover = (
           offerings={offerings}
           isListSettled={isListSettled}
           canEditLevels={canEditLevels}
+          actorIsOwner={actorIsOwner}
         />
       </Provider>
     </QueryClientProvider>
@@ -327,6 +336,8 @@ describe('OfferingPopoverContainer roster levels', () => {
     levelWrite.mutate.mockReset();
     levelWrite.isPending = false;
     levelWrite.variables = undefined;
+    levelWrite.error = null;
+    levelWrite.reset.mockClear();
     toast.success.mockReset();
     toast.error.mockReset();
   });
@@ -465,5 +476,103 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(
       screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
     ).toBeNull();
+  });
+  const bob = {
+    userId: 'u-bob',
+    name: 'Bob Hoover',
+    email: 'bob@example.com',
+    level: null,
+  };
+  const bobInDirectory = {
+    ...adaInDirectory,
+    profileId: 43,
+    userId: 'u-bob',
+    email: 'bob@example.com',
+    firstName: 'Bob',
+    lastName: 'Hoover',
+    levels: {},
+  };
+
+  it('a failed save does not leave its error in the next dialog', async () => {
+    directory.users = [adaInDirectory, bobInDirectory];
+    const { pinA } = renderPopover([{ ...withAda, users: [ada, bob] }], true);
+    pinA();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+    const failure = new Error('Only an owner can change this level.');
+    levelWrite.error = failure;
+    act(() => levelWrite.mutate.mock.calls[0][1].onError(failure));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
+    );
+
+    fireEvent.click(
+      screen.getByRole('combobox', { name: 'Level for Bob Hoover' }),
+    );
+    const basic = await screen.findByRole('option', { name: 'Basic' });
+    fireEvent.mouseMove(basic);
+    fireEvent.click(basic);
+
+    await screen.findByRole('dialog', { name: /Set level to Basic/ });
+    expect(
+      screen.queryByText('Only an owner can change this level.'),
+    ).toBeNull();
+  });
+
+  it('a save that lands after the popover moved on does not patch the other roster', async () => {
+    const offeringB: Offering = {
+      ...offeringA,
+      id: 8,
+      startsOn: '2027-01-04',
+      endsOn: '2027-02-17',
+      users: [ada],
+    };
+    const { pinA, store } = renderPopover([withAda, offeringB], true);
+    pinA();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+
+    // The popover now shows B, whose roster holds the same person.
+    act(() => {
+      store.set(dispatchOfferingPopoverAtom, { type: 'close' });
+    });
+    act(() => {
+      store.set(dispatchOfferingPopoverAtom, {
+        type: 'pin',
+        target: { mode: 'edit', offeringId: offeringB.id },
+      });
+    });
+    act(() => levelWrite.mutate.mock.calls[0][1].onSuccess());
+
+    expect(adaSelect().textContent).toContain('INTER');
+  });
+
+  it('locks a staff member’s level for a non-owner, and says why', () => {
+    directory.users = [{ ...adaInDirectory, roles: ['admin'] }];
+    const { pinA } = renderPopover([withAda], true, false);
+    pinA();
+    expect(
+      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
+    ).toBeNull();
+    expect(screen.getByText('Owner only')).toBeTruthy();
+  });
+
+  it('lets an owner change a staff member’s level', () => {
+    directory.users = [{ ...adaInDirectory, roles: ['admin'] }];
+    const { pinA } = renderPopover([withAda], true, true);
+    pinA();
+    expect(adaSelect()).toBeTruthy();
+  });
+
+  it('says a person missing from the directory is why their level is locked', () => {
+    directory.users = [];
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    expect(screen.getByText('Not in directory')).toBeTruthy();
   });
 });

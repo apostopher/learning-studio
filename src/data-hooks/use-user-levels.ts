@@ -50,8 +50,13 @@ type SetLevelBody = {
 
 /** Why a level write failed, in words the admin can act on. */
 function levelWriteError(status: number): Error {
+  // The UI offers the control only with `level:update`, so a 403 is the
+  // endpoint's other refusal (`assertCanActOnProfile`): a target holding a
+  // staff role, and an actor who is not the owner.
   if (status === 403) {
-    return new Error('You do not have permission to change levels.');
+    return new Error(
+      'Only an owner can change the level of someone with a staff role.',
+    );
   }
   if (status === 404) {
     return new Error('That person or course no longer exists.');
