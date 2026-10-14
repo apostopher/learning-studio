@@ -31,13 +31,27 @@ const base = { messages: [], uiMessages: [], subscriptions: [], userId: 'u1' };
 beforeEach(() => vi.clearAllMocks());
 
 describe('buildChatStream', () => {
-  it('text chat is unchanged: base prompt only, line chunking', async () => {
+  it('text chat: base prompt only, word chunking so replies stream as written', async () => {
     await buildChatStream(base);
     const args = streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(args.system).toBe('BASE PROMPT');
     expect(smoothStream).toHaveBeenCalledWith({
       delayInMs: 20,
-      chunking: 'line',
+      chunking: 'word',
+    });
+    expect(args.experimental_transform).toEqual([
+      { smooth: { delayInMs: 20, chunking: 'word' } },
+    ]);
+  });
+
+  it.each([
+    ['text', {}],
+    ['voice', { voice: { tavusRules: 'r' } }],
+  ])('%s: asks Gemini for low thinking', async (_channel, extra) => {
+    await buildChatStream({ ...base, ...extra });
+    const args = streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args.providerOptions).toEqual({
+      google: { thinkingConfig: { thinkingLevel: 'low' } },
     });
   });
 

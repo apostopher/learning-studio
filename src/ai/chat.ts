@@ -50,9 +50,7 @@ export type BuildChatStreamOptions = {
   skaProfile?: SkaProfileForPrompt;
   /**
    * Tavus video call. Appends the voice prompt and Tavus's own rules
-   * (emotion tags, speech punctuation) to the system prompt, and switches
-   * `smoothStream` to word chunking — line chunking would hold a spoken
-   * reply, which has no newlines, back until it finished.
+   * (emotion tags, speech punctuation) to the system prompt.
    */
   voice?: { tavusRules: string };
   /** Cancels generation when Tavus abandons a (speculative) request. */
@@ -171,12 +169,19 @@ export async function buildChatStream({
     },
     toolChoice: 'auto',
     stopWhen: stepCountIs(4),
-    experimental_transform: [
-      smoothStream({ delayInMs: 20, chunking: voice ? 'word' : 'line' }),
-    ],
+    // Gemini 3 thinks at length by default, and every second of it is a
+    // second the learner stares at an empty bubble. 'low' still leaves room
+    // to decide when to search; 'minimal' is the next step if this is slow.
+    providerOptions: {
+      google: { thinkingConfig: { thinkingLevel: 'low' } },
+    },
+    // Word chunking for text too: line chunking held a reply back until it
+    // wrote a newline, so a one-paragraph answer arrived only once complete.
+    experimental_transform: [smoothStream({ delayInMs: 20, chunking: 'word' })],
     onChunk: ({ chunk }) => {
-      // Server-side time to the first text the model produced; tool-only
-      // steps don't count, so a search-first turn is measured to its answer.
+      // Server-side time to the first text chunk after smoothing, i.e. close
+      // to when the learner sees it; tool-only steps don't count, so a
+      // search-first turn is measured to its answer.
       if (timeToFirstChunkMs === undefined && chunk.type === 'text-delta') {
         timeToFirstChunkMs = Date.now() - startedAt;
       }
