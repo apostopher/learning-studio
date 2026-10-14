@@ -137,6 +137,9 @@ function AdminSectionScreen() {
           hasOrgPermission(roles, permissions, 'course', 'create') ||
           isCourseManagerAnywhere
         }
+        // The roster's level select: `level:update` behind
+        // `requirePermission`, so the admin floor applies too.
+        canEditLevels={hasOrgPermission(roles, permissions, 'level', 'update')}
       />
     );
   }

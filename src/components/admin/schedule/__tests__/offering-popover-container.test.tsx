@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dispatchOfferingPopoverAtom,
   offeringPopoverAtom,
@@ -33,9 +39,27 @@ vi.mock('#/data-hooks/use-offerings', () => ({
   useUpdateOffering: mutation,
   useDeleteOffering: mutation,
 }));
+// The directory the roster resolves profiles from — empty unless a test
+// seeds it.
+const directory = vi.hoisted(() => ({ users: [] as unknown[] }));
 vi.mock('#/data-hooks/use-admin-users', () => ({
-  useAdminUsers: () => ({ data: { users: [] }, isLoading: false }),
+  useAdminUsers: () => ({
+    data: { users: directory.users, pending: [] },
+    isLoading: false,
+  }),
 }));
+// The level write is the consumer of the confirm dialog: recorded, and its
+// arguments asserted.
+const levelWrite = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  isPending: false,
+  variables: undefined as unknown,
+}));
+vi.mock('#/data-hooks/use-user-levels', () => ({
+  useSetUserCourseLevel: () => levelWrite,
+}));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 import { OfferingPopoverContainer } from '../offering-popover-container';
 
@@ -48,7 +72,10 @@ const offeringA: Offering = {
   users: [],
 };
 
-const renderPopover = () => {
+const renderPopover = (
+  initial: Offering[] = [offeringA],
+  canEditLevels = false,
+) => {
   const store = createStore();
   const tree = (offerings: Offering[], isListSettled = true) => (
     <QueryClientProvider client={queryClient}>
@@ -59,13 +86,14 @@ const renderPopover = () => {
         <OfferingPopoverContainer
           offerings={offerings}
           isListSettled={isListSettled}
+          canEditLevels={canEditLevels}
         />
       </Provider>
     </QueryClientProvider>
   );
   const queryClient = new QueryClient();
   const outsideClick = vi.fn();
-  const view = render(tree([offeringA]));
+  const view = render(tree(initial));
   const pinA = () =>
     act(() => {
       store.set(dispatchOfferingPopoverAtom, {
@@ -269,5 +297,173 @@ describe('OfferingPopoverContainer Close button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.getByRole('button', { name: 'Keep editing' })).toBeTruthy();
     expect(screen.getByLabelText('Window')).toBeTruthy();
+  });
+});
+
+describe('OfferingPopoverContainer roster levels', () => {
+  const ada = {
+    userId: 'u-ada',
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    level: 'intermediate' as const,
+  };
+  const withAda: Offering = { ...offeringA, users: [ada] };
+  const adaInDirectory = {
+    profileId: 42,
+    userId: 'u-ada',
+    email: 'ada@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    callSign: null,
+    phoneNumber: null,
+    roles: [],
+    courses: [],
+    levels: { 3: 'intermediate' },
+    createdAt: '2026-01-01',
+  };
+
+  beforeEach(() => {
+    directory.users = [adaInDirectory];
+    levelWrite.mutate.mockReset();
+    levelWrite.isPending = false;
+    levelWrite.variables = undefined;
+    toast.success.mockReset();
+    toast.error.mockReset();
+  });
+
+  const adaSelect = () =>
+    screen.getByRole('combobox', { name: 'Level for Ada Lovelace' });
+  const pick = async (name: string) => {
+    fireEvent.click(adaSelect());
+    const option = await screen.findByRole('option', { name });
+    fireEvent.mouseMove(option);
+    fireEvent.click(option);
+  };
+  const writeMessage = (text: string) =>
+    fireEvent.change(screen.getByLabelText(/Message for the pilot/), {
+      target: { value: text },
+    });
+
+  it('asks for the pilot message before writing anything', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    await pick('Advanced');
+
+    expect(
+      await screen.findByRole('dialog', { name: /Set level to Advanced/ }),
+    ).toBeTruthy();
+    expect(levelWrite.mutate).not.toHaveBeenCalled();
+  });
+
+  it('writes the picked level for that profile, course and message on Save', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+    expect(levelWrite.mutate.mock.calls[0][0]).toEqual({
+      profileId: 42,
+      courseId: 3,
+      level: 'advanced',
+      message: 'Cleared for advanced ops.',
+      note: undefined,
+    });
+  });
+
+  it('on success: toasts, shows the new level on the row, and closes the dialog', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+
+    act(() => levelWrite.mutate.mock.calls[0][1].onSuccess());
+
+    expect(toast.success).toHaveBeenCalledWith(
+      'Ada Lovelace is now Advanced in Instrument Ground School',
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
+    );
+    expect(adaSelect().textContent).toContain('EXPERT');
+    // A level already saved is not an unsaved edit of the offering.
+    expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
+  });
+
+  it('on failure: toasts the reason and keeps the dialog open', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+
+    act(() =>
+      levelWrite.mutate.mock.calls[0][1].onError(
+        new Error('You do not have permission to change levels.'),
+      ),
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'You do not have permission to change levels.',
+    );
+    expect(screen.getByRole('dialog', { name: /Set level/ })).toBeTruthy();
+  });
+
+  it('Cancel writes nothing, keeps the old level and the popover', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    await pick('Advanced');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
+    );
+    expect(levelWrite.mutate).not.toHaveBeenCalled();
+    expect(adaSelect().textContent).toContain('INTER');
+    expect(screen.getByLabelText('Start date')).toBeTruthy();
+  });
+
+  it('works over a dirty (modal) pin without raising the discard question', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    makeDirty();
+    await pick('Advanced');
+    writeMessage('Cleared for advanced ops.');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
+    // The offering edit is untouched underneath.
+    expect(windowInput().value).toBe('60');
+  });
+
+  it('marks the row being saved busy', () => {
+    levelWrite.isPending = true;
+    levelWrite.variables = { profileId: 42 };
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    expect(adaSelect().getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('offers no select without level:update', () => {
+    const { pinA } = renderPopover([withAda], false);
+    pinA();
+    expect(
+      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
+    ).toBeNull();
+    expect(screen.getByText(/Levels are view only/)).toBeTruthy();
+  });
+
+  it('offers no select for someone missing from the directory', () => {
+    directory.users = [];
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    expect(
+      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
+    ).toBeNull();
   });
 });

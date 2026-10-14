@@ -205,6 +205,41 @@ describe('/admin — what each section is handed', () => {
     expect(m.schedule.mock.lastCall?.[0].canSchedule).toBe(true);
   });
 
+  /**
+   * The roster's level select stands for `PUT /api/admin/users/:id/levels`,
+   * guarded by `requirePermission('level','update')` — grant AND admin floor.
+   * Built from the grant alone, a course manager holding the key would be
+   * offered a select that answers 403.
+   */
+  it('gives the schedule level:update only with the admin floor', async () => {
+    await mountSection('schedule', {
+      roles: [],
+      permissions: ['level:update'],
+      isStaffAnywhere: true,
+      isCourseManagerAnywhere: true,
+    });
+    await screen.findByTestId('schedule');
+    expect(m.schedule.mock.lastCall?.[0].canEditLevels).toBe(false);
+
+    await mountSection('schedule', {
+      roles: ['admin'],
+      permissions: ['level:read'],
+      isStaffAnywhere: true,
+      isCourseManagerAnywhere: false,
+    });
+    await screen.findByTestId('schedule');
+    expect(m.schedule.mock.lastCall?.[0].canEditLevels).toBe(false);
+
+    await mountSection('schedule', {
+      roles: ['admin'],
+      permissions: ['level:update'],
+      isStaffAnywhere: true,
+      isCourseManagerAnywhere: false,
+    });
+    await screen.findByTestId('schedule');
+    expect(m.schedule.mock.lastCall?.[0].canEditLevels).toBe(true);
+  });
+
   it('gives People the roles and permissions it filters on', async () => {
     await mountSection('people', {
       roles: ['admin'],
