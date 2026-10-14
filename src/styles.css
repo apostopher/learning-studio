@@ -681,7 +681,7 @@
 
   /* Half-width admin columns and phones: drop the volume slider (mute stays)
      and the elapsed/total readout before the row can overflow. */
-  @container vp (max-width: 420px) {
+  @container vp (inline-size <= 420px) {
     .video-player .vp-volume-slider,
     .video-player .vp-time {
       display: none;

@@ -18,9 +18,12 @@ export type LessonPlaybackResult = PlaybackResult & {
 /**
  * The one definition of "play this lesson in this language for this course",
  * shared by the learner resolver and the admin preview so they cannot drift.
- * Lives apart from `lesson-playback.ts` (which `admin.ts` already imports for
- * cache invalidation) so the admin resolver can call it without pulling the
- * Redis-backed reader into its module graph.
+ * Lives apart from `lesson-playback.ts` for the tests, not the runtime graph
+ * (`admin.ts` imports `lesson-playback.ts` anyway, for cache invalidation):
+ * the admin resolver's tests stub `#/db/lesson-playback` wholesale, so a
+ * resolver kept there would be stubbed out from under `resolveLessonPlayback`.
+ * It imports `resolveCourseProvider` back from `admin.ts` — a cycle, safe
+ * only because neither side reads the other at module load, just at call time.
  *
  * Credentials are looked up for the SELECTED video's provider: an alternate
  * may live on a different provider than the primary.
