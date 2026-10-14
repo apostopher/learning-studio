@@ -17,6 +17,7 @@ import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import { countRemixers, getRemixSourceIds } from '#/db/course-remixes';
+import { remixFlagshipIntoNewCourse } from '#/db/flagship-remix';
 import {
   getCourseIdForModuleId,
   getCourseSlugForCourseId,
@@ -303,6 +304,11 @@ export async function createCourse(
   // this the course has no `course_orgs` row, so the AI-training modal would
   // open its Persona tab with nowhere to store a selection.
   await linkCourseToOrg(created.id, orgId);
+
+  // The flagship is always remixed into every course in its org. After the
+  // link above, since `remixCourse` refuses a course outside the org; and it
+  // never throws — a failed remix is logged, not a failed create.
+  await remixFlagshipIntoNewCourse(created.id, orgId);
 
   return created;
 }

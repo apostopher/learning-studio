@@ -192,4 +192,31 @@ describe('CourseColumn', () => {
     // The modules' scroller does not contain it.
     expect(module_.parentElement?.contains(cover)).toBe(false);
   });
+  /**
+   * The rail hides the modules every course borrows from the flagship, so
+   * the column has to say they are there — otherwise a course looks like it
+   * teaches only its own handful. Above the modules, so it is read first.
+   */
+  it('states its note above the modules', () => {
+    render(
+      <CourseColumn course={course()} note="Includes all 3D Airmanship modules">
+        <div data-testid="module">Module One</div>
+      </CourseColumn>,
+    );
+
+    const note = screen.getByText('Includes all 3D Airmanship modules');
+    expect(
+      note.compareDocumentPosition(screen.getByTestId('module')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('says nothing when it has no note', () => {
+    const { container } = render(
+      <CourseColumn course={course()} note={null}>
+        <div>Module One</div>
+      </CourseColumn>,
+    );
+    expect(container.querySelector('p')).toBeNull();
+  });
 });

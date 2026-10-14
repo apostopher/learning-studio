@@ -5,19 +5,17 @@ import {
 import { Link } from '@tanstack/react-router';
 import { useAtom, useSetAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
-import { toast } from 'sonner';
 import {
   createModuleTargetAtom,
   deleteCourseAtom,
   editCourseAtom,
   expandedEditorModuleIdsAtom,
-  unremixCourseAtom,
 } from '#/atoms/admin';
 import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
-import { useRemixCourse } from '#/data-hooks/use-remix-course';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { duplicateLessonNotes } from '#/lib/duplicate-lessons';
+import { flagshipRailNote, railModules } from '#/lib/flagship-course';
 import { CourseColumn } from './course-column';
 import { CourseColumnActions } from './course-column-actions';
 import { EditorCourseEmptyContainer } from './editor-course-empty-container';
@@ -59,7 +57,6 @@ export const EditorCourseColumnContainer = ({
     expandedEditorModuleIdsAtom,
   );
   const { course, modules } = courseBoard;
-  const ownIds = new Set(modules.map((m) => m.id));
   /**
    * Lessons THIS course teaches more than once, across its own modules —
    * whole-course remixing makes it common that a remixer's own module
@@ -85,46 +82,16 @@ export const EditorCourseColumnContainer = ({
   const openEditCourse = useSetAtom(editCourseAtom);
   const openDeleteCourse = useSetAtom(deleteCourseAtom);
 
-  const remixCourse = useRemixCourse();
-  const openUnremix = useSetAtom(unremixCourseAtom);
-  const isFlagship = flagship?.id === course.id;
-  const isRemixed =
-    flagship !== null &&
-    courseBoard.remixes.some((r) => r.sourceCourseId === flagship.id);
-  // How many of THIS column's modules came from the flagship — the count the
-  // un-remix confirm states so the admin knows the blast radius before
-  // clicking, not just how many the flagship happens to hold in total.
-  const borrowedCount =
-    flagship === null
-      ? 0
-      : modules.filter((m) => m.owner.id === flagship.id).length;
-  const remix =
-    flagship && !isFlagship
-      ? {
-          sourceName: flagship.name,
-          isRemixed,
-          isPending: remixCourse.isPending,
-          onRemix: () =>
-            remixCourse.mutate(
-              { courseId: course.id, sourceCourseId: flagship.id },
-              {
-                onSuccess: ({ moduleCount }) =>
-                  toast.success(
-                    `${moduleCount} ${moduleCount === 1 ? 'module' : 'modules'} from ${flagship.name} added to ${course.name}`,
-                  ),
-                onError: (error) => toast.error(error.message),
-              },
-            ),
-          onUnremix: () =>
-            openUnremix({
-              courseId: course.id,
-              courseName: course.name,
-              sourceCourseId: flagship.id,
-              sourceName: flagship.name,
-              moduleCount: borrowedCount,
-            }),
-        }
-      : undefined;
+  /**
+   * What this column DRAWS: every module except those borrowed from the
+   * flagship, which every course holds (see `railModules`). The sortable,
+   * the accordion and the empty state all run on this list; the reorder
+   * path runs on the full column in the cache, which keeps the hidden
+   * flagship block intact (see `railModules`' doc comment).
+   */
+  const shown = railModules(courseBoard, flagship?.id ?? null);
+  const shownIds = new Set(shown.map((m) => m.id));
+  const hidesBorrowed = shown.length < modules.length;
 
   return (
     <CourseColumn
@@ -134,7 +101,6 @@ export const EditorCourseColumnContainer = ({
           courseName={course.name}
           canEditCourse={canEditCourse}
           canDeleteCourse={canDeleteCourse}
-          remix={remix}
           onAddModule={() =>
             openCreateModule({ id: course.id, name: course.name })
           }
@@ -161,24 +127,28 @@ export const EditorCourseColumnContainer = ({
           <Settings2 className="h-4 w-4" aria-hidden="true" />
         </Link>
       }
+      note={flagshipRailNote(flagship, course.id)}
       emptySlot={
-        modules.length === 0 ? (
-          <EditorCourseEmptyContainer course={course} />
+        shown.length === 0 ? (
+          <EditorCourseEmptyContainer
+            course={course}
+            hasBorrowedModules={hidesBorrowed}
+          />
         ) : undefined
       }
-      expandedModuleIds={expandedModuleIds.filter((id) => ownIds.has(id))}
+      expandedModuleIds={expandedModuleIds.filter((id) => shownIds.has(id))}
       onExpandedModuleIdsChange={(next) => {
         setExpandedModuleIds((prev) => [
-          ...prev.filter((id) => !ownIds.has(id)),
+          ...prev.filter((id) => !shownIds.has(id)),
           ...next,
         ]);
       }}
     >
       <SortableContext
-        items={modules.map((m) => moduleDndId(course.id, m.id))}
+        items={shown.map((m) => moduleDndId(course.id, m.id))}
         strategy={verticalListSortingStrategy}
       >
-        {modules.map((mod) => (
+        {shown.map((mod) => (
           <EditorModuleContainer
             key={mod.id}
             module={mod}

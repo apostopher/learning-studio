@@ -15,6 +15,7 @@ import {
   parseDndId,
   UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
+import { findFlagshipCourse, railModules } from '#/lib/flagship-course';
 import { removeLessonLabel } from './lesson-card-labels';
 
 /**
@@ -102,16 +103,26 @@ function findCourse(
 /**
  * Why a drop on a COURSE column itself is refused.
  *
- * That target only exists while a course has no modules — see
+ * That target only exists while a course DRAWS no modules — see
  * `EditorCourseEmptyContainer` — but this does not assume it: a course found
- * with modules gets the sentence that points at them instead. The reason has
- * to name the remedy, because "you cannot drop here" alone leaves the reader
- * with a lesson in hand and nowhere to put it.
+ * with modules on screen gets the sentence that points at them instead. The
+ * reason has to name the remedy, because "you cannot drop here" alone leaves
+ * the reader with a lesson in hand and nowhere to put it.
+ *
+ * "On screen" is `railModules`: the modules a course borrows from the
+ * flagship are hidden on the rail, so a course holding only those has none
+ * the reader can drop on, and is told it has none of its own.
  */
-function courseDropRefusal(courseBoard: EditorCourseBoard): string {
-  return courseBoard.modules.length === 0
-    ? `${courseBoard.course.name} has no modules yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.`
-    : `Drop the lesson on one of ${courseBoard.course.name}'s modules — a lesson sits inside a module, not loose in the course.`;
+function courseDropRefusal(
+  board: OrgEditorBoard,
+  courseBoard: EditorCourseBoard,
+): string {
+  if (courseBoard.modules.length === 0)
+    return `${courseBoard.course.name} has no modules yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.`;
+  const flagshipId = findFlagshipCourse(board)?.id ?? null;
+  if (railModules(courseBoard, flagshipId).length === 0)
+    return `${courseBoard.course.name} has no modules of its own yet, and a lesson can only sit inside a module. Create one first, then drop the lesson into it.`;
+  return `Drop the lesson on one of ${courseBoard.course.name}'s modules — a lesson sits inside a module, not loose in the course.`;
 }
 
 /** A module found on the board, with the course board that owns it. */
@@ -542,7 +553,7 @@ export function resolveDrop(
         kind: 'forbidden',
         reason:
           courseBoard.course.id === from.courseBoard.course.id
-            ? courseDropRefusal(courseBoard)
+            ? courseDropRefusal(board, courseBoard)
             : `"${from.lesson.name}" is placed in ${from.courseBoard.course.name}, and a placed lesson only moves between modules of its own course. Drag it from the library to add it to ${courseBoard.course.name} as well.`,
       };
     }
@@ -642,7 +653,10 @@ export function resolveDrop(
     if (over.type === 'course') {
       const courseBoard = findCourse(board, over.id);
       if (!courseBoard) return null;
-      return { kind: 'forbidden', reason: courseDropRefusal(courseBoard) };
+      return {
+        kind: 'forbidden',
+        reason: courseDropRefusal(board, courseBoard),
+      };
     }
 
     const to = resolveOverModule(board, overId);
