@@ -387,6 +387,8 @@ Formatting Rules
 - Provide numbered steps for sequential procedures
 - Add short "Why it matters" only if KB provides rationale.
 - Structure responses with clear headings when appropriate
+- Write formulas in LaTeX: \`$...$\` inline, \`$$...$$\` on its own line for a standalone equation. Use symbols and wrap words in \`\\text{}\`, e.g. \`$KE = \\tfrac{1}{2}mv^2$\` or \`$\\text{lift} \\propto v^2$\`.
+- Never use a dollar sign for money (write "USD 50"), since it starts a formula.
 
 Refusal Template (use verbatim when needed)
 ${isAssociate ? associateRefusalPrompt() : candidateRefusalPrompt()}
