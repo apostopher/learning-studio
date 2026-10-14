@@ -54,6 +54,9 @@ vi.mock('#/data-hooks/use-admin-courses', () => ({
 vi.mock('#/data-hooks/use-admin-users', () => ({
   useAdminUsers: () => ({ data: { users: [] }, isLoading: false }),
 }));
+vi.mock('#/data-hooks/use-user-levels', () => ({
+  useSetUserCourseLevel: mutation,
+}));
 
 import { SchedulePageContainer } from '#/components/admin/schedule/schedule-page-container';
 
@@ -77,7 +80,11 @@ const renderPage = (store = createStore()) => {
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
-        <SchedulePageContainer canSchedule />
+        <SchedulePageContainer
+          canSchedule
+          canEditLevels={false}
+          actorIsOwner={false}
+        />
       </Provider>
     </QueryClientProvider>,
   );

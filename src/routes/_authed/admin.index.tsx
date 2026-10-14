@@ -7,7 +7,11 @@ import { EditorContainer } from '#/components/admin/editor-container';
 import { SchedulePageContainer } from '#/components/admin/schedule/schedule-page-container';
 import { UsersPageContainer } from '#/components/admin/users/users-page-container';
 import { adminUsersQueryOptions } from '#/data-hooks/use-admin-users';
-import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
+import {
+  hasAdminAccess,
+  hasOrgPermission,
+  OWNER_ROLE,
+} from '#/lib/admin-schemas';
 import {
   adminSearchSchema,
   adminSectionGates,
@@ -137,6 +141,12 @@ function AdminSectionScreen() {
           hasOrgPermission(roles, permissions, 'course', 'create') ||
           isCourseManagerAnywhere
         }
+        // The roster's level select: `level:update` behind
+        // `requirePermission`, so the admin floor applies too.
+        canEditLevels={hasOrgPermission(roles, permissions, 'level', 'update')}
+        // The level endpoint's second guard: only an owner may change the
+        // level of someone holding a staff role.
+        actorIsOwner={roles.includes(OWNER_ROLE)}
       />
     );
   }

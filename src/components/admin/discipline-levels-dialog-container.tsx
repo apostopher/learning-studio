@@ -6,6 +6,7 @@ import { disciplineLevelsTargetAtom, levelsBoardModeAtom } from '#/atoms/admin';
 import { useDisciplineLessonPosters } from '#/data-hooks/use-discipline-lesson-posters';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useSetLibraryLessonLevels } from '#/data-hooks/use-set-library-lesson-levels';
+import { nextLessonLevels } from '#/lib/lesson-levels';
 import {
   DisciplineLevelsBoard,
   type DisciplineLevelsColumn,
@@ -58,18 +59,18 @@ export const DisciplineLevelsBoardContainer = ({
     });
   }
 
-  // A press toggles the current mode's level on that lesson — added if
-  // absent, removed if present — leaving its other levels alone.
+  // A press toggles the current mode on that lesson — see `nextLessonLevels`
+  // for how the exclusive `'none'` mode combines with the real levels.
   const toggleLesson = (lessonId: number) => {
     const lesson = [
       ...discipline.untitled,
       ...discipline.modules.flatMap((m) => m.lessons),
     ].find((l) => l.id === lessonId);
     if (!lesson) return;
-    const levels = lesson.levels.includes(mode)
-      ? lesson.levels.filter((l) => l !== mode)
-      : [...lesson.levels, mode];
-    setLevels.mutate({ lessonId, levels });
+    setLevels.mutate({
+      lessonId,
+      levels: nextLessonLevels(lesson.levels, mode),
+    });
   };
 
   return (
@@ -115,7 +116,8 @@ export const DisciplineLevelsDialogContainer = () => {
                 Update levels · {target?.name}
               </Dialog.Title>
               <Dialog.Description className="text-secondary text-sm">
-                Press a lesson to add or remove the selected level.
+                Press a lesson to add or remove the selected level. None hides
+                it from every level.
               </Dialog.Description>
             </div>
             <LevelModeToggle value={mode} onValueChange={setMode} />

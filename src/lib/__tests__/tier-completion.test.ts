@@ -77,3 +77,30 @@ describe('isTierComplete', () => {
     ).toBe(false);
   });
 });
+
+describe("isTierComplete — a 'none' lesson", () => {
+  it('is not counted toward any tier, so an unfinished one never blocks', () => {
+    for (const level of ['basic', 'intermediate', 'advanced'] as const) {
+      expect(
+        isTierComplete({
+          lessons: [
+            { lessonId: 1, levels: [level], isAvailable: true },
+            { lessonId: 2, levels: ['none'], isAvailable: true },
+          ],
+          progress: [{ lessonId: 1, percent: 100 }],
+          level,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('cannot complete a tier on its own', () => {
+    expect(
+      isTierComplete({
+        lessons: [{ lessonId: 2, levels: ['none'], isAvailable: true }],
+        progress: [{ lessonId: 2, percent: 100 }],
+        level: 'basic',
+      }),
+    ).toBe(false);
+  });
+});

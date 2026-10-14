@@ -78,6 +78,8 @@ const draggingCourseAtom = atom<{
  */
 export const SchedulePageContainer = ({
   canSchedule,
+  canEditLevels,
+  actorIsOwner,
 }: {
   /**
    * Whether this actor may create offerings — the course-manager-or-admin
@@ -88,6 +90,10 @@ export const SchedulePageContainer = ({
    * a worse answer than showing it read-only.
    */
   canSchedule: boolean;
+  /** `level:update` with the admin floor — the roster's level select. */
+  canEditLevels: boolean;
+  /** Owner — may change the level of someone holding a staff role. */
+  actorIsOwner: boolean;
 }) => {
   const [weekStart, setWeekStart] = useAtom(scheduleWindowStartAtom);
   const dispatch = useSetAtom(dispatchOfferingPopoverAtom);
@@ -436,6 +442,8 @@ export const SchedulePageContainer = ({
         // (no data, nothing pending), else a failed fetch left the popover
         // pinned but invisible and refusing every later click.
         isListSettled={!offerings.isPending && !offerings.isPlaceholderData}
+        canEditLevels={canEditLevels}
+        actorIsOwner={actorIsOwner}
       />
     </DndContext>
   );

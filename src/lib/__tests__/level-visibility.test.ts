@@ -58,3 +58,33 @@ describe('filterCourseToLevel', () => {
     expect(course.modules[0].lessons).toHaveLength(3);
   });
 });
+
+describe("the 'none' tag", () => {
+  it('hides the lesson at every learner level', () => {
+    expect(isLessonVisibleAtLevel(['none'], 'basic')).toBe(false);
+    expect(isLessonVisibleAtLevel(['none'], 'intermediate')).toBe(false);
+    expect(isLessonVisibleAtLevel(['none'], 'advanced')).toBe(false);
+  });
+
+  it('is dropped by filterCourseToLevel at every level, while [] stays', () => {
+    const course = {
+      modules: [
+        {
+          slug: 'm1',
+          lessons: [
+            { slug: 'hidden', levels: ['none'] },
+            { slug: 'everyone', levels: [] },
+          ],
+        },
+        { slug: 'm2', lessons: [{ slug: 'only-none', levels: ['none'] }] },
+      ],
+    };
+    for (const level of ['basic', 'intermediate', 'advanced'] as const) {
+      const filtered = filterCourseToLevel(course, level);
+      expect(filtered.modules.map((m) => m.slug)).toEqual(['m1']);
+      expect(filtered.modules[0].lessons.map((l) => l.slug)).toEqual([
+        'everyone',
+      ]);
+    }
+  });
+});

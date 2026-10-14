@@ -1,9 +1,9 @@
-import { Select } from '@base-ui/react/select';
 import { format } from 'date-fns';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
 import { LEVEL_LABELS } from '#/lib/level-labels';
-import { USER_LEVELS, type UserLevel } from '#/types';
+import type { UserLevel } from '#/types';
+import { LevelSelect } from '../level-select';
 
 interface UserCourseLevelSelectProps {
   courseName: string;
@@ -57,38 +57,12 @@ export const UserCourseLevelSelect = ({
       />
     )}
     {canEdit ? (
-      <Select.Root
+      <LevelSelect
         value={level}
-        onValueChange={(next) => onLevelChange(next as UserLevel)}
+        onValueChange={onLevelChange}
+        ariaLabel={`Level in ${courseName}`}
         disabled={saving}
-      >
-        <Select.Trigger
-          aria-label={`Level in ${courseName}`}
-          className="flex items-center gap-1.5 rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
-        >
-          <Select.Value>
-            {(value: UserLevel) => LEVEL_LABELS[value]}
-          </Select.Value>
-          <Select.Icon>
-            <ChevronDown className="h-3 w-3" aria-hidden="true" />
-          </Select.Icon>
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Positioner sideOffset={4} className="z-50">
-            <Select.Popup className="rounded-lg border border-gray-6 bg-gray-2 p-1 shadow-lg">
-              {USER_LEVELS.map((value) => (
-                <Select.Item
-                  key={value}
-                  value={value}
-                  className="cursor-pointer rounded-md px-2 py-1.5 text-primary text-sm data-[highlighted]:bg-gray-4"
-                >
-                  <Select.ItemText>{LEVEL_LABELS[value]}</Select.ItemText>
-                </Select.Item>
-              ))}
-            </Select.Popup>
-          </Select.Positioner>
-        </Select.Portal>
-      </Select.Root>
+      />
     ) : (
       // Visible text, not a disabled control: the reason ("View only")
       // is real text content so it reaches assistive tech the same way

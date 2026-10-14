@@ -54,12 +54,15 @@ export const disciplineLevelsTargetAtom = atom<{
   name: string;
 } | null>(null);
 
+export type LevelsBoardMode = UserLevel | 'none';
+
 /**
- * Which level a press on the Update levels board adds or removes. Kept across
- * openings: an SME tagging one level tends to work through several
- * disciplines at that level.
+ * Which level a press on the Update levels board adds or removes — or
+ * `'none'`, which hides the lesson from every level. Kept across openings: an
+ * SME tagging one level tends to work through several disciplines at that
+ * level.
  */
-export const levelsBoardModeAtom = atom<UserLevel>('basic');
+export const levelsBoardModeAtom = atom<LevelsBoardMode>('basic');
 
 /** The discipline being renamed from the library column, or null. */
 export const renameDisciplineTargetAtom = atom<{

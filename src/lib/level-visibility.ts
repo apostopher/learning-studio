@@ -17,6 +17,15 @@ export function isLessonVisibleAtLevel(
 }
 
 /**
+ * A lesson tagged `'none'` has been withdrawn from every level — not moved to
+ * another tier. Out-of-tier work a pilot already finished stays readable as an
+ * archive; withdrawn work does not, even for someone who completed it.
+ */
+export function isLessonWithdrawn(levels: readonly string[]): boolean {
+  return levels.includes('none');
+}
+
+/**
  * Narrow a course payload to what one pilot may see.
  *
  * Modules left with no visible lessons are dropped, not rendered empty — an

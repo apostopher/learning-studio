@@ -5,10 +5,10 @@ import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
 import { muxCredentialShape } from '#/lib/video-providers/mux';
 import {
   CourseLessonDependencySchema,
+  LessonLevelsSchema,
   OtherVideoIdSchema,
   SubscriptionsSchema,
   UserLevelSchema,
-  UserLevelsSchema,
 } from '#/types';
 
 export const ADMIN_ROLE = 'admin';
@@ -201,7 +201,7 @@ export const boardLessonSchema = z.object({
   /** Whether the learner must watch the video before the lesson completes. */
   needsVideoWatch: z.boolean(),
   requiredSubscriptions: SubscriptionsSchema,
-  levels: UserLevelsSchema,
+  levels: LessonLevelsSchema,
   /** A lesson counts as configured once it has a video. */
   isConfigured: z.boolean(),
   /**
@@ -391,7 +391,7 @@ export const updateLessonConfigInputSchema = z
     hasDebrief: z.boolean().optional(),
     needsVideoWatch: z.boolean().optional(),
     requiredSubscriptions: SubscriptionsSchema.optional(),
-    levels: UserLevelsSchema.optional(),
+    levels: LessonLevelsSchema.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
@@ -1078,7 +1078,7 @@ export const libraryLessonSchema = z.object({
    * warning's tooltip text, never a chip's state, and would cost the library
    * query a per-lesson count.
    */
-  levels: UserLevelsSchema,
+  levels: LessonLevelsSchema,
   requiredSubscriptions: SubscriptionsSchema,
   hasDebrief: z.boolean(),
   needsVideoWatch: z.boolean(),

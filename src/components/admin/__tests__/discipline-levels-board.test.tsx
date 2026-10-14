@@ -119,4 +119,36 @@ describe('DisciplineLevelsBoard', () => {
         .map((b) => b.textContent),
     ).toEqual(['Basic', 'Advanced']);
   });
+
+  it("badges a 'none' lesson None, and presses it in None mode", () => {
+    const columns = [
+      {
+        key: 1 as const,
+        name: 'Basics',
+        lessons: [
+          { ...lesson(10, 'Ditching'), levels: ['none' as const] },
+          { ...lesson(11, 'Spins'), levels: ['basic' as const] },
+        ],
+      },
+    ];
+    const { rerender } = render(
+      <DisciplineLevelsBoard mode="none" columns={columns} />,
+    );
+    const ditching = screen.getByRole('button', { name: /Ditching/ });
+    expect(ditching.getAttribute('aria-pressed')).toBe('true');
+    expect(
+      screen
+        .getByRole('button', { name: /Spins/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('false');
+    const badge = within(ditching).getByText('None');
+    // Highlighted like a level badge for the current mode.
+    expect(badge.className).toContain('bg-accent-muted');
+
+    rerender(<DisciplineLevelsBoard mode="basic" columns={columns} />);
+    expect(
+      within(screen.getByRole('button', { name: /Ditching/ })).getByText('None')
+        .className,
+    ).toContain('bg-gray-4');
+  });
 });

@@ -5,9 +5,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { type ChipTone, chipClassName } from '#/components/ui/chip';
-import { LEVEL_ACRONYMS } from '#/lib/level-labels';
+import { LEVEL_ACRONYMS, LEVEL_LABELS } from '#/lib/level-labels';
 import type { OfferingUser } from '#/lib/offering-schemas';
 import type { UserLevel } from '#/types';
+import { LevelSelect } from '../level-select';
 
 /**
  * Rows the table shows before it scrolls. The popover's maximum size is
@@ -27,6 +28,8 @@ const HEAD_REM = 2; // h-8
  * colour per level. `null` is muted on purpose: "not levelled yet" is an
  * absence, and dressing it in a hue would make it look like a fourth rung.
  */
+export type LevelLockReason = { short: string; full: string };
+
 const LEVEL_TONES: Record<UserLevel, ChipTone> = {
   basic: 'soft-warning',
   intermediate: 'soft-apple',
@@ -41,16 +44,34 @@ const LEVEL_TONES: Record<UserLevel, ChipTone> = {
  * only carry a name. It is also the shape that scales: a twenty-two person
  * intake wraps into an unreadable block as chips.
  *
- * Presentational. Searching, adding and removing are the container's.
+ * Presentational. Searching, adding, removing and level changes are the
+ * container's.
  */
 export const OfferingRosterTable = ({
   users,
   onRemove,
   disabled = false,
+  canEditLevels = false,
+  levelLockReason = () => null,
+  onLevelChange,
+  savingUserId = null,
 }: {
   users: OfferingUser[];
   onRemove: (userId: string) => void;
   disabled?: boolean;
+  /** `level:update` — without it every level is a read-only chip. */
+  canEditLevels?: boolean;
+  /**
+   * Why this row's level cannot be written here, or null when it can — e.g.
+   * the person is not in the user directory (the endpoint is keyed on their
+   * profile), or they hold a staff role and only an owner may change it.
+   * `short` is shown in the cell; `full` is what assistive tech reads.
+   */
+  levelLockReason?: (userId: string) => LevelLockReason | null;
+  /** A level was picked. The container confirms it before anything saves. */
+  onLevelChange?: (userId: string, level: UserLevel) => void;
+  /** The row whose level change is in flight, if any. */
+  savingUserId?: string | null;
 }) => {
   const columns: ColumnDef<OfferingUser>[] = [
     {
@@ -81,9 +102,27 @@ export const OfferingRosterTable = ({
       accessorKey: 'level',
       header: 'Level',
       cell: ({ row }) => {
-        const level = row.original.level;
-        return level ? (
-          <span className={chipClassName(LEVEL_TONES[level])}>
+        const { userId, name, level } = row.original;
+        const lock = canEditLevels ? levelLockReason(userId) : null;
+        if (canEditLevels && onLevelChange && lock === null) {
+          return (
+            <LevelSelect
+              value={level}
+              onValueChange={(next) => onLevelChange(userId, next)}
+              ariaLabel={`Level for ${name}`}
+              // Acronyms on the trigger: a full "Intermediate" does not fit
+              // the column. The options carry the full names.
+              valueLabels={LEVEL_ACRONYMS}
+              saving={savingUserId === userId}
+              disabled={disabled}
+            />
+          );
+        }
+        const chip = level ? (
+          <span
+            className={chipClassName(LEVEL_TONES[level])}
+            title={LEVEL_LABELS[level]}
+          >
             {LEVEL_ACRONYMS[level]}
           </span>
         ) : (
@@ -93,7 +132,23 @@ export const OfferingRosterTable = ({
             className={chipClassName('muted')}
             title="No level set for this course yet"
           >
-            NONE
+            No level
+          </span>
+        );
+        if (!lock) return chip;
+        // A locked state states its reason, visibly: short in the cell (the
+        // column is narrow), whole for assistive tech.
+        return (
+          <span className="flex flex-col items-start gap-0.5 leading-tight">
+            {chip}
+            <span
+              className="max-w-full truncate text-secondary text-xs"
+              title={lock.full}
+              aria-hidden="true"
+            >
+              {lock.short}
+            </span>
+            <span className="sr-only">{lock.full}</span>
           </span>
         );
       },
@@ -133,70 +188,80 @@ export const OfferingRosterTable = ({
   }
 
   return (
-    // Native overflow, not the shared ScrollArea: its root is block-size 100%,
-    // which needs a definite-height parent, and this box is content-sized up
-    // to a cap.
-    <section
-      // Physical-axis overflow: Tailwind 4.1 has no overflow-block utility,
-      // the same reason as the sticky `top-0` exception below.
-      className="overflow-y-auto overscroll-contain rounded-lg border border-gray-6"
-      // Inline because Tailwind cannot build a class from these constants. The
-      // trailing 10px is one border per row, and the 2px is this box's own top and
-      // bottom border (border-box), so the 10th row is fully visible.
-      style={{
-        maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px + 2px)`,
-      }}
-      // Scrollable region must be reachable and named for keyboard users.
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region has to be focusable or keyboard users cannot scroll it
-      tabIndex={0}
-      aria-label="People on this offering"
-    >
-      <table className="w-full table-fixed border-collapse text-sm">
-        {/* Fixed layout: column widths, not content, decide where long names
+    <div className="flex flex-col gap-1.5">
+      {/* Native overflow, not the shared ScrollArea: its root is block-size
+          100%, which needs a definite-height parent, and this box is
+          content-sized up to a cap. */}
+      <section
+        // Physical-axis overflow: Tailwind 4.1 has no overflow-block utility,
+        // the same reason as the sticky `top-0` exception below.
+        className="overflow-y-auto overscroll-contain rounded-lg border border-gray-6"
+        // Inline because Tailwind cannot build a class from these constants. The
+        // trailing 10px is one border per row, and the 2px is this box's own top and
+        // bottom border (border-box), so the 10th row is fully visible.
+        style={{
+          maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px + 2px)`,
+        }}
+        // Scrollable region must be reachable and named for keyboard users.
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region has to be focusable or keyboard users cannot scroll it
+        tabIndex={0}
+        aria-label="People on this offering"
+      >
+        <table className="w-full table-fixed border-collapse text-sm">
+          {/* Fixed layout: column widths, not content, decide where long names
             and emails truncate, so a row can never outgrow the popover. Name
-            takes 40%, Email the remainder after Level and actions. */}
-        <colgroup>
-          <col className="w-[40%]" />
-          <col />
-          <col className="w-20" />
-          <col className="w-24" />
-        </colgroup>
-        {/* Physical `top`: sticky offset is block-axis here and Tailwind v4 has
+            takes 40%, Email the remainder after Level and actions. Level is
+            wide enough for the select's trigger, not just a chip. */}
+          <colgroup>
+            <col className="w-[40%]" />
+            <col />
+            <col className="w-28" />
+            <col className="w-24" />
+          </colgroup>
+          {/* Physical `top`: sticky offset is block-axis here and Tailwind v4 has
             no logical top utility. A CLAUDE.md-sanctioned exception. */}
-        <thead className="sticky top-0 z-[1] bg-gray-3">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="h-8">
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  scope="col"
-                  className="whitespace-nowrap px-3 py-0 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
-                >
-                  {flexRender(
-                    header.column.columnDef.header,
-                    header.getContext(),
-                  )}
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              className="h-10 border-gray-6 border-t bg-gray-1 hover:bg-gray-2"
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-3 py-0 align-middle">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+          <thead className="sticky top-0 z-[1] bg-gray-3">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="h-8">
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    scope="col"
+                    className="whitespace-nowrap px-3 py-0 text-start font-semibold text-secondary text-xs uppercase tracking-wider"
+                  >
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                className="h-10 border-gray-6 border-t bg-gray-1 hover:bg-gray-2"
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-3 py-0 align-middle">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      {!canEditLevels && (
+        // A locked control states why and what unlocks it, in visible text.
+        <p className="text-secondary text-xs">
+          Levels are view only here. Changing them needs an admin with the
+          Levels “update” permission.
+        </p>
+      )}
+    </div>
   );
 };
 

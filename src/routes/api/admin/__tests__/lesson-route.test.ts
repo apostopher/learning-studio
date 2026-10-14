@@ -417,6 +417,21 @@ describe('patchLessonHandler — config (discipline-owned content)', () => {
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
   });
 
+  it("forwards the exclusive 'none' tag to updateLessonConfig", async () => {
+    const res = await patchLessonHandler(req({ levels: ['none'] }), '10');
+    expect(res.status).toBe(200);
+    expect(m.updateLessonConfig).toHaveBeenCalledWith(10, { levels: ['none'] });
+  });
+
+  it("400s 'none' mixed with a real level and writes nothing", async () => {
+    const res = await patchLessonHandler(
+      req({ levels: ['none', 'basic'] }),
+      '10',
+    );
+    expect(res.status).toBe(400);
+    expect(m.updateLessonConfig).not.toHaveBeenCalled();
+  });
+
   it('404s when the config write target has vanished', async () => {
     m.updateLessonConfig.mockResolvedValue(null);
     const res = await patchLessonHandler(req({ levels: ['basic'] }), '10');

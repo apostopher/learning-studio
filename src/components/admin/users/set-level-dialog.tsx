@@ -5,6 +5,8 @@ import type { UseFormRegisterReturn } from 'react-hook-form';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import type { UserLevel } from '#/types';
 
+const SAVING_NOTE_ID = 'set-level-saving-note';
+
 interface SetLevelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,7 +40,15 @@ export const SetLevelDialog = ({
   isPending,
   error,
 }: SetLevelDialogProps) => (
-  <Dialog.Root open={open} onOpenChange={onOpenChange}>
+  <Dialog.Root
+    open={open}
+    // Mid-save the dialog stays put: closing it would hide the outcome of a
+    // write that is still landing, and the caller's draft with it.
+    onOpenChange={(next) => {
+      if (!next && isPending) return;
+      onOpenChange(next);
+    }}
+  >
     <Dialog.Portal>
       <Dialog.Backdrop className="dialog-backdrop fixed inset-0 z-50 bg-gray-1/70 backdrop-blur-sm" />
       <Dialog.Popup className="dialog-popup fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-[480px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-6 bg-gray-2 shadow-xl">
@@ -51,7 +61,12 @@ export const SetLevelDialog = ({
               {courseName}
             </Dialog.Description>
           </div>
-          <Dialog.Close className="shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
+          <Dialog.Close
+            aria-label="Close"
+            disabled={isPending}
+            aria-describedby={isPending ? SAVING_NOTE_ID : undefined}
+            className="shrink-0 rounded-md p-1.5 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 data-[disabled]:cursor-not-allowed data-[disabled]:hover:bg-transparent"
+          >
             <X className="h-5 w-5" aria-hidden="true" />
           </Dialog.Close>
         </div>
@@ -110,8 +125,19 @@ export const SetLevelDialog = ({
             </p>
           )}
 
+          {isPending && (
+            // Why Cancel and Close are locked, in text — they point here.
+            <output id={SAVING_NOTE_ID} className="text-secondary text-sm">
+              Saving… Cancel is available again once the level is saved.
+            </output>
+          )}
+
           <div className="flex justify-end gap-2">
-            <Dialog.Close className="rounded-lg border border-gray-6 px-3 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9">
+            <Dialog.Close
+              disabled={isPending}
+              aria-describedby={isPending ? SAVING_NOTE_ID : undefined}
+              className="rounded-lg border border-gray-6 px-3 py-2 font-medium text-primary text-sm transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 data-[disabled]:cursor-not-allowed data-[disabled]:hover:bg-transparent"
+            >
               Cancel
             </Dialog.Close>
             <button

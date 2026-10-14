@@ -7,6 +7,7 @@ import {
 } from '#/components/admin/schedule/offering-popover-state';
 import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
 import { calendarWindowStart } from '#/components/calendar';
+import type { UserLevel } from '#/types';
 
 /**
  * The first week drawn by the schedule calendar.
@@ -70,3 +71,22 @@ export const offeringPopoverReturnFocusAtom = atom<HTMLElement | null>(null);
 export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
   null,
 );
+
+/**
+ * A level picked in the offering roster, waiting on the confirm dialog for
+ * the pilot-facing message — or null. Nothing is written until that dialog
+ * is submitted; cancelling just clears this.
+ */
+export const rosterLevelDraftAtom = atom<{
+  /**
+   * What the popover had open when the level was picked — the offering being
+   * edited (null while scheduling a new one) and its course. A save that
+   * lands after the popover moved on must not patch the roster now showing.
+   */
+  offeringId: number | null;
+  courseId: number;
+  userId: string;
+  profileId: number;
+  name: string;
+  level: UserLevel;
+} | null>(null);

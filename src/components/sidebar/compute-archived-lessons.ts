@@ -1,4 +1,7 @@
-import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
+import {
+  isLessonVisibleAtLevel,
+  isLessonWithdrawn,
+} from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
 export type ArchivedLesson = {
@@ -53,6 +56,9 @@ export function computeArchivedLessons(
   for (const mod of course.modules) {
     for (const lesson of mod.lessons) {
       if (isLessonVisibleAtLevel(lesson.levels, level)) continue;
+      // Tagged None: withdrawn from every level, not completed at an earlier
+      // one — so it is not offered as an archive either.
+      if (isLessonWithdrawn(lesson.levels)) continue;
       const percent = percentByLessonId.get(lesson.id) ?? 0;
       if (percent < 100) continue;
       archived.push({

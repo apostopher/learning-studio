@@ -37,4 +37,36 @@ describe('updateLessonConfigInputSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  it("accepts the exclusive 'none' tag", () => {
+    expect(
+      updateLessonConfigInputSchema.safeParse({ levels: ['none'] }).success,
+    ).toBe(true);
+  });
+
+  it('still accepts real levels and the empty "every level" tag', () => {
+    expect(
+      updateLessonConfigInputSchema.safeParse({ levels: ['basic', 'advanced'] })
+        .success,
+    ).toBe(true);
+    expect(
+      updateLessonConfigInputSchema.safeParse({ levels: [] }).success,
+    ).toBe(true);
+  });
+
+  it("rejects 'none' mixed with a real level, saying why", () => {
+    const parsed = updateLessonConfigInputSchema.safeParse({
+      levels: ['none', 'basic'],
+    });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((i) => i.message)).toContain(
+      'None cannot be combined with other levels',
+    );
+  });
+
+  it('rejects an unknown level', () => {
+    expect(
+      updateLessonConfigInputSchema.safeParse({ levels: ['expert'] }).success,
+    ).toBe(false);
+  });
 });

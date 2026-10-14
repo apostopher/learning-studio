@@ -19,6 +19,29 @@ export const UserLevelSchema = z.enum(USER_LEVELS);
 export const UserLevelsSchema = z.array(UserLevelSchema);
 export type UserLevel = (typeof USER_LEVELS)[number];
 
+export function isUserLevel(value: string): value is UserLevel {
+  return (USER_LEVELS as readonly string[]).includes(value);
+}
+
+/**
+ * What a LESSON's `levels` may hold: the learner tiers, plus `'none'`.
+ *
+ * `'none'` hides the lesson from every tier — no pilot is ever at level
+ * `'none'`, so `isLessonVisibleAtLevel`'s exact match never shows it. It is
+ * exclusive: a lesson is either hidden from everyone or tagged with real
+ * tiers, never both. Distinct from `[]`, which means "visible at every tier".
+ *
+ * Lesson fields only — a USER's level is always a `UserLevel`.
+ */
+export const LESSON_LEVELS = [...USER_LEVELS, 'none'] as const;
+export const LessonLevelSchema = z.enum(LESSON_LEVELS);
+export type LessonLevel = (typeof LESSON_LEVELS)[number];
+export const LessonLevelsSchema = z
+  .array(LessonLevelSchema)
+  .refine((levels) => !levels.includes('none') || levels.length === 1, {
+    message: 'None cannot be combined with other levels',
+  });
+
 /**
  * Where a `user_levels` row came from.
  *

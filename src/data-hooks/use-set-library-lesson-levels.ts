@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { LibraryLesson, OrgLibrary } from '#/lib/admin-schemas';
-import type { UserLevel } from '#/types';
+import type { LessonLevel } from '#/types';
 import { dataKeys } from './keys';
 
 /** Every lesson list the library holds, with `lessonId`'s levels replaced. */
 function withLevels(
   library: OrgLibrary,
   lessonId: number,
-  levels: UserLevel[],
+  levels: LessonLevel[],
 ): OrgLibrary {
   const patch = (lessons: LibraryLesson[]) =>
     lessons.map((l) => (l.id === lessonId ? { ...l, levels } : l));
@@ -39,7 +39,7 @@ export function useSetLibraryLessonLevels() {
 
   return useMutation({
     mutationKey,
-    mutationFn: async (input: { lessonId: number; levels: UserLevel[] }) => {
+    mutationFn: async (input: { lessonId: number; levels: LessonLevel[] }) => {
       const res = await fetch(`/api/admin/lessons/${input.lessonId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },

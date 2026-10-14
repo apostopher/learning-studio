@@ -25,6 +25,7 @@ import {
   CourseLessonQuizAnswerSchema,
   CourseLessonQuizAnswersSchema,
   CourseLessonQuizSchema,
+  LessonLevelsSchema,
   type LevelSource,
   LevelSourceSchema,
   type MaterialLink,
@@ -38,7 +39,6 @@ import {
   SubscriptionsSchema,
   type UserLevel,
   UserLevelSchema,
-  UserLevelsSchema,
 } from '#/types';
 
 export * from './auth-schema';
@@ -472,7 +472,7 @@ export const lessonsTable = pgTable(
 
 export const dbLessonSchema = createSelectSchema(lessonsTable, {
   requiredSubscriptions: SubscriptionsSchema,
-  levels: UserLevelsSchema,
+  levels: LessonLevelsSchema,
 });
 export type DBLesson = z.infer<typeof dbLessonSchema>;
 
