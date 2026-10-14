@@ -23,6 +23,7 @@
     "db:migrate-staff-roles": "dotenv -e .env.local -- tsx src/db/migrate-staff-roles.ts",
     "db:migrate-discipline-staff": "dotenv -e .env.local -- tsx src/db/migrate-discipline-staff.ts",
     "db:migrate-offerings": "dotenv -e .env.local -- tsx src/db/migrate-offerings.ts",
+    "db:migrate-video-captions": "dotenv -e .env.local -- tsx src/db/migrate-video-captions.ts",
     "db:migrate-video-calls": "dotenv -e .env.local -- tsx src/db/migrate-video-calls.ts",
     "db:migrate-viper-context": "dotenv -e .env.local -- tsx src/db/migrate-viper-context.ts",
     "db:migrate-lesson-embeddings": "dotenv -e .env.local -- tsx src/db/migrate-lesson-embeddings.ts",
