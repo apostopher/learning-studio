@@ -71,8 +71,14 @@ export async function remixFlagshipIntoNewCourse(
       actorId: null,
     });
     if (!result.ok) {
+      // The one refusal with a remedy to name: which flagship modules gate
+      // on a module the flagship only borrows.
+      const detail =
+        result.reason === 'source-depends-on-borrowed'
+          ? ` (${result.modules.map((m) => m.slug).join(', ')})`
+          : '';
       console.error(
-        `createCourse: could not remix flagship ${flagshipId} into course ${courseId}: ${result.reason}`,
+        `createCourse: could not remix flagship ${flagshipId} into course ${courseId}: ${result.reason}${detail}`,
       );
     }
   } catch (error) {

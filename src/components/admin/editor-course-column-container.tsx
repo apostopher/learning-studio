@@ -127,7 +127,7 @@ export const EditorCourseColumnContainer = ({
           <Settings2 className="h-4 w-4" aria-hidden="true" />
         </Link>
       }
-      note={flagshipRailNote(flagship, course.id)}
+      note={flagshipRailNote(flagship, courseBoard)}
       emptySlot={
         shown.length === 0 ? (
           <EditorCourseEmptyContainer

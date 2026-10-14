@@ -69,15 +69,35 @@ describe('railModules', () => {
 
 describe('flagshipRailNote', () => {
   const flagship = { id: 6, name: '3D Airmanship' };
+  const column = (id: number, sources: number[]) => ({
+    course: { id },
+    remixes: sources.map((sourceCourseId) => ({ sourceCourseId })),
+  });
 
-  it('says the column includes every flagship module', () => {
-    expect(flagshipRailNote(flagship, 2)).toBe(
+  it('says the column includes every flagship module when it remixes the flagship', () => {
+    expect(flagshipRailNote(flagship, column(2, [6]))).toBe(
       'Includes all 3D Airmanship modules',
     );
   });
 
+  /**
+   * Before the backfill runs, or after a create-time remix failed, a course
+   * holds none of the flagship's modules. Claiming it "includes all" of them
+   * would hide exactly the gap an admin needs to see. Mutant: ignoring
+   * `remixes` and always claiming inclusion.
+   */
+  it('says the column is not yet linked when it does not remix the flagship', () => {
+    expect(flagshipRailNote(flagship, column(2, []))).toBe(
+      'Not yet linked to 3D Airmanship modules',
+    );
+    // Remixing some OTHER course is not remixing the flagship.
+    expect(flagshipRailNote(flagship, column(2, [9]))).toBe(
+      'Not yet linked to 3D Airmanship modules',
+    );
+  });
+
   it('says nothing without a flagship, or in the flagship itself', () => {
-    expect(flagshipRailNote(null, 2)).toBeNull();
-    expect(flagshipRailNote(flagship, 6)).toBeNull();
+    expect(flagshipRailNote(null, column(2, []))).toBeNull();
+    expect(flagshipRailNote(flagship, column(6, []))).toBeNull();
   });
 });

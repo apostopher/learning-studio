@@ -149,6 +149,25 @@ describe('remixFlagshipIntoNewCourse', () => {
     error.mockRestore();
   });
 
+  it('names the offending modules when the flagship gates on a borrowed one', async () => {
+    captured.result = [{ id: 6 }];
+    remixes.remixCourse.mockResolvedValue({
+      ok: false,
+      reason: 'source-depends-on-borrowed',
+      sourceName: '3D Airmanship',
+      modules: [
+        { slug: 'upset-recovery', name: 'Upset Recovery' },
+        { slug: 'spins', name: 'Spins' },
+      ],
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await remixFlagshipIntoNewCourse(40, 11);
+
+    expect(String(error.mock.calls[0][0])).toContain('upset-recovery, spins');
+    error.mockRestore();
+  });
+
   it('logs, rather than throws, a remix that throws', async () => {
     captured.result = [{ id: 6 }];
     remixes.remixCourse.mockRejectedValue(new Error('deadlock'));

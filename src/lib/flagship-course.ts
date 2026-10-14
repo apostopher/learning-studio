@@ -30,10 +30,11 @@ export function findFlagshipCourse<
  *
  * The flagship is the library, not a course among courses: its lessons are
  * filed under the discipline of the same name in the left pane, and the
- * courses on the rail all borrow its modules (see `railModules`). Drawn as a column
- * too, it would sit beside the very courses that remix it, its modules on
- * screen twice. It is edited on its own board (`/admin/$courseId/editor`,
- * reached from the Courses screen and from every "Edited in …" link).
+ * courses on the rail all borrow its modules (see `railModules`). Drawn as
+ * a column too, it would sit beside the very courses that remix it, its
+ * modules on screen twice. It is edited on its own board
+ * (`/admin/$courseId/editor`, reached from the Courses screen and from every
+ * "Edited in …" link).
  *
  * The full board still feeds `findFlagshipCourse` and the drag resolver —
  * only what is DRAWN is filtered.
@@ -65,11 +66,23 @@ export function railModules<M extends { owner: { id: number } }>(
   return courseBoard.modules.filter((m) => m.owner.id !== flagshipId);
 }
 
-/** The line a rail column shows in place of the flagship modules it hides. */
+/**
+ * The line a rail column shows about the flagship modules it hides.
+ *
+ * Read off the column's own `remixes`, not assumed: a course created before
+ * the backfill ran, or whose create-time remix failed, holds none of the
+ * flagship's modules, and claiming it "includes all" of them would hide the
+ * gap. Such a course says so instead.
+ */
 export function flagshipRailNote(
   flagship: { id: number; name: string } | null,
-  courseId: number,
+  courseBoard: {
+    course: { id: number };
+    remixes: ReadonlyArray<{ sourceCourseId: number }>;
+  },
 ): string | null {
-  if (flagship === null || flagship.id === courseId) return null;
-  return `Includes all ${flagship.name} modules`;
+  if (flagship === null || flagship.id === courseBoard.course.id) return null;
+  return courseBoard.remixes.some((r) => r.sourceCourseId === flagship.id)
+    ? `Includes all ${flagship.name} modules`
+    : `Not yet linked to ${flagship.name} modules`;
 }
