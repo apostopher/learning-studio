@@ -74,16 +74,18 @@ export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
 
 /**
  * A roster level chosen with the chip but not yet settled: pressed and
- * waiting on the debounce, and/or sent and not yet answered. Keyed by
- * `rosterLevelEditKey`, so the same person on another offering's roster is a
- * different entry. An entry is removed once nothing is waiting or in flight,
- * and the chip falls back to the roster row's own (saved) level.
+ * waiting on the debounce, and/or being saved. Keyed by `rosterLevelEditKey`
+ * — course and person, not offering: a level belongs to the person in a
+ * course, so the same person on two offerings of one course is ONE level,
+ * with one queue of saves. An entry is removed once nothing is waiting,
+ * sending or queued, and the chip falls back to the roster row's own
+ * (saved) level.
  */
 export type RosterLevelEdit = {
   /**
-   * What the popover had open when the chip was pressed — the offering being
-   * edited (null while scheduling a new one) and its course. The save goes to
-   * that course, and only patches that roster.
+   * The offering the latest press was on (null while scheduling a new one).
+   * Only for the patch guard: a save patches the roster on screen only if it
+   * is still this one.
    */
   offeringId: number | null;
   courseId: number;
@@ -95,14 +97,20 @@ export type RosterLevelEdit = {
   level: UserLevel;
   /** The debounced save, while one is waiting. */
   timer: ReturnType<typeof setTimeout> | null;
-  /** Saves sent and not yet answered. */
-  inFlight: number;
+  /**
+   * The level being saved right now, or null. One save per row at a time:
+   * two concurrent PUTs could land out of order, and each one messages the
+   * pilot.
+   */
+  sending: UserLevel | null;
+  /**
+   * A save came due (debounce or flush) while one was sending. When that one
+   * settles, `level` is sent once — if it differs from what just went.
+   */
+  queued: boolean;
 };
 
-export const rosterLevelEditKey = (
-  offeringId: number | null,
-  courseId: number,
-  userId: string,
-) => `${offeringId ?? 'new'}:${courseId}:${userId}`;
+export const rosterLevelEditKey = (courseId: number, userId: string) =>
+  `${courseId}:${userId}`;
 
 export const rosterLevelEditsAtom = atom<Record<string, RosterLevelEdit>>({});

@@ -106,7 +106,14 @@ const renderPopover = (
     });
   const rerender = (offerings: Offering[], isListSettled = true) =>
     view.rerender(tree(offerings, isListSettled));
-  return { store, pinA, previewA, rerender, outsideClick };
+  return {
+    store,
+    pinA,
+    previewA,
+    rerender,
+    outsideClick,
+    unmount: view.unmount,
+  };
 };
 
 const startDate = () =>
@@ -391,23 +398,150 @@ describe('OfferingPopoverContainer roster levels', () => {
     settleDebounce();
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
 
-    // A press in flight queues the new level behind its own debounce.
     press();
     expect(adaChip().textContent).toBe('BASIC');
+    expect(adaChip().getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('sends one write per row at a time: a newer choice waits for the one in flight', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
     settleDebounce();
+    press(); // basic
+    settleDebounce();
+    // Not a second, racing PUT: it waits for the first to settle…
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => writes[0].resolve());
+    // …then goes. So a later save can never land before an earlier one.
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(2);
-    expect(levelWrite.mutateAsync.mock.calls[1][0]).toMatchObject({
+    expect(levelWrite.mutateAsync.mock.calls[1][0]).toEqual({
+      profileId: 42,
+      courseId: 3,
       level: 'basic',
       message: message('Basic'),
     });
-
-    await act(async () => writes[0].resolve());
-    // The first save landing must not throw away the newer choice.
+    // The first save landing does not throw away the newer choice.
     expect(adaChip().textContent).toBe('BASIC');
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
+
     await act(async () => writes[1].resolve());
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
     expect(adaChip().textContent).toBe('BASIC');
+  });
+
+  it('presses during a flight make exactly one follow-up save, at the final level', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    settleDebounce();
+    press(); // basic
+    settleDebounce();
+    press(); // intermediate
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => writes[0].resolve());
+    await act(async () => writes[1]?.resolve());
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(2);
+    expect(levelWrite.mutateAsync.mock.calls[1][0]).toMatchObject({
+      level: 'intermediate',
+      message: message('Intermediate'),
+    });
+    expect(toast.success).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends no follow-up when the presses came back round to what was just saved', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    settleDebounce();
+    press(); // basic
+    press(); // intermediate
+    press(); // advanced
+    settleDebounce();
+
+    await act(async () => writes[0].resolve());
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('a success then a failure reverts the chip to the last level saved', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    settleDebounce();
+    press(); // basic
+    settleDebounce();
+    await act(async () => writes[0].resolve());
+    await act(async () =>
+      writes[1].reject(new Error('That person or course no longer exists.')),
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'That person or course no longer exists.',
+    );
+    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('leaving the page with a save still waiting writes it at once', () => {
+    const { pinA, unmount } = renderPopover([withAda], true);
+    pinA();
+    press();
+    unmount();
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toEqual({
+      profileId: 42,
+      courseId: 3,
+      level: 'advanced',
+      message: message('Advanced'),
+    });
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('one person on two offerings of one course is one level: one queue, one save', () => {
+    const offeringB: Offering = {
+      ...offeringA,
+      id: 8,
+      startsOn: '2027-01-04',
+      endsOn: '2027-02-17',
+      users: [ada],
+    };
+    const { pinA, store } = renderPopover([withAda, offeringB], true);
+    pinA();
+    press(); // advanced, chosen on A
+    // Straight to B through the store, so nothing flushes A's pending save.
+    act(() => {
+      store.set(dispatchOfferingPopoverAtom, { type: 'close' });
+    });
+    act(() => {
+      store.set(dispatchOfferingPopoverAtom, {
+        type: 'pin',
+        target: { mode: 'edit', offeringId: offeringB.id },
+      });
+    });
+    expect(store.get(offeringPopoverAtom)).toMatchObject({
+      status: 'pinned',
+      target: { offeringId: offeringB.id },
+    });
+    // B shows the same course's pending level, and steps on from it.
+    expect(adaChip().textContent).toBe('EXPERT');
+    press(); // basic
+    settleDebounce();
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toMatchObject({
+      profileId: 42,
+      courseId: 3,
+      level: 'basic',
+    });
   });
 
   it('on success: toasts, and the row holds the saved level without dirtying the offering', async () => {
@@ -471,9 +605,12 @@ describe('OfferingPopoverContainer roster levels', () => {
   });
 
   it('a save for a roster the popover moved away from does not patch the roster now showing', async () => {
+    // Another course: the same person, but a different level to keep.
     const offeringB: Offering = {
       ...offeringA,
       id: 8,
+      courseId: 5,
+      courseName: 'Multi-Crew Cooperation',
       startsOn: '2027-01-04',
       endsOn: '2027-02-17',
       users: [ada],

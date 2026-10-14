@@ -44,6 +44,9 @@ const LEVEL_TONES: Record<UserLevel, ChipTone> = {
   advanced: 'soft-success',
 };
 
+/** Why a chip is locked — it states its reason, in its name and tooltip. */
+const LOCKED_NOTE = 'Locked while the offering saves.';
+
 /** The lesson quickshot's press: quick, with a little overshoot. */
 const PRESS_SPRING = { type: 'spring', duration: 0.25, bounce: 0.35 } as const;
 
@@ -81,7 +84,9 @@ const LevelCycleChip = ({
         // is what makes it inert to Enter and Space as well as the pointer.
         aria-disabled={disabled || undefined}
         aria-busy={saving || undefined}
-        aria-label={`Level for ${name}: ${levelName(level)}. Press to change.`}
+        aria-label={`Level for ${name}: ${levelName(level)}. ${
+          disabled ? LOCKED_NOTE : 'Press to change.'
+        }`}
         render={
           <motion.button
             type="button"
@@ -100,7 +105,11 @@ const LevelCycleChip = ({
         {levelText(level)}
       </Tooltip.Trigger>
       <IconButtonTooltip
-        label={`${levelName(level)}. Press to make it ${LEVEL_LABELS[nextRosterLevel(level)]} — it saves when you stop pressing. Basic, Intermediate, Advanced, then back to Basic.`}
+        label={
+          disabled
+            ? `${levelName(level)}. ${LOCKED_NOTE}`
+            : `${levelName(level)}. Press to make it ${LEVEL_LABELS[nextRosterLevel(level)]} — it saves when you stop pressing. Basic, Intermediate, Advanced, then back to Basic.`
+        }
       />
     </Tooltip.Root>
     {saving && (

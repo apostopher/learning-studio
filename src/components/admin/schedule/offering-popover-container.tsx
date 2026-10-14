@@ -2,6 +2,7 @@ import { Popover } from '@base-ui/react/popover';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { X } from 'lucide-react';
+import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -311,24 +312,24 @@ export const OfferingPopoverContainer = ({
   };
   // Levels are written from the chip: each press steps the row on at once,
   // and the save waits until the presses stop. Pending and in-flight state
-  // lives in `rosterLevelEditsAtom`, keyed by the roster it was chosen in.
+  // lives in `rosterLevelEditsAtom`, keyed by course and person.
   const currentOfferingId =
     saveTarget?.mode === 'edit' ? saveTarget.offering.id : null;
   const editFor = (userId: string): RosterLevelEdit | undefined =>
     courseId === null
       ? undefined
-      : levelEdits[rosterLevelEditKey(currentOfferingId, courseId, userId)];
+      : levelEdits[rosterLevelEditKey(courseId, userId)];
   const displayLevel = (userId: string): UserLevel | null =>
     editFor(userId)?.level ??
     users.find((row) => row.userId === userId)?.level ??
     null;
   const savingUserIds = users
-    .filter((row) => (editFor(row.userId)?.inFlight ?? 0) > 0)
+    .filter((row) => editFor(row.userId)?.sending != null)
     .map((row) => row.userId);
 
   /**
-   * Changes one edit, and drops it once nothing is waiting or in flight — the
-   * chip then shows the roster row's own level again.
+   * Changes one edit, and drops it once nothing is waiting, sending or
+   * queued — the chip then shows the roster row's own level again.
    */
   const patchLevelEdit = (
     key: string,
@@ -339,32 +340,54 @@ export const OfferingPopoverContainer = ({
       if (!current) return prev;
       const next = change(current);
       const { [key]: _dropped, ...rest } = prev;
-      return next.timer === null && next.inFlight === 0
+      return next.timer === null && next.sending === null && !next.queued
         ? rest
         : { ...rest, [key]: next };
     });
 
-  /** Whether the popover still shows the roster `edit` was chosen in. */
-  const isStillOpen = (edit: RosterLevelEdit) => {
+  /** Whether the popover still shows the roster a save was chosen in. */
+  const isStillOpen = (chosenIn: {
+    offeringId: number | null;
+    courseId: number;
+  }) => {
     const current = store.get(offeringPopoverAtom);
     if (current.status !== 'pinned') return false;
     const target = current.target;
     return target.mode === 'edit'
-      ? edit.offeringId === target.offeringId
-      : edit.offeringId === null && edit.courseId === target.courseId;
+      ? chosenIn.offeringId === target.offeringId
+      : chosenIn.offeringId === null && chosenIn.courseId === target.courseId;
   };
 
-  /** Sends the edit's current level now. Read from the store, never stale. */
-  const saveLevel = (key: string) => {
+  /**
+   * A sent save has answered. Sends the row's latest level once if a save
+   * came due meanwhile and it differs from what just went; otherwise the
+   * entry clears. After a failure that leaves the chip on the last saved
+   * level (the roster row's own).
+   */
+  const settleLevelSave = (key: string, sent: UserLevel) => {
     const edit = store.get(rosterLevelEditsAtom)[key];
     if (!edit) return;
-    if (edit.timer !== null) clearTimeout(edit.timer);
+    if (edit.timer === null && edit.queued && edit.level !== sent) {
+      sendLevel(key);
+      return;
+    }
+    // Still being pressed (a timer is waiting): that timer sends when it
+    // fires, now that nothing is in flight.
+    patchLevelEdit(key, (e) => ({ ...e, sending: null, queued: false }));
+  };
+
+  /** Sends the edit's current level. Read from the store, never stale. */
+  const sendLevel = (key: string) => {
+    const edit = store.get(rosterLevelEditsAtom)[key];
+    if (!edit) return;
+    const { level } = edit;
+    const chosenIn = { offeringId: edit.offeringId, courseId: edit.courseId };
     patchLevelEdit(key, (e) => ({
       ...e,
       timer: null,
-      inFlight: e.inFlight + 1,
+      sending: level,
+      queued: false,
     }));
-    const { level } = edit;
     // `mutateAsync`, not `mutate` with callbacks: one mutation serves every
     // row, and `mutate`'s per-call callbacks fire only for its latest call.
     setCourseLevel
@@ -384,7 +407,7 @@ export const OfferingPopoverContainer = ({
           // refreshes the rest). Already saved, so not an unsaved edit of
           // the offering: no `shouldDirty`, or the popover would ask to
           // discard it.
-          if (isStillOpen(edit)) {
+          if (isStillOpen(chosenIn)) {
             form.setValue(
               'users',
               form
@@ -394,17 +417,27 @@ export const OfferingPopoverContainer = ({
                 ),
             );
           }
-          patchLevelEdit(key, (e) => ({ ...e, inFlight: e.inFlight - 1 }));
+          settleLevelSave(key, level);
         },
         (error: unknown) => {
           toast.error(
             error instanceof Error ? error.message : "Couldn't set the level.",
           );
-          // Back to the last saved level — unless a newer choice is still
-          // waiting or in flight, which is what the chip shows instead.
-          patchLevelEdit(key, (e) => ({ ...e, inFlight: e.inFlight - 1 }));
+          settleLevelSave(key, level);
         },
       );
+  };
+
+  /** A save came due: send it, or queue it behind the one in flight. */
+  const saveLevel = (key: string) => {
+    const edit = store.get(rosterLevelEditsAtom)[key];
+    if (!edit) return;
+    if (edit.timer !== null) clearTimeout(edit.timer);
+    if (edit.sending !== null) {
+      patchLevelEdit(key, (e) => ({ ...e, timer: null, queued: true }));
+      return;
+    }
+    sendLevel(key);
   };
 
   /** Saves, now, every level still waiting on its debounce. */
@@ -414,11 +447,19 @@ export const OfferingPopoverContainer = ({
     }
   };
 
+  // Leaving the page with a level still waiting saves it rather than drops
+  // it — the same flush as `close`. An effect because the debounce timers are
+  // outside React; everything the flush touches is read from the store or is
+  // a stable handle (the store, the mutation's mutateAsync, the RHF form), so
+  // the mount-time closure is the right one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: unmount-only cleanup; see above
+  useEffect(() => () => flushLevelSaves(), []);
+
   const handleCycleLevel = (userId: string) => {
     const profileId = directoryByUserId.get(userId)?.profileId;
     const person = users.find((row) => row.userId === userId);
     if (profileId === undefined || !person || courseId === null) return;
-    const key = rosterLevelEditKey(currentOfferingId, courseId, userId);
+    const key = rosterLevelEditKey(courseId, userId);
     const previous = store.get(rosterLevelEditsAtom)[key];
     // A press restarts the wait, in flight or not: only where the presses
     // stop is saved.
@@ -435,7 +476,8 @@ export const OfferingPopoverContainer = ({
         name: person.name,
         level: nextRosterLevel(previous?.level ?? person.level),
         timer,
-        inFlight: previous?.inFlight ?? 0,
+        sending: previous?.sending ?? null,
+        queued: previous?.queued ?? false,
       },
     }));
   };

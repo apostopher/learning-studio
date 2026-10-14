@@ -196,9 +196,13 @@ describe('OfferingRosterTable level cell', () => {
         disabled
       />,
     );
-    expect(adaChip().getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(adaChip());
+    // A locked state says why, in its name (and its tooltip).
+    const locked = screen.getByRole('button', {
+      name: 'Level for Ada Lovelace: Intermediate. Locked while the offering saves.',
+    });
+    expect(locked.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(locked);
     expect(onCycleLevel).not.toHaveBeenCalled();
-    expect(adaChip().className).not.toMatch(/opacity/);
+    expect(locked.className).not.toMatch(/opacity/);
   });
 });
