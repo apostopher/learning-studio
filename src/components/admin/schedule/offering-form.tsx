@@ -113,7 +113,7 @@ export const OfferingForm = ({
           min={1}
           value={windowDays}
           onChange={(event) => onWindowDaysChange(event.target.value)}
-          aria-describedby="offering-window-unit offering-window-hint"
+          aria-describedby="offering-window-unit"
           className={fieldClassName(false)}
         />
         <span id="offering-window-unit" className="sr-only">
@@ -162,14 +162,6 @@ export const OfferingForm = ({
         {summaryLine}
       </p>
     )}
-
-    <p id="offering-window-hint" className="text-secondary text-sm">
-      This window is the <strong className="text-primary">ground school</strong>
-      , done remotely: how long a student has to finish every lesson, quiz and
-      debrief before they travel. It closes the day they arrive on site, so
-      every student has to be through the whole curriculum by the end date — not
-      merely keeping up.
-    </p>
 
     <div className="flex flex-col gap-3">
       <h3 className={labelClassName}>On this offering · {rosterCount}</h3>

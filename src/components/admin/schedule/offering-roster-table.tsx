@@ -15,8 +15,12 @@ import { LevelSelect } from '../level-select';
  * defined as "the form plus this many people", so the row and header heights
  * below are FIXED — a computed max height only means something if the rows
  * it counts are a known size.
+ *
+ * 12, up from 10, when the form's four-line "ground school" explainer was
+ * removed: that paragraph plus its gap was about 6rem, two rows' worth, and
+ * the roster is what that height is now spent on.
  */
-export const ROSTER_VISIBLE_ROWS = 10;
+export const ROSTER_VISIBLE_ROWS = 12;
 const ROW_REM = 2.5; // h-10
 const HEAD_REM = 2; // h-8
 
@@ -197,8 +201,8 @@ export const OfferingRosterTable = ({
         // the same reason as the sticky `top-0` exception below.
         className="overflow-y-auto overscroll-contain rounded-lg border border-gray-6"
         // Inline because Tailwind cannot build a class from these constants. The
-        // trailing 10px is one border per row, and the 2px is this box's own top and
-        // bottom border (border-box), so the 10th row is fully visible.
+        // trailing px term is one border per row, and the 2px is this box's own top and
+        // bottom border (border-box), so the last counted row is fully visible.
         style={{
           maxBlockSize: `calc(${HEAD_REM}rem + ${ROSTER_VISIBLE_ROWS} * ${ROW_REM}rem + ${ROSTER_VISIBLE_ROWS}px + 2px)`,
         }}
