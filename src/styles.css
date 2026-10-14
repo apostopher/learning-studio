@@ -688,6 +688,10 @@
     }
     .video-player .vp-controls-row {
       gap: calc(var(--spacing) * 1);
+      /* Wrap instead of clipping the rightmost control (fullscreen) when a
+         visible "No captions" label plus the language menu exceed the row. */
+      flex-wrap: wrap;
+      row-gap: calc(var(--spacing) * 1);
     }
   }
 
