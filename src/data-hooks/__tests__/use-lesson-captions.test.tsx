@@ -111,4 +111,44 @@ describe('useRequestLessonCaptions', () => {
       queryKey: dataKeys.lessonPlaybacks(10),
     });
   });
+
+  it('rejects with the route’s own reason when it refuses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: 'Captions come from the provider for this video.',
+        }),
+      }),
+    );
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useRequestLessonCaptions(), {
+      wrapper,
+    });
+    await expect(
+      result.current.mutateAsync({ lessonId: 10, courseId: 7, lang: 'fr' }),
+    ).rejects.toThrow('Captions come from the provider for this video.');
+  });
+
+  it('falls back to the status when the body has no reason', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error('not json');
+        },
+      }),
+    );
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useRequestLessonCaptions(), {
+      wrapper,
+    });
+    await expect(
+      result.current.mutateAsync({ lessonId: 10, courseId: 7, lang: 'fr' }),
+    ).rejects.toThrow("Couldn't request captions (500)");
+  });
 });

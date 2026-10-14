@@ -455,7 +455,6 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
   });
 });
 
-/** F1: the player waits on what `onSourceExpired` returns before re-attaching. */
 describe('VideoSectionContainer captions status', () => {
   it('hands the status line the lesson, course and previewed language', () => {
     stubHooks({ configured: true });
@@ -495,6 +494,7 @@ describe('VideoSectionContainer captions status', () => {
   });
 });
 
+/** F1: the player waits on what `onSourceExpired` returns before re-attaching. */
 describe('VideoSectionContainer recovery', () => {
   it('hands the player the refetch promise as the recovery result', () => {
     stubHooks({ configured: true });

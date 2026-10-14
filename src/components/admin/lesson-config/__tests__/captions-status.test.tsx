@@ -54,10 +54,27 @@ describe('CaptionsStatus', () => {
         isRequesting
       />,
     );
+    const button = screen.getByRole('button', {
+      name: 'Requesting…',
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    // Dimming would drop the label below AA; busy is stated, not faded.
+    expect(button.className).not.toContain('opacity');
+  });
+
+  it('says why a request failed', () => {
+    render(
+      <CaptionsStatus
+        {...base}
+        status="none"
+        onRequest={vi.fn()}
+        requestError="Captions come from the provider for this video."
+      />,
+    );
     expect(
-      (screen.getByRole('button', { name: 'Requesting…' }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+      screen.getByText('Captions come from the provider for this video.'),
+    ).toBeTruthy();
   });
 
   it('renders nothing for a video that is not on Mux', () => {

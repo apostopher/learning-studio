@@ -19,7 +19,19 @@ export function useRequestLessonCaptions() {
         `/api/admin/lessons/${lessonId}/captions?courseId=${courseId}&lang=${lang}`,
         { method: 'POST' },
       );
-      if (!res.ok) throw new Error(`Couldn't request captions (${res.status})`);
+      if (!res.ok) {
+        // The route explains a refusal (e.g. 409: not a Mux video); say that.
+        const body: unknown = await res.json().catch(() => null);
+        const reason =
+          typeof body === 'object' &&
+          body !== null &&
+          'error' in body &&
+          typeof body.error === 'string' &&
+          body.error
+            ? body.error
+            : null;
+        throw new Error(reason ?? `Couldn't request captions (${res.status})`);
+      }
     },
     onSuccess: (_data, { lessonId }) => {
       queryClient.invalidateQueries({
