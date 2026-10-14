@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { alternateLangSchema, videoLangSchema } from '#/lib/video-languages';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
+import { muxCredentialShape } from '#/lib/video-providers/mux';
 import {
   CourseLessonDependencySchema,
   OtherVideoIdSchema,
@@ -402,8 +403,7 @@ export type UpdateLessonConfigInput = z.infer<
 
 export const muxCredentialInputSchema = z.object({
   provider: z.literal('mux'),
-  keyId: z.string().trim().min(1),
-  privateKey: z.string().trim().min(1),
+  ...muxCredentialShape,
 });
 export const synthesiaCredentialInputSchema = z.object({
   provider: z.literal('synthesia'),

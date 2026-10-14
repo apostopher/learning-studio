@@ -7,6 +7,7 @@ import {
 import { isVideoAvailable, isVideoNotReady } from '../../types';
 import { isAuthRejectionStatus, PlaybackError } from './errors';
 import { muxCredentialSchema } from './mux';
+import { checkMuxApiToken } from './mux-api.server';
 import { synthesiaCredentialSchema } from './synthesia';
 import type { ProviderId } from './types';
 
@@ -188,7 +189,14 @@ export async function validateCredentials(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     if (provider === 'mux') {
-      const { keyId, privateKey } = muxCredentialSchema.parse(creds);
+      const parsed = muxCredentialSchema.safeParse(creds);
+      if (!parsed.success) {
+        return {
+          ok: false,
+          error: parsed.error.issues[0]?.message ?? 'Invalid Mux credentials',
+        };
+      }
+      const { keyId, privateKey, apiTokenId, apiTokenSecret } = parsed.data;
       // Structural check: the key must sign. Full validity confirmed on play.
       await mux.jwt.signPlaybackId('validation', {
         keyId,
@@ -196,6 +204,10 @@ export async function validateCredentials(
         expiration: '30s',
         type: 'video',
       });
+      if (apiTokenId !== undefined && apiTokenSecret !== undefined) {
+        const tokenError = await checkMuxApiToken(apiTokenId, apiTokenSecret);
+        if (tokenError) return { ok: false, error: tokenError };
+      }
       return { ok: true };
     }
     const { apiKey } = synthesiaCredentialSchema.parse(creds);

@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signPlaybackId } = vi.hoisted(() => ({
+const { signPlaybackId, checkMuxApiToken } = vi.hoisted(() => ({
   signPlaybackId: vi.fn(),
+  checkMuxApiToken: vi.fn(),
 }));
+
+vi.mock('./mux-api.server', () => ({ checkMuxApiToken }));
 
 vi.mock('@mux/mux-node', () => ({
   default: vi.fn().mockImplementation(() => ({
@@ -457,5 +460,40 @@ describe('classifying a Synthesia failure', () => {
     ).catch((e: unknown) => e);
 
     expect((error as PlaybackError).code).toBe('PROVIDER_AUTH_REJECTED');
+  });
+});
+
+describe('validateCredentials — Mux API token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signPlaybackId.mockResolvedValue('token');
+  });
+
+  it('checks the token when one is given and reports its rejection', async () => {
+    checkMuxApiToken.mockResolvedValue('Mux rejected the API token.');
+    const r = await validateCredentials('mux', {
+      ...muxCreds,
+      apiTokenId: 'tid',
+      apiTokenSecret: 'ts',
+    });
+    expect(checkMuxApiToken).toHaveBeenCalledWith('tid', 'ts');
+    expect(r).toEqual({ ok: false, error: 'Mux rejected the API token.' });
+  });
+
+  it('does not call Mux when no token is given', async () => {
+    const r = await validateCredentials('mux', muxCreds);
+    expect(checkMuxApiToken).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+  });
+
+  it('reports half a token pair in words, not as a zod dump', async () => {
+    const r = await validateCredentials('mux', {
+      ...muxCreds,
+      apiTokenId: 'tid',
+    });
+    expect(r).toEqual({
+      ok: false,
+      error: 'Enter both the API token ID and secret, or neither',
+    });
   });
 });

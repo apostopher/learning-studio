@@ -1936,6 +1936,7 @@ describe('saveCourseProvider Synthesia thumbnail cache invalidation', () => {
 
   it('does not touch the Synthesia thumbnail cache when saving a Mux credential', async () => {
     resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.select.mockReturnValueOnce(makeChain([])); // no stored Mux row to merge
     db.insert.mockReturnValueOnce(makeChain(undefined));
 
     await saveCourseProvider(42, {

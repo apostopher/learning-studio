@@ -72,6 +72,10 @@ import {
   type VideoLang,
 } from '#/lib/video-languages';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
+import {
+  type MuxCredentials,
+  mergeStoredMuxToken,
+} from '#/lib/video-providers/mux';
 import { buildLessonPosters } from '#/lib/video-providers/posters.server';
 import { validateCredentials } from '#/lib/video-providers/resolve.server';
 import type {
@@ -793,7 +797,14 @@ export async function saveCourseProvider(
   courseId: number,
   input: SaveCredentialInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { provider, ...creds } = input;
+  const { provider, ...entered } = input;
+  const creds =
+    provider === 'mux'
+      ? mergeStoredMuxToken(
+          entered as MuxCredentials,
+          await resolveCourseProvider(courseId, 'mux'),
+        )
+      : entered;
   const validation = await validateCredentials(provider, creds);
   if (!validation.ok) return validation;
   const secrets = encryptJson(creds);

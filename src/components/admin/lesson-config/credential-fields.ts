@@ -8,6 +8,8 @@ export interface CredentialFormValues {
   keyId?: string;
   privateKey?: string;
   apiKey?: string;
+  apiTokenId?: string;
+  apiTokenSecret?: string;
 }
 
 /**
@@ -36,6 +38,20 @@ export function buildCredentialFields(
         type: 'password',
         register: form.register('privateKey'),
         error: form.formState.errors.privateKey?.message,
+      },
+      {
+        name: 'apiTokenId',
+        label: 'API access token ID (optional, for captions)',
+        type: 'text',
+        register: form.register('apiTokenId'),
+        error: form.formState.errors.apiTokenId?.message,
+      },
+      {
+        name: 'apiTokenSecret',
+        label: 'API access token secret (optional, for captions)',
+        type: 'password',
+        register: form.register('apiTokenSecret'),
+        error: form.formState.errors.apiTokenSecret?.message,
       },
     ];
   }
