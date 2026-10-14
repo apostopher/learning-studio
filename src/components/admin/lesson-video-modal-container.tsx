@@ -1,13 +1,19 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { useAtom } from 'jotai';
-import { Video, X } from 'lucide-react';
+import { Loader2, Video, X } from 'lucide-react';
 // `#/` not `@/` for the value imports: vitest cannot resolve the `@/` alias,
 // and this container is rendered by its own test.
 import { adminPreviewLangAtomFamily, playLessonAtom } from '#/atoms/admin';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
-import { isVideoLang } from '#/lib/video-languages';
+import {
+  isVideoLang,
+  labelForLang,
+  PRIMARY_VIDEO_LANG,
+} from '#/lib/video-languages';
 import type { EditorBoardModule } from '@/lib/admin-schemas';
 import { computeVideoModalState } from './compute-video-modal-state';
+import { BackToPrimaryLanguageButton } from './lesson-config/preview-language-fallback';
+import { previewLanguageNotice } from './lesson-config/preview-language-notice';
 import { VideoPreview } from './lesson-config/video-preview';
 
 /**
@@ -85,6 +91,18 @@ export const LessonVideoModalContainer = ({
     data: playback.data,
   });
 
+  // A previewed translation with nothing to play: the player — and its
+  // language menu — is not drawn, and this atom is shared with the config
+  // dialog, so without a way back here the admin is stuck until a reload.
+  const languageNotice =
+    state.kind === 'ready' || state.kind === 'loading'
+      ? null
+      : previewLanguageNotice(
+          lang,
+          state.kind,
+          state.kind === 'error' ? state.message : null,
+        );
+
   return (
     <Dialog.Root
       open={play !== null}
@@ -116,16 +134,30 @@ export const LessonVideoModalContainer = ({
             grey box and no next step.
           */}
           {state.kind === 'ready' ? (
-            // No `onPlaybackFailed`: the board has no dead-key notice, and
-            // the player's own error overlay already says playback failed.
-            <VideoPreview
-              key={play?.lessonId}
-              playback={state.playback}
-              onLanguageChange={(code) => {
-                if (isVideoLang(code)) setLang(code);
-              }}
-              onSourceExpired={() => void playback.refetch()}
-            />
+            <>
+              {/* No `onPlaybackFailed`: the board has no dead-key notice, and
+                  the player's own error overlay already says playback failed. */}
+              <VideoPreview
+                key={play?.lessonId}
+                playback={state.playback}
+                onLanguageChange={(code) => {
+                  if (isVideoLang(code)) setLang(code);
+                }}
+                onSourceExpired={() => playback.refetch()}
+              />
+              {/* Mid language switch the previous language keeps playing as
+                  placeholder data, so what is being waited for is said here.
+                  On its own surface: the backdrop behind is not a token. */}
+              {playback.isPlaceholderData && (
+                <output className="mbs-2 inline-flex items-center gap-1.5 rounded-md bg-gray-2 px-2.5 py-1 text-secondary text-sm">
+                  <Loader2
+                    className="h-3.5 w-3.5 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Loading {labelForLang(lang)}…
+                </output>
+              )}
+            </>
           ) : (
             <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg bg-gray-3 px-6 text-center">
               <Video className="h-10 w-10 text-gray-8" aria-hidden="true" />
@@ -140,10 +172,16 @@ export const LessonVideoModalContainer = ({
                 // from loading to any of these while the admin is looking at it.
                 role="status"
               >
-                {MESSAGES[state.kind]}
+                {languageNotice?.message ?? MESSAGES[state.kind]}
               </p>
-              {state.kind === 'error' && (
+              {state.kind === 'error' && !languageNotice && (
                 <p className="text-tertiary text-xs">{state.message}</p>
+              )}
+              {languageNotice && (
+                <BackToPrimaryLanguageButton
+                  label={languageNotice.backLabel}
+                  onClick={() => setLang(PRIMARY_VIDEO_LANG)}
+                />
               )}
             </div>
           )}

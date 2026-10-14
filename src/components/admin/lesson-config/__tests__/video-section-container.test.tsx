@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -82,6 +82,7 @@ const lastPreviewProps = () =>
   preview.mock.calls.at(-1)?.[0] as {
     playback: unknown;
     onLanguageChange?: (code: string) => void;
+    onSourceExpired?: () => unknown;
     onPlaybackFailed?: (message: string) => void;
   };
 
@@ -345,5 +346,126 @@ describe('VideoSectionContainer preview language', () => {
       /the stored key is no longer valid/,
     );
     expect(lastPreviewProps().playback).toBeNull();
+  });
+});
+
+/**
+ * F2: the player holds the only language menu, so a previewed language that
+ * cannot play (still rendering, failed, or the request errored) unmounts the
+ * only way back. The section must name the language and offer the way back
+ * itself — and the way back must reach the PLAYBACK HOOK.
+ */
+describe('VideoSectionContainer with a non-playable preview language', () => {
+  function renderAndPickFrench(after: Record<string, unknown>) {
+    stubHooks({ configured: true });
+    hooks.playback.mockReturnValue({
+      data: readyPlayback,
+      isLoading: false,
+      isError: false,
+      isPlaceholderData: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    hooks.playback.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isPlaceholderData: false,
+      error: null,
+      refetch: vi.fn(),
+      ...after,
+    });
+    act(() => lastPreviewProps().onLanguageChange?.('fr'));
+  }
+
+  it('names the language still rendering and goes back to English on request', () => {
+    renderAndPickFrench({
+      data: { status: 'rendering', lang: 'fr', languages: ['en', 'fr'] },
+    });
+
+    expect(
+      screen.getByText(/The French video is still rendering/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to English' }));
+
+    expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
+      lessonId: 10,
+      courseId: 7,
+      lang: 'en',
+    });
+  });
+
+  it('names the language whose request failed, with the reason, and goes back', () => {
+    renderAndPickFrench({
+      data: undefined,
+      isError: true,
+      error: new Error('Mux is not connected for this course'),
+    });
+
+    expect(
+      screen.getByText(
+        "The French video couldn't be loaded: Mux is not connected for this course",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to English' }));
+
+    expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
+      lessonId: 10,
+      courseId: 7,
+      lang: 'en',
+    });
+  });
+
+  it('offers no way back while previewing English itself', () => {
+    stubHooks({ configured: true });
+    hooks.playback.mockReturnValue({
+      data: { status: 'rendering', lang: 'en', languages: ['en'] },
+      isLoading: false,
+      isError: false,
+      isPlaceholderData: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to English' }),
+    ).toBeNull();
+    expect(screen.getByText(/This video is still rendering/)).toBeTruthy();
+  });
+});
+
+/** F1: the player waits on what `onSourceExpired` returns before re-attaching. */
+describe('VideoSectionContainer recovery', () => {
+  it('hands the player the refetch promise as the recovery result', () => {
+    stubHooks({ configured: true });
+    const settled = Promise.resolve('refetched');
+    hooks.playback.mockReturnValue({
+      data: readyPlayback,
+      isLoading: false,
+      isError: false,
+      isPlaceholderData: false,
+      error: null,
+      refetch: vi.fn(() => settled),
+    });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    expect(lastPreviewProps().onSourceExpired?.()).toBe(settled);
   });
 });

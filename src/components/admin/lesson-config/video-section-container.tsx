@@ -14,13 +14,22 @@ import { useLessonVideo } from '#/data-hooks/use-lesson-video';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
 import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
-import { isVideoLang, labelForLang } from '#/lib/video-languages';
+import {
+  isVideoLang,
+  labelForLang,
+  PRIMARY_VIDEO_LANG,
+} from '#/lib/video-languages';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { AlternateVideosContainer } from './alternate-videos-container';
 import { computeVideoPreviewState } from './compute-video-preview-state';
 import { CredentialFlowContainer } from './credential-flow-container';
+import { PreviewLanguageFallback } from './preview-language-fallback';
+import {
+  type PreviewNotPlayableKind,
+  previewLanguageNotice,
+} from './preview-language-notice';
 import { VideoPreview } from './video-preview';
 import { VideoUrlForm } from './video-url-form';
 
@@ -195,6 +204,40 @@ export const VideoSectionContainer = ({
       ? 'The provider refused the signed playback request, which means the stored key is no longer valid.'
       : null);
 
+  // A previewed translation with nothing to play unmounts the player — and
+  // with it the only language menu — so the way back is offered here.
+  const notPlayableKind: PreviewNotPlayableKind | null = playback.isError
+    ? 'error'
+    : previewState.kind === 'rendering' || previewState.kind === 'failed'
+      ? previewState.kind
+      : null;
+  const languageNotice =
+    notPlayableKind === null
+      ? null
+      : previewLanguageNotice(
+          previewLang,
+          notPlayableKind,
+          playback.error?.message,
+        );
+  const languageFallback = languageNotice && (
+    <PreviewLanguageFallback
+      {...languageNotice}
+      onBack={() => setPreviewLang(PRIMARY_VIDEO_LANG)}
+    >
+      {(previewState.kind === 'rendering' || previewState.kind === 'failed') &&
+        !playback.isError && (
+          <button
+            type="button"
+            onClick={() => playback.refetch()}
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {previewState.kind === 'rendering' ? 'Check again' : 'Retry'}
+          </button>
+        )}
+    </PreviewLanguageFallback>
+  );
+
   // A dead key is still "configured" as far as the credentials query knows, so
   // this has to override it — otherwise we'd render a player that cannot play.
   const canPlay = isProviderConfigured && keyRejection === null;
@@ -223,7 +266,7 @@ export const VideoSectionContainer = ({
             onLanguageChange={(code) => {
               if (isVideoLang(code)) setPreviewLang(code);
             }}
-            onSourceExpired={() => void playback.refetch()}
+            onSourceExpired={() => playback.refetch()}
             onPlaybackFailed={() => setPlaybackForbidden(true)}
           />
           {hasVideo && activeProvider && (
@@ -291,7 +334,8 @@ export const VideoSectionContainer = ({
                 Loading {labelForLang(previewLang)}…
               </output>
             )}
-            {playback.isError && (
+            {languageFallback}
+            {!languageNotice && playback.isError && (
               <p role="alert" className="text-error-text text-sm">
                 Couldn't resolve playback: {playback.error.message}
               </p>
@@ -305,7 +349,7 @@ export const VideoSectionContainer = ({
               (computeVideoPreviewState), not on `playback.data` directly,
               so the decision has one home a test can reach.
             */}
-            {previewState.kind === 'rendering' && (
+            {!languageNotice && previewState.kind === 'rendering' && (
               <div className="flex items-center justify-between gap-3">
                 <output className="text-secondary text-sm">
                   This video is still rendering and isn't playable yet.
@@ -320,7 +364,7 @@ export const VideoSectionContainer = ({
                 </button>
               </div>
             )}
-            {previewState.kind === 'failed' && (
+            {!languageNotice && previewState.kind === 'failed' && (
               <div className="flex items-center justify-between gap-3">
                 <p role="alert" className="text-error-text text-sm">
                   This video failed to render at the provider.
@@ -339,6 +383,9 @@ export const VideoSectionContainer = ({
         ) : (
           activeProvider && (
             <div className="flex flex-col gap-4">
+              {/* A refused alternate lands here too (its rejection is coded
+                  like the primary's); the way back must not depend on it. */}
+              {languageFallback}
               {keyRejection === null && (
                 <p className="text-secondary text-sm">
                   Connect {VIDEO_PROVIDERS[activeProvider].label} for this
