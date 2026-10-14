@@ -3,8 +3,9 @@ import { useAtom } from 'jotai';
 import { Video, X } from 'lucide-react';
 // `#/` not `@/` for the value imports: vitest cannot resolve the `@/` alias,
 // and this container is rendered by its own test.
-import { playLessonAtom } from '#/atoms/admin';
+import { adminPreviewLangAtomFamily, playLessonAtom } from '#/atoms/admin';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
+import { isVideoLang } from '#/lib/video-languages';
 import type { EditorBoardModule } from '@/lib/admin-schemas';
 import { computeVideoModalState } from './compute-video-modal-state';
 import { VideoPreview } from './lesson-config/video-preview';
@@ -32,11 +33,11 @@ const MESSAGES: Record<
 /**
  * Frameless video preview, opened from a lesson card's tile.
  *
- * Reuses `VideoPreview` — the admin player from the lesson config modal —
- * rather than the learner's `VideoPlayerContainer`. That is not a convenience:
- * the learner container runs `useMilestoneReporter`, so previewing a lesson
- * from the board would write `videos_progress` rows against the admin's own
- * account.
+ * Plays through the shared `VideoPlayerContainer` (via `VideoPreview`), never
+ * the learner lesson page's player container: only that one records
+ * `videos_progress`, so an admin previewing from the board writes nothing
+ * against their own account. (Not named here by identifier: a static guard,
+ * admin-preview-records-no-progress.test.ts, forbids the name in this file.)
  *
  * "Frameless" means no titlebar and no panel chrome, NOT no way out: the
  * dialog still carries a name for screen readers, still closes on Escape and
@@ -64,9 +65,21 @@ export const LessonVideoModalContainer = ({
   // an HTTP round trip per Synthesia lesson — for every card on the board.
   // Resolved for the lesson IN the course the tile named — never one picked
   // from `modules`, which on the org editor spans every course on the rail.
-  const playback = useLessonVideoPlayback(play, play !== null);
+  // Per-lesson preview language, shared with the config dialog's preview of
+  // the same lesson. Read with a stable fallback id while closed: hooks
+  // cannot be skipped, and lesson 0 is never a real lesson.
+  const [lang, setLang] = useAtom(
+    adminPreviewLangAtomFamily(play?.lessonId ?? 0),
+  );
+  const playback = useLessonVideoPlayback(
+    play === null ? null : { ...play, lang },
+    play !== null,
+  );
   const state = computeVideoModalState({
-    isFetched: playback.isFetched,
+    // Placeholder data counts as arrived: mid language switch the new key
+    // has not fetched, and treating that as "loading" would unmount the
+    // player — losing the resume point the placeholder exists to keep.
+    isFetched: playback.isFetched || playback.isPlaceholderData,
     isError: playback.isError,
     errorMessage: playback.error?.message ?? null,
     data: playback.data,
@@ -90,7 +103,7 @@ export const LessonVideoModalContainer = ({
 
           <Dialog.Close
             aria-label="Close video preview"
-            className="-top-10 absolute end-0 rounded p-1.5 text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            className="-inset-bs-10 absolute end-0 rounded p-1.5 text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </Dialog.Close>
@@ -103,7 +116,16 @@ export const LessonVideoModalContainer = ({
             grey box and no next step.
           */}
           {state.kind === 'ready' ? (
-            <VideoPreview playback={state.playback} />
+            // No `onPlaybackFailed`: the board has no dead-key notice, and
+            // the player's own error overlay already says playback failed.
+            <VideoPreview
+              key={play?.lessonId}
+              playback={state.playback}
+              onLanguageChange={(code) => {
+                if (isVideoLang(code)) setLang(code);
+              }}
+              onSourceExpired={() => void playback.refetch()}
+            />
           ) : (
             <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg bg-gray-3 px-6 text-center">
               <Video className="h-10 w-10 text-gray-8" aria-hidden="true" />

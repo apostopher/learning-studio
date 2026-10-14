@@ -1,63 +1,37 @@
 import { Video } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-import { attachMedia } from '#/components/video-player/attach-media';
+import { VideoPlayerContainer } from '#/components/video-player';
 import type { LearnerPlayback } from '#/lib/admin-schemas';
+import { badgeForLang, labelForLang } from '#/lib/video-languages';
+import { captionsForPlayback } from '#/lib/video-providers/playback-captions';
 
 interface VideoPreviewProps {
   playback: LearnerPlayback | null;
-  /**
-   * Called when the media request for an HLS manifest is refused with 401/403.
-   *
-   * This is the only way a revoked Mux signing key ever surfaces: Mux JWTs are
-   * signed locally on our server, so `resolvePlayback` succeeds and only Mux's
-   * own edge rejects the token. Caveat: it relies on hls.js exposing the
-   * response status, so it does not fire on browsers playing HLS natively
-   * (Safari), where the media error carries no status.
-   */
-  onForbidden?: () => void;
+  /** Previewed language changed; caller re-queries playback for it. */
+  onLanguageChange?: (code: string) => void;
+  /** Signed URL refused mid-play; caller refetches playback. */
+  onSourceExpired?: () => void;
+  /** Recovery exhausted — for Mux this means the stored key is dead. */
+  onPlaybackFailed?: (message: string) => void;
 }
 
 /**
- * 16:9 admin preview player.
+ * 16:9 admin preview: a placeholder until there is something playable, then
+ * the app's shared `VideoPlayerContainer` — captions, language menu, recovery
+ * and all. Presentational: it only chooses which of the two to draw and maps
+ * the playback body onto the player's props.
  *
- * This is a presentational component, but it owns a `useEffect`: attaching
- * hls.js to a `<video>` element (and tearing the instance down on unmount or
- * when `playback` changes) is imperative DOM/media wiring that JSX cannot
- * express declaratively. The project's presentational-component rules
- * explicitly carve out this case ("may use refs for direct DOM manipulation,
- * such as for animations") — a media player is the same category of concern.
+ * Deliberately NOT keyed here. Keying on the URL would remount the player on
+ * every token refresh and on a language switch, throwing away the restore
+ * point that resumes at the same spot. The per-LESSON remount is the
+ * callers' (`key={lesson.id}` / `key={play.lessonId}`), so recovery budget
+ * and a pending restore never leak from one lesson into the next.
  */
-export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Held in a ref so an inline arrow from the caller cannot land in the effect
-  // below's dependency list — that would tear down and re-attach hls.js on
-  // every parent render.
-  const onForbiddenRef = useRef(onForbidden);
-  useEffect(() => {
-    onForbiddenRef.current = onForbidden;
-  }, [onForbidden]);
-
-  // Destructured so the effect depends on the URL rather than the object's
-  // identity: playback is re-resolved on a timer to keep the signed URL alive,
-  // and remounting the player on a refetch that returned the same URL would
-  // reset the viewer's position for nothing.
-  //
-  // A `playback` that is still rendering or failed carries no `url`/`kind` —
-  // treated the same as "nothing to play yet" here.
-  const url = playback?.status === 'ready' ? playback.url : null;
-  const kind = playback?.status === 'ready' ? playback.kind : null;
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !url || !kind) return;
-    // `attachMedia`'s onError only ever fires for the 401/403 manifest
-    // rejection described above — see its own comment for why. The `fatal`
-    // flag hls.js reports isn't meaningful to this admin-only callback, which
-    // has always meant only "the stored key was refused."
-    return attachMedia(video, url, kind, () => onForbiddenRef.current?.());
-  }, [url, kind]);
-
+export const VideoPreview = ({
+  playback,
+  onLanguageChange,
+  onSourceExpired,
+  onPlaybackFailed,
+}: VideoPreviewProps) => {
   if (!playback || playback.status !== 'ready') {
     return (
       <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-gray-3">
@@ -66,13 +40,23 @@ export const VideoPreview = ({ playback, onForbidden }: VideoPreviewProps) => {
     );
   }
 
+  const lang = playback.lang;
   return (
-    // biome-ignore lint/a11y/useMediaCaption: admin preview of source video, no caption track available.
-    <video
-      ref={videoRef}
-      controls
-      playsInline
-      className="aspect-video w-full rounded-lg bg-gray-12"
+    <VideoPlayerContainer
+      src={playback.url}
+      kind={playback.kind}
+      poster={playback.poster ?? undefined}
+      captions={captionsForPlayback(playback.captions, lang)}
+      captionsUnavailable={playback.captions === null}
+      languages={playback.languages.map((code) => ({
+        code,
+        badge: badgeForLang(code),
+        label: labelForLang(code),
+      }))}
+      activeLanguage={lang}
+      onLanguageChange={onLanguageChange}
+      onSourceExpired={onSourceExpired}
+      onPlaybackFailed={onPlaybackFailed}
     />
   );
 };

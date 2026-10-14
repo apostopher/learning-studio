@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai-family';
 import type { ProviderId } from '#/lib/admin-schemas';
+import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
 import type { UserLevel } from '#/types';
 
 /** Whether the create-course dialog is open. */
@@ -303,12 +304,21 @@ export const videoDraftDetectionAtom = atom<{
 } | null>(null);
 
 /**
- * The lesson whose browser request for a resolved playback URL was refused
- * (401/403). This is the only signal that a Mux signing key has been revoked:
- * Mux JWTs are signed locally on our server, so playback resolution succeeds and
- * only Mux's edge rejects the token.
+ * The lesson whose preview player gave up recovering (its `onPlaybackFailed`,
+ * after the shared player's automatic retries). This is the only signal that a
+ * Mux signing key has been revoked: Mux JWTs are signed locally on our server,
+ * so playback resolution succeeds and only Mux's edge rejects the token.
  */
 export const videoPlaybackForbiddenLessonIdAtom = atom<number | null>(null);
+
+/**
+ * The language an admin is previewing a lesson's video in. Per lesson, page
+ * lifetime only — and deliberately NOT `videoLanguageAtom`: previewing the
+ * French cut must not switch the admin's own learner videos to French.
+ */
+export const adminPreviewLangAtomFamily = atomFamily((_lessonId: number) =>
+  atom<VideoLang>(PRIMARY_VIDEO_LANG),
+);
 
 /**
  * The lesson whose name is being edited inline in the library's "Edit

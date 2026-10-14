@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import {
+  adminPreviewLangAtomFamily,
   videoDraftDetectionAtom,
   videoPlaybackForbiddenLessonIdAtom,
 } from '#/atoms/admin';
@@ -13,6 +14,7 @@ import { useLessonVideo } from '#/data-hooks/use-lesson-video';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
 import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
+import { isVideoLang, labelForLang } from '#/lib/video-languages';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
@@ -124,9 +126,17 @@ export const VideoSectionContainer = ({
     ) ??
       false);
 
+  // The admin's own preview language for this lesson — never the learner's
+  // video-language preference, so previewing a translation leaves their own
+  // lessons in the language they chose.
+  const [previewLang, setPreviewLang] = useAtom(
+    adminPreviewLangAtomFamily(lesson.id),
+  );
   const playbackEnabled = courseId !== null && hasVideo && isProviderConfigured;
   const playback = useLessonVideoPlayback(
-    courseId === null ? null : { lessonId: lesson.id, courseId },
+    courseId === null
+      ? null
+      : { lessonId: lesson.id, courseId, lang: previewLang },
     playbackEnabled,
   );
   const previewState = computeVideoPreviewState(playback.data);
@@ -171,7 +181,9 @@ export const VideoSectionContainer = ({
   // Two independent ways a stored key turns out to be dead, because the
   // providers fail in different places: Synthesia refuses our server's API call
   // (coded 502 → PlaybackError), while Mux accepts the locally-signed JWT and
-  // only its edge refuses the browser's manifest request (→ onForbidden).
+  // only its edge refuses the browser's manifest request — which reaches us as
+  // the shared player's `onPlaybackFailed`, once its automatic retries (each
+  // re-resolving a fresh signed URL) are used up.
   const serverRejection =
     playback.error instanceof PlaybackError &&
     playback.error.code === 'PROVIDER_AUTH_REJECTED'
@@ -206,11 +218,16 @@ export const VideoSectionContainer = ({
       <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
         <div className="min-w-0">
           <VideoPreview
+            key={lesson.id}
             playback={thumbnailPlayback}
-            onForbidden={() => setPlaybackForbidden(true)}
+            onLanguageChange={(code) => {
+              if (isVideoLang(code)) setPreviewLang(code);
+            }}
+            onSourceExpired={() => void playback.refetch()}
+            onPlaybackFailed={() => setPlaybackForbidden(true)}
           />
           {hasVideo && activeProvider && (
-            <p className="mt-1.5 text-tertiary text-xs">
+            <p className="mbs-1.5 text-tertiary text-xs">
               Current video:{' '}
               <span className="font-medium text-secondary">
                 {VIDEO_PROVIDERS[activeProvider].label}
@@ -258,6 +275,21 @@ export const VideoSectionContainer = ({
                 />
                 Resolving playback…
               </p>
+            )}
+            {/*
+              A language switch: the hook keeps serving the previous
+              language as placeholder data (so `isLoading` stays false and
+              the player above stays mounted, ready to resume at the same
+              spot) — which leaves saying what is being waited for to here.
+            */}
+            {playback.isPlaceholderData && (
+              <output className="flex items-center gap-1.5 text-tertiary text-sm">
+                <Loader2
+                  className="h-3.5 w-3.5 animate-spin"
+                  aria-hidden="true"
+                />
+                Loading {labelForLang(previewLang)}…
+              </output>
             )}
             {playback.isError && (
               <p role="alert" className="text-error-text text-sm">
