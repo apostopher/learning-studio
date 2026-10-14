@@ -82,94 +82,94 @@ export const OfferingForm = ({
     }}
     className="flex flex-col gap-4"
   >
-    <div className="grid grid-cols-[minmax(0,1fr)_6rem_minmax(0,1fr)] items-start gap-2.5">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="offering-starts-on" className={labelClassName}>
-          Start date
-        </label>
-        <input
-          ref={startsOnRef}
-          id="offering-starts-on"
-          type="date"
-          value={startsOn}
-          onChange={(event) => onStartsOnChange(event.target.value)}
-          aria-invalid={startsOnError ? true : undefined}
-          aria-describedby={
-            startsOnError ? 'offering-starts-on-error' : undefined
-          }
-          className={fieldClassName(Boolean(startsOnError))}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {/* "Window" alone on screen; the unit is spoken via the hint the input
+    {/* The dates, their errors and the summary line are one block: the
+        summary reads the three fields back, so it sits snug under them
+        (gap-1), while the form's gap-4 still parts this block from the
+        roster below. */}
+    <div className="flex flex-col gap-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_6rem_minmax(0,1fr)] items-start gap-2.5">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="offering-starts-on" className={labelClassName}>
+            Start date
+          </label>
+          <input
+            ref={startsOnRef}
+            id="offering-starts-on"
+            type="date"
+            value={startsOn}
+            onChange={(event) => onStartsOnChange(event.target.value)}
+            aria-invalid={startsOnError ? true : undefined}
+            aria-describedby={
+              startsOnError ? 'offering-starts-on-error' : undefined
+            }
+            className={fieldClassName(Boolean(startsOnError))}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {/* "Window" alone on screen; the unit is spoken via the hint the input
             is described by, and printed in the summary line beneath. */}
-        <label htmlFor="offering-window-days" className={labelClassName}>
-          Window
-        </label>
-        <input
-          id="offering-window-days"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          value={windowDays}
-          onChange={(event) => onWindowDaysChange(event.target.value)}
-          aria-describedby="offering-window-unit offering-window-hint"
-          className={fieldClassName(false)}
-        />
-        <span id="offering-window-unit" className="sr-only">
-          calendar days
-        </span>
+          <label htmlFor="offering-window-days" className={labelClassName}>
+            Window
+          </label>
+          <input
+            id="offering-window-days"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={windowDays}
+            onChange={(event) => onWindowDaysChange(event.target.value)}
+            aria-describedby="offering-window-unit"
+            className={fieldClassName(false)}
+          />
+          <span id="offering-window-unit" className="sr-only">
+            calendar days
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="offering-ends-on" className={labelClassName}>
+            Complete by
+          </label>
+          <input
+            id="offering-ends-on"
+            type="date"
+            value={endsOn}
+            min={startsOn || undefined}
+            onChange={(event) => onEndsOnChange(event.target.value)}
+            aria-invalid={endsOnError ? true : undefined}
+            aria-describedby={
+              endsOnError ? 'offering-ends-on-error' : undefined
+            }
+            className={fieldClassName(Boolean(endsOnError))}
+          />
+        </div>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="offering-ends-on" className={labelClassName}>
-          Complete by
-        </label>
-        <input
-          id="offering-ends-on"
-          type="date"
-          value={endsOn}
-          min={startsOn || undefined}
-          onChange={(event) => onEndsOnChange(event.target.value)}
-          aria-invalid={endsOnError ? true : undefined}
-          aria-describedby={endsOnError ? 'offering-ends-on-error' : undefined}
-          className={fieldClassName(Boolean(endsOnError))}
-        />
-      </div>
-    </div>
-    {/* Errors under the row, full width: in a 3-column row a message under one
+      {/* Errors under the row, full width: in a 3-column row a message under one
         narrow field would wrap to a word per line. */}
-    {startsOnError && (
-      <p
-        id="offering-starts-on-error"
-        role="alert"
-        className="text-error-text text-sm"
-      >
-        {startsOnError}
-      </p>
-    )}
-    {endsOnError && (
-      <p
-        id="offering-ends-on-error"
-        role="alert"
-        className="text-error-text text-sm"
-      >
-        {endsOnError}
-      </p>
-    )}
+      {startsOnError && (
+        <p
+          id="offering-starts-on-error"
+          role="alert"
+          className="text-error-text text-sm"
+        >
+          {startsOnError}
+        </p>
+      )}
+      {endsOnError && (
+        <p
+          id="offering-ends-on-error"
+          role="alert"
+          className="text-error-text text-sm"
+        >
+          {endsOnError}
+        </p>
+      )}
 
-    {summaryLine && (
-      <p className="font-mono font-semibold text-primary text-sm">
-        {summaryLine}
-      </p>
-    )}
-
-    <p id="offering-window-hint" className="text-secondary text-sm">
-      This window is the <strong className="text-primary">ground school</strong>
-      , done remotely: how long a student has to finish every lesson, quiz and
-      debrief before they travel. It closes the day they arrive on site, so
-      every student has to be through the whole curriculum by the end date — not
-      merely keeping up.
-    </p>
+      {summaryLine && (
+        <p className="font-mono font-semibold text-primary text-sm">
+          {summaryLine}
+        </p>
+      )}
+    </div>
 
     <div className="flex flex-col gap-3">
       <h3 className={labelClassName}>On this offering · {rosterCount}</h3>

@@ -73,20 +73,50 @@ export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
 );
 
 /**
- * A level picked in the offering roster, waiting on the confirm dialog for
- * the pilot-facing message — or null. Nothing is written until that dialog
- * is submitted; cancelling just clears this.
+ * A roster level chosen with the chip but not yet settled: pressed and
+ * waiting on the debounce, and/or being saved. Keyed by `rosterLevelEditKey`
+ * — course and person, not offering: a level belongs to the person in a
+ * course, so the same person on two offerings of one course is ONE level,
+ * with one queue of saves. An entry is removed once nothing is waiting,
+ * sending or queued, and the chip falls back to the roster row's own
+ * (saved) level.
  */
-export const rosterLevelDraftAtom = atom<{
+export type RosterLevelEdit = {
   /**
-   * What the popover had open when the level was picked — the offering being
-   * edited (null while scheduling a new one) and its course. A save that
-   * lands after the popover moved on must not patch the roster now showing.
+   * The offering the latest press was on (null while scheduling a new one).
+   * Only for the patch guard: a save patches the roster on screen only if it
+   * is still this one.
    */
   offeringId: number | null;
   courseId: number;
+  courseName: string;
   userId: string;
   profileId: number;
   name: string;
+  /** What the chip shows, and what the next save writes. */
   level: UserLevel;
-} | null>(null);
+  /**
+   * The level known to be saved: the roster row's own when the edit began,
+   * then each level a save confirmed. A save of this level is skipped — no
+   * redundant write, no second pilot message for the same level.
+   */
+  saved: UserLevel | null;
+  /** The debounced save, while one is waiting. */
+  timer: ReturnType<typeof setTimeout> | null;
+  /**
+   * The level being saved right now, or null. One save per row at a time:
+   * two concurrent PUTs could land out of order, and each one messages the
+   * pilot.
+   */
+  sending: UserLevel | null;
+  /**
+   * A save came due (debounce or flush) while one was sending. When that one
+   * settles, `level` is sent once — if it differs from what just went.
+   */
+  queued: boolean;
+};
+
+export const rosterLevelEditKey = (courseId: number, userId: string) =>
+  `${courseId}:${userId}`;
+
+export const rosterLevelEditsAtom = atom<Record<string, RosterLevelEdit>>({});
