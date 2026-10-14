@@ -7,8 +7,10 @@ import {
 import { attachMedia } from './attach-media';
 import { useVideoPlayer } from './hooks';
 import {
+  applyCaptionModes,
   captionLoadFailedPatch,
   captionsSignature,
+  captionsTogglePatch,
   fatalMediaOutcome,
   reattachKey,
   recoveryAttemptsOnPlaying,
@@ -287,14 +289,12 @@ export const VideoPlayerContainer = ({
     v.currentTime = Math.max(0, Math.min(time, v.duration || time));
   };
 
-  const setCaptions = (enabled: boolean) => {
-    const v = videoRef.current;
-    if (!v) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      const tt = v.textTracks[i];
-      tt.mode = enabled && i === 0 ? 'showing' : 'disabled';
-    }
-  };
+  // Flips state only; the mode effect below applies it to the text tracks.
+  const toggleCaptions = () =>
+    setState((prev) => {
+      const patch = captionsTogglePatch(prev);
+      return patch ? { ...prev, ...patch } : prev;
+    });
 
   const toggleFullscreen = async () => {
     const root = rootRef.current;
@@ -332,13 +332,27 @@ export const VideoPlayerContainer = ({
   // chosen — without this dependency captions that were on would silently
   // drop after every swap while the button still read "on".
   // biome-ignore lint/correctness/useExhaustiveDependencies: rest.captions intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
+  //
+  // Also re-applied whenever a track is added or switched by someone else:
+  // hls.js and Safari add the stream's own subtitle tracks after load and may
+  // switch one on, which would put captions on screen that CC cannot clear.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      v.textTracks[i].mode =
-        state.captionsEnabled && i === 0 ? 'showing' : 'disabled';
-    }
+    const tracks = v.textTracks;
+    const apply = () => {
+      applyCaptionModes(
+        tracks as unknown as ArrayLike<{ mode: string }>,
+        state.captionsEnabled,
+      );
+    };
+    apply();
+    tracks.addEventListener('addtrack', apply);
+    tracks.addEventListener('change', apply);
+    return () => {
+      tracks.removeEventListener('addtrack', apply);
+      tracks.removeEventListener('change', apply);
+    };
   }, [state.captionsEnabled, captionsKey]);
 
   const onKeyboardShortcut = (key: string) => {
@@ -372,7 +386,7 @@ export const VideoPlayerContainer = ({
         break;
       case 'c':
       case 'C':
-        if (state.hasCaptions) setCaptions(!state.captionsEnabled);
+        toggleCaptions();
         break;
       case 'f':
       case 'F':
@@ -414,10 +428,7 @@ export const VideoPlayerContainer = ({
       if (!v) return;
       v.playbackRate = rate;
     },
-    onCaptionsToggle: () => {
-      if (!state.hasCaptions) return;
-      setCaptions(!state.captionsEnabled);
-    },
+    onCaptionsToggle: toggleCaptions,
     onFullscreenToggle: () => void toggleFullscreen(),
     onRetry: () => {
       // A fresh, user-initiated attempt always gets its own budget — this

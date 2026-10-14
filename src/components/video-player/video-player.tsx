@@ -114,14 +114,16 @@ export const VideoPlayer = ({
             if (e.target instanceof HTMLTrackElement) a.onCaptionsError?.();
           }}
         >
-          {captions?.map((c, i) => (
+          {/* No `default`: the browser would show that track on load while
+              player state still said captions were off. CC state alone
+              decides what shows (the container's mode effect). */}
+          {captions?.map((c) => (
             <track
               key={`${c.src}-${c.lang}`}
               kind="subtitles"
               src={c.src}
               srcLang={c.lang}
               label={c.label}
-              default={i === 0}
             />
           ))}
         </video>

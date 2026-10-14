@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_RECOVERY_ATTEMPTS } from '#/components/video-player/compute-recovery-action';
 import {
+  applyCaptionModes,
   captionLoadFailedPatch,
   captionsSignature,
+  captionsTogglePatch,
   fatalMediaOutcome,
   type ReattachRequest,
   reattachKey,
@@ -130,5 +132,45 @@ describe('recoveryAttemptsOnPlaying', () => {
   });
   it('leaves it alone when nothing was re-attached since the failure', () => {
     expect(recoveryAttemptsOnPlaying(1, false)).toBe(1);
+  });
+});
+
+describe('captionsTogglePatch', () => {
+  it('turns captions on, and back off — the toggle must be able to disable them', () => {
+    const on = captionsTogglePatch({
+      hasCaptions: true,
+      captionsEnabled: false,
+    });
+    expect(on).toEqual({ captionsEnabled: true });
+    expect(
+      captionsTogglePatch({ hasCaptions: true, captionsEnabled: true }),
+    ).toEqual({ captionsEnabled: false });
+  });
+
+  it('does nothing when the video has no captions', () => {
+    expect(
+      captionsTogglePatch({ hasCaptions: false, captionsEnabled: false }),
+    ).toBeNull();
+  });
+});
+
+describe('applyCaptionModes', () => {
+  const tracks = (...modes: string[]) => modes.map((mode) => ({ mode }));
+
+  it('shows only our first track when CC is on; any later track (in-band HLS subtitles) stays off', () => {
+    const t = tracks('disabled', 'showing');
+    expect(applyCaptionModes(t, true)).toBe(true);
+    expect(t.map((x) => x.mode)).toEqual(['showing', 'disabled']);
+  });
+
+  it('turns every track off when CC is off, including one the browser or hls.js switched on', () => {
+    const t = tracks('showing', 'showing');
+    applyCaptionModes(t, false);
+    expect(t.map((x) => x.mode)).toEqual(['disabled', 'disabled']);
+  });
+
+  it('writes nothing when the modes already match, so its own change events cannot loop', () => {
+    const t = tracks('showing', 'disabled');
+    expect(applyCaptionModes(t, true)).toBe(false);
   });
 });

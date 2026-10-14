@@ -28,7 +28,7 @@ describe('VideoPlayer', () => {
     expect(video?.getAttribute('crossorigin')).toBe('anonymous');
   });
 
-  it('renders one subtitles <track> per caption, the first one default', () => {
+  it('renders one subtitles <track> per caption, none browser-default (CC state decides what shows)', () => {
     const ref = createRef<HTMLVideoElement>();
     const { container } = render(
       <VideoPlayer
@@ -50,7 +50,7 @@ describe('VideoPlayer', () => {
         t.hasAttribute('default'),
       ]),
     ).toEqual([
-      ['en.vtt', 'en', 'English', 'subtitles', true],
+      ['en.vtt', 'en', 'English', 'subtitles', false],
       ['fr.vtt', 'fr', 'French', 'subtitles', false],
     ]);
   });
