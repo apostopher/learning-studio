@@ -1,6 +1,8 @@
 import type { UIMessage } from 'ai';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { brand } from '#/ai/prompts/brand';
 import { cn } from '#/lib/cn';
 
@@ -81,13 +83,25 @@ const markdownComponents: Components = {
   ),
 };
 
+/** `$…$` inline and `$$…$$` display formulas, typeset by KaTeX (styles in
+ * `styles.css`). A formula still streaming in, or one KaTeX can't parse,
+ * renders as its source in the current text colour rather than throwing. */
+const remarkPlugins = [remarkGfm, remarkMath];
+const rehypePlugins: Parameters<typeof ReactMarkdown>[0]['rehypePlugins'] = [
+  [rehypeKatex, { throwOnError: false, errorColor: 'currentColor' }],
+];
+
 const Markdown = ({ children }: { children: string }) => (
-  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+  <ReactMarkdown
+    remarkPlugins={remarkPlugins}
+    rehypePlugins={rehypePlugins}
+    components={markdownComponents}
+  >
     {children}
   </ReactMarkdown>
 );
 
-/** Renders one chat bubble: assistant text as markdown (GFM), user/system
+/** Renders one chat bubble: assistant text as markdown (GFM + math), user/system
  * text as plain, whitespace-preserving text. Hookless — `ReactMarkdown`'s
  * default export is a synchronous, hookless render (see `MarkdownHooks` for
  * the async/hooked variant, which is intentionally not used here). */

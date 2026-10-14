@@ -3,6 +3,8 @@
 @import "./styles/theme.generated.css";
 /* Semantic layer built on those primitives (committed — review changes here). */
 @import "./styles/tokens.css";
+/* Formula typesetting for Viper's chat replies (rehype-katex output). */
+@import "katex/dist/katex.min.css";
 @plugin "@tailwindcss/typography";
 
 /* The app is dark-only: `__root.tsx` pins `class="dark"` on <html>.
@@ -1640,4 +1642,12 @@
   from {
     opacity: 0;
   }
+}
+
+/* A long display formula scrolls inside its chat bubble instead of
+   overflowing it. Physical axis on purpose: `overflow-inline` has no Chromium
+   or Safari support yet, and KaTeX lays formulas out left-to-right anyway. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
