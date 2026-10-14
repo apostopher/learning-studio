@@ -273,6 +273,9 @@ vi.mock('@vercel/blob', () => blob);
 // unrelated to this change and unresolvable under vitest — stub it out
 // rather than let it drag the whole chain in.
 vi.mock('#/lib/video-providers/resolve.server', () => resolveServer);
+vi.mock('#/db/video-captions', () => ({
+  muxCaptionsForPlayback: vi.fn(async () => null),
+}));
 // admin.ts calls `getVideoThumbnailsWithCache.invalidate(args)` from
 // saveCourseProvider — it never calls the reader itself, so the callable
 // half is untested filler. Without this mock, importing admin.ts would drag
@@ -310,6 +313,7 @@ const {
 // resolveLessonPlayback's `resolveCourseProvider` call, not to test
 // encryption itself.
 const { encryptJson } = await import('#/lib/crypto.server');
+const { muxCaptionsForPlayback } = await import('#/db/video-captions');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -1810,6 +1814,7 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'fr-ref',
       expect.anything(),
+      { muxCaptions: muxCaptionsForPlayback },
     );
     expect(result).toMatchObject({ lang: 'fr' });
   });
@@ -1836,6 +1841,7 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'fr-ref',
       expect.anything(),
+      { muxCaptions: muxCaptionsForPlayback },
     );
     expect(result).toMatchObject({ lang: 'fr', languages: ['en', 'fr'] });
   });
@@ -1849,6 +1855,7 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'en-ref',
       expect.anything(),
+      { muxCaptions: muxCaptionsForPlayback },
     );
     expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr'] });
   });
@@ -1862,6 +1869,7 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'en-ref',
       expect.anything(),
+      { muxCaptions: muxCaptionsForPlayback },
     );
     expect(result).toMatchObject({ lang: 'en', languages: ['en'] });
   });

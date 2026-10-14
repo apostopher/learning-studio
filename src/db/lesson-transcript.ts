@@ -25,7 +25,7 @@ const MIN_USEFUL_CHARS = 200;
  * A lesson's video transcript, flattened to prose.
  *
  * Null whenever there is nothing to work with, which is a normal answer rather
- * than a failure: Mux videos carry no text track on this account, a lesson may
+ * than a failure: a Mux video has a transcript once its auto-generated captions are ready (`#/db/video-captions`), a lesson may
  * have no video at all, and a caption fetch can simply fail. Callers treat null
  * as "no transcript source" and the UI offers no debrief.
  *

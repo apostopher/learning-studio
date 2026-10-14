@@ -69,8 +69,12 @@ vi.mock('#/lib/video-providers/resolve.server', () => providers);
 vi.mock('#/db/course-modules', () => ({ courseModuleIds: () => 'SUBQUERY' }));
 vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug: vi.fn() }));
 vi.mock('#/db/placements', () => ({ getCourseIdsForLesson: vi.fn() }));
+vi.mock('#/db/video-captions', () => ({
+  muxCaptionsForPlayback: vi.fn(async () => null),
+}));
 
 const { getLessonPlayback } = await import('#/db/lesson-playback');
+const { muxCaptionsForPlayback } = await import('#/db/video-captions');
 
 const lessonRow = {
   videoProvider: 'mux',
@@ -153,6 +157,51 @@ describe('getLessonPlayback', () => {
       'lesson-playback:3:l1:en',
       JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 60 }, // 90 - 30
+    );
+  });
+
+  it('caches for at most 60s while Mux captions are generating', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([lessonRow]));
+    const ready = {
+      status: 'ready' as const,
+      url: 'https://cdn/v.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+      captionsPending: true as const,
+    };
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    await getLessonPlayback('l1', inCourse);
+
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:3:l1:en',
+      expect.any(String),
+      { ex: 60 },
+    );
+  });
+
+  it('caches for the full signature window (minus margin) when no captions are pending', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([lessonRow]));
+    const ready = {
+      status: 'ready' as const,
+      url: 'https://cdn/v.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+    };
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    await getLessonPlayback('l1', inCourse);
+
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:3:l1:en',
+      expect.any(String),
+      { ex: 3570 },
     );
   });
 
@@ -288,9 +337,12 @@ describe('getLessonPlayback with a language', () => {
     });
 
     expect(admin.resolveCourseProvider).toHaveBeenCalledWith(3, 'mux');
-    expect(providers.resolvePlayback).toHaveBeenCalledWith('mux', 'fr-ref', {
-      keyId: 'mux-key',
-    });
+    expect(providers.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'fr-ref',
+      { keyId: 'mux-key' },
+      { muxCaptions: muxCaptionsForPlayback },
+    );
     expect(result).toEqual({
       ...ready,
       lang: 'fr-CA',
@@ -315,6 +367,7 @@ describe('getLessonPlayback with a language', () => {
       'synthesia',
       'en-ref',
       expect.anything(),
+      { muxCaptions: muxCaptionsForPlayback },
     );
     expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr-CA'] });
   });

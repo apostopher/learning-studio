@@ -5,8 +5,9 @@ import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
  * would be generated from (see `resolveDebriefSource`).
  *
  * The playback response already answers this, so availability costs no extra
- * request and no AI call on the page's critical path. Mux videos report
- * `captions: null` on this account, so those lessons correctly offer nothing.
+ * request and no AI call on the page's critical path. A Mux video
+ * reports `captions: null` until its auto-generated captions are ready
+ * (`#/db/video-captions`), so it correctly offers nothing in the meantime.
  *
  * Deliberately conservative while playback is still resolving: `undefined`
  * answers false, so the debrief appears once it is known to work rather than

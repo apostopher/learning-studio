@@ -1,4 +1,5 @@
 import { resolveCourseProvider } from '#/db/admin';
+import { muxCaptionsForPlayback } from '#/db/video-captions';
 import type { VideoLang } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import {
@@ -66,6 +67,7 @@ export async function resolveSelectedLessonVideo({
     selection.provider,
     selection.ref,
     creds,
+    { muxCaptions: muxCaptionsForPlayback },
   );
   return { ...playback, lang: selection.lang, languages: selection.languages };
 }

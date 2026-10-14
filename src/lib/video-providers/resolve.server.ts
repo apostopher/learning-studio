@@ -8,6 +8,7 @@ import { isVideoAvailable, isVideoNotReady } from '../../types';
 import { isAuthRejectionStatus, PlaybackError } from './errors';
 import { muxCredentialSchema } from './mux';
 import { checkMuxApiToken } from './mux-api.server';
+import { captionsVttUrl, type MuxCaptionsLookup } from './mux-captions';
 import { synthesiaCredentialSchema } from './synthesia';
 import type { ProviderId } from './types';
 
@@ -34,6 +35,12 @@ export interface Playback {
    * absence rather than render an uncaptioned player as if it were complete.
    */
   captions: { vtt: string } | null;
+  /**
+   * Set (to `true`) only on a Mux result whose captions are still being
+   * generated, so the learner cache can expire within a minute and pick
+   * them up — see `playbackCacheTtl`. Absent otherwise.
+   */
+  captionsPending?: true;
 }
 
 /** A video the provider holds but cannot serve yet. */
@@ -51,6 +58,12 @@ export async function resolvePlayback(
   provider: ProviderId,
   ref: string,
   creds: unknown,
+  options: {
+    muxCaptions?: (
+      playbackId: string,
+      creds: unknown,
+    ) => Promise<MuxCaptionsLookup>;
+  } = {},
 ): Promise<PlaybackResult> {
   if (provider === 'mux') {
     const { keyId, privateKey } = muxCredentialSchema.parse(creds);
@@ -68,7 +81,8 @@ export async function resolvePlayback(
       //
       // NOTE: a *revoked but well-formed* Mux key signs perfectly happily here.
       // Mux only rejects the JWT when the browser fetches the manifest, so that
-      // case is detected client-side by VideoPreview's `onForbidden`, not here.
+      // case is detected client-side: the player reports the manifest refusal
+      // through `onPlaybackFailed`, which reaches the admin preview.
       throw new PlaybackError(
         'PROVIDER_AUTH_REJECTED',
         'The stored Mux signing key could not be used to sign playback.',
@@ -93,6 +107,17 @@ export async function resolvePlayback(
       posterToken = null;
     }
 
+    // Captions are best-effort: a lookup failure (DB, Mux) must never take
+    // the video itself down — it plays uncaptioned and CC states why.
+    let captionsLookup: MuxCaptionsLookup = null;
+    if (options.muxCaptions) {
+      try {
+        captionsLookup = await options.muxCaptions(ref, creds);
+      } catch (error) {
+        console.error(`Mux captions lookup failed for ${ref}:`, error);
+      }
+    }
+
     return {
       status: 'ready',
       url: `https://stream.mux.com/${ref}.m3u8?token=${token}`,
@@ -102,8 +127,15 @@ export async function resolvePlayback(
       poster: posterToken
         ? `https://image.mux.com/${ref}/thumbnail.jpg?token=${posterToken}`
         : null,
-      // Mux text tracks are not configured on this account; null is honest.
-      captions: null,
+      // Mux auto-generated captions (see `#/db/video-captions`). Signed
+      // playback: the text track takes the same video token as the stream.
+      captions:
+        captionsLookup?.status === 'ready'
+          ? { vtt: captionsVttUrl(ref, captionsLookup.trackId, token) }
+          : null,
+      ...(captionsLookup?.status === 'pending'
+        ? { captionsPending: true as const }
+        : {}),
     };
   }
 

@@ -497,3 +497,47 @@ describe('validateCredentials — Mux API token', () => {
     });
   });
 });
+
+describe('resolvePlayback — Mux captions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signPlaybackId.mockResolvedValue('signed-jwt-token');
+  });
+
+  it('a ready track becomes the signed VTT URL, with the same token as the stream', async () => {
+    const muxCaptions = vi.fn(async () => ({
+      status: 'ready' as const,
+      trackId: 'trk',
+    }));
+    const r = await resolvePlayback('mux', 'pid', muxCreds, { muxCaptions });
+    expect(muxCaptions).toHaveBeenCalledWith('pid', muxCreds);
+    if (r.status !== 'ready') throw new Error('expected ready');
+    const token = new URL(r.url).searchParams.get('token');
+    expect(r.captions).toEqual({
+      vtt: `https://stream.mux.com/pid/text/trk.vtt?token=${token}`,
+    });
+    expect(r.captionsPending).toBeUndefined();
+  });
+
+  it('generating → no captions yet, flagged pending for the cache', async () => {
+    const r = await resolvePlayback('mux', 'pid', muxCreds, {
+      muxCaptions: async () => ({ status: 'pending' as const }),
+    });
+    expect(r).toMatchObject({
+      status: 'ready',
+      captions: null,
+      captionsPending: true,
+    });
+  });
+
+  it('a captions lookup that throws never takes playback down', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await resolvePlayback('mux', 'pid', muxCreds, {
+      muxCaptions: async () => {
+        throw new Error('db down');
+      },
+    });
+    errorLog.mockRestore();
+    expect(r).toMatchObject({ status: 'ready', captions: null });
+  });
+});
