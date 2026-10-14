@@ -25,6 +25,43 @@ export function captionLoadFailedPatch() {
   };
 }
 
+/** The CC toggle's state change. Player state is the ONE source of truth for
+ * whether captions show — the container's mode effect applies it to the text
+ * tracks. Writing `TextTrack.mode` directly instead (as the toggle once did)
+ * left the state saying "off" forever, so every press turned captions on and
+ * none could turn them off. `null`: this video has no captions to toggle. */
+export function captionsTogglePatch(state: {
+  hasCaptions: boolean;
+  captionsEnabled: boolean;
+}): { captionsEnabled: boolean } | null {
+  return state.hasCaptions ? { captionsEnabled: !state.captionsEnabled } : null;
+}
+
+/**
+ * Puts the video's text tracks in the modes CC state asks for: our first
+ * `<track>` showing when on, every track disabled otherwise. `<track>`
+ * elements come first in a TextTrackList, so any later track is one the
+ * stream brought (Mux lists ready captions in its HLS manifest; hls.js and
+ * Safari add those as tracks of their own) and stays off — the CC button must
+ * be the only thing that shows captions. Writes only what differs and reports
+ * whether it wrote, so re-running it from the tracks' own `change` event
+ * settles instead of looping.
+ */
+export function applyCaptionModes(
+  tracks: ArrayLike<{ mode: string }>,
+  enabled: boolean,
+): boolean {
+  let changed = false;
+  for (let i = 0; i < tracks.length; i++) {
+    const want = enabled && i === 0 ? 'showing' : 'disabled';
+    if (tracks[i].mode !== want) {
+      tracks[i].mode = want;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** Stable identity of a caption set by content, not array identity: callers
  * rebuild the array every render, and only a changed `src` (a fresh signed
  * URL) should clear a caption load error. */
