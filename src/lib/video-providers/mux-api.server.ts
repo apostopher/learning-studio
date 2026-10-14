@@ -1,4 +1,7 @@
 import Mux from '@mux/mux-node';
+import { muxCredentialSchema } from './mux';
+import type { MuxCaptionCode } from './mux-captions';
+import type { MuxCaptionsApi } from './mux-captions-service';
 
 /** Every Mux API call: a stuck request must not hold an admin save open. */
 export const muxApiClient = (tokenId: string, tokenSecret: string) =>
@@ -22,4 +25,40 @@ export async function checkMuxApiToken(
       ? 'Mux rejected the API token.'
       : `Mux couldn't check the API token: ${(error as Error).message}`;
   }
+}
+
+/** The real Mux API behind the captions service. */
+export function muxCaptionsApi(
+  tokenId: string,
+  tokenSecret: string,
+): MuxCaptionsApi {
+  const client = muxApiClient(tokenId, tokenSecret);
+  return {
+    async assetIdForPlayback(playbackId) {
+      const { object } = await client.video.playbackIds.retrieve(playbackId);
+      if (object.type !== 'asset') {
+        throw new Error('this playback id is a live stream, not a video.');
+      }
+      return object.id;
+    },
+    async assetTracks(assetId) {
+      const asset = await client.video.assets.retrieve(assetId);
+      return asset.tracks ?? [];
+    },
+    async generateSubtitles(assetId, audioTrackId, code: MuxCaptionCode, name) {
+      await client.video.assets.generateSubtitles(assetId, audioTrackId, {
+        generated_subtitles: [{ language_code: code, name }],
+      });
+    },
+  };
+}
+
+/** The captions API for a course's stored Mux credentials, or `null` with no API token. */
+export function muxApiFromCreds(creds: unknown): MuxCaptionsApi | null {
+  const parsed = muxCredentialSchema.safeParse(creds);
+  if (!parsed.success) return null;
+  const { apiTokenId, apiTokenSecret } = parsed.data;
+  return apiTokenId && apiTokenSecret
+    ? muxCaptionsApi(apiTokenId, apiTokenSecret)
+    : null;
 }
