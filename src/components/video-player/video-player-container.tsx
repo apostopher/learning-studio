@@ -2,8 +2,8 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useId, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';
 import { attachMedia } from './attach-media';
-import { computeRecoveryDecision } from './compute-recovery-action';
 import { useVideoPlayer } from './hooks';
+import { captionLoadFailedPatch, fatalMediaOutcome } from './media-failure';
 import {
   applyRestorePoint,
   captureRestorePoint,
@@ -42,8 +42,22 @@ type ContainerProps = Omit<
    * playhead is restored and playback resumed.
    */
   onLanguageChange?: (code: string) => void;
+  /**
+   * Fires once when automatic recovery is exhausted; the player still shows
+   * its own error overlay.
+   */
+  onPlaybackFailed?: (message: string) => void;
 };
 
+/**
+ * The app's one video player: drop it on any page with a `src`. Optional
+ * captions, a video-language menu, and callbacks for an expiring signed URL
+ * (`onSourceExpired`) and for recovery giving up (`onPlaybackFailed`).
+ *
+ * It never records progress. Lesson progress, the debrief overlay and the
+ * coverage notice belong to `LessonPlayerContainer`, which wraps this —
+ * admin previews use this directly so an admin's viewing writes nothing.
+ */
 export const VideoPlayerContainer = ({
   playerId: providedId,
   onEnded,
@@ -51,6 +65,7 @@ export const VideoPlayerContainer = ({
   captionsUnavailable,
   onSourceExpired,
   onLanguageChange,
+  onPlaybackFailed,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -69,10 +84,15 @@ export const VideoPlayerContainer = ({
   // a per-video fact like "this one has no captions" at creation time — this
   // is the only place that gap is bridged. Nothing else in this container
   // (or `useVideoPlayer`) ever writes `captionsUnavailable`.
+  //
+  // Depends on `rest.captions` so a new caption list (a fresh signed URL)
+  // resets a load error back to the prop value; a re-render with the same
+  // array reference does not clear it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.captions only re-triggers the reset; the body doesn't read it.
   useEffect(() => {
     if (captionsUnavailable === undefined) return;
     setState((prev) => ({ ...prev, captionsUnavailable }));
-  }, [captionsUnavailable, setState]);
+  }, [captionsUnavailable, rest.captions, setState]);
 
   // Held in a ref, like `onForbiddenRef` in the admin preview this was
   // extracted from: `onSourceExpired` traces back to an inline arrow
@@ -84,6 +104,10 @@ export const VideoPlayerContainer = ({
   useEffect(() => {
     onSourceExpiredRef.current = onSourceExpired;
   }, [onSourceExpired]);
+  const onPlaybackFailedRef = useRef(onPlaybackFailed);
+  useEffect(() => {
+    onPlaybackFailedRef.current = onPlaybackFailed;
+  }, [onPlaybackFailed]);
 
   // How many automatic recoveries this mount has already attempted — see
   // `compute-recovery-action.ts` for why this is capped rather than
@@ -169,16 +193,14 @@ export const VideoPlayerContainer = ({
     if (!video || !rest.src || kind !== 'hls') return;
     return attachMedia(video, rest.src, kind, (fatal) => {
       if (!fatal) return;
-      const decision = computeRecoveryDecision(recoveryAttemptsRef.current);
-      setState((prev) => ({
-        ...prev,
-        status: 'error',
-        error: decision.message,
-      }));
-      if (decision.kind === 'retry') {
-        recoveryAttemptsRef.current = decision.attempt;
+      const out = fatalMediaOutcome(recoveryAttemptsRef.current);
+      setState((prev) => ({ ...prev, ...out.patch }));
+      if (out.retry) {
+        recoveryAttemptsRef.current = out.retry.attempt;
         pendingRestoreTimeRef.current = video.currentTime;
         onSourceExpiredRef.current?.();
+      } else if (out.failedMessage !== null) {
+        onPlaybackFailedRef.current?.(out.failedMessage);
       }
       // Terminal: no further automatic attempt. The ErrorOverlay's Retry
       // button (actions.onRetry below) is the only way forward from here,
@@ -351,6 +373,8 @@ export const VideoPlayerContainer = ({
       armHideTimer(!state.paused);
     },
     onKeyboardShortcut,
+    onCaptionsError: () =>
+      setState((prev) => ({ ...prev, ...captionLoadFailedPatch() })),
     onLanguageChange: onLanguageChange
       ? (code) => {
           // The active menu item fires this too. Capturing for it would

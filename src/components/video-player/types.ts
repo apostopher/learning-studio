@@ -54,6 +54,8 @@ export type VideoPlayerActions = {
   onPointerActivity?: () => void;
   onKeyboardShortcut?: (key: string) => void;
   onLanguageChange?: (code: string) => void;
+  /** A caption file failed to load (e.g. its signed URL expired). */
+  onCaptionsError?: () => void;
 };
 
 /** One entry of the player's language menu — already labelled, the player knows no codes. */

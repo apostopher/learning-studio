@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -244,5 +244,22 @@ describe('VideoPlayer', () => {
       await screen.findByRole('menuitem', { name: /Canadian French/ }),
     );
     expect(onLanguageChange).toHaveBeenCalledWith('fr-CA');
+  });
+
+  it('reports a caption file that fails to load', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const onCaptionsError = vi.fn();
+    const { container } = render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        captions={[{ src: 'expired.vtt', lang: 'en', label: 'English' }]}
+        actions={{ onCaptionsError }}
+      />,
+    );
+    const track = container.querySelector('track');
+    if (!track) throw new Error('no track rendered');
+    fireEvent.error(track);
+    expect(onCaptionsError).toHaveBeenCalledTimes(1);
   });
 });

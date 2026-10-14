@@ -113,6 +113,15 @@ export const VideoPlayer = ({
               srcLang={c.lang}
               label={c.label}
               default={i === 0}
+              // React never wires `onError` on <track> (its non-delegated
+              // event list covers img/link/source/media only), and `error`
+              // doesn't bubble — so listen natively through the ref.
+              ref={(el) => {
+                if (!el) return;
+                const onError = () => a.onCaptionsError?.();
+                el.addEventListener('error', onError);
+                return () => el.removeEventListener('error', onError);
+              }}
             />
           ))}
         </video>
