@@ -6,6 +6,7 @@ import {
   absentResourceResponse,
   requireCoursePermission,
 } from '#/lib/permissions.server';
+import { isVideoLang, PRIMARY_VIDEO_LANG } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 
 /** Video playback is content, read-only here. */
@@ -44,15 +45,19 @@ export async function getVideoPlaybackHandler(
   // which key signs the URL — and only the editor (`/admin/$courseId/…`)
   // knows which one it is showing. Inferring it here used to pick the
   // lowest course id, which was the wrong course for anyone in the other.
-  const courseId = parsePositiveInt(
-    new URL(request.url).searchParams.get('courseId'),
-  );
+  const { searchParams } = new URL(request.url);
+  const courseId = parsePositiveInt(searchParams.get('courseId'));
   if (courseId === null) {
     return Response.json(
       { error: 'A valid courseId is required' },
       { status: 400 },
     );
   }
+  // Same rule as the learner route: an unknown or unattached language is
+  // never a refusal — the resolver falls back to the primary video and says
+  // which language it played.
+  const rawLang = searchParams.get('lang');
+  const lang = isVideoLang(rawLang) ? rawLang : PRIMARY_VIDEO_LANG;
   // Confirm the placement before guarding: guarding on a course the lesson is
   // not in would misreport "no such lesson" as "forbidden". A course the
   // lesson is not placed in gets the SAME answer as an unknown lesson, and
@@ -68,7 +73,7 @@ export async function getVideoPlaybackHandler(
   if (denied) return denied;
 
   try {
-    const playback = await resolveLessonPlayback(lessonId, courseId);
+    const playback = await resolveLessonPlayback(lessonId, courseId, lang);
     // 404 now means "no video assigned" only. A missing course credential
     // used to land here too, which made an admin misconfiguration
     // indistinguishable from an empty lesson; it throws

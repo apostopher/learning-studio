@@ -7,6 +7,7 @@
 import { useSetAtom } from 'jotai';
 import { type RefObject, useEffect, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';
+import { resolveHasCaptions } from './media-failure';
 import type { VideoPlayerState } from './types';
 
 const HIDE_DELAY_MS = 2000;
@@ -27,11 +28,15 @@ export const useVideoPlayer = (
       setState((prev) => ({ ...prev, ...p }));
 
     const onLoadedMetadata = () =>
-      patch({
+      setState((prev) => ({
+        ...prev,
         duration: Number.isFinite(video.duration) ? video.duration : 0,
-        hasCaptions: video.textTracks.length > 0,
+        hasCaptions: resolveHasCaptions(
+          video.textTracks.length,
+          prev.captionsUnavailable,
+        ),
         status: 'ready',
-      });
+      }));
     const onTimeUpdate = () => patch({ currentTime: video.currentTime });
     const onPlay = () =>
       patch({ paused: false, hasPlayedOnce: true, status: 'ready' });

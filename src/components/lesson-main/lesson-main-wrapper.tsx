@@ -110,7 +110,9 @@ export const LessonMainWrapper = ({
       // video just broke) would additionally log an unhandled promise
       // rejection on every failure, which is noise, not signal, on a path
       // that already has a real error handler.
-      void refetchLessonPlaybackFresh(queryClient, lesson, videoLang).catch(
+      // Returned (already caught) so the player can re-attach once the
+      // fresh url has landed — see `onSourceExpired`.
+      return refetchLessonPlaybackFresh(queryClient, lesson, videoLang).catch(
         () => {},
       );
     },

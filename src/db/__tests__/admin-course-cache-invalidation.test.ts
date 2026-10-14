@@ -1678,7 +1678,7 @@ describe('resolveLessonPlayback course scoping', () => {
       captions: null,
     });
 
-    await resolveLessonPlayback(9, 3);
+    await resolveLessonPlayback(9, 3, 'en');
 
     expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(whereCalls).toHaveLength(1);
@@ -1742,7 +1742,7 @@ describe('resolveLessonPlayback course scoping', () => {
       captions: null,
     });
 
-    const result = await resolveLessonPlayback(9, 3);
+    const result = await resolveLessonPlayback(9, 3, 'en');
 
     expect(orderByCalls).toHaveLength(1);
     // Fix round 1 (Important 2): asserting by `.name` ('module_id') rather
@@ -1756,6 +1756,114 @@ describe('resolveLessonPlayback course scoping', () => {
     expect(orderByCalls[0]).toBe(moduleLessonsTable.moduleId);
     expect(limitCalls).toEqual([1]);
     expect(result?.status).toBe('ready');
+  });
+});
+
+describe('resolveLessonPlayback language selection', () => {
+  const credsWheres: SQL[] = [];
+  const lookup = (
+    otherVideoIds: unknown,
+    {
+      primaryProvider = 'mux',
+      creds = true,
+    }: { primaryProvider?: string; creds?: boolean } = {},
+  ) => {
+    credsWheres.length = 0;
+    const chain = {
+      from: () => chain,
+      innerJoin: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+      limit: () =>
+        Promise.resolve([
+          {
+            videoProvider: primaryProvider,
+            videoRef: 'en-ref',
+            otherVideoIds,
+          },
+        ]),
+    };
+    const credsChain = makeChain(
+      creds ? [{ secrets: encryptJson({ keyId: 'k', privateKey: 'p' }) }] : [],
+    );
+    const credsWhere = credsChain.where;
+    credsChain.where = ((condition: SQL) => {
+      credsWheres.push(condition);
+      return credsWhere();
+    }) as typeof credsChain.where;
+    db.select.mockReturnValueOnce(chain).mockReturnValueOnce(credsChain);
+    resolveServer.resolvePlayback.mockResolvedValue({
+      status: 'rendering',
+    });
+  };
+
+  it('takes credentials from the SELECTED video provider, not the primary', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }], {
+      primaryProvider: 'synthesia',
+    });
+
+    const result = await resolveLessonPlayback(9, 3, 'fr');
+
+    expect(credsWheres).toHaveLength(1);
+    expect(renderSqlParams(credsWheres[0])).toEqual([3, 'mux']);
+    expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'fr-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'fr' });
+  });
+
+  it('names the selected provider when it has no credentials', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }], {
+      primaryProvider: 'synthesia',
+      creds: false,
+    });
+
+    await expect(resolveLessonPlayback(9, 3, 'fr')).rejects.toMatchObject({
+      code: 'PROVIDER_NOT_CONFIGURED',
+      message: 'This course has no mux credentials configured.',
+    });
+    expect(resolveServer.resolvePlayback).not.toHaveBeenCalled();
+  });
+
+  it('resolves the requested alternate and reports the languages on offer', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }]);
+
+    const result = await resolveLessonPlayback(9, 3, 'fr');
+
+    expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'fr-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'fr', languages: ['en', 'fr'] });
+  });
+
+  it('falls back to the primary video for a language the lesson lacks', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }]);
+
+    const result = await resolveLessonPlayback(9, 3, 'de');
+
+    expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'en-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr'] });
+  });
+
+  it('offers no alternates when the stored column fails its schema', async () => {
+    lookup([{ lang: 'FR', videoId: 'old-shape' }]);
+
+    const result = await resolveLessonPlayback(9, 3, 'fr');
+
+    expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'en-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'en', languages: ['en'] });
   });
 });
 

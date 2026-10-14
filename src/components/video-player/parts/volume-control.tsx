@@ -45,6 +45,7 @@ export const VolumeControl = ({
         onValueChange={(v) => onVolumeChange?.(Array.isArray(v) ? v[0] : v)}
         aria-label={volumeLabel}
         aria-valuetext={valueText}
+        className="vp-volume-slider"
         style={{ inlineSize: 80 }}
       >
         <Slider.Control>

@@ -37,7 +37,11 @@ describe('useLessonVideoPlayback', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ status: 'rendering' }),
+        json: async () => ({
+          status: 'rendering',
+          lang: 'en',
+          languages: ['en'],
+        }),
       }),
     );
     const { client, wrapper } = harness();
@@ -49,15 +53,90 @@ describe('useLessonVideoPlayback', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/admin/lessons/10/video-playback?courseId=7',
+      '/api/admin/lessons/10/video-playback?courseId=7&lang=en',
     );
     // The entry the NEXT reader of this lesson-in-this-course finds — and,
     // by the same key, the entry a reader of the same lesson in course 8
     // does NOT find.
     expect(client.getQueryData(dataKeys.lessonPlayback(10, 7))).toEqual({
       status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
     });
     expect(client.getQueryData(dataKeys.lessonPlayback(10, 8))).toBeUndefined();
+  });
+
+  it('asks for the previewed language and caches each language separately', async () => {
+    const body = { status: 'rendering', lang: 'fr', languages: ['en', 'fr'] };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, json: async () => body }),
+    );
+    const { client, wrapper } = harness();
+
+    const { result } = renderHook(
+      () =>
+        useLessonVideoPlayback({ lessonId: 10, courseId: 7, lang: 'fr' }, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/admin/lessons/10/video-playback?courseId=7&lang=fr',
+    );
+    // A signed-URL refetch re-reads THIS entry, so the preview stays French;
+    // the English entry is a different video and must not be reused for it.
+    expect(client.getQueryData(dataKeys.lessonPlayback(10, 7, 'fr'))).toEqual(
+      body,
+    );
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'en')),
+    ).toBeUndefined();
+  });
+
+  describe('while the next target loads', () => {
+    const en = { status: 'rendering', lang: 'en', languages: ['en', 'fr'] };
+    const respond = (url: string) =>
+      url.includes('lang=en')
+        ? Promise.resolve({ ok: true, status: 200, json: async () => en })
+        : new Promise(() => {}); // everything else stays pending
+
+    it('keeps the previous language on screen across a language switch', async () => {
+      vi.stubGlobal('fetch', vi.fn(respond));
+      const { wrapper } = harness();
+
+      const { result, rerender } = renderHook(
+        ({ lang }: { lang: 'en' | 'fr' }) =>
+          useLessonVideoPlayback({ lessonId: 10, courseId: 7, lang }, true),
+        { wrapper, initialProps: { lang: 'en' } },
+      );
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      rerender({ lang: 'fr' });
+
+      // Without this the player unmounts and the resume position is lost.
+      expect(result.current.data).toEqual(en);
+      expect(result.current.isPlaceholderData).toBe(true);
+    });
+
+    it('never shows one lesson’s video under another lesson', async () => {
+      vi.stubGlobal('fetch', vi.fn(respond));
+      const { wrapper } = harness();
+
+      const { result, rerender } = renderHook(
+        ({ lessonId }: { lessonId: number }) =>
+          useLessonVideoPlayback({ lessonId, courseId: 7, lang: 'en' }, true),
+        { wrapper, initialProps: { lessonId: 10 } },
+      );
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      rerender({ lessonId: 11 });
+
+      expect(result.current.data).toBeUndefined();
+      expect(result.current.isPlaceholderData).toBe(false);
+    });
   });
 
   it('fetches nothing while it has no lesson to ask about', () => {

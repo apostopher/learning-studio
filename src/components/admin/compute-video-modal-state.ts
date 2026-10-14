@@ -1,4 +1,4 @@
-import type { LessonPlayback } from '#/lib/admin-schemas';
+import type { LearnerPlayback } from '#/lib/admin-schemas';
 
 export type VideoModalState =
   | { kind: 'loading' }
@@ -7,7 +7,7 @@ export type VideoModalState =
   | { kind: 'unavailable' }
   | { kind: 'rendering' }
   | { kind: 'failed' }
-  | { kind: 'ready'; playback: Extract<LessonPlayback, { status: 'ready' }> };
+  | { kind: 'ready'; playback: Extract<LearnerPlayback, { status: 'ready' }> };
 
 export type VideoModalStateInput = {
   /**
@@ -19,7 +19,7 @@ export type VideoModalStateInput = {
   isError: boolean;
   errorMessage: string | null;
   /** `null` is a real 404 answer; `undefined` means nothing has arrived. */
-  data: LessonPlayback | null | undefined;
+  data: LearnerPlayback | null | undefined;
 };
 
 /**

@@ -471,8 +471,8 @@ const playbackLanguageFields = {
 };
 
 /**
- * The LEARNER route's body: playback plus which language it is and which
- * the lesson offers. The admin preview route keeps `lessonPlaybackSchema`.
+ * The playback route body, learner and admin preview alike: playback plus
+ * which language it is and which the lesson offers.
  */
 export const learnerPlaybackSchema = z.discriminatedUnion('status', [
   lessonPlaybackReadySchema.extend(playbackLanguageFields),

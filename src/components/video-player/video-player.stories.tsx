@@ -59,13 +59,11 @@ export const PlayingWithCaptions: Story = {
   args: {
     src: SAMPLE_SRC,
     videoRef: createRef<HTMLVideoElement>(),
-    tracks: [
+    captions: [
       {
         src: 'https://example.test/captions.vtt',
-        srcLang: 'en',
+        lang: 'en',
         label: 'English',
-        kind: 'subtitles',
-        default: true,
       },
     ],
     state: {
@@ -78,6 +76,15 @@ export const PlayingWithCaptions: Story = {
       hasCaptions: true,
       captionsEnabled: true,
     },
+    actions: noopActions,
+  },
+};
+
+export const PlainFile: Story = {
+  args: {
+    src: SAMPLE_SRC,
+    videoRef: createRef<HTMLVideoElement>(),
+    state: { status: 'ready' },
     actions: noopActions,
   },
 };

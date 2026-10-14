@@ -27,6 +27,10 @@ import { getLessonPlayback } from '#/db/lesson-playback';
 import { nextAvailableLessonSlug } from '#/db/lesson-slug';
 import { getLessonTranscript } from '#/db/lesson-transcript';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
+import {
+  type LessonPlaybackResult,
+  resolveSelectedLessonVideo,
+} from '#/db/resolve-lesson-video';
 import type { DBCourse } from '#/db/schema';
 import {
   courseModulesTable,
@@ -65,15 +69,11 @@ import {
   type AlternateLang,
   removeAlternate,
   upsertAlternate,
+  type VideoLang,
 } from '#/lib/video-languages';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
-import { PlaybackError } from '#/lib/video-providers/errors';
 import { buildLessonPosters } from '#/lib/video-providers/posters.server';
-import {
-  type PlaybackResult,
-  resolvePlayback,
-  validateCredentials,
-} from '#/lib/video-providers/resolve.server';
+import { validateCredentials } from '#/lib/video-providers/resolve.server';
 import type {
   CourseLessonDependency,
   OnboardingQuestions,
@@ -972,7 +972,8 @@ export function removeLessonAlternateVideo(
 export async function resolveLessonPlayback(
   lessonId: number,
   courseId: number,
-): Promise<PlaybackResult | null> {
+  lang: VideoLang,
+): Promise<LessonPlaybackResult | null> {
   // `courseId` is the course the route already resolved (and guarded on) —
   // fix round 1: previously this ran its own independent "lowest course id"
   // lookup, which happened to match the route's guard only because both used
@@ -1003,6 +1004,7 @@ export async function resolveLessonPlayback(
     .select({
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
+      otherVideoIds: lessonsTable.otherVideoIds,
     })
     .from(lessonsTable)
     .innerJoin(
@@ -1018,18 +1020,13 @@ export async function resolveLessonPlayback(
     .orderBy(moduleLessonsTable.moduleId)
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
-  const provider = lesson.videoProvider as ProviderId;
-  const creds = await resolveCourseProvider(courseId, provider);
-  // See resolveLessonPlaybackUncached: a missing credential is an admin
-  // misconfiguration, not "no video", and must not collapse into the same
-  // 404 the board reads as "nothing assigned".
-  if (!creds) {
-    throw new PlaybackError(
-      'PROVIDER_NOT_CONFIGURED',
-      `This course has no ${provider} credentials configured.`,
-    );
-  }
-  return resolvePlayback(provider, lesson.videoRef, creds);
+  return resolveSelectedLessonVideo({
+    provider: lesson.videoProvider as ProviderId,
+    ref: lesson.videoRef,
+    otherVideoIds: lesson.otherVideoIds,
+    courseId,
+    lang,
+  });
 }
 
 /**

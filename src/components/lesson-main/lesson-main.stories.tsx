@@ -137,7 +137,7 @@ export const ReadyPlaying: Story = {
         status: 'ready',
         src: 'https://download.samplelib.com/mp4/sample-5s.mp4',
         kind: 'file',
-        tracks: [],
+        captions: [],
         captionsUnavailable: false,
         lang: 'en',
         languages: ['en'],

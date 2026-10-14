@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lessonPlaybackSchema } from '#/lib/admin-schemas';
+import { learnerPlaybackSchema } from '#/lib/admin-schemas';
 import { computeVideoPreviewState } from '../compute-video-preview-state';
 
 describe('computeVideoPreviewState', () => {
@@ -15,13 +15,21 @@ describe('computeVideoPreviewState', () => {
     // of throwing). A schema-only test would pass even if this function
     // still ignored `status` — this asserts on what the parsed value
     // actually becomes downstream.
-    const parsed = lessonPlaybackSchema.parse({ status: 'rendering' });
+    const parsed = learnerPlaybackSchema.parse({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
 
     expect(computeVideoPreviewState(parsed)).toEqual({ kind: 'rendering' });
   });
 
   it('parses a failed wire body and reaches the failed state', () => {
-    const parsed = lessonPlaybackSchema.parse({ status: 'failed' });
+    const parsed = learnerPlaybackSchema.parse({
+      status: 'failed',
+      lang: 'en',
+      languages: ['en'],
+    });
 
     expect(computeVideoPreviewState(parsed)).toEqual({ kind: 'failed' });
   });
@@ -34,8 +42,10 @@ describe('computeVideoPreviewState', () => {
       expiresInSeconds: 600,
       poster: null,
       captions: null,
+      lang: 'en' as const,
+      languages: ['en' as const],
     };
-    const parsed = lessonPlaybackSchema.parse(body);
+    const parsed = learnerPlaybackSchema.parse(body);
 
     expect(computeVideoPreviewState(parsed)).toEqual({
       kind: 'ready',
@@ -44,6 +54,6 @@ describe('computeVideoPreviewState', () => {
   });
 
   it('rejects a wire body with an unrecognized status instead of silently matching a branch', () => {
-    expect(() => lessonPlaybackSchema.parse({ status: 'unknown' })).toThrow();
+    expect(() => learnerPlaybackSchema.parse({ status: 'unknown' })).toThrow();
   });
 });

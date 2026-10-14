@@ -1,3 +1,5 @@
+import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
+
 /** Query-key factory for typesafe TanStack Query hooks in src/data-hooks/. */
 export const dataKeys = {
   adminCourses: () => ['admin', 'courses'] as const,
@@ -44,8 +46,11 @@ export const dataKeys = {
    * different signed URLs. One shared entry would hand the second course
    * the first's URL until it went stale.
    */
-  lessonPlayback: (lessonId: number, courseId: number) =>
-    [...dataKeys.lessonPlaybacks(lessonId), courseId] as const,
+  lessonPlayback: (
+    lessonId: number,
+    courseId: number,
+    lang: VideoLang = PRIMARY_VIDEO_LANG,
+  ) => [...dataKeys.lessonPlaybacks(lessonId), courseId, lang] as const,
   /** Every course's posters — the prefix `lessonPosters` is built on. */
   allLessonPosters: () => ['admin', 'lesson-posters'] as const,
   lessonPosters: (courseId: number) =>

@@ -51,7 +51,8 @@ export type ComputeArgs = {
    */
   material?: MaterialQueryShape;
   onRetryCourse: () => void;
-  onRetryVideo: () => void;
+  /** Returns the refetch's promise so the player can re-attach once it settles. */
+  onRetryVideo: () => unknown;
 };
 
 const errorMessage = (err: unknown): string =>
@@ -59,7 +60,7 @@ const errorMessage = (err: unknown): string =>
 
 const resolveVideoState = (
   video: VideoQueryShape,
-  onRetryVideo: () => void,
+  onRetryVideo: () => unknown,
 ): VideoFetchState => {
   if (video.isError) {
     return {

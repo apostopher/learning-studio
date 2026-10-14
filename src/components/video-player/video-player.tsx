@@ -18,7 +18,7 @@ export const VideoPlayer = ({
   kind = 'file',
   videoRef,
   rootRef,
-  tracks,
+  captions,
   state,
   actions,
   playbackRates = [...PLAYBACK_RATES],
@@ -38,7 +38,7 @@ export const VideoPlayer = ({
     muted = false,
     playbackRate = 1,
     captionsEnabled = false,
-    hasCaptions = (tracks?.length ?? 0) > 0,
+    hasCaptions = (captions?.length ?? 0) > 0,
     captionsUnavailable = false,
     fullscreen = false,
     status = 'idle',
@@ -104,9 +104,25 @@ export const VideoPlayer = ({
           // attribute also governs) keeps working.
           crossOrigin="anonymous"
           {...nativeRest}
+          // React never wires `onError` on <track>, and `error` doesn't
+          // bubble — but it does pass through the capture phase of the
+          // <video>, so catch it there. Hookless, and always the current
+          // handler. The video's own errors (target is the <video>) are not
+          // caption failures and are left to the container's listeners.
+          onErrorCapture={(e) => {
+            nativeRest.onErrorCapture?.(e);
+            if (e.target instanceof HTMLTrackElement) a.onCaptionsError?.();
+          }}
         >
-          {tracks?.map((t) => (
-            <track key={`${t.src}-${t.srcLang ?? ''}`} {...t} />
+          {captions?.map((c, i) => (
+            <track
+              key={`${c.src}-${c.lang}`}
+              kind="subtitles"
+              src={c.src}
+              srcLang={c.lang}
+              label={c.label}
+              default={i === 0}
+            />
           ))}
         </video>
 
@@ -210,7 +226,7 @@ export const VideoPlayer = ({
               onToggle={a.onCaptionsToggle}
             />
           ) : captionsUnavailable ? (
-            // Known to have no caption track (as opposed to `tracks` simply
+            // Known to have no caption track (as opposed to `captions` simply
             // not having arrived yet) — shown disabled rather than omitted,
             // so a captions-dependent viewer sees why, instead of a player
             // that looks identical to one that was never asked to caption.

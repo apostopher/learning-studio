@@ -1,17 +1,43 @@
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useId, useRef } from 'react';
-import { videoPlayerStateAtomFamily } from './atoms';
+import {
+  videoPlayerReattachAtomFamily,
+  videoPlayerStateAtomFamily,
+} from './atoms';
 import { attachMedia } from './attach-media';
-import { computeRecoveryDecision } from './compute-recovery-action';
 import { useVideoPlayer } from './hooks';
+import {
+  captionLoadFailedPatch,
+  captionsSignature,
+  fatalMediaOutcome,
+  reattachKey,
+  recoveryAttemptsOnPlaying,
+  requestReattach,
+} from './media-failure';
 import {
   applyRestorePoint,
   captureRestorePoint,
   isLanguageSwitch,
   type RestorePoint,
+  restorePointForSourceSwap,
 } from './restore-point';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
 import { VideoPlayer } from './video-player';
+
+/**
+ * Runs `then` once `settled` (the caller's refetch, or nothing) settles, plus
+ * one macrotask: TanStack Query notifies its observers on a `setTimeout(0)`
+ * scheduled before the refetch promise resolves, so by then a FRESH url has
+ * rendered and `reattachKey` sees it — and the settled request adds no
+ * second attach of the old url. A rejected refetch still re-attaches: the
+ * caller surfaces its own error, and the player must not stall either way.
+ */
+const afterSettled = (settled: unknown, then: () => void): void => {
+  void Promise.resolve(settled)
+    .catch(() => {})
+    .then(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    .then(then);
+};
 
 type ContainerProps = Omit<
   VideoPlayerProps,
@@ -33,8 +59,13 @@ type ContainerProps = Omit<
    * URL/token) after a mid-playback source failure. Wired to the ready
    * state's `onRetry` from `#/components/lesson-main/types` — see that
    * field's comment for why this exists and why it is never timer-driven.
+   *
+   * Return the refetch's promise when there is one: the player waits for it
+   * to settle and then re-attaches the source EVEN IF the url is unchanged
+   * (a deterministic signer can hand back the same url — see
+   * `ReattachRequest`). A plain `void` return re-attaches straight away.
    */
-  onSourceExpired?: () => void;
+  onSourceExpired?: () => unknown;
   /**
    * The learner picked another language. The container pauses and records
    * the playhead BEFORE calling this (see `restore-point.ts`); the caller's
@@ -42,8 +73,22 @@ type ContainerProps = Omit<
    * playhead is restored and playback resumed.
    */
   onLanguageChange?: (code: string) => void;
+  /**
+   * Fires once when automatic recovery is exhausted; the player still shows
+   * its own error overlay.
+   */
+  onPlaybackFailed?: (message: string) => void;
 };
 
+/**
+ * The app's one video player: drop it on any page with a `src`. Optional
+ * captions, a video-language menu, and callbacks for an expiring signed URL
+ * (`onSourceExpired`) and for recovery giving up (`onPlaybackFailed`).
+ *
+ * It never records progress. Lesson progress, the debrief overlay and the
+ * coverage notice belong to `LessonPlayerContainer`, which wraps this —
+ * admin previews use this directly so an admin's viewing writes nothing.
+ */
 export const VideoPlayerContainer = ({
   playerId: providedId,
   onEnded,
@@ -51,6 +96,7 @@ export const VideoPlayerContainer = ({
   captionsUnavailable,
   onSourceExpired,
   onLanguageChange,
+  onPlaybackFailed,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -59,6 +105,11 @@ export const VideoPlayerContainer = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const state = useAtomValue(videoPlayerStateAtomFamily(playerId));
   const setState = useSetAtom(videoPlayerStateAtomFamily(playerId));
+  const reattach = useAtomValue(videoPlayerReattachAtomFamily(playerId));
+  const setReattach = useSetAtom(videoPlayerReattachAtomFamily(playerId));
+  // Changes only when a settled recovery must re-attach the src already
+  // showing; a fresh src re-attaches through `rest.src` on its own.
+  const attachKey = reattachKey(reattach, rest.src);
   const { showControls, armHideTimer, hideAfterPointerLeave } = useVideoPlayer(
     playerId,
     videoRef,
@@ -69,10 +120,18 @@ export const VideoPlayerContainer = ({
   // a per-video fact like "this one has no captions" at creation time — this
   // is the only place that gap is bridged. Nothing else in this container
   // (or `useVideoPlayer`) ever writes `captionsUnavailable`.
+  //
+  // Keyed on the captions' CONTENT signature, not the array: callers rebuild
+  // the array every render, and only a changed `src` (a fresh signed URL)
+  // should reset a load error back to the prop value.
+  const captionsKey = captionsSignature(rest.captions);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: captionsKey only re-triggers the reset; the body doesn't read it.
   useEffect(() => {
-    if (captionsUnavailable === undefined) return;
-    setState((prev) => ({ ...prev, captionsUnavailable }));
-  }, [captionsUnavailable, setState]);
+    setState((prev) => ({
+      ...prev,
+      captionsUnavailable: captionsUnavailable ?? false,
+    }));
+  }, [captionsUnavailable, captionsKey, setState]);
 
   // Held in a ref, like `onForbiddenRef` in the admin preview this was
   // extracted from: `onSourceExpired` traces back to an inline arrow
@@ -84,22 +143,26 @@ export const VideoPlayerContainer = ({
   useEffect(() => {
     onSourceExpiredRef.current = onSourceExpired;
   }, [onSourceExpired]);
+  const onPlaybackFailedRef = useRef(onPlaybackFailed);
+  useEffect(() => {
+    onPlaybackFailedRef.current = onPlaybackFailed;
+  }, [onPlaybackFailed]);
 
   // How many automatic recoveries this mount has already attempted — see
   // `compute-recovery-action.ts` for why this is capped rather than
-  // unbounded. Deliberately NOT reset on a reattachment reaching
-  // `loadedmetadata`: that used to be the reset signal, on the theory that
-  // reaching metadata proves the last attempt worked, but Task 6 exists for
-  // tokens expiring MID-PLAYBACK — a fragment-level 403 (which hls.js
-  // reports through the exact same `fatal` + `response.code` shape as a
-  // manifest-level one) can arrive well AFTER metadata has already loaded.
-  // Resetting there let the cap re-arm indefinitely in precisely the case
-  // it exists to terminate: a revoked key that keeps passing manifest
-  // fetch/early buffering but keeps failing again on later fragments. Only
-  // a manual Retry click (below) resets this — an over-strict cap that
-  // eventually reaches an honest terminal state is preferable to one that
-  // can spin forever.
+  // unbounded. NOT reset on a reattachment reaching `loadedmetadata`: a
+  // fragment-level 403 (same `fatal` + `response.code` shape as a
+  // manifest-level one) can arrive well AFTER metadata has loaded, so
+  // metadata proves nothing. It IS reset on the first `playing` after a
+  // recovery re-attach (`recoveryAttemptsOnPlaying`) — media actually
+  // playing again is the proof the recovery worked, and without the reset
+  // an hour-long session would spend its whole budget across separate,
+  // successful token renewals and then give up on the next one. A manual
+  // Retry click (below) also resets it.
   const recoveryAttemptsRef = useRef(0);
+  // Whether the source has been re-attached since the last fatal failure —
+  // what lets the next `playing` count as a recovery that worked.
+  const reattachedSinceFailureRef = useRef(false);
   // The playhead position to restore once a recovery reattachment lands.
   // Captured right before teardown (in the fatal-error handler below, and in
   // the manual retry action) — without this, re-running `attachMedia` drops
@@ -107,11 +170,13 @@ export const VideoPlayerContainer = ({
   // depends on watch coverage is worse than the error it was recovering
   // from. `null` means "nothing pending".
   const pendingRestoreTimeRef = useRef<number | null>(null);
-  // A language swap's restore point. Separate from `pendingRestoreTimeRef`
-  // (the recovery path), which never resumes playback on its own — a
-  // recovery from a fatal error should not auto-play, a language switch
-  // should.
-  const pendingLanguageRestoreRef = useRef<RestorePoint | null>(null);
+  // A source swap's restore point: a language switch (captured before the
+  // caller is asked for the new language) or a timer-driven url refresh
+  // (captured from the outgoing media as the old source is torn down — see
+  // `restorePointForSourceSwap`). Separate from `pendingRestoreTimeRef` (the
+  // recovery path), which never resumes playback on its own — a recovery
+  // from a fatal error should not auto-play, these should.
+  const pendingSwapRestoreRef = useRef<RestorePoint | null>(null);
 
   // Registered once, independent of `rest.src`: the video element itself
   // never unmounts across a reattachment (only its `src`/hls.js instance
@@ -121,9 +186,9 @@ export const VideoPlayerContainer = ({
     const video = videoRef.current;
     if (!video) return;
     const onLoadedMetadata = () => {
-      const langPoint = pendingLanguageRestoreRef.current;
+      const langPoint = pendingSwapRestoreRef.current;
       if (langPoint) {
-        pendingLanguageRestoreRef.current = null;
+        pendingSwapRestoreRef.current = null;
         applyRestorePoint(video, langPoint);
         return;
       }
@@ -141,8 +206,19 @@ export const VideoPlayerContainer = ({
           ? Math.min(target, video.duration)
           : target;
     };
+    const onPlaying = () => {
+      recoveryAttemptsRef.current = recoveryAttemptsOnPlaying(
+        recoveryAttemptsRef.current,
+        reattachedSinceFailureRef.current,
+      );
+      reattachedSinceFailureRef.current = false;
+    };
     video.addEventListener('loadedmetadata', onLoadedMetadata);
-    return () => video.removeEventListener('loadedmetadata', onLoadedMetadata);
+    video.addEventListener('playing', onPlaying);
+    return () => {
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      video.removeEventListener('playing', onPlaying);
+    };
   }, []);
 
   // Plain files are already handled by VideoPlayer's native `src` attribute
@@ -158,33 +234,52 @@ export const VideoPlayerContainer = ({
   // can only fix an EXPIRED token by minting a new one, not a REVOKED
   // signing key, which would reject again no matter how many times it's
   // re-fetched — the client cannot tell those apart, so recovery gets a
-  // small fixed budget rather than spinning forever. Once a fresh `src` prop
-  // arrives (on retry), this effect's own dependency on `rest.src` tears
-  // down the stale hls.js instance and reattaches, and the native
-  // `loadstart` handler in `useVideoPlayer` (below) clears `status: 'error'`
-  // the moment that reattachment begins.
+  // small fixed budget rather than spinning forever. Once the recovery's
+  // refetch settles, this effect re-runs either through `rest.src` (a fresh
+  // url) or through `attachKey` (the SAME url came back — see
+  // `ReattachRequest`), tears down the stale hls.js instance and reattaches;
+  // the native `loadstart` handler in `useVideoPlayer` clears
+  // `status: 'error'` the moment that reattachment begins.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attachKey is the re-attach trigger for an unchanged src; the body deliberately doesn't read it.
   useEffect(() => {
     const video = videoRef.current;
     const kind = rest.kind ?? 'file';
-    if (!video || !rest.src || kind !== 'hls') return;
-    return attachMedia(video, rest.src, kind, (fatal) => {
+    const src = rest.src;
+    if (!video || !src || kind !== 'hls') return;
+    if (recoveryAttemptsRef.current > 0) {
+      reattachedSinceFailureRef.current = true;
+    }
+    const teardown = attachMedia(video, src, kind, (fatal) => {
       if (!fatal) return;
-      const decision = computeRecoveryDecision(recoveryAttemptsRef.current);
-      setState((prev) => ({
-        ...prev,
-        status: 'error',
-        error: decision.message,
-      }));
-      if (decision.kind === 'retry') {
-        recoveryAttemptsRef.current = decision.attempt;
+      reattachedSinceFailureRef.current = false;
+      const out = fatalMediaOutcome(recoveryAttemptsRef.current);
+      setState((prev) => ({ ...prev, ...out.patch }));
+      if (out.retry) {
+        recoveryAttemptsRef.current = out.retry.attempt;
         pendingRestoreTimeRef.current = video.currentTime;
-        onSourceExpiredRef.current?.();
+        afterSettled(onSourceExpiredRef.current?.(), () =>
+          setReattach((prev) => requestReattach(prev, src)),
+        );
+      } else if (out.failedMessage !== null) {
+        onPlaybackFailedRef.current?.(out.failedMessage);
       }
       // Terminal: no further automatic attempt. The ErrorOverlay's Retry
       // button (actions.onRetry below) is the only way forward from here,
       // and it resets the budget for a genuinely new try.
     });
-  }, [rest.src, rest.kind, setState]);
+    return () => {
+      // Read before teardown: detaching hls.js resets the playhead. A swap
+      // nobody captured for (the admin's timer refresh of a signed url)
+      // would otherwise restart at 0:00, paused.
+      const point = restorePointForSourceSwap({
+        languagePending: pendingSwapRestoreRef.current !== null,
+        recoveryPending: pendingRestoreTimeRef.current !== null,
+        outgoing: video,
+      });
+      if (point) pendingSwapRestoreRef.current = point;
+      teardown();
+    };
+  }, [rest.src, rest.kind, attachKey, setState, setReattach]);
 
   const seekTo = (time: number) => {
     const v = videoRef.current;
@@ -236,7 +331,7 @@ export const VideoPlayerContainer = ({
   // whose TextTrack starts `disabled` regardless of what the learner had
   // chosen — without this dependency captions that were on would silently
   // drop after every swap while the button still read "on".
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.tracks intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.captions intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -244,7 +339,7 @@ export const VideoPlayerContainer = ({
       v.textTracks[i].mode =
         state.captionsEnabled && i === 0 ? 'showing' : 'disabled';
     }
-  }, [state.captionsEnabled, rest.tracks]);
+  }, [state.captionsEnabled, captionsKey]);
 
   const onKeyboardShortcut = (key: string) => {
     const v = videoRef.current;
@@ -336,14 +431,22 @@ export const VideoPlayerContainer = ({
       // Harmless to call for a native media error that was never a
       // signed-URL issue at all; it just re-fetches playback data that was
       // going to stay cached otherwise.
-      onSourceExpired?.();
+      const settled = onSourceExpired?.();
+      // Same identical-url trap as automatic recovery: re-attach once the
+      // refetch settles, whether or not the url changed.
+      const src = rest.src;
+      if (src) {
+        afterSettled(settled, () =>
+          setReattach((prev) => requestReattach(prev, src)),
+        );
+      }
       // `video.load()` only helps the 'file' path (a plain `src` reload).
       // For 'hls', hls.js — not the native element — owns the media; the
       // element has no `src` of its own to reload, and calling `load()`
       // directly on it can tear down hls.js's MediaSource attachment
       // instead of helping. The HLS path's recovery is entirely driven by
-      // `onSourceExpired` yielding a new `src` prop, which the attachMedia
-      // effect above reattaches on its own.
+      // `onSourceExpired` settling, after which the attachMedia effect
+      // above reattaches (new `src`, or `attachKey` for the same one).
       if ((rest.kind ?? 'file') !== 'hls') v?.load();
     },
     onPointerActivity: () => {
@@ -351,6 +454,8 @@ export const VideoPlayerContainer = ({
       armHideTimer(!state.paused);
     },
     onKeyboardShortcut,
+    onCaptionsError: () =>
+      setState((prev) => ({ ...prev, ...captionLoadFailedPatch() })),
     onLanguageChange: onLanguageChange
       ? (code) => {
           // The active menu item fires this too. Capturing for it would
@@ -358,7 +463,7 @@ export const VideoPlayerContainer = ({
           // resume-on-next-loadedmetadata — see `isLanguageSwitch`.
           if (!isLanguageSwitch(code, rest.activeLanguage)) return;
           const v = videoRef.current;
-          if (v) pendingLanguageRestoreRef.current = captureRestorePoint(v);
+          if (v) pendingSwapRestoreRef.current = captureRestorePoint(v);
           onLanguageChange(code);
         }
       : undefined,

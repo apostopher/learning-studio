@@ -22,14 +22,8 @@ describe('playbackToState', () => {
     expect(state.src).toBe('https://cdn/v.mp4');
     expect(state.kind).toBe('file');
     expect(state.poster).toBe('https://cdn/p.jpg');
-    expect(state.tracks).toEqual([
-      {
-        src: 'https://cdn/c.vtt',
-        srcLang: 'en',
-        label: 'English',
-        kind: 'subtitles',
-        default: true,
-      },
+    expect(state.captions).toEqual([
+      { src: 'https://cdn/c.vtt', lang: 'en', label: 'English' },
     ]);
     expect(state.captionsUnavailable).toBe(false);
     // The exact same callback the caller passed in — this is the seam
@@ -44,10 +38,10 @@ describe('playbackToState', () => {
     expect(state.kind).toBe('hls');
   });
 
-  it('emits no tracks and flags captions unavailable when the provider has no captions', () => {
+  it('emits no captions and flags captions unavailable when the provider has no captions', () => {
     const state = playbackToState({ ...ready, captions: null }, vi.fn());
     if (state.status !== 'ready') throw new Error('expected ready');
-    expect(state.tracks).toEqual([]);
+    expect(state.captions).toEqual([]);
     // This is the fact a Mux-backed video always reports (Mux text tracks
     // aren't configured on this account) — the player must be told, not left
     // to infer "no captions needed" from an empty track list alone.
@@ -75,8 +69,8 @@ describe('playbackToState', () => {
     if (state.status !== 'ready') throw new Error('expected ready');
     expect(state.lang).toBe('fr-CA');
     expect(state.languages).toEqual(['en', 'fr-CA']);
-    expect(state.tracks[0]).toMatchObject({
-      srcLang: 'fr-CA',
+    expect(state.captions[0]).toMatchObject({
+      lang: 'fr-CA',
       label: 'Canadian French',
     });
   });
