@@ -1,14 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dispatchOfferingPopoverAtom,
   offeringPopoverAtom,
@@ -48,20 +42,13 @@ vi.mock('#/data-hooks/use-admin-users', () => ({
     isLoading: false,
   }),
 }));
-// The level write is the consumer of the confirm dialog: recorded, and its
-// arguments asserted.
-const levelWrite = vi.hoisted(() => {
-  const write = {
-    mutate: vi.fn(),
-    isPending: false,
-    variables: undefined as unknown,
-    error: null as Error | null,
-    reset: vi.fn(() => {
-      write.error = null;
-    }),
-  };
-  return write;
-});
+// The level write is the consumer of a chip press: recorded, its arguments
+// asserted, and each call settled by hand.
+const levelWrite = vi.hoisted(() => ({
+  mutateAsync: vi.fn(),
+  reset: vi.fn(),
+  isPending: false,
+}));
 vi.mock('#/data-hooks/use-user-levels', () => ({
   useSetUserCourseLevel: () => levelWrite,
 }));
@@ -330,199 +317,160 @@ describe('OfferingPopoverContainer roster levels', () => {
     levels: { 3: 'intermediate' },
     createdAt: '2026-01-01',
   };
+  /** Every write's settle handles, in call order. */
+  let writes: { resolve: () => void; reject: (error: Error) => void }[] = [];
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     directory.users = [adaInDirectory];
-    levelWrite.mutate.mockReset();
-    levelWrite.isPending = false;
-    levelWrite.variables = undefined;
-    levelWrite.error = null;
+    writes = [];
+    levelWrite.mutateAsync.mockReset();
+    levelWrite.mutateAsync.mockImplementation(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          writes.push({ resolve, reject });
+        }),
+    );
     levelWrite.reset.mockClear();
     toast.success.mockReset();
     toast.error.mockReset();
   });
-
-  const adaSelect = () =>
-    screen.getByRole('combobox', { name: 'Level for Ada Lovelace' });
-  const pick = async (name: string) => {
-    fireEvent.click(adaSelect());
-    const option = await screen.findByRole('option', { name });
-    fireEvent.mouseMove(option);
-    fireEvent.click(option);
-  };
-  const writeMessage = (text: string) =>
-    fireEvent.change(screen.getByLabelText(/Message for the pilot/), {
-      target: { value: text },
-    });
-
-  it('asks for the pilot message before writing anything', async () => {
-    const { pinA } = renderPopover([withAda], true);
-    pinA();
-    await pick('Advanced');
-
-    expect(
-      await screen.findByRole('dialog', { name: /Set level to Advanced/ }),
-    ).toBeTruthy();
-    expect(levelWrite.mutate).not.toHaveBeenCalled();
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('writes the picked level for that profile, course and message on Save', async () => {
+  const adaChip = () =>
+    screen.getByRole('button', { name: /^Level for Ada Lovelace/ });
+  const press = () => fireEvent.click(adaChip());
+  const settleDebounce = () => act(() => vi.advanceTimersByTime(700));
+  const message = (label: string) =>
+    `Your training team set your level in Instrument Ground School to ${label}.`;
+
+  it('a press advances the chip at once, and writes nothing yet', () => {
     const { pinA } = renderPopover([withAda], true);
     pinA();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(adaChip().textContent).toBe('INTER');
 
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
-    expect(levelWrite.mutate.mock.calls[0][0]).toEqual({
+    press();
+    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().getAttribute('aria-label')).toBe(
+      'Level for Ada Lovelace: Advanced. Press to change.',
+    );
+    press();
+    expect(adaChip().textContent).toBe('BASIC');
+
+    expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
+    // No confirm dialog any more: the press is the whole gesture.
+    expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull();
+  });
+
+  it('saves only where the admin stops, ~700ms after the last press, with the generated message', () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    act(() => vi.advanceTimersByTime(500));
+    press(); // basic — restarts the wait
+    act(() => vi.advanceTimersByTime(699));
+    expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toEqual({
       profileId: 42,
       courseId: 3,
-      level: 'advanced',
-      message: 'Cleared for advanced ops.',
-      note: undefined,
+      level: 'basic',
+      message: message('Basic'),
     });
   });
 
-  it('on success: toasts, shows the new level on the row, and closes the dialog', async () => {
+  it('marks the row saving while the write is in flight, and keeps the chip pressable', async () => {
     const { pinA } = renderPopover([withAda], true);
     pinA();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+    press();
+    settleDebounce();
+    expect(adaChip().getAttribute('aria-busy')).toBe('true');
 
-    act(() => levelWrite.mutate.mock.calls[0][1].onSuccess());
+    // A press in flight queues the new level behind its own debounce.
+    press();
+    expect(adaChip().textContent).toBe('BASIC');
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(2);
+    expect(levelWrite.mutateAsync.mock.calls[1][0]).toMatchObject({
+      level: 'basic',
+      message: message('Basic'),
+    });
+
+    await act(async () => writes[0].resolve());
+    // The first save landing must not throw away the newer choice.
+    expect(adaChip().textContent).toBe('BASIC');
+    expect(adaChip().getAttribute('aria-busy')).toBe('true');
+    await act(async () => writes[1].resolve());
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
+    expect(adaChip().textContent).toBe('BASIC');
+  });
+
+  it('on success: toasts, and the row holds the saved level without dirtying the offering', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press();
+    settleDebounce();
+    await act(async () => writes[0].resolve());
 
     expect(toast.success).toHaveBeenCalledWith(
       'Ada Lovelace is now Advanced in Instrument Ground School',
     );
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
-    );
-    expect(adaSelect().textContent).toContain('EXPERT');
-    // A level already saved is not an unsaved edit of the offering.
+    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
+    // A level already saved is not an unsaved edit: Esc closes cleanly.
+    pressEscape();
     expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
   });
 
-  it('on failure: toasts the reason and keeps the dialog open', async () => {
+  it('on failure: toasts the reason and reverts the chip to the saved level', async () => {
     const { pinA } = renderPopover([withAda], true);
     pinA();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
-
-    act(() =>
-      levelWrite.mutate.mock.calls[0][1].onError(
-        new Error('You do not have permission to change levels.'),
+    press();
+    settleDebounce();
+    await act(async () =>
+      writes[0].reject(
+        new Error(
+          'Only an owner can change the level of someone with a staff role.',
+        ),
       ),
     );
 
     expect(toast.error).toHaveBeenCalledWith(
-      'You do not have permission to change levels.',
+      'Only an owner can change the level of someone with a staff role.',
     );
-    expect(screen.getByRole('dialog', { name: /Set level/ })).toBeTruthy();
+    expect(adaChip().textContent).toBe('INTER');
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
   });
 
-  it('Cancel writes nothing, keeps the old level and the popover', async () => {
-    const { pinA } = renderPopover([withAda], true);
+  it('closing with a save still waiting writes it at once, for that course', async () => {
+    const { pinA, store } = renderPopover([withAda], true);
     pinA();
-    await pick('Advanced');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    press();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(store.get(offeringPopoverAtom).status).toBe('closed');
 
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toEqual({
+      profileId: 42,
+      courseId: 3,
+      level: 'advanced',
+      message: message('Advanced'),
+    });
+    await act(async () => writes[0].resolve());
+    expect(toast.success).toHaveBeenCalledWith(
+      'Ada Lovelace is now Advanced in Instrument Ground School',
     );
-    expect(levelWrite.mutate).not.toHaveBeenCalled();
-    expect(adaSelect().textContent).toContain('INTER');
-    expect(screen.getByLabelText('Start date')).toBeTruthy();
+    // And nothing fires a second time when the old debounce would have.
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('works over a dirty (modal) pin without raising the discard question', async () => {
-    const { pinA } = renderPopover([withAda], true);
-    pinA();
-    makeDirty();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
-    expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
-    // The offering edit is untouched underneath.
-    expect(windowInput().value).toBe('60');
-  });
-
-  it('marks the row being saved busy', () => {
-    levelWrite.isPending = true;
-    levelWrite.variables = { profileId: 42 };
-    const { pinA } = renderPopover([withAda], true);
-    pinA();
-    expect(adaSelect().getAttribute('aria-busy')).toBe('true');
-  });
-
-  it('offers no select without level:update', () => {
-    const { pinA } = renderPopover([withAda], false);
-    pinA();
-    expect(
-      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
-    ).toBeNull();
-    expect(screen.getByText(/Levels are view only/)).toBeTruthy();
-  });
-
-  it('offers no select for someone missing from the directory', () => {
-    directory.users = [];
-    const { pinA } = renderPopover([withAda], true);
-    pinA();
-    expect(
-      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
-    ).toBeNull();
-  });
-  const bob = {
-    userId: 'u-bob',
-    name: 'Bob Hoover',
-    email: 'bob@example.com',
-    level: null,
-  };
-  const bobInDirectory = {
-    ...adaInDirectory,
-    profileId: 43,
-    userId: 'u-bob',
-    email: 'bob@example.com',
-    firstName: 'Bob',
-    lastName: 'Hoover',
-    levels: {},
-  };
-
-  it('a failed save does not leave its error in the next dialog', async () => {
-    directory.users = [adaInDirectory, bobInDirectory];
-    const { pinA } = renderPopover([{ ...withAda, users: [ada, bob] }], true);
-    pinA();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
-    const failure = new Error('Only an owner can change this level.');
-    levelWrite.error = failure;
-    act(() => levelWrite.mutate.mock.calls[0][1].onError(failure));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /Set level/ })).toBeNull(),
-    );
-
-    fireEvent.click(
-      screen.getByRole('combobox', { name: 'Level for Bob Hoover' }),
-    );
-    const basic = await screen.findByRole('option', { name: 'Basic' });
-    fireEvent.mouseMove(basic);
-    fireEvent.click(basic);
-
-    await screen.findByRole('dialog', { name: /Set level to Basic/ });
-    expect(
-      screen.queryByText('Only an owner can change this level.'),
-    ).toBeNull();
-  });
-
-  it('a save that lands after the popover moved on does not patch the other roster', async () => {
+  it('a save for a roster the popover moved away from does not patch the roster now showing', async () => {
     const offeringB: Offering = {
       ...offeringA,
       id: 8,
@@ -532,10 +480,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     };
     const { pinA, store } = renderPopover([withAda, offeringB], true);
     pinA();
-    await pick('Advanced');
-    writeMessage('Cleared for advanced ops.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(levelWrite.mutate).toHaveBeenCalled());
+    press();
 
     // The popover now shows B, whose roster holds the same person.
     act(() => {
@@ -547,9 +492,49 @@ describe('OfferingPopoverContainer roster levels', () => {
         target: { mode: 'edit', offeringId: offeringB.id },
       });
     });
-    act(() => levelWrite.mutate.mock.calls[0][1].onSuccess());
+    // A's pending choice is not dropped, and is not B's to show.
+    expect(adaChip().textContent).toBe('INTER');
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toMatchObject({
+      profileId: 42,
+      courseId: 3,
+      level: 'advanced',
+    });
+    await act(async () => writes[0].resolve());
 
-    expect(adaSelect().textContent).toContain('INTER');
+    expect(adaChip().textContent).toBe('INTER');
+  });
+
+  it('works over a dirty (modal) pin without raising the discard question', () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    makeDirty();
+    press();
+    settleDebounce();
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
+    expect(windowInput().value).toBe('60');
+  });
+
+  it('offers no level button without level:update', () => {
+    const { pinA } = renderPopover([withAda], false);
+    pinA();
+    expect(
+      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
+    ).toBeNull();
+    expect(screen.getByText(/Levels are view only/)).toBeTruthy();
+  });
+
+  it('offers no level button for someone missing from the directory, and says why', () => {
+    directory.users = [];
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    expect(
+      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
+    ).toBeNull();
+    expect(screen.getByText('Not in directory')).toBeTruthy();
   });
 
   it('locks a staff member’s level for a non-owner, and says why', () => {
@@ -557,7 +542,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     const { pinA } = renderPopover([withAda], true, false);
     pinA();
     expect(
-      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
+      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
     ).toBeNull();
     expect(screen.getByText('Owner only')).toBeTruthy();
   });
@@ -566,13 +551,6 @@ describe('OfferingPopoverContainer roster levels', () => {
     directory.users = [{ ...adaInDirectory, roles: ['admin'] }];
     const { pinA } = renderPopover([withAda], true, true);
     pinA();
-    expect(adaSelect()).toBeTruthy();
-  });
-
-  it('says a person missing from the directory is why their level is locked', () => {
-    directory.users = [];
-    const { pinA } = renderPopover([withAda], true);
-    pinA();
-    expect(screen.getByText('Not in directory')).toBeTruthy();
+    expect(adaChip()).toBeTruthy();
   });
 });

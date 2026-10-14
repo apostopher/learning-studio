@@ -9,7 +9,9 @@ import {
   offeringPopoverAtom,
   offeringPopoverReturnFocusAtom,
   offeringPopoverSuppressFocusPreviewAtom,
-  rosterLevelDraftAtom,
+  type RosterLevelEdit,
+  rosterLevelEditKey,
+  rosterLevelEditsAtom,
 } from '#/atoms/schedule';
 import { useAdminUsers } from '#/data-hooks/use-admin-users';
 import {
@@ -18,7 +20,6 @@ import {
   useUpdateOffering,
 } from '#/data-hooks/use-offerings';
 import { useSetUserCourseLevel } from '#/data-hooks/use-user-levels';
-import { setUserLevelInputSchema } from '#/lib/admin-schemas';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import {
   type Offering,
@@ -27,7 +28,6 @@ import {
   offeringFormSchema,
 } from '#/lib/offering-schemas';
 import type { UserLevel } from '#/types';
-import { SetLevelDialog } from '../users/set-level-dialog';
 import { OfferingAddPerson } from './offering-add-person';
 import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
@@ -43,6 +43,11 @@ import {
   formatWindowSummary,
   windowDaysBetween,
 } from './offering-window';
+import {
+  nextRosterLevel,
+  ROSTER_LEVEL_SAVE_DELAY_MS,
+  rosterLevelMessage,
+} from './roster-level';
 
 /**
  * How long an offering runs by default, in days from the drop.
@@ -57,17 +62,6 @@ const DEFAULT_WINDOW_DAYS = 45;
 /** The person search term and armed row. Atoms, so the form stays hookless. */
 const personQueryAtom = atom('');
 const selectedPersonAtom = atom<string | null>(null);
-
-/**
- * The roster's level confirm: the same message (required, shown to the pilot)
- * and note the users page asks for, validated by the endpoint's own schema.
- */
-const levelFormSchema = setUserLevelInputSchema.pick({
-  message: true,
-  note: true,
-});
-type LevelForm = { message: string; note?: string };
-const EMPTY_LEVEL_FORM: LevelForm = { message: '', note: '' };
 
 /** The form with nothing open — also what `values` holds while closed. */
 const EMPTY_SEED: OfferingFormValues = { startsOn: '', endsOn: '', users: [] };
@@ -148,11 +142,7 @@ export const OfferingPopoverContainer = ({
   const remove = useDeleteOffering();
   const directory = useAdminUsers();
   const setCourseLevel = useSetUserCourseLevel();
-  const [levelDraft, setLevelDraft] = useAtom(rosterLevelDraftAtom);
-  const levelForm = useForm<LevelForm>({
-    resolver: zodResolver(levelFormSchema),
-    defaultValues: EMPTY_LEVEL_FORM,
-  });
+  const levelEdits = useAtomValue(rosterLevelEditsAtom);
 
   const editing =
     dialog?.mode === 'edit'
@@ -218,6 +208,9 @@ export const OfferingPopoverContainer = ({
   // before a later preview of another offering — `keepDirtyValues` below would
   // otherwise carry a pinned A's edits into B. A preview is never dirty: inert.
   const close = () => {
+    // A level chosen and still waiting on its debounce is the admin's last
+    // word: save it now, for the roster it was chosen in, not never.
+    flushLevelSaves();
     dispatch({ type: 'close' });
     // `keepDirtyValues: false` explicitly: RHF merges the form's
     // `resetOptions` into every reset, so a bare reset KEPT the dirty fields —
@@ -225,8 +218,6 @@ export const OfferingPopoverContainer = ({
     form.reset(EMPTY_SEED, { keepDirtyValues: false });
     setPersonQuery('');
     setSelectedPerson(null);
-    setLevelDraft(null);
-    setCourseLevel.reset();
     create.reset();
     update.reset();
     remove.reset();
@@ -318,87 +309,136 @@ export const OfferingPopoverContainer = ({
     }
     return null;
   };
-  const savingProfileId = setCourseLevel.isPending
-    ? (setCourseLevel.variables?.profileId ?? null)
-    : null;
-  const savingUserId =
-    savingProfileId === null
-      ? null
-      : ((directory.data?.users ?? []).find(
-          (user) => user.profileId === savingProfileId,
-        )?.userId ?? null);
+  // Levels are written from the chip: each press steps the row on at once,
+  // and the save waits until the presses stop. Pending and in-flight state
+  // lives in `rosterLevelEditsAtom`, keyed by the roster it was chosen in.
+  const currentOfferingId =
+    saveTarget?.mode === 'edit' ? saveTarget.offering.id : null;
+  const editFor = (userId: string): RosterLevelEdit | undefined =>
+    courseId === null
+      ? undefined
+      : levelEdits[rosterLevelEditKey(currentOfferingId, courseId, userId)];
+  const displayLevel = (userId: string): UserLevel | null =>
+    editFor(userId)?.level ??
+    users.find((row) => row.userId === userId)?.level ??
+    null;
+  const savingUserIds = users
+    .filter((row) => (editFor(row.userId)?.inFlight ?? 0) > 0)
+    .map((row) => row.userId);
 
-  // A pick only opens the confirm. The select stays on the saved level —
-  // it is controlled by the roster row — so Cancel needs no undo.
-  const handleLevelChange = (userId: string, level: UserLevel) => {
-    const profileId = directoryByUserId.get(userId)?.profileId;
-    const person = users.find((row) => row.userId === userId);
-    if (profileId === undefined || !person || courseId === null) return;
-    levelForm.reset(EMPTY_LEVEL_FORM);
-    // A fresh confirm: the last attempt's error belongs to someone else.
-    setCourseLevel.reset();
-    setLevelDraft({
-      offeringId: saveTarget?.mode === 'edit' ? saveTarget.offering.id : null,
-      courseId,
-      userId,
-      profileId,
-      name: person.name,
-      level,
+  /**
+   * Changes one edit, and drops it once nothing is waiting or in flight — the
+   * chip then shows the roster row's own level again.
+   */
+  const patchLevelEdit = (
+    key: string,
+    change: (edit: RosterLevelEdit) => RosterLevelEdit,
+  ) =>
+    store.set(rosterLevelEditsAtom, (prev) => {
+      const current = prev[key];
+      if (!current) return prev;
+      const next = change(current);
+      const { [key]: _dropped, ...rest } = prev;
+      return next.timer === null && next.inFlight === 0
+        ? rest
+        : { ...rest, [key]: next };
     });
-  };
 
-  /** Whether the popover still shows what `draft` was picked in. */
-  const isStillOpen = (draft: {
-    offeringId: number | null;
-    courseId: number;
-  }) => {
+  /** Whether the popover still shows the roster `edit` was chosen in. */
+  const isStillOpen = (edit: RosterLevelEdit) => {
     const current = store.get(offeringPopoverAtom);
     if (current.status !== 'pinned') return false;
     const target = current.target;
     return target.mode === 'edit'
-      ? draft.offeringId === target.offeringId
-      : draft.offeringId === null && draft.courseId === target.courseId;
+      ? edit.offeringId === target.offeringId
+      : edit.offeringId === null && edit.courseId === target.courseId;
   };
 
-  const handleSetLevel = levelForm.handleSubmit((values) => {
-    if (!levelDraft) return;
-    const draft = levelDraft;
-    const draftCourseName = courseName;
-    setCourseLevel.mutate(
-      {
-        profileId: draft.profileId,
-        courseId: draft.courseId,
-        level: draft.level,
-        message: values.message,
-        note: values.note || undefined,
-      },
-      {
-        onSuccess: () => {
+  /** Sends the edit's current level now. Read from the store, never stale. */
+  const saveLevel = (key: string) => {
+    const edit = store.get(rosterLevelEditsAtom)[key];
+    if (!edit) return;
+    if (edit.timer !== null) clearTimeout(edit.timer);
+    patchLevelEdit(key, (e) => ({
+      ...e,
+      timer: null,
+      inFlight: e.inFlight + 1,
+    }));
+    const { level } = edit;
+    // `mutateAsync`, not `mutate` with callbacks: one mutation serves every
+    // row, and `mutate`'s per-call callbacks fire only for its latest call.
+    setCourseLevel
+      .mutateAsync({
+        profileId: edit.profileId,
+        courseId: edit.courseId,
+        level,
+        message: rosterLevelMessage(edit.courseName, level),
+      })
+      .then(
+        () => {
           toast.success(
-            `${draft.name} is now ${LEVEL_LABELS[draft.level]} in ${draftCourseName}`,
+            `${edit.name} is now ${LEVEL_LABELS[level]} in ${edit.courseName}`,
           );
           // The level is saved either way; the roster is only patched if it
-          // is still the one the level was picked in (the invalidation
-          // refreshes the rest).
-          if (!isStillOpen(draft)) return;
-          // Already saved, so not an unsaved edit of the offering: no
-          // `shouldDirty`, or the popover would ask to discard it.
-          form.setValue(
-            'users',
-            form
-              .getValues('users')
-              .map((row) =>
-                row.userId === draft.userId
-                  ? { ...row, level: draft.level }
-                  : row,
-              ),
-          );
-          setLevelDraft(null);
+          // is still the one the level was chosen in (the invalidation
+          // refreshes the rest). Already saved, so not an unsaved edit of
+          // the offering: no `shouldDirty`, or the popover would ask to
+          // discard it.
+          if (isStillOpen(edit)) {
+            form.setValue(
+              'users',
+              form
+                .getValues('users')
+                .map((row) =>
+                  row.userId === edit.userId ? { ...row, level } : row,
+                ),
+            );
+          }
+          patchLevelEdit(key, (e) => ({ ...e, inFlight: e.inFlight - 1 }));
         },
-        onError: (error) => toast.error(error.message),
+        (error: unknown) => {
+          toast.error(
+            error instanceof Error ? error.message : "Couldn't set the level.",
+          );
+          // Back to the last saved level — unless a newer choice is still
+          // waiting or in flight, which is what the chip shows instead.
+          patchLevelEdit(key, (e) => ({ ...e, inFlight: e.inFlight - 1 }));
+        },
+      );
+  };
+
+  /** Saves, now, every level still waiting on its debounce. */
+  const flushLevelSaves = () => {
+    for (const [key, edit] of Object.entries(store.get(rosterLevelEditsAtom))) {
+      if (edit.timer !== null) saveLevel(key);
+    }
+  };
+
+  const handleCycleLevel = (userId: string) => {
+    const profileId = directoryByUserId.get(userId)?.profileId;
+    const person = users.find((row) => row.userId === userId);
+    if (profileId === undefined || !person || courseId === null) return;
+    const key = rosterLevelEditKey(currentOfferingId, courseId, userId);
+    const previous = store.get(rosterLevelEditsAtom)[key];
+    // A press restarts the wait, in flight or not: only where the presses
+    // stop is saved.
+    if (previous?.timer) clearTimeout(previous.timer);
+    const timer = setTimeout(() => saveLevel(key), ROSTER_LEVEL_SAVE_DELAY_MS);
+    store.set(rosterLevelEditsAtom, (prev) => ({
+      ...prev,
+      [key]: {
+        offeringId: currentOfferingId,
+        courseId,
+        courseName,
+        userId,
+        profileId,
+        name: person.name,
+        level: nextRosterLevel(previous?.level ?? person.level),
+        timer,
+        inFlight: previous?.inFlight ?? 0,
       },
-    );
-  });
+    }));
+  };
 
   const handleSubmit = form.handleSubmit((values) => {
     // Unreachable without a target: the popover is closed whenever there is
@@ -463,204 +503,181 @@ export const OfferingPopoverContainer = ({
   };
 
   return (
-    <>
-      <Popover.Root
-        open={saveTarget !== null}
-        // Unsaved edits make the popover modal (Base UI `true`: a backdrop takes
-        // outside presses, page scroll locks, and — with the Close part below —
-        // focus is trapped). A press outside then only raises the discard
-        // question instead of ALSO acting on what was under it: the calendar's
-        // arrows used to move the window out from under the form, and a nav
-        // link left the page with the popover stale. A clean pin stays
-        // non-modal so clicking another bar still switches to it.
-        // ('trap-focus' would leave outside pointer presses live.)
-        modal={isPinned && isDirty}
-        onOpenChangeComplete={(open) => {
-          if (!open && isOrphaned) close();
-        }}
-        onOpenChange={(open, details) => {
-          if (open) return;
-          // The level confirm is a dialog of its own, portaled outside this
-          // popup: a press or Esc inside it must not dismiss the popover too.
-          if (store.get(rosterLevelDraftAtom) !== null) {
-            details.cancel();
-            return;
-          }
-          // A mouse click elsewhere put the user's attention THERE: even after a
-          // keyboard pin, focus must not be pulled back to the bar it came from.
-          if (details.reason === 'outside-press')
-            store.set(offeringPopoverReturnFocusAtom, null);
-          // Only dismissals reach here — this popover has no Trigger, so Base UI
-          // never asks to open it. Every exit path goes through the reducer.
-          //
-          // Any path that leaves the popover open cancels Base UI's close, so it
-          // records no internal close (and no "skip return focus") for a popover
-          // that is in fact still showing.
-          if (
-            details.reason !== 'escape-key' &&
-            details.reason !== 'outside-press' &&
-            details.reason !== 'close-press'
-          ) {
-            // e.g. focus-out: a pinned form must survive focus wandering off.
-            details.cancel();
-            return;
-          }
-          // A clean pinned popover closes through `close` so the form and the
-          // mutations reset.
-          if (popover.status === 'pinned' && !isDirty) {
-            close();
-            return;
-          }
-          // Everything else is the reducer's call: a dirty pin asks first, and a
-          // preview ignores outside-press (the pointer leaving closes it).
-          // The Close button asks exactly what Esc asks.
-          const reason =
-            details.reason === 'outside-press' ? 'outside' : 'escape';
-          const staysOpen =
-            popover.status === 'pinned' ||
-            (popover.status === 'preview' && reason === 'outside');
-          if (staysOpen) details.cancel();
-          dispatch({ type: 'dismiss', reason, dirty: isDirty });
-        }}
-      >
-        <Popover.Portal>
-          <OfferingPopoverPositionerContainer isPreview={!isPinned}>
-            <Popover.Popup
-              // A preview must not take focus from the bar the keyboard is on;
-              // the page focuses the first field after a pin.
-              initialFocus={false}
-              // Returns focus ONLY when the page recorded a segment, which it
-              // does only for a keyboard pin. Anything else returns false so
-              // Base UI leaves focus where the user put it — a mouse click
-              // elsewhere, or a preview unmounting as Tab moves past the last
-              // segment. Read-and-clear, so a stale element never comes back.
-              finalFocus={() => {
-                const el = store.get(offeringPopoverReturnFocusAtom);
-                store.set(offeringPopoverReturnFocusAtom, null);
-                // The focus this causes must not re-open a preview of the
-                // offering just closed (see the atom's doc).
-                store.set(offeringPopoverSuppressFocusPreviewAtom, el);
-                return el ?? false;
-              }}
-              // A preview is a picture of the offering, not a form: inert
-              // removes it from the tab order and the accessibility tree. The
-              // positioner turns off pointer events for it (see `isPreview`).
-              inert={!isPinned || undefined}
-              // Physical-axis overflow: Tailwind has no overflow-block utility
-              // (the same exception as the roster table's scroller).
-              className="offering-popover relative flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
-            >
-              {/* A subtitle under the title, not a block beside it: course names
+    <Popover.Root
+      open={saveTarget !== null}
+      // Unsaved edits make the popover modal (Base UI `true`: a backdrop takes
+      // outside presses, page scroll locks, and — with the Close part below —
+      // focus is trapped). A press outside then only raises the discard
+      // question instead of ALSO acting on what was under it: the calendar's
+      // arrows used to move the window out from under the form, and a nav
+      // link left the page with the popover stale. A clean pin stays
+      // non-modal so clicking another bar still switches to it.
+      // ('trap-focus' would leave outside pointer presses live.)
+      modal={isPinned && isDirty}
+      onOpenChangeComplete={(open) => {
+        if (!open && isOrphaned) close();
+      }}
+      onOpenChange={(open, details) => {
+        if (open) return;
+        // A mouse click elsewhere put the user's attention THERE: even after a
+        // keyboard pin, focus must not be pulled back to the bar it came from.
+        if (details.reason === 'outside-press')
+          store.set(offeringPopoverReturnFocusAtom, null);
+        // Only dismissals reach here — this popover has no Trigger, so Base UI
+        // never asks to open it. Every exit path goes through the reducer.
+        //
+        // Any path that leaves the popover open cancels Base UI's close, so it
+        // records no internal close (and no "skip return focus") for a popover
+        // that is in fact still showing.
+        if (
+          details.reason !== 'escape-key' &&
+          details.reason !== 'outside-press' &&
+          details.reason !== 'close-press'
+        ) {
+          // e.g. focus-out: a pinned form must survive focus wandering off.
+          details.cancel();
+          return;
+        }
+        // A clean pinned popover closes through `close` so the form and the
+        // mutations reset.
+        if (popover.status === 'pinned' && !isDirty) {
+          close();
+          return;
+        }
+        // Everything else is the reducer's call: a dirty pin asks first, and a
+        // preview ignores outside-press (the pointer leaving closes it).
+        // The Close button asks exactly what Esc asks.
+        const reason =
+          details.reason === 'outside-press' ? 'outside' : 'escape';
+        const staysOpen =
+          popover.status === 'pinned' ||
+          (popover.status === 'preview' && reason === 'outside');
+        if (staysOpen) details.cancel();
+        dispatch({ type: 'dismiss', reason, dirty: isDirty });
+      }}
+    >
+      <Popover.Portal>
+        <OfferingPopoverPositionerContainer isPreview={!isPinned}>
+          <Popover.Popup
+            // A preview must not take focus from the bar the keyboard is on;
+            // the page focuses the first field after a pin.
+            initialFocus={false}
+            // Returns focus ONLY when the page recorded a segment, which it
+            // does only for a keyboard pin. Anything else returns false so
+            // Base UI leaves focus where the user put it — a mouse click
+            // elsewhere, or a preview unmounting as Tab moves past the last
+            // segment. Read-and-clear, so a stale element never comes back.
+            finalFocus={() => {
+              const el = store.get(offeringPopoverReturnFocusAtom);
+              store.set(offeringPopoverReturnFocusAtom, null);
+              // The focus this causes must not re-open a preview of the
+              // offering just closed (see the atom's doc).
+              store.set(offeringPopoverSuppressFocusPreviewAtom, el);
+              return el ?? false;
+            }}
+            // A preview is a picture of the offering, not a form: inert
+            // removes it from the tab order and the accessibility tree. The
+            // positioner turns off pointer events for it (see `isPreview`).
+            inert={!isPinned || undefined}
+            // Physical-axis overflow: Tailwind has no overflow-block utility
+            // (the same exception as the roster table's scroller).
+            className="offering-popover relative flex flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-gray-6 bg-gray-2 p-5 shadow-xl [inline-size:min(34rem,calc(100vw-2rem))] [max-block-size:var(--available-height)]"
+          >
+            {/* A subtitle under the title, not a block beside it: course names
                 are long enough that a side-by-side explainer almost always
                 wrapped, leaving a narrow end-aligned column stranded below. */}
-              <div className="flex flex-col gap-1 pe-8 pbe-3">
-                <Popover.Title className="font-semibold text-accent-text text-lg">
-                  {courseName}
-                </Popover.Title>
-                <Popover.Description className="text-secondary text-xs">
-                  An offering is one dated run of a course. Each course can have
-                  multiple offerings.
-                </Popover.Description>
-              </div>
-              {/* Base UI traps focus in a modal popover only when a Close
+            <div className="flex flex-col gap-1 pe-8 pbe-3">
+              <Popover.Title className="font-semibold text-accent-text text-lg">
+                {courseName}
+              </Popover.Title>
+              <Popover.Description className="text-secondary text-xs">
+                An offering is one dated run of a course. Each course can have
+                multiple offerings.
+              </Popover.Description>
+            </div>
+            {/* Base UI traps focus in a modal popover only when a Close
                 part is rendered. It is also a visible way out for touch
                 and screen-reader users who have no Esc key; it asks the
                 same discard question Esc does. Pinned to the corner, not
                 the header row, so a wrapping title cannot move it. */}
-              <Popover.Close
-                aria-label="Close"
-                className="absolute inset-bs-3 end-3 shrink-0 rounded-md p-2 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </Popover.Close>
-              <OfferingForm
-                startsOnRef={(node) => {
-                  offeringPopoverFirstField.current = node;
-                }}
-                startsOn={startsOn}
-                onStartsOnChange={handleStartsOnChange}
-                startsOnError={form.formState.errors.startsOn?.message}
-                windowDays={windowDays === null ? '' : String(windowDays)}
-                onWindowDaysChange={handleWindowDaysChange}
-                endsOn={endsOn}
-                onEndsOnChange={(next) =>
-                  form.setValue('endsOn', next, { shouldDirty: true })
-                }
-                endsOnError={form.formState.errors.endsOn?.message}
-                summaryLine={formatWindowSummary(startsOn, endsOn)}
-                rosterCount={levelSummary(users)}
-                addPerson={
-                  <OfferingAddPerson
-                    query={personQuery}
-                    onQueryChange={setPersonQuery}
-                    results={results}
-                    selectedUserId={selectedPerson}
-                    onSelect={setSelectedPerson}
-                    onAdd={handleAdd}
-                    disabled={isSaving}
-                    emptyLabel={
-                      directory.isLoading
-                        ? 'Loading people…'
-                        : 'Nobody matches that search who is not already on this offering.'
-                    }
-                  />
-                }
-                rosterTable={
-                  <Controller
-                    control={form.control}
-                    name="users"
-                    render={({ field }) => (
-                      <OfferingRosterTable
-                        users={field.value}
-                        onRemove={handleRemove}
-                        disabled={isSaving}
-                        canEditLevels={canEditLevels}
-                        levelLockReason={levelLockReason}
-                        onLevelChange={handleLevelChange}
-                        savingUserId={savingUserId}
-                      />
-                    )}
-                  />
-                }
-                onSubmit={handleSubmit}
-                onCancel={close}
-                onDelete={
-                  saveTarget?.mode === 'edit'
-                    ? () => handleDelete(saveTarget.offering)
-                    : undefined
-                }
-                isSaving={isSaving}
-                submitLabel={dialog?.mode === 'edit' ? 'Save' : 'Schedule'}
-                saveError={saveError}
-                discardConfirm={
-                  popover.status === 'pinned' && popover.confirmingDiscard ? (
-                    <OfferingDiscardConfirm
-                      onKeepEditing={keepEditing}
-                      onDiscard={close}
+            <Popover.Close
+              aria-label="Close"
+              className="absolute inset-bs-3 end-3 shrink-0 rounded-md p-2 text-secondary transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Popover.Close>
+            <OfferingForm
+              startsOnRef={(node) => {
+                offeringPopoverFirstField.current = node;
+              }}
+              startsOn={startsOn}
+              onStartsOnChange={handleStartsOnChange}
+              startsOnError={form.formState.errors.startsOn?.message}
+              windowDays={windowDays === null ? '' : String(windowDays)}
+              onWindowDaysChange={handleWindowDaysChange}
+              endsOn={endsOn}
+              onEndsOnChange={(next) =>
+                form.setValue('endsOn', next, { shouldDirty: true })
+              }
+              endsOnError={form.formState.errors.endsOn?.message}
+              summaryLine={formatWindowSummary(startsOn, endsOn)}
+              rosterCount={levelSummary(users)}
+              addPerson={
+                <OfferingAddPerson
+                  query={personQuery}
+                  onQueryChange={setPersonQuery}
+                  results={results}
+                  selectedUserId={selectedPerson}
+                  onSelect={setSelectedPerson}
+                  onAdd={handleAdd}
+                  disabled={isSaving}
+                  emptyLabel={
+                    directory.isLoading
+                      ? 'Loading people…'
+                      : 'Nobody matches that search who is not already on this offering.'
+                  }
+                />
+              }
+              rosterTable={
+                <Controller
+                  control={form.control}
+                  name="users"
+                  render={({ field }) => (
+                    <OfferingRosterTable
+                      users={field.value}
+                      onRemove={handleRemove}
+                      disabled={isSaving}
+                      canEditLevels={canEditLevels}
+                      levelLockReason={levelLockReason}
+                      onCycleLevel={handleCycleLevel}
+                      displayLevel={displayLevel}
+                      savingUserIds={savingUserIds}
                     />
-                  ) : undefined
-                }
-              />
-            </Popover.Popup>
-          </OfferingPopoverPositionerContainer>
-        </Popover.Portal>
-      </Popover.Root>
-      {/* A sibling of the popover, not inside it: in React's tree it would sit
-        under the offering's <form>, and its own submit would bubble there. */}
-      <SetLevelDialog
-        open={levelDraft !== null}
-        onOpenChange={(next) => {
-          if (!next) setLevelDraft(null);
-        }}
-        courseName={courseName}
-        level={levelDraft?.level ?? 'basic'}
-        onSubmit={handleSetLevel}
-        registerMessage={levelForm.register('message')}
-        registerNote={levelForm.register('note')}
-        messageError={levelForm.formState.errors.message?.message}
-        isPending={setCourseLevel.isPending}
-        error={setCourseLevel.error?.message}
-      />
-    </>
+                  )}
+                />
+              }
+              onSubmit={handleSubmit}
+              onCancel={close}
+              onDelete={
+                saveTarget?.mode === 'edit'
+                  ? () => handleDelete(saveTarget.offering)
+                  : undefined
+              }
+              isSaving={isSaving}
+              submitLabel={dialog?.mode === 'edit' ? 'Save' : 'Schedule'}
+              saveError={saveError}
+              discardConfirm={
+                popover.status === 'pinned' && popover.confirmingDiscard ? (
+                  <OfferingDiscardConfirm
+                    onKeepEditing={keepEditing}
+                    onDiscard={close}
+                  />
+                ) : undefined
+              }
+            />
+          </Popover.Popup>
+        </OfferingPopoverPositionerContainer>
+      </Popover.Portal>
+    </Popover.Root>
   );
 };

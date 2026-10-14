@@ -28,16 +28,6 @@ describe('OfferingRosterTable row height', () => {
   });
 });
 
-/**
- * Base UI commits an item only once it is highlighted (a real pointer hovers
- * it first), so a bare click is ignored: move onto it, then click.
- */
-async function pickOption(name: string) {
-  const option = await screen.findByRole('option', { name });
-  fireEvent.mouseMove(option);
-  fireEvent.click(option);
-}
-
 describe('OfferingRosterTable level cell', () => {
   const ada = {
     userId: 'u1',
@@ -51,101 +41,102 @@ describe('OfferingRosterTable level cell', () => {
     email: 'bob@example.com',
     level: null,
   };
+  const adaChip = () =>
+    screen.getByRole('button', {
+      name: 'Level for Ada Lovelace: Intermediate. Press to change.',
+    });
 
-  it('is a select named for the person when levels are editable', () => {
+  it('is a chip button named for the person and their level when editable', () => {
     render(
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
-        onLevelChange={vi.fn()}
+        onCycleLevel={vi.fn()}
       />,
     );
-    const adaSelect = screen.getByRole('combobox', {
-      name: 'Level for Ada Lovelace',
+    expect(adaChip().textContent).toBe('INTER');
+    // The shared chip shape and the level's tone, not a bespoke colour.
+    expect(adaChip().className).toContain('bg-apple-3');
+    // No level yet: a muted chip that says so, not a blank or "NONE".
+    const bobChip = screen.getByRole('button', {
+      name: 'Level for Bob Hoover: No level. Press to change.',
     });
-    expect(adaSelect.textContent).toContain('INTER');
-    // No level yet: a placeholder that says so, not a blank or "NONE".
-    expect(
-      screen.getByRole('combobox', { name: 'Level for Bob Hoover' })
-        .textContent,
-    ).toContain('No level');
+    expect(bobChip.textContent).toBe('No level');
+    expect(bobChip.className).toContain('bg-gray-4');
+    expect(screen.queryByRole('combobox')).toBeNull();
   });
 
-  it('hands the person and the picked level to onLevelChange', async () => {
-    const onLevelChange = vi.fn();
+  it('hands the person to onCycleLevel on a press', () => {
+    const onCycleLevel = vi.fn();
     render(
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
-        onLevelChange={onLevelChange}
+        onCycleLevel={onCycleLevel}
       />,
     );
-    fireEvent.click(
-      screen.getByRole('combobox', { name: 'Level for Ada Lovelace' }),
-    );
-    await pickOption('Advanced');
-    expect(onLevelChange).toHaveBeenCalledWith('u1', 'advanced');
+    fireEvent.click(adaChip());
+    expect(onCycleLevel).toHaveBeenCalledWith('u1');
   });
 
-  it('offers only the three levels — there is no way back to no level', async () => {
+  it('shows the level displayLevel gives, over the row’s saved one', () => {
     render(
       <OfferingRosterTable
-        users={[bob]}
+        users={[ada]}
         onRemove={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
-        onLevelChange={vi.fn()}
+        onCycleLevel={vi.fn()}
+        displayLevel={() => 'advanced'}
       />,
     );
-    fireEvent.click(
-      screen.getByRole('combobox', { name: 'Level for Bob Hoover' }),
-    );
-    await screen.findByRole('option', { name: 'Basic' });
-    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Basic',
-      'Intermediate',
-      'Advanced',
-    ]);
+    const chip = screen.getByRole('button', {
+      name: 'Level for Ada Lovelace: Advanced. Press to change.',
+    });
+    expect(chip.textContent).toBe('EXPERT');
+    expect(chip.className).toContain('bg-success-3');
   });
 
-  it('shows the saving row busy and locked', () => {
+  it('shows a spinner by a saving row and keeps its chip pressable', () => {
+    const onCycleLevel = vi.fn();
     render(
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
-        onLevelChange={vi.fn()}
-        savingUserId="u1"
+        onCycleLevel={onCycleLevel}
+        savingUserIds={['u1']}
       />,
     );
-    const saving = screen.getByRole('combobox', {
-      name: 'Level for Ada Lovelace',
-    });
-    expect(saving.getAttribute('aria-busy')).toBe('true');
+    expect(adaChip().getAttribute('aria-busy')).toBe('true');
     expect(
-      saving.hasAttribute('disabled') ||
-        saving.getAttribute('data-disabled') !== null,
-    ).toBe(true);
-    const idle = screen.getByRole('combobox', { name: 'Level for Bob Hoover' });
-    expect(idle.getAttribute('aria-busy')).not.toBe('true');
+      adaChip().closest('td')?.querySelector('.animate-spin'),
+    ).not.toBeNull();
+    fireEvent.click(adaChip());
+    expect(onCycleLevel).toHaveBeenCalledWith('u1');
+    const bobChip = screen.getByRole('button', {
+      name: /Level for Bob Hoover/,
+    });
+    expect(bobChip.getAttribute('aria-busy')).toBeNull();
+    expect(bobChip.closest('td')?.querySelector('.animate-spin')).toBeNull();
   });
 
-  it('renders read-only chips and says why without level:update', () => {
+  it('renders read-only chips (not buttons) and says why without level:update', () => {
     render(
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
         canEditLevels={false}
         levelLockReason={() => null}
-        onLevelChange={vi.fn()}
+        onCycleLevel={vi.fn()}
       />,
     );
-    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Level for/ })).toBeNull();
     expect(screen.getByText('INTER')).toBeTruthy();
     expect(screen.getByText('No level')).toBeTruthy();
     expect(screen.getByText(/Levels are view only/)).toBeTruthy();
@@ -162,18 +153,18 @@ describe('OfferingRosterTable level cell', () => {
             ? { short: 'Not in directory', full: 'Not in the user directory' }
             : null
         }
-        onLevelChange={vi.fn()}
+        onCycleLevel={vi.fn()}
       />,
     );
     expect(
-      screen.queryByRole('combobox', { name: 'Level for Ada Lovelace' }),
+      screen.queryByRole('button', { name: /Level for Ada Lovelace/ }),
     ).toBeNull();
-    expect(screen.getByText('INTER')).toBeTruthy();
+    expect(screen.getByText('INTER').tagName).toBe('SPAN');
     // Visible, and complete for assistive tech.
     expect(screen.getByText('Not in directory')).toBeTruthy();
     expect(screen.getByText('Not in the user directory')).toBeTruthy();
     expect(
-      screen.getByRole('combobox', { name: 'Level for Bob Hoover' }),
+      screen.getByRole('button', { name: /Level for Bob Hoover/ }),
     ).toBeTruthy();
   });
 
@@ -183,7 +174,7 @@ describe('OfferingRosterTable level cell', () => {
         users={[ada]}
         onRemove={vi.fn()}
         canEditLevels={false}
-        onLevelChange={vi.fn()}
+        onCycleLevel={vi.fn()}
       />,
     );
     expect(
@@ -193,22 +184,21 @@ describe('OfferingRosterTable level cell', () => {
     ).toBeTruthy();
   });
 
-  it('greys a locked select with AA-safe tokens, not opacity', () => {
+  it('a chip locked while the offering saves ignores presses and keeps AA text', () => {
+    const onCycleLevel = vi.fn();
     render(
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
-        onLevelChange={vi.fn()}
+        onCycleLevel={onCycleLevel}
         disabled
       />,
     );
-    const select = screen.getByRole('combobox', {
-      name: 'Level for Ada Lovelace',
-    });
-    expect(select.hasAttribute('data-disabled')).toBe(true);
-    expect(select.className).not.toMatch(/opacity/);
-    expect(select.className).toContain('data-[disabled]:text-secondary');
+    expect(adaChip().getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(adaChip());
+    expect(onCycleLevel).not.toHaveBeenCalled();
+    expect(adaChip().className).not.toMatch(/opacity/);
   });
 });

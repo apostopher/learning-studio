@@ -73,20 +73,36 @@ export const offeringPopoverSuppressFocusPreviewAtom = atom<HTMLElement | null>(
 );
 
 /**
- * A level picked in the offering roster, waiting on the confirm dialog for
- * the pilot-facing message — or null. Nothing is written until that dialog
- * is submitted; cancelling just clears this.
+ * A roster level chosen with the chip but not yet settled: pressed and
+ * waiting on the debounce, and/or sent and not yet answered. Keyed by
+ * `rosterLevelEditKey`, so the same person on another offering's roster is a
+ * different entry. An entry is removed once nothing is waiting or in flight,
+ * and the chip falls back to the roster row's own (saved) level.
  */
-export const rosterLevelDraftAtom = atom<{
+export type RosterLevelEdit = {
   /**
-   * What the popover had open when the level was picked — the offering being
-   * edited (null while scheduling a new one) and its course. A save that
-   * lands after the popover moved on must not patch the roster now showing.
+   * What the popover had open when the chip was pressed — the offering being
+   * edited (null while scheduling a new one) and its course. The save goes to
+   * that course, and only patches that roster.
    */
   offeringId: number | null;
   courseId: number;
+  courseName: string;
   userId: string;
   profileId: number;
   name: string;
+  /** What the chip shows, and what the next save writes. */
   level: UserLevel;
-} | null>(null);
+  /** The debounced save, while one is waiting. */
+  timer: ReturnType<typeof setTimeout> | null;
+  /** Saves sent and not yet answered. */
+  inFlight: number;
+};
+
+export const rosterLevelEditKey = (
+  offeringId: number | null,
+  courseId: number,
+  userId: string,
+) => `${offeringId ?? 'new'}:${courseId}:${userId}`;
+
+export const rosterLevelEditsAtom = atom<Record<string, RosterLevelEdit>>({});
