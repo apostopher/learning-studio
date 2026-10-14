@@ -82,7 +82,7 @@ function hasContent(message: ModelMessage): boolean {
 /**
  * Assembles the `streamText` config the chat route streams from: viper7's
  * system prompt (gated on associate status), the searchKB + checkFlyability
- * tools, and gemini-3.6-flash as the model. `toolChoice: 'auto'` lets the
+ * tools, and gemini-3.8-flash as the model. `toolChoice: 'auto'` lets the
  * model route between the two tools itself (see design doc §"Tool
  * orchestration" for why no forced selector step is needed).
  *
