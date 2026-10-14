@@ -95,6 +95,12 @@ export type RosterLevelEdit = {
   name: string;
   /** What the chip shows, and what the next save writes. */
   level: UserLevel;
+  /**
+   * The level known to be saved: the roster row's own when the edit began,
+   * then each level a save confirmed. A save of this level is skipped — no
+   * redundant write, no second pilot message for the same level.
+   */
+  saved: UserLevel | null;
   /** The debounced save, while one is waiting. */
   timer: ReturnType<typeof setTimeout> | null;
   /**

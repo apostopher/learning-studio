@@ -381,6 +381,16 @@ export const OfferingPopoverContainer = ({
     const edit = store.get(rosterLevelEditsAtom)[key];
     if (!edit) return;
     const { level } = edit;
+    if (level === edit.saved) {
+      // Pressed round to what is already saved: nothing to write.
+      patchLevelEdit(key, (e) => ({
+        ...e,
+        timer: null,
+        sending: null,
+        queued: false,
+      }));
+      return;
+    }
     const chosenIn = { offeringId: edit.offeringId, courseId: edit.courseId };
     patchLevelEdit(key, (e) => ({
       ...e,
@@ -399,33 +409,48 @@ export const OfferingPopoverContainer = ({
       })
       .then(
         () => {
-          toast.success(
-            `${edit.name} is now ${LEVEL_LABELS[level]} in ${edit.courseName}`,
-          );
-          // The level is saved either way; the roster is only patched if it
-          // is still the one the level was chosen in (the invalidation
-          // refreshes the rest). Already saved, so not an unsaved edit of
-          // the offering: no `shouldDirty`, or the popover would ask to
-          // discard it.
-          if (isStillOpen(chosenIn)) {
-            form.setValue(
-              'users',
-              form
-                .getValues('users')
-                .map((row) =>
-                  row.userId === edit.userId ? { ...row, level } : row,
-                ),
+          // Recorded first, and settled in `finally`: a throw below (a toast,
+          // the form) must not leave the row spinning with every later save
+          // queued behind it.
+          patchLevelEdit(key, (e) => ({ ...e, saved: level }));
+          try {
+            toast.success(
+              `${edit.name} is now ${LEVEL_LABELS[level]} in ${edit.courseName}`,
             );
+            // The level is saved either way; the roster is only patched if it
+            // is still the one the level was chosen in (the invalidation
+            // refreshes the rest). Already saved, so not an unsaved edit of
+            // the offering: no `shouldDirty`, or the popover would ask to
+            // discard it.
+            if (isStillOpen(chosenIn)) {
+              form.setValue(
+                'users',
+                form
+                  .getValues('users')
+                  .map((row) =>
+                    row.userId === edit.userId ? { ...row, level } : row,
+                  ),
+              );
+            }
+          } finally {
+            settleLevelSave(key, level);
           }
-          settleLevelSave(key, level);
         },
         (error: unknown) => {
-          toast.error(
-            error instanceof Error ? error.message : "Couldn't set the level.",
-          );
-          settleLevelSave(key, level);
+          try {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "Couldn't set the level.",
+            );
+          } finally {
+            settleLevelSave(key, level);
+          }
         },
-      );
+      )
+      // Whatever escaped the handlers above has already been settled for;
+      // report it rather than leave an unhandled rejection.
+      .catch((error: unknown) => console.error(error));
   };
 
   /** A save came due: send it, or queue it behind the one in flight. */
@@ -476,6 +501,7 @@ export const OfferingPopoverContainer = ({
         name: person.name,
         level: nextRosterLevel(previous?.level ?? person.level),
         timer,
+        saved: previous ? previous.saved : person.level,
         sending: previous?.sending ?? null,
         queued: previous?.queued ?? false,
       },

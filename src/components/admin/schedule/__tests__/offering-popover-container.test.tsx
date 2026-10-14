@@ -489,6 +489,46 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
   });
 
+  it('a throw while handling a success still settles the row, and later saves go out', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    settleDebounce();
+    toast.success.mockImplementationOnce(() => {
+      throw new Error('toast blew up');
+    });
+    await act(async () => writes[0].resolve());
+
+    expect(adaChip().getAttribute('aria-busy')).toBeNull();
+    press();
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes nothing when the presses come back round to the saved level', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    // Round from the row's own level, before the debounce.
+    press(); // advanced
+    press(); // basic
+    press(); // intermediate
+    settleDebounce();
+    expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
+    expect(adaChip().textContent).toBe('INTER');
+
+    // And round again after a save has landed.
+    press(); // advanced
+    settleDebounce();
+    await act(async () => writes[0].resolve());
+    press(); // basic
+    press(); // intermediate
+    press(); // advanced
+    settleDebounce();
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(adaChip().textContent).toBe('EXPERT');
+  });
+
   it('leaving the page with a save still waiting writes it at once', () => {
     const { pinA, unmount } = renderPopover([withAda], true);
     pinA();
