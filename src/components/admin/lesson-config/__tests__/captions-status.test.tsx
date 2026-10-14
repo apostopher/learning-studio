@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { CaptionsStatus } from '../captions-status';
+import { CaptionsStatus, CaptionsStatusLoadError } from '../captions-status';
 
 const base = { languageLabel: 'French', error: null };
 
@@ -80,5 +80,13 @@ describe('CaptionsStatus', () => {
   it('renders nothing for a video that is not on Mux', () => {
     const { container } = render(<CaptionsStatus {...base} status="not_mux" />);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('CaptionsStatusLoadError', () => {
+  it('states that the status could not be loaded, as a status line', () => {
+    render(<CaptionsStatusLoadError />);
+    const line = screen.getByText("Couldn't load captions status");
+    expect(line.closest('output')).not.toBeNull();
   });
 });

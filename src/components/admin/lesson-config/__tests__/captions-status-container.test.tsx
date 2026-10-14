@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({ captions: vi.fn(), request: vi.fn() }));
@@ -12,7 +12,11 @@ vi.mock('#/data-hooks/use-request-lesson-captions', () => ({
 const status = vi.hoisted(() =>
   vi.fn((_p: Record<string, unknown>) => <div />),
 );
-vi.mock('../captions-status', () => ({ CaptionsStatus: status }));
+const loadError = vi.hoisted(() => vi.fn(() => <p>load error</p>));
+vi.mock('../captions-status', () => ({
+  CaptionsStatus: status,
+  CaptionsStatusLoadError: loadError,
+}));
 
 import { CaptionsStatusContainer } from '../captions-status-container';
 
@@ -46,5 +50,16 @@ describe('CaptionsStatusContainer', () => {
     const props = status.mock.calls.at(-1)?.[0];
     expect(props?.isRequesting).toBe(false);
     expect(props?.requestError).toBeNull();
+  });
+
+  // A failed status read used to render nothing: an admin couldn't tell
+  // "no line" from "couldn't ask".
+  it('says so when the captions status could not be loaded', () => {
+    h.captions.mockReturnValue({ data: undefined, isError: true });
+    h.request.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    render(<CaptionsStatusContainer lessonId={10} courseId={7} lang="fr" />);
+    expect(loadError).toHaveBeenCalled();
+    expect(screen.queryByText('load error')).not.toBeNull();
+    expect(status).not.toHaveBeenCalled();
   });
 });

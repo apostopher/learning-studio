@@ -12,7 +12,11 @@ const isAuthStatus = (error: unknown): boolean => {
   return status === 401 || status === 403;
 };
 
-/** `null` when the token works; otherwise the admin-facing reason. */
+/**
+ * `null` unless Mux REJECTS the token (401/403), in which case the
+ * admin-facing reason. Any other failure (timeout, 5xx, network) says
+ * nothing about the token, so it is logged and never blocks the save.
+ */
 export async function checkMuxApiToken(
   tokenId: string,
   tokenSecret: string,
@@ -21,9 +25,12 @@ export async function checkMuxApiToken(
     await muxApiClient(tokenId, tokenSecret).video.assets.list({ limit: 1 });
     return null;
   } catch (error) {
-    return isAuthStatus(error)
-      ? 'Mux rejected the API token.'
-      : `Mux couldn't check the API token: ${(error as Error).message}`;
+    if (isAuthStatus(error)) return 'Mux rejected the API token.';
+    console.warn(
+      "Couldn't check the Mux API token; saving it unchecked:",
+      error,
+    );
+    return null;
   }
 }
 

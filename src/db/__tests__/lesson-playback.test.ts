@@ -76,7 +76,22 @@ vi.mock('#/db/video-captions', () => ({
 const { getLessonPlayback } = await import('#/db/lesson-playback');
 const { muxCaptionsForPlayback } = await import('#/db/video-captions');
 
+/**
+ * The captions reader handed to `resolvePlayback` must be bound to THIS
+ * lesson (its token-less fallback looks up the lesson's other courses).
+ * Invoke the captured reader and assert what the real one received.
+ */
+async function expectCaptionsBoundTo(lessonId: number) {
+  const deps = providers.resolvePlayback.mock.calls.at(-1)?.[3] as {
+    muxCaptions: (ref: string, creds: unknown) => Promise<unknown>;
+  };
+  const creds = { keyId: 'serving' };
+  await deps.muxCaptions('ref', creds);
+  expect(muxCaptionsForPlayback).toHaveBeenCalledWith('ref', creds, lessonId);
+}
+
 const lessonRow = {
+  id: 9,
   videoProvider: 'mux',
   videoRef: 'ref-1',
   otherVideoIds: [],
@@ -312,6 +327,7 @@ describe('getLessonPlayback', () => {
 
 describe('getLessonPlayback with a language', () => {
   const rowWithFrench = {
+    id: 9,
     videoProvider: 'synthesia',
     videoRef: 'en-ref',
     otherVideoIds: [{ lang: 'fr-CA', provider: 'mux', ref: 'fr-ref' }],
@@ -341,8 +357,9 @@ describe('getLessonPlayback with a language', () => {
       'mux',
       'fr-ref',
       { keyId: 'mux-key' },
-      { muxCaptions: muxCaptionsForPlayback },
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toEqual({
       ...ready,
       lang: 'fr-CA',
@@ -367,8 +384,9 @@ describe('getLessonPlayback with a language', () => {
       'synthesia',
       'en-ref',
       expect.anything(),
-      { muxCaptions: muxCaptionsForPlayback },
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr-CA'] });
   });
 

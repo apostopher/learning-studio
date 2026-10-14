@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { resolveCourseProvider } from '#/db/admin';
+import { getLessonPlayback } from '#/db/lesson-playback';
 import { getCourseIdsForLesson } from '#/db/placements';
 import { lessonsTable, videoCaptionsTable } from '#/db/schema';
 import type { VideoLang } from '#/lib/video-languages';
@@ -45,13 +46,25 @@ export const captionsStore: CaptionsStore = {
  * The Mux API to caption a lesson's videos with: through the first course
  * placing the lesson whose Mux credentials carry an API token. Video is
  * lesson content (saved without a course in hand), and every course points
- * at the same Mux environment, so any token-bearing course will do.
+ * at the same Mux environment, so any token-bearing course will do. A
+ * course whose stored credentials fail to load (an undecryptable envelope)
+ * is skipped, never fatal: it must not take captions down for the others.
  */
 export async function findCaptionsApi(
   lessonId: number,
 ): Promise<MuxCaptionsApi | null> {
   for (const courseId of await getCourseIdsForLesson(lessonId)) {
-    const api = muxApiFromCreds(await resolveCourseProvider(courseId, 'mux'));
+    let creds: unknown;
+    try {
+      creds = await resolveCourseProvider(courseId, 'mux');
+    } catch (error) {
+      console.warn(
+        `Skipping course ${courseId} for Mux captions: its credentials could not be loaded.`,
+        error,
+      );
+      continue;
+    }
+    const api = muxApiFromCreds(creds);
     if (api) return api;
   }
   return null;
@@ -93,7 +106,7 @@ export async function requestLessonCaptions({
   playbackId: string;
   lang: VideoLang;
 }): Promise<RequestCaptionsResult> {
-  return requestMuxCaptions(
+  const outcome = await requestMuxCaptions(
     {
       store: captionsStore,
       api: await findCaptionsApi(lessonId),
@@ -101,6 +114,30 @@ export async function requestLessonCaptions({
     },
     { playbackId, lang },
   );
+  if (outcome === 'generating' || outcome === 'ready') {
+    await evictLearnerPlayback(lessonId);
+  }
+  return outcome;
+}
+
+/**
+ * Learners' cached playback may say `captions: null` (cached before this
+ * request) for up to its full TTL; evict it so the next load sees the new
+ * state. Best effort — a failure is logged, never thrown.
+ */
+async function evictLearnerPlayback(lessonId: number): Promise<void> {
+  try {
+    const [lesson] = await db
+      .select({ slug: lessonsTable.slug })
+      .from(lessonsTable)
+      .where(eq(lessonsTable.id, lessonId));
+    if (lesson) await getLessonPlayback.invalidate(lesson.slug);
+  } catch (error) {
+    console.error(
+      `Failed to evict lesson ${lessonId} playback after a captions request:`,
+      error,
+    );
+  }
 }
 
 /** For save routes: captions must never fail the save that triggered them. */
@@ -121,16 +158,20 @@ export async function requestLessonCaptionsSafely(input: {
 
 /**
  * Playback's view of a Mux video's captions, refreshing through the SERVING
- * course's token when it has one. Injected into `resolvePlayback`.
+ * course's token when it has one, otherwise through the first token-bearing
+ * course placing the lesson (`findCaptionsApi`, the rule generation uses) —
+ * so a learner in a token-less course still sees captions finish. Injected
+ * into `resolvePlayback`, bound to the lesson by `resolveSelectedLessonVideo`.
  */
 export async function muxCaptionsForPlayback(
   playbackId: string,
   creds: unknown,
+  lessonId: number,
 ): Promise<MuxCaptionsLookup> {
   const row = await readMuxCaptions(
     {
       store: captionsStore,
-      api: muxApiFromCreds(creds),
+      api: muxApiFromCreds(creds) ?? (await findCaptionsApi(lessonId)),
       now: () => new Date(),
     },
     playbackId,

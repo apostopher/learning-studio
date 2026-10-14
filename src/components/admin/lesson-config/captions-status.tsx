@@ -81,3 +81,12 @@ export function CaptionsStatus(props: CaptionsStatusProps) {
     </div>
   );
 }
+
+/** The status line when the status itself couldn't be read — never silence. */
+export function CaptionsStatusLoadError() {
+  return (
+    <output className="text-tertiary text-sm">
+      Couldn't load captions status
+    </output>
+  );
+}

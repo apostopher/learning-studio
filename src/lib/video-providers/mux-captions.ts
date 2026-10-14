@@ -129,6 +129,18 @@ export function playbackCacheTtl(
     : bySignature;
 }
 
+/**
+ * Mux's own words from an SDK APIError's parsed body
+ * (`{ error: { messages: [...] } }`), or null when it carries none.
+ */
+function muxBodyMessages(error: unknown): string | null {
+  const messages = (error as { error?: { error?: { messages?: unknown } } })
+    ?.error?.error?.messages;
+  if (!Array.isArray(messages)) return null;
+  const words = messages.filter((m): m is string => typeof m === 'string');
+  return words.length > 0 ? words.join(' ') : null;
+}
+
 /** A Mux API failure in words an admin can act on. */
 export function describeMuxError(error: unknown): string {
   const { status, message } = (error ?? {}) as {
@@ -136,7 +148,10 @@ export function describeMuxError(error: unknown): string {
     message?: unknown;
   };
   if (status === 401 || status === 403) return 'Mux rejected the API token.';
-  const text = typeof message === 'string' ? message : String(error);
+  // The SDK's message is "<status> <raw JSON>"; prefer Mux's own sentences.
+  const text =
+    muxBodyMessages(error) ??
+    (typeof message === 'string' ? message : String(error));
   if (/7 days/i.test(text)) {
     return 'Mux only captions videos older than 7 days on request — contact Mux support.';
   }

@@ -44,6 +44,7 @@ async function resolveLessonPlaybackUncached(
 ): Promise<LessonPlaybackResult | null> {
   const [lesson] = await db
     .select({
+      id: lessonsTable.id,
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
       otherVideoIds: lessonsTable.otherVideoIds,
@@ -63,6 +64,7 @@ async function resolveLessonPlaybackUncached(
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
   return resolveSelectedLessonVideo({
+    lessonId: lesson.id,
     provider: lesson.videoProvider as ProviderId,
     ref: lesson.videoRef,
     otherVideoIds: lesson.otherVideoIds,

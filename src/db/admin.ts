@@ -792,6 +792,23 @@ export async function listCourseProviders(
   });
 }
 
+/**
+ * The stored Mux creds to carry a token over from, or null when the row
+ * can't be loaded (an undecryptable envelope): re-saving is how an admin
+ * repairs such a row, so it must mean "no stored token", not a 500.
+ */
+async function storedMuxCredsOrNull(courseId: number): Promise<unknown> {
+  try {
+    return await resolveCourseProvider(courseId, 'mux');
+  } catch (error) {
+    console.warn(
+      `Stored Mux credentials for course ${courseId} could not be loaded; saving without a carried-over token.`,
+      error,
+    );
+    return null;
+  }
+}
+
 /** Validate then upsert encrypted provider credentials for a course. */
 export async function saveCourseProvider(
   courseId: number,
@@ -802,7 +819,7 @@ export async function saveCourseProvider(
     provider === 'mux'
       ? mergeStoredMuxToken(
           entered as MuxCredentials,
-          await resolveCourseProvider(courseId, 'mux'),
+          await storedMuxCredsOrNull(courseId),
         )
       : entered;
   const validation = await validateCredentials(provider, creds);
@@ -1032,6 +1049,7 @@ export async function resolveLessonPlayback(
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
   return resolveSelectedLessonVideo({
+    lessonId,
     provider: lesson.videoProvider as ProviderId,
     ref: lesson.videoRef,
     otherVideoIds: lesson.otherVideoIds,

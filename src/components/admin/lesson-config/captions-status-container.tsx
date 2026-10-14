@@ -1,7 +1,7 @@
 import { useLessonCaptions } from '#/data-hooks/use-lesson-captions';
 import { useRequestLessonCaptions } from '#/data-hooks/use-request-lesson-captions';
 import { labelForLang, type VideoLang } from '#/lib/video-languages';
-import { CaptionsStatus } from './captions-status';
+import { CaptionsStatus, CaptionsStatusLoadError } from './captions-status';
 
 export function CaptionsStatusContainer({
   lessonId,
@@ -14,7 +14,9 @@ export function CaptionsStatusContainer({
 }) {
   const captions = useLessonCaptions({ lessonId, courseId, lang });
   const request = useRequestLessonCaptions();
-  if (!captions.data) return null;
+  if (!captions.data) {
+    return captions.isError ? <CaptionsStatusLoadError /> : null;
+  }
   // The mutation is shared across languages; only show its state for this one.
   const isThisLang = request.variables?.lang === lang;
   return (

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
 import {
   captionsRefetchInterval,
+  shouldRefreshPlaybackOnCaptions,
   useLessonCaptions,
 } from '#/data-hooks/use-lesson-captions';
 import { useRequestLessonCaptions } from '#/data-hooks/use-request-lesson-captions';
@@ -85,6 +86,62 @@ describe('useLessonCaptions', () => {
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBeNull();
+  });
+});
+
+describe('shouldRefreshPlaybackOnCaptions', () => {
+  it('only when captions turn ready', () => {
+    expect(shouldRefreshPlaybackOnCaptions('generating', 'ready')).toBe(true);
+    expect(shouldRefreshPlaybackOnCaptions(undefined, 'ready')).toBe(true);
+    expect(shouldRefreshPlaybackOnCaptions('ready', 'ready')).toBe(false);
+    expect(shouldRefreshPlaybackOnCaptions('generating', 'generating')).toBe(
+      false,
+    );
+    expect(shouldRefreshPlaybackOnCaptions('ready', 'failed')).toBe(false);
+    expect(shouldRefreshPlaybackOnCaptions('generating', undefined)).toBe(
+      false,
+    );
+  });
+});
+
+describe('useLessonCaptions refreshing the preview', () => {
+  // The admin preview's playback was fetched while captions were still
+  // generating (no VTT); when polling sees them turn ready, the preview must
+  // refetch to get CC.
+  const observe = async (previous: string, next: string) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: next, error: null, lang: 'en' }),
+      }),
+    );
+    const { client, wrapper } = harness();
+    client.setQueryData(
+      dataKeys.lessonCaptions(10, 7, 'en'),
+      { status: previous, error: null, lang: 'en' },
+      { updatedAt: 0 },
+    );
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(
+      () => useLessonCaptions({ lessonId: 10, courseId: 7, lang: 'en' }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.data?.status).toBe(next));
+    return invalidate;
+  };
+
+  it('refetches the lesson playback when captions go generating → ready', async () => {
+    const invalidate = await observe('generating', 'ready');
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonPlaybacks(10),
+    });
+  });
+
+  it('leaves playback alone when captions were already ready', async () => {
+    const invalidate = await observe('ready', 'ready');
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });
 

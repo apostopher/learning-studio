@@ -189,6 +189,38 @@ describe('describeMuxError', () => {
       "Mux couldn't generate captions: boom",
     );
   });
+  // The SDK's APIError message is "<status> <raw JSON body>"; Mux's own
+  // words live in the parsed body's `error.messages`.
+  const apiError = (status: number, messages: string[]) => ({
+    status,
+    message: `${status} ${JSON.stringify({ error: { type: 'invalid_parameters', messages } })}`,
+    error: { error: { type: 'invalid_parameters', messages } },
+  });
+  it("uses Mux's own messages, not the raw status and JSON", () => {
+    expect(
+      describeMuxError(
+        apiError(400, ['Audio track not found.', 'Try another track.']),
+      ),
+    ).toBe(
+      "Mux couldn't generate captions: Audio track not found. Try another track.",
+    );
+  });
+  it('spots the 7-day limit inside the structured messages too', () => {
+    expect(
+      describeMuxError(
+        apiError(400, [
+          'Assets older than 7 days cannot have subtitles generated',
+        ]),
+      ),
+    ).toBe(
+      'Mux only captions videos older than 7 days on request — contact Mux support.',
+    );
+  });
+  it('still names a rejected token when the body is structured', () => {
+    expect(describeMuxError(apiError(401, ['Unauthorized']))).toBe(
+      'Mux rejected the API token.',
+    );
+  });
 });
 
 describe('captionTrackName', () => {

@@ -115,4 +115,31 @@ describe('useSetLessonVideo', () => {
     expect(invalidatedKeys).toContainEqual(dataKeys.orgLibrary());
     expect(invalidatedKeys).toContainEqual(dataKeys.editorBoard());
   });
+
+  // A replaced video is a different video with different captions (or none,
+  // or a provider with no Mux captions at all). Without this the admin
+  // captions line kept the old video's "captions ready" or cached `not_mux`.
+  it('invalidates every captions status of the lesson', async () => {
+    const { client, wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 200 }),
+    );
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        lessonId: 10,
+        provider: 'mux',
+        ref: 'playback-abc',
+      });
+    });
+
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      ([arg]) => arg?.queryKey,
+    );
+    expect(invalidatedKeys).toContainEqual(dataKeys.lessonCaptionsAll(10));
+  });
 });
