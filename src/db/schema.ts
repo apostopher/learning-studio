@@ -575,6 +575,26 @@ export const courseVideoProvidersTable = pgTable(
   ],
 );
 
+/**
+ * Mux caption state per PLAYBACK id (not per lesson: one Mux video can sit
+ * under several lessons and courses). See `src/db/video-captions.ts`.
+ */
+export const videoCaptionsTable = pgTable('video_captions', {
+  playbackId: text('playback_id').primaryKey(),
+  assetId: text('asset_id'),
+  trackId: text('track_id'),
+  languageCode: text('language_code').notNull(),
+  status: text('status').notNull(), // 'generating' | 'ready' | 'failed' | 'unsupported'
+  error: text('error'),
+  checkedAt: timestamp('checked_at', {
+    mode: 'date',
+    withTimezone: true,
+  }).notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const moduleDependenciesTable = pgTable(
   'module_dependencies',
   {

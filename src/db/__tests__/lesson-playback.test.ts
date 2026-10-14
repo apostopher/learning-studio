@@ -69,10 +69,29 @@ vi.mock('#/lib/video-providers/resolve.server', () => providers);
 vi.mock('#/db/course-modules', () => ({ courseModuleIds: () => 'SUBQUERY' }));
 vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug: vi.fn() }));
 vi.mock('#/db/placements', () => ({ getCourseIdsForLesson: vi.fn() }));
+vi.mock('#/db/video-captions', () => ({
+  muxCaptionsForPlayback: vi.fn(async () => null),
+}));
 
 const { getLessonPlayback } = await import('#/db/lesson-playback');
+const { muxCaptionsForPlayback } = await import('#/db/video-captions');
+
+/**
+ * The captions reader handed to `resolvePlayback` must be bound to THIS
+ * lesson (its token-less fallback looks up the lesson's other courses).
+ * Invoke the captured reader and assert what the real one received.
+ */
+async function expectCaptionsBoundTo(lessonId: number) {
+  const deps = providers.resolvePlayback.mock.calls.at(-1)?.[3] as {
+    muxCaptions: (ref: string, creds: unknown) => Promise<unknown>;
+  };
+  const creds = { keyId: 'serving' };
+  await deps.muxCaptions('ref', creds);
+  expect(muxCaptionsForPlayback).toHaveBeenCalledWith('ref', creds, lessonId);
+}
 
 const lessonRow = {
+  id: 9,
   videoProvider: 'mux',
   videoRef: 'ref-1',
   otherVideoIds: [],
@@ -153,6 +172,51 @@ describe('getLessonPlayback', () => {
       'lesson-playback:3:l1:en',
       JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 60 }, // 90 - 30
+    );
+  });
+
+  it('caches for at most 60s while Mux captions are generating', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([lessonRow]));
+    const ready = {
+      status: 'ready' as const,
+      url: 'https://cdn/v.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+      captionsPending: true as const,
+    };
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    await getLessonPlayback('l1', inCourse);
+
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:3:l1:en',
+      expect.any(String),
+      { ex: 60 },
+    );
+  });
+
+  it('caches for the full signature window (minus margin) when no captions are pending', async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+    db.select.mockReturnValueOnce(makeChain([lessonRow]));
+    const ready = {
+      status: 'ready' as const,
+      url: 'https://cdn/v.m3u8',
+      kind: 'hls' as const,
+      expiresInSeconds: 3600,
+      poster: null,
+      captions: null,
+    };
+    providers.resolvePlayback.mockResolvedValueOnce(ready);
+
+    await getLessonPlayback('l1', inCourse);
+
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'lesson-playback:3:l1:en',
+      expect.any(String),
+      { ex: 3570 },
     );
   });
 
@@ -263,6 +327,7 @@ describe('getLessonPlayback', () => {
 
 describe('getLessonPlayback with a language', () => {
   const rowWithFrench = {
+    id: 9,
     videoProvider: 'synthesia',
     videoRef: 'en-ref',
     otherVideoIds: [{ lang: 'fr-CA', provider: 'mux', ref: 'fr-ref' }],
@@ -288,9 +353,13 @@ describe('getLessonPlayback with a language', () => {
     });
 
     expect(admin.resolveCourseProvider).toHaveBeenCalledWith(3, 'mux');
-    expect(providers.resolvePlayback).toHaveBeenCalledWith('mux', 'fr-ref', {
-      keyId: 'mux-key',
-    });
+    expect(providers.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'fr-ref',
+      { keyId: 'mux-key' },
+      { muxCaptions: expect.any(Function) },
+    );
+    await expectCaptionsBoundTo(9);
     expect(result).toEqual({
       ...ready,
       lang: 'fr-CA',
@@ -315,7 +384,9 @@ describe('getLessonPlayback with a language', () => {
       'synthesia',
       'en-ref',
       expect.anything(),
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr-CA'] });
   });
 

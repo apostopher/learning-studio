@@ -23,6 +23,7 @@ import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { AlternateVideosContainer } from './alternate-videos-container';
+import { CaptionsStatusContainer } from './captions-status-container';
 import { computeVideoPreviewState } from './compute-video-preview-state';
 import { CredentialFlowContainer } from './credential-flow-container';
 import { PreviewLanguageFallback } from './preview-language-fallback';
@@ -335,6 +336,11 @@ export const VideoSectionContainer = ({
               </output>
             )}
             {languageFallback}
+            <CaptionsStatusContainer
+              lessonId={lesson.id}
+              courseId={courseId}
+              lang={previewLang}
+            />
             {!languageNotice && playback.isError && (
               <p role="alert" className="text-error-text text-sm">
                 Couldn't resolve playback: {playback.error.message}

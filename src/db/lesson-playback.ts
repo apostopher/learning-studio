@@ -14,6 +14,7 @@ import {
   VIDEO_LANGUAGES,
   type VideoLang,
 } from '#/lib/video-languages';
+import { playbackCacheTtl } from '#/lib/video-providers/mux-captions';
 import type { ProviderId } from '#/lib/video-providers/types';
 
 const CACHE_KEY_PREFIX = 'lesson-playback';
@@ -43,6 +44,7 @@ async function resolveLessonPlaybackUncached(
 ): Promise<LessonPlaybackResult | null> {
   const [lesson] = await db
     .select({
+      id: lessonsTable.id,
       videoProvider: lessonsTable.videoProvider,
       videoRef: lessonsTable.videoRef,
       otherVideoIds: lessonsTable.otherVideoIds,
@@ -62,6 +64,7 @@ async function resolveLessonPlaybackUncached(
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
   return resolveSelectedLessonVideo({
+    lessonId: lesson.id,
     provider: lesson.videoProvider as ProviderId,
     ref: lesson.videoRef,
     otherVideoIds: lesson.otherVideoIds,
@@ -91,7 +94,8 @@ async function resolveLessonPlaybackUncached(
  *  - a `ready` result with a known `expiresInSeconds` is written with a TTL
  *    derived from that expiry (30s safety margin: a URL handed to a client
  *    at the instant its cache entry expires must still play long enough to
- *    start);
+ *    start), and at most 60s while Mux captions are generating
+ *    (`playbackCacheTtl`);
  *  - a `ready` result with `expiresInSeconds: null` is returned WITHOUT
  *    writing — no expiry information means no safe TTL, and guessing one is
  *    how a dead URL gets served with no error path;
@@ -160,7 +164,10 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
     );
 
     if (result?.status === 'ready' && result.expiresInSeconds !== null) {
-      const ex = Math.max(1, result.expiresInSeconds - 30);
+      const ex = playbackCacheTtl(
+        result.expiresInSeconds,
+        result.captionsPending === true,
+      );
       await redis.set(key, JSON.stringify(result), { ex });
     }
 

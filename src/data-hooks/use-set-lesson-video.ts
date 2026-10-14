@@ -51,6 +51,10 @@ export function useSetLessonVideo(courseId: number | null) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonPlaybacks(input.lessonId),
       });
+      // A replaced video has different captions — or, off Mux, none from us.
+      queryClient.invalidateQueries({
+        queryKey: dataKeys.lessonCaptionsAll(input.lessonId),
+      });
       // Without this the board's tile flips to a play button on refetch but
       // its poster stays grey for the full 30-minute lessonPosters staleTime
       // — the exact moment an admin looks to confirm the attach worked.

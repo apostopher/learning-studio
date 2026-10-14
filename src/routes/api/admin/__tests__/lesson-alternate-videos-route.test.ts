@@ -16,6 +16,7 @@ const m = vi.hoisted(() => {
     getLessonAlternateVideos: vi.fn(),
     setLessonAlternateVideo: vi.fn(),
     removeLessonAlternateVideo: vi.fn(),
+    requestLessonCaptionsSafely: vi.fn(async (_input: unknown) => {}),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -32,6 +33,9 @@ vi.mock('#/db/admin', () => ({
   getLessonAlternateVideos: m.getLessonAlternateVideos,
   setLessonAlternateVideo: m.setLessonAlternateVideo,
   removeLessonAlternateVideo: m.removeLessonAlternateVideo,
+}));
+vi.mock('#/db/video-captions', () => ({
+  requestLessonCaptionsSafely: m.requestLessonCaptionsSafely,
 }));
 
 import {
@@ -107,6 +111,35 @@ describe('PUT', () => {
     const res = await putAlternateVideoHandler(json('PUT', entry), '10');
     expect(res.status).toBe(403);
     expect(m.setLessonAlternateVideo).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT captions trigger', () => {
+  it('a Mux alternate save requests captions in that language', async () => {
+    const res = await putAlternateVideoHandler(
+      json('PUT', { lang: 'fr', provider: 'mux', ref: 'altpid' }),
+      '10',
+    );
+    expect(res.status).toBe(200);
+    expect(m.requestLessonCaptionsSafely).toHaveBeenCalledWith({
+      lessonId: 10,
+      playbackId: 'altpid',
+      lang: 'fr',
+    });
+  });
+
+  it('a Synthesia alternate requests no Mux captions', async () => {
+    await putAlternateVideoHandler(json('PUT', entry), '10');
+    expect(m.requestLessonCaptionsSafely).not.toHaveBeenCalled();
+  });
+
+  it('a captions failure never fails the save', async () => {
+    m.requestLessonCaptionsSafely.mockRejectedValueOnce(new Error('boom'));
+    const res = await putAlternateVideoHandler(
+      json('PUT', { lang: 'fr', provider: 'mux', ref: 'altpid' }),
+      '10',
+    );
+    expect(res.status).toBe(200);
   });
 });
 

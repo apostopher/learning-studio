@@ -7,6 +7,7 @@ import {
   setLessonAlternateVideo,
 } from '#/db/admin';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
+import { requestLessonCaptionsSafely } from '#/db/video-captions';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   removeLessonAlternateVideoInputSchema,
@@ -92,6 +93,21 @@ export async function putAlternateVideoHandler(
   }
   const updated = await setLessonAlternateVideo(lessonId, parsed.data);
   if (!updated) return new Response('Not found', { status: 404 });
+
+  // Auto-captions for a Mux video. Awaited (a serverless response may end
+  // the work) but never allowed to fail the save — the outcome is stored on
+  // `video_captions` and shown, with Retry, in the video section.
+  if (parsed.data.provider === 'mux') {
+    try {
+      await requestLessonCaptionsSafely({
+        lessonId,
+        playbackId: parsed.data.ref,
+        lang: parsed.data.lang,
+      });
+    } catch (error) {
+      console.error('Captions request failed after a video save:', error);
+    }
+  }
   return Response.json({ ok: true });
 }
 

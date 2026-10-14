@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signPlaybackId } = vi.hoisted(() => ({
+const { signPlaybackId, checkMuxApiToken } = vi.hoisted(() => ({
   signPlaybackId: vi.fn(),
+  checkMuxApiToken: vi.fn(),
 }));
+
+vi.mock('./mux-api.server', () => ({ checkMuxApiToken }));
 
 vi.mock('@mux/mux-node', () => ({
   default: vi.fn().mockImplementation(() => ({
@@ -457,5 +460,84 @@ describe('classifying a Synthesia failure', () => {
     ).catch((e: unknown) => e);
 
     expect((error as PlaybackError).code).toBe('PROVIDER_AUTH_REJECTED');
+  });
+});
+
+describe('validateCredentials — Mux API token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signPlaybackId.mockResolvedValue('token');
+  });
+
+  it('checks the token when one is given and reports its rejection', async () => {
+    checkMuxApiToken.mockResolvedValue('Mux rejected the API token.');
+    const r = await validateCredentials('mux', {
+      ...muxCreds,
+      apiTokenId: 'tid',
+      apiTokenSecret: 'ts',
+    });
+    expect(checkMuxApiToken).toHaveBeenCalledWith('tid', 'ts');
+    expect(r).toEqual({ ok: false, error: 'Mux rejected the API token.' });
+  });
+
+  it('does not call Mux when no token is given', async () => {
+    const r = await validateCredentials('mux', muxCreds);
+    expect(checkMuxApiToken).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+  });
+
+  it('reports half a token pair in words, not as a zod dump', async () => {
+    const r = await validateCredentials('mux', {
+      ...muxCreds,
+      apiTokenId: 'tid',
+    });
+    expect(r).toEqual({
+      ok: false,
+      error: 'Enter both the API token ID and secret, or neither',
+    });
+  });
+});
+
+describe('resolvePlayback — Mux captions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signPlaybackId.mockResolvedValue('signed-jwt-token');
+  });
+
+  it('a ready track becomes the signed VTT URL, with the same token as the stream', async () => {
+    const muxCaptions = vi.fn(async () => ({
+      status: 'ready' as const,
+      trackId: 'trk',
+    }));
+    const r = await resolvePlayback('mux', 'pid', muxCreds, { muxCaptions });
+    expect(muxCaptions).toHaveBeenCalledWith('pid', muxCreds);
+    if (r.status !== 'ready') throw new Error('expected ready');
+    const token = new URL(r.url).searchParams.get('token');
+    expect(r.captions).toEqual({
+      vtt: `https://stream.mux.com/pid/text/trk.vtt?token=${token}`,
+    });
+    expect(r.captionsPending).toBeUndefined();
+  });
+
+  it('generating → no captions yet, flagged pending for the cache', async () => {
+    const r = await resolvePlayback('mux', 'pid', muxCreds, {
+      muxCaptions: async () => ({ status: 'pending' as const }),
+    });
+    expect(r).toMatchObject({
+      status: 'ready',
+      captions: null,
+      captionsPending: true,
+    });
+  });
+
+  it('a captions lookup that throws never takes playback down', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await resolvePlayback('mux', 'pid', muxCreds, {
+      muxCaptions: async () => {
+        throw new Error('db down');
+      },
+    });
+    errorLog.mockRestore();
+    expect(r).toMatchObject({ status: 'ready', captions: null });
   });
 });

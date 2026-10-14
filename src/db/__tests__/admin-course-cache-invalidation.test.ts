@@ -273,6 +273,9 @@ vi.mock('@vercel/blob', () => blob);
 // unrelated to this change and unresolvable under vitest — stub it out
 // rather than let it drag the whole chain in.
 vi.mock('#/lib/video-providers/resolve.server', () => resolveServer);
+vi.mock('#/db/video-captions', () => ({
+  muxCaptionsForPlayback: vi.fn(async () => null),
+}));
 // admin.ts calls `getVideoThumbnailsWithCache.invalidate(args)` from
 // saveCourseProvider — it never calls the reader itself, so the callable
 // half is untested filler. Without this mock, importing admin.ts would drag
@@ -309,7 +312,8 @@ const {
 // used here just to build a decryptable `secrets` fixture for
 // resolveLessonPlayback's `resolveCourseProvider` call, not to test
 // encryption itself.
-const { encryptJson } = await import('#/lib/crypto.server');
+const { encryptJson, decryptJson } = await import('#/lib/crypto.server');
+const { muxCaptionsForPlayback } = await import('#/db/video-captions');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -1759,6 +1763,20 @@ describe('resolveLessonPlayback course scoping', () => {
   });
 });
 
+/**
+ * The captions reader handed to `resolvePlayback` must be bound to THIS
+ * lesson (its token-less fallback looks up the lesson's other courses).
+ * Invoke the captured reader and assert what the real one received.
+ */
+async function expectCaptionsBoundTo(lessonId: number) {
+  const deps = resolveServer.resolvePlayback.mock.calls.at(-1)?.[3] as {
+    muxCaptions: (ref: string, creds: unknown) => Promise<unknown>;
+  };
+  const creds = { keyId: 'serving' };
+  await deps.muxCaptions('ref', creds);
+  expect(muxCaptionsForPlayback).toHaveBeenCalledWith('ref', creds, lessonId);
+}
+
 describe('resolveLessonPlayback language selection', () => {
   const credsWheres: SQL[] = [];
   const lookup = (
@@ -1810,7 +1828,9 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'fr-ref',
       expect.anything(),
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'fr' });
   });
 
@@ -1836,7 +1856,9 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'fr-ref',
       expect.anything(),
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'fr', languages: ['en', 'fr'] });
   });
 
@@ -1849,7 +1871,9 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'en-ref',
       expect.anything(),
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'en', languages: ['en', 'fr'] });
   });
 
@@ -1862,7 +1886,9 @@ describe('resolveLessonPlayback language selection', () => {
       'mux',
       'en-ref',
       expect.anything(),
+      { muxCaptions: expect.any(Function) },
     );
+    await expectCaptionsBoundTo(9);
     expect(result).toMatchObject({ lang: 'en', languages: ['en'] });
   });
 });
@@ -1911,6 +1937,39 @@ describe('getCourseLessonPosters course scoping', () => {
   });
 });
 
+describe('saveCourseProvider with an undecryptable stored Mux row', () => {
+  // Re-saving is exactly how an admin repairs a row that no longer decrypts
+  // (rotated key, corrupted envelope). The stored-token merge used to throw
+  // out of the save — a 500 with no way to fix the credentials.
+  it('treats the stored row as having no token and saves the entered credentials', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const good = encryptJson({ keyId: 'old', privateKey: 'old' });
+    const broken = { ...good, tag: Buffer.alloc(16).toString('base64') };
+    resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.select.mockReturnValueOnce(makeChain([{ secrets: broken }]));
+    const insertChain = makeChain(undefined);
+    db.insert.mockReturnValueOnce(insertChain);
+    const entered = { keyId: 'key-id', privateKey: 'private-key' };
+
+    const result = await saveCourseProvider(42, {
+      provider: 'mux',
+      ...entered,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(resolveServer.validateCredentials).toHaveBeenCalledWith(
+      'mux',
+      entered,
+    );
+    const inserted = insertChain.valuesArg as {
+      secrets: Parameters<typeof decryptJson>[0];
+    };
+    expect(decryptJson(inserted.secrets)).toEqual(entered);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
 describe('saveCourseProvider Synthesia thumbnail cache invalidation', () => {
   // A rotated/corrected Synthesia key used to leave the Redis-cached
   // thumbnail sweep untouched, so posters could stay wrong or missing for up
@@ -1936,6 +1995,7 @@ describe('saveCourseProvider Synthesia thumbnail cache invalidation', () => {
 
   it('does not touch the Synthesia thumbnail cache when saving a Mux credential', async () => {
     resolveServer.validateCredentials.mockResolvedValue({ ok: true });
+    db.select.mockReturnValueOnce(makeChain([])); // no stored Mux row to merge
     db.insert.mockReturnValueOnce(makeChain(undefined));
 
     await saveCourseProvider(42, {

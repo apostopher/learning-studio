@@ -57,6 +57,11 @@ describe('useSetLessonAlternateVideo', () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: dataKeys.lessonPlaybacks(10),
     });
+    // A different video for a language has different captions: the admin
+    // captions line must not keep the old video's status.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonCaptionsAll(10),
+    });
   });
 });
 
@@ -77,6 +82,11 @@ describe('useRemoveLessonAlternateVideo', () => {
     });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: dataKeys.lessonPlaybacks(10),
+    });
+    // A different video for a language has different captions: the admin
+    // captions line must not keep the old video's status.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: dataKeys.lessonCaptionsAll(10),
     });
   });
 });

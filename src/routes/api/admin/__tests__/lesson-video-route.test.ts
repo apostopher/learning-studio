@@ -15,6 +15,7 @@ const m = vi.hoisted(() => {
     getDisciplineIdForLessonId: vi.fn(),
     setLessonVideo: vi.fn(),
     getLessonVideo: vi.fn(),
+    requestLessonCaptionsSafely: vi.fn(async (_input: unknown) => {}),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -30,6 +31,9 @@ vi.mock('#/db/lesson-access', () => ({
 vi.mock('#/db/admin', () => ({
   setLessonVideo: m.setLessonVideo,
   getLessonVideo: m.getLessonVideo,
+}));
+vi.mock('#/db/video-captions', () => ({
+  requestLessonCaptionsSafely: m.requestLessonCaptionsSafely,
 }));
 
 import { getVideoHandler, putVideoHandler } from '../lessons.$lessonId.video';
@@ -159,6 +163,34 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
       null,
       'update',
     );
+  });
+});
+
+describe('PUT captions trigger', () => {
+  it('a Mux video save requests captions for the new playback id, in English', async () => {
+    const res = await putVideoHandler(
+      req({ provider: 'mux', ref: 'newpid' }),
+      '10',
+    );
+    expect(res.status).toBe(200);
+    expect(m.requestLessonCaptionsSafely).toHaveBeenCalledWith({
+      lessonId: 10,
+      playbackId: 'newpid',
+      lang: 'en',
+    });
+  });
+
+  it('a Synthesia save requests no Mux captions', async () => {
+    await putVideoHandler(req({ provider: 'synthesia', ref: 's1' }), '10');
+    expect(m.requestLessonCaptionsSafely).not.toHaveBeenCalled();
+  });
+
+  it('a captions failure never fails the save', async () => {
+    m.requestLessonCaptionsSafely.mockRejectedValueOnce(
+      new Error('should be swallowed upstream'),
+    );
+    const res = await putVideoHandler(req({ provider: 'mux', ref: 'p' }), '10');
+    expect(res.status).toBe(200);
   });
 });
 

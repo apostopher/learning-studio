@@ -1,4 +1,5 @@
 import { resolveCourseProvider } from '#/db/admin';
+import { muxCaptionsForPlayback } from '#/db/video-captions';
 import type { VideoLang } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import {
@@ -29,12 +30,14 @@ export type LessonPlaybackResult = PlaybackResult & {
  * may live on a different provider than the primary.
  */
 export async function resolveSelectedLessonVideo({
+  lessonId,
   provider,
   ref,
   otherVideoIds,
   courseId,
   lang,
 }: {
+  lessonId: number;
   provider: ProviderId;
   ref: string;
   otherVideoIds: unknown;
@@ -66,6 +69,12 @@ export async function resolveSelectedLessonVideo({
     selection.provider,
     selection.ref,
     creds,
+    // Bound to the lesson: without a token in the serving course's creds,
+    // the captions refresh falls back to another course placing the lesson.
+    {
+      muxCaptions: (playbackId, servingCreds) =>
+        muxCaptionsForPlayback(playbackId, servingCreds, lessonId),
+    },
   );
   return { ...playback, lang: selection.lang, languages: selection.languages };
 }

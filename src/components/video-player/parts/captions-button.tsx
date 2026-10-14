@@ -1,4 +1,4 @@
-import { Subtitles } from 'lucide-react';
+import { ClosedCaption } from 'lucide-react';
 
 type CaptionsButtonProps = {
   enabled: boolean;
@@ -51,7 +51,7 @@ export const CaptionsButton = ({
     }
     style={enabled ? { color: 'var(--color-accent-9)' } : undefined}
   >
-    <Subtitles size={20} aria-hidden="true" />
+    <ClosedCaption size={20} aria-hidden="true" />
     {unavailable ? (
       <span style={{ fontSize: '0.75rem' }}>{unavailableText}</span>
     ) : null}

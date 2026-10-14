@@ -28,6 +28,10 @@ export function useSetLessonAlternateVideo() {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonPlaybacks(lessonId),
       });
+      // A different video for the language has different captions.
+      queryClient.invalidateQueries({
+        queryKey: dataKeys.lessonCaptionsAll(lessonId),
+      });
     },
   });
 }
