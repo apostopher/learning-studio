@@ -236,7 +236,7 @@ export const VideoPlayerContainer = ({
   // whose TextTrack starts `disabled` regardless of what the learner had
   // chosen — without this dependency captions that were on would silently
   // drop after every swap while the button still read "on".
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.tracks intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.captions intentionally re-triggers the mode reset when the <track> elements are replaced even though it isn't read in the body — the body reads the live textTracks list instead.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -244,7 +244,7 @@ export const VideoPlayerContainer = ({
       v.textTracks[i].mode =
         state.captionsEnabled && i === 0 ? 'showing' : 'disabled';
     }
-  }, [state.captionsEnabled, rest.tracks]);
+  }, [state.captionsEnabled, rest.captions]);
 
   const onKeyboardShortcut = (key: string) => {
     const v = videoRef.current;

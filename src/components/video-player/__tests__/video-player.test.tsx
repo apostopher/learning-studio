@@ -28,7 +28,47 @@ describe('VideoPlayer', () => {
     expect(video?.getAttribute('crossorigin')).toBe('anonymous');
   });
 
-  it('hides captions button when no tracks are provided', () => {
+  it('renders one subtitles <track> per caption, the first one default', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        captions={[
+          { src: 'en.vtt', lang: 'en', label: 'English' },
+          { src: 'fr.vtt', lang: 'fr', label: 'French' },
+        ]}
+      />,
+    );
+    const tracks = [...container.querySelectorAll('track')];
+    expect(
+      tracks.map((t) => [
+        t.getAttribute('src'),
+        t.getAttribute('srclang'),
+        t.getAttribute('label'),
+        t.getAttribute('kind'),
+        t.hasAttribute('default'),
+      ]),
+    ).toEqual([
+      ['en.vtt', 'en', 'English', 'subtitles', true],
+      ['fr.vtt', 'fr', 'French', 'subtitles', false],
+    ]);
+  });
+
+  it('a plain src (no captions, no languages) shows no CC button and no language menu', () => {
+    const ref = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        actions={{ onCaptionsToggle: vi.fn(), onLanguageChange: vi.fn() }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /captions/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /language/i })).toBeNull();
+  });
+
+  it('hides captions button when no captions are provided', () => {
     const ref = createRef<HTMLVideoElement>();
     render(
       <VideoPlayer
@@ -40,20 +80,13 @@ describe('VideoPlayer', () => {
     expect(screen.queryByRole('button', { name: /captions/i })).toBeNull();
   });
 
-  it('shows captions button when tracks are provided and onCaptionsToggle is set', () => {
+  it('shows captions button when captions are provided and onCaptionsToggle is set', () => {
     const ref = createRef<HTMLVideoElement>();
     render(
       <VideoPlayer
         {...MIN_PROPS}
         videoRef={ref}
-        tracks={[
-          {
-            src: 'cap.vtt',
-            srcLang: 'en',
-            label: 'English',
-            kind: 'subtitles',
-          },
-        ]}
+        captions={[{ src: 'cap.vtt', lang: 'en', label: 'English' }]}
         state={{ captionsEnabled: true }}
         actions={{ onCaptionsToggle: vi.fn() }}
       />,
@@ -93,14 +126,7 @@ describe('VideoPlayer', () => {
       <VideoPlayer
         {...MIN_PROPS}
         videoRef={ref}
-        tracks={[
-          {
-            src: 'cap.vtt',
-            srcLang: 'en',
-            label: 'English',
-            kind: 'subtitles',
-          },
-        ]}
+        captions={[{ src: 'cap.vtt', lang: 'en', label: 'English' }]}
         state={{ captionsUnavailable: true }}
         actions={{ onCaptionsToggle: vi.fn() }}
       />,

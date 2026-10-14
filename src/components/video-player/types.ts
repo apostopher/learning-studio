@@ -7,6 +7,12 @@ export type VideoPlayerStatus =
   | 'buffering'
   | 'error';
 
+/**
+ * One caption file. The player builds a `kind="subtitles"` `<track>` from each
+ * and the CC button turns on the first.
+ */
+export type VideoCaption = { src: string; lang: string; label: string };
+
 export type VideoPlayerState = {
   paused: boolean;
   currentTime: number;
@@ -19,7 +25,7 @@ export type VideoPlayerState = {
   hasCaptions: boolean;
   /**
    * True when the source video is known to have no caption track at all —
-   * as opposed to `hasCaptions` simply being false because no `tracks` were
+   * as opposed to `hasCaptions` simply being false because no `captions` were
    * passed yet (still loading). Distinguishing the two matters: a Mux video
    * always has this set (Mux text tracks aren't configured on this account),
    * and silently showing the same "no captions button" as a video that
@@ -97,7 +103,7 @@ export type VideoPlayerProps = Omit<
   kind?: 'hls' | 'file';
   videoRef: React.Ref<HTMLVideoElement>;
   rootRef?: React.Ref<HTMLDivElement>;
-  tracks?: React.ComponentPropsWithoutRef<'track'>[];
+  captions?: VideoCaption[];
   state?: Partial<VideoPlayerState>;
   actions?: VideoPlayerActions;
   playbackRates?: number[];

@@ -2,6 +2,7 @@ export { videoPlayerStateAtomFamily } from './atoms';
 export { formatTime } from './format-time';
 export { DEFAULT_LABELS, PLAYBACK_RATES } from './labels';
 export type {
+  VideoCaption,
   VideoPlayerActions,
   VideoPlayerLabels,
   VideoPlayerProps,

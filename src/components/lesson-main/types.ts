@@ -1,8 +1,6 @@
-import type { ComponentPropsWithoutRef } from 'react';
+import type { VideoCaption } from '#/components/video-player/types';
 import type { LockedMaterialResponse } from '#/lib/lesson-gating';
 import type { VideoLang } from '#/lib/video-languages';
-
-export type TrackProps = ComponentPropsWithoutRef<'track'>;
 
 export type VideoFetchState =
   | { status: 'fetching' }
@@ -14,7 +12,8 @@ export type VideoFetchState =
       /** How `src` must be played — threaded through to `VideoPlayer`/`VideoPlayerContainer`'s `kind` prop. */
       kind: 'hls' | 'file';
       poster?: string;
-      tracks: TrackProps[];
+      /** Caption files for this video, in the played language; empty when the provider has none. */
+      captions: VideoCaption[];
       /** True when the provider has no caption track at all for this video (e.g. Mux). */
       captionsUnavailable: boolean;
       /** The language actually playing (`en` when the preference had no match). */

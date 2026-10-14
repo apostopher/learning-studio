@@ -1,12 +1,6 @@
-import type {
-  TrackProps,
-  VideoFetchState,
-} from '#/components/lesson-main/types';
-import {
-  labelForLang,
-  PRIMARY_VIDEO_LANG,
-  type VideoLang,
-} from '#/lib/video-languages';
+import type { VideoFetchState } from '#/components/lesson-main/types';
+import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
+import { captionsForPlayback } from './playback-captions';
 import type { PlaybackResult } from './resolve.server';
 
 type PlaybackWithLanguage = PlaybackResult & {
@@ -16,7 +10,7 @@ type PlaybackWithLanguage = PlaybackResult & {
 
 /**
  * Playback → player state. Pure, and the only place a provider's absence of
- * captions turns into an empty track list — so that absence is visible in one
+ * captions turns into an empty caption list — so that absence is visible in one
  * place rather than implied across the player.
  */
 export const playbackToState = (
@@ -36,23 +30,12 @@ export const playbackToState = (
   }
   const lang = result.lang ?? PRIMARY_VIDEO_LANG;
   const languages = result.languages ?? [PRIMARY_VIDEO_LANG];
-  const tracks: TrackProps[] = result.captions
-    ? [
-        {
-          src: result.captions.vtt,
-          srcLang: lang,
-          label: labelForLang(lang),
-          kind: 'subtitles',
-          default: true,
-        },
-      ]
-    : [];
   return {
     status: 'ready',
     src: result.url,
     kind: result.kind,
     poster: result.poster ?? undefined,
-    tracks,
+    captions: captionsForPlayback(result.captions, lang),
     captionsUnavailable: result.captions === null,
     lang,
     languages,
