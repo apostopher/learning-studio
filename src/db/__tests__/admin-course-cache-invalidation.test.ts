@@ -1760,7 +1760,15 @@ describe('resolveLessonPlayback course scoping', () => {
 });
 
 describe('resolveLessonPlayback language selection', () => {
-  const lookup = (otherVideoIds: unknown) => {
+  const credsWheres: SQL[] = [];
+  const lookup = (
+    otherVideoIds: unknown,
+    {
+      primaryProvider = 'mux',
+      creds = true,
+    }: { primaryProvider?: string; creds?: boolean } = {},
+  ) => {
+    credsWheres.length = 0;
     const chain = {
       from: () => chain,
       innerJoin: () => chain,
@@ -1768,18 +1776,56 @@ describe('resolveLessonPlayback language selection', () => {
       orderBy: () => chain,
       limit: () =>
         Promise.resolve([
-          { videoProvider: 'mux', videoRef: 'en-ref', otherVideoIds },
+          {
+            videoProvider: primaryProvider,
+            videoRef: 'en-ref',
+            otherVideoIds,
+          },
         ]),
     };
-    db.select
-      .mockReturnValueOnce(chain)
-      .mockReturnValueOnce(
-        makeChain([{ secrets: encryptJson({ keyId: 'k', privateKey: 'p' }) }]),
-      );
+    const credsChain = makeChain(
+      creds ? [{ secrets: encryptJson({ keyId: 'k', privateKey: 'p' }) }] : [],
+    );
+    const credsWhere = credsChain.where;
+    credsChain.where = ((condition: SQL) => {
+      credsWheres.push(condition);
+      return credsWhere();
+    }) as typeof credsChain.where;
+    db.select.mockReturnValueOnce(chain).mockReturnValueOnce(credsChain);
     resolveServer.resolvePlayback.mockResolvedValue({
       status: 'rendering',
     });
   };
+
+  it('takes credentials from the SELECTED video provider, not the primary', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }], {
+      primaryProvider: 'synthesia',
+    });
+
+    const result = await resolveLessonPlayback(9, 3, 'fr');
+
+    expect(credsWheres).toHaveLength(1);
+    expect(renderSqlParams(credsWheres[0])).toEqual([3, 'mux']);
+    expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
+      'mux',
+      'fr-ref',
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ lang: 'fr' });
+  });
+
+  it('names the selected provider when it has no credentials', async () => {
+    lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }], {
+      primaryProvider: 'synthesia',
+      creds: false,
+    });
+
+    await expect(resolveLessonPlayback(9, 3, 'fr')).rejects.toMatchObject({
+      code: 'PROVIDER_NOT_CONFIGURED',
+      message: 'This course has no mux credentials configured.',
+    });
+    expect(resolveServer.resolvePlayback).not.toHaveBeenCalled();
+  });
 
   it('resolves the requested alternate and reports the languages on offer', async () => {
     lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }]);

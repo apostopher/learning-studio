@@ -1,9 +1,12 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
-import { resolveCourseProvider } from '#/db/admin';
 import { courseModuleIds } from '#/db/course-modules';
 import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getCourseIdsForLesson } from '#/db/placements';
+import {
+  type LessonPlaybackResult,
+  resolveSelectedLessonVideo,
+} from '#/db/resolve-lesson-video';
 import { lessonsTable, moduleLessonsTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
 import {
@@ -11,22 +14,11 @@ import {
   VIDEO_LANGUAGES,
   type VideoLang,
 } from '#/lib/video-languages';
-import { PlaybackError } from '#/lib/video-providers/errors';
-import {
-  type PlaybackResult,
-  resolvePlayback,
-} from '#/lib/video-providers/resolve.server';
-import { selectVideoForLang } from '#/lib/video-providers/select-video-for-lang';
 import type { ProviderId } from '#/lib/video-providers/types';
-import { OtherVideoIdsSchema } from '#/types';
 
 const CACHE_KEY_PREFIX = 'lesson-playback';
 
-/** A `PlaybackResult` plus which language it is and which the lesson offers. */
-export type LessonPlaybackResult = PlaybackResult & {
-  lang: VideoLang;
-  languages: VideoLang[];
-};
+export type { LessonPlaybackResult };
 
 /**
  * Playback for a lesson AS TAUGHT BY one course, resolved through that
@@ -69,40 +61,13 @@ async function resolveLessonPlaybackUncached(
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
 
-  // A column that fails the schema (a row written under the old
-  // `{ lang: 'FR', videoId }` shape, or by hand) must not take the English
-  // video down with it — it simply offers no alternates.
-  const alternates = OtherVideoIdsSchema.safeParse(lesson.otherVideoIds);
-  const selection = selectVideoForLang({
-    primary: {
-      provider: lesson.videoProvider as ProviderId,
-      ref: lesson.videoRef,
-    },
-    alternates: alternates.success ? alternates.data : [],
-    requested: lang,
+  return resolveSelectedLessonVideo({
+    provider: lesson.videoProvider as ProviderId,
+    ref: lesson.videoRef,
+    otherVideoIds: lesson.otherVideoIds,
+    courseId,
+    lang,
   });
-
-  const creds = await resolveCourseProvider(courseId, selection.provider);
-  // Throws rather than returning null: null here is indistinguishable from
-  // "no such lesson" and "no video assigned", which the route deliberately
-  // renders as an opaque 403. A missing course credential is neither — it is
-  // an admin misconfiguration the learner can do nothing about, and
-  // flattening it into the same refusal is how a whole course of lessons can
-  // be dead with nothing anywhere saying why. Safe to distinguish: the gate
-  // and subscription checks have already passed by the time this runs, so it
-  // reveals nothing about which slugs exist.
-  if (!creds) {
-    throw new PlaybackError(
-      'PROVIDER_NOT_CONFIGURED',
-      `This course has no ${selection.provider} credentials configured.`,
-    );
-  }
-  const playback = await resolvePlayback(
-    selection.provider,
-    selection.ref,
-    creds,
-  );
-  return { ...playback, lang: selection.lang, languages: selection.languages };
 }
 
 /**

@@ -45,9 +45,8 @@ export async function getVideoPlaybackHandler(
   // which key signs the URL — and only the editor (`/admin/$courseId/…`)
   // knows which one it is showing. Inferring it here used to pick the
   // lowest course id, which was the wrong course for anyone in the other.
-  const courseId = parsePositiveInt(
-    new URL(request.url).searchParams.get('courseId'),
-  );
+  const { searchParams } = new URL(request.url);
+  const courseId = parsePositiveInt(searchParams.get('courseId'));
   if (courseId === null) {
     return Response.json(
       { error: 'A valid courseId is required' },
@@ -57,7 +56,7 @@ export async function getVideoPlaybackHandler(
   // Same rule as the learner route: an unknown or unattached language is
   // never a refusal — the resolver falls back to the primary video and says
   // which language it played.
-  const rawLang = new URL(request.url).searchParams.get('lang');
+  const rawLang = searchParams.get('lang');
   const lang = isVideoLang(rawLang) ? rawLang : PRIMARY_VIDEO_LANG;
   // Confirm the placement before guarding: guarding on a course the lesson is
   // not in would misreport "no such lesson" as "forbidden". A course the

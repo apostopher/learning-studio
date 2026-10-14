@@ -27,6 +27,10 @@ import { getLessonPlayback } from '#/db/lesson-playback';
 import { nextAvailableLessonSlug } from '#/db/lesson-slug';
 import { getLessonTranscript } from '#/db/lesson-transcript';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
+import {
+  type LessonPlaybackResult,
+  resolveSelectedLessonVideo,
+} from '#/db/resolve-lesson-video';
 import type { DBCourse } from '#/db/schema';
 import {
   courseModulesTable,
@@ -68,14 +72,8 @@ import {
   type VideoLang,
 } from '#/lib/video-languages';
 import { type ProviderId, VIDEO_PROVIDERS } from '#/lib/video-providers';
-import { PlaybackError } from '#/lib/video-providers/errors';
 import { buildLessonPosters } from '#/lib/video-providers/posters.server';
-import {
-  type PlaybackResult,
-  resolvePlayback,
-  validateCredentials,
-} from '#/lib/video-providers/resolve.server';
-import { selectVideoForLang } from '#/lib/video-providers/select-video-for-lang';
+import { validateCredentials } from '#/lib/video-providers/resolve.server';
 import type {
   CourseLessonDependency,
   OnboardingQuestions,
@@ -975,9 +973,7 @@ export async function resolveLessonPlayback(
   lessonId: number,
   courseId: number,
   lang: VideoLang,
-): Promise<
-  (PlaybackResult & { lang: VideoLang; languages: VideoLang[] }) | null
-> {
+): Promise<LessonPlaybackResult | null> {
   // `courseId` is the course the route already resolved (and guarded on) —
   // fix round 1: previously this ran its own independent "lowest course id"
   // lookup, which happened to match the route's guard only because both used
@@ -1024,35 +1020,13 @@ export async function resolveLessonPlayback(
     .orderBy(moduleLessonsTable.moduleId)
     .limit(1);
   if (!lesson?.videoProvider || !lesson.videoRef) return null;
-  // A column that fails the schema offers no alternates rather than taking
-  // the primary video down (same rule as the learner resolver).
-  const alternates = OtherVideoIdsSchema.safeParse(lesson.otherVideoIds);
-  const selection = selectVideoForLang({
-    primary: {
-      provider: lesson.videoProvider as ProviderId,
-      ref: lesson.videoRef,
-    },
-    alternates: alternates.success ? alternates.data : [],
-    requested: lang,
+  return resolveSelectedLessonVideo({
+    provider: lesson.videoProvider as ProviderId,
+    ref: lesson.videoRef,
+    otherVideoIds: lesson.otherVideoIds,
+    courseId,
+    lang,
   });
-  // Credentials belong to the SELECTED video's provider: an alternate may
-  // live on a different provider than the primary.
-  const creds = await resolveCourseProvider(courseId, selection.provider);
-  // See resolveLessonPlaybackUncached: a missing credential is an admin
-  // misconfiguration, not "no video", and must not collapse into the same
-  // 404 the board reads as "nothing assigned".
-  if (!creds) {
-    throw new PlaybackError(
-      'PROVIDER_NOT_CONFIGURED',
-      `This course has no ${selection.provider} credentials configured.`,
-    );
-  }
-  const playback = await resolvePlayback(
-    selection.provider,
-    selection.ref,
-    creds,
-  );
-  return { ...playback, lang: selection.lang, languages: selection.languages };
 }
 
 /**
