@@ -81,11 +81,11 @@ import { buildLessonPosters } from '#/lib/video-providers/posters.server';
 import { validateCredentials } from '#/lib/video-providers/resolve.server';
 import type {
   CourseLessonDependency,
+  LessonLevel,
   OnboardingQuestions,
   OtherVideoId,
   OtherVideoIds,
   SubscriptionType,
-  UserLevel,
 } from '#/types';
 import { OtherVideoIdsSchema } from '#/types';
 import { db } from '.';
@@ -527,7 +527,7 @@ export async function createLesson(input: {
     hasDebrief: created.hasDebrief,
     needsVideoWatch: created.needsVideoWatch,
     requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
-    levels: created.levels as UserLevel[],
+    levels: created.levels as LessonLevel[],
     isConfigured: created.videoRef !== null,
     // A lesson is created before any material exists, so it has no quiz yet.
     quizQuestionCount: 0,
@@ -762,7 +762,7 @@ export async function getCourseBoard(
         hasDebrief: l.hasDebrief,
         needsVideoWatch: l.needsVideoWatch,
         requiredSubscriptions: l.requiredSubscriptions as SubscriptionType[],
-        levels: l.levels as UserLevel[],
+        levels: l.levels as LessonLevel[],
         isConfigured: l.videoRef !== null,
         quizQuestionCount: Number(l.quizQuestionCount),
         dependsOn: l.dependsOn,
@@ -1251,7 +1251,7 @@ export async function updateLessonConfig(
     hasDebrief?: boolean;
     needsVideoWatch?: boolean;
     requiredSubscriptions?: SubscriptionType[];
-    levels?: UserLevel[];
+    levels?: LessonLevel[];
   },
 ): Promise<{
   id: number;
@@ -1259,7 +1259,7 @@ export async function updateLessonConfig(
   hasDebrief: boolean;
   needsVideoWatch: boolean;
   requiredSubscriptions: SubscriptionType[];
-  levels: UserLevel[];
+  levels: LessonLevel[];
 } | null> {
   const [updated] = await db
     .update(lessonsTable)
@@ -1280,7 +1280,7 @@ export async function updateLessonConfig(
   return {
     ...updated,
     requiredSubscriptions: updated.requiredSubscriptions as SubscriptionType[],
-    levels: updated.levels as UserLevel[],
+    levels: updated.levels as LessonLevel[],
   };
 }
 

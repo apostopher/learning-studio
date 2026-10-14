@@ -33,6 +33,7 @@ import {
 import { cacheWithRedis } from '@/integrations/upstash/redis';
 import type {
   CourseLessonDependencies,
+  LessonLevel,
   SubscriptionType,
   UserLevel,
 } from '@/types';
@@ -182,7 +183,7 @@ export async function getCourseDetails(slug: string) {
         rank: placement.rank,
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
-        levels: lesson.levels as UserLevel[],
+        levels: lesson.levels as LessonLevel[],
         hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
         otherVideoIds: lesson.otherVideoIds || [],
         dependsOn: [],

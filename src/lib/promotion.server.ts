@@ -7,7 +7,7 @@ import { getCurrentLevel, insertEarnedLevelRow } from '#/db/user-levels';
 import { getUserEmail } from '#/db/user-profile';
 import { sendLevelPromotionEmail } from '#/lib/email/send-level-promotion-email';
 import { isTierComplete, nextLevel } from '#/lib/tier-completion';
-import type { UserLevel } from '#/types';
+import { isUserLevel, type UserLevel } from '#/types';
 
 export type Promotion = { id: number; from: UserLevel; to: UserLevel };
 
@@ -68,7 +68,11 @@ export async function maybePromote(options: {
   // This is what makes the spec's own rollout property true: the catalogue
   // stays fully visible on deploy and the feature switches on lesson by lesson
   // as authors tag content.
-  if (!lessons.some((lesson) => lesson.levels.length > 0)) return null;
+  //
+  // "Tagged" means a REAL tier. `'none'` hides a lesson from everyone; it is
+  // not a tier, so a course whose only tags are `'none'` is still untagged and
+  // its `[]` lessons would trigger exactly the cascade above.
+  if (!lessons.some((lesson) => lesson.levels.some(isUserLevel))) return null;
 
   if (!isTierComplete({ lessons, progress: progress.lessons, level: from })) {
     return null;

@@ -165,6 +165,34 @@ describe('maybePromote', () => {
     expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
   });
 
+  it("promotes nobody in a course whose only tags are 'none'", async () => {
+    // 'none' hides a lesson from every tier; it is not a tier. A course that
+    // tags only 'none' still has no tiers, so the untagged-catalogue cascade
+    // above must not start: the remaining [] lessons are visible at EVERY
+    // tier and would complete basic, then intermediate, on successive writes.
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          lessons: [
+            { id: 1, isAvailable: true, levels: [] },
+            { id: 2, isAvailable: true, levels: ['none'] },
+          ],
+        },
+      ],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, percent: 100 },
+        { lessonId: 2, percent: 100 },
+      ],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
+  });
+
   it('still promotes when only SOME lessons are tagged', async () => {
     // The guard is "nothing in this course is tagged", not "every lesson is
     // tagged" — a part-tagged course is the normal mid-rollout state.

@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { levelsBoardModeAtom } from '#/atoms/admin';
+import { type LevelsBoardMode, levelsBoardModeAtom } from '#/atoms/admin';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 
 const lesson = (
@@ -57,6 +57,7 @@ vi.mock('#/data-hooks/use-org-library', () => ({
               lessons: [
                 lesson(10, 'Stalls', []),
                 lesson(11, 'Spins', ['basic', 'advanced']),
+                lesson(12, 'Ditching', ['none']),
               ],
             },
           ],
@@ -68,7 +69,7 @@ vi.mock('#/data-hooks/use-org-library', () => ({
 
 import { DisciplineLevelsBoardContainer } from '../discipline-levels-dialog-container';
 
-function renderBoard(mode: 'basic' | 'intermediate' | 'advanced') {
+function renderBoard(mode: LevelsBoardMode) {
   const store = createStore();
   store.set(levelsBoardModeAtom, mode);
   render(
@@ -100,5 +101,23 @@ describe('DisciplineLevelsBoardContainer', () => {
       lessonId: 30,
       levels: ['advanced', 'intermediate'],
     });
+  });
+
+  it("in None mode, replaces every level with ['none']", () => {
+    renderBoard('none');
+    fireEvent.click(screen.getByRole('button', { name: /Spins/ }));
+    expect(mutate).toHaveBeenCalledWith({ lessonId: 11, levels: ['none'] });
+  });
+
+  it("in None mode, clears a 'none' lesson back to every level", () => {
+    renderBoard('none');
+    fireEvent.click(screen.getByRole('button', { name: /Ditching/ }));
+    expect(mutate).toHaveBeenCalledWith({ lessonId: 12, levels: [] });
+  });
+
+  it("a real level replaces a lesson's 'none' tag", () => {
+    renderBoard('advanced');
+    fireEvent.click(screen.getByRole('button', { name: /Ditching/ }));
+    expect(mutate).toHaveBeenCalledWith({ lessonId: 12, levels: ['advanced'] });
   });
 });

@@ -1,4 +1,4 @@
-import { USER_LEVELS, type UserLevel } from '#/types';
+import { type LessonLevel, USER_LEVELS, type UserLevel } from '#/types';
 
 /**
  * Pilot-facing names, kept apart from the stored values.
@@ -11,6 +11,17 @@ export const LEVEL_LABELS: Record<UserLevel, string> = {
   basic: 'Basic',
   intermediate: 'Intermediate',
   advanced: 'Advanced',
+};
+
+/**
+ * Admin-facing names for what a LESSON's levels can hold — the tiers, plus
+ * `'none'` (hidden from every tier). Kept apart from `LEVEL_LABELS` so that
+ * pilot-facing copy, which only ever names a real tier, stays typed to
+ * `UserLevel` and cannot be handed `'none'`.
+ */
+export const LESSON_LEVEL_LABELS: Record<LessonLevel, string> = {
+  ...LEVEL_LABELS,
+  none: 'None',
 };
 
 export function levelLabel(level: UserLevel): string {

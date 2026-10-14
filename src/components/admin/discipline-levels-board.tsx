@@ -1,8 +1,9 @@
 import { Video } from 'lucide-react';
+import type { LevelsBoardMode } from '#/atoms/admin';
 import type { LibraryLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
-import { LEVEL_LABELS } from '#/lib/level-labels';
-import { USER_LEVELS, type UserLevel } from '#/types';
+import { LESSON_LEVEL_LABELS } from '#/lib/level-labels';
+import { LESSON_LEVELS } from '#/types';
 
 export type DisciplineLevelsColumn = {
   /** A module id, or `'root'` for the lessons filed in no module. */
@@ -29,8 +30,8 @@ export const DisciplineLevelsBoard = ({
   onSelectLesson,
 }: {
   columns: DisciplineLevelsColumn[];
-  /** The level a press adds or removes. */
-  mode: UserLevel;
+  /** The level a press adds or removes, or `'none'`. */
+  mode: LevelsBoardMode;
   /** Lesson id → poster frame, when the discipline's shelf has one. */
   posters?: Record<string, string>;
   /**
@@ -75,7 +76,8 @@ export const DisciplineLevelsBoard = ({
                 const waiting = lesson.isConfigured && postersLoading;
                 const tagged = lesson.levels.includes(mode);
                 // In the canonical order, whatever order they were saved in.
-                const badges = USER_LEVELS.filter((l) =>
+                // `'none'` is exclusive, so it is only ever badged alone.
+                const badges = LESSON_LEVELS.filter((l) =>
                   lesson.levels.includes(l),
                 );
                 return (
@@ -131,7 +133,7 @@ export const DisciplineLevelsBoard = ({
                                   : 'bg-gray-4 text-secondary',
                               )}
                             >
-                              {LEVEL_LABELS[level]}
+                              {LESSON_LEVEL_LABELS[level]}
                             </span>
                           ))}
                         </span>
