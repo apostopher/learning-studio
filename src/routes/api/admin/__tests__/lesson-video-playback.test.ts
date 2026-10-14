@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { VideoLang } from '#/lib/video-languages';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 // Fully stub admin-functions.server (see mocking rules: no importOriginal on
@@ -25,7 +26,12 @@ const {
     getCourseIdsForLesson: vi.fn<() => Promise<number[]>>(),
     // Typed so an invalid fixture (e.g. a pre-Task-1 body missing `status`)
     // is a tsc error, not something only a runtime parse would catch.
-    resolveLessonPlayback: vi.fn<() => Promise<PlaybackResult | null>>(),
+    resolveLessonPlayback:
+      vi.fn<
+        () => Promise<
+          (PlaybackResult & { lang: VideoLang; languages: VideoLang[] }) | null
+        >
+      >(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({ ForbiddenError }));
@@ -39,7 +45,7 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/placements', () => ({ getCourseIdsForLesson }));
 vi.mock('#/db/admin', () => ({ resolveLessonPlayback }));
 
-import { lessonPlaybackSchema } from '#/lib/admin-schemas';
+import { learnerPlaybackSchema } from '#/lib/admin-schemas';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { getVideoPlaybackHandler } from '../lessons.$lessonId.video-playback';
 
@@ -73,7 +79,11 @@ describe('getVideoPlaybackHandler', () => {
   });
 
   it('asks for content:read scoped to the course the client named', async () => {
-    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+    resolveLessonPlayback.mockResolvedValue({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
     await getVideoPlaybackHandler(req('99'), '1');
     expect(requireCoursePermission).toHaveBeenCalledWith(
       expect.anything(),
@@ -101,11 +111,15 @@ describe('getVideoPlaybackHandler', () => {
   // so a regression to an independent lookup on either side can't silently
   // reintroduce that mismatch.
   it('resolves playback with the course the client named, the same one it guarded', async () => {
-    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+    resolveLessonPlayback.mockResolvedValue({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
 
     await getVideoPlaybackHandler(req('99'), '1');
 
-    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99);
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99, 'en');
   });
 
   /**
@@ -147,13 +161,18 @@ describe('getVideoPlaybackHandler', () => {
   });
 
   it('returns a resolved playback the client schema can actually parse', async () => {
-    const playback: PlaybackResult = {
+    const playback: PlaybackResult & {
+      lang: VideoLang;
+      languages: VideoLang[];
+    } = {
       status: 'ready',
       url: 'https://x/y.m3u8',
       kind: 'hls',
       expiresInSeconds: 3600,
       poster: 'https://x/poster.jpg',
       captions: { vtt: 'https://x/captions.vtt' },
+      lang: 'en',
+      languages: ['en'],
     };
     resolveLessonPlayback.mockResolvedValue(playback);
 
@@ -163,18 +182,65 @@ describe('getVideoPlaybackHandler', () => {
     // Parsed with the real client-side schema — not compared against the
     // same object reference the mock returned (that would pass even if the
     // fixture were a shape the client could never actually read).
-    const parsed = lessonPlaybackSchema.parse(await res.json());
+    const parsed = learnerPlaybackSchema.parse(await res.json());
     expect(parsed).toEqual(playback);
   });
 
   it('returns a rendering playback that survives route -> client schema parse', async () => {
-    resolveLessonPlayback.mockResolvedValue({ status: 'rendering' });
+    resolveLessonPlayback.mockResolvedValue({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
 
     const res = await getVideoPlaybackHandler(req(), '1');
 
     expect(res.status).toBe(200);
-    const parsed = lessonPlaybackSchema.parse(await res.json());
-    expect(parsed).toEqual({ status: 'rendering' });
+    const parsed = learnerPlaybackSchema.parse(await res.json());
+    expect(parsed).toEqual({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
+  });
+
+  it('passes a requested language through to the resolver', async () => {
+    resolveLessonPlayback.mockResolvedValue({
+      status: 'rendering',
+      lang: 'fr',
+      languages: ['en', 'fr'],
+    });
+    const res = await getVideoPlaybackHandler(
+      new Request(
+        'http://test/api/admin/lessons/1/video-playback?courseId=42&lang=fr',
+      ),
+      '1',
+    );
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'fr');
+    expect(learnerPlaybackSchema.parse(await res.json())).toMatchObject({
+      lang: 'fr',
+      languages: ['en', 'fr'],
+    });
+  });
+
+  it.each([
+    'xx',
+    '',
+    'EN',
+  ])('treats an unknown lang (%j) as the primary language, never an error', async (lang) => {
+    resolveLessonPlayback.mockResolvedValue({
+      status: 'rendering',
+      lang: 'en',
+      languages: ['en'],
+    });
+    const res = await getVideoPlaybackHandler(
+      new Request(
+        `http://test/api/admin/lessons/1/video-playback?courseId=42&lang=${lang}`,
+      ),
+      '1',
+    );
+    expect(res.status).toBe(200);
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'en');
   });
 
   it('403s a refused actor without touching the database', async () => {
