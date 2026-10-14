@@ -465,6 +465,21 @@ export const lessonPlaybackSchema = z.discriminatedUnion('status', [
 ]);
 export type LessonPlayback = z.infer<typeof lessonPlaybackSchema>;
 
+export const lessonCaptionsSchema = z.object({
+  status: z.enum([
+    'generating',
+    'ready',
+    'failed',
+    'unsupported',
+    'none',
+    'no_token',
+    'not_mux',
+  ]),
+  error: z.string().nullable(),
+  lang: videoLangSchema,
+});
+export type LessonCaptions = z.infer<typeof lessonCaptionsSchema>;
+
 const playbackLanguageFields = {
   lang: videoLangSchema,
   languages: z.array(videoLangSchema).min(1),

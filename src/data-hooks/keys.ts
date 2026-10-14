@@ -51,6 +51,11 @@ export const dataKeys = {
     courseId: number,
     lang: VideoLang = PRIMARY_VIDEO_LANG,
   ) => [...dataKeys.lessonPlaybacks(lessonId), courseId, lang] as const,
+  /** Every language and course of one lesson's captions status. */
+  lessonCaptionsAll: (lessonId: number) =>
+    ['admin', 'lesson-captions', lessonId] as const,
+  lessonCaptions: (lessonId: number, courseId: number, lang: VideoLang) =>
+    [...dataKeys.lessonCaptionsAll(lessonId), courseId, lang] as const,
   /** Every course's posters — the prefix `lessonPosters` is built on. */
   allLessonPosters: () => ['admin', 'lesson-posters'] as const,
   lessonPosters: (courseId: number) =>

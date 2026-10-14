@@ -53,6 +53,15 @@ vi.mock('../alternate-videos-container', () => ({
   ),
 }));
 
+// Captures its props: what the section owes it is the lesson, course and
+// previewed language the status is about.
+const captionsStatus = vi.hoisted(() =>
+  vi.fn((_p: Record<string, unknown>) => <div data-testid="captions-status" />),
+);
+vi.mock('../captions-status-container', () => ({
+  CaptionsStatusContainer: captionsStatus,
+}));
+
 import { VideoSectionContainer } from '../video-section-container';
 
 // A fresh jotai store per render: the preview-language atom family is keyed
@@ -447,6 +456,45 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
 });
 
 /** F1: the player waits on what `onSourceExpired` returns before re-attaching. */
+describe('VideoSectionContainer captions status', () => {
+  it('hands the status line the lesson, course and previewed language', () => {
+    stubHooks({ configured: true });
+    hooks.playback.mockReturnValue({
+      data: readyPlayback,
+      isLoading: false,
+      isError: false,
+      isPlaceholderData: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    act(() => lastPreviewProps().onLanguageChange?.('fr'));
+    expect(captionsStatus.mock.calls.at(-1)?.[0]).toEqual({
+      lessonId: 10,
+      courseId: 7,
+      lang: 'fr',
+    });
+  });
+
+  it('is not rendered without a course', () => {
+    stubHooks();
+    render(
+      <VideoSectionContainer
+        courseId={null}
+        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+      />,
+      { wrapper },
+    );
+    expect(captionsStatus).not.toHaveBeenCalled();
+  });
+});
+
 describe('VideoSectionContainer recovery', () => {
   it('hands the player the refetch promise as the recovery result', () => {
     stubHooks({ configured: true });
