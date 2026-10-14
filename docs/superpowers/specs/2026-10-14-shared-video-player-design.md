@@ -55,20 +55,17 @@ about lessons. No page gets a video it doesn't have today.
 
 ### 1. Public API
 
-`#/components/video-player` exports one drop-in, `VideoPlayer`. It is
-today's `VideoPlayerContainer`, renamed. Today's presentational
-`VideoPlayer` is renamed `VideoPlayerView`. Every import updates in the
-same change:
-
-- `lesson-main.tsx`, whose placeholder states use the view;
-- `lesson-player-container.tsx`;
-- `video-player.stories.tsx`;
-- `index.ts`.
+The drop-in is the existing **`VideoPlayerContainer`** (exported from
+`#/components/video-player`), kept under that name: the project's naming
+rule is `foo-container.tsx` / `FooContainer` for stateful components, so
+renaming it `VideoPlayer` would break convention and churn every import.
+The presentational `VideoPlayer` keeps its name too. *(Revised from the
+conversation's "rename to VideoPlayer" for that reason.)*
 
 ```ts
 type VideoCaption = { src: string; lang: string; label: string };
 
-type VideoPlayerProps = {
+type VideoPlayerContainerProps = {
   src: string;                         // required
   kind?: 'hls' | 'file';               // default 'file'
   poster?: string;
@@ -103,7 +100,7 @@ type VideoPlayerProps = {
 
 ### 2. Admin
 
-- `VideoPreview`'s `<video controls>` is replaced by `VideoPlayer` in both
+- `VideoPreview`'s `<video controls>` is replaced by `VideoPlayerContainer` in both
   places:
   - the lesson config video section (`video-section-container.tsx`);
   - the lesson video modal (`lesson-video-modal-container.tsx`).
@@ -169,7 +166,7 @@ The repo can't render-test components that use hooks under Vitest (see
 `hooks.ts` header). Logic therefore stays in pure functions, and the
 stateful player is verified in the browser.
 
-- **`VideoPlayerView` render tests** (jsdom, existing pattern in
+- **`VideoPlayer` (presentational) render tests** (jsdom, existing pattern in
   `video-player.test.tsx`):
   - captions → one `<track>` per caption, CC enabled;
   - `captionsUnavailable` → disabled CC with its reason;
