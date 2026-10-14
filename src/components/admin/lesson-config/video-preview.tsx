@@ -1,10 +1,10 @@
 import { Video } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { attachMedia } from '#/components/video-player/attach-media';
-import type { LessonPlayback } from '#/lib/admin-schemas';
+import type { LearnerPlayback } from '#/lib/admin-schemas';
 
 interface VideoPreviewProps {
-  playback: LessonPlayback | null;
+  playback: LearnerPlayback | null;
   /**
    * Called when the media request for an HLS manifest is refused with 401/403.
    *

@@ -22,6 +22,8 @@ const ready = {
   expiresInSeconds: 3600,
   poster: null,
   captions: null,
+  lang: 'en' as const,
+  languages: ['en' as const],
 };
 
 describe('computeVideoModalState', () => {
@@ -52,10 +54,14 @@ describe('computeVideoModalState', () => {
 
   it('distinguishes rendering from failed', () => {
     expect(
-      computeVideoModalState(input({ data: { status: 'rendering' } })).kind,
+      computeVideoModalState(
+        input({ data: { status: 'rendering', lang: 'en', languages: ['en'] } }),
+      ).kind,
     ).toBe('rendering');
     expect(
-      computeVideoModalState(input({ data: { status: 'failed' } })).kind,
+      computeVideoModalState(
+        input({ data: { status: 'failed', lang: 'en', languages: ['en'] } }),
+      ).kind,
     ).toBe('failed');
   });
 

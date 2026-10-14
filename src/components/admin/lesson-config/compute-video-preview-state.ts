@@ -1,8 +1,8 @@
-import type { LessonPlayback } from '#/lib/admin-schemas';
+import type { LearnerPlayback } from '#/lib/admin-schemas';
 
 export type VideoPreviewState =
   | { kind: 'empty' }
-  | { kind: 'ready'; playback: Extract<LessonPlayback, { status: 'ready' }> }
+  | { kind: 'ready'; playback: Extract<LearnerPlayback, { status: 'ready' }> }
   | { kind: 'rendering' }
   | { kind: 'failed' };
 
@@ -24,7 +24,7 @@ export type VideoPreviewState =
  * which reads identically to "nothing configured".
  */
 export function computeVideoPreviewState(
-  playback: LessonPlayback | null | undefined,
+  playback: LearnerPlayback | null | undefined,
 ): VideoPreviewState {
   if (!playback) return { kind: 'empty' };
   if (playback.status === 'ready') return { kind: 'ready', playback };

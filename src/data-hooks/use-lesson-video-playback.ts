@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { lessonPlaybackSchema, playbackErrorSchema } from '#/lib/admin-schemas';
+import {
+  learnerPlaybackSchema,
+  playbackErrorSchema,
+} from '#/lib/admin-schemas';
+import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
 import { PlaybackError } from '#/lib/video-providers/errors';
 import { dataKeys } from './keys';
 
@@ -39,7 +43,12 @@ export function playbackRefetchDelayMs(
  * says so — `/admin/$courseId/…` for the per-course board, the column the
  * tile was pressed in for the org editor's rail.
  */
-export type LessonInCourse = { lessonId: number; courseId: number };
+export type LessonInCourse = {
+  lessonId: number;
+  courseId: number;
+  /** Preview language; omitted means the primary one (`'en'`). */
+  lang?: VideoLang;
+};
 
 /**
  * Resolved playback URL for a lesson's video, in the given course. `null`
@@ -54,11 +63,12 @@ export function useLessonVideoPlayback(
     queryKey: dataKeys.lessonPlayback(
       target?.lessonId ?? 0,
       target?.courseId ?? 0,
+      target?.lang,
     ),
     queryFn: async () => {
       if (target === null) return null;
       const res = await fetch(
-        `/api/admin/lessons/${target.lessonId}/video-playback?courseId=${target.courseId}`,
+        `/api/admin/lessons/${target.lessonId}/video-playback?courseId=${target.courseId}&lang=${target.lang ?? PRIMARY_VIDEO_LANG}`,
       );
       if (res.status === 404) return null;
       if (!res.ok) {
@@ -73,9 +83,26 @@ export function useLessonVideoPlayback(
         }
         throw new Error(`Failed to load playback (${res.status})`);
       }
-      return lessonPlaybackSchema.parse(await res.json());
+      return learnerPlaybackSchema.parse(await res.json());
     },
     enabled: enabled && target !== null,
+    // A language switch changes the key; keep the previous language's data
+    // while the new one loads so the preview's player stays mounted and its
+    // resume-at-same-position restore point survives (same reason as the
+    // learner side, see `lessonPlaybackAtomFamily` in atoms/lesson-video.ts).
+    // Only across a language change, though: a different lesson or course is
+    // a different video, and showing it under the new key would be wrong.
+    placeholderData: (previousData, previousQuery) => {
+      if (target === null || previousQuery === undefined) return undefined;
+      // The key minus its trailing language is the lesson-in-course identity.
+      const identity = dataKeys
+        .lessonPlayback(target.lessonId, target.courseId)
+        .slice(0, -1);
+      const sameTarget =
+        previousQuery.queryKey.length === identity.length + 1 &&
+        identity.every((part, i) => previousQuery.queryKey[i] === part);
+      return sameTarget ? previousData : undefined;
+    },
     staleTime: 5 * 60_000,
     // Keeps a mounted preview's signed URL alive; see playbackRefetchDelayMs.
     // A rendering/failed result carries no `expiresInSeconds` (there is no
