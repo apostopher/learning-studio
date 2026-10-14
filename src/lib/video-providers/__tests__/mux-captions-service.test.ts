@@ -221,3 +221,112 @@ describe('readMuxCaptions', () => {
     });
   });
 });
+
+describe('fix round 1', () => {
+  const genRow: VideoCaptionsRow = {
+    playbackId: 'p',
+    assetId: 'asset-1',
+    trackId: null,
+    languageCode: 'fr',
+    status: 'generating',
+    error: null,
+    checkedAt: new Date(NOW.getTime() - 61_000),
+  };
+
+  it('a generating row with no track id fails when the language track errored', async () => {
+    store = memoryStore([genRow]);
+    const a = api({
+      assetTracks: vi.fn(async () => [
+        { id: 'bad', type: 'text', status: 'errored', language_code: 'fr' },
+      ]),
+    });
+    expect(await readMuxCaptions(deps(a), 'p')).toMatchObject({
+      status: 'failed',
+      error: "Mux couldn't generate captions: the caption track failed.",
+    });
+  });
+
+  it('a second request while generating does not generate again', async () => {
+    store = memoryStore([genRow]);
+    const a = api();
+    expect(
+      await requestMuxCaptions(deps(a), { playbackId: 'p', lang: 'fr' }),
+    ).toBe('generating');
+    expect(a.generateSubtitles).not.toHaveBeenCalled();
+    expect(a.assetIdForPlayback).not.toHaveBeenCalled();
+  });
+
+  it('reuses a preparing track in the language without generating', async () => {
+    const a = api({
+      assetTracks: vi.fn(async () => [
+        { id: 'aud', type: 'audio', status: 'ready' },
+        { id: 'prep', type: 'text', status: 'preparing', language_code: 'en' },
+      ]),
+    });
+    expect(
+      await requestMuxCaptions(deps(a), { playbackId: 'p', lang: 'en' }),
+    ).toBe('generating');
+    expect(a.generateSubtitles).not.toHaveBeenCalled();
+    expect(store.rows.get('p')).toMatchObject({
+      status: 'generating',
+      trackId: 'prep',
+    });
+  });
+
+  it('readMuxCaptions resolves null when the store read throws', async () => {
+    store.get.mockRejectedValue(new Error('db'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await readMuxCaptions(deps(api()), 'p')).toBeNull();
+    errorLog.mockRestore();
+  });
+
+  it('a failing store write does not stop requestMuxCaptions reporting failed', async () => {
+    store.upsert.mockRejectedValue(new Error('db'));
+    const a = api({
+      assetIdForPlayback: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(
+      await requestMuxCaptions(deps(a), { playbackId: 'p', lang: 'en' }),
+    ).toBe('failed');
+    errorLog.mockRestore();
+  });
+
+  it('a failing store write on the unsupported path still reports unsupported', async () => {
+    store.upsert.mockRejectedValue(new Error('db'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(
+      await requestMuxCaptions(deps(api()), { playbackId: 'p', lang: 'ja' }),
+    ).toBe('unsupported');
+    errorLog.mockRestore();
+  });
+
+  it('a failing store read in requestMuxCaptions proceeds as if no row', async () => {
+    store.get.mockRejectedValue(new Error('db'));
+    const a = api();
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(
+      await requestMuxCaptions(deps(a), { playbackId: 'p', lang: 'en' }),
+    ).toBe('generating');
+    errorLog.mockRestore();
+    expect(a.generateSubtitles).toHaveBeenCalled();
+  });
+
+  it('a read-back failure after a successful generate is still generating', async () => {
+    const a = api({
+      assetTracks: vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 'aud', type: 'audio', status: 'ready' }])
+        .mockRejectedValueOnce(new Error('down')),
+    });
+    expect(
+      await requestMuxCaptions(deps(a), { playbackId: 'p', lang: 'en' }),
+    ).toBe('generating');
+    expect(store.rows.get('p')).toMatchObject({
+      status: 'generating',
+      trackId: null,
+    });
+  });
+});

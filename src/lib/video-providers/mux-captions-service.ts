@@ -40,10 +40,40 @@ export type RequestCaptionsResult = CaptionStatus | 'no_token';
 
 class CaptionsFailure extends Error {}
 
+async function safeUpsert(
+  store: CaptionsStore,
+  row: VideoCaptionsRow,
+): Promise<void> {
+  try {
+    await store.upsert(row);
+  } catch (error) {
+    console.error(
+      `Mux captions store write failed for ${row.playbackId}:`,
+      error,
+    );
+  }
+}
+
+async function safeGet(
+  store: CaptionsStore,
+  playbackId: string,
+): Promise<VideoCaptionsRow | null> {
+  try {
+    return await store.get(playbackId);
+  } catch (error) {
+    console.error(`Mux captions store read failed for ${playbackId}:`, error);
+    return null;
+  }
+}
+
+const baseLanguage = (code: string | undefined) => code?.split('-')[0];
+
 /**
  * Make sure Mux is captioning this video: reuse a matching text track if the
  * asset has one, otherwise ask Mux to generate one. Never throws — every
- * outcome is recorded on the row so the admin sees it and can retry.
+ * outcome is recorded on the row so the admin sees it and can retry (a failed
+ * store write is logged and the status still returned). A video already
+ * `generating` in this language is not asked again, so no duplicate tracks.
  */
 export async function requestMuxCaptions(
   { store, api, now }: CaptionsDeps,
@@ -58,10 +88,23 @@ export async function requestMuxCaptions(
     checkedAt: now(),
   };
   if (code === null) {
-    await store.upsert({ ...base, languageCode: lang, status: 'unsupported' });
+    await safeUpsert(store, {
+      ...base,
+      languageCode: lang,
+      status: 'unsupported',
+    });
     return 'unsupported';
   }
   if (api === null) return 'no_token';
+
+  const stored = await safeGet(store, playbackId);
+  if (
+    stored?.status === 'generating' &&
+    stored.languageCode === code &&
+    stored.assetId !== null
+  ) {
+    return 'generating';
+  }
 
   let assetId: string | null = null;
   try {
@@ -69,7 +112,7 @@ export async function requestMuxCaptions(
     const tracks = await api.assetTracks(assetId);
     const existing = pickCaptionTrack(tracks, code);
     if (existing) {
-      await store.upsert({
+      await safeUpsert(store, {
         ...base,
         assetId,
         trackId: existing.trackId,
@@ -89,13 +132,22 @@ export async function requestMuxCaptions(
       captionTrackName(lang),
     );
     // Read the asset back for the new track's id — the status refresh
-    // follows that track. Absent (Mux not yet listing it) is still
-    // `generating`; the next request reuses whatever track appears.
-    const created = pickCaptionTrack(await api.assetTracks(assetId), code);
-    await store.upsert({
+    // follows that track. Absent (Mux not yet listing it, or the read-back
+    // failing) is still `generating`: Mux accepted the request.
+    let trackId: string | null = null;
+    try {
+      trackId =
+        pickCaptionTrack(await api.assetTracks(assetId), code)?.trackId ?? null;
+    } catch (error) {
+      console.error(
+        `Mux caption track read-back failed for ${playbackId}:`,
+        error,
+      );
+    }
+    await safeUpsert(store, {
       ...base,
       assetId,
-      trackId: created?.trackId ?? null,
+      trackId,
       languageCode: code,
       status: 'generating',
     });
@@ -105,7 +157,7 @@ export async function requestMuxCaptions(
       error instanceof CaptionsFailure
         ? `Mux couldn't generate captions: ${error.message}`
         : describeMuxError(error);
-    await store.upsert({
+    await safeUpsert(store, {
       ...base,
       assetId,
       languageCode: code,
@@ -120,13 +172,13 @@ export async function requestMuxCaptions(
  * The stored caption state, refreshed from Mux at most once a minute while
  * generating. Never throws: a refresh failure is logged and the stale row is
  * returned (with `checkedAt` bumped, so a Mux outage is not re-asked on
- * every playback).
+ * every playback). A failing store read resolves `null`.
  */
 export async function readMuxCaptions(
   { store, api, now }: CaptionsDeps,
   playbackId: string,
 ): Promise<VideoCaptionsRow | null> {
-  const row = await store.get(playbackId);
+  const row = await safeGet(store, playbackId);
   if (!row) return null;
   const at = now();
   if (!api || !shouldRefreshCaptions(row, at, true)) return row;
@@ -144,7 +196,15 @@ export async function readMuxCaptions(
         row.languageCode as MuxCaptionCode,
       );
       trackId = found?.trackId ?? null;
-      outcome = found?.status ?? 'generating';
+      // pickCaptionTrack skips errored tracks: without this a row that never
+      // learned its track id would stay `generating` forever.
+      const errored = tracks.some(
+        (t) =>
+          t.type === 'text' &&
+          t.status === 'errored' &&
+          baseLanguage(t.language_code) === row.languageCode,
+      );
+      outcome = found?.status ?? (errored ? 'failed' : 'generating');
     } else {
       outcome = trackOutcome(tracks, trackId);
     }
