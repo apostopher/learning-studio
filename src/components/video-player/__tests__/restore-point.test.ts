@@ -3,6 +3,7 @@ import {
   applyRestorePoint,
   captureRestorePoint,
   isLanguageSwitch,
+  restorePointForSourceSwap,
 } from '../restore-point';
 
 describe('restore point', () => {
@@ -59,5 +60,54 @@ describe('isLanguageSwitch', () => {
 
   it('is false when no active language is known — nothing to switch from', () => {
     expect(isLanguageSwitch('fr-CA', undefined)).toBe(false);
+  });
+});
+
+/**
+ * F3 (spec §3 row 1): the admin preview re-resolves its signed URL ~60s
+ * before expiry. The new src re-attaches; with nothing pending, the outgoing
+ * playhead has to become the restore point or the video restarts at 0:00.
+ */
+describe('restorePointForSourceSwap', () => {
+  const playingAt42 = { currentTime: 42, paused: false };
+
+  it('carries a playing video across a timer refresh and keeps it playing', () => {
+    expect(
+      restorePointForSourceSwap({
+        languagePending: false,
+        recoveryPending: false,
+        outgoing: playingAt42,
+      }),
+    ).toEqual({ time: 42, resume: true });
+  });
+
+  it('keeps a paused video paused', () => {
+    expect(
+      restorePointForSourceSwap({
+        languagePending: false,
+        recoveryPending: false,
+        outgoing: { currentTime: 7, paused: true },
+      }),
+    ).toEqual({ time: 7, resume: false });
+  });
+
+  it('leaves a pending language-switch restore point to win', () => {
+    expect(
+      restorePointForSourceSwap({
+        languagePending: true,
+        recoveryPending: false,
+        outgoing: playingAt42,
+      }),
+    ).toBeNull();
+  });
+
+  it('leaves a pending recovery restore point to win (recovery never auto-plays)', () => {
+    expect(
+      restorePointForSourceSwap({
+        languagePending: false,
+        recoveryPending: true,
+        outgoing: playingAt42,
+      }),
+    ).toBeNull();
   });
 });

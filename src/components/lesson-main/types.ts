@@ -32,8 +32,11 @@ export type VideoFetchState =
        * that number is relative to when the server resolved playback, not to
        * now, and a cached response can under-report the remaining time — the
        * only trustworthy trigger is the observed failure itself.
+       *
+       * Returns the refetch's promise: the player waits for it to settle
+       * before re-attaching (see `VideoPlayerContainer`'s `onSourceExpired`).
        */
-      onRetry: () => void;
+      onRetry: () => unknown;
     };
 
 export type LessonMainState =

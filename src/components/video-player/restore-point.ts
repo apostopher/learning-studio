@@ -52,3 +52,24 @@ export const applyRestorePoint = (
       : point.time;
   if (point.resume) void Promise.resolve(video.play()).catch(() => {});
 };
+
+/**
+ * The restore point for a source swap nobody asked to restore — the admin
+ * preview's timer re-resolving its signed URL shortly before expiry. Read
+ * from the OUTGOING media just before it is torn down: without it the new
+ * url starts at 0:00, paused. A pending language switch or recovery already
+ * owns the restore and wins (`null`): recovery deliberately never
+ * auto-plays, and a language switch already captured the right point.
+ */
+export const restorePointForSourceSwap = ({
+  languagePending,
+  recoveryPending,
+  outgoing,
+}: {
+  languagePending: boolean;
+  recoveryPending: boolean;
+  outgoing: { currentTime: number; paused: boolean };
+}): RestorePoint | null =>
+  languagePending || recoveryPending
+    ? null
+    : { time: outgoing.currentTime, resume: !outgoing.paused };

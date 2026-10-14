@@ -15,7 +15,7 @@ type PlaybackWithLanguage = PlaybackResult & {
  */
 export const playbackToState = (
   result: PlaybackWithLanguage | undefined,
-  onRetry: () => void,
+  onRetry: () => unknown,
 ): VideoFetchState => {
   if (!result) return { status: 'fetching' };
   // Narrowed via `!== 'ready'` rather than two `=== 'rendering'/'failed'`

@@ -9,7 +9,7 @@ interface VideoPreviewProps {
   /** Previewed language changed; caller re-queries playback for it. */
   onLanguageChange?: (code: string) => void;
   /** Signed URL refused mid-play; caller refetches playback. */
-  onSourceExpired?: () => void;
+  onSourceExpired?: () => unknown;
   /** Recovery exhausted — for Mux this means the stored key is dead. */
   onPlaybackFailed?: (message: string) => void;
 }
