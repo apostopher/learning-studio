@@ -3,7 +3,11 @@ import { useEffect, useId, useRef } from 'react';
 import { videoPlayerStateAtomFamily } from './atoms';
 import { attachMedia } from './attach-media';
 import { useVideoPlayer } from './hooks';
-import { captionLoadFailedPatch, fatalMediaOutcome } from './media-failure';
+import {
+  captionLoadFailedPatch,
+  captionsSignature,
+  fatalMediaOutcome,
+} from './media-failure';
 import {
   applyRestorePoint,
   captureRestorePoint,
@@ -85,14 +89,17 @@ export const VideoPlayerContainer = ({
   // is the only place that gap is bridged. Nothing else in this container
   // (or `useVideoPlayer`) ever writes `captionsUnavailable`.
   //
-  // Depends on `rest.captions` so a new caption list (a fresh signed URL)
-  // resets a load error back to the prop value; a re-render with the same
-  // array reference does not clear it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rest.captions only re-triggers the reset; the body doesn't read it.
+  // Keyed on the captions' CONTENT signature, not the array: callers rebuild
+  // the array every render, and only a changed `src` (a fresh signed URL)
+  // should reset a load error back to the prop value.
+  const captionsKey = captionsSignature(rest.captions);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: captionsKey only re-triggers the reset; the body doesn't read it.
   useEffect(() => {
-    if (captionsUnavailable === undefined) return;
-    setState((prev) => ({ ...prev, captionsUnavailable }));
-  }, [captionsUnavailable, rest.captions, setState]);
+    setState((prev) => ({
+      ...prev,
+      captionsUnavailable: captionsUnavailable ?? false,
+    }));
+  }, [captionsUnavailable, captionsKey, setState]);
 
   // Held in a ref, like `onForbiddenRef` in the admin preview this was
   // extracted from: `onSourceExpired` traces back to an inline arrow
@@ -266,7 +273,7 @@ export const VideoPlayerContainer = ({
       v.textTracks[i].mode =
         state.captionsEnabled && i === 0 ? 'showing' : 'disabled';
     }
-  }, [state.captionsEnabled, rest.captions]);
+  }, [state.captionsEnabled, captionsKey]);
 
   const onKeyboardShortcut = (key: string) => {
     const v = videoRef.current;

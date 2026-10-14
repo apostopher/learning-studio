@@ -24,3 +24,21 @@ export function captionLoadFailedPatch() {
     captionsUnavailable: true as const,
   };
 }
+
+/** Stable identity of a caption set by content, not array identity: callers
+ * rebuild the array every render, and only a changed `src` (a fresh signed
+ * URL) should clear a caption load error. */
+export function captionsSignature(
+  captions: ReadonlyArray<{ src: string }> | undefined,
+): string {
+  return captions?.map((c) => c.src).join('|') ?? '';
+}
+
+/** Whether the CC toggle may show: a `<track>` whose file failed to load stays
+ * in the DOM, so the raw track count must not override "unavailable". */
+export function resolveHasCaptions(
+  trackCount: number,
+  captionsUnavailable: boolean,
+): boolean {
+  return trackCount > 0 && !captionsUnavailable;
+}

@@ -262,4 +262,21 @@ describe('VideoPlayer', () => {
     fireEvent.error(track);
     expect(onCaptionsError).toHaveBeenCalledTimes(1);
   });
+
+  it("does not report the video element's own error as a caption failure", () => {
+    const ref = createRef<HTMLVideoElement>();
+    const onCaptionsError = vi.fn();
+    const { container } = render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        captions={[{ src: 'en.vtt', lang: 'en', label: 'English' }]}
+        actions={{ onCaptionsError }}
+      />,
+    );
+    const video = container.querySelector('video');
+    if (!video) throw new Error('no video rendered');
+    fireEvent.error(video);
+    expect(onCaptionsError).not.toHaveBeenCalled();
+  });
 });
