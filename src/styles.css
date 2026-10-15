@@ -560,6 +560,13 @@
     );
     flex-direction: column;
   }
+  /* Larger, always-visible scrollbar (`scrollbarSize="large"`). Set on the
+     root's OWN scrollbars (child combinator), not as an inherited variable,
+     so scroll areas nested inside keep their default size. */
+  .scroll-area-root--large > .scroll-area-scrollbar {
+    --size-scroll-area-thumb: calc(var(--spacing) * 3);
+    opacity: 1;
+  }
   .scroll-area-thumb {
     background-color: var(--color-scroll-area-thumb);
     border-radius: var(--radius-scroll-area-thumb);

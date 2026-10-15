@@ -76,6 +76,12 @@ type ScrollAreaProps = {
   /** Ref to the scrolling viewport element — e.g. for `use-stick-to-bottom`,
    * which needs to read/set scrollTop on the actual scroll container. */
   viewportRef?: Ref<HTMLDivElement>;
+  /**
+   * `large`: a wider scrollbar that stays visible at rest, for dense, wide
+   * tools (the knowledge library editor) where a thin hover-only bar is hard
+   * to find and hard to grab.
+   */
+  scrollbarSize?: 'default' | 'large';
 };
 
 export const ScrollArea = ({
@@ -84,15 +90,20 @@ export const ScrollArea = ({
   viewportClassName,
   orientation = 'vertical',
   viewportRef,
+  scrollbarSize = 'default',
 }: ScrollAreaProps) => {
   const showVertical = orientation !== 'horizontal';
   const showHorizontal = orientation !== 'vertical';
 
   return (
     <BaseScrollArea.Root
-      className={
-        className ? `scroll-area-root ${className}` : 'scroll-area-root'
-      }
+      className={[
+        'scroll-area-root',
+        scrollbarSize === 'large' && 'scroll-area-root--large',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <BaseScrollArea.Viewport
         ref={viewportRef}
