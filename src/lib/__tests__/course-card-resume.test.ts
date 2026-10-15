@@ -13,7 +13,7 @@ const lesson = (
   isAvailable: true,
   hasVideo: true,
   needsVideoWatch: true,
-  levels: [],
+  levels: ['basic'],
   dependsOn,
 });
 
@@ -127,6 +127,17 @@ describe('resolveCardResume', () => {
       moduleSlug: 'navigation',
       lessonSlug: 'dead-reckoning',
     });
+  });
+
+  it('does not link a no-level pilot into any lesson', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [],
+      pointerLessonId: 1,
+      level: null,
+      bypassLocks: false,
+    });
+    expect(result).toEqual({ kind: 'none', reason: 'no-level' });
   });
 
   it('ignores locks for an admin', () => {

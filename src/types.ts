@@ -29,7 +29,9 @@ export function isUserLevel(value: string): value is UserLevel {
  * `'none'` hides the lesson from every tier — no pilot is ever at level
  * `'none'`, so `isLessonVisibleAtLevel`'s exact match never shows it. It is
  * exclusive: a lesson is either hidden from everyone or tagged with real
- * tiers, never both. Distinct from `[]`, which means "visible at every tier".
+ * tiers, never both. `[]` (untagged) is ALSO visible to no one under strict
+ * levels; `'none'` differs in being an explicit withdrawal, which
+ * `isLessonWithdrawn` reads.
  *
  * Lesson fields only — a USER's level is always a `UserLevel`.
  */
@@ -45,7 +47,9 @@ export const LessonLevelsSchema = z
 /**
  * Where a `user_levels` row came from.
  *
- * `enrolment` — the idempotent starting row. `earned` — the pilot completed a
+ * `enrolment` — the starting Basic row enrolment USED to write; existing rows
+ * keep it, but nothing writes it any more (a new enrolee starts with no
+ * level). `earned` — the pilot completed a
  * tier. `admin` — a human intervened, and `message` is required.
  */
 export const LEVEL_SOURCES = ['enrolment', 'earned', 'admin'] as const;

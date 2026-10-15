@@ -48,7 +48,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
-          levels: [],
+          levels: ['basic'],
           dependsOn: [],
         },
         {
@@ -58,7 +58,7 @@ const details = {
           isAvailable: true,
           hasVideo: true,
           needsVideoWatch: true,
-          levels: [],
+          levels: ['basic'],
           dependsOn: [{ lessonSlug: 'a', moduleSlug: 'm1' }],
         },
       ],

@@ -10,6 +10,7 @@ import {
   UserCourseLevelHistory,
   UserCourseLevelSelect,
 } from './user-course-level-row';
+import { courseLevelOf } from './user-levels-helpers';
 import type { UserRow } from './users-table';
 
 export interface CourseOption {
@@ -225,7 +226,7 @@ export const UserDetailModal = ({
                             {enrolled && canViewLevels && !isPending && (
                               <UserCourseLevelSelect
                                 courseName={course.name}
-                                level={levels[course.id] ?? 'basic'}
+                                level={courseLevelOf(levels, course.id)}
                                 canEdit={canEditLevels}
                                 saving={savingLevelCourseId === course.id}
                                 onLevelChange={(next) =>

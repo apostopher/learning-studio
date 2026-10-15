@@ -69,11 +69,28 @@ describe('computeArchivedLessons', () => {
     expect(archived).toEqual([]);
   });
 
-  it('does not archive a lesson that is still visible at the current level (levels: [] means every tier)', () => {
+  it('does not archive a completed untagged lesson: it was never at any level', () => {
+    // levels: [] is visible to no one under strict levels, but it was not
+    // moved to another tier either — there is no earlier level it could be
+    // the archive of.
     const archived = computeArchivedLessons(
       course,
       { lessons: [{ lessonId: 1, percent: 100 }] },
       'advanced',
+    );
+    expect(archived).toEqual([]);
+  });
+
+  it('archives nothing for a pilot with no level', () => {
+    const archived = computeArchivedLessons(
+      course,
+      {
+        lessons: [
+          { lessonId: 2, percent: 100 },
+          { lessonId: 3, percent: 100 },
+        ],
+      },
+      null,
     );
     expect(archived).toEqual([]);
   });

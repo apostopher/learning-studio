@@ -5,6 +5,10 @@ import { ArchivedLessonsSection } from './archived-lessons-section';
 import type { ArchivedLesson } from './compute-archived-lessons';
 import { CourseSidebarHeader } from './course-sidebar-header';
 import { ModuleAccordion } from './module-accordion';
+import {
+  SidebarEmptyLevel,
+  type SidebarEmptyLevelReason,
+} from './sidebar-empty-level';
 import { SidebarError } from './sidebar-error';
 import { SidebarSkeleton } from './sidebar-skeleton';
 
@@ -36,6 +40,11 @@ type CourseSidebarProps = {
   archivedLessons?: readonly ArchivedLesson[];
   archiveSectionOpen?: boolean;
   onArchiveSectionOpenChange?: (open: boolean) => void;
+  /**
+   * Set when a learner's tree is empty because of their level (none set, or
+   * no lessons at it) — the message replaces the empty module list.
+   */
+  emptyReason?: SidebarEmptyLevelReason | null;
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -58,6 +67,7 @@ export const CourseSidebar = ({
   archivedLessons,
   archiveSectionOpen,
   onArchiveSectionOpenChange,
+  emptyReason,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -107,16 +117,20 @@ export const CourseSidebar = ({
               coursePercent={coursePercent ?? 0}
               level={level}
             />
-            <ModuleAccordion
-              courseSlug={courseSlug}
-              modules={modules ?? []}
-              openModuleSlug={openModuleSlug}
-              onOpenChange={onOpenChange}
-              activeLessonSlug={activeLessonSlug}
-              lessonPercents={lessonPercents ?? {}}
-              modulePercents={modulePercents ?? {}}
-              lessonLocks={lessonLocks ?? {}}
-            />
+            {emptyReason ? (
+              <SidebarEmptyLevel reason={emptyReason} />
+            ) : (
+              <ModuleAccordion
+                courseSlug={courseSlug}
+                modules={modules ?? []}
+                openModuleSlug={openModuleSlug}
+                onOpenChange={onOpenChange}
+                activeLessonSlug={activeLessonSlug}
+                lessonPercents={lessonPercents ?? {}}
+                modulePercents={modulePercents ?? {}}
+                lessonLocks={lessonLocks ?? {}}
+              />
+            )}
             <ArchivedLessonsSection
               courseSlug={courseSlug}
               lessons={archivedLessons ?? []}

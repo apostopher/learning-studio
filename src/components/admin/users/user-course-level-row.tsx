@@ -7,7 +7,8 @@ import { LevelSelect } from '../level-select';
 
 interface UserCourseLevelSelectProps {
   courseName: string;
-  level: UserLevel;
+  /** Null when the pilot has no level in this course — shown as "No level". */
+  level: UserLevel | null;
   /**
    * `level:update` — the select is interactive. Without it (read-only, i.e.
    * `level:read` alone) the level renders as plain text: this file has no
@@ -69,7 +70,7 @@ export const UserCourseLevelSelect = ({
       // it reaches sighted users, rather than relying on a greyed-out
       // appearance alone.
       <span className="rounded-md border border-gray-7 bg-gray-1 px-2 py-1 text-primary text-xs">
-        {LEVEL_LABELS[level]}
+        {level === null ? 'No level' : LEVEL_LABELS[level]}
         <span className="ms-1.5 text-tertiary">View only</span>
       </span>
     )}

@@ -77,10 +77,12 @@ export async function saveTestResultsHandler(
   // `lessonPercent`, which is what the gate reads to decide `readOnly`.
   //
   // `lessonLock`/`materialLock` are deliberately NOT honoured here — refusing
-  // on those would newly 403 flows that succeed today, a separate decision
-  // with its own blast radius. Refusing on `outOfTier` alone breaks nothing
-  // that currently works: every lesson ships with `levels = '{}'`, so nothing
-  // is out of tier until an author tags one.
+  // on those would newly 403 flows that succeed today, a separate decision with
+  // its own blast radius. Refusing on `outOfTier` alone matches what the pilot
+  // can see: under strict levels an untagged lesson, a lesson at another level,
+  // and every lesson for a pilot with no level is either refused outright or
+  // held only as a read-only archive, so a write to it has no legitimate
+  // origin.
   if (gate?.outOfTier) {
     return new Response('Forbidden', { status: 403 });
   }

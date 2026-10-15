@@ -92,8 +92,12 @@ export async function getLibraryForUser({
   //
   // Withheld in BOTH out-of-tier states, read-only included: a file is a
   // durable copy that leaves the site, not a rendering of work already done.
+  //
+  // Keyed on `viewingAsAuthor`, not `level === null`: a learner whose level
+  // has not been set also has a null level, and strict levels give them
+  // nothing — not the author's unfiltered library.
   const gateCourse = toGateCourse(
-    level === null ? details : filterCourseToLevel(details, level),
+    viewingAsAuthor ? details : filterCourseToLevel(details, level),
   );
 
   // The author bypass is expressed as "every lesson is watched", not as a

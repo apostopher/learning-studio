@@ -8,7 +8,8 @@ import {
 import { auth } from '#/lib/auth';
 
 /**
- * The logged-in pilot's current level for one course (`?slug=`), plus any
+ * The logged-in pilot's current level for one course (`?slug=`) — null when
+ * none has been set, which strict levels read as "sees nothing" — plus any
  * admin-issued OR earned change they have not yet acknowledged. Any user
  * SUBSCRIBED to the course may read their own level — the user comes from the
  * session, never the query string, matching the other `/api/user/*` reads in

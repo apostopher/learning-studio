@@ -171,6 +171,36 @@ describe('getMyCourses — course staff', () => {
     });
   });
 
+  it('hands a learner with no level row in a course a null level, never a guessed basic', async () => {
+    // Strict levels: no level means the card resolves against nothing, so
+    // it says "your level has not been set" rather than linking into Basic.
+    m.getCurrentLevelsByCourse.mockResolvedValue(new Map([[8, 'advanced']]));
+
+    await getMyCourses('u1');
+
+    expect(argsForCourse(7)).toMatchObject({ level: null, bypassLocks: false });
+    expect(argsForCourse(8)).toMatchObject({
+      level: 'advanced',
+      bypassLocks: false,
+    });
+  });
+
+  it('gives a learner with no level in a course 0%, however much they watched', async () => {
+    // Both courses' only lesson is Basic and fully watched. Course 8 has a
+    // Basic level, so it is the control: the same rows score above 0 there.
+    dbState.rows = [
+      { ...row(7, 'own-course', 'A Course They Staff'), watchedHits: 99 },
+      { ...row(8, 'other-course', 'Someone Else’s Course'), watchedHits: 99 },
+    ];
+    m.getCurrentLevelsByCourse.mockResolvedValue(new Map([[8, 'basic']]));
+
+    const cards = await getMyCourses('u1');
+    const percentOf = (id: number) => cards.find((c) => c.id === id)?.percent;
+
+    expect(percentOf(8)).toBeGreaterThan(0);
+    expect(percentOf(7)).toBe(0);
+  });
+
   it('resolves the staffed courses in ONE query, not one per card', async () => {
     m.getStaffCourseIds.mockResolvedValue(new Set([7]));
 

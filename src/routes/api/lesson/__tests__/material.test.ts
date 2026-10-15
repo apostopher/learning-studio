@@ -195,6 +195,18 @@ describe('out-of-tier lessons', () => {
     expect(getLessonMaterial).not.toHaveBeenCalled();
   });
 
+  it('403s a pilot with no level with level: null, so the client can say why', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: null,
+      outOfTier: { readOnly: false },
+    });
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'out-of-tier', level: null });
+    expect(getLessonMaterial).not.toHaveBeenCalled();
+  });
+
   it('serves a completed out-of-tier lesson flagged read-only', async () => {
     evaluateLessonGate.mockResolvedValue({
       ...openGate,

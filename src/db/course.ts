@@ -414,9 +414,12 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
   const viewsAsAuthor = (courseId: number): boolean =>
     bypassLocks || staffCourseIds.has(courseId);
   // Null for an author: they wrote every tier, so none of them filters what
-  // they see — the same short-circuit `evaluateLessonGate` makes.
+  // they see — the same short-circuit `evaluateLessonGate` makes. Also null
+  // for a learner with no level row in the course, who under strict levels
+  // sees NOTHING — so every filter below keys the bypass on `viewsAsAuthor`,
+  // never on a null level.
   const levelFor = (courseId: number): UserLevel | null =>
-    viewsAsAuthor(courseId) ? null : (levels.get(courseId) ?? 'basic');
+    viewsAsAuthor(courseId) ? null : (levels.get(courseId) ?? null);
 
   const percents = aggregatePercentByCourse(
     rows
@@ -425,8 +428,8 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         // course with no modules (or no visible lessons) in the map at 0%
         // rather than vanishing from it.
         if (r.lessonId === null) return true;
-        const level = levelFor(r.courseId);
-        return level === null || isLessonVisibleAtLevel(r.levels ?? [], level);
+        if (viewsAsAuthor(r.courseId)) return true;
+        return isLessonVisibleAtLevel(r.levels ?? [], levelFor(r.courseId));
       })
       .map((r) => ({
         courseId: r.courseId,

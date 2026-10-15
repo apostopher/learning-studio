@@ -34,7 +34,7 @@ describe('isTierComplete', () => {
     ).toBe(true);
   });
 
-  it('counts untagged lessons into the current tier', () => {
+  it('does not count untagged lessons toward any tier', () => {
     expect(
       isTierComplete({
         lessons,
@@ -42,6 +42,16 @@ describe('isTierComplete', () => {
           { lessonId: 1, percent: 100 },
           { lessonId: 2, percent: 40 },
         ],
+        level: 'basic',
+      }),
+    ).toBe(true);
+  });
+
+  it('cannot be completed by untagged lessons alone', () => {
+    expect(
+      isTierComplete({
+        lessons: [{ lessonId: 2, levels: [], isAvailable: true }],
+        progress: [{ lessonId: 2, percent: 100 }],
         level: 'basic',
       }),
     ).toBe(false);

@@ -4,7 +4,9 @@ import { dataKeys } from '#/data-hooks/keys';
 import { UserLevelSchema } from '#/types';
 
 const myLevelSchema = z.object({
-  level: UserLevelSchema,
+  // Null when the pilot's training team has not set a level in this course —
+  // under strict levels they then see nothing, and the sidebar says why.
+  level: UserLevelSchema.nullable(),
   pendingChange: z
     .object({
       id: z.number(),

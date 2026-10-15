@@ -149,6 +149,44 @@ describe('getLibraryForUser level visibility', () => {
     expect(names(result)).toEqual([]);
   });
 
+  it('withholds every file from a pilot with no level', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
+    m.getLibraryForCourse.mockResolvedValue({
+      files: [
+        ...library.files,
+        { id: 3, name: 'Module Pack', size: 10, type: 'application/pdf' },
+      ],
+      assignments: [
+        ...library.assignments,
+        { fileId: 3, moduleSlug: 'm1', lessonSlug: null },
+      ],
+    });
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual([]);
+  });
+
+  it('withholds a file attached to an untagged lesson at every level', async () => {
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...details.modules[0],
+          lessons: [{ ...details.modules[0].lessons[0], levels: [] }],
+        },
+      ],
+    });
+
+    for (const level of ['basic', 'intermediate', 'advanced'] as const) {
+      m.getCurrentLevel.mockResolvedValue(level);
+      const result = await getLibraryForUser({
+        userId: 'u1',
+        courseSlug: 'rt',
+      });
+      expect(names(result)).toEqual([]);
+    }
+  });
+
   it('does not filter for an admin, and does not look up a level for one', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
 
@@ -156,6 +194,25 @@ describe('getLibraryForUser level visibility', () => {
 
     expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
     expect(m.getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('serves an author the files on untagged and None lessons', async () => {
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...details.modules[0],
+          lessons: [
+            { ...details.modules[0].lessons[0], levels: [] },
+            { ...details.modules[0].lessons[1], levels: ['none'] },
+          ],
+        },
+      ],
+    });
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
   });
 
   it('does not filter for a subject expert on their own course', async () => {

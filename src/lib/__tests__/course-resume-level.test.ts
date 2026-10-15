@@ -178,12 +178,51 @@ describe('resolveResumeTargetForLevel', () => {
     expect(result).toEqual(BASIC_INTRO);
   });
 
-  it('reports no-lessons when the pilot can see nothing in the course', () => {
+  it('reports no-lessons-at-level when the course has lessons but none at the pilot’s level', () => {
     const result = resolveResumeTargetForLevel({
       details,
       watched: new Set<string>(),
       pointerLessonId: null,
       level: 'advanced',
+      bypassLocks: false,
+    });
+
+    expect(result).toEqual({ kind: 'none', reason: 'no-lessons-at-level' });
+  });
+
+  it('treats untagged lessons as at nobody’s level', () => {
+    const untagged = {
+      modules: [{ ...details.modules[0], lessons: [lesson(1, 'loose', [])] }],
+    };
+    const result = resolveResumeTargetForLevel({
+      details: untagged,
+      watched: new Set<string>(),
+      pointerLessonId: 1,
+      level: 'basic',
+      bypassLocks: false,
+    });
+
+    expect(result).toEqual({ kind: 'none', reason: 'no-lessons-at-level' });
+  });
+
+  it('reports no-level for a pilot whose level has not been set, never a lesson', () => {
+    const result = resolveResumeTargetForLevel({
+      details,
+      watched: new Set<string>(),
+      pointerLessonId: 1,
+      level: null,
+      bypassLocks: false,
+    });
+
+    expect(result).toEqual({ kind: 'none', reason: 'no-level' });
+  });
+
+  it('still reports no-lessons for a course with nothing published', () => {
+    const result = resolveResumeTargetForLevel({
+      details: { modules: [] },
+      watched: new Set<string>(),
+      pointerLessonId: null,
+      level: 'basic',
       bypassLocks: false,
     });
 

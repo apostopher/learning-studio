@@ -49,7 +49,7 @@ vi.mock('../../../data-hooks/use-course-progress-summary', () => ({
 
 // Defaults to a settled 'basic' level with no pending change, so every test
 // that does not care about levels still exercises filterCourseToLevel (with
-// fixture lessons carrying `levels: []`, i.e. visible to everyone) rather
+// fixture lessons tagged `['basic']`, i.e. visible at that level) rather
 // than accidentally short-circuiting on a still-loading level query.
 const levelMock = vi.fn<() => { data: unknown; isError: boolean }>(() => ({
   data: { level: 'basic', pendingChange: null },
@@ -70,15 +70,23 @@ const fakeCourse = {
       id: 1,
       slug: 'fundamentals',
       name: 'Fundamentals',
-      lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false, levels: [] }],
+      lessons: [
+        {
+          slug: 'pitch',
+          name: 'Pitch',
+          hasVideo: false,
+          isAvailable: true,
+          levels: ['basic'],
+        },
+      ],
     },
     {
       id: 2,
       slug: 'intermediate',
       name: 'Intermediate',
       lessons: [
-        { slug: 'yaw', name: 'Yaw', hasVideo: false, levels: [] },
-        { slug: 'roll', name: 'Roll', hasVideo: false, levels: [] },
+        { slug: 'yaw', name: 'Yaw', hasVideo: false, levels: ['basic'] },
+        { slug: 'roll', name: 'Roll', hasVideo: false, levels: ['basic'] },
       ],
     },
   ],
@@ -103,7 +111,7 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [],
-          levels: [],
+          levels: ['basic'],
         },
       ],
     },
@@ -121,7 +129,7 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [],
-          levels: [],
+          levels: ['basic'],
         },
         {
           id: 3,
@@ -131,7 +139,7 @@ const gatedCourse = {
           isAvailable: true,
           needsVideoWatch: true,
           dependsOn: [{ lessonSlug: 'yaw', moduleSlug: 'intermediate' }],
-          levels: [],
+          levels: ['basic'],
         },
       ],
     },
@@ -147,7 +155,15 @@ const leveledCourse = {
       id: 1,
       slug: 'fundamentals',
       name: 'Fundamentals',
-      lessons: [{ slug: 'pitch', name: 'Pitch', hasVideo: false, levels: [] }],
+      lessons: [
+        {
+          slug: 'pitch',
+          name: 'Pitch',
+          hasVideo: false,
+          isAvailable: true,
+          levels: ['basic'],
+        },
+      ],
     },
     {
       id: 2,
@@ -158,6 +174,7 @@ const leveledCourse = {
           slug: 'vortex',
           name: 'Vortex Recovery',
           hasVideo: false,
+          isAvailable: true,
           levels: ['advanced'],
         },
       ],
@@ -474,6 +491,49 @@ describe('CourseSidebarWrapper', () => {
     expect(screen.queryByText('Basic')).toBeNull();
   });
 
+  it('tells a pilot with no level why the sidebar is empty, and lists nothing', async () => {
+    levelMock.mockReturnValue({
+      data: { level: null, pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
+    expect(
+      screen.getByText(
+        'Your training team hasn’t set your level for this course yet.',
+      ),
+    ).toBeDefined();
+    expect(screen.getByText('0 modules · 0 lessons')).toBeDefined();
+    // Said once, by the main pane's live region — the sidebar copy is
+    // static text, so a screen reader does not hear it twice.
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('Fundamentals')).toBeNull();
+    expect(screen.queryByText('Pitch')).toBeNull();
+  });
+
+  it('tells a pilot whose level has no lessons that there are none at their level', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'intermediate', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: leveledCourse,
+      isLoading: false,
+      isError: false,
+    });
+    expect(
+      screen.getByText(
+        'There are no lessons at your level in this course yet.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText('Fundamentals')).toBeNull();
+  });
+
+  it('shows no empty-state message when the pilot has lessons to see', async () => {
+    await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
+    expect(screen.queryByText(/hasn’t set your level/)).toBeNull();
+    expect(screen.queryByText(/no lessons at your level/)).toBeNull();
+  });
+
   // A dedicated fixture (not leveledCourse, which omits dependsOn/
   // sequentialLessons/isAvailable/needsVideoWatch) — these two tests are the
   // first in this file to give computeLessonLocks a genuinely non-empty
@@ -499,7 +559,7 @@ describe('CourseSidebarWrapper', () => {
             isAvailable: true,
             needsVideoWatch: true,
             dependsOn: [],
-            levels: [],
+            levels: ['basic'],
           },
         ],
       },

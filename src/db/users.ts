@@ -7,7 +7,6 @@ import {
   userProfileTable,
   userRolesTable,
 } from '#/db/schema';
-import { ensureEnrolmentLevel } from '#/db/user-levels';
 import type { UpdateUserProfileInput } from '#/lib/admin-schemas';
 import type { UserLevel } from '#/types';
 
@@ -229,9 +228,9 @@ export async function addUserEnrolment(options: {
         courseSubscriptionsTable.courseId,
       ],
     });
-  // A pilot with an entitlement but no level row renders an empty course with
-  // no error anywhere, so the level row is part of enrolling, not a side task.
-  await ensureEnrolmentLevel(options.userId, options.courseId);
+  // No level row on purpose: a new enrolee starts with NO level, and under
+  // strict levels sees nothing until their training team sets one. The course
+  // page and sidebar say exactly that, so the empty course is explained.
 }
 
 /**

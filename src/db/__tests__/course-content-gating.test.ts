@@ -147,8 +147,9 @@ const detailsFor = (
     hasVideo: boolean;
     needsVideoWatch: boolean;
     dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
-    /** Defaults to [] — visible at every tier — so the fixtures above keep
-     * describing the subscription and material gates and nothing else. */
+    /** Defaults to ['basic'] — the level the gate suites' learner is at —
+     * so the fixtures above keep describing the subscription and material
+     * gates and nothing else. */
     levels?: readonly string[];
   }[],
 ) => ({
@@ -162,7 +163,7 @@ const detailsFor = (
       name: 'M',
       dependsOn: [],
       sequentialLessons: false,
-      lessons: lessons.map((lesson) => ({ levels: [], ...lesson })),
+      lessons: lessons.map((lesson) => ({ levels: ['basic'], ...lesson })),
     },
   ],
 });
@@ -491,7 +492,7 @@ describe('getCourseContentForAgent level visibility', () => {
     expect(getCurrentLevel).toHaveBeenCalledWith('u1', 7);
   });
 
-  it('keeps untagged lessons, which belong to every tier', async () => {
+  it('withholds untagged lessons, which belong to no tier', async () => {
     getCourseDetailsWithCache.mockResolvedValue(
       detailsFor([
         {
@@ -502,12 +503,23 @@ describe('getCourseContentForAgent level visibility', () => {
           hasVideo: false,
           needsVideoWatch: false,
           dependsOn: [],
+          levels: [],
         },
       ]),
     );
     dbState.rows = [row('a', 'A body', 10)];
+    for (const level of ['basic', 'intermediate', 'advanced'] as const) {
+      getCurrentLevel.mockResolvedValue(level);
+      const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+      expect(html).not.toContain('A body');
+    }
+  });
+
+  it('gives a pilot with no level nothing to read', async () => {
+    getCurrentLevel.mockResolvedValue(null);
     const html = await getCourseContentForAgent('c1', { userId: 'u1' });
-    expect(html).toContain('A body');
+    expect(html).not.toContain('A body');
+    expect(html).not.toContain('B body');
   });
 
   it('drops a lesson the cached payload does not contain at all', async () => {
@@ -526,6 +538,37 @@ describe('getCourseContentForAgent level visibility', () => {
     expect(html).toContain('A body');
     expect(html).toContain('B body');
     expect(getCurrentLevel).not.toHaveBeenCalled();
+  });
+
+  it('gives an author untagged and None lessons too — they author every lesson', async () => {
+    getUserRoleNames.mockResolvedValue(['admin']);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'a',
+          name: 'A',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+          levels: [],
+        },
+        {
+          id: 11,
+          slug: 'b',
+          name: 'B',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+          levels: ['none'],
+        },
+      ]),
+    );
+    const html = await getCourseContentForAgent('c1', { userId: 'admin-1' });
+    expect(html).toContain('A body');
+    expect(html).toContain('B body');
   });
 
   it('does not resolve a level for a subject expert on their own course', async () => {

@@ -1,6 +1,6 @@
 import {
+  isLessonArchivable,
   isLessonVisibleAtLevel,
-  isLessonWithdrawn,
 } from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
@@ -39,6 +39,12 @@ type ProgressLike = { lessons: readonly ProgressLesson[] };
  * reachable at all: `/api/lesson/material` 403s a never-completed
  * out-of-tier lesson).
  *
+ * Only lessons placed at a real level qualify (`isLessonArchivable`): a
+ * withdrawn `['none']` or untagged `[]` lesson was never moved to another
+ * tier, so it is not an earlier level's work — the same rule the server gate
+ * applies before serving a read-only copy. A pilot with no level (`null`)
+ * gets no archive at all: they see nothing in the course.
+ *
  * Admins are not filtered here — this is a pilot-facing view of THEIR OWN
  * completed work, and `CourseSidebarWrapper` does not call this for admins
  * (whose tree is never filtered to begin with, so nothing is ever "earlier").
@@ -46,9 +52,9 @@ type ProgressLike = { lessons: readonly ProgressLesson[] };
 export function computeArchivedLessons(
   course: ArchivableCourse | null | undefined,
   progress: ProgressLike | null | undefined,
-  level: UserLevel,
+  level: UserLevel | null,
 ): ArchivedLesson[] {
-  if (!course || !progress) return [];
+  if (!course || !progress || level === null) return [];
   const percentByLessonId = new Map(
     progress.lessons.map((l) => [l.lessonId, l.percent]),
   );
@@ -56,9 +62,9 @@ export function computeArchivedLessons(
   for (const mod of course.modules) {
     for (const lesson of mod.lessons) {
       if (isLessonVisibleAtLevel(lesson.levels, level)) continue;
-      // Tagged None: withdrawn from every level, not completed at an earlier
-      // one — so it is not offered as an archive either.
-      if (isLessonWithdrawn(lesson.levels)) continue;
+      // Tagged None (withdrawn) or untagged (at nobody's level): not
+      // completed at an earlier level, so not offered as an archive either.
+      if (!isLessonArchivable(lesson.levels)) continue;
       const percent = percentByLessonId.get(lesson.id) ?? 0;
       if (percent < 100) continue;
       archived.push({

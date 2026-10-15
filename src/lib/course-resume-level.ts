@@ -1,6 +1,9 @@
 import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
 import { type DetailsCourse, toGateCourse } from '#/lib/lesson-gating-inputs';
-import { filterCourseToLevel } from '#/lib/level-visibility';
+import {
+  courseHasAvailableLessons,
+  filterCourseToLevel,
+} from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
 export type ResolveResumeForLevelArgs = {
@@ -13,8 +16,14 @@ export type ResolveResumeForLevelArgs = {
   watched: ReadonlySet<string>;
   /** The resume pointer as stored: a lesson FK, or null on a first visit. */
   pointerLessonId: number | null;
-  /** The pilot's tier, or null for an admin — who has no tier and no filter. */
+  /**
+   * The pilot's tier, or null when their training team has not set one —
+   * strict levels then give them nothing to resume into. Ignored for an
+   * author (`bypassLocks`), who has no tier and no filter; callers pass null
+   * there too.
+   */
   level: UserLevel | null;
+  /** True for an author (admin, or staff on this course): no level filter, no locks. */
   bypassLocks: boolean;
 };
 
@@ -50,9 +59,33 @@ export function resolveResumeTargetForLevel({
   level,
   bypassLocks,
 }: ResolveResumeForLevelArgs): ResumeTarget {
-  const visible =
-    level === null ? details : filterCourseToLevel(details, level);
+  if (bypassLocks) {
+    return resolveForTree(details, watched, pointerLessonId, true);
+  }
 
+  // Said before anything is filtered, so the empty state names the real
+  // reason — "your level has not been set" — rather than the generic one.
+  if (level === null) return { kind: 'none', reason: 'no-level' };
+
+  const visible = filterCourseToLevel(details, level);
+
+  // The course has lessons, just none at this pilot's level. Distinct from
+  // `no-lessons` (nothing published at all) because the remedy differs: this
+  // one is for their training team, not for waiting on authors.
+  if (visible.modules.length === 0 && courseHasAvailableLessons(details)) {
+    return { kind: 'none', reason: 'no-lessons-at-level' };
+  }
+
+  return resolveForTree(visible, watched, pointerLessonId, false);
+}
+
+/** Resolve against the tree this viewer can see (filtered, or whole for an author). */
+function resolveForTree(
+  visible: DetailsCourse,
+  watched: ReadonlySet<string>,
+  pointerLessonId: number | null,
+  bypassLocks: boolean,
+): ResumeTarget {
   // id → slug, against the visible tree. An id absent from it — deleted, made
   // WIP, a cache race, or now out of tier — resolves to null, which
   // resolveResumeTarget treats exactly like a first visit.

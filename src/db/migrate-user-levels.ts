@@ -55,19 +55,10 @@ async function main(): Promise<void> {
     CREATE INDEX IF NOT EXISTS lessons_levels_gin ON lessons USING gin (levels);
   `);
 
-  // Backfill: every existing enrolment gets its starting Basic row, so the
-  // read path never has to cope with an enrolled pilot who has no level.
-  console.info('Backfilling enrolment rows…');
-  const result = await db.execute(sql`
-    INSERT INTO user_levels (user_id, course_id, level, source)
-    SELECT cs.user_id, cs.course_id, 'basic', 'enrolment'
-    FROM course_subscriptions cs
-    WHERE NOT EXISTS (
-      SELECT 1 FROM user_levels ul
-      WHERE ul.user_id = cs.user_id AND ul.course_id = cs.course_id
-    );
-  `);
-  console.info(`Backfilled ${result.rowCount ?? 0} enrolment level row(s).`);
+  // No enrolment backfill. This used to give every enrolment a starting
+  // Basic row; under strict levels a pilot starts with NO level until their
+  // training team sets one, so re-running this script must not hand out
+  // Basic to everyone who has none.
   console.info('Done.');
 }
 

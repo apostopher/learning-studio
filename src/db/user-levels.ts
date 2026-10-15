@@ -14,16 +14,18 @@ export type InsertLevelRow = {
 };
 
 /**
- * The pilot's level in one course — the newest row.
+ * The pilot's level in one course — the newest row — or null when they have
+ * no row at all.
  *
- * Falls back to 'basic' rather than throwing. `ensureEnrolmentLevel` means an
- * enrolled pilot always has a row, so the fallback only fires for a course
- * they are not enrolled in, where 'basic' is the harmless answer.
+ * Null, not a 'basic' fallback: under strict levels a pilot with no level sees
+ * nothing in the course, and the roster shows them as "no level" from the same
+ * rows. Guessing 'basic' here would show them Basic lessons their training
+ * team never assigned, and disagree with what the admin sees.
  */
 export async function getCurrentLevel(
   userId: string,
   courseId: number,
-): Promise<UserLevel> {
+): Promise<UserLevel | null> {
   const [row] = await db
     .select({ level: userLevelsTable.level })
     .from(userLevelsTable)
@@ -35,7 +37,7 @@ export async function getCurrentLevel(
     )
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
     .limit(1);
-  return row?.level ?? 'basic';
+  return row?.level ?? null;
 }
 
 /**
@@ -48,7 +50,7 @@ export async function getCurrentLevel(
  * ranking, not something a drizzle join expresses cleanly.
  *
  * A course absent from the map has no rows at all; callers should read that as
- * 'basic', matching `getCurrentLevel`'s fallback.
+ * "no level" (null), matching `getCurrentLevel`.
  */
 export async function getCurrentLevelsByCourse(
   userId: string,
@@ -144,34 +146,6 @@ export async function insertEarnedLevelRow(input: {
     RETURNING id
   `);
   return result.rows[0]?.id ?? null;
-}
-
-/**
- * Write the starting Basic row, once.
- *
- * Conditional on there being no rows at all — not on the absence of an
- * 'enrolment' row — so that unenrolling and re-enrolling an Advanced pilot
- * does not walk them back to Basic.
- *
- * `executor` exists so a caller already inside a transaction can run this on
- * its `tx` — claiming pending enrolments does exactly that, and used to carry
- * a verbatim copy of the SQL below because this helper was bound to `db`.
- * Two copies of a WHERE NOT EXISTS is two places for the idempotency rule to
- * drift.
- */
-export async function ensureEnrolmentLevel(
-  userId: string,
-  courseId: number,
-  executor: Pick<typeof db, 'execute'> = db,
-): Promise<void> {
-  await executor.execute(sql`
-    INSERT INTO user_levels (user_id, course_id, level, source)
-    SELECT ${userId}, ${courseId}, 'basic', 'enrolment'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM user_levels
-      WHERE user_id = ${userId} AND course_id = ${courseId}
-    )
-  `);
 }
 
 /**
