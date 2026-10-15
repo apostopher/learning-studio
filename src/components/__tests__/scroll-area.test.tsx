@@ -201,4 +201,21 @@ describe('ScrollArea', () => {
     );
     expect(container.querySelector('.scroll-area-root--large')).toBeNull();
   });
+
+  it('a bar with nothing to scroll carries no overflow flag, which styles.css uses to hide its thumb', () => {
+    // jsdom lays nothing out, so nothing overflows: the kept-mounted
+    // scrollbar must still be in the DOM but WITHOUT data-has-overflow-y —
+    // the attribute `.scroll-area-scrollbar:not([data-has-overflow-y])`
+    // keys on to hide an empty thumb.
+    const { container } = render(
+      <ScrollArea scrollbarSize="large">
+        <p>content</p>
+      </ScrollArea>,
+    );
+    const bar = container.querySelector(
+      '.scroll-area-scrollbar[data-orientation="vertical"]',
+    );
+    expect(bar).not.toBeNull();
+    expect(bar?.hasAttribute('data-has-overflow-y')).toBe(false);
+  });
 });

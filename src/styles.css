@@ -567,6 +567,18 @@
     --size-scroll-area-thumb: calc(var(--spacing) * 3);
     opacity: 1;
   }
+  /* Nothing to scroll on this bar's axis: no thumb at all, not even on hover
+     or at rest for the large variant. The scrollbars are `keepMounted`, so
+     without this a full-length thumb sits over content that cannot move.
+     Base UI marks each scrollbar with `data-has-overflow-x/y`. */
+  .scroll-area-scrollbar[data-orientation="vertical"]:not(
+      [data-has-overflow-y]
+    ),
+  .scroll-area-scrollbar[data-orientation="horizontal"]:not(
+      [data-has-overflow-x]
+    ) {
+    visibility: hidden;
+  }
   .scroll-area-thumb {
     background-color: var(--color-scroll-area-thumb);
     border-radius: var(--radius-scroll-area-thumb);
