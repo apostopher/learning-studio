@@ -71,7 +71,13 @@ const fakeCourse = {
       slug: 'fundamentals',
       name: 'Fundamentals',
       lessons: [
-        { slug: 'pitch', name: 'Pitch', hasVideo: false, levels: ['basic'] },
+        {
+          slug: 'pitch',
+          name: 'Pitch',
+          hasVideo: false,
+          isAvailable: true,
+          levels: ['basic'],
+        },
       ],
     },
     {
@@ -150,7 +156,13 @@ const leveledCourse = {
       slug: 'fundamentals',
       name: 'Fundamentals',
       lessons: [
-        { slug: 'pitch', name: 'Pitch', hasVideo: false, levels: ['basic'] },
+        {
+          slug: 'pitch',
+          name: 'Pitch',
+          hasVideo: false,
+          isAvailable: true,
+          levels: ['basic'],
+        },
       ],
     },
     {
@@ -162,6 +174,7 @@ const leveledCourse = {
           slug: 'vortex',
           name: 'Vortex Recovery',
           hasVideo: false,
+          isAvailable: true,
           levels: ['advanced'],
         },
       ],
@@ -490,6 +503,9 @@ describe('CourseSidebarWrapper', () => {
       ),
     ).toBeDefined();
     expect(screen.getByText('0 modules · 0 lessons')).toBeDefined();
+    // Said once, by the main pane's live region — the sidebar copy is
+    // static text, so a screen reader does not hear it twice.
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByText('Fundamentals')).toBeNull();
     expect(screen.queryByText('Pitch')).toBeNull();
   });

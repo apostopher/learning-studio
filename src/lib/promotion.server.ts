@@ -6,6 +6,7 @@ import { getCourseProgress } from '#/db/course-progress';
 import { getCurrentLevel, insertEarnedLevelRow } from '#/db/user-levels';
 import { getUserEmail } from '#/db/user-profile';
 import { sendLevelPromotionEmail } from '#/lib/email/send-level-promotion-email';
+import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
 import { isTierComplete, nextLevel } from '#/lib/tier-completion';
 import { isUserLevel, type UserLevel } from '#/types';
 
@@ -39,8 +40,8 @@ export async function maybePromote(options: {
 
   const from = await getCurrentLevel(options.userId, courseId);
   // No level, no rung to climb from: a pilot's first level is set by their
-  // training team (or written at enrolment by `ensureEnrolmentLevel`), never
-  // earned from progress — under strict levels they cannot see a lesson to
+  // training team — enrolment no longer writes one — never earned from
+  // progress — under strict levels they cannot see a lesson to
   // make progress on anyway.
   if (from === null) return null;
   const to = nextLevel(from);
@@ -82,6 +83,19 @@ export async function maybePromote(options: {
   if (!lessons.some((lesson) => lesson.levels.some(isUserLevel))) return null;
 
   if (!isTierComplete({ lessons, progress: progress.lessons, level: from })) {
+    return null;
+  }
+
+  // Never promote into an empty tier. Under strict levels a pilot sees only
+  // lessons at their exact level, so promoting a Basic-only course's graduate
+  // to Intermediate would empty their course — and email them about it. They
+  // stay where their content is until the next tier has some.
+  if (
+    !lessons.some(
+      (lesson) =>
+        lesson.isAvailable && isLessonVisibleAtLevel(lesson.levels, to),
+    )
+  ) {
     return null;
   }
 

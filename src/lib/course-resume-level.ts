@@ -1,6 +1,9 @@
 import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
 import { type DetailsCourse, toGateCourse } from '#/lib/lesson-gating-inputs';
-import { filterCourseToLevel } from '#/lib/level-visibility';
+import {
+  courseHasAvailableLessons,
+  filterCourseToLevel,
+} from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
 export type ResolveResumeForLevelArgs = {
@@ -69,10 +72,7 @@ export function resolveResumeTargetForLevel({
   // The course has lessons, just none at this pilot's level. Distinct from
   // `no-lessons` (nothing published at all) because the remedy differs: this
   // one is for their training team, not for waiting on authors.
-  if (
-    visible.modules.length === 0 &&
-    details.modules.some((mod) => mod.lessons.some((l) => l.isAvailable))
-  ) {
+  if (visible.modules.length === 0 && courseHasAvailableLessons(details)) {
     return { kind: 'none', reason: 'no-lessons-at-level' };
   }
 

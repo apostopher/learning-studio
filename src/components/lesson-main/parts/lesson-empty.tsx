@@ -43,7 +43,7 @@ export const LessonEmpty = ({ courseSlug, state }: LessonEmptyProps) => (
         <h2 className="text-lg font-medium text-primary">No level set yet</h2>
         <p className="text-sm text-secondary">
           Your training team hasn&rsquo;t set your level for this course yet.
-          Your lessons will appear here once they do.
+          Ask them to set it.
         </p>
       </>
     ) : state.reason === 'no-lessons-at-level' ? (

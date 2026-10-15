@@ -5,7 +5,6 @@ import {
   coursesTable,
   pendingEnrolmentsTable,
 } from '#/db/schema';
-import { ensureEnrolmentLevel } from '#/db/user-levels';
 
 /**
  * Pre-assign a course to an email that may not have an account yet.
@@ -152,11 +151,8 @@ export async function claimPendingEnrolments(options: {
         ],
       });
 
-    // Through the shared helper, on this transaction's executor — one copy of
-    // the idempotency rule, not two.
-    for (const row of pending) {
-      await ensureEnrolmentLevel(options.userId, row.courseId, tx);
-    }
+    // No level rows: a claimed enrolment starts with no level, exactly like
+    // a direct grant (see `addUserEnrolment`) — the training team sets it.
 
     await tx
       .update(pendingEnrolmentsTable)

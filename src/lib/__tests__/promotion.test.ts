@@ -203,6 +203,7 @@ describe('maybePromote', () => {
           lessons: [
             { id: 1, isAvailable: true, levels: [] },
             { id: 2, isAvailable: true, levels: ['basic'] },
+            { id: 3, isAvailable: true, levels: ['intermediate'] },
           ],
         },
       ],
@@ -242,6 +243,30 @@ describe('maybePromote', () => {
         { lessonId: 1, percent: 100 },
         { lessonId: 2, percent: 100 },
       ],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
+  });
+
+  it('never promotes into a tier that has no lessons', async () => {
+    // Promoting a Basic-only course's graduate to Intermediate would empty
+    // their course under strict levels — and email them about it.
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          lessons: [
+            { id: 1, isAvailable: true, levels: ['basic'] },
+            { id: 2, isAvailable: true, levels: [] },
+            { id: 3, isAvailable: false, levels: ['intermediate'] },
+          ],
+        },
+      ],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 1, percent: 100 }],
     });
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();

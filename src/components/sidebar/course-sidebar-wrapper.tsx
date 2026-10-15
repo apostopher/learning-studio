@@ -5,7 +5,10 @@ import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summa
 import { useMyLevel } from '#/data-hooks/use-my-level';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
 import { LEVEL_LABELS } from '#/lib/level-labels';
-import { filterCourseToLevel } from '#/lib/level-visibility';
+import {
+  courseHasAvailableLessons,
+  filterCourseToLevel,
+} from '#/lib/level-visibility';
 import {
   archiveSectionOpenAtom,
   openModuleSlugAtom,
@@ -181,9 +184,10 @@ export const CourseSidebarWrapper = ({
     // sidebar says which rather than drawing an empty list. An author's tree
     // is never level-filtered, so it never gets one; nor does a course with
     // no lessons at all, which is empty for everyone and says so elsewhere.
-    const courseHasLessons = (detailsQuery.data?.modules ?? []).some(
-      (mod) => mod.lessons.length > 0,
-    );
+    // The UNFILTERED payload: the question is whether the course has lessons
+    // at all, not whether this pilot can see any.
+    const courseHasLessons =
+      detailsQuery.data != null && courseHasAvailableLessons(detailsQuery.data);
     const emptyReason =
       viewingAsAuthor || moduleCount > 0 || !levelQuery.data
         ? null

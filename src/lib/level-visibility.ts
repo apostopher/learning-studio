@@ -83,3 +83,21 @@ export function filterCourseToLevel<
     .filter((mod) => mod.lessons.length > 0);
   return { ...course, modules };
 }
+
+/**
+ * Does this course have any available lesson at all, at any level?
+ *
+ * The one question that tells the two strict-level empty states apart from
+ * "nothing published": a pilot whose filtered tree is empty while this is
+ * true has no lessons AT THEIR LEVEL; when it is false, nobody has any.
+ * Shared by the resume path and the sidebar so the two cannot disagree.
+ */
+export function courseHasAvailableLessons(course: {
+  modules: readonly {
+    lessons: readonly { isAvailable: boolean }[];
+  }[];
+}): boolean {
+  return course.modules.some((mod) =>
+    mod.lessons.some((lesson) => lesson.isAvailable),
+  );
+}

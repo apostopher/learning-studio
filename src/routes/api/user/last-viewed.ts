@@ -76,13 +76,12 @@ export async function recordLastViewedHandler(
   // to decide `readOnly` — so a caller could POST their way from a
   // `403 out-of-tier` to a 200 serving the full material.
   //
-  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing
-  // on those would newly 403 flows that succeed today, which is a separate
+  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing on
+  // those would newly 403 flows that succeed today, which is a separate
   // decision with its own blast radius (see this handler's doc comment).
-  // Refusing on
-  // `outOfTier` alone matches what the pilot can see: under strict levels
-  // an untagged lesson, a lesson at another level, and every lesson for a
-  // pilot with no level is either refused outright or held only as a
+  // Refusing on `outOfTier` alone matches what the pilot can see: under strict
+  // levels an untagged lesson, a lesson at another level, and every lesson for
+  // a pilot with no level is either refused outright or held only as a
   // read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
     return new Response('Forbidden', { status: 403 });

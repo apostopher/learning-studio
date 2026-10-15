@@ -196,6 +196,25 @@ describe('getLibraryForUser level visibility', () => {
     expect(m.getCurrentLevel).not.toHaveBeenCalled();
   });
 
+  it('serves an author the files on untagged and None lessons', async () => {
+    m.getUserRoleNames.mockResolvedValue(['admin']);
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...details.modules[0],
+          lessons: [
+            { ...details.modules[0].lessons[0], levels: [] },
+            { ...details.modules[0].lessons[1], levels: ['none'] },
+          ],
+        },
+      ],
+    });
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
+  });
+
   it('does not filter for a subject expert on their own course', async () => {
     m.getUserRoleNames.mockResolvedValue([]);
     m.isCourseStaff.mockResolvedValue(true);

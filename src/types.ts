@@ -47,7 +47,9 @@ export const LessonLevelsSchema = z
 /**
  * Where a `user_levels` row came from.
  *
- * `enrolment` — the idempotent starting row. `earned` — the pilot completed a
+ * `enrolment` — the starting Basic row enrolment USED to write; existing rows
+ * keep it, but nothing writes it any more (a new enrolee starts with no
+ * level). `earned` — the pilot completed a
  * tier. `admin` — a human intervened, and `message` is required.
  */
 export const LEVEL_SOURCES = ['enrolment', 'earned', 'admin'] as const;

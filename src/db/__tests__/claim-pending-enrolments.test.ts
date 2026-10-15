@@ -112,12 +112,22 @@ describe('claimPendingEnrolments', () => {
       { userId: 'user-1', courseId: 7, grantedBy: 'admin-9' },
       { userId: 'user-1', courseId: 8, grantedBy: 'admin-9' },
     ]);
-    // One level row per claimed course, carrying this user's id and that
-    // course's id — a swapped or dropped id would silently misfile the row.
-    expect(calls.executedParams).toEqual([
-      ['user-1', 7, 'user-1', 7],
-      ['user-1', 8, 'user-1', 8],
+  });
+
+  it('writes no level row: a new enrolee starts with no level', async () => {
+    // Strict levels: the training team sets a pilot's first level. An
+    // automatic 'basic' row here would show them Basic lessons nobody chose.
+    const { tx, calls } = makeTx([
+      { id: 1, courseId: 7, addedBy: 'admin-9' },
+      { id: 2, courseId: 8, addedBy: 'admin-9' },
     ]);
+    db.transaction.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
+
+    await claimPendingEnrolments({ userId: 'user-1', email: 'p@e.com' });
+
+    expect(calls.executedParams).toEqual([]);
   });
 
   it('credits the admin who pre-assigned it, not the sign-in', async () => {

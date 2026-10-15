@@ -540,6 +540,37 @@ describe('getCourseContentForAgent level visibility', () => {
     expect(getCurrentLevel).not.toHaveBeenCalled();
   });
 
+  it('gives an author untagged and None lessons too — they author every lesson', async () => {
+    getUserRoleNames.mockResolvedValue(['admin']);
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([
+        {
+          id: 10,
+          slug: 'a',
+          name: 'A',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+          levels: [],
+        },
+        {
+          id: 11,
+          slug: 'b',
+          name: 'B',
+          isAvailable: true,
+          hasVideo: false,
+          needsVideoWatch: false,
+          dependsOn: [],
+          levels: ['none'],
+        },
+      ]),
+    );
+    const html = await getCourseContentForAgent('c1', { userId: 'admin-1' });
+    expect(html).toContain('A body');
+    expect(html).toContain('B body');
+  });
+
   it('does not resolve a level for a subject expert on their own course', async () => {
     isCourseStaff.mockResolvedValue(true);
     const html = await getCourseContentForAgent('c1', { userId: 'sme-1' });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  courseHasAvailableLessons,
   filterCourseToLevel,
   isLessonVisibleAtLevel,
 } from '#/lib/level-visibility';
@@ -98,5 +99,24 @@ describe("the 'none' tag", () => {
         'everyone',
       ]);
     }
+  });
+});
+
+describe('courseHasAvailableLessons', () => {
+  it('is true when any module holds an available lesson', () => {
+    expect(
+      courseHasAvailableLessons({
+        modules: [{ lessons: [] }, { lessons: [{ isAvailable: true }] }],
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for a course with no lessons, or only unavailable ones', () => {
+    expect(courseHasAvailableLessons({ modules: [] })).toBe(false);
+    expect(
+      courseHasAvailableLessons({
+        modules: [{ lessons: [{ isAvailable: false }] }],
+      }),
+    ).toBe(false);
   });
 });

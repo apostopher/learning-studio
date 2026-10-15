@@ -12,11 +12,12 @@ describe('LessonEmpty', () => {
       />,
     );
     expect(screen.getByRole('heading').textContent).toBe('No level set yet');
-    expect(
-      screen.getByText(
-        /Your training team hasn’t set your level for this course yet\./,
-      ),
-    ).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain(
+      'Your training team hasn’t set your level for this course yet. Ask them to set it.',
+    );
+    // Promise nothing about lessons appearing: setting a level does not
+    // guarantee there are lessons at it.
+    expect(screen.queryByText(/will appear/)).toBeNull();
     // Not the "nothing published" copy — that would send them to wait for
     // content rather than to their training team.
     expect(screen.queryByText(/published/)).toBeNull();

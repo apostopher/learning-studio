@@ -149,34 +149,6 @@ export async function insertEarnedLevelRow(input: {
 }
 
 /**
- * Write the starting Basic row, once.
- *
- * Conditional on there being no rows at all — not on the absence of an
- * 'enrolment' row — so that unenrolling and re-enrolling an Advanced pilot
- * does not walk them back to Basic.
- *
- * `executor` exists so a caller already inside a transaction can run this on
- * its `tx` — claiming pending enrolments does exactly that, and used to carry
- * a verbatim copy of the SQL below because this helper was bound to `db`.
- * Two copies of a WHERE NOT EXISTS is two places for the idempotency rule to
- * drift.
- */
-export async function ensureEnrolmentLevel(
-  userId: string,
-  courseId: number,
-  executor: Pick<typeof db, 'execute'> = db,
-): Promise<void> {
-  await executor.execute(sql`
-    INSERT INTO user_levels (user_id, course_id, level, source)
-    SELECT ${userId}, ${courseId}, 'basic', 'enrolment'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM user_levels
-      WHERE user_id = ${userId} AND course_id = ${courseId}
-    )
-  `);
-}
-
-/**
  * The newest row, if it was written by an admin OR earned by the pilot and
  * they have not yet dismissed it. Drives the between-visits notice.
  *
