@@ -1,4 +1,5 @@
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
+import type { UserLevel } from '#/types';
 
 /**
  * Swap each history row's `changedBy` (an auth user id) for the matching
@@ -16,4 +17,18 @@ export function resolveChangedByEmail(
       ? (emailByUserId.get(row.changedBy) ?? row.changedBy)
       : row.changedBy,
   }));
+}
+
+/**
+ * A pilot's level in one course, or null when they have no level row there.
+ *
+ * Never defaults to 'basic': under strict levels a pilot with no level sees
+ * nothing, so showing them as Basic here would contradict both the roster
+ * ("No level") and what the pilot actually sees.
+ */
+export function courseLevelOf(
+  levels: Readonly<Record<number, UserLevel>>,
+  courseId: number,
+): UserLevel | null {
+  return levels[courseId] ?? null;
 }

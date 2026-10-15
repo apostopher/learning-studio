@@ -38,6 +38,39 @@ describe('UserCourseLevelSelect', () => {
     ).toBeTruthy();
   });
 
+  it('shows a pilot with no level as "No level" in the select, not Basic', () => {
+    render(
+      <UserCourseLevelSelect
+        courseName="Advanced Aerial Photography"
+        level={null}
+        canEdit={true}
+        saving={false}
+        onLevelChange={vi.fn()}
+      />,
+    );
+
+    const select = screen.getByRole('combobox', {
+      name: 'Level in Advanced Aerial Photography',
+    });
+    expect(select.textContent).toContain('No level');
+    expect(select.textContent).not.toContain('Basic');
+  });
+
+  it('shows a pilot with no level as "No level" in the read-only text, not Basic', () => {
+    render(
+      <UserCourseLevelSelect
+        courseName="Advanced Aerial Photography"
+        level={null}
+        canEdit={false}
+        saving={false}
+        onLevelChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No level')).toBeTruthy();
+    expect(screen.queryByText('Basic')).toBeNull();
+  });
+
   it('renders the level as plain, reason-stating text without level:update', () => {
     render(
       <UserCourseLevelSelect

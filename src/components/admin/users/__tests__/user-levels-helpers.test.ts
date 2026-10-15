@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
-import { resolveChangedByEmail } from '../user-levels-helpers';
+import { courseLevelOf, resolveChangedByEmail } from '../user-levels-helpers';
 
 const row = (overrides: Partial<LevelHistoryRow> = {}): LevelHistoryRow => ({
   id: 1,
@@ -49,5 +49,15 @@ describe('resolveChangedByEmail', () => {
     resolveChangedByEmail(history, emailByUserId);
 
     expect(original.changedBy).toBe('user-abc');
+  });
+});
+
+describe('courseLevelOf', () => {
+  it('is null for a pilot with no level row in the course, never a guessed Basic', () => {
+    expect(courseLevelOf({ 8: 'advanced' }, 7)).toBeNull();
+  });
+
+  it('is the pilot’s level where they have one', () => {
+    expect(courseLevelOf({ 7: 'intermediate' }, 7)).toBe('intermediate');
   });
 });
