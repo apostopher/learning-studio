@@ -118,6 +118,7 @@ export const CourseColumn = ({
       )}
 
       <ScrollArea
+        scrollbarSize="large"
         orientation="vertical"
         className="flex-1"
         viewportClassName="h-full"

@@ -181,4 +181,24 @@ describe('ScrollArea', () => {
     expect(root?.className).toContain('outer');
     expect(viewport?.className).toContain('inner');
   });
+
+  it('marks the root for a larger scrollbar when scrollbarSize="large"', () => {
+    const { container } = render(
+      <ScrollArea scrollbarSize="large">
+        <p>content</p>
+      </ScrollArea>,
+    );
+    expect(
+      container.querySelector('.scroll-area-root.scroll-area-root--large'),
+    ).not.toBeNull();
+  });
+
+  it('keeps the default scrollbar size unless asked', () => {
+    const { container } = render(
+      <ScrollArea>
+        <p>content</p>
+      </ScrollArea>,
+    );
+    expect(container.querySelector('.scroll-area-root--large')).toBeNull();
+  });
 });

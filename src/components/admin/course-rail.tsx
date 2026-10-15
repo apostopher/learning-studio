@@ -29,6 +29,7 @@ export const CourseRail = ({
       {headerAction}
     </header>
     <ScrollArea
+      scrollbarSize="large"
       orientation="horizontal"
       className="flex-1"
       viewportClassName="h-full"

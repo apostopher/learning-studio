@@ -219,4 +219,15 @@ describe('CourseColumn', () => {
     );
     expect(container.querySelector('p')).toBeNull();
   });
+
+  it('scrolls its modules with the larger knowledge-library scrollbar', () => {
+    const { container } = render(
+      <CourseColumn course={course()}>
+        <div>Module One</div>
+      </CourseColumn>,
+    );
+    expect(container.querySelectorAll('.scroll-area-root--large')).toHaveLength(
+      1,
+    );
+  });
 });
