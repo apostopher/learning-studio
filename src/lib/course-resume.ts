@@ -17,6 +17,11 @@ import {
 export type ResumeTarget =
   | { kind: 'lesson'; moduleSlug: string; lessonSlug: string }
   | { kind: 'none'; reason: 'no-lessons' }
+  // Strict levels (decided in `resolveResumeTargetForLevel`, never here): the
+  // pilot has no level in this course, or the course has lessons but none at
+  // their level. Both are for their training team to fix.
+  | { kind: 'none'; reason: 'no-level' }
+  | { kind: 'none'; reason: 'no-lessons-at-level' }
   | { kind: 'none'; reason: 'all-locked'; lock: LessonLock };
 
 export type ResolveResumeArgs = {

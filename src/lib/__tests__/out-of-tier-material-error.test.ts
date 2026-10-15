@@ -40,6 +40,16 @@ describe('readOutOfTierError', () => {
     expect(await readOutOfTierError(res)).toBeNull();
   });
 
+  it('carries an explicit null level through, for a pilot with no level', async () => {
+    // Distinct from a missing or malformed level: the server stated, in the
+    // body, that this pilot has no level — which is a true thing the notice
+    // can say, unlike a guess.
+    const res = jsonResponse(403, { error: 'out-of-tier', level: null });
+    const err = await readOutOfTierError(res);
+    expect(err).toBeInstanceOf(OutOfTierMaterialError);
+    expect(err?.level).toBeNull();
+  });
+
   it('returns null for a 403 with a different body shape', async () => {
     const res = jsonResponse(403, { error: 'something-else' });
     expect(await readOutOfTierError(res)).toBeNull();

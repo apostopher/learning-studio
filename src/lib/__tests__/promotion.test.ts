@@ -116,11 +116,11 @@ describe('maybePromote', () => {
   });
 
   /**
-   * The deploy-day cascade. Every lesson ships `levels = '{}'`, and
-   * `isLessonVisibleAtLevel([], level)` is true for EVERY tier — so without a
-   * guard, any pilot already at 100% is promoted to intermediate on their next
-   * progress write and to advanced on the write after, each with a real email
-   * and an append-only row. Asserting on the WRITER and the MAILER, not just
+   * The vacuous-completion cascade. If "every lesson at this tier is done"
+   * were ever answered true over an untagged course — as it was when `[]`
+   * meant every tier — any pilot at 100% would be promoted to intermediate on
+   * their next progress write and to advanced on the write after, each with a
+   * real email and an append-only row. Asserting on the WRITER and the MAILER, not just
    * the return value: a promotion that wrote the row and then reported null
    * would still have shipped the incident.
    */
@@ -167,9 +167,8 @@ describe('maybePromote', () => {
 
   it("promotes nobody in a course whose only tags are 'none'", async () => {
     // 'none' hides a lesson from every tier; it is not a tier. A course that
-    // tags only 'none' still has no tiers, so the untagged-catalogue cascade
-    // above must not start: the remaining [] lessons are visible at EVERY
-    // tier and would complete basic, then intermediate, on successive writes.
+    // tags only 'none' still has no tiers, so the cascade above must not
+    // start from it.
     m.getCourseDetailsWithCache.mockResolvedValue({
       modules: [
         {
@@ -195,7 +194,38 @@ describe('maybePromote', () => {
 
   it('still promotes when only SOME lessons are tagged', async () => {
     // The guard is "nothing in this course is tagged", not "every lesson is
-    // tagged" — a part-tagged course is the normal mid-rollout state.
+    // tagged" — a part-tagged course is the normal state. Strict levels: the
+    // untagged lesson is at nobody's level, so its 0% does not hold the pilot
+    // back; finishing the one Basic lesson finishes Basic.
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          lessons: [
+            { id: 1, isAvailable: true, levels: [] },
+            { id: 2, isAvailable: true, levels: ['basic'] },
+          ],
+        },
+      ],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, percent: 0 },
+        { lessonId: 2, percent: 100 },
+      ],
+    });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toEqual({
+      id: 42,
+      from: 'basic',
+      to: 'intermediate',
+    });
+  });
+
+  it('never promotes from a tier that has no lessons tagged with it', async () => {
+    // Strict levels: completing untagged and Intermediate lessons is not
+    // completing Basic. A vacuous "every Basic lesson is done" over zero
+    // lessons must not promote.
     m.getCourseDetailsWithCache.mockResolvedValue({
       modules: [
         {
@@ -214,11 +244,25 @@ describe('maybePromote', () => {
       ],
     });
 
-    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toEqual({
-      id: 42,
-      from: 'basic',
-      to: 'intermediate',
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
+  });
+
+  it('never promotes a pilot with no level, whatever they have finished', async () => {
+    // No level means no tier to complete and no rung to climb from — a
+    // level is something the training team sets first.
+    m.getCurrentLevel.mockResolvedValue(null);
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, percent: 100 },
+        { lessonId: 2, percent: 100 },
+      ],
     });
+
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+    expect(m.sendLevelPromotionEmail).not.toHaveBeenCalled();
   });
 
   /**

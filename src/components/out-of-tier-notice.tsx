@@ -3,14 +3,16 @@ import { LEVEL_LABELS } from '#/lib/level-labels';
 import type { UserLevel } from '#/types';
 
 export interface OutOfTierNoticeProps {
-  notice: { level: UserLevel } | null;
+  notice: { level: UserLevel | null } | null;
   onDismiss: () => void;
 }
 
 /**
  * Explains why a direct/bookmarked/history link just bounced the pilot back
  * to the course: the lesson sits outside their current level and they never
- * completed it, so `/api/lesson/material` refused it (see
+ * completed it — or the pilot has no level in this course at all, which
+ * strict levels treat as "every lesson is closed" and which gets its own copy
+ * rather than a misleading tier name — so `/api/lesson/material` refused it (see
  * lib/lesson-gating.server.ts's `outOfTier` gate). Without this the redirect
  * alone reads as a bug — a link that silently goes nowhere.
  *
@@ -36,13 +38,27 @@ export const OutOfTierNotice = ({
       <Dialog.Popup className="dialog-popup fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md rounded-xl border border-gray-6 bg-gray-2 p-6 shadow-xl">
         {notice && (
           <>
-            <Dialog.Title className="font-semibold text-primary text-xl">
-              Not part of your level
-            </Dialog.Title>
-            <Dialog.Description className="mt-2 text-secondary text-sm">
-              That lesson isn&rsquo;t part of your current level (
-              {LEVEL_LABELS[notice.level]}).
-            </Dialog.Description>
+            {notice.level === null ? (
+              <>
+                <Dialog.Title className="font-semibold text-primary text-xl">
+                  No level set yet
+                </Dialog.Title>
+                <Dialog.Description className="mt-2 text-secondary text-sm">
+                  Your training team hasn&rsquo;t set your level for this course
+                  yet, so its lessons aren&rsquo;t open to you.
+                </Dialog.Description>
+              </>
+            ) : (
+              <>
+                <Dialog.Title className="font-semibold text-primary text-xl">
+                  Not part of your level
+                </Dialog.Title>
+                <Dialog.Description className="mt-2 text-secondary text-sm">
+                  That lesson isn&rsquo;t part of your current level (
+                  {LEVEL_LABELS[notice.level]}).
+                </Dialog.Description>
+              </>
+            )}
             <button
               type="button"
               onClick={onDismiss}

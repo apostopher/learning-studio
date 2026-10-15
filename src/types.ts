@@ -29,7 +29,9 @@ export function isUserLevel(value: string): value is UserLevel {
  * `'none'` hides the lesson from every tier — no pilot is ever at level
  * `'none'`, so `isLessonVisibleAtLevel`'s exact match never shows it. It is
  * exclusive: a lesson is either hidden from everyone or tagged with real
- * tiers, never both. Distinct from `[]`, which means "visible at every tier".
+ * tiers, never both. `[]` (untagged) is ALSO visible to no one under strict
+ * levels; `'none'` differs in being an explicit withdrawal, which
+ * `isLessonWithdrawn` reads.
  *
  * Lesson fields only — a USER's level is always a `UserLevel`.
  */

@@ -10,9 +10,10 @@ import { UserLevelSchema } from '#/types';
  * instead of rendering a retryable error card.
  */
 export class OutOfTierMaterialError extends Error {
-  readonly level: UserLevel;
+  /** Null when the pilot has no level in the course — strict levels close every lesson to them. */
+  readonly level: UserLevel | null;
 
-  constructor(level: UserLevel) {
+  constructor(level: UserLevel | null) {
     super('out-of-tier');
     this.name = 'OutOfTierMaterialError';
     this.level = level;
@@ -41,7 +42,10 @@ export async function readOutOfTierError(
   ) {
     return null;
   }
-  const level = UserLevelSchema.safeParse(
+  // An explicit `level: null` is the server saying "this pilot has no level"
+  // — a true statement the notice can make. Only a MISSING or malformed level
+  // falls through below.
+  const level = UserLevelSchema.nullable().safeParse(
     (body as Record<string, unknown>).level,
   );
   // No usable level, no OutOfTierMaterialError. Defaulting to 'basic' here

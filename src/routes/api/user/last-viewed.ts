@@ -79,9 +79,11 @@ export async function recordLastViewedHandler(
   // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing
   // on those would newly 403 flows that succeed today, which is a separate
   // decision with its own blast radius (see this handler's doc comment).
-  // Refusing on `outOfTier` alone breaks nothing that currently works: every
-  // lesson ships with `levels = '{}'`, so nothing is out of tier until an
-  // author tags one — which is precisely when this should start to bite.
+  // Refusing on
+  // `outOfTier` alone matches what the pilot can see: under strict levels
+  // an untagged lesson, a lesson at another level, and every lesson for a
+  // pilot with no level is either refused outright or held only as a
+  // read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
     return new Response('Forbidden', { status: 403 });
   }

@@ -22,6 +22,9 @@ export type Promotion = { id: number; from: UserLevel; to: UserLevel };
  * rejected: one new Basic lesson would demote every Advanced pilot at once and,
  * under exact-match visibility, empty their course.
  *
+ * A pilot with no level is never promoted: there is no tier for them to have
+ * finished.
+ *
  * Returns the promotion so the calling route can put it in its response and
  * the UI can show the moment in-flow rather than the pilot discovering a
  * rearranged course on their next visit.
@@ -35,6 +38,11 @@ export async function maybePromote(options: {
   const { id: courseId, name: courseName } = identity;
 
   const from = await getCurrentLevel(options.userId, courseId);
+  // No level, no rung to climb from: a pilot's first level is set by their
+  // training team (or written at enrolment by `ensureEnrolmentLevel`), never
+  // earned from progress — under strict levels they cannot see a lesson to
+  // make progress on anyway.
+  if (from === null) return null;
   const to = nextLevel(from);
   // Top of the ladder: skip the progress query entirely. This is what keeps
   // the check affordable on high-frequency video-milestone pings.
@@ -54,24 +62,23 @@ export async function maybePromote(options: {
     })),
   );
 
-  // Nothing in this course is tagged, so there are no tiers to complete.
+  // Nothing in this course is tagged with a real tier, so there are no tiers
+  // to complete.
   //
-  // Without this guard the untagged catalogue promotes the entire user base to
-  // `advanced` on deploy day: `isLessonVisibleAtLevel([], level)` is true for
-  // EVERY tier, so any pilot already at 100% satisfies `isTierComplete('basic')`
-  // on their next progress write (promoted, emailed), then
-  // `isTierComplete('intermediate')` on the write after (promoted, emailed
-  // again). The rows are append-only and the emails are real, and the first
-  // lesson an author later tags `['basic']` would then be invisible to
-  // everyone — correctable only one pilot at a time.
-  //
-  // This is what makes the spec's own rollout property true: the catalogue
-  // stays fully visible on deploy and the feature switches on lesson by lesson
-  // as authors tag content.
+  // Under strict levels `isTierComplete` already answers false here — no
+  // lesson is visible at any tier, and an empty tier is never complete — so
+  // this guard is now a second wall, not the only one. It stays because the
+  // failure it prevents is unrecoverable: if a vacuous "every lesson at this
+  // tier is done" ever answered true for an untagged course (as it did while
+  // `[]` meant every tier), any pilot at 100% would be promoted to
+  // intermediate on their next progress write and to advanced on the write
+  // after — append-only rows and real emails each time. Keeping the rule
+  // stated here, in the one function that writes promotions, means a future
+  // change to the visibility predicate cannot silently reopen it. It also
+  // skips the tier walk for the common untagged course.
   //
   // "Tagged" means a REAL tier. `'none'` hides a lesson from everyone; it is
-  // not a tier, so a course whose only tags are `'none'` is still untagged and
-  // its `[]` lessons would trigger exactly the cascade above.
+  // not a tier, so a course whose only tags are `'none'` has no tiers either.
   if (!lessons.some((lesson) => lesson.levels.some(isUserLevel))) return null;
 
   if (!isTierComplete({ lessons, progress: progress.lessons, level: from })) {

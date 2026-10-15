@@ -198,7 +198,9 @@ export async function getGatedCourseForAgent(
 
   // Filter 3: level visibility. An author has no tier — they wrote every one
   // — so they skip it, exactly as they skip every gate in
-  // `evaluateLessonGate`.
+  // `evaluateLessonGate`. For a learner, `level` is null when their training
+  // team has not set one, and strict levels give that learner NOTHING — so
+  // the author bypass is keyed on `viewingAsAuthor`, never on `level === null`.
   const level = viewingAsAuthor
     ? null
     : await getCurrentLevel(userId, rows[0].courseId);
@@ -211,23 +213,22 @@ export async function getGatedCourseForAgent(
   // "open" for lessons it cannot locate, so the filter meant to hide a lesson
   // would be the very thing that released it.
   const gateCourse = toGateCourse(
-    level === null ? details : filterCourseToLevel(details, level),
+    viewingAsAuthor ? details : filterCourseToLevel(details, level),
   );
   const watched = watchedLessonSlugs(details, progress);
 
   // Built from the UNFILTERED payload, and a slug the payload does not contain
   // is simply absent from it — so an unknown lesson is dropped rather than
   // waved through. Fail closed, matching the gate.
-  const visibleLessonSlugs =
-    level === null
-      ? null
-      : new Set(
-          details.modules.flatMap((mod) =>
-            mod.lessons
-              .filter((lesson) => isLessonVisibleAtLevel(lesson.levels, level))
-              .map((lesson) => lesson.slug),
-          ),
-        );
+  const visibleLessonSlugs = viewingAsAuthor
+    ? null
+    : new Set(
+        details.modules.flatMap((mod) =>
+          mod.lessons
+            .filter((lesson) => isLessonVisibleAtLevel(lesson.levels, level))
+            .map((lesson) => lesson.slug),
+        ),
+      );
 
   // Filter 4: per-lesson locks. Gate on the distinct lesson slugs rather than
   // the raw (possibly duplicated, possibly lesson-less) rows, then filter the

@@ -171,6 +171,20 @@ describe('getMyCourses — course staff', () => {
     });
   });
 
+  it('hands a learner with no level row in a course a null level, never a guessed basic', async () => {
+    // Strict levels: no level means the card resolves against nothing, so
+    // it says "your level has not been set" rather than linking into Basic.
+    m.getCurrentLevelsByCourse.mockResolvedValue(new Map([[8, 'advanced']]));
+
+    await getMyCourses('u1');
+
+    expect(argsForCourse(7)).toMatchObject({ level: null, bypassLocks: false });
+    expect(argsForCourse(8)).toMatchObject({
+      level: 'advanced',
+      bypassLocks: false,
+    });
+  });
+
   it('resolves the staffed courses in ONE query, not one per card', async () => {
     m.getStaffCourseIds.mockResolvedValue(new Set([7]));
 

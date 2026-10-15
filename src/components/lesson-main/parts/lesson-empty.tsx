@@ -1,4 +1,4 @@
-import { BookOpen, Lock } from 'lucide-react';
+import { BookOpen, Lock, UserRoundX } from 'lucide-react';
 import type { ResumeTarget } from '#/lib/course-resume';
 
 type LessonEmptyProps = {
@@ -12,7 +12,8 @@ type LessonEmptyProps = {
 
 /**
  * The terminal state for a course that cannot resume anyone: nothing is
- * published, or nothing is open to this learner yet.
+ * published, nothing is open to this learner yet, the learner has no level in
+ * this course, or nothing is published at their level (strict levels).
  *
  * This replaced "Pick a lesson from the sidebar to begin." — which was not
  * merely a dead end but false in both cases, since there is nothing pickable
@@ -29,13 +30,33 @@ export const LessonEmpty = ({ courseSlug, state }: LessonEmptyProps) => (
     className="flex flex-col items-center gap-3 rounded-lg border border-gray-6 bg-gray-2 px-6 py-16 text-center"
   >
     <span className="flex size-12 items-center justify-center rounded-full bg-gray-a3 text-secondary">
-      {state.reason === 'no-lessons' ? (
-        <BookOpen className="size-6" aria-hidden="true" />
-      ) : (
+      {state.reason === 'all-locked' ? (
         <Lock className="size-6" aria-hidden="true" />
+      ) : state.reason === 'no-level' ? (
+        <UserRoundX className="size-6" aria-hidden="true" />
+      ) : (
+        <BookOpen className="size-6" aria-hidden="true" />
       )}
     </span>
-    {state.reason === 'no-lessons' ? (
+    {state.reason === 'no-level' ? (
+      <>
+        <h2 className="text-lg font-medium text-primary">No level set yet</h2>
+        <p className="text-sm text-secondary">
+          Your training team hasn&rsquo;t set your level for this course yet.
+          Your lessons will appear here once they do.
+        </p>
+      </>
+    ) : state.reason === 'no-lessons-at-level' ? (
+      <>
+        <h2 className="text-lg font-medium text-primary">
+          No lessons at your level
+        </h2>
+        <p className="text-sm text-secondary">
+          There are no lessons at your level in this course yet. Your training
+          team can tell you what&rsquo;s coming.
+        </p>
+      </>
+    ) : state.reason === 'no-lessons' ? (
       <>
         <h2 className="text-lg font-medium text-primary">No lessons yet</h2>
         <p className="text-sm text-secondary">

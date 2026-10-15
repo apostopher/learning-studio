@@ -14,8 +14,8 @@ import {
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
+  isLessonArchivable,
   isLessonVisibleAtLevel,
-  isLessonWithdrawn,
 } from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
@@ -32,8 +32,12 @@ export type LessonGateResult = {
    */
   isAdmin: boolean;
   subscribed: boolean;
-  /** The pilot's tier in this course, for copy that has to name it. */
-  level: UserLevel;
+  /**
+   * The pilot's tier in this course, for copy that has to name it — or null
+   * when their training team has not set one, in which case every lesson is
+   * `outOfTier` and the copy must say "no level set", not name a tier.
+   */
+  level: UserLevel | null;
   /**
    * Null when the lesson is in the pilot's tier.
    *
@@ -175,10 +179,13 @@ export async function evaluateLessonGate({
     // you never did is not yours. `percent` is the aggregate across every
     // component of the lesson, so 100 is the only honest reading of "done".
     //
-    // Except a lesson tagged None: that is withdrawn, not out-of-tier, so it
-    // is closed even to a pilot who completed it.
+    // Except where there is no "earlier level" for it to be the archive of:
+    // a lesson tagged None (withdrawn) or untagged (at nobody's level) is
+    // closed even to a pilot who completed it, and so is everything for a
+    // pilot with no level — they see nothing, archive included.
     const completed =
-      !isLessonWithdrawn(target.levels) &&
+      level !== null &&
+      isLessonArchivable(target.levels) &&
       progress.lessons.some(
         (row) => row.lessonId === target.id && row.percent === 100,
       );

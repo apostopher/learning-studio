@@ -177,18 +177,37 @@ export const CourseSidebarWrapper = ({
     const modules = data.modules as unknown as readonly ModuleLike[];
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((sum, m) => sum + m.lessons.length, 0);
+    // Strict levels can leave a learner's tree empty for two reasons, and the
+    // sidebar says which rather than drawing an empty list. An author's tree
+    // is never level-filtered, so it never gets one; nor does a course with
+    // no lessons at all, which is empty for everyone and says so elsewhere.
+    const courseHasLessons = (detailsQuery.data?.modules ?? []).some(
+      (mod) => mod.lessons.length > 0,
+    );
+    const emptyReason =
+      viewingAsAuthor || moduleCount > 0 || !levelQuery.data
+        ? null
+        : levelQuery.data.level === null
+          ? ('no-level' as const)
+          : courseHasLessons
+            ? ('no-lessons-at-level' as const)
+            : null;
     return {
       status: 'ready' as const,
       title: data.name,
       moduleCount,
       lessonCount,
       modules,
+      emptyReason,
     };
   }, [
     visibleDetails,
     detailsQuery.isError,
     detailsQuery.isLoading,
     levelPending,
+    levelQuery.data,
+    viewingAsAuthor,
+    detailsQuery.data,
   ]);
 
   if (derived.status === 'loading' || derived.status === 'error') {
@@ -219,10 +238,11 @@ export const CourseSidebarWrapper = ({
       coursePercent={coursePercent}
       lessonLocks={lessonLocks}
       level={
-        viewingAsAuthor || !levelQuery.data
+        viewingAsAuthor || !levelQuery.data || levelQuery.data.level === null
           ? null
           : LEVEL_LABELS[levelQuery.data.level]
       }
+      emptyReason={derived.emptyReason}
       archivedLessons={archivedLessons}
       archiveSectionOpen={archiveSectionOpen}
       onArchiveSectionOpenChange={setArchiveSectionOpen}

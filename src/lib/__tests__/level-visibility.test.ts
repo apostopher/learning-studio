@@ -5,10 +5,17 @@ import {
 } from '#/lib/level-visibility';
 
 describe('isLessonVisibleAtLevel', () => {
-  it('shows an untagged lesson to every tier', () => {
-    expect(isLessonVisibleAtLevel([], 'basic')).toBe(true);
-    expect(isLessonVisibleAtLevel([], 'intermediate')).toBe(true);
-    expect(isLessonVisibleAtLevel([], 'advanced')).toBe(true);
+  it('hides an untagged lesson from every tier', () => {
+    expect(isLessonVisibleAtLevel([], 'basic')).toBe(false);
+    expect(isLessonVisibleAtLevel([], 'intermediate')).toBe(false);
+    expect(isLessonVisibleAtLevel([], 'advanced')).toBe(false);
+  });
+
+  it('shows a pilot with no level nothing at all', () => {
+    expect(isLessonVisibleAtLevel(['basic'], null)).toBe(false);
+    expect(isLessonVisibleAtLevel(['basic', 'advanced'], null)).toBe(false);
+    expect(isLessonVisibleAtLevel([], null)).toBe(false);
+    expect(isLessonVisibleAtLevel(['none'], null)).toBe(false);
   });
 
   it('matches exactly — advanced does not inherit basic', () => {
@@ -42,9 +49,13 @@ describe('filterCourseToLevel', () => {
     ],
   };
 
-  it('keeps only lessons visible at the level', () => {
+  it('keeps only lessons tagged with exactly that level', () => {
     const filtered = filterCourseToLevel(course, 'intermediate');
-    expect(filtered.modules[0].lessons.map((l) => l.slug)).toEqual(['b', 'c']);
+    expect(filtered.modules[0].lessons.map((l) => l.slug)).toEqual(['c']);
+  });
+
+  it('leaves a pilot with no level an empty course', () => {
+    expect(filterCourseToLevel(course, null).modules).toEqual([]);
   });
 
   it('drops a module with no visible lessons entirely', () => {
@@ -66,14 +77,15 @@ describe("the 'none' tag", () => {
     expect(isLessonVisibleAtLevel(['none'], 'advanced')).toBe(false);
   });
 
-  it('is dropped by filterCourseToLevel at every level, while [] stays', () => {
+  it('is dropped by filterCourseToLevel at every level, as is []', () => {
     const course = {
       modules: [
         {
           slug: 'm1',
           lessons: [
             { slug: 'hidden', levels: ['none'] },
-            { slug: 'everyone', levels: [] },
+            { slug: 'untagged', levels: [] },
+            { slug: 'everyone', levels: ['basic', 'intermediate', 'advanced'] },
           ],
         },
         { slug: 'm2', lessons: [{ slug: 'only-none', levels: ['none'] }] },

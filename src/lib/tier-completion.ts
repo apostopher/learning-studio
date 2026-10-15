@@ -26,8 +26,13 @@ export function nextLevel(level: UserLevel): UserLevel | null {
  * notion. Note this is deliberately NOT `watched`, which is weaker and is what
  * the prerequisite gate uses.
  *
- * An empty tier returns false. Otherwise a course with no lessons at a tier
- * would promote the pilot on every single progress write, forever.
+ * Strict: only lessons tagged with exactly this tier count — the same
+ * `isLessonVisibleAtLevel` the pilot's view uses, so an untagged `[]` or
+ * withdrawn `['none']` lesson neither blocks the tier nor completes it.
+ *
+ * An empty tier returns false. Otherwise "every lesson at this tier is done"
+ * would be vacuously true for a tier with no lessons, and promote the pilot
+ * on every single progress write, forever.
  */
 export function isTierComplete(input: TierCompletionInput): boolean {
   const percentByLesson = new Map(

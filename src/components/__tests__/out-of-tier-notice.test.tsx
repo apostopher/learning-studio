@@ -23,6 +23,18 @@ describe('OutOfTierNotice', () => {
     expect(screen.getByText(/Intermediate/)).toBeTruthy();
   });
 
+  it('tells a pilot with no level that their level has not been set, not that they are out of tier', () => {
+    render(<OutOfTierNotice notice={{ level: null }} onDismiss={vi.fn()} />);
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Your training team hasn.t set your level for this course yet/,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/current level/)).toBeNull();
+  });
+
   /**
    * Asserts on the collaborator the button was handed, not on internal
    * state — see CLAUDE.md's testing rule on asserting what the consumer got.

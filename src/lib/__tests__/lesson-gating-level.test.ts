@@ -252,3 +252,71 @@ describe("a lesson tagged 'none'", () => {
     expect(result?.outOfTier).toEqual({ readOnly: false });
   });
 });
+
+describe('strict levels: an untagged lesson, and a pilot with no level', () => {
+  const withLesson = (lesson: Record<string, unknown>) => ({
+    modules: [
+      {
+        ...DETAILS.modules[0],
+        lessons: [{ ...DETAILS.modules[0].lessons[0], ...lesson }],
+      },
+    ],
+  });
+
+  it('closes an untagged lesson at every learner level', async () => {
+    m.getCourseDetailsWithCache.mockResolvedValue(
+      withLesson({ id: 13, slug: 'untagged-1', levels: [] }),
+    );
+    for (const level of ['basic', 'intermediate', 'advanced'] as const) {
+      m.getCurrentLevel.mockResolvedValue(level);
+      const result = await evaluateLessonGate({
+        userId: 'u1',
+        lessonSlug: 'untagged-1',
+        courseSlug: 'c1',
+      });
+      expect(result?.outOfTier).toEqual({ readOnly: false });
+    }
+  });
+
+  it('keeps an untagged lesson closed even when the pilot completed it', async () => {
+    // It was never moved to another tier, so there is no "earlier level" it
+    // could be the archive of — it is simply not anyone's.
+    m.getCourseDetailsWithCache.mockResolvedValue(
+      withLesson({ id: 13, slug: 'untagged-1', levels: [] }),
+    );
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 13, moduleId: 1, percent: 100, watched: true }],
+    });
+    m.getCurrentLevel.mockResolvedValue('basic');
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'untagged-1',
+      courseSlug: 'c1',
+    });
+    expect(result?.outOfTier).toEqual({ readOnly: false });
+  });
+
+  it('closes every lesson to a pilot with no level, and reports level null', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'basic-1',
+      courseSlug: 'c1',
+    });
+    expect(result?.outOfTier).toEqual({ readOnly: false });
+    expect(result?.level).toBeNull();
+  });
+
+  it('does not offer a no-level pilot a read-only copy of work they completed', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [{ lessonId: 10, moduleId: 1, percent: 100, watched: true }],
+    });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'basic-1',
+      courseSlug: 'c1',
+    });
+    expect(result?.outOfTier).toEqual({ readOnly: false });
+  });
+});
