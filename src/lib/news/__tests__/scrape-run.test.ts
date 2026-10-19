@@ -267,6 +267,40 @@ describe('runNewsScrape — dedup', () => {
 });
 
 describe('runNewsScrape — budget and isolation', () => {
+  it('times out a hung source at the budget so the others are still written', async () => {
+    m.listScrapeTargets.mockResolvedValue([
+      source({ id: 1, url: 'https://www.avweb.com/', rank: 1 }),
+      source({ id: 2, url: 'https://www.flyingmag.com/', rank: 2 }),
+    ]);
+    m.fetchPage.mockImplementation(async (url: string) => {
+      if (url === 'https://www.avweb.com/') return new Promise(() => {});
+      if (url === 'https://www.flyingmag.com/') return indexPage([]);
+      return articlePage({
+        url,
+        title: 'Still works',
+        published: '2026-08-02T00:00:00Z',
+      });
+    });
+    m.extractNewsLinks.mockResolvedValue({
+      ok: true,
+      links: ['https://www.flyingmag.com/a'],
+    });
+
+    const result = await runNewsScrape({ budgetMs: 50, now: NOW });
+
+    expect(result.articlesWritten).toBe(1);
+    expect(m.upsertArticle).toHaveBeenCalledWith(
+      expect.objectContaining({ newsSourceId: 2 }),
+    );
+    expect(m.recordScrapeOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 1,
+        status: 'fetch_failed',
+        message: expect.stringContaining('Timed out'),
+      }),
+    );
+  });
+
   it('defers every source when the budget is already spent, and says which', async () => {
     m.listScrapeTargets.mockResolvedValue([
       source({ id: 1, url: 'https://www.avweb.com/' }),

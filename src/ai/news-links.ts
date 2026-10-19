@@ -53,6 +53,9 @@ export async function extractNewsLinks(
       schema: NewsLinksSchema,
       system: SYSTEM,
       prompt: `HTML of the news index page:\n\n${trimmed}`,
+      // A hung model call would otherwise hold its source past the run's
+      // budget.
+      abortSignal: AbortSignal.timeout(60_000),
     });
     return { ok: true, links: object.links };
   } catch (error) {

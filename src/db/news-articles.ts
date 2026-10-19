@@ -5,7 +5,12 @@ import type { SimilarityCandidate } from '#/lib/news/select-articles';
 import type { NewsScrapeStatus } from '#/types';
 
 /** How long an article stays before the cron sweeps it. Also the dedup window. */
-export const RETENTION_DAYS = 7;
+/**
+ * Long on purpose: the feed only shows articles first seen inside this window,
+ * so a source that keeps failing must not empty it within days. Fresh articles
+ * still sort first, so older ones only surface when nothing newer exists.
+ */
+export const RETENTION_DAYS = 90;
 
 export interface UpsertArticleInput {
   courseId: number;
