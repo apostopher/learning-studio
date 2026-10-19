@@ -1358,8 +1358,8 @@ export const newsSourcesTableRelations = relations(
  * yielded them.
  *
  * Rows are transient: the cron deletes anything whose `firstSeenAt` is older
- * than a week. That window is also the dedup window — a story re-linked after
- * seven days resurfaces as new, which is accepted.
+ * than `RETENTION_DAYS` (90). That window is also the dedup window — a story
+ * re-linked after it resurfaces as new, which is accepted.
  */
 export const newsArticlesTable = pgTable(
   'news_articles',

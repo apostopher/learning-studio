@@ -48,11 +48,31 @@ export interface ScrapeRunResult {
 
 interface Deadline {
   expired: () => boolean;
+  remainingMs: () => number;
 }
 
 const makeDeadline = (startedAt: number, budgetMs: number): Deadline => ({
   expired: () => Date.now() - startedAt >= budgetMs,
+  remainingMs: () => Math.max(0, budgetMs - (Date.now() - startedAt)),
 });
+
+/**
+ * Reject once `ms` elapses. The budget is only checked before a source starts,
+ * and writes wait for every harvest — so without this, one source that hangs
+ * past `maxDuration` gets the function killed and every source's haul is lost
+ * with it, not just its own.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(new Error(`Timed out after ${ms}ms; deferred to the next run.`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Fetch a source's index page, sharing the result across courses.
@@ -258,7 +278,10 @@ export async function runNewsScrape({
           return null;
         }
         try {
-          const harvest = await harvestSource(target, now);
+          const harvest = await withTimeout(
+            harvestSource(target, now),
+            deadline.remainingMs(),
+          );
           return { target, harvest };
         } catch (error) {
           return {
