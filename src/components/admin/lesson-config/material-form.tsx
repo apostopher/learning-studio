@@ -5,6 +5,7 @@ import {
   type FieldErrors,
   type UseFormRegister,
 } from 'react-hook-form';
+import type { MaterialExtraTab } from '#/lib/flagship-course';
 import type { LessonMaterialGeneration } from '#/types';
 import { LinkListField } from './link-list-field';
 import { QuizField } from './quiz-field';
@@ -16,14 +17,16 @@ const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 
 /**
  * Presentational body of the material edit form. Prose fields (text, proTips,
- * assignments) and key points use RichTextEditor via Controller; jobOfTheDay is
- * a plain URL input; quiz keeps its control and links use LinkListField
- * (name + URL per row). The container owns useForm and submission; the
+ * assignments) and key points use RichTextEditor via Controller; quiz keeps
+ * its control and links use LinkListField (name + URL per row). The closing
+ * field follows `extraTab`: 3D Airmanship lessons get the Job of the Day URL
+ * input, every other lesson a "TEST THIS!" LinkListField. The container owns useForm and submission; the
  * Save button lives in the modal's sidebar (`MaterialSaveButton`) and reaches
  * this form by id.
  */
 export const MaterialForm = ({
   formId,
+  extraTab,
   register,
   control,
   errors,
@@ -37,6 +40,11 @@ export const MaterialForm = ({
    * form scrolls.
    */
   formId: string;
+  /**
+   * Which closing field to offer. Undefined while the lesson's material is
+   * still loading — neither is drawn rather than guessing and swapping.
+   */
+  extraTab: MaterialExtraTab | undefined;
   register: UseFormRegister<LessonMaterialGeneration>;
   control: Control<LessonMaterialGeneration>;
   errors: FieldErrors<LessonMaterialGeneration>;
@@ -98,17 +106,33 @@ export const MaterialForm = ({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="material-job" className={labelCls}>
-          Job of the day (URL)
-        </label>
-        <input
-          id="material-job"
-          type="text"
-          {...register('jobOfTheDay')}
-          className="rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+      {extraTab === 'jobOfTheDay' && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="material-job" className={labelCls}>
+            Job of the day (URL)
+          </label>
+          <input
+            id="material-job"
+            type="text"
+            {...register('jobOfTheDay')}
+            className="rounded-md border border-gray-6 bg-gray-1 px-3 py-2 text-primary text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+          />
+        </div>
+      )}
+
+      {extraTab === 'testThis' && (
+        <Controller
+          control={control}
+          name="testThis"
+          render={({ field }) => (
+            <LinkListField
+              label="TEST THIS!"
+              value={field.value ?? []}
+              onChange={field.onChange}
+            />
+          )}
         />
-      </div>
+      )}
 
       <Controller
         control={control}

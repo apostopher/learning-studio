@@ -332,6 +332,7 @@ export const CourseLessonMaterialSchema = z.object({
   links: z.array(MaterialLinkSchema).optional(),
   assignments: z.string().optional(),
   jobOfTheDay: z.string().optional(),
+  testThis: z.array(MaterialLinkSchema).optional(),
   attachments: z.array(z.string()).optional(),
 });
 export type CourseLessonMaterial = z.infer<typeof CourseLessonMaterialSchema>;

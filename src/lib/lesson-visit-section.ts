@@ -31,6 +31,7 @@ export const TRACKED_LESSON_SECTIONS = [
   'links',
   'assignments',
   'jobOfTheDay',
+  'testThis',
 ] as const;
 
 export type TrackedLessonSection = (typeof TRACKED_LESSON_SECTIONS)[number];

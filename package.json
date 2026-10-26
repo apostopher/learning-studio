@@ -20,6 +20,7 @@
     "db:migrate-user-management": "dotenv -e .env.local -- tsx src/db/migrate-user-management.ts",
     "db:migrate-user-levels": "dotenv -e .env.local -- tsx src/db/migrate-user-levels.ts",
     "db:migrate-material-links": "dotenv -e .env.local -- tsx src/db/migrate-material-links.ts",
+    "db:migrate-test-this": "dotenv -e .env.local -- tsx src/db/migrate-test-this.ts",
     "db:migrate-staff-roles": "dotenv -e .env.local -- tsx src/db/migrate-staff-roles.ts",
     "db:migrate-discipline-staff": "dotenv -e .env.local -- tsx src/db/migrate-discipline-staff.ts",
     "db:migrate-offerings": "dotenv -e .env.local -- tsx src/db/migrate-offerings.ts",

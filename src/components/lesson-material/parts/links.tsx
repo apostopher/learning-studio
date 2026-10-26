@@ -3,17 +3,18 @@ import type { MaterialLink } from '#/types';
 
 type LinksProps = {
   links: MaterialLink[] | null;
+  /** Shown when no link has a URL. Defaults to the Links tab's wording. */
+  emptyText?: string;
 };
 
-export const Links = ({ links }: LinksProps) => {
+export const Links = ({
+  links,
+  emptyText = 'No links available for this lesson yet.',
+}: LinksProps) => {
   const usable = links?.filter((link) => link.url.trim().length > 0) ?? [];
 
   if (usable.length === 0) {
-    return (
-      <p className="text-sm text-secondary">
-        No links available for this lesson yet.
-      </p>
-    );
+    return <p className="text-sm text-secondary">{emptyText}</p>;
   }
 
   return (

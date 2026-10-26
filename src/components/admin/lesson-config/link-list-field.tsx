@@ -28,6 +28,9 @@ export const LinkListField = ({
     onChange(value.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   const remove = (index: number) =>
     onChange(value.filter((_, i) => i !== index));
+  // Labels like "TEST THIS!" carry spaces and punctuation, which an HTML id
+  // may not — and two lists on one form must not share ids.
+  const idBase = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -36,21 +39,21 @@ export const LinkListField = ({
         // biome-ignore lint/suspicious/noArrayIndexKey: this list is controlled — value always comes from props, so index is a stable enough key for this render.
         <div key={i} className="flex items-center gap-2">
           <div className="grid flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <label className="sr-only" htmlFor={`${label}-name-${i}`}>
+            <label className="sr-only" htmlFor={`${idBase}-name-${i}`}>
               Link {i + 1} name
             </label>
             <input
-              id={`${label}-name-${i}`}
+              id={`${idBase}-name-${i}`}
               value={item.name}
               onChange={(e) => update(i, { name: e.target.value })}
               placeholder="Name"
               className={inputCls}
             />
-            <label className="sr-only" htmlFor={`${label}-url-${i}`}>
+            <label className="sr-only" htmlFor={`${idBase}-url-${i}`}>
               Link {i + 1} URL
             </label>
             <input
-              id={`${label}-url-${i}`}
+              id={`${idBase}-url-${i}`}
               type="url"
               inputMode="url"
               value={item.url}

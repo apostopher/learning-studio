@@ -16,6 +16,29 @@
  */
 export const FLAGSHIP_COURSE_SLUG = '3d-airmanship';
 
+/** The discipline the flagship's lessons are filed under. */
+export const FLAGSHIP_DISCIPLINE_SLUG = '3d-airmanship';
+
+/**
+ * The material tab that closes a lesson's tab strip. "Job of the Day" (one
+ * URL) is a 3D Airmanship feature, so only its discipline's lessons carry it;
+ * every other lesson — no discipline included — gets "TEST THIS!", a list of
+ * links shaped exactly like `links`.
+ *
+ * Decided by discipline alone, never by which column happens to hold data:
+ * the save path writes only the fitting column, and progress counts only the
+ * fitting one, so a lesson can never ask for a tab its learner cannot see.
+ */
+export type MaterialExtraTab = 'jobOfTheDay' | 'testThis';
+
+export function materialExtraTabFor(
+  disciplineSlug: string | null | undefined,
+): MaterialExtraTab {
+  return disciplineSlug === FLAGSHIP_DISCIPLINE_SLUG
+    ? 'jobOfTheDay'
+    : 'testThis';
+}
+
 export function findFlagshipCourse<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C['course'] | null {
