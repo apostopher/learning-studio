@@ -715,7 +715,10 @@ export const lessonMaterialTable = pgTable(
     proTips: text('pro_tips'),
     links: json('links').$type<MaterialLink[]>(),
     assignments: text('assignments'),
+    /** 3D Airmanship lessons only — see `materialExtraTabFor`. */
     jobOfTheDay: text('job_of_the_day'),
+    /** Every other lesson's "TEST THIS!" links — see `materialExtraTabFor`. */
+    testThis: json('test_this').$type<MaterialLink[]>(),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },

@@ -1,10 +1,13 @@
+import type { MaterialExtraTab } from '#/lib/flagship-course';
+
 export type MaterialTabValue =
   | 'keyPoints'
   | 'quiz'
   | 'proTips'
   | 'links'
   | 'assignments'
-  | 'jobOfTheDay';
+  | 'jobOfTheDay'
+  | 'testThis';
 
 export type MaterialTab = { value: MaterialTabValue; label: string };
 
@@ -18,6 +21,11 @@ export type ComputeMaterialTabsArgs = {
    * `resolveDebriefSource`).
    */
   canDebrief: boolean;
+  /**
+   * The closing tab — Job of the Day on 3D Airmanship lessons, TEST THIS! on
+   * every other (see `materialExtraTabFor`). Never both.
+   */
+  extraTab: MaterialExtraTab;
 };
 
 /**
@@ -44,6 +52,7 @@ export type ComputeMaterialTabsArgs = {
 export function computeMaterialTabs({
   hasDebrief,
   canDebrief,
+  extraTab,
 }: ComputeMaterialTabsArgs): MaterialTab[] {
   const activity: MaterialTab[] = hasDebrief
     ? // No generator input means no debrief is possible, and the quiz is
@@ -60,7 +69,9 @@ export function computeMaterialTabs({
     { value: 'proTips', label: 'Pro Tips' },
     { value: 'links', label: 'Links' },
     { value: 'assignments', label: 'Assignments' },
-    { value: 'jobOfTheDay', label: 'Job of the Day' },
+    extraTab === 'jobOfTheDay'
+      ? { value: 'jobOfTheDay', label: 'Job of the Day' }
+      : { value: 'testThis', label: 'TEST THIS!' },
   ];
 }
 

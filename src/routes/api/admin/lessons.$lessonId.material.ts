@@ -60,8 +60,11 @@ export async function getMaterialHandler(
   }
   const denied = await guard(request, lessonId, 'read');
   if (denied) return denied;
-  const material = await getLessonMaterialByLessonId(lessonId);
-  return Response.json(material ?? null);
+  // `{ extraTab, material }` — the form needs the tab even when no material
+  // is saved yet. Null only if the lesson vanished after the guard.
+  const result = await getLessonMaterialByLessonId(lessonId);
+  if (!result) return new Response('Not found', { status: 404 });
+  return Response.json(result);
 }
 
 export async function saveMaterialHandler(

@@ -16,6 +16,9 @@ Fields:
   the name when the document gives no label. Omit if none.
 - assignments: HTML string for the assignment section. Omit if none.
 - jobOfTheDay: the "Job of the Day" URL only. Omit if none.
+- testThis: array of { name, url } for each link under the "TEST THIS!"
+  heading, same rules as links. Those links go here, NOT in links. Omit if
+  the document has no TEST THIS! section.
 - attachments: array of referenced attachment file names. Omit if none.
 
 Rules:

@@ -5,7 +5,7 @@ import {
 } from '../compute-material-tabs';
 
 const labels = (args: { hasDebrief: boolean; canDebrief: boolean }) =>
-  computeMaterialTabs(args).map((t) => t.label);
+  computeMaterialTabs({ extraTab: 'jobOfTheDay', ...args }).map((t) => t.label);
 
 describe('computeMaterialTabs', () => {
   it('offers the authored Quiz when the lesson has no debrief', () => {
@@ -20,7 +20,11 @@ describe('computeMaterialTabs', () => {
   });
 
   it('replaces the Quiz tab with Debrief — never both', () => {
-    const tabs = computeMaterialTabs({ hasDebrief: true, canDebrief: true });
+    const tabs = computeMaterialTabs({
+      hasDebrief: true,
+      canDebrief: true,
+      extraTab: 'jobOfTheDay',
+    });
     expect(tabs.map((t) => t.label)).toContain('Debrief');
     expect(tabs.map((t) => t.label)).not.toContain('Quiz');
     // One activity slot, so the count matches the no-debrief case exactly.
@@ -31,7 +35,11 @@ describe('computeMaterialTabs', () => {
     // The overlay switches tabs by value (`setActiveTab('quiz')`). A distinct
     // value for the debrief would make that jump silently miss on exactly the
     // lessons the overlay appears on.
-    const tabs = computeMaterialTabs({ hasDebrief: true, canDebrief: true });
+    const tabs = computeMaterialTabs({
+      hasDebrief: true,
+      canDebrief: true,
+      extraTab: 'jobOfTheDay',
+    });
     expect(tabs.find((t) => t.label === 'Debrief')?.value).toBe('quiz');
   });
 
@@ -39,7 +47,11 @@ describe('computeMaterialTabs', () => {
     // has_debrief suppresses the quiz unconditionally, and with no key points
     // no debrief can be generated — so there is no second tab at all. This is
     // the accepted dead state; it must render as absent, not as an empty tab.
-    const tabs = computeMaterialTabs({ hasDebrief: true, canDebrief: false });
+    const tabs = computeMaterialTabs({
+      hasDebrief: true,
+      canDebrief: false,
+      extraTab: 'jobOfTheDay',
+    });
     expect(tabs.map((t) => t.value)).not.toContain('quiz');
     expect(tabs).toHaveLength(5);
   });
@@ -54,8 +66,50 @@ describe('computeMaterialTabs', () => {
   });
 });
 
+describe('computeMaterialTabs — closing tab', () => {
+  it('closes a 3D Airmanship lesson with Job of the Day, and no TEST THIS!', () => {
+    const tabs = computeMaterialTabs({
+      hasDebrief: false,
+      canDebrief: false,
+      extraTab: 'jobOfTheDay',
+    });
+    expect(tabs.at(-1)).toEqual({
+      value: 'jobOfTheDay',
+      label: 'Job of the Day',
+    });
+    expect(tabs.map((t) => t.value)).not.toContain('testThis');
+  });
+
+  it('closes every other lesson with TEST THIS!, and no Job of the Day', () => {
+    const tabs = computeMaterialTabs({
+      hasDebrief: false,
+      canDebrief: false,
+      extraTab: 'testThis',
+    });
+    expect(tabs.at(-1)).toEqual({ value: 'testThis', label: 'TEST THIS!' });
+    expect(tabs.map((t) => t.value)).not.toContain('jobOfTheDay');
+    // One closing slot either way, so the strip is the same length.
+    expect(tabs).toHaveLength(6);
+  });
+
+  it('falls back to Key Points when the remembered tab is the other closing tab', () => {
+    // `activeTabAtom` is global, so a learner who left a 3D lesson on Job of
+    // the Day lands on a UAS lesson with that tab still remembered.
+    const tabs = computeMaterialTabs({
+      hasDebrief: false,
+      canDebrief: false,
+      extraTab: 'testThis',
+    });
+    expect(resolveActiveTab(tabs, 'jobOfTheDay')).toBe('keyPoints');
+  });
+});
+
 describe('resolveActiveTab', () => {
-  const tabs = computeMaterialTabs({ hasDebrief: true, canDebrief: true });
+  const tabs = computeMaterialTabs({
+    hasDebrief: true,
+    canDebrief: true,
+    extraTab: 'jobOfTheDay',
+  });
 
   it('keeps a selection that exists', () => {
     expect(resolveActiveTab(tabs, 'proTips')).toBe('proTips');
@@ -69,6 +123,7 @@ describe('resolveActiveTab', () => {
     const noActivity = computeMaterialTabs({
       hasDebrief: true,
       canDebrief: false,
+      extraTab: 'jobOfTheDay',
     });
     expect(resolveActiveTab(noActivity, 'quiz')).toBe('keyPoints');
   });
