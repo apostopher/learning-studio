@@ -1,10 +1,15 @@
+import { DebriefStatusError } from '#/data-hooks/use-debrief-status';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import type { DebriefStatusResponse } from '#/routes/api/lesson/debrief-status';
 import { debriefSessionForLesson } from './parts/debrief-session-owner';
 
 export type DebriefPanel =
   | { kind: 'loading' }
-  | { kind: 'error' }
+  /**
+   * `refused`: the server said no (403/404) — retrying cannot help and the
+   * connection is not to blame. Otherwise a network or server failure.
+   */
+  | { kind: 'error'; refused: boolean; message: string }
   | { kind: 'not-done'; outstanding: readonly OutstandingItem[] }
   | { kind: 'waiting'; availableAt: string }
   /** Renders DebriefQuizContainer. */
@@ -22,6 +27,8 @@ export type ComputeDebriefPanelArgs = {
   status: {
     isPending: boolean;
     isError: boolean;
+    /** The query's error — a `DebriefStatusError` carries the HTTP status. */
+    error?: unknown;
     data: DebriefStatusResponse | undefined;
   };
   /** `justSubmittedDebriefAtom`. */
@@ -30,6 +37,22 @@ export type ComputeDebriefPanelArgs = {
   /** An in-memory debrief session for this lesson exists and is not complete. */
   sessionInProgress: boolean;
 };
+
+/** The route refused this pilot this lesson's debrief (403 or 404). */
+export const DEBRIEF_REFUSED_COPY =
+  "This debrief isn't available for this lesson.";
+
+/** The status could not be fetched — network or server. */
+export const DEBRIEF_FAILED_COPY =
+  "Your debrief's schedule didn't load. Check your connection and try again.";
+
+/** 403 (gate, level, out-of-tier) and 404 (no debrief) are answers, not failures. */
+function isRefusal(error: unknown): boolean {
+  return (
+    error instanceof DebriefStatusError &&
+    (error.status === 403 || error.status === 404)
+  );
+}
 
 /**
  * What the Debrief tab shows, from the server's state for this pilot.
@@ -59,7 +82,13 @@ export function computeDebriefPanel({
   // Data first: a failed background refetch keeps the last known state
   // rather than replacing a working panel with an error.
   if (!status.data) {
-    return status.isPending ? { kind: 'loading' } : { kind: 'error' };
+    if (status.isPending) return { kind: 'loading' };
+    const refused = isRefusal(status.error);
+    return {
+      kind: 'error',
+      refused,
+      message: refused ? DEBRIEF_REFUSED_COPY : DEBRIEF_FAILED_COPY,
+    };
   }
 
   const { data } = status;

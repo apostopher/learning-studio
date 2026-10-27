@@ -143,9 +143,13 @@ export const DebriefPanelContainer = ({
         </div>
       );
     case 'error':
-      return (
+      // A refusal is an answer, not a failure: no retry, and nothing about the
+      // connection.
+      return panel.refused ? (
+        <p className="py-2 text-sm text-secondary">{panel.message}</p>
+      ) : (
         <LessonError
-          message="Your debrief's schedule didn't load. Check your connection and try again."
+          message={panel.message}
           onRetry={() => void refetch()}
           subject="your debrief"
         />

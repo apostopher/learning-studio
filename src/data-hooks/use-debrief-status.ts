@@ -41,6 +41,20 @@ export const debriefStatusSchema = z.object({
 
 export type DebriefStatus = z.infer<typeof debriefStatusSchema>;
 
+/**
+ * A non-2xx answer from the debrief-status route, carrying its HTTP status so
+ * the panel can tell a refusal (403/404: this pilot gets no debrief here)
+ * from a failure worth retrying (see `computeDebriefPanel`).
+ */
+export class DebriefStatusError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`Failed to load debrief status (${status})`);
+    this.name = 'DebriefStatusError';
+    this.status = status;
+  }
+}
+
 export async function fetchDebriefStatus({
   courseSlug,
   lessonSlug,
@@ -51,9 +65,7 @@ export async function fetchDebriefStatus({
   const res = await fetch(
     `/api/lesson/debrief-status?lessonSlug=${encodeURIComponent(lessonSlug)}&courseSlug=${encodeURIComponent(courseSlug)}`,
   );
-  if (!res.ok) {
-    throw new Error(`Failed to load debrief status (${res.status})`);
-  }
+  if (!res.ok) throw new DebriefStatusError(res.status);
   return debriefStatusSchema.parse(await res.json());
 }
 

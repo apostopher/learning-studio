@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DebriefStatusError } from '#/data-hooks/use-debrief-status';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import type { DebriefState } from '#/lib/debrief-schedule';
 import type {
@@ -7,6 +8,8 @@ import type {
 } from '#/routes/api/lesson/debrief-status';
 import {
   computeDebriefPanel,
+  DEBRIEF_FAILED_COPY,
+  DEBRIEF_REFUSED_COPY,
   debriefSessionProgress,
   isStaleDebriefSession,
   settleDebriefPanel,
@@ -61,8 +64,37 @@ describe('computeDebriefPanel', () => {
 
   it('is an error when the status failed with nothing to fall back on', () => {
     expect(panel({ isPending: false, isError: true, data: undefined })).toEqual(
-      { kind: 'error' },
+      { kind: 'error', refused: false, message: DEBRIEF_FAILED_COPY },
     );
+  });
+
+  it.each([
+    403, 404,
+  ])('says the debrief is not available, with no retry, when the server refuses (%i)', (code) => {
+    expect(
+      panel({
+        isPending: false,
+        isError: true,
+        error: new DebriefStatusError(code),
+        data: undefined,
+      }),
+    ).toEqual({ kind: 'error', refused: true, message: DEBRIEF_REFUSED_COPY });
+  });
+
+  it.each([
+    ['a server failure', new DebriefStatusError(500)],
+    ['a network failure', new TypeError('Failed to fetch')],
+  ])('blames the connection only for %s', (_why, error) => {
+    expect(
+      panel({ isPending: false, isError: true, error, data: undefined }),
+    ).toEqual({ kind: 'error', refused: false, message: DEBRIEF_FAILED_COPY });
+  });
+
+  it('copy: a refusal never tells the pilot to check their connection', () => {
+    expect(DEBRIEF_REFUSED_COPY).toBe(
+      "This debrief isn't available for this lesson.",
+    );
+    expect(DEBRIEF_FAILED_COPY).toMatch(/Check your connection/);
   });
 
   it('keeps showing the last known state when only a background refetch failed', () => {
