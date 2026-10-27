@@ -1,12 +1,31 @@
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
+import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
 import { dataKeys } from './keys';
+
+const outstandingItemSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('video') }),
+  z.object({ kind: z.literal('quiz') }),
+  z.object({ kind: z.literal('visit') }),
+  z.object({
+    kind: z.literal('section'),
+    section: z.enum(TRACKED_LESSON_SECTIONS),
+  }),
+]);
 
 const lessonProgressSchema = z.object({
   lessonId: z.number(),
   moduleId: z.number(),
   percent: z.number(),
   watched: z.boolean(),
+  done: z.boolean(),
+  outstanding: z.array(outstandingItemSchema),
+  debrief: z.object({
+    doneAt: z.string().nullable(),
+    passed: z.boolean(),
+    lastFailedAt: z.string().nullable(),
+    bearing: z.boolean(),
+  }),
 });
 
 const moduleProgressSchema = z.object({

@@ -21,8 +21,34 @@ const summary = {
   totalLessons: 8,
   modules: [{ moduleId: 1, percent: 42, watchedLessons: 3, totalLessons: 8 }],
   lessons: [
-    { lessonId: 10, moduleId: 1, percent: 100, watched: true },
-    { lessonId: 11, moduleId: 1, percent: 0, watched: false },
+    {
+      lessonId: 10,
+      moduleId: 1,
+      percent: 100,
+      watched: true,
+      done: true,
+      outstanding: [],
+      debrief: {
+        doneAt: '2026-10-01T00:00:00.000Z',
+        passed: false,
+        lastFailedAt: null,
+        bearing: true,
+      },
+    },
+    {
+      lessonId: 11,
+      moduleId: 1,
+      percent: 0,
+      watched: false,
+      done: false,
+      outstanding: [{ kind: 'video' }, { kind: 'section', section: 'links' }],
+      debrief: {
+        doneAt: null,
+        passed: false,
+        lastFailedAt: null,
+        bearing: false,
+      },
+    },
   ],
 };
 

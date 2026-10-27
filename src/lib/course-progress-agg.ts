@@ -1,4 +1,6 @@
 import { watchedMilestones } from './course-milestones';
+import type { DebriefFacts } from './debrief-schedule';
+import type { TrackedLessonSection } from './lesson-visit-section';
 
 /**
  * Milestones that count toward completion (10..95 — every milestone except the
@@ -26,33 +28,49 @@ export type LessonProgressRow = {
   hasVideo: boolean;
   needsVideoWatch: boolean;
 
-  /** Material tabs this lesson actually has content behind (D12). */
-  applicableSections: number;
-  /** Of those, how many the learner has selected at least once. */
-  tappedSections: number;
+  /** Material tabs this lesson has content behind (D12), in canonical order. */
+  applicableSectionNames: TrackedLessonSection[];
+  /** Tabs the learner has selected at least once (may include now-empty tabs). */
+  tappedSectionNames: TrackedLessonSection[];
 
-  /**
-   * Tab 2 is Quiz XOR Debrief, decided by `hasDebrief` alone (D21). When it is
-   * true the authored quiz is never rendered, so it never counts — even if
-   * `canDebrief` is false and the learner ends up with no tab 2 at all.
-   */
+  /** The lesson has the debrief switch on. */
   hasDebrief: boolean;
   /** The authored quiz has at least one question. */
   hasQuiz: boolean;
-  /** The debrief generator has what it needs: key points and body text. */
-  canDebrief: boolean;
   quizPlayed: boolean;
-  debriefAnswered: boolean;
+
+  /**
+   * The debrief counts toward the course percent: switch on AND either authored
+   * body text, or the server has already produced one for this pilot (so
+   * unusable captions never block course-done).
+   */
+  debriefBearing: boolean;
+  debriefPassed: boolean;
+  /** ISO. Latest below-par attempt. */
+  lastFailedDebriefAt: string | null;
+  /** ISO. When the lesson first reached 100% (sticky), from lesson_completions. */
+  doneAt: string | null;
 
   /** The learner has opened this lesson's page at least once. */
   visited: boolean;
 };
+
+export type OutstandingItem =
+  | { kind: 'video' }
+  | { kind: 'quiz' }
+  | { kind: 'visit' }
+  | { kind: 'section'; section: TrackedLessonSection };
 
 export type LessonProgress = {
   lessonId: number;
   moduleId: number;
   percent: number;
   watched: boolean;
+  /** `doneAt !== null` — sticky, unlike `percent === 100`. */
+  done: boolean;
+  /** What is still missing; empty iff percent === 100. */
+  outstanding: OutstandingItem[];
+  debrief: DebriefFacts & { bearing: boolean };
 };
 
 export type ModuleProgress = {
@@ -71,19 +89,25 @@ export type CourseProgress = {
   lessons: LessonProgress[];
 };
 
+/** Applicable sections the learner has tapped (intersection, so an emptied-then-tapped tab cannot overshoot). */
+function tappedApplicable(row: LessonProgressRow): TrackedLessonSection[] {
+  const tapped = new Set(row.tappedSectionNames);
+  return row.applicableSectionNames.filter((n) => tapped.has(n));
+}
+
 /**
  * Each component this lesson asks of the learner, as a 0..1 fraction.
  *
  * A component is included only when the lesson has it AND the learner can act
- * on it — the same principle `isLessonSatisfied` applies to prerequisites: a
- * requirement no action can satisfy must never count against you. Concretely:
- * a lesson with no video is not asked to watch one, a tab with nothing behind
- * it is not asked to be opened, and a debrief with no key points to generate
- * from is not asked to be answered.
+ * on it: a lesson with no video is not asked to watch one, a tab with nothing
+ * behind it is not asked to be opened.
  *
- * Continuous, not discrete (D10): video contributes its milestone fraction and
- * sections their tapped fraction, because both have a real partial state. Quiz
- * and debrief are 0 or 1 — no partial attempt is persisted for either.
+ * The debrief is NOT a component: it opens 24h after the lesson is done, so it
+ * counts toward the course percent instead (see coursePercent). The authored
+ * quiz always counts.
+ *
+ * Continuous, not discrete (D10): video and sections have a real partial
+ * state; the quiz is 0 or 1.
  */
 function componentFractions(row: LessonProgressRow): number[] {
   const out: number[] = [];
@@ -92,23 +116,64 @@ function componentFractions(row: LessonProgressRow): number[] {
     out.push(Math.min(row.watchedHits, WATCHED_TOTAL) / WATCHED_TOTAL);
   }
 
-  if (row.applicableSections > 0) {
-    // Clamped because a section tapped while it had content stays recorded
-    // after an admin empties that tab, which would otherwise push the fraction
-    // above 1 and the lesson above 100%.
-    const tapped = Math.min(row.tappedSections, row.applicableSections);
-    out.push(tapped / row.applicableSections);
+  if (row.applicableSectionNames.length > 0) {
+    out.push(tappedApplicable(row).length / row.applicableSectionNames.length);
   }
 
-  // Quiz XOR debrief, never both — `hasDebrief` alone decides which tab
-  // renders, so the other component is not merely unfinished, it is unreachable.
-  if (row.hasDebrief) {
-    if (row.canDebrief) out.push(row.debriefAnswered ? 1 : 0);
-  } else if (row.hasQuiz) {
-    out.push(row.quizPlayed ? 1 : 0);
-  }
+  if (row.hasQuiz) out.push(row.quizPlayed ? 1 : 0);
 
   return out;
+}
+
+/**
+ * What is still missing, mirroring `componentFractions` component for
+ * component: video, quiz, each untapped applicable section, and the visit only
+ * when no component applies. Empty iff the lesson is at 100%.
+ */
+export function lessonOutstanding(row: LessonProgressRow): OutstandingItem[] {
+  const out: OutstandingItem[] = [];
+  let components = 0;
+
+  if (row.hasVideo && row.needsVideoWatch) {
+    components++;
+    if (row.watchedHits < WATCHED_TOTAL) out.push({ kind: 'video' });
+  }
+
+  if (row.hasQuiz) {
+    components++;
+    if (!row.quizPlayed) out.push({ kind: 'quiz' });
+  }
+
+  if (row.applicableSectionNames.length > 0) {
+    components++;
+    const tapped = new Set(row.tappedSectionNames);
+    for (const section of row.applicableSectionNames) {
+      if (!tapped.has(section)) out.push({ kind: 'section', section });
+    }
+  }
+
+  if (components === 0 && !row.visited) out.push({ kind: 'visit' });
+  return out;
+}
+
+/**
+ * Course percent: a flat mean over every lesson's percent plus one item per
+ * debrief-bearing lesson (100 if passed, else 0). Non-bearing lessons add no
+ * debrief item.
+ */
+export function coursePercent(
+  lessons: readonly {
+    percent: number;
+    debrief: { bearing: boolean; passed: boolean };
+  }[],
+): number {
+  const items: number[] = [];
+  for (const l of lessons) {
+    items.push(l.percent);
+    if (l.debrief.bearing) items.push(l.debrief.passed ? 100 : 0);
+  }
+  if (items.length === 0) return 0;
+  return Math.round(items.reduce((s, p) => s + p, 0) / items.length);
 }
 
 /**
@@ -148,7 +213,7 @@ function lessonWatched(row: LessonProgressRow): boolean {
  *
  * - lesson%  = round(mean of the components that apply · 100); see lessonPercent.
  * - module%  = round(avg of its lessons' %); 0 for a module with no lessons.
- * - course%  = round(avg of the modules that HAVE lessons); 0 when none do.
+ * - course%  = coursePercent: flat mean over lessons plus bearing debriefs.
  */
 export function aggregateCourseProgress(
   slug: string,
@@ -170,6 +235,14 @@ export function aggregateCourseProgress(
       moduleId: row.moduleId,
       percent: lessonPercent(row),
       watched: lessonWatched(row),
+      done: row.doneAt !== null,
+      outstanding: lessonOutstanding(row),
+      debrief: {
+        doneAt: row.doneAt,
+        passed: row.debriefPassed,
+        lastFailedAt: row.lastFailedDebriefAt,
+        bearing: row.debriefBearing,
+      },
     });
   }
 
@@ -195,20 +268,10 @@ export function aggregateCourseProgress(
   const totalLessons = modules.reduce((n, m) => n + m.totalLessons, 0);
   const watchedLessons = modules.reduce((n, m) => n + m.watchedLessons, 0);
 
-  // A module with no available lessons is excluded from the course average
-  // rather than averaged in at 0%. It is still returned (the sidebar renders
-  // its heading and needs a percent for it), it just does not vote.
-  //
-  // Scoring it 100 instead — which is what the old platform did — would make
-  // every course that is still being built read 100% complete, since a course
-  // with no published lessons is nothing BUT empty modules. Excluding gives
-  // the case that matters (some modules done, one still empty) a course
-  // percentage that reflects only the lessons that actually exist.
-  const counted = modules.filter((m) => m.totalLessons > 0);
-  const percent =
-    counted.length === 0
-      ? 0
-      : Math.round(counted.reduce((s, m) => s + m.percent, 0) / counted.length);
+  // Modules still report their own (lesson-mean) percent, empty ones at 0, but
+  // the course percent is flat over lessons, so an empty module simply
+  // contributes nothing — and a course of only empty modules reads 0, never 100.
+  const percent = coursePercent(lessons);
 
   return { slug, percent, watchedLessons, totalLessons, modules, lessons };
 }

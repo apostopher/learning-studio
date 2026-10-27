@@ -3,11 +3,17 @@ import { watchedMilestones } from '#/lib/course-milestones';
 import {
   aggregateCourseProgress,
   aggregatePercentByCourse,
+  coursePercent,
   type LessonProgressRow,
+  lessonOutstanding,
   type ManyCourseProgressRow,
 } from '#/lib/course-progress-agg';
+import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
 
 const FULL = watchedMilestones.length; // 18 — all watched-milestones hit
+
+/** The first n tracked sections, in canonical order. */
+const secs = (n: number) => TRACKED_LESSON_SECTIONS.slice(0, n);
 
 /**
  * A lesson that asks NOTHING: no video, no material, no quiz, no debrief.
@@ -25,13 +31,15 @@ const row = (
   watchedHits: 0,
   hasVideo: false,
   needsVideoWatch: false,
-  applicableSections: 0,
-  tappedSections: 0,
+  applicableSectionNames: [],
+  tappedSectionNames: [],
   hasDebrief: false,
+  debriefBearing: false,
   hasQuiz: false,
-  canDebrief: false,
   quizPlayed: false,
-  debriefAnswered: false,
+  debriefPassed: false,
+  lastFailedDebriefAt: null,
+  doneAt: null,
   visited: false,
   ...over,
 });
@@ -75,14 +83,14 @@ describe('a single component', () => {
       row({
         moduleId: 1,
         lessonId: 10,
-        applicableSections: 4,
-        tappedSections: 1,
+        applicableSectionNames: secs(4),
+        tappedSectionNames: secs(1),
       }),
       row({
         moduleId: 1,
         lessonId: 11,
-        applicableSections: 4,
-        tappedSections: 4,
+        applicableSectionNames: secs(4),
+        tappedSectionNames: secs(4),
       }),
     ]);
     expect(lessons.map((l) => l.percent)).toEqual([25, 100]);
@@ -95,8 +103,8 @@ describe('a single component', () => {
       row({
         moduleId: 1,
         lessonId: 10,
-        applicableSections: 2,
-        tappedSections: 5,
+        applicableSectionNames: secs(2),
+        tappedSectionNames: secs(5),
       }),
     ]);
     expect(lessons[0].percent).toBe(100);
@@ -109,80 +117,163 @@ describe('a single component', () => {
     ]);
     expect(lessons.map((l) => l.percent)).toEqual([0, 100]);
   });
-
-  it('debrief: 0 or 1, and only when it can actually be generated', () => {
-    const { lessons } = aggregateCourseProgress('c', [
-      row({ moduleId: 1, lessonId: 10, hasDebrief: true, canDebrief: true }),
-      row({
-        moduleId: 1,
-        lessonId: 11,
-        hasDebrief: true,
-        canDebrief: true,
-        debriefAnswered: true,
-      }),
-      // No key points to generate from: not merely unfinished, unreachable —
-      // so it must not count, and with nothing else to do the lesson falls
-      // back to the visit.
-      row({
-        moduleId: 1,
-        lessonId: 12,
-        hasDebrief: true,
-        canDebrief: false,
-        visited: true,
-      }),
-    ]);
-    expect(lessons.map((l) => l.percent)).toEqual([0, 100, 100]);
-  });
 });
 
-describe('quiz XOR debrief', () => {
-  it('ignores the authored quiz entirely when hasDebrief is on', () => {
-    // The Quiz tab never renders while hasDebrief is on, so a quiz the learner
-    // is never shown must not hold their lesson below 100%.
+describe('quiz and debrief', () => {
+  it('quiz counts even when hasDebrief', () => {
     const { lessons } = aggregateCourseProgress('c', [
       row({
         moduleId: 1,
         lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: FULL,
         hasQuiz: true,
         quizPlayed: false,
         hasDebrief: true,
-        canDebrief: true,
-        debriefAnswered: true,
+        debriefBearing: true,
+        applicableSectionNames: [],
       }),
     ]);
-    expect(lessons[0].percent).toBe(100);
+    expect(lessons[0].percent).toBe(50);
   });
 
-  it('counts the authored quiz when hasDebrief is off', () => {
-    const { lessons } = aggregateCourseProgress('c', [
-      row({ moduleId: 1, lessonId: 10, hasQuiz: true, quizPlayed: true }),
-    ]);
-    expect(lessons[0].percent).toBe(100);
-  });
-
-  it('falls back to the visit when the quiz is hidden and no debrief is possible', () => {
-    // The accepted dead state: the learner sees no second tab at all. Progress
-    // must not punish them for content the UI never offered.
+  it('debrief never counts toward lesson percent', () => {
     const { lessons } = aggregateCourseProgress('c', [
       row({
         moduleId: 1,
         lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: FULL,
         hasQuiz: true,
+        quizPlayed: true,
         hasDebrief: true,
-        canDebrief: false,
-        visited: true,
+        debriefBearing: true,
+        debriefPassed: false,
       }),
     ]);
     expect(lessons[0].percent).toBe(100);
+  });
+});
+
+describe('outstanding items', () => {
+  const lesson = (over: Partial<LessonProgressRow>) =>
+    row({ moduleId: 1, lessonId: 10, ...over });
+
+  it('lists exactly what is missing, in order video, quiz, sections, visit', () => {
+    expect(
+      lessonOutstanding(
+        lesson({
+          hasVideo: true,
+          needsVideoWatch: true,
+          watchedHits: 4,
+          hasQuiz: true,
+          quizPlayed: false,
+          applicableSectionNames: ['keyPoints', 'links', 'assignments'],
+          tappedSectionNames: ['keyPoints'],
+        }),
+      ),
+    ).toEqual([
+      { kind: 'video' },
+      { kind: 'quiz' },
+      { kind: 'section', section: 'links' },
+      { kind: 'section', section: 'assignments' },
+    ]);
+  });
+
+  it('an empty lesson is outstanding as visit until visited', () => {
+    expect(lessonOutstanding(lesson({}))).toEqual([{ kind: 'visit' }]);
+    expect(lessonOutstanding(lesson({ visited: true }))).toEqual([]);
+  });
+
+  it('is empty exactly when the lesson reports 100%, and reaches the payload', () => {
+    const done = lesson({
+      hasQuiz: true,
+      quizPlayed: true,
+      applicableSectionNames: ['keyPoints'],
+      tappedSectionNames: ['keyPoints', 'links'],
+    });
+    const open = lesson({ lessonId: 11, hasQuiz: true });
+    const { lessons } = aggregateCourseProgress('c', [done, open]);
+    expect(lessons.map((l) => [l.percent, l.outstanding])).toEqual([
+      [100, []],
+      [0, [{ kind: 'quiz' }]],
+    ]);
+  });
+});
+
+describe('done and debrief facts', () => {
+  it('done comes from doneAt, not percent', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        applicableSectionNames: secs(2),
+        tappedSectionNames: secs(1),
+        doneAt: '2026-10-01T00:00:00Z',
+      }),
+      row({ moduleId: 1, lessonId: 11, visited: true, doneAt: null }),
+    ]);
+    expect(lessons.map((l) => [l.percent, l.done])).toEqual([
+      [50, true],
+      [100, false],
+    ]);
+  });
+
+  it('passes the debrief facts through to the payload', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        debriefBearing: true,
+        debriefPassed: true,
+        lastFailedDebriefAt: '2026-10-02T00:00:00Z',
+        doneAt: '2026-10-01T00:00:00Z',
+      }),
+    ]);
+    expect(lessons[0].debrief).toEqual({
+      doneAt: '2026-10-01T00:00:00Z',
+      passed: true,
+      lastFailedAt: '2026-10-02T00:00:00Z',
+      bearing: true,
+    });
+  });
+});
+
+describe('coursePercent', () => {
+  const L = (percent: number, bearing: boolean, passed = false) => ({
+    percent,
+    debrief: { bearing, passed },
+  });
+
+  it('is a flat mean over lessons plus bearing debriefs', () => {
+    expect(coursePercent([L(100, true), L(100, true)])).toBe(50);
+    expect(coursePercent([L(100, true, true), L(100, true)])).toBe(75);
+  });
+
+  it('a non-bearing lesson adds no debrief item', () => {
+    expect(coursePercent([L(100, false), L(100, false)])).toBe(100);
+    expect(coursePercent([L(100, true, true), L(100, false)])).toBe(100);
+  });
+
+  it('is 0 for no lessons', () => {
+    expect(coursePercent([])).toBe(0);
+  });
+
+  it('feeds CourseProgress.percent', () => {
+    const { percent } = aggregateCourseProgress('c', [
+      row({ moduleId: 1, lessonId: 10, visited: true, debriefBearing: true }),
+    ]);
+    expect(percent).toBe(50);
   });
 });
 
 describe('a lesson with no material', () => {
   it('is complete on the video alone, debrief switch or not', () => {
     // The rule for a video-only lesson: watching it IS finishing it. With no
-    // material row there are no applicable sections, no authored quiz, and
-    // `canDebrief` is false (it is SQL over lesson_material — see
-    // progress-components.ts), so the video is the only component.
+    // material row there are no applicable sections and no authored quiz, so
+    // the video is the only component.
     //
     // `hasDebrief: true` is the case that matters. Such a lesson still OFFERS a
     // debrief, generated from the video transcript, and it renders below the
@@ -195,8 +286,6 @@ describe('a lesson with no material', () => {
         needsVideoWatch: true,
         watchedHits: FULL,
         hasDebrief: true,
-        canDebrief: false,
-        debriefAnswered: false,
       }),
     ]);
     expect(lessons[0].percent).toBe(100);
@@ -213,7 +302,6 @@ describe('a lesson with no material', () => {
         needsVideoWatch: true,
         watchedHits: 0,
         hasDebrief: true,
-        canDebrief: false,
         visited: true,
       }),
     ]);
@@ -231,8 +319,8 @@ describe('combining components', () => {
         hasVideo: true,
         needsVideoWatch: true,
         watchedHits: 9,
-        applicableSections: 4,
-        tappedSections: 2,
+        applicableSectionNames: secs(4),
+        tappedSectionNames: secs(2),
         hasQuiz: true,
       }),
     ]);
@@ -249,8 +337,8 @@ describe('combining components', () => {
         hasVideo: true,
         needsVideoWatch: false,
         watchedHits: 0,
-        applicableSections: 2,
-        tappedSections: 2,
+        applicableSectionNames: secs(2),
+        tappedSectionNames: secs(2),
       }),
     ]);
     expect(lessons[0].percent).toBe(100);
@@ -264,11 +352,9 @@ describe('combining components', () => {
         hasVideo: true,
         needsVideoWatch: true,
         watchedHits: FULL,
-        applicableSections: 3,
-        tappedSections: 3,
+        applicableSectionNames: secs(3),
+        tappedSectionNames: secs(3),
         hasDebrief: true,
-        canDebrief: true,
-        debriefAnswered: true,
       }),
     ]);
     expect(lessons[0].percent).toBe(100);
@@ -295,8 +381,8 @@ describe('watched vs percent (D19)', () => {
       row({
         moduleId: 1,
         lessonId: 11,
-        applicableSections: 1,
-        tappedSections: 1,
+        applicableSectionNames: secs(1),
+        tappedSectionNames: secs(1),
       }),
     ]);
     expect(lessons.map((l) => l.percent)).toEqual([100, 100]);
@@ -312,8 +398,8 @@ describe('watched vs percent (D19)', () => {
         hasVideo: true,
         needsVideoWatch: true,
         watchedHits: FULL,
-        applicableSections: 2,
-        tappedSections: 0,
+        applicableSectionNames: secs(2),
+        tappedSectionNames: secs(0),
       }),
     ]);
     expect(lessons[0].percent).toBe(50);
@@ -332,14 +418,14 @@ describe('rollups', () => {
     ]);
   });
 
-  it('course% is the average of module percents (not lesson-weighted)', () => {
+  it('course% is a flat mean over lessons (lesson-weighted), module% unchanged', () => {
     const result = aggregateCourseProgress('c', [
       watchable(1, 10, FULL),
       watchable(1, 11, FULL),
       ...Array.from({ length: 20 }, (_, i) => watchable(2, 100 + i, 9)),
     ]);
     expect(result.modules.map((m) => m.percent)).toEqual([100, 50]);
-    expect(result.percent).toBe(75); // (100 + 50) / 2, not lesson-weighted 55
+    expect(result.percent).toBe(55); // (2*100 + 20*50) / 22, not module-mean 75
     expect(result.totalLessons).toBe(22);
     expect(result.watchedLessons).toBe(2);
   });
@@ -438,8 +524,8 @@ describe('aggregatePercentByCourse', () => {
         courseId: 1,
         moduleId: 10,
         lessonId: 100,
-        applicableSections: 2,
-        tappedSections: 1,
+        applicableSectionNames: secs(2),
+        tappedSectionNames: secs(1),
       }),
     ]);
     expect(percents.get(1)).toBe(50);
