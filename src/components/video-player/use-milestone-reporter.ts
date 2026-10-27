@@ -1,14 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { useEffect, useRef } from 'react';
-import { dataKeys } from '#/data-hooks/keys';
 import { useReportVideoProgress } from '#/data-hooks/use-report-video-progress';
 import {
   useVideoProgress,
   videoProgressSchema,
 } from '#/data-hooks/use-video-progress';
-import { queryKeys } from '#/hooks/data/keys';
 import type { LessonRef } from '#/lib/lesson-ref';
+import { invalidateAfterCoverageComplete } from './after-coverage-complete';
 import { videoPlayerStateAtomFamily } from './atoms';
 import {
   computeMilestoneTick,
@@ -100,14 +99,9 @@ export function useMilestoneReporter(
       reported: state.reported,
       report: (input) => reportRef.current.mutate({ courseSlug, ...input }),
       fetchProgress,
-    }).then(() => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.lessonMaterial({ courseSlug, lessonSlug }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: dataKeys.lessonProgress(lessonSlug),
-      });
-    });
+    }).then(() =>
+      invalidateAfterCoverageComplete(queryClient, { courseSlug, lessonSlug }),
+    );
   }, [
     currentTime,
     duration,

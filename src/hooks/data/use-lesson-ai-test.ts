@@ -15,6 +15,7 @@ import {
   totalScoreAtom,
 } from '#/atoms/lesson-ai-test';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import { invalidateLessonDoneReaders } from '#/data-hooks/invalidate-lesson-done';
 import { dataKeys } from '#/data-hooks/keys';
 import type { LessonRef } from '#/lib/lesson-ref';
 
@@ -124,16 +125,9 @@ export async function postSaveResults({
  */
 export function invalidateAfterSave(
   queryClient: QueryClient,
-  { courseSlug, lessonSlug }: LessonRef,
+  lesson: LessonRef,
 ) {
-  return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: dataKeys.debriefStatus(courseSlug, lessonSlug),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: dataKeys.courseProgressSummary(courseSlug),
-    }),
-  ]);
+  return invalidateLessonDoneReaders(queryClient, lesson);
 }
 
 // Read hooks — thin wrappers over atoms

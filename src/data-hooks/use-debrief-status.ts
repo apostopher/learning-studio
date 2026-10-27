@@ -59,9 +59,11 @@ export async function fetchDebriefStatus({
 
 /**
  * Which state this pilot's debrief is in, and (once passed) their attempts.
- * Backed by GET /api/lesson/debrief-status. A finished attempt invalidates it
- * (see `useSaveResults`), so a minute of staleness only covers the clock
- * running out on a waiting state.
+ * Backed by GET /api/lesson/debrief-status. A finished attempt invalidates it,
+ * and so does every step that can make the lesson done — a tab tap, a quiz
+ * submit, the video's coverage completing (see `invalidateLessonDoneReaders`)
+ * — so a minute of staleness only covers the clock running out on a waiting
+ * state.
  */
 export function useDebriefStatus({
   courseSlug,

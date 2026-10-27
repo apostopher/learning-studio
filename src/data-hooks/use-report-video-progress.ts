@@ -15,8 +15,12 @@ export type ReportVideoProgressInput = LessonRef & { progress: number };
  * design: sends via `navigator.sendBeacon` so it survives page unload /
  * navigation (the common case when a video ends or the user leaves), falling
  * back to a `keepalive` fetch when the beacon is unavailable or rejected.
- * No cache invalidation — progress is fired frequently during playback and the
- * server row is append-only; readers refresh on their own next fetch.
+ * No cache invalidation per milestone — progress is fired frequently during
+ * playback and the server row is append-only. The one moment that matters,
+ * coverage completing, is handled by `useMilestoneReporter` once
+ * `reconcileCoverage` has confirmed it server-side (see
+ * `invalidateAfterCoverageComplete`), so a beacon still in flight cannot race
+ * the refetch.
  *
  * `/api/user/report-video-progress` returns a `promotion` alongside the save,
  * so `parse` pulls it out here and the atom gets set on success. Note this
