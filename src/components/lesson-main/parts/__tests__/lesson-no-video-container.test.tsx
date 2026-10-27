@@ -25,9 +25,24 @@ const props = {
 };
 
 describe('LessonNoVideoContainer', () => {
-  it('offers the debrief shortcut on a normal video-less lesson', () => {
+  /**
+   * The card's Debrief button only switched to the Debrief tab — the same
+   * shortcut the post-video button was. The debrief now opens 24h after the
+   * lesson is done, so the shortcut would land on a schedule, not a debrief;
+   * the tab itself says when it opens.
+   */
+  it('offers no debrief button, even on a normal video-less debrief lesson', () => {
     render(<LessonNoVideoContainer {...props} readOnly={false} />);
-    expect(screen.getByRole('button', { name: /Debrief/ })).toBeDefined();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('names the debrief in the heading when the lesson has a Debrief tab', () => {
+    render(<LessonNoVideoContainer {...props} readOnly={false} />);
+    expect(
+      screen.getByRole('heading', {
+        name: 'Radio Calls is reading and debrief',
+      }),
+    ).toBeDefined();
   });
 
   it('reads the material for the course the lesson is being viewed in', () => {
@@ -40,14 +55,10 @@ describe('LessonNoVideoContainer', () => {
     });
   });
 
-  /**
-   * The shortcut only switches tabs — it does not start anything. On a
-   * read-only lesson the Debrief tab's Start is disabled, so offering the
-   * shortcut hands the pilot a button whose entire effect is to deposit them
-   * on a dead end.
-   */
-  it('offers no debrief shortcut on a read-only lesson', () => {
+  it('does not promise a debrief on a read-only lesson, which has no Debrief tab', () => {
     render(<LessonNoVideoContainer {...props} readOnly />);
-    expect(screen.queryByRole('button', { name: /Debrief/ })).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Radio Calls is reading' }),
+    ).toBeDefined();
   });
 });

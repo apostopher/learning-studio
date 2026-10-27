@@ -1,4 +1,4 @@
-export type PlayerOverlayKind = 'coverage' | 'debrief' | 'none';
+export type PlayerOverlayKind = 'coverage' | 'none';
 
 /**
  * How close to `duration` still counts as "sitting at the end".
@@ -27,21 +27,6 @@ export type ComputePlayerOverlayArgs = {
   playback: { paused: boolean; currentTime: number; duration: number };
   /** Already narrowed to the 'video' lock reason — see lesson-player-container.tsx. */
   materialLocked: boolean;
-  hasCurrentTest: boolean;
-  /**
-   * `lessons.has_debrief`. Previously ignored entirely, so the overlay
-   * appeared on every lesson regardless — a regression against the old
-   * platform, which gated the button on this flag. It is authoritative now:
-   * with it off, tab 2 is the authored quiz and there is no debrief to offer.
-   */
-  hasDebrief: boolean;
-  /**
-   * Whether the server can resolve a source to generate a debrief from: the
-   * material's body text, or this video's caption transcript on a lesson with
-   * no material row. Without one, generation 422s and the button would be a
-   * press that produces nothing.
-   */
-  canDebrief: boolean;
 };
 
 /**
@@ -66,26 +51,21 @@ function isRestingAtEnd({
  * function because `LessonPlayerContainer` cannot be rendered under Vitest —
  * react-compiler nulls the dispatcher for this repo's hook-calling
  * components, the same wall `lesson-main.test.tsx` documents for
- * `VideoPlayerContainer`. This is the only way the must-not-regress
- * requirement ("the debrief overlay must still appear on the normal path")
- * can have a test that could ever go red.
+ * `VideoPlayerContainer`. This is the only way the coverage notice's
+ * rules (on at the end of an incomplete watch, off the moment the student
+ * goes back to the video) can have a test that could ever go red.
  *
- * The return type is a single string, not two independent booleans, so
- * "both overlays selected" is structurally impossible rather than merely
- * untested.
+ * There used to be a second overlay: a Debrief button at the end of the
+ * video. It went when the debrief moved to opening 24h after the lesson is
+ * done (spaced review) — at the end of the video there is nothing to take
+ * yet, and the Debrief tab says when there will be.
  */
 export function computePlayerOverlay({
   reachedEnd,
   playback,
   materialLocked,
-  hasCurrentTest,
-  hasDebrief,
-  canDebrief,
 }: ComputePlayerOverlayArgs): PlayerOverlayKind {
   if (!reachedEnd) return 'none';
   if (!isRestingAtEnd(playback)) return 'none';
-  if (materialLocked) return 'coverage';
-  if (hasCurrentTest) return 'none';
-  if (!hasDebrief || !canDebrief) return 'none';
-  return 'debrief';
+  return materialLocked ? 'coverage' : 'none';
 }

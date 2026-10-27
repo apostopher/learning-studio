@@ -5,7 +5,7 @@ import { saveJson } from './save-json';
 
 /**
  * Ask the server to start generating this lesson's debrief now, so it is ready
- * when the video unlocks it.
+ * the moment it opens (24h after the lesson is done).
  *
  * Fire-and-forget like useRecordLastViewed: generation takes a while, the
  * response carries nothing, and it should outlive the learner navigating on.
@@ -27,12 +27,10 @@ export function usePrepareDebrief() {
 export type ShouldPrepareDebriefArgs = {
   /** True once the video is actually playing, not merely mounted. */
   playing: boolean;
-  /** `lessons.has_debrief` — off means tab 2 is the authored quiz. */
+  /** `lessons.has_debrief` — off means there is no debrief to prepare. */
   hasDebrief: boolean;
   /** Whether a debrief can be generated at all for this lesson. */
   canDebrief: boolean;
-  /** The material is still waiting on this video — the window prep is for. */
-  materialLocked: boolean;
   readOnly: boolean;
   /** This lesson was already asked for during this component's life. */
   alreadyRequested: boolean;
@@ -43,26 +41,19 @@ export type ShouldPrepareDebriefArgs = {
  * usePrepareDebriefOnPlay, extracted so it can be tested without rendering a
  * hook (see nextLastViewedWrite for the same split).
  *
- * `materialLocked` mirrors the server's own rule: once the video is watched
- * Start is available, and preparing then would only spend a model run on a
- * rewatch. The server enforces this too; checking here saves the request.
+ * No gate on the material being locked any more: the debrief opens 24h after
+ * the lesson is done, not when the video unlocks the material, and the server
+ * prepares in every state short of passed. A repeat is a server-side no-op
+ * (a stored test built from the current source is kept).
  */
 export function shouldPrepareDebrief({
   playing,
   hasDebrief,
   canDebrief,
-  materialLocked,
   readOnly,
   alreadyRequested,
 }: ShouldPrepareDebriefArgs): boolean {
-  return (
-    playing &&
-    hasDebrief &&
-    canDebrief &&
-    materialLocked &&
-    !readOnly &&
-    !alreadyRequested
-  );
+  return playing && hasDebrief && canDebrief && !readOnly && !alreadyRequested;
 }
 
 /**
@@ -74,7 +65,6 @@ export function usePrepareDebriefOnPlay({
   playing,
   hasDebrief,
   canDebrief,
-  materialLocked,
   readOnly,
 }: LessonRef & Omit<ShouldPrepareDebriefArgs, 'alreadyRequested'>) {
   const { mutate } = usePrepareDebrief();
@@ -87,7 +77,6 @@ export function usePrepareDebriefOnPlay({
       playing,
       hasDebrief,
       canDebrief,
-      materialLocked,
       readOnly,
       alreadyRequested: requestedRef.current === requestKey,
     });
@@ -100,7 +89,6 @@ export function usePrepareDebriefOnPlay({
     playing,
     hasDebrief,
     canDebrief,
-    materialLocked,
     readOnly,
     mutate,
   ]);

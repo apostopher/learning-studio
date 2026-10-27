@@ -50,20 +50,28 @@ describe('shouldPrepareDebrief', () => {
     playing: true,
     hasDebrief: true,
     canDebrief: true,
-    materialLocked: true,
     readOnly: false,
     alreadyRequested: false,
   };
 
-  it('fires when a debrief lesson starts playing behind its video lock', () => {
+  it('fires when a debrief lesson starts playing', () => {
     expect(shouldPrepareDebrief(watching)).toBe(true);
+  });
+
+  it('still fires on a rewatch once the video is watched', () => {
+    // The debrief no longer opens when the video unlocks the material: it
+    // opens 24h after the lesson is done, and the server prepares in every
+    // state short of passed. Holding off once the material unlocked meant a
+    // pilot who watched before this shipped never got a head start at all.
+    // The old gate rides along untyped so this goes red if it comes back.
+    const unlocked = { materialLocked: false };
+    expect(shouldPrepareDebrief({ ...watching, ...unlocked })).toBe(true);
   });
 
   it.each<[string, Partial<ShouldPrepareDebriefArgs>]>([
     ['before the video plays', { playing: false }],
-    ['when tab 2 is the authored quiz', { hasDebrief: false }],
+    ['when the lesson has no debrief', { hasDebrief: false }],
     ['when there is nothing to generate from', { canDebrief: false }],
-    ['once the video is already watched', { materialLocked: false }],
     ['on a read-only archive view', { readOnly: true }],
     ['a second time for the same lesson', { alreadyRequested: true }],
   ])('holds off %s', (_why, override) => {

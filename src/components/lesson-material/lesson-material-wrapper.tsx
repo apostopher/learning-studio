@@ -1,6 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
-import { lessonMaterialRef } from '#/atoms/lesson-ai-test';
+import { useCallback } from 'react';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import { useSectionTapRecorder } from '#/data-hooks/use-record-section-tap';
 import { queryKeys } from '#/hooks/data/keys';
@@ -41,9 +40,6 @@ export const LessonMaterialWrapper = ({
   // the video has a caption track, which is what decides if a material-less
   // lesson can still offer a transcript-sourced debrief.
   const video = useLessonVideo(lessonRef);
-  const tabsRef = useRef<HTMLDivElement>(null);
-
-  lessonMaterialRef.current = tabsRef.current;
 
   // Lesson slugs are globally unique (`lessons.slug` carries a UNIQUE
   // constraint), so this needs no module to scope it — which is just as well,
@@ -89,14 +85,15 @@ export const LessonMaterialWrapper = ({
     // Nothing authored for this lesson — so no tab strip, and no error either:
     // the lesson is open and its video is above. The debrief still belongs to
     // the learner though, so it renders on its own below the video, generated
-    // from the video's transcript. `tabsRef` is reused as its scroll anchor so
-    // the post-video overlay's jump lands here (see LessonPlayerContainer).
+    // from the video's transcript. Not on a read-only lesson, which has no
+    // debrief clock (call 12) — the same rule as the Debrief tab.
     case 'empty':
-      return canDebriefFromTranscript({
-        hasDebrief: lesson?.hasDebrief ?? false,
-        hasCaptions: playbackHasCaptions(video.data),
-      }) ? (
-        <LessonDebriefSection sectionRef={tabsRef}>
+      return !state.readOnly &&
+        canDebriefFromTranscript({
+          hasDebrief: lesson?.hasDebrief ?? false,
+          hasCaptions: playbackHasCaptions(video.data),
+        }) ? (
+        <LessonDebriefSection>
           <DebriefQuizContainer
             courseSlug={courseSlug}
             lessonSlug={lessonSlug}
@@ -113,10 +110,8 @@ export const LessonMaterialWrapper = ({
           <LessonMaterialView
             material={state.material}
             courseSlug={courseSlug}
-            tabsRef={tabsRef}
-            // Defaults to the authored quiz while the course payload is still
-            // in flight. Failing the other way would flash a Debrief tab on
-            // lessons that have none, and briefly hide a quiz that does exist.
+            // No Debrief tab while the course payload is still in flight:
+            // failing the other way would flash one on lessons that have none.
             hasDebrief={lesson?.hasDebrief ?? false}
             onTabSelected={recordSectionTap}
             readOnly={state.readOnly}

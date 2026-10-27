@@ -4,73 +4,67 @@ import {
   resolveActiveTab,
 } from '../compute-material-tabs';
 
-const labels = (args: { hasDebrief: boolean; canDebrief: boolean }) =>
-  computeMaterialTabs({ extraTab: 'jobOfTheDay', ...args }).map((t) => t.label);
+const values = (args: { hasQuiz: boolean; hasDebriefTab: boolean }) =>
+  computeMaterialTabs({ extraTab: 'jobOfTheDay', ...args }).map((t) => t.value);
 
 describe('computeMaterialTabs', () => {
-  it('offers the authored Quiz when the lesson has no debrief', () => {
-    expect(labels({ hasDebrief: false, canDebrief: false })).toEqual([
-      'Key Points',
-      'Quiz',
-      'Pro Tips',
-      'Links',
-      'Assignments',
-      'Job of the Day',
+  it('offers Quiz AND Debrief, in that order, when the lesson has both', () => {
+    // The spec's tab order (design "Tabs", call 7). Quiz and Debrief used to
+    // be mutually exclusive (ledger D21, superseded).
+    const tabs = computeMaterialTabs({
+      hasQuiz: true,
+      hasDebriefTab: true,
+      extraTab: 'jobOfTheDay',
+    });
+    expect(tabs).toEqual([
+      { value: 'keyPoints', label: 'Key Points' },
+      { value: 'quiz', label: 'Quiz' },
+      { value: 'debrief', label: 'Debrief' },
+      { value: 'proTips', label: 'Pro Tips' },
+      { value: 'links', label: 'Links' },
+      { value: 'assignments', label: 'Assignments' },
+      { value: 'jobOfTheDay', label: 'Job of the Day' },
     ]);
   });
 
-  it('replaces the Quiz tab with Debrief — never both', () => {
-    const tabs = computeMaterialTabs({
-      hasDebrief: true,
-      canDebrief: true,
-      extraTab: 'jobOfTheDay',
-    });
-    expect(tabs.map((t) => t.label)).toContain('Debrief');
-    expect(tabs.map((t) => t.label)).not.toContain('Quiz');
-    // One activity slot, so the count matches the no-debrief case exactly.
-    expect(tabs).toHaveLength(6);
+  it('has no Quiz tab when the lesson has no authored questions', () => {
+    expect(values({ hasQuiz: false, hasDebriefTab: true })).toEqual([
+      'keyPoints',
+      'debrief',
+      'proTips',
+      'links',
+      'assignments',
+      'jobOfTheDay',
+    ]);
   });
 
-  it('keeps the value as "quiz" so the post-video overlay still lands', () => {
-    // The overlay switches tabs by value (`setActiveTab('quiz')`). A distinct
-    // value for the debrief would make that jump silently miss on exactly the
-    // lessons the overlay appears on.
-    const tabs = computeMaterialTabs({
-      hasDebrief: true,
-      canDebrief: true,
-      extraTab: 'jobOfTheDay',
-    });
-    expect(tabs.find((t) => t.label === 'Debrief')?.value).toBe('quiz');
+  it('has no Debrief tab when the lesson cannot offer one', () => {
+    expect(values({ hasQuiz: true, hasDebriefTab: false })).toEqual([
+      'keyPoints',
+      'quiz',
+      'proTips',
+      'links',
+      'assignments',
+      'jobOfTheDay',
+    ]);
   });
 
-  it('drops the activity tab entirely when a debrief is configured but impossible', () => {
-    // has_debrief suppresses the quiz unconditionally, and with no key points
-    // no debrief can be generated — so there is no second tab at all. This is
-    // the accepted dead state; it must render as absent, not as an empty tab.
-    const tabs = computeMaterialTabs({
-      hasDebrief: true,
-      canDebrief: false,
-      extraTab: 'jobOfTheDay',
-    });
-    expect(tabs.map((t) => t.value)).not.toContain('quiz');
-    expect(tabs).toHaveLength(5);
-  });
-
-  it('suppresses the quiz even when no debrief can replace it', () => {
-    // The flag is authoritative: an admin who turns Debrief on hides the
-    // authored quiz whether or not the debrief works. The admin note under the
-    // toggle is what makes that visible rather than silent.
-    expect(labels({ hasDebrief: true, canDebrief: false })).not.toContain(
-      'Quiz',
-    );
+  it('has neither when there is no quiz and no debrief', () => {
+    expect(values({ hasQuiz: false, hasDebriefTab: false })).toEqual([
+      'keyPoints',
+      'proTips',
+      'links',
+      'assignments',
+      'jobOfTheDay',
+    ]);
   });
 });
 
 describe('computeMaterialTabs — closing tab', () => {
   it('closes a 3D Airmanship lesson with Job of the Day, and no TEST THIS!', () => {
     const tabs = computeMaterialTabs({
-      hasDebrief: false,
-      canDebrief: false,
+      hasQuiz: true,
+      hasDebriefTab: false,
       extraTab: 'jobOfTheDay',
     });
     expect(tabs.at(-1)).toEqual({
@@ -82,8 +76,8 @@ describe('computeMaterialTabs — closing tab', () => {
 
   it('closes every other lesson with TEST THIS!, and no Job of the Day', () => {
     const tabs = computeMaterialTabs({
-      hasDebrief: false,
-      canDebrief: false,
+      hasQuiz: true,
+      hasDebriefTab: false,
       extraTab: 'testThis',
     });
     expect(tabs.at(-1)).toEqual({ value: 'testThis', label: 'TEST THIS!' });
@@ -96,8 +90,8 @@ describe('computeMaterialTabs — closing tab', () => {
     // `activeTabAtom` is global, so a learner who left a 3D lesson on Job of
     // the Day lands on a UAS lesson with that tab still remembered.
     const tabs = computeMaterialTabs({
-      hasDebrief: false,
-      canDebrief: false,
+      hasQuiz: true,
+      hasDebriefTab: false,
       extraTab: 'testThis',
     });
     expect(resolveActiveTab(tabs, 'jobOfTheDay')).toBe('keyPoints');
@@ -106,26 +100,27 @@ describe('computeMaterialTabs — closing tab', () => {
 
 describe('resolveActiveTab', () => {
   const tabs = computeMaterialTabs({
-    hasDebrief: true,
-    canDebrief: true,
+    hasQuiz: true,
+    hasDebriefTab: true,
     extraTab: 'jobOfTheDay',
   });
 
   it('keeps a selection that exists', () => {
     expect(resolveActiveTab(tabs, 'proTips')).toBe('proTips');
+    expect(resolveActiveTab(tabs, 'debrief')).toBe('debrief');
   });
 
   it('falls back to Key Points when the selected tab is gone', () => {
     // activeTabAtom is global and is not reset between lessons, so a learner
-    // who was on the Debrief tab can land on a lesson that has no tab 2.
-    // Without this the panel renders a strip with nothing selected and no
-    // body — a blank screen with no explanation.
-    const noActivity = computeMaterialTabs({
-      hasDebrief: true,
-      canDebrief: false,
+    // who was on the Debrief tab can land on a lesson that has none. Without
+    // this the panel renders a strip with nothing selected and no body — a
+    // blank screen with no explanation.
+    const noDebrief = computeMaterialTabs({
+      hasQuiz: true,
+      hasDebriefTab: false,
       extraTab: 'jobOfTheDay',
     });
-    expect(resolveActiveTab(noActivity, 'quiz')).toBe('keyPoints');
+    expect(resolveActiveTab(noDebrief, 'debrief')).toBe('keyPoints');
   });
 
   it('falls back for a value that was never a tab', () => {

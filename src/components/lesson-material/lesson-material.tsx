@@ -1,5 +1,4 @@
 import { Tabs } from '@base-ui/react/tabs';
-import type { RefObject } from 'react';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LessonMaterial } from '#/db/lesson';
 import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
@@ -16,8 +15,7 @@ type LessonMaterialProps = {
   material: NonNullable<LessonMaterial>;
   /** The course the lesson is being read in — every write the quiz/debrief containers make is per course. */
   courseSlug: string;
-  tabsRef?: RefObject<HTMLDivElement | null>;
-  /** Whether tab 2 is the Debrief rather than the authored quiz. */
+  /** `lessons.has_debrief` — the admin's switch for the Debrief tab. */
   hasDebrief: boolean;
   /** Called with each newly selected tab, so the container can record it. */
   onTabSelected?: (tab: string) => void;
@@ -28,27 +26,25 @@ type LessonMaterialProps = {
 export const LessonMaterialView = ({
   material,
   courseSlug,
-  tabsRef,
   hasDebrief,
   onTabSelected,
   readOnly,
 }: LessonMaterialProps) => {
   const [activeTab, setActiveTab] = useActiveTab();
 
-  // Body text is enough: when no key points were authored the server derives
-  // them from that text (see resolveDebriefSource), so a lesson with prose and
-  // no bullet list no longer loses its Debrief tab.
-  const canDebrief = Boolean(material.text);
   const tabs = computeMaterialTabs({
-    hasDebrief,
-    canDebrief,
+    hasQuiz: (material.quiz?.length ?? 0) > 0,
+    // Body text is enough: when no key points were authored the server
+    // derives them from that text (see resolveDebriefSource). Read-only
+    // lessons get no debrief clock (call 12), so no tab either.
+    hasDebriefTab: hasDebrief && !readOnly && Boolean(material.text),
     extraTab: material.extraTab,
   });
+  const has = (value: string) => tabs.some((tab) => tab.value === value);
   const selected = resolveActiveTab(tabs, activeTab);
 
   return (
     <Tabs.Root
-      ref={tabsRef}
       value={selected}
       onValueChange={(val) => {
         setActiveTab(val as string);
@@ -78,29 +74,24 @@ export const LessonMaterialView = ({
         <KeyPoints points={material.keyPoints} />
       </Tabs.Panel>
 
-      {/*
-        Which container owns this panel is decided by `hasDebrief`, not by
-        whether a test happens to be in memory. Keying off `currentTest` meant
-        the panel fell back to the authored quiz the moment the learner
-        refreshed — the debrief was only ever reachable through the post-video
-        overlay, and unrecoverable once dismissed.
-      */}
-      {tabs.some((tab) => tab.value === 'quiz') ? (
+      {has('quiz') ? (
         <Tabs.Panel value="quiz" className="outline-hidden">
-          {hasDebrief ? (
-            <DebriefQuizContainer
-              courseSlug={courseSlug}
-              lessonSlug={material.lessonSlug}
-              readOnly={readOnly}
-            />
-          ) : (
-            <LessonQuizContainer
-              courseSlug={courseSlug}
-              lessonSlug={material.lessonSlug}
-              quiz={material.quiz}
-              readOnly={readOnly}
-            />
-          )}
+          <LessonQuizContainer
+            courseSlug={courseSlug}
+            lessonSlug={material.lessonSlug}
+            quiz={material.quiz}
+            readOnly={readOnly}
+          />
+        </Tabs.Panel>
+      ) : null}
+
+      {has('debrief') ? (
+        <Tabs.Panel value="debrief" className="outline-hidden">
+          <DebriefQuizContainer
+            courseSlug={courseSlug}
+            lessonSlug={material.lessonSlug}
+            readOnly={readOnly}
+          />
         </Tabs.Panel>
       ) : null}
 
