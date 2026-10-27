@@ -1,5 +1,6 @@
 import { BookOpen, Lock, UserRoundX } from 'lucide-react';
 import type { ResumeTarget } from '#/lib/course-resume';
+import { lessonLockSentence } from '#/lib/lock-copy';
 
 type LessonEmptyProps = {
   courseSlug: string;
@@ -69,22 +70,20 @@ export const LessonEmpty = ({ courseSlug, state }: LessonEmptyProps) => (
         <h2 className="text-lg font-medium text-primary">
           Nothing is open yet
         </h2>
-        {state.lock.kind === 'lesson-locked' ? (
-          <p className="text-sm text-secondary">
-            Finish{' '}
-            <a
-              className="text-primary underline underline-offset-2"
-              href={`/course/${courseSlug}/modules/${state.lock.moduleSlug}/lessons/${state.lock.lessonSlug}`}
-            >
-              {state.lock.lessonName}
-            </a>{' '}
-            first to unlock this course.
-          </p>
-        ) : state.lock.kind === 'module-locked' ? (
-          <p className="text-sm text-secondary">
-            Finish the {state.lock.moduleName} module first to unlock this
-            course.
-          </p>
+        {state.lock.kind !== 'open' ? (
+          <>
+            <p className="text-sm text-secondary">
+              {lessonLockSentence(state.lock)}
+            </p>
+            {state.lock.kind === 'lesson-locked' ? (
+              <a
+                className="text-sm text-primary underline underline-offset-2"
+                href={`/course/${courseSlug}/modules/${state.lock.moduleSlug}/lessons/${state.lock.lessonSlug}`}
+              >
+                Go to {state.lock.lessonName}
+              </a>
+            ) : null}
+          </>
         ) : (
           // Unreachable by construction: resolveResumeTarget only reports
           // all-locked when the first lesson's lock is NOT open. Kept as real

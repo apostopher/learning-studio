@@ -182,9 +182,10 @@ const OPEN_MATERIAL: MaterialLock = { kind: 'open' };
  * prerequisite lesson to be done (see `isPrerequisiteMet`).
  *
  * Three escapes, all deliberate: an unavailable (WIP) lesson is outside gate
- * logic entirely; a lesson with watching switched off cannot block; and a
- * lesson with no video has nothing to watch — needsVideoWatch defaults to
- * true, so blocking there would strand every video-less lesson forever.
+ * logic entirely; a lesson with watching switched off does not lock its own
+ * material; and a lesson with no video has nothing to watch. These escapes
+ * only concern the lesson's own material — as a prerequisite, such a lesson
+ * still blocks until it is done.
  */
 export function isLessonSatisfied(
   lesson: GateLesson,

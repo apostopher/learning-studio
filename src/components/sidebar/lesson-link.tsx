@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import type { LessonLock } from '#/lib/lesson-gating';
+import { lessonLockSentence } from '#/lib/lock-copy';
 import { CircularProgress } from '../ui/circular-progress';
 import { LessonLockIcon } from './lesson-lock-icon';
 
@@ -24,11 +25,8 @@ type LessonLinkProps = {
  * the reason is announced exactly once.
  */
 function lockReason(lock: LessonLock): string | null {
-  if (lock.kind === 'lesson-locked') return `Finish ${lock.lessonName} first`;
-  if (lock.kind === 'module-locked') {
-    return `Finish the ${lock.moduleName} module first`;
-  }
-  return null;
+  if (lock.kind === 'open') return null;
+  return lessonLockSentence(lock);
 }
 
 export const LessonLink = ({

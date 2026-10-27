@@ -1,5 +1,6 @@
 import { Lock } from 'lucide-react';
 import type { LockedMaterialResponse } from '#/lib/lesson-gating';
+import { lessonLockSentence } from '#/lib/lock-copy';
 
 type MaterialLockedProps = {
   lock: LockedMaterialResponse;
@@ -22,22 +23,24 @@ export const MaterialLocked = ({ lock, courseSlug }: MaterialLockedProps) => {
         Watch the video to unlock the key points, quiz, and the rest of this
         lesson&rsquo;s material.
       </p>
-    ) : lock.reason === 'lesson' ? (
-      <p className="text-sm text-secondary">
-        Finish{' '}
-        <a
-          className="text-primary underline underline-offset-2"
-          href={`/course/${courseSlug}/modules/${lock.blockedBy.moduleSlug}/lessons/${lock.blockedBy.lessonSlug}`}
-        >
-          {lock.blockedBy.lessonName}
-        </a>{' '}
-        first to unlock this lesson&rsquo;s material.
-      </p>
     ) : (
-      <p className="text-sm text-secondary">
-        Finish the {lock.blockedBy.moduleName} module first to unlock this
-        lesson&rsquo;s material.
-      </p>
+      <>
+        <p className="text-sm text-secondary">
+          {lessonLockSentence(
+            lock.reason === 'lesson'
+              ? { kind: 'lesson-locked', ...lock.blockedBy }
+              : { kind: 'module-locked', ...lock.blockedBy },
+          )}
+        </p>
+        {lock.reason === 'lesson' ? (
+          <a
+            className="text-sm text-primary underline underline-offset-2"
+            href={`/course/${courseSlug}/modules/${lock.blockedBy.moduleSlug}/lessons/${lock.blockedBy.lessonSlug}`}
+          >
+            Go to {lock.blockedBy.lessonName}
+          </a>
+        ) : null}
+      </>
     );
 
   return (
