@@ -20,8 +20,9 @@ import {
   evaluateLessonLock,
   evaluateMaterialLock,
   type GateCourse,
+  type GateProgress,
 } from '#/lib/lesson-gating';
-import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import { gateProgress, toGateCourse } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
   isLessonVisibleAtLevel,
@@ -36,7 +37,7 @@ type GatedRow = { lessonSlug: string };
  * lesson_material, so without this a student locked out of a lesson can simply
  * ask the assistant for its key points.
  *
- * `watchedLessonSlugsSet` is required, not nullable: the previous "null means
+ * `progress` is required, not nullable: the previous "null means
  * no user context, keep everything" escape had no production call site and
  * existed only as a fail-open branch a future caller could stumble into.
  * Viewing-as-author is the one and only bypass, and it is explicit — the
@@ -46,21 +47,14 @@ type GatedRow = { lessonSlug: string };
 export function filterGatedLessons<T extends GatedRow>(
   rows: T[],
   course: GateCourse,
-  watchedLessonSlugsSet: ReadonlySet<string>,
+  progress: GateProgress,
   viewingAsAuthor: boolean,
 ): T[] {
   if (viewingAsAuthor) return rows;
   return rows.filter((r) => {
-    const lessonLock = evaluateLessonLock(
-      course,
-      r.lessonSlug,
-      watchedLessonSlugsSet,
-    );
+    const lessonLock = evaluateLessonLock(course, r.lessonSlug, progress);
     if (lessonLock.kind !== 'open') return false;
-    return (
-      evaluateMaterialLock(course, r.lessonSlug, watchedLessonSlugsSet).kind ===
-      'open'
-    );
+    return evaluateMaterialLock(course, r.lessonSlug, progress).kind === 'open';
   });
 }
 
@@ -215,7 +209,9 @@ export async function getGatedCourseForAgent(
   const gateCourse = toGateCourse(
     viewingAsAuthor ? details : filterCourseToLevel(details, level),
   );
-  const watched = watchedLessonSlugs(details, progress);
+  // UNFILTERED payload, as in `evaluateLessonGate`: work done at an earlier
+  // tier still satisfies a visible lesson's prerequisite.
+  const learnerProgress = gateProgress(details, progress);
 
   // Built from the UNFILTERED payload, and a slug the payload does not contain
   // is simply absent from it — so an unknown lesson is dropped rather than
@@ -251,7 +247,7 @@ export async function getGatedCourseForAgent(
     filterGatedLessons(
       distinctLessonRows,
       gateCourse,
-      watched,
+      learnerProgress,
       viewingAsAuthor,
     ).map((r) => r.lessonSlug),
   );

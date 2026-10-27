@@ -110,6 +110,36 @@ describe('resumeTargetForUser — course staff', () => {
     expect(m.getCurrentLevel).toHaveBeenCalledWith('u1', 7);
   });
 
+  it('hands the resolver done lessons and outstanding items, keyed by slug', async () => {
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        {
+          lessonId: 10,
+          watched: true,
+          done: false,
+          outstanding: [{ kind: 'quiz' }],
+        },
+      ],
+    });
+
+    await call();
+
+    const [args] = m.resolveResumeTargetForLevel.mock.calls[0] as [
+      {
+        progress: {
+          watched: Set<string>;
+          done: Set<string>;
+          outstanding: Map<string, unknown>;
+        };
+      },
+    ];
+    expect([...args.progress.watched]).toEqual(['basic-1']);
+    expect([...args.progress.done]).toEqual([]);
+    expect(args.progress.outstanding.get('basic-1')).toEqual([
+      { kind: 'quiz' },
+    ]);
+  });
+
   it('does not query staff for an admin — they bypass on role alone', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
 

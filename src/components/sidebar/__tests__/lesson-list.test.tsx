@@ -123,6 +123,7 @@ describe('LessonList', () => {
             lessonSlug: 'a',
             moduleSlug: 'fundamentals',
             lessonName: 'Lesson A',
+            outstanding: [],
           },
         }}
         activeLessonSlug={null}

@@ -88,6 +88,7 @@ describe('LessonMain', () => {
               lessonSlug: 'a',
               moduleSlug: 'm-1',
               lessonName: 'Lesson One',
+              outstanding: [],
             },
           },
         }}

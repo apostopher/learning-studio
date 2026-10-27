@@ -117,34 +117,32 @@ describe('moduleGateWarning', () => {
     expect(warning).toContain('no lessons yet');
   });
 
-  it('reports a module whose lessons all skip the video watch', () => {
-    const warning = moduleGateWarning(
-      mod('a', [], [lesson({ needsVideoWatch: false })]),
-    );
-    expect(warning).toContain('can never block');
+  it('is silent for a module whose lessons skip the video watch', () => {
+    // A prerequisite is met when its lessons are DONE, which a lesson with no
+    // watch requirement still has to be — so it blocks.
+    expect(
+      moduleGateWarning(mod('a', [], [lesson({ needsVideoWatch: false })])),
+    ).toBeNull();
   });
 
-  it('reports a module whose lessons have no video', () => {
-    // A lesson with no video assigned at all is the common case — gating
-    // (`isLessonSatisfied`) returns true for every such lesson, so the
-    // prerequisite silently does nothing.
-    const warning = moduleGateWarning(
-      mod('a', [], [lesson({ hasVideo: false })]),
-    );
-    expect(warning).toContain('can never block');
+  it('is silent for a module whose lessons have no video', () => {
+    expect(
+      moduleGateWarning(mod('a', [], [lesson({ hasVideo: false })])),
+    ).toBeNull();
   });
 
-  it('reports a module whose only blocking lesson is unavailable', () => {
-    // Gating filters unavailable lessons out before checking satisfaction.
+  it('reports a module whose lessons are all unavailable', () => {
+    // An unavailable lesson can never be done, so gating ignores it.
     const warning = moduleGateWarning(
       mod('a', [], [lesson({ isAvailable: false })]),
     );
     expect(warning).toContain('can never block');
+    expect(warning).toContain('available');
   });
 
   it('is silent when one of several lessons can block', () => {
     const warning = moduleGateWarning(
-      mod('a', [], [lesson({ needsVideoWatch: false }), lesson()]),
+      mod('a', [], [lesson({ isAvailable: false }), lesson()]),
     );
     expect(warning).toBeNull();
   });

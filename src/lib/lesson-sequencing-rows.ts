@@ -11,7 +11,7 @@ import {
  *
  * `hasVideo: l.isConfigured` mirrors `toDepModule` in the module dependencies
  * container: the board calls a lesson configured once it has a video, which is
- * the same fact `isLessonSatisfied` keys on.
+ * the same fact `isLessonSatisfied` keys on (the lesson's own material lock).
  */
 export function toGateCourseFromBoard(
   modules: readonly BoardModule[],
@@ -94,7 +94,9 @@ function buildNote(
       : 'Nothing before this lesson can gate it, so it opens straight away.';
   }
   if (skipped.length > 0) {
-    return `Skips ${names(skipped)} — no video to watch there, so ${skipped.length === 1 ? 'it' : 'they'} cannot gate anything.`;
+    // Only an unavailable lesson is skipped: it can never be done, so
+    // chaining to it would strand every lesson after it.
+    return `Skips ${names(skipped)} — not available to learners yet, so ${skipped.length === 1 ? 'it' : 'they'} cannot gate anything.`;
   }
   return null;
 }

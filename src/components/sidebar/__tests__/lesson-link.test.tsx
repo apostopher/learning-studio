@@ -145,6 +145,7 @@ describe('LessonLink', () => {
           lessonSlug: 'intro',
           moduleSlug: 'fundamentals',
           lessonName: 'Intro',
+          outstanding: [],
         }}
       />,
     );
@@ -168,6 +169,7 @@ describe('LessonLink', () => {
           lessonSlug: 'intro',
           moduleSlug: 'fundamentals',
           lessonName: 'Intro',
+          outstanding: [],
         }}
       />,
     );
@@ -203,6 +205,8 @@ describe('LessonLink', () => {
           kind: 'module-locked',
           moduleSlug: 'intro',
           moduleName: 'Intro',
+          lessonsLeft: 1,
+          next: { lessonName: 'First lesson', outstanding: [] },
         }}
       />,
     );

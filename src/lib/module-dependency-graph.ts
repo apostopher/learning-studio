@@ -12,11 +12,10 @@ export type DepLesson = {
   isAvailable: boolean;
   needsVideoWatch: boolean;
   /**
-   * Whether the lesson has a video assigned. Gating now keys on
-   * `(videoProvider, videoRef)` (`isLessonSatisfied` short-circuits to
-   * satisfied when this is false), matching `isConfigured` on the board —
-   * a lesson configured through the admin video flow can block exactly when
-   * the board shows it as configured.
+   * Whether the lesson has a video assigned, keyed on
+   * `(videoProvider, videoRef)` to match `isConfigured` on the board. It
+   * decides the lesson's own material lock (`isLessonSatisfied`), not
+   * whether the lesson can block a prerequisite — any available lesson can.
    */
   hasVideo: boolean;
 };
@@ -85,9 +84,11 @@ export function createsCycle(
   return next.some((candidate) => forbidden.has(candidate));
 }
 
-/** Mirrors `isLessonSatisfied`: the conditions under which a lesson can block. */
-const canBlock = (lesson: DepLesson): boolean =>
-  lesson.isAvailable && lesson.needsVideoWatch && lesson.hasVideo;
+/**
+ * Mirrors `canBlock` in lesson-gating.ts: a prerequisite module is met when its
+ * available lessons are DONE, so every available lesson blocks — video or not.
+ */
+const canBlock = (lesson: DepLesson): boolean => lesson.isAvailable;
 
 /**
  * Why depending on `prereq` currently gates nothing, or null when it does.
@@ -106,7 +107,7 @@ export function moduleGateWarning(prereq: DepModule): string | null {
     return `${prereq.name} has no lessons yet, so this prerequisite won’t lock anything until it does.`;
   }
   if (!prereq.lessons.some(canBlock)) {
-    return `No lesson in ${prereq.name} has a video that must be watched, so this prerequisite can never block.`;
+    return `No lesson in ${prereq.name} is available to learners yet, so this prerequisite can never block.`;
   }
   return null;
 }

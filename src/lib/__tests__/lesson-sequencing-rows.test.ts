@@ -68,18 +68,30 @@ describe('buildSequencingRows', () => {
     const rows = rowsFor(
       board([
         lesson(1, 'a'),
-        lesson(2, 'reading', { isConfigured: false }),
+        lesson(2, 'draft', { isAvailable: false }),
         lesson(3, 'c'),
       ]),
     );
     expect(rows[2].prerequisites.map((p) => p.slug)).toEqual(['a']);
-    expect(rows[2].note).toMatch(/skips reading/i);
-    expect(rows[2].note).toMatch(/no video/i);
+    expect(rows[2].note).toMatch(/skips draft/i);
+    expect(rows[2].note).toMatch(/not available/i);
+  });
+
+  it('chains to a lesson with no video, which gates until it is done', () => {
+    const rows = rowsFor(
+      board([
+        lesson(1, 'a'),
+        lesson(2, 'reading', { isConfigured: false }),
+        lesson(3, 'c'),
+      ]),
+    );
+    expect(rows[2].prerequisites.map((p) => p.slug)).toEqual(['reading']);
+    expect(rows[2].note).toBeNull();
   });
 
   it('says so when nothing before a lesson can gate it', () => {
     const rows = rowsFor(
-      board([lesson(1, 'reading', { isConfigured: false }), lesson(2, 'b')]),
+      board([lesson(1, 'draft', { isAvailable: false }), lesson(2, 'b')]),
     );
     expect(rows[1].prerequisites).toEqual([]);
     expect(rows[1].note).toMatch(/opens straight away/i);

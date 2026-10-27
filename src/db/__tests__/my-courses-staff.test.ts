@@ -136,6 +136,26 @@ beforeEach(() => {
   m.resolveCardResume.mockReturnValue({ kind: 'none', reason: 'no-lessons' });
 });
 
+describe('getMyCourses — done lessons', () => {
+  it('hands each card the lessons with a completion row in that course', async () => {
+    // `doneAt` is the row's `lesson_completions` subquery. Done, not watched,
+    // is what unlocks the next lesson, so the card must receive it.
+    dbState.rows = [
+      { ...row(7, 'own-course', 'A'), lessonId: 70, doneAt: new Date() },
+      { ...row(7, 'own-course', 'A'), lessonId: 71, doneAt: null },
+      { ...row(8, 'other-course', 'B'), lessonId: 80, doneAt: null },
+    ];
+
+    await getMyCourses('u1');
+
+    const doneOf = (id: number) =>
+      (argsForCourse(id) as unknown as { doneLessonIds: Set<number> })
+        .doneLessonIds;
+    expect([...doneOf(7)]).toEqual([70]);
+    expect([...doneOf(8)]).toEqual([]);
+  });
+});
+
 describe('getMyCourses — course staff', () => {
   it('bypasses locks and the tier on the card for a course they staff', async () => {
     m.getStaffCourseIds.mockResolvedValue(new Set([7]));

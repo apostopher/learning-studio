@@ -11,7 +11,7 @@ import {
   type LessonLock,
   type MaterialLock,
 } from '#/lib/lesson-gating';
-import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import { gateProgress, toGateCourse } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
   isLessonArchivable,
@@ -202,9 +202,9 @@ export async function evaluateLessonGate({
   // named as the prerequisite blocking one they can.
   const gateCourse = toGateCourse(filterCourseToLevel(details, level));
   // Deliberately the UNFILTERED payload: a hidden lesson the pilot completed
-  // at an earlier tier still counts as watched, so a visible lesson that
+  // at an earlier tier still counts as done, so a visible lesson that
   // explicitly depends on it does not lock on work already done.
-  const watched = watchedLessonSlugs(details, progress);
+  const learnerProgress = gateProgress(details, progress);
 
   return {
     ...course,
@@ -212,7 +212,7 @@ export async function evaluateLessonGate({
     subscribed,
     level,
     outOfTier: null,
-    lessonLock: evaluateLessonLock(gateCourse, lessonSlug, watched),
-    materialLock: evaluateMaterialLock(gateCourse, lessonSlug, watched),
+    lessonLock: evaluateLessonLock(gateCourse, lessonSlug, learnerProgress),
+    materialLock: evaluateMaterialLock(gateCourse, lessonSlug, learnerProgress),
   };
 }

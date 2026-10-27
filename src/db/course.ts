@@ -499,6 +499,18 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
               lessonId: r.lessonId as number,
               watchedHits: Number(r.watchedHits),
             })),
+          // From the same row's `lesson_completions` subquery (`doneAt`, see
+          // progress-components.ts) — no extra round trip for the grid.
+          doneLessonIds: new Set(
+            rows
+              .filter(
+                (r) =>
+                  r.courseId === course.id &&
+                  r.lessonId != null &&
+                  r.doneAt != null,
+              )
+              .map((r) => r.lessonId as number),
+          ),
           pointerLessonId: pointers.get(course.id) ?? null,
           level: levelFor(course.id),
           bypassLocks: viewsAsAuthor(course.id),

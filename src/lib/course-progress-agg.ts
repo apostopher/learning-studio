@@ -195,10 +195,9 @@ function lessonPercent(row: LessonProgressRow): number {
  * Whether this lesson's VIDEO is fully watched — deliberately NOT "is the
  * lesson complete" (D19).
  *
- * This feeds `watchedLessonSlugs` and so the prerequisite gate, which must not
- * change (D1). Tying it to `percent === 100` would silently turn sections, the
- * quiz and the debrief into unlock requirements — none of which any of
- * `LessonLock`'s three kinds can explain to a student. So `watched` and
+ * This feeds the lesson's OWN material lock (`GateProgress.watched`) and
+ * library unlocks (`watchedLessonSlugs`). Prerequisites read the sticky `done`
+ * instead, with `outstanding` saying what is left. So `watched` and
  * `percent === 100` diverge, and `watchedLessons` counts videos watched rather
  * than lessons finished.
  */

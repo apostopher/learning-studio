@@ -96,13 +96,19 @@ describe('getLessonMaterialHandler', () => {
         lessonSlug: 'a',
         moduleSlug: 'm1',
         lessonName: 'A',
+        outstanding: [],
       },
     });
     const body = await (await getLessonMaterialHandler(req())).json();
     expect(body).toEqual({
       locked: true,
       reason: 'lesson',
-      blockedBy: { lessonSlug: 'a', moduleSlug: 'm1', lessonName: 'A' },
+      blockedBy: {
+        lessonSlug: 'a',
+        moduleSlug: 'm1',
+        lessonName: 'A',
+        outstanding: [],
+      },
     });
   });
 

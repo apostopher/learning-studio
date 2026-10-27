@@ -24,6 +24,7 @@ describe('MaterialLocked', () => {
             lessonSlug: 'a',
             moduleSlug: 'm1',
             lessonName: 'Close Encounters',
+            outstanding: [],
           },
         }}
         courseSlug="c"
@@ -44,7 +45,12 @@ describe('MaterialLocked', () => {
         lock={{
           locked: true,
           reason: 'module',
-          blockedBy: { moduleSlug: 'm1', moduleName: 'Wakeup Call' },
+          blockedBy: {
+            moduleSlug: 'm1',
+            moduleName: 'Wakeup Call',
+            lessonsLeft: 1,
+            next: { lessonName: 'First lesson', outstanding: [] },
+          },
         }}
         courseSlug="c"
       />,

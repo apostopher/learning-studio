@@ -39,6 +39,7 @@ describe('resolveCardResume', () => {
     const result = resolveCardResume({
       details,
       lessonHits: [{ lessonId: 1, watchedHits: 1 }],
+      doneLessonIds: new Set(),
       pointerLessonId: 2,
       level: 'basic',
       bypassLocks: false,
@@ -52,10 +53,11 @@ describe('resolveCardResume', () => {
     });
   });
 
-  it('treats a lesson as complete only when every milestone is hit', () => {
+  it('unlocks the next lesson once the previous one is done', () => {
     const result = resolveCardResume({
       details,
-      lessonHits: [{ lessonId: 1, watchedHits: watchedMilestones.length }],
+      lessonHits: [],
+      doneLessonIds: new Set([1]),
       pointerLessonId: 2,
       level: 'basic',
       bypassLocks: false,
@@ -67,10 +69,27 @@ describe('resolveCardResume', () => {
     });
   });
 
+  it('keeps the next lesson locked when the previous video is watched but not done', () => {
+    const result = resolveCardResume({
+      details,
+      lessonHits: [{ lessonId: 1, watchedHits: watchedMilestones.length }],
+      doneLessonIds: new Set(),
+      pointerLessonId: 2,
+      level: 'basic',
+      bypassLocks: false,
+    });
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'navigation',
+      lessonSlug: 'pilotage',
+    });
+  });
+
   it('resolves the pointer id to its slug', () => {
     const result = resolveCardResume({
       details,
       lessonHits: [],
+      doneLessonIds: new Set(),
       pointerLessonId: 1,
       level: 'basic',
       bypassLocks: false,
@@ -86,6 +105,7 @@ describe('resolveCardResume', () => {
     const result = resolveCardResume({
       details,
       lessonHits: [],
+      doneLessonIds: new Set(),
       pointerLessonId: 9999,
       level: 'basic',
       bypassLocks: false,
@@ -117,6 +137,7 @@ describe('resolveCardResume', () => {
     const result = resolveCardResume({
       details: mixed,
       lessonHits: [],
+      doneLessonIds: new Set(),
       pointerLessonId: null,
       level: 'intermediate',
       bypassLocks: false,
@@ -133,6 +154,7 @@ describe('resolveCardResume', () => {
     const result = resolveCardResume({
       details,
       lessonHits: [],
+      doneLessonIds: new Set(),
       pointerLessonId: 1,
       level: null,
       bypassLocks: false,
@@ -144,6 +166,7 @@ describe('resolveCardResume', () => {
     const result = resolveCardResume({
       details,
       lessonHits: [],
+      doneLessonIds: new Set(),
       pointerLessonId: 2,
       level: null,
       bypassLocks: true,

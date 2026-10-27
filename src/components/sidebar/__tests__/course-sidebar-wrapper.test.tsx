@@ -271,8 +271,8 @@ describe('CourseSidebarWrapper', () => {
     progressMock.mockReturnValue({
       data: {
         lessons: [
-          { lessonId: 2, watched: false },
-          { lessonId: 3, watched: false },
+          { lessonId: 2, watched: false, done: false, outstanding: [] },
+          { lessonId: 3, watched: false, done: false, outstanding: [] },
         ],
         modules: [],
       },
@@ -316,8 +316,8 @@ describe('CourseSidebarWrapper', () => {
     progressMock.mockReturnValue({
       data: {
         lessons: [
-          { lessonId: 2, watched: false },
-          { lessonId: 3, watched: false },
+          { lessonId: 2, watched: false, done: false, outstanding: [] },
+          { lessonId: 3, watched: false, done: false, outstanding: [] },
         ],
         modules: [],
       },
@@ -341,12 +341,12 @@ describe('CourseSidebarWrapper', () => {
     expect(rollLink?.textContent).not.toContain('Finish');
   });
 
-  it('opens the row once its prerequisite is watched', async () => {
+  it('opens the row once its prerequisite is done', async () => {
     progressMock.mockReturnValue({
       data: {
         lessons: [
-          { lessonId: 2, watched: true },
-          { lessonId: 3, watched: false },
+          { lessonId: 2, watched: true, done: true, outstanding: [] },
+          { lessonId: 3, watched: false, done: false, outstanding: [] },
         ],
         modules: [],
       },
@@ -423,8 +423,8 @@ describe('CourseSidebarWrapper', () => {
     progressMock.mockReturnValue({
       data: {
         lessons: [
-          { lessonId: 2, watched: false },
-          { lessonId: 3, watched: false },
+          { lessonId: 2, watched: false, done: false, outstanding: [] },
+          { lessonId: 3, watched: false, done: false, outstanding: [] },
         ],
         modules: [],
       },
@@ -590,7 +590,16 @@ describe('CourseSidebarWrapper', () => {
     // to a 'basic' pilot — and progress marks it 100% complete.
     progressMock.mockReturnValue({
       data: {
-        lessons: [{ lessonId: 11, moduleId: 2, percent: 100, watched: true }],
+        lessons: [
+          {
+            lessonId: 11,
+            moduleId: 2,
+            percent: 100,
+            watched: true,
+            done: true,
+            outstanding: [],
+          },
+        ],
         modules: [],
       },
     });
@@ -624,7 +633,16 @@ describe('CourseSidebarWrapper', () => {
   it('does not archive an out-of-tier lesson that was never completed', async () => {
     progressMock.mockReturnValue({
       data: {
-        lessons: [{ lessonId: 11, moduleId: 2, percent: 40, watched: false }],
+        lessons: [
+          {
+            lessonId: 11,
+            moduleId: 2,
+            percent: 40,
+            watched: false,
+            done: false,
+            outstanding: [],
+          },
+        ],
         modules: [],
       },
     });
@@ -657,8 +675,22 @@ describe('CourseSidebarWrapper', () => {
       data: {
         percent: 75,
         lessons: [
-          { lessonId: 1, moduleId: 1, percent: 50, watched: false },
-          { lessonId: 11, moduleId: 2, percent: 100, watched: true },
+          {
+            lessonId: 1,
+            moduleId: 1,
+            percent: 50,
+            watched: false,
+            done: false,
+            outstanding: [],
+          },
+          {
+            lessonId: 11,
+            moduleId: 2,
+            percent: 100,
+            watched: true,
+            done: true,
+            outstanding: [],
+          },
         ],
         modules: [
           { moduleId: 1, percent: 50 },
