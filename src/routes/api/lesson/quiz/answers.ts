@@ -23,9 +23,8 @@ const SubmitQuizInputSchema = z.object({
  * `userId` with the authenticated one, which worked but left a request shape
  * that looks like it accepts a user id.
  *
- * The prerequisite LOCKS are deliberately not checked here, matching the
- * other write routes: honouring them would newly 403 flows that succeed
- * today, which is a separate decision. The LEVEL check is enforced.
+ * The LEVEL check and the prerequisite and video LOCKS are all enforced: a
+ * saved attempt moves progress, and progress completes lessons.
  */
 export async function submitLessonQuizHandler(
   request: Request,
@@ -61,9 +60,6 @@ export async function submitLessonQuizHandler(
   // distinguishable 404, matching report-video-progress and the playback
   // route: telling the two apart hands an enumeration oracle to any signed-in
   // caller.
-  //
-  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
-  // that remains a separate decision with its own blast radius.
   if (!gate?.subscribed) {
     return new Response('Forbidden', { status: 403 });
   }
@@ -75,14 +71,19 @@ export async function submitLessonQuizHandler(
   // reads to decide `readOnly` — so an unrefused caller could POST their way
   // from a `403 out-of-tier` to a 200 serving the full material.
   //
-  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing on
-  // those would newly 403 flows that succeed today, which is a separate
-  // decision with its own blast radius. Refusing on `outOfTier` alone matches
-  // what the pilot can see: under strict levels an untagged lesson, a lesson at
-  // another level, and every lesson for a pilot with no level is either refused
-  // outright or held only as a read-only archive, so a write to it has no
-  // legitimate origin.
+  // Under strict levels an untagged lesson, a lesson at another level, and
+  // every lesson for a pilot with no level is either refused outright or held
+  // only as a read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // Refuse a locked lesson too, prerequisite or video. The quiz only renders
+  // inside material the gate released, so a write here has no legitimate
+  // origin — and what it writes can take a video-less lesson to 100%, record
+  // it done, and unlock the next lesson without the pilot having earned it.
+  // Same 403 as every other refusal, so the route is not an oracle.
+  if (gate.lessonLock.kind !== 'open' || gate.materialLock.kind !== 'open') {
     return new Response('Forbidden', { status: 403 });
   }
 

@@ -22,18 +22,14 @@ const sectionTapSchema = z.object({
 /**
  * Record that the logged-in learner opened a material tab.
  *
- * Any user SUBSCRIBED to the course may record their own tap: it is their own
- * navigation within content they are already being served, the user comes from
- * the session rather than the body, and the section is enumerated. The
- * prerequisite LOCKS are deliberately not re-checked, matching
- * `/api/user/last-viewed` — the tab only renders inside material the gate
- * already released, and the worst forgery achieves is a learner inflating
- * their own progress ring. That can complete a lesson of theirs, which the
- * debrief clock and the next lesson's unlock then read, but only within a
- * course they are already subscribed to.
+ * Any user SUBSCRIBED to the course may record their own tap on a lesson the
+ * gate has released: the user comes from the session rather than the body, and
+ * the section is enumerated. The prerequisite and video LOCKS are enforced,
+ * unlike `/api/user/last-viewed`, because a tap moves progress: it can
+ * complete a lesson, which the debrief clock and the next lesson's unlock read.
  *
- * The LEVEL check is different in kind and IS enforced, because here the
- * progress ring is not cosmetic: tapped sections feed `lessonPercent`, a
+ * The LEVEL check is enforced for the same reason — the progress ring is not
+ * cosmetic: tapped sections feed `lessonPercent`, a
  * lesson reaching 100% is recorded as the sticky `done`, and the level gate
  * reads `done` to decide whether an out-of-tier lesson opens read-only.
  * Without this, a caller could tap their way to 100% on a material-only
@@ -75,9 +71,6 @@ export async function recordLessonSectionHandler(
   // distinguishable 404, matching report-video-progress and the playback
   // route: telling the two apart hands an enumeration oracle to any signed-in
   // caller.
-  //
-  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
-  // that remains a separate decision with its own blast radius.
   if (!gate?.subscribed) {
     return new Response('Forbidden', { status: 403 });
   }
@@ -89,14 +82,19 @@ export async function recordLessonSectionHandler(
   // `readOnly` — so a caller could POST their way from a `403 out-of-tier` to
   // a 200 serving the full material.
   //
-  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing on
-  // those would newly 403 flows that succeed today, which is a separate
-  // decision with its own blast radius (see this handler's doc comment).
-  // Refusing on `outOfTier` alone matches what the pilot can see: under strict
-  // levels an untagged lesson, a lesson at another level, and every lesson for
-  // a pilot with no level is either refused outright or held only as a
-  // read-only archive, so a write to it has no legitimate origin.
+  // Under strict levels an untagged lesson, a lesson at another level, and
+  // every lesson for a pilot with no level is either refused outright or held
+  // only as a read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // Refuse a locked lesson too, prerequisite or video. The tab only renders
+  // inside material the gate released, so a write here has no legitimate
+  // origin — and what it writes can take a video-less lesson to 100%, record
+  // it done, and unlock the next lesson without the pilot having earned it.
+  // Same 403 as every other refusal, so the route is not an oracle.
+  if (gate.lessonLock.kind !== 'open' || gate.materialLock.kind !== 'open') {
     return new Response('Forbidden', { status: 403 });
   }
 

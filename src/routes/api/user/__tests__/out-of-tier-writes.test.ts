@@ -66,9 +66,9 @@ beforeEach(() => {
  * Every case asserts the WRITER was not called, not merely the status: a 403
  * that already performed the write would have handed over the escalation.
  *
- * Both refuse in both read-only states — an archive view writes nothing — and
- * both deliberately still ignore `lessonLock`/`materialLock`, which is
- * asserted below so the narrow scope cannot drift wider unnoticed.
+ * Both refuse in both read-only states — an archive view writes nothing.
+ * lesson-section also refuses a locked lesson; last-viewed deliberately does
+ * not, since the resume pointer moves no progress.
  */
 describe('out-of-tier writes are refused', () => {
   describe('lesson-section', () => {
@@ -100,20 +100,29 @@ describe('out-of-tier writes are refused', () => {
       expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
     });
 
-    it('still records a tap on a locked but in-tier lesson', async () => {
-      // The scope is deliberately narrow: honouring lessonLock here would 403
-      // flows that succeed today, which is a separate decision. If someone
-      // widens it, this goes red and they have to say so.
-      m.evaluateLessonGate.mockResolvedValue({
-        ...inTier,
-        lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
-        materialLock: { kind: 'video-locked' },
-      });
+    // Tabs only render inside material the gate released, so a tap on a
+    // locked lesson has no legitimate origin. Unrefused, a hand-made POST could
+    // take a video-less lesson to 100%, record it done, and unlock the next.
+    it.each([
+      [
+        'prerequisite-locked',
+        {
+          lessonLock: {
+            kind: 'lesson-locked',
+            lessonSlug: 'a',
+            moduleSlug: 'm',
+          },
+        },
+      ],
+      ['video-locked', { materialLock: { kind: 'video-locked' } }],
+    ])('403s a tap on a %s lesson without recording it', async (_, locks) => {
+      m.evaluateLessonGate.mockResolvedValue({ ...inTier, ...locks });
       const res = await recordLessonSectionHandler(
         post('/api/user/lesson-section', body),
       );
-      expect(res.status).toBe(201);
-      expect(m.recordLessonSectionTap).toHaveBeenCalledOnce();
+      expect(res.status).toBe(403);
+      expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
+      expect(m.settleProgress).not.toHaveBeenCalled();
     });
   });
 

@@ -70,8 +70,7 @@ beforeEach(() => {
  * that already performed the write would have handed over the escalation.
  *
  * Both refuse in both read-only states — an archive view writes nothing —
- * and deliberately still ignore `lessonLock`/`materialLock`, pinned below so
- * the narrow scope cannot drift wider unnoticed.
+ * and a locked lesson is refused too.
  */
 describe('out-of-tier quiz submissions are refused', () => {
   const body = { lessonSlug: 'l1', courseSlug: 'c1', answers };
@@ -98,18 +97,24 @@ describe('out-of-tier quiz submissions are refused', () => {
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
   });
 
-  it('still records an attempt on a locked but in-tier lesson', async () => {
-    // The scope is deliberately narrow: honouring lessonLock here would 403
-    // flows that succeed today, which is a separate decision. If someone
-    // widens it, this goes red and they have to say so.
-    m.evaluateLessonGate.mockResolvedValue({
-      ...inTier,
-      lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
-      materialLock: { kind: 'video-locked' },
-    });
+  // The quiz only renders inside material the gate released, so an attempt
+  // on a locked lesson has no legitimate origin. Unrefused, a hand-made POST
+  // could take a video-less lesson to 100%, record it done, and unlock the
+  // next.
+  it.each([
+    [
+      'prerequisite-locked',
+      {
+        lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
+      },
+    ],
+    ['video-locked', { materialLock: { kind: 'video-locked' } }],
+  ])('403s an attempt on a %s lesson without recording it', async (_, locks) => {
+    m.evaluateLessonGate.mockResolvedValue({ ...inTier, ...locks });
     const res = await submitLessonQuizHandler(post(body));
-    expect(res.status).toBe(200);
-    expect(m.saveLessonQuizAnswers).toHaveBeenCalledOnce();
+    expect(res.status).toBe(403);
+    expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 });
 
