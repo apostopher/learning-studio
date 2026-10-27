@@ -3,8 +3,9 @@ import { format } from 'date-fns';
 
 /**
  * A debrief time as the pilot reads it, in their own timezone: "Tue 28 Oct,
- * 3:40 PM", with " 2027" appended when the year is not the current one (in
- * that zone — on 31 Dec in UTC it may already be next year for the pilot).
+ * 3:40 PM", or "Fri 1 Jan 2027, 6:00 PM" when the year is not the current
+ * one (in that zone — on 31 Dec in UTC it may already be next year for the
+ * pilot).
  *
  * There is no stored user timezone, so it defaults to the browser's. That is
  * why every caller renders this inside `ClientGate`: on the server it would
@@ -17,8 +18,10 @@ export function formatDebriefTime(
 ): string {
   const at = new TZDate(iso, timeZone);
   const today = new TZDate(now, timeZone);
-  const base = format(at, 'EEE d MMM, h:mm a');
-  return at.getFullYear() === today.getFullYear()
-    ? base
-    : `${base} ${format(at, 'yyyy')}`;
+  return format(
+    at,
+    at.getFullYear() === today.getFullYear()
+      ? 'EEE d MMM, h:mm a'
+      : 'EEE d MMM yyyy, h:mm a',
+  );
 }

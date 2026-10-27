@@ -91,6 +91,7 @@ export const LessonMaterialView = ({
             courseSlug={courseSlug}
             lessonSlug={material.lessonSlug}
             readOnly={readOnly}
+            headingLevel={2}
           />
         </Tabs.Panel>
       ) : null}

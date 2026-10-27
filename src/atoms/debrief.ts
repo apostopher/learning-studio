@@ -1,17 +1,19 @@
 import { atom } from 'jotai';
-import type { AITest } from '#/ai/schemas';
+import type { DebriefSaveRecord } from '#/components/lesson-material/parts/debrief-save';
 
 /**
- * The lesson slug of the debrief attempt submitted in this page session, set
- * once save-results succeeds. It is what lets the Debrief panel show that
- * attempt's score report straight after a below-par submission (call 2),
- * while any later visit during the wait shows only the reopen time.
+ * The lesson slug of the debrief attempt submitted while the pilot has been
+ * on that lesson, set once save-results succeeds. It is what lets the Debrief
+ * panel show that attempt's score report straight after a below-par
+ * submission (call 2). Cleared when the pilot leaves the lesson
+ * (LessonMaterialWrapper), so any later visit during the wait shows only the
+ * reopen time.
  */
 export const justSubmittedDebriefAtom = atom<string | null>(null);
 
 /**
- * The debrief session already sent to save-results. An atom rather than a
- * ref: the Debrief panel unmounts with its tab, and a remounted container
- * holding a complete session would otherwise post the same attempt again.
+ * Where the save of a completed debrief session stands. An atom rather than
+ * a ref: the Debrief panel unmounts with its tab, and a remounted container
+ * must neither post the same attempt again nor forget that its save failed.
  */
-export const savedDebriefTestAtom = atom<AITest | null>(null);
+export const debriefSaveAtom = atom<DebriefSaveRecord | null>(null);

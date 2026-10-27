@@ -194,17 +194,18 @@ describe('debriefSessionProgress', () => {
 describe('isStaleDebriefSession', () => {
   const base = {
     sessionProgress: 'complete' as const,
-    justSubmittedLessonSlug: LESSON,
-    lessonSlug: LESSON,
+    sessionSaved: true,
     status: {
       isFetching: false,
       data: loaded({ kind: 'open', retake: true }).data,
     },
   };
 
-  it('is stale once the debrief has reopened after this session was submitted', () => {
+  it('is stale once the debrief has reopened after this session was saved', () => {
     // The page stayed open through the 24h wait: the old score report would
     // otherwise sit where the fresh debrief's Start belongs, with no way on.
+    // Keyed on the save, not on the just-submitted marker — that is cleared
+    // on leaving the lesson, and the saved session outlives it.
     expect(isStaleDebriefSession(base)).toBe(true);
   });
 
@@ -219,16 +220,12 @@ describe('isStaleDebriefSession', () => {
     ).toBe(false);
   });
 
-  it('is not stale for a session not yet complete, or never submitted here', () => {
+  it('is not stale for a session not yet complete, or not (yet) saved', () => {
     expect(
       isStaleDebriefSession({ ...base, sessionProgress: 'in-progress' }),
     ).toBe(false);
-    expect(
-      isStaleDebriefSession({ ...base, justSubmittedLessonSlug: null }),
-    ).toBe(false);
-    expect(
-      isStaleDebriefSession({ ...base, justSubmittedLessonSlug: 'other' }),
-    ).toBe(false);
+    // Saving, or failed: the report is the only place the retry lives.
+    expect(isStaleDebriefSession({ ...base, sessionSaved: false })).toBe(false);
   });
 
   it('is not stale while the debrief is still closed or passed', () => {

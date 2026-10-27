@@ -2,9 +2,15 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({ useLessonMaterial: vi.fn() }));
+const h = vi.hoisted(() => ({
+  useLessonMaterial: vi.fn(),
+  usePrepareDebriefOnVisit: vi.fn(),
+}));
 vi.mock('#/hooks/data/use-lesson-material', () => ({
   useLessonMaterial: h.useLessonMaterial,
+}));
+vi.mock('#/data-hooks/use-prepare-debrief', () => ({
+  usePrepareDebriefOnVisit: h.usePrepareDebriefOnVisit,
 }));
 
 import { LessonNoVideoContainer } from '../lesson-no-video-container';
@@ -60,5 +66,37 @@ describe('LessonNoVideoContainer', () => {
     expect(
       screen.getByRole('heading', { name: 'Radio Calls is reading' }),
     ).toBeDefined();
+  });
+
+  /**
+   * This card renders only for lessons with no video, which never mount the
+   * player's prepare-on-play — so this is where their first-visit prepare
+   * lives (spec: "For lessons with no video, generation runs on first
+   * visit"). Lessons with a video never reach this container.
+   */
+  it('asks to prepare the debrief for this lesson and course on first visit', () => {
+    render(<LessonNoVideoContainer {...props} readOnly={false} />);
+    expect(h.usePrepareDebriefOnVisit).toHaveBeenCalledWith({
+      courseSlug: 'ppl',
+      lessonSlug: 'radio-calls',
+      hasDebrief: true,
+      canDebrief: true,
+      readOnly: false,
+    });
+  });
+
+  it('passes the facts that hold the prepare off on a read-only lesson', () => {
+    render(<LessonNoVideoContainer {...props} readOnly />);
+    expect(h.usePrepareDebriefOnVisit).toHaveBeenCalledWith(
+      expect.objectContaining({ readOnly: true }),
+    );
+  });
+
+  it('cannot prepare before the material says there is something to generate from', () => {
+    h.useLessonMaterial.mockReturnValue({ data: undefined });
+    render(<LessonNoVideoContainer {...props} readOnly={false} />);
+    expect(h.usePrepareDebriefOnVisit).toHaveBeenCalledWith(
+      expect.objectContaining({ canDebrief: false }),
+    );
   });
 });

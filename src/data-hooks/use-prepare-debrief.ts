@@ -93,3 +93,51 @@ export function usePrepareDebriefOnPlay({
     mutate,
   ]);
 }
+
+export type ShouldPrepareDebriefOnVisitArgs = Omit<
+  ShouldPrepareDebriefArgs,
+  'playing'
+>;
+
+/**
+ * Whether to fire the prepare request for a lesson with NO video, on first
+ * visit — the spec's rule for those lessons, which never mount the player and
+ * so never reach prepare-on-play. The same decision as `shouldPrepareDebrief`
+ * with the visit standing in for the first play.
+ */
+export function shouldPrepareDebriefOnVisit(
+  args: ShouldPrepareDebriefOnVisitArgs,
+): boolean {
+  return shouldPrepareDebrief({ ...args, playing: true });
+}
+
+/**
+ * Fire the prepare request once per lesson, on first visit to a lesson with no
+ * video. Only `LessonNoVideoContainer` calls this: lessons with a video
+ * prepare on play instead. Same request as prepare-on-play, so the server's
+ * 204 refusals (passed, out-of-tier, no debrief) apply unchanged.
+ */
+export function usePrepareDebriefOnVisit({
+  courseSlug,
+  lessonSlug,
+  hasDebrief,
+  canDebrief,
+  readOnly,
+}: LessonRef & Omit<ShouldPrepareDebriefOnVisitArgs, 'alreadyRequested'>) {
+  const { mutate } = usePrepareDebrief();
+  // A ref, not an atom: it gates a side effect, nothing renders from it.
+  const requestedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const requestKey = `${courseSlug}/${lessonSlug}`;
+    const fire = shouldPrepareDebriefOnVisit({
+      hasDebrief,
+      canDebrief,
+      readOnly,
+      alreadyRequested: requestedRef.current === requestKey,
+    });
+    if (!fire) return;
+    requestedRef.current = requestKey;
+    mutate({ courseSlug, lessonSlug });
+  }, [courseSlug, lessonSlug, hasDebrief, canDebrief, readOnly, mutate]);
+}

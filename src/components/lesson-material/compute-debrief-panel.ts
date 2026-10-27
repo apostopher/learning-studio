@@ -100,28 +100,32 @@ export function debriefSessionProgress(
 }
 
 /**
- * Whether the completed session in memory is a submitted attempt the debrief
- * has since reopened past — the page stayed open through the 24h wait. Left
- * in place, its old score report would sit where the fresh debrief's Start
- * belongs, with no way on (Retake is gone, call 8).
+ * Whether the completed session in memory is a saved attempt the debrief has
+ * since reopened past — the page stayed open through the 24h wait, or the
+ * pilot came back to the lesson after it. Left in place, its old score report
+ * would sit where the fresh debrief's Start belongs, with no way on (Retake
+ * is gone, call 8).
+ *
+ * Keyed on the session's save (`debriefSaveState === 'saved'`), not on the
+ * just-submitted marker, which is cleared when the pilot leaves the lesson.
+ * A session still saving, or whose save failed, is never stale: its report is
+ * where the retry lives.
  *
  * `isFetching` matters: between a save and its refetch the cached status
  * still says `open`, and that is the old status, not a reopening.
  */
 export function isStaleDebriefSession({
   sessionProgress,
-  justSubmittedLessonSlug,
-  lessonSlug,
+  sessionSaved,
   status,
 }: {
   sessionProgress: DebriefSessionProgress;
-  justSubmittedLessonSlug: string | null;
-  lessonSlug: string;
+  sessionSaved: boolean;
   status: { isFetching: boolean; data: DebriefStatusResponse | undefined };
 }): boolean {
   return (
     sessionProgress === 'complete' &&
-    justSubmittedLessonSlug === lessonSlug &&
+    sessionSaved &&
     !status.isFetching &&
     status.data?.state.kind === 'open'
   );

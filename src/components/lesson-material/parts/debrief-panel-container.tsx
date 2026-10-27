@@ -1,7 +1,7 @@
 import { useAtom, useSetAtom } from 'jotai';
 import { Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
-import { justSubmittedDebriefAtom } from '#/atoms/debrief';
+import { useEffect, useId } from 'react';
+import { debriefSaveAtom, justSubmittedDebriefAtom } from '#/atoms/debrief';
 import { ClientGate } from '#/components/client-gate';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
@@ -21,6 +21,8 @@ import {
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
 import { DebriefQuizContainer } from './debrief-quiz-container';
+import { debriefSaveState } from './debrief-save';
+import { debriefSessionForLesson } from './debrief-session-owner';
 import { DebriefWait } from './debrief-wait';
 import { freeTextAnswerAtom, selectedOptionAtom } from './question-card';
 import { ScoreReport } from './score-report';
@@ -34,6 +36,11 @@ type DebriefPanelContainerProps = {
    * ever does.
    */
   readOnly: boolean;
+  /**
+   * The level the panel's own headings take: 2 under the tab strip, 3 inside
+   * the material-less lesson's "Debrief" section, which is itself an h2.
+   */
+  headingLevel: 2 | 3;
 };
 
 /**
@@ -56,9 +63,12 @@ export const DebriefPanelContainer = ({
   courseSlug,
   lessonSlug,
   readOnly,
+  headingLevel,
 }: DebriefPanelContainerProps) => {
+  const idBase = useId();
   const status = useDebriefStatus({ courseSlug, lessonSlug, enabled: true });
   const [justSubmitted, setJustSubmitted] = useAtom(justSubmittedDebriefAtom);
+  const [saveRecord, setSaveRecord] = useAtom(debriefSaveAtom);
   const session = useCurrentTest();
   const evaluations = useEvaluations();
   const totalScore = useTotalScore();
@@ -73,8 +83,11 @@ export const DebriefPanelContainer = ({
   );
   const stale = isStaleDebriefSession({
     sessionProgress,
-    justSubmittedLessonSlug: justSubmitted,
-    lessonSlug,
+    sessionSaved:
+      debriefSaveState(
+        saveRecord,
+        debriefSessionForLesson(session, lessonSlug),
+      ) === 'saved',
     status,
   });
   const panel = settleDebriefPanel(
@@ -94,12 +107,14 @@ export const DebriefPanelContainer = ({
     resetTest();
     setSelectedOption('');
     setFreeTextAnswer('');
+    setSaveRecord(null);
     setJustSubmitted(null);
   }, [
     stale,
     resetTest,
     setSelectedOption,
     setFreeTextAnswer,
+    setSaveRecord,
     setJustSubmitted,
   ]);
 
@@ -136,10 +151,19 @@ export const DebriefPanelContainer = ({
         />
       );
     case 'not-done':
-      return <DebriefWait kind="not-done" outstanding={panel.outstanding} />;
+      return (
+        <DebriefWait
+          idBase={idBase}
+          headingLevel={headingLevel}
+          kind="not-done"
+          outstanding={panel.outstanding}
+        />
+      );
     case 'waiting':
       return (
         <DebriefWait
+          idBase={idBase}
+          headingLevel={headingLevel}
           kind="waiting"
           time={<DebriefTime iso={panel.availableAt} />}
         />
@@ -147,6 +171,8 @@ export const DebriefPanelContainer = ({
     case 'retake-waiting':
       return (
         <DebriefWait
+          idBase={idBase}
+          headingLevel={headingLevel}
           kind="retake-waiting"
           time={<DebriefTime iso={panel.availableAt} />}
         />

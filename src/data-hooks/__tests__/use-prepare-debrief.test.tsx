@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type ShouldPrepareDebriefArgs,
   shouldPrepareDebrief,
+  shouldPrepareDebriefOnVisit,
   usePrepareDebrief,
 } from '#/data-hooks/use-prepare-debrief';
 
@@ -76,5 +77,36 @@ describe('shouldPrepareDebrief', () => {
     ['a second time for the same lesson', { alreadyRequested: true }],
   ])('holds off %s', (_why, override) => {
     expect(shouldPrepareDebrief({ ...watching, ...override })).toBe(false);
+  });
+});
+
+/**
+ * Video-less lessons never mount the player, so prepare-on-play never runs
+ * for them. Spec ("When generation runs"): they prepare on first visit.
+ */
+describe('shouldPrepareDebriefOnVisit', () => {
+  const visiting = {
+    hasDebrief: true,
+    canDebrief: true,
+    readOnly: false,
+    alreadyRequested: false,
+  };
+
+  it('fires on the first visit to a video-less debrief lesson', () => {
+    expect(shouldPrepareDebriefOnVisit(visiting)).toBe(true);
+  });
+
+  it.each<[string, Partial<typeof visiting>]>([
+    ['when the lesson has no debrief', { hasDebrief: false }],
+    [
+      'until the material has loaded with something to generate from',
+      { canDebrief: false },
+    ],
+    ['on a read-only archive view', { readOnly: true }],
+    ['a second time for the same lesson', { alreadyRequested: true }],
+  ])('holds off %s', (_why, override) => {
+    expect(shouldPrepareDebriefOnVisit({ ...visiting, ...override })).toBe(
+      false,
+    );
   });
 });

@@ -88,7 +88,7 @@ export const ScoreReport = ({
                 : question.question;
 
             return (
-              <Collapsible.Root key={question.id} className="group">
+              <Collapsible.Root key={question.id} className="group/question">
                 <Collapsible.Trigger className="flex w-full items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-start text-sm hover:bg-gray-2">
                   <span className="shrink-0 font-medium text-secondary">
                     Q{i + 1}
@@ -104,7 +104,7 @@ export const ScoreReport = ({
                     {truncatedQuestion}
                   </span>
                   <ChevronDown
-                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]:rotate-180"
+                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]/question:rotate-180"
                     aria-hidden="true"
                   />
                 </Collapsible.Trigger>

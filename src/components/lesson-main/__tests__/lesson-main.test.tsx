@@ -17,6 +17,13 @@ vi.mock('#/components/lesson-material', () => ({
   ),
 }));
 
+// The no-video card prepares a video-less lesson's debrief on first visit
+// (TanStack mutation). Its wiring is asserted in
+// lesson-no-video-container.test.tsx; here it is just a seam with no client.
+vi.mock('#/data-hooks/use-prepare-debrief', () => ({
+  usePrepareDebriefOnVisit: () => {},
+}));
+
 import { LessonMain } from '../lesson-main';
 
 describe('LessonMain', () => {

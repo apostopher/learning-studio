@@ -27,7 +27,7 @@ describe('formatDebriefTime', () => {
         new Date('2026-12-30T00:00:00Z'),
         AUCKLAND,
       ),
-    ).toBe('Fri 1 Jan, 6:00 PM 2027');
+    ).toBe('Fri 1 Jan 2027, 6:00 PM');
   });
 
   it("compares years in the pilot's zone, not UTC", () => {

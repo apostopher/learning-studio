@@ -1,9 +1,7 @@
 import { useAtom, useSetAtom } from 'jotai';
-import { useEffect } from 'react';
-import {
-  justSubmittedDebriefAtom,
-  savedDebriefTestAtom,
-} from '#/atoms/debrief';
+import { useCallback, useEffect } from 'react';
+import type { AITest } from '#/ai/schemas';
+import { debriefSaveAtom, justSubmittedDebriefAtom } from '#/atoms/debrief';
 import {
   useAdvanceQuestion,
   useCurrentQuestion,
@@ -19,6 +17,8 @@ import {
   useTotalScore,
 } from '#/hooks/data/use-lesson-ai-test';
 import { DebriefIntro } from './debrief-intro';
+import { debriefSaveOutcome, debriefSaveState } from './debrief-save';
+import { DebriefSaveNotice } from './debrief-save-notice';
 import { debriefSessionForLesson } from './debrief-session-owner';
 import { EvaluationCard } from './evaluation-card';
 import {
@@ -65,7 +65,7 @@ export const DebriefQuizContainer = ({
   const isGenerating = useIsGenerating();
   const setSelectedOption = useSetAtom(selectedOptionAtom);
   const setFreeTextAnswer = useSetAtom(freeTextAnswerAtom);
-  const [savedTest, setSavedTest] = useAtom(savedDebriefTestAtom);
+  const [saveRecord, setSaveRecord] = useAtom(debriefSaveAtom);
   const setJustSubmitted = useSetAtom(justSubmittedDebriefAtom);
 
   // A debrief session belongs to the lesson it was generated for — see
@@ -89,38 +89,62 @@ export const DebriefQuizContainer = ({
     ? evaluations.find((e) => e.questionId === currentQuestion.id)
     : null;
 
+  const saveState = debriefSaveState(saveRecord, test);
+
+  // One save of this session, from the auto-save below or the pilot's retry.
+  // Each outcome is debriefSaveOutcome's: recorded, refused as not open (the
+  // session is stale — drop it so the panel follows the refetched status),
+  // or failed (keep the session and say so, with the same save on offer).
+  const submit = useCallback(
+    (session: AITest) => {
+      setSaveRecord({ test: session, state: 'saving' });
+      void Promise.allSettled([saveResults(courseSlug)]).then(([settled]) => {
+        switch (debriefSaveOutcome(settled)) {
+          case 'saved':
+            setSaveRecord({ test: session, state: 'saved' });
+            setJustSubmitted(lessonSlug);
+            return;
+          case 'not-open':
+            setSaveRecord(null);
+            resetTest();
+            setSelectedOption('');
+            setFreeTextAnswer('');
+            return;
+          case 'failed':
+            if (settled.status === 'rejected') console.error(settled.reason);
+            setSaveRecord({ test: session, state: 'failed' });
+            return;
+        }
+      });
+    },
+    [
+      courseSlug,
+      lessonSlug,
+      saveResults,
+      setSaveRecord,
+      setJustSubmitted,
+      resetTest,
+      setSelectedOption,
+      setFreeTextAnswer,
+    ],
+  );
+
   // The dangerous one: this fires from a rendered state the moment the last
   // evaluation lands, not a button press, so hiding the score report would
   // not stop it writing. See shouldAutoSaveDebrief's doc comment.
   useEffect(() => {
     if (
+      test === null ||
       !shouldAutoSaveDebrief({
         isComplete,
-        alreadySaved: test !== null && savedTest === test,
+        alreadySaved: saveState !== 'unsaved',
         readOnly,
       })
     ) {
       return;
     }
-    setSavedTest(test);
-    saveResults(courseSlug)
-      .then((saved) => {
-        // null: refused as not open — nothing was recorded, and the status
-        // refetch has already been asked for.
-        if (saved !== null) setJustSubmitted(lessonSlug);
-      })
-      .catch(console.error);
-  }, [
-    isComplete,
-    test,
-    savedTest,
-    setSavedTest,
-    saveResults,
-    setJustSubmitted,
-    readOnly,
-    courseSlug,
-    lessonSlug,
-  ]);
+    submit(test);
+  }, [isComplete, test, saveState, readOnly, submit]);
 
   // Not `return null`: this tab is now the primary way into the debrief — the
   // only way, on a lesson with no video — so an empty panel here would be a
@@ -145,6 +169,16 @@ export const DebriefQuizContainer = ({
         score={totalScore}
         questions={test.questions}
         evaluations={evaluations}
+        footer={
+          saveState === 'saving' || saveState === 'failed' ? (
+            <DebriefSaveNotice
+              state={saveState}
+              onRetry={() => {
+                if (!readOnly) submit(test);
+              }}
+            />
+          ) : null
+        }
       />
     );
   }

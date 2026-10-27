@@ -66,4 +66,27 @@ describe('DebriefAttemptHistory', () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();
   });
+
+  it("rotates only the chevron of the attempt opened, not every question's inside it", async () => {
+    // Tailwind's unnamed `group-data-[open]:` matches ANY open `.group`
+    // ancestor, and ScoreReport's question rows are groups too.
+    render(<DebriefAttemptHistory attempts={attempts} />);
+    const passed = screen.getAllByRole('listitem')[0];
+    await userEvent.click(
+      within(passed).getByRole('button', { name: /Wed 29 Oct/ }),
+    );
+    const chevrons = passed.querySelectorAll('svg.lucide-chevron-down');
+    expect(chevrons.length).toBe(2);
+    expect(chevrons[0].getAttribute('class')).toContain(
+      'group-data-[open]/attempt:rotate-180',
+    );
+    expect(chevrons[1].getAttribute('class')).toContain(
+      'group-data-[open]/question:rotate-180',
+    );
+    for (const chevron of chevrons) {
+      expect(chevron.getAttribute('class')).not.toMatch(
+        /(^|\s)group-data-\[open\]:/,
+      );
+    }
+  });
 });
