@@ -1,4 +1,11 @@
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { z } from 'zod';
+import {
+  type AIEvaluationResult,
+  AIEvaluationResultSchema,
+  type AITestQuestion,
+  AITestSchema,
+} from '#/ai/schemas';
 import { db } from '#/db';
 import { DEBRIEF_PAR_SCORE, type DebriefFacts } from '#/lib/debrief-schedule';
 import { lessonCompletionsTable, lessonTestResultsTable } from './schema';
@@ -92,6 +99,67 @@ export async function getDebriefAttempts(
         ]
       : [],
   );
+}
+
+export type DebriefAttemptReport = DebriefAttempt & {
+  /** The questions asked, as saved. Empty if the stored JSON is unreadable. */
+  questions: AITestQuestion[];
+  /** The pilot's answers and their evaluations. Empty if unreadable. */
+  evaluations: AIEvaluationResult[];
+};
+
+const storedEvaluationsSchema = z.array(AIEvaluationResultSchema);
+
+/**
+ * Finished attempts WITH the data a score report renders — only for a pilot
+ * who has passed (the status route's passed branch), since the history is
+ * hidden until then. Same filter and order as `getDebriefAttempts`.
+ *
+ * `save-results` stores `questions` as the whole AITest (`{ lessonSlug,
+ * questions }`) and `answers` as the evaluation array. A row whose JSON no
+ * longer parses keeps its score and date with empty arrays rather than
+ * dropping out of the history.
+ */
+export async function getDebriefAttemptReports(
+  userId: string,
+  lessonSlug: string,
+): Promise<DebriefAttemptReport[]> {
+  const rows = await db
+    .select({
+      id: lessonTestResultsTable.id,
+      totalScore: lessonTestResultsTable.totalScore,
+      completedAt: lessonTestResultsTable.completedAt,
+      questions: lessonTestResultsTable.questions,
+      answers: lessonTestResultsTable.answers,
+    })
+    .from(lessonTestResultsTable)
+    .where(
+      and(
+        eq(lessonTestResultsTable.userId, userId),
+        eq(lessonTestResultsTable.lessonSlug, lessonSlug),
+        isNotNull(lessonTestResultsTable.completedAt),
+        isNotNull(lessonTestResultsTable.totalScore),
+      ),
+    )
+    .orderBy(
+      desc(lessonTestResultsTable.completedAt),
+      desc(lessonTestResultsTable.id),
+    );
+
+  return rows.flatMap((row) => {
+    if (row.completedAt === null || row.totalScore === null) return [];
+    const test = AITestSchema.safeParse(row.questions);
+    const evaluations = storedEvaluationsSchema.safeParse(row.answers);
+    return [
+      {
+        id: row.id,
+        totalScore: row.totalScore,
+        completedAt: row.completedAt.toISOString(),
+        questions: test.success ? test.data.questions : [],
+        evaluations: evaluations.success ? evaluations.data : [],
+      },
+    ];
+  });
 }
 
 /**

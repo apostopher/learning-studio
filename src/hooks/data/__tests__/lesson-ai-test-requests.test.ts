@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import type { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  invalidateAfterSave,
   postEvaluateAnswer,
   postGenerateTest,
   postSaveResults,
@@ -84,5 +86,21 @@ describe('debrief requests carry the course', () => {
       evaluations: [],
       totalScore: 80,
     });
+  });
+});
+
+describe('invalidateAfterSave', () => {
+  it('invalidates the debrief status of that lesson and the course progress', async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const setQueryData = vi.fn();
+    await invalidateAfterSave(
+      { invalidateQueries, setQueryData } as unknown as QueryClient,
+      lesson,
+    );
+    expect(invalidateQueries.mock.calls.map((c) => c[0].queryKey)).toEqual([
+      ['user', 'debrief-status', 'ppl', 'l1'],
+      ['course', 'progress-summary', 'ppl'],
+    ]);
+    expect(setQueryData).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useAtomCallback } from 'jotai/utils';
 import { useCallback } from 'react';
@@ -14,6 +15,7 @@ import {
   totalScoreAtom,
 } from '#/atoms/lesson-ai-test';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import { dataKeys } from '#/data-hooks/keys';
 import type { LessonRef } from '#/lib/lesson-ref';
 
 /**
@@ -81,6 +83,25 @@ export async function postSaveResults({
   });
   if (!response.ok) throw new Error('Failed to save results');
   return response.json();
+}
+
+/**
+ * A saved attempt can change the debrief's state (passed, or re-locked for
+ * 24h) and the course rollup's debrief badges. Invalidate rather than write
+ * a partial state: the server owns what the new state is.
+ */
+export function invalidateAfterSave(
+  queryClient: QueryClient,
+  { courseSlug, lessonSlug }: LessonRef,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: dataKeys.debriefStatus(courseSlug, lessonSlug),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: dataKeys.courseProgressSummary(courseSlug),
+    }),
+  ]);
 }
 
 // Read hooks — thin wrappers over atoms
@@ -193,23 +214,31 @@ export function useEvaluateAnswer() {
 // carries its own `lessonSlug` (see debrief-session-owner.ts), but the course
 // it is being taken in is the container's, from the route.
 export function useSaveResults() {
+  const queryClient = useQueryClient();
   return useAtomCallback(
-    useCallback(async (get, set, courseSlug: string) => {
-      const test = get(currentTestAtom);
-      const evaluations = get(evaluationsAtom);
-      const totalScore = get(totalScoreAtom);
+    useCallback(
+      async (get, set, courseSlug: string) => {
+        const test = get(currentTestAtom);
+        const evaluations = get(evaluationsAtom);
+        const totalScore = get(totalScoreAtom);
 
-      if (!test) throw new Error('No test to save');
+        if (!test) throw new Error('No test to save');
 
-      const json = await postSaveResults({
-        courseSlug,
-        test,
-        evaluations,
-        totalScore,
-      });
-      const promotion = extractPromotion(json);
-      if (promotion) set(pendingPromotionAtom, promotion);
-      return json;
-    }, []),
+        const json = await postSaveResults({
+          courseSlug,
+          test,
+          evaluations,
+          totalScore,
+        });
+        const promotion = extractPromotion(json);
+        if (promotion) set(pendingPromotionAtom, promotion);
+        void invalidateAfterSave(queryClient, {
+          courseSlug,
+          lessonSlug: test.lessonSlug,
+        });
+        return json;
+      },
+      [queryClient],
+    ),
   );
 }
