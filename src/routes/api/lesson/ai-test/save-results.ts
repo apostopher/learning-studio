@@ -2,16 +2,11 @@ import { createFileRoute } from '@tanstack/react-router';
 import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
-import { getDebriefFacts, saveTestResult } from '#/db/lesson-test';
+import { saveTestResult } from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
 import { debriefNotOpen } from '#/lib/debrief-not-open';
-import {
-  computeDebriefState,
-  DEBRIEF_DELAY_MS,
-  type DebriefState,
-  isPass,
-} from '#/lib/debrief-schedule';
+import { isPass } from '#/lib/debrief-schedule';
 import { prepareDebrief } from '#/lib/prepared-debrief.server';
 import { settleProgress } from '#/lib/settle-progress.server';
 
@@ -106,15 +101,9 @@ export async function saveTestResultsHandler(
     // fail the debrief the pilot just completed.
     const promotion = await settleProgress({ userId, courseSlug });
 
-    const state = await stateAfterSave({
-      userId,
-      lessonSlug,
-      lessonId: access.lessonId,
-      totalScore,
-      completedAt: result.completedAt,
-    });
-
-    return Response.json({ ...result, promotion, state });
+    // No debrief state in the response: the client invalidates the status
+    // query and reads it from there (see `invalidateAfterSave`).
+    return Response.json({ ...result, promotion });
   } catch (error) {
     console.error('Failed to save test result:', error);
     return Response.json(
@@ -124,42 +113,6 @@ export async function saveTestResultsHandler(
   }
 }
 
-/**
- * The debrief's state now that this attempt is recorded, so the client can
- * show "passed" or "next attempt opens …" without a second round trip.
- *
- * Re-read from Postgres — the same facts every other reader uses, which also
- * catches a pass recorded meanwhile in another tab. If that read fails the
- * attempt is still saved, so answer from the attempt itself rather than 500:
- * the state was `open` a moment ago, so `doneAt` is at least 24h old and a
- * below-par attempt reopens exactly 24h after it was completed.
- */
-async function stateAfterSave({
-  userId,
-  lessonSlug,
-  lessonId,
-  totalScore,
-  completedAt,
-}: {
-  userId: string;
-  lessonSlug: string;
-  lessonId: number;
-  totalScore: number;
-  completedAt: Date | null;
-}): Promise<DebriefState> {
-  try {
-    const facts = await getDebriefFacts(userId, lessonSlug, lessonId);
-    return computeDebriefState(facts, new Date());
-  } catch (error) {
-    console.error('Failed to re-read debrief facts after save:', error);
-    if (isPass(totalScore)) return { kind: 'passed' };
-    const attemptMs = (completedAt ?? new Date()).getTime();
-    return {
-      kind: 'retake-waiting',
-      availableAt: new Date(attemptMs + DEBRIEF_DELAY_MS).toISOString(),
-    };
-  }
-}
 export const Route = createFileRoute('/api/lesson/ai-test/save-results')({
   server: {
     handlers: { POST: ({ request }) => saveTestResultsHandler(request) },

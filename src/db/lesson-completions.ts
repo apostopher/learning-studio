@@ -1,10 +1,5 @@
-import { and, eq } from 'drizzle-orm';
 import { db } from '#/db';
-import {
-  courseModulesTable,
-  lessonCompletionsTable,
-  moduleLessonsTable,
-} from '#/db/schema';
+import { lessonCompletionsTable } from '#/db/schema';
 
 /**
  * Stamp lessons as done. Insert-only by design: `done_at` starts the 24h
@@ -20,29 +15,4 @@ export async function recordLessonCompletions(
     .insert(lessonCompletionsTable)
     .values(lessonIds.map((lessonId) => ({ userId, lessonId })))
     .onConflictDoNothing();
-}
-
-/** Ids of the course's lessons this pilot has a completion row for. */
-export async function getDoneLessonIds(
-  userId: string,
-  courseId: number,
-): Promise<Set<number>> {
-  const rows = await db
-    .selectDistinct({ lessonId: lessonCompletionsTable.lessonId })
-    .from(lessonCompletionsTable)
-    .innerJoin(
-      moduleLessonsTable,
-      eq(moduleLessonsTable.lessonId, lessonCompletionsTable.lessonId),
-    )
-    .innerJoin(
-      courseModulesTable,
-      eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
-    )
-    .where(
-      and(
-        eq(lessonCompletionsTable.userId, userId),
-        eq(courseModulesTable.courseId, courseId),
-      ),
-    );
-  return new Set(rows.map((r) => r.lessonId));
 }

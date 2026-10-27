@@ -10,7 +10,6 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   evaluateMCQ: vi.fn(),
   saveTestResult: vi.fn(),
-  getDebriefFacts: vi.fn(),
   settleProgress: vi.fn(),
   takePreparedDebrief: vi.fn(),
   discardPreparedDebrief: vi.fn(),
@@ -41,7 +40,6 @@ vi.mock('#/lib/prepared-debrief.server', () => ({
 }));
 vi.mock('#/db/lesson-test', () => ({
   saveTestResult: m.saveTestResult,
-  getDebriefFacts: m.getDebriefFacts,
 }));
 vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: m.evaluateFreeText,
@@ -119,11 +117,6 @@ beforeEach(() => {
   m.saveTestResult.mockResolvedValue({
     id: 1,
     completedAt: new Date('2026-10-27T09:30:00.000Z'),
-  });
-  m.getDebriefFacts.mockResolvedValue({
-    doneAt: '2026-10-25T00:00:00.000Z',
-    passed: true,
-    lastFailedAt: null,
   });
   m.settleProgress.mockResolvedValue(null);
   m.takePreparedDebrief.mockResolvedValue(null);
@@ -463,40 +456,10 @@ describe('save-results', () => {
     expect(m.waitUntil).not.toHaveBeenCalled();
   });
 
-  it('returns the state recomputed AFTER the save — retake-waiting 24h from the attempt', async () => {
-    vi.useFakeTimers({
-      toFake: ['Date'],
-      now: new Date('2026-10-27T09:30:00.000Z'),
-    });
-    m.getDebriefFacts.mockResolvedValue({
-      doneAt: '2026-10-25T00:00:00.000Z',
-      passed: false,
-      lastFailedAt: '2026-10-27T09:30:00.000Z',
-    });
+  it('returns the saved row and promotion, and no debrief state (the client refetches status)', async () => {
     const res = await save(69);
-    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41);
-    expect(m.getDebriefFacts.mock.invocationCallOrder[0]).toBeGreaterThan(
-      m.saveTestResult.mock.invocationCallOrder[0],
-    );
-    expect((await res.json()).state).toEqual({
-      kind: 'retake-waiting',
-      availableAt: '2026-10-28T09:30:00.000Z',
-    });
-  });
-
-  it('returns passed after a pass', async () => {
-    const res = await save(70);
-    expect((await res.json()).state).toEqual({ kind: 'passed' });
-  });
-
-  it('still answers with the state when re-reading the facts fails — the attempt is saved', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    m.getDebriefFacts.mockRejectedValue(new Error('db blip'));
-    const res = await save(69);
-    expect(res.status).toBe(200);
-    expect((await res.json()).state).toEqual({
-      kind: 'retake-waiting',
-      availableAt: '2026-10-28T09:30:00.000Z',
-    });
+    const json = await res.json();
+    expect(json).not.toHaveProperty('state');
+    expect(json).toHaveProperty('promotion', null);
   });
 });
