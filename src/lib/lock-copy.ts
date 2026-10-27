@@ -3,8 +3,8 @@ import type { LessonLock } from '#/lib/lesson-gating';
 import type { TrackedLessonSection } from '#/lib/lesson-visit-section';
 
 /**
- * Tab labels, as the pilot sees them. Must match the labels in
- * `compute-material-tabs.ts` (which defines them inline per tab).
+ * Tab labels, as the pilot sees them. The single source: both the lock
+ * sentences and `compute-material-tabs.ts` read this object.
  */
 export const SECTION_LABELS: Record<TrackedLessonSection, string> = {
   keyPoints: 'Key Points',

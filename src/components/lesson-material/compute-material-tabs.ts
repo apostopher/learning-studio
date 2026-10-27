@@ -1,4 +1,5 @@
 import type { MaterialExtraTab } from '#/lib/flagship-course';
+import { SECTION_LABELS } from '#/lib/lock-copy';
 
 export type MaterialTabValue =
   | 'keyPoints'
@@ -64,14 +65,14 @@ export function computeMaterialTabs({
     : [{ value: 'quiz', label: 'Quiz' }];
 
   return [
-    { value: 'keyPoints', label: 'Key Points' },
+    { value: 'keyPoints', label: SECTION_LABELS.keyPoints },
     ...activity,
-    { value: 'proTips', label: 'Pro Tips' },
-    { value: 'links', label: 'Links' },
-    { value: 'assignments', label: 'Assignments' },
+    { value: 'proTips', label: SECTION_LABELS.proTips },
+    { value: 'links', label: SECTION_LABELS.links },
+    { value: 'assignments', label: SECTION_LABELS.assignments },
     extraTab === 'jobOfTheDay'
-      ? { value: 'jobOfTheDay', label: 'Job of the Day' }
-      : { value: 'testThis', label: 'TEST THIS!' },
+      ? { value: 'jobOfTheDay', label: SECTION_LABELS.jobOfTheDay }
+      : { value: 'testThis', label: SECTION_LABELS.testThis },
   ];
 }
 

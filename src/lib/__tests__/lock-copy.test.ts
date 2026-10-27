@@ -34,14 +34,18 @@ describe('describeOutstanding', () => {
 });
 
 describe('lessonLockSentence', () => {
-  const lessonLock = (outstanding: OutstandingItem[]): LessonLock => ({
+  const lessonLock = (
+    outstanding: OutstandingItem[],
+  ): Extract<LessonLock, { kind: 'lesson-locked' }> => ({
     kind: 'lesson-locked',
     lessonSlug: 'l4',
     moduleSlug: 'm',
     lessonName: 'Lesson 4',
     outstanding,
   });
-  const moduleLock = (lessonsLeft: number): LessonLock => ({
+  const moduleLock = (
+    lessonsLeft: number,
+  ): Extract<LessonLock, { kind: 'module-locked' }> => ({
     kind: 'module-locked',
     moduleSlug: 'b',
     moduleName: 'Basics',
@@ -49,20 +53,18 @@ describe('lessonLockSentence', () => {
     next: { lessonName: 'Lesson 4', outstanding: [quiz] },
   });
   it('names the lesson and what is left', () => {
-    expect(lessonLockSentence(lessonLock([quiz, sec('links')]) as never)).toBe(
+    expect(lessonLockSentence(lessonLock([quiz, sec('links')]))).toBe(
       'Finish Lesson 4 first: take the quiz and open Links.',
     );
   });
   it('falls back when nothing is outstanding', () => {
-    expect(lessonLockSentence(lessonLock([]) as never)).toBe(
-      'Finish Lesson 4 first.',
-    );
+    expect(lessonLockSentence(lessonLock([]))).toBe('Finish Lesson 4 first.');
   });
   it('names the module, count and next lesson', () => {
-    expect(lessonLockSentence(moduleLock(3) as never)).toBe(
+    expect(lessonLockSentence(moduleLock(3))).toBe(
       'Finish the Basics module first: 3 lessons left. Next: Lesson 4 — take the quiz.',
     );
-    expect(lessonLockSentence(moduleLock(1) as never)).toBe(
+    expect(lessonLockSentence(moduleLock(1))).toBe(
       'Finish the Basics module first: 1 lesson left. Next: Lesson 4 — take the quiz.',
     );
   });
