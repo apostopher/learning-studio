@@ -1,9 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
-import { saveTestResult } from '#/db/lesson-test';
+import { getDebriefFacts, saveTestResult } from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
-import { evaluateLessonGate } from '#/lib/lesson-gating.server';
+import { getDebriefAccess } from '#/lib/debrief-access.server';
+import { debriefNotOpen } from '#/lib/debrief-not-open';
+import {
+  computeDebriefState,
+  DEBRIEF_DELAY_MS,
+  type DebriefState,
+  isPass,
+} from '#/lib/debrief-schedule';
+import { prepareDebrief } from '#/lib/prepared-debrief.server';
 import { settleProgress } from '#/lib/settle-progress.server';
 
 const SaveResultsInputSchema = z.object({
@@ -18,15 +27,20 @@ const SaveResultsInputSchema = z.object({
 });
 
 /**
- * Persist a completed debrief.
+ * Persist a completed debrief, for the session user.
  *
  * Lifted out of the `createFileRoute` call so it can be tested the way every
- * other handler in this directory is — the gate below is the kind of branch
- * that must not rely on being exercised by hand.
+ * other handler in this directory is.
  *
- * The prerequisite LOCKS are not checked here, matching the other two write
- * routes: honouring them would newly 403 flows that succeed today, which is a
- * separate decision. The LEVEL check is enforced.
+ * Asks `getDebriefAccess` first, like `generate`: a non-subscriber, a
+ * prerequisite-locked lesson, an out-of-tier lesson (in BOTH read-only states
+ * — an archive view may show a pilot the debrief they already did, never
+ * record a new one) and a lesson with no debrief are refused before anything
+ * is written. A debrief that is not open NOW is refused with 409 — a stale
+ * second tab submitting after the debrief relocked must not add an attempt.
+ *
+ * Every refusal comes before the write, because what this writes is what the
+ * debrief schedule, course percent and promotion read.
  */
 export async function saveTestResultsHandler(
   request: Request,
@@ -48,66 +62,58 @@ export async function saveTestResultsHandler(
     );
   }
   const { lessonSlug, courseSlug, test, evaluations, totalScore } = parsed.data;
-
-  const gate = await evaluateLessonGate({
-    userId: session.user.id,
-    lessonSlug,
-    courseSlug,
-  });
-  // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
-  // has always answered this question; this route just never asked it. It is
-  // load-bearing now: what this writes feeds `lessonPercent`, and in a
-  // video-less course that is enough to drive `maybePromote` into writing a
-  // durable level row and sending a real promotion email — for a course the
-  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
-  // into the same 403 rather than a distinguishable 404, matching
-  // report-video-progress and the playback route: telling the two apart hands
-  // an enumeration oracle to any signed-in caller.
-  //
-  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
-  // that remains a separate decision with its own blast radius.
-  if (!gate?.subscribed) {
-    return new Response('Forbidden', { status: 403 });
-  }
-
-  // Refuse an out-of-tier lesson, in BOTH read-only states: a read-only
-  // archive view may show a pilot the debrief they already did, never record a
-  // new one.
-  //
-  // `lessonLock`/`materialLock` are deliberately NOT honoured here — refusing
-  // on those would newly 403 flows that succeed today, a separate decision with
-  // its own blast radius. Refusing on `outOfTier` alone matches what the pilot
-  // can see: under strict levels an untagged lesson, a lesson at another level,
-  // and every lesson for a pilot with no level is either refused outright or
-  // held only as a read-only archive, so a write to it has no legitimate
-  // origin.
-  if (gate?.outOfTier) {
-    return new Response('Forbidden', { status: 403 });
-  }
+  const userId = session.user.id;
 
   try {
-    // TODO: restore session.user.id when auth is re-enabled (Task 8 of the
-    // debrief plan fixes this write). Until then every result lands on
-    // 'dev-user' and counts for nobody; the guards above are written against
-    // the session user and are already correct once it is fixed.
+    const access = await getDebriefAccess({
+      userId,
+      lessonSlug,
+      courseSlug,
+      now: new Date(),
+    });
+    if (!access.ok) {
+      return new Response(access.status === 404 ? 'Not Found' : 'Forbidden', {
+        status: access.status,
+      });
+    }
+    if (access.state.kind !== 'open') {
+      return debriefNotOpen(access.state);
+    }
+
     const result = await saveTestResult({
-      userId: 'dev-user',
+      userId,
       lessonSlug,
       questions: test,
       answers: evaluations,
       totalScore,
     });
 
+    // Below par: the debrief relocks for 24h, then reopens with a FRESH set.
+    // Generate it now, in the background, so it is ready when it reopens. Not
+    // awaited — the pilot is waiting on this response, not on the model.
+    if (!isPass(totalScore)) {
+      waitUntil(
+        prepareDebrief({ userId, courseId: access.courseId, lessonSlug }).catch(
+          (error: unknown) => {
+            console.error('Failed to prepare debrief retake:', error);
+          },
+        ),
+      );
+    }
+
     // Best-effort: `settleProgress` never throws, so a settle failure cannot
-    // fail the debrief the pilot just completed. Settled against the real session user, not the
-    // 'dev-user' placeholder above — this is already correct for when that
-    // TODO is fixed.
-    const promotion = await settleProgress({
-      userId: session.user.id,
-      courseSlug: gate.courseSlug,
+    // fail the debrief the pilot just completed.
+    const promotion = await settleProgress({ userId, courseSlug });
+
+    const state = await stateAfterSave({
+      userId,
+      lessonSlug,
+      lessonId: access.lessonId,
+      totalScore,
+      completedAt: result.completedAt,
     });
 
-    return Response.json({ ...result, promotion });
+    return Response.json({ ...result, promotion, state });
   } catch (error) {
     console.error('Failed to save test result:', error);
     return Response.json(
@@ -117,6 +123,42 @@ export async function saveTestResultsHandler(
   }
 }
 
+/**
+ * The debrief's state now that this attempt is recorded, so the client can
+ * show "passed" or "next attempt opens …" without a second round trip.
+ *
+ * Re-read from Postgres — the same facts every other reader uses, which also
+ * catches a pass recorded meanwhile in another tab. If that read fails the
+ * attempt is still saved, so answer from the attempt itself rather than 500:
+ * the state was `open` a moment ago, so `doneAt` is at least 24h old and a
+ * below-par attempt reopens exactly 24h after it was completed.
+ */
+async function stateAfterSave({
+  userId,
+  lessonSlug,
+  lessonId,
+  totalScore,
+  completedAt,
+}: {
+  userId: string;
+  lessonSlug: string;
+  lessonId: number;
+  totalScore: number;
+  completedAt: Date | null;
+}): Promise<DebriefState> {
+  try {
+    const facts = await getDebriefFacts(userId, lessonSlug, lessonId);
+    return computeDebriefState(facts, new Date());
+  } catch (error) {
+    console.error('Failed to re-read debrief facts after save:', error);
+    if (isPass(totalScore)) return { kind: 'passed' };
+    const attemptMs = (completedAt ?? new Date()).getTime();
+    return {
+      kind: 'retake-waiting',
+      availableAt: new Date(attemptMs + DEBRIEF_DELAY_MS).toISOString(),
+    };
+  }
+}
 export const Route = createFileRoute('/api/lesson/ai-test/save-results')({
   server: {
     handlers: { POST: ({ request }) => saveTestResultsHandler(request) },

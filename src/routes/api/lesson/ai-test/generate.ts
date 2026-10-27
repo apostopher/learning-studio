@@ -2,9 +2,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { generateTest } from '#/ai/generate-test';
 import { auth } from '#/lib/auth';
+import { getDebriefAccess } from '#/lib/debrief-access.server';
+import { debriefNotOpen } from '#/lib/debrief-not-open';
 import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
-import { evaluateLessonGate } from '#/lib/lesson-gating.server';
-import { takePreparedDebrief } from '#/lib/prepared-debrief.server';
+import {
+  sourceFingerprint,
+  takePreparedDebrief,
+} from '#/lib/prepared-debrief.server';
 
 /**
  * `lessonSlug` and the course it is being read in. The body used to carry
@@ -38,42 +42,29 @@ export async function generateTestHandler(request: Request): Promise<Response> {
   const { lessonSlug, courseSlug } = parsed.data;
 
   try {
-    // The same gate the material panel passes. The debrief is lesson content,
-    // and it now reads that content server-side, so it cannot be looser than
-    // the endpoint that serves the material itself. One opaque 403, as in
-    // playback.ts, so this is not an enumeration oracle for lesson slugs.
-    const gate = await evaluateLessonGate({
+    // The single authority on whether this pilot may take this debrief now:
+    // subscription, prerequisites, level (out-of-tier refused in BOTH
+    // read-only states — generating is new assessment work) and has_debrief,
+    // then the 24h schedule. All before the source lookup and the model, so a
+    // refusal costs no tokens.
+    const access = await getDebriefAccess({
       userId: session.user.id,
       lessonSlug,
       courseSlug,
+      now: new Date(),
     });
-    if (
-      !gate ||
-      !gate.subscribed ||
-      gate.lessonLock.kind !== 'open' ||
-      gate.materialLock.kind !== 'open'
-    ) {
-      return new Response('Forbidden', { status: 403 });
+    if (!access.ok) {
+      return new Response(access.status === 404 ? 'Not Found' : 'Forbidden', {
+        status: access.status,
+      });
     }
-    // Outside the pilot's level — refused in BOTH out-of-tier cases, read-only
-    // included. Generating a debrief is new assessment work, and an archive
-    // view must not start fresh work for a tier the pilot has moved past.
-    // Placed before the source lookup and the model call, so a refusal costs
-    // no tokens. Opaque 403 for the anti-enumeration reason above.
-    if (gate.outOfTier) {
-      return new Response('Forbidden', { status: 403 });
+    // Not done yet, inside the 24h wait, waiting to retake, or already passed.
+    // The client hiding the button is not the gate; this is.
+    if (access.state.kind !== 'open') {
+      return debriefNotOpen(access.state);
     }
 
-    // Generated while the pilot watched the video (see `prepare.ts`). After
-    // the gate, never before it: a prepared debrief is still locked material.
-    const prepared = await takePreparedDebrief({
-      userId: session.user.id,
-      courseId: gate.courseId,
-      lessonSlug,
-    });
-    if (prepared) return Response.json(prepared);
-
-    const source = await resolveDebriefSource(lessonSlug, gate.courseId);
+    const source = await resolveDebriefSource(lessonSlug, access.courseId);
     if (!source) {
       // Not a 500: nothing is broken. This lesson has neither authored
       // material nor a usable transcript, so there is nothing to build a
@@ -83,6 +74,14 @@ export async function generateTestHandler(request: Request): Promise<Response> {
         { status: 422 },
       );
     }
+
+    // Prepared ahead (see `prepare.ts`), served only if it was built from the
+    // source as it is NOW — material or captions edited since are a miss.
+    const prepared = await takePreparedDebrief(
+      { userId: session.user.id, courseId: access.courseId, lessonSlug },
+      sourceFingerprint(source.text),
+    );
+    if (prepared) return Response.json(prepared);
 
     const test = await generateTest(lessonSlug, source.keyPoints, source.text);
     return Response.json(test);

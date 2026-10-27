@@ -1,32 +1,47 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type Key = { userId: string; courseId: number; lessonSlug: string };
+type Row = { test: unknown; sourceFingerprint: string };
+
 const m = vi.hoisted(() => ({
-  store: new Map<string, unknown>(),
+  claims: new Map<string, string>(),
+  rows: new Map<string, { test: unknown; sourceFingerprint: string }>(),
   resolveDebriefSource: vi.fn(),
   generateTest: vi.fn(),
+  upsertPreparedDebrief: vi.fn(),
 }));
 
-// A Map standing in for Upstash, honouring the two options this module relies
-// on: `nx` (the claim) and getdel's read-once.
+const rowKey = (k: Key) => `${k.userId}:${k.courseId}:${k.lessonSlug}`;
+
+// A Map standing in for Upstash. Only the claim lock lives in Redis now; the
+// prepared test itself is a Postgres row (it has to outlive the 24h wait).
 vi.mock('#/integrations/upstash/redis', () => ({
   redis: {
     set: vi.fn(async (key: string, value: string, opts?: { nx?: boolean }) => {
-      if (opts?.nx && m.store.has(key)) return null;
-      m.store.set(key, value);
+      if (opts?.nx && m.claims.has(key)) return null;
+      m.claims.set(key, value);
       return 'OK';
     }),
-    getdel: vi.fn(async (key: string) => {
-      const value = m.store.get(key);
-      m.store.delete(key);
-      // Upstash deserialises JSON on read.
-      return typeof value === 'string' ? JSON.parse(value) : (value ?? null);
-    }),
     del: vi.fn(async (key: string) => {
-      m.store.delete(key);
+      m.claims.delete(key);
       return 1;
     }),
   },
+}));
+// A Map standing in for the `prepared_debriefs` table, keyed like its unique
+// index (user, course, lesson).
+vi.mock('#/db/prepared-debriefs', () => ({
+  selectPreparedFingerprint: vi.fn(
+    async (k: Key) => m.rows.get(rowKey(k))?.sourceFingerprint ?? null,
+  ),
+  upsertPreparedDebrief: m.upsertPreparedDebrief,
+  deletePreparedDebrief: vi.fn(async (k: Key) => {
+    const row = m.rows.get(rowKey(k)) ?? null;
+    m.rows.delete(rowKey(k));
+    return row;
+  }),
 }));
 vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
@@ -35,10 +50,11 @@ vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 
 import {
   prepareDebrief,
+  sourceFingerprint,
   takePreparedDebrief,
 } from '../prepared-debrief.server';
 
-const k = { userId: 'u1', courseId: 7, lessonSlug: 'l1' };
+const k: Key = { userId: 'u1', courseId: 7, lessonSlug: 'l1' };
 const test = {
   lessonSlug: 'l1',
   questions: [
@@ -51,10 +67,17 @@ const test = {
     },
   ],
 };
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  m.store.clear();
+  m.claims.clear();
+  m.rows.clear();
+  m.upsertPreparedDebrief.mockImplementation(
+    async (key: Key, t: unknown, fp: string) => {
+      m.rows.set(rowKey(key), { test: t, sourceFingerprint: fp } satisfies Row);
+    },
+  );
   m.resolveDebriefSource.mockResolvedValue({
     kind: 'material',
     keyPoints: ['k'],
@@ -63,27 +86,46 @@ beforeEach(() => {
   m.generateTest.mockResolvedValue(test);
 });
 
-describe('prepared debrief', () => {
-  it('hands the prepared test to the next take, built from the resolved source', async () => {
+describe('sourceFingerprint', () => {
+  it('is the sha256 hex of the source text', () => {
+    expect(sourceFingerprint('body')).toBe(sha256('body'));
+    expect(sourceFingerprint('body')).not.toBe(sourceFingerprint('body2'));
+  });
+});
+
+describe('prepareDebrief', () => {
+  it('writes the test built from the resolved source, stamped with its fingerprint', async () => {
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.resolveDebriefSource).toHaveBeenCalledWith('l1', 7);
     expect(m.generateTest).toHaveBeenCalledWith('l1', ['k'], 'body');
-    expect(await takePreparedDebrief(k)).toEqual(test);
+    expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
+      k,
+      test,
+      sha256('body'),
+    );
   });
 
-  it('is served once, so a Retake gets fresh questions', async () => {
-    await prepareDebrief(k);
-    await takePreparedDebrief(k);
-    expect(await takePreparedDebrief(k)).toBeNull();
+  it('skips the model when a row with the CURRENT fingerprint already exists', async () => {
+    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('body') });
+    expect(await prepareDebrief(k)).toBe('already-prepared');
+    expect(m.generateTest).not.toHaveBeenCalled();
+    expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
   });
 
-  it('is per pilot', async () => {
-    await prepareDebrief(k);
-    expect(await takePreparedDebrief({ ...k, userId: 'u2' })).toBeNull();
+  it('regenerates over a row whose source has since changed', async () => {
+    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('old body') });
+    expect(await prepareDebrief(k)).toBe('prepared');
+    expect(m.generateTest).toHaveBeenCalledOnce();
+    expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
+      k,
+      test,
+      sha256('body'),
+    );
   });
 
   it('runs the model once while a claim is held (pause/play, reload)', async () => {
     await prepareDebrief(k);
+    m.rows.clear(); // even with nothing stored, the claim dedupes
     expect(await prepareDebrief(k)).toBe('already-claimed');
     expect(m.generateTest).toHaveBeenCalledTimes(1);
   });
@@ -98,11 +140,35 @@ describe('prepared debrief', () => {
     m.resolveDebriefSource.mockResolvedValue(null);
     expect(await prepareDebrief(k)).toBe('no-source');
     expect(m.generateTest).not.toHaveBeenCalled();
-    expect(await takePreparedDebrief(k)).toBeNull();
+    expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
+  });
+});
+
+describe('takePreparedDebrief', () => {
+  it('returns the test once, so a retake gets fresh questions', async () => {
+    await prepareDebrief(k);
+    expect(await takePreparedDebrief(k, sha256('body'))).toEqual(test);
+    expect(await takePreparedDebrief(k, sha256('body'))).toBeNull();
   });
 
-  it('treats an entry that no longer parses as a miss', async () => {
-    m.store.set('prepared-debrief:ready:u1:7:l1', JSON.stringify({ nope: 1 }));
-    expect(await takePreparedDebrief(k)).toBeNull();
+  it('is per pilot', async () => {
+    await prepareDebrief(k);
+    expect(
+      await takePreparedDebrief({ ...k, userId: 'u2' }, sha256('body')),
+    ).toBeNull();
+  });
+
+  it('returns null on a fingerprint mismatch, and the stale row is gone', async () => {
+    await prepareDebrief(k);
+    expect(await takePreparedDebrief(k, sha256('edited body'))).toBeNull();
+    expect(m.rows.has(rowKey(k))).toBe(false);
+  });
+
+  it('treats a row that no longer parses as a miss', async () => {
+    m.rows.set(rowKey(k), {
+      test: { nope: 1 },
+      sourceFingerprint: sha256('body'),
+    });
+    expect(await takePreparedDebrief(k, sha256('body'))).toBeNull();
   });
 });
