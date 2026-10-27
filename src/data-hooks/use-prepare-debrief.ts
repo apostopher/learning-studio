@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
+import { canOfferDebrief, type DebriefOfferArgs } from '#/lib/debrief-offer';
 import type { LessonRef } from '#/lib/lesson-ref';
 import { saveJson } from './save-json';
 
@@ -24,13 +25,15 @@ export function usePrepareDebrief() {
   });
 }
 
-export type ShouldPrepareDebriefArgs = {
+/**
+ * `hasDebrief`, `materialText` and `transcriptUsable` feed the shared
+ * `canOfferDebrief` rule — the same one the Debrief tab and the
+ * transcript-only section ask — so a debrief is never prepared that the
+ * panel will not offer.
+ */
+export type ShouldPrepareDebriefArgs = DebriefOfferArgs & {
   /** True once the video is actually playing, not merely mounted. */
   playing: boolean;
-  /** `lessons.has_debrief` — off means there is no debrief to prepare. */
-  hasDebrief: boolean;
-  /** Whether a debrief can be generated at all for this lesson. */
-  canDebrief: boolean;
   readOnly: boolean;
   /** This lesson was already asked for during this component's life. */
   alreadyRequested: boolean;
@@ -49,11 +52,17 @@ export type ShouldPrepareDebriefArgs = {
 export function shouldPrepareDebrief({
   playing,
   hasDebrief,
-  canDebrief,
+  materialText,
+  transcriptUsable,
   readOnly,
   alreadyRequested,
 }: ShouldPrepareDebriefArgs): boolean {
-  return playing && hasDebrief && canDebrief && !readOnly && !alreadyRequested;
+  return (
+    playing &&
+    canOfferDebrief({ hasDebrief, materialText, transcriptUsable }) &&
+    !readOnly &&
+    !alreadyRequested
+  );
 }
 
 /**
@@ -64,7 +73,8 @@ export function usePrepareDebriefOnPlay({
   lessonSlug,
   playing,
   hasDebrief,
-  canDebrief,
+  materialText,
+  transcriptUsable,
   readOnly,
 }: LessonRef & Omit<ShouldPrepareDebriefArgs, 'alreadyRequested'>) {
   const { mutate } = usePrepareDebrief();
@@ -76,7 +86,8 @@ export function usePrepareDebriefOnPlay({
     const fire = shouldPrepareDebrief({
       playing,
       hasDebrief,
-      canDebrief,
+      materialText,
+      transcriptUsable,
       readOnly,
       alreadyRequested: requestedRef.current === requestKey,
     });
@@ -88,7 +99,8 @@ export function usePrepareDebriefOnPlay({
     lessonSlug,
     playing,
     hasDebrief,
-    canDebrief,
+    materialText,
+    transcriptUsable,
     readOnly,
     mutate,
   ]);
@@ -121,7 +133,8 @@ export function usePrepareDebriefOnVisit({
   courseSlug,
   lessonSlug,
   hasDebrief,
-  canDebrief,
+  materialText,
+  transcriptUsable,
   readOnly,
 }: LessonRef & Omit<ShouldPrepareDebriefOnVisitArgs, 'alreadyRequested'>) {
   const { mutate } = usePrepareDebrief();
@@ -132,12 +145,21 @@ export function usePrepareDebriefOnVisit({
     const requestKey = `${courseSlug}/${lessonSlug}`;
     const fire = shouldPrepareDebriefOnVisit({
       hasDebrief,
-      canDebrief,
+      materialText,
+      transcriptUsable,
       readOnly,
       alreadyRequested: requestedRef.current === requestKey,
     });
     if (!fire) return;
     requestedRef.current = requestKey;
     mutate({ courseSlug, lessonSlug });
-  }, [courseSlug, lessonSlug, hasDebrief, canDebrief, readOnly, mutate]);
+  }, [
+    courseSlug,
+    lessonSlug,
+    hasDebrief,
+    materialText,
+    transcriptUsable,
+    readOnly,
+    mutate,
+  ]);
 }

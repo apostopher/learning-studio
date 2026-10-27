@@ -71,7 +71,10 @@ export async function prepareDebrief(
 
   try {
     const source = await resolveDebriefSource(k.lessonSlug, k.courseId);
-    if (!source) return 'no-source';
+    if (!source) {
+      await discardPreparedDebrief(k);
+      return 'no-source';
+    }
     const fingerprint = sourceFingerprint(source.text);
     if ((await selectPreparedFingerprint(k)) === fingerprint) {
       return 'already-prepared';
@@ -89,6 +92,21 @@ export async function prepareDebrief(
     await redis.del(claimKey(k));
     throw error;
   }
+}
+
+/**
+ * Drop any prepared debrief for this pilot and lesson, without serving it.
+ *
+ * Called whenever `resolveDebriefSource` finds nothing to build from (ledger
+ * T8). The course SQL counts a prepared row as making the lesson
+ * debrief-bearing (call 11), so a row outliving its source would demand a
+ * debrief nobody can generate and hold the course below 100% forever.
+ * Deleting it keeps "debrief-bearing" meaning "the debrief can be generated".
+ */
+export async function discardPreparedDebrief(
+  k: PreparedDebriefKey,
+): Promise<void> {
+  await deletePreparedDebrief(k);
 }
 
 /**

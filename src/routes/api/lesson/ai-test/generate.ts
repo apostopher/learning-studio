@@ -6,6 +6,7 @@ import { getDebriefAccess } from '#/lib/debrief-access.server';
 import { debriefNotOpen } from '#/lib/debrief-not-open';
 import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 import {
+  discardPreparedDebrief,
   sourceFingerprint,
   takePreparedDebrief,
 } from '#/lib/prepared-debrief.server';
@@ -64,11 +65,19 @@ export async function generateTestHandler(request: Request): Promise<Response> {
       return debriefNotOpen(access.state);
     }
 
+    const key = {
+      userId: session.user.id,
+      courseId: access.courseId,
+      lessonSlug,
+    };
     const source = await resolveDebriefSource(lessonSlug, access.courseId);
     if (!source) {
       // Not a 500: nothing is broken. This lesson has neither authored
       // material nor a usable transcript, so there is nothing to build a
-      // debrief from — and the UI does not offer one.
+      // debrief from — and the UI does not offer one. Any prepared row goes
+      // too (ledger T8): it would keep the lesson debrief-bearing in the
+      // course SQL for a debrief that can no longer be generated.
+      await discardPreparedDebrief(key);
       return Response.json(
         { error: 'This lesson has no debrief source' },
         { status: 422 },
@@ -78,7 +87,7 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     // Prepared ahead (see `prepare.ts`), served only if it was built from the
     // source as it is NOW — material or captions edited since are a miss.
     const prepared = await takePreparedDebrief(
-      { userId: session.user.id, courseId: access.courseId, lessonSlug },
+      key,
       sourceFingerprint(source.text),
     );
     if (prepared) return Response.json(prepared);

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 import {
-  canDebriefFromTranscript,
   playbackHasCaptions,
+  showsTranscriptDebriefSection,
 } from '../compute-transcript-debrief';
 
 const ready = (captions: { vtt: string } | null): PlaybackResult => ({
@@ -33,16 +33,19 @@ describe('playbackHasCaptions', () => {
   });
 });
 
-describe('canDebriefFromTranscript', () => {
-  it('needs both the admin switch and a caption track', () => {
+describe('showsTranscriptDebriefSection', () => {
+  const base = { hasDebrief: true, transcriptUsable: true, readOnly: false };
+
+  it('needs the admin switch and a caption track, and not read-only', () => {
+    expect(showsTranscriptDebriefSection(base)).toBe(true);
+    expect(showsTranscriptDebriefSection({ ...base, hasDebrief: false })).toBe(
+      false,
+    );
     expect(
-      canDebriefFromTranscript({ hasDebrief: true, hasCaptions: true }),
-    ).toBe(true);
-    expect(
-      canDebriefFromTranscript({ hasDebrief: false, hasCaptions: true }),
+      showsTranscriptDebriefSection({ ...base, transcriptUsable: false }),
     ).toBe(false);
-    expect(
-      canDebriefFromTranscript({ hasDebrief: true, hasCaptions: false }),
-    ).toBe(false);
+    expect(showsTranscriptDebriefSection({ ...base, readOnly: true })).toBe(
+      false,
+    );
   });
 });

@@ -61,6 +61,17 @@ describe('LessonNoVideoContainer', () => {
     });
   });
 
+  it('does not promise a debrief when the material has no body text', () => {
+    // No video here, so no transcript either: canOfferDebrief says no.
+    h.useLessonMaterial.mockReturnValue({
+      data: { locked: false, material: { text: '' } },
+    });
+    render(<LessonNoVideoContainer {...props} readOnly={false} />);
+    expect(
+      screen.getByRole('heading', { name: 'Radio Calls is reading' }),
+    ).toBeDefined();
+  });
+
   it('does not promise a debrief on a read-only lesson, which has no Debrief tab', () => {
     render(<LessonNoVideoContainer {...props} readOnly />);
     expect(
@@ -80,7 +91,9 @@ describe('LessonNoVideoContainer', () => {
       courseSlug: 'ppl',
       lessonSlug: 'radio-calls',
       hasDebrief: true,
-      canDebrief: true,
+      materialText: '<p>Body</p>',
+      // No video on this branch, so never a transcript to fall back to.
+      transcriptUsable: false,
       readOnly: false,
     });
   });
@@ -96,7 +109,10 @@ describe('LessonNoVideoContainer', () => {
     h.useLessonMaterial.mockReturnValue({ data: undefined });
     render(<LessonNoVideoContainer {...props} readOnly={false} />);
     expect(h.usePrepareDebriefOnVisit).toHaveBeenCalledWith(
-      expect.objectContaining({ canDebrief: false }),
+      expect.objectContaining({
+        materialText: undefined,
+        transcriptUsable: false,
+      }),
     );
   });
 });

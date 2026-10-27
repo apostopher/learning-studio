@@ -4,8 +4,26 @@ import {
   resolveActiveTab,
 } from '../compute-material-tabs';
 
-const values = (args: { hasQuiz: boolean; hasDebriefTab: boolean }) =>
-  computeMaterialTabs({ extraTab: 'jobOfTheDay', ...args }).map((t) => t.value);
+/** A lesson with body text, so the Debrief tab hinges on `on` alone. */
+const debriefOn = (on: boolean) => ({
+  hasDebrief: on,
+  materialText: 'body',
+  transcriptUsable: false,
+  readOnly: false,
+});
+
+const values = ({
+  hasQuiz,
+  hasDebriefTab,
+}: {
+  hasQuiz: boolean;
+  hasDebriefTab: boolean;
+}) =>
+  computeMaterialTabs({
+    extraTab: 'jobOfTheDay',
+    hasQuiz,
+    debrief: debriefOn(hasDebriefTab),
+  }).map((t) => t.value);
 
 describe('computeMaterialTabs', () => {
   it('offers Quiz AND Debrief, in that order, when the lesson has both', () => {
@@ -13,7 +31,7 @@ describe('computeMaterialTabs', () => {
     // be mutually exclusive (ledger D21, superseded).
     const tabs = computeMaterialTabs({
       hasQuiz: true,
-      hasDebriefTab: true,
+      debrief: debriefOn(true),
       extraTab: 'jobOfTheDay',
     });
     expect(tabs).toEqual([
@@ -64,7 +82,7 @@ describe('computeMaterialTabs — closing tab', () => {
   it('closes a 3D Airmanship lesson with Job of the Day, and no TEST THIS!', () => {
     const tabs = computeMaterialTabs({
       hasQuiz: true,
-      hasDebriefTab: false,
+      debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
     });
     expect(tabs.at(-1)).toEqual({
@@ -77,7 +95,7 @@ describe('computeMaterialTabs — closing tab', () => {
   it('closes every other lesson with TEST THIS!, and no Job of the Day', () => {
     const tabs = computeMaterialTabs({
       hasQuiz: true,
-      hasDebriefTab: false,
+      debrief: debriefOn(false),
       extraTab: 'testThis',
     });
     expect(tabs.at(-1)).toEqual({ value: 'testThis', label: 'TEST THIS!' });
@@ -91,7 +109,7 @@ describe('computeMaterialTabs — closing tab', () => {
     // the Day lands on a UAS lesson with that tab still remembered.
     const tabs = computeMaterialTabs({
       hasQuiz: true,
-      hasDebriefTab: false,
+      debrief: debriefOn(false),
       extraTab: 'testThis',
     });
     expect(resolveActiveTab(tabs, 'jobOfTheDay')).toBe('keyPoints');
@@ -101,7 +119,7 @@ describe('computeMaterialTabs — closing tab', () => {
 describe('resolveActiveTab', () => {
   const tabs = computeMaterialTabs({
     hasQuiz: true,
-    hasDebriefTab: true,
+    debrief: debriefOn(true),
     extraTab: 'jobOfTheDay',
   });
 
@@ -117,7 +135,7 @@ describe('resolveActiveTab', () => {
     // blank screen with no explanation.
     const noDebrief = computeMaterialTabs({
       hasQuiz: true,
-      hasDebriefTab: false,
+      debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
     });
     expect(resolveActiveTab(noDebrief, 'debrief')).toBe('keyPoints');
@@ -125,5 +143,47 @@ describe('resolveActiveTab', () => {
 
   it('falls back for a value that was never a tab', () => {
     expect(resolveActiveTab(tabs, 'downloads')).toBe('keyPoints');
+  });
+});
+
+describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
+  const has = (debrief: Parameters<typeof computeMaterialTabs>[0]['debrief']) =>
+    computeMaterialTabs({ hasQuiz: false, debrief, extraTab: 'testThis' }).some(
+      (t) => t.value === 'debrief',
+    );
+
+  it('offers the tab on an empty-bodied material row when the video has captions', () => {
+    // The defect: this lesson was prepared from its transcript and counted
+    // debrief-bearing, but had no tab — so it could never reach 100%.
+    expect(
+      has({
+        hasDebrief: true,
+        materialText: '',
+        transcriptUsable: true,
+        readOnly: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('offers no tab with neither body text nor captions', () => {
+    expect(
+      has({
+        hasDebrief: true,
+        materialText: null,
+        transcriptUsable: false,
+        readOnly: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('offers no tab on a read-only lesson', () => {
+    expect(
+      has({
+        hasDebrief: true,
+        materialText: 'body',
+        transcriptUsable: true,
+        readOnly: true,
+      }),
+    ).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   getDebriefFacts: vi.fn(),
   settleProgress: vi.fn(),
   takePreparedDebrief: vi.fn(),
+  discardPreparedDebrief: vi.fn(),
   prepareDebrief: vi.fn(),
   waitUntil: vi.fn(),
 }));
@@ -33,6 +34,7 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 vi.mock('#/lib/prepared-debrief.server', () => ({
   takePreparedDebrief: m.takePreparedDebrief,
+  discardPreparedDebrief: m.discardPreparedDebrief,
   prepareDebrief: m.prepareDebrief,
   // A recognisable stand-in, so a test can tell which text was fingerprinted.
   sourceFingerprint: (text: string) => `fp(${text})`,
@@ -266,6 +268,20 @@ describe('generate, once the debrief is open', () => {
     const res = await generate();
     expect(res.status).toBe(422);
     expect(m.generateTest).not.toHaveBeenCalled();
+  });
+
+  it('deletes any prepared row for this pilot, course and lesson when there is no source (ledger T8)', async () => {
+    // "Debrief-bearing" in the course SQL counts a prepared row, so a stale
+    // one for a debrief that can no longer be generated would hold the
+    // course open forever.
+    m.resolveDebriefSource.mockResolvedValue(null);
+    await generate();
+    expect(m.discardPreparedDebrief).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      lessonSlug: 'l1',
+    });
+    expect(m.takePreparedDebrief).not.toHaveBeenCalled();
   });
 
   it('serves a retake the same way', async () => {

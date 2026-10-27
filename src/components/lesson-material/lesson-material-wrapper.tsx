@@ -13,8 +13,8 @@ import {
   isSectionTapRecordingEnabled,
 } from './compute-material-panel-state';
 import {
-  canDebriefFromTranscript,
   playbackHasCaptions,
+  showsTranscriptDebriefSection,
 } from './compute-transcript-debrief';
 import { LessonMaterialView } from './lesson-material';
 import { LessonMaterialSkeleton } from './lesson-material-skeleton';
@@ -39,9 +39,11 @@ export const LessonMaterialWrapper = ({
   const query = useLessonMaterial(lessonRef);
   const details = useCourseDetails(courseSlug);
   // The same cached query the player made — read here only to learn whether
-  // the video has a caption track, which is what decides if a material-less
-  // lesson can still offer a transcript-sourced debrief.
+  // the video has a caption track, which is what decides whether a lesson
+  // without body text (no material row, or one with an empty body) can still
+  // offer a transcript-sourced debrief.
   const video = useLessonVideo(lessonRef);
+  const transcriptUsable = playbackHasCaptions(video.data);
 
   // Lesson slugs are globally unique (`lessons.slug` carries a UNIQUE
   // constraint), so this needs no module to scope it — which is just as well,
@@ -100,11 +102,11 @@ export const LessonMaterialWrapper = ({
     // from the video's transcript. Not on a read-only lesson, which has no
     // debrief clock (call 12) — the same rule as the Debrief tab.
     case 'empty':
-      return !state.readOnly &&
-        canDebriefFromTranscript({
-          hasDebrief: lesson?.hasDebrief ?? false,
-          hasCaptions: playbackHasCaptions(video.data),
-        }) ? (
+      return showsTranscriptDebriefSection({
+        hasDebrief: lesson?.hasDebrief ?? false,
+        transcriptUsable,
+        readOnly: state.readOnly,
+      }) ? (
         <LessonDebriefSection>
           <DebriefPanelContainer
             courseSlug={courseSlug}
@@ -126,6 +128,7 @@ export const LessonMaterialWrapper = ({
             // No Debrief tab while the course payload is still in flight:
             // failing the other way would flash one on lessons that have none.
             hasDebrief={lesson?.hasDebrief ?? false}
+            transcriptUsable={transcriptUsable}
             onTabSelected={recordSectionTap}
             readOnly={state.readOnly}
           />

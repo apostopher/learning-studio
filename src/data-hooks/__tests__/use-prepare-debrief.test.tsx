@@ -50,13 +50,24 @@ describe('shouldPrepareDebrief', () => {
   const watching: ShouldPrepareDebriefArgs = {
     playing: true,
     hasDebrief: true,
-    canDebrief: true,
+    materialText: 'body',
+    transcriptUsable: false,
     readOnly: false,
     alreadyRequested: false,
   };
 
   it('fires when a debrief lesson starts playing', () => {
     expect(shouldPrepareDebrief(watching)).toBe(true);
+  });
+
+  it('fires from captions alone, even on an empty-bodied material row', () => {
+    expect(
+      shouldPrepareDebrief({
+        ...watching,
+        materialText: '',
+        transcriptUsable: true,
+      }),
+    ).toBe(true);
   });
 
   it('still fires on a rewatch once the video is watched', () => {
@@ -72,7 +83,10 @@ describe('shouldPrepareDebrief', () => {
   it.each<[string, Partial<ShouldPrepareDebriefArgs>]>([
     ['before the video plays', { playing: false }],
     ['when the lesson has no debrief', { hasDebrief: false }],
-    ['when there is nothing to generate from', { canDebrief: false }],
+    [
+      'when there is nothing to generate from',
+      { materialText: null, transcriptUsable: false },
+    ],
     ['on a read-only archive view', { readOnly: true }],
     ['a second time for the same lesson', { alreadyRequested: true }],
   ])('holds off %s', (_why, override) => {
@@ -87,7 +101,8 @@ describe('shouldPrepareDebrief', () => {
 describe('shouldPrepareDebriefOnVisit', () => {
   const visiting = {
     hasDebrief: true,
-    canDebrief: true,
+    materialText: 'body',
+    transcriptUsable: false,
     readOnly: false,
     alreadyRequested: false,
   };
@@ -100,7 +115,7 @@ describe('shouldPrepareDebriefOnVisit', () => {
     ['when the lesson has no debrief', { hasDebrief: false }],
     [
       'until the material has loaded with something to generate from',
-      { canDebrief: false },
+      { materialText: undefined },
     ],
     ['on a read-only archive view', { readOnly: true }],
     ['a second time for the same lesson', { alreadyRequested: true }],

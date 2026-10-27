@@ -1,3 +1,4 @@
+import { canOfferDebrief, type DebriefOfferArgs } from '#/lib/debrief-offer';
 import type { MaterialExtraTab } from '#/lib/flagship-course';
 import { SECTION_LABELS } from '#/lib/lock-copy';
 
@@ -17,12 +18,12 @@ export type ComputeMaterialTabsArgs = {
   /** The lesson has authored quiz questions. */
   hasQuiz: boolean;
   /**
-   * The lesson offers a debrief to this pilot: `has_debrief` is on, the
-   * server can generate one (body text is enough — see
-   * `resolveDebriefSource`), and the lesson is not a read-only archive view
-   * (call 12: no debrief clock there).
+   * What decides the Debrief tab: the shared `canOfferDebrief` rule (body
+   * text, or failing that a usable caption transcript — the generator's own
+   * order, so an empty-bodied material row on a captioned video still gets the
+   * tab), and not a read-only archive view (call 12: no debrief clock there).
    */
-  hasDebriefTab: boolean;
+  debrief: DebriefOfferArgs & { readOnly: boolean };
   /**
    * The closing tab — Job of the Day on 3D Airmanship lessons, TEST THIS! on
    * every other (see `materialExtraTabFor`). Never both.
@@ -47,9 +48,10 @@ export type ComputeMaterialTabsArgs = {
  */
 export function computeMaterialTabs({
   hasQuiz,
-  hasDebriefTab,
+  debrief,
   extraTab,
 }: ComputeMaterialTabsArgs): MaterialTab[] {
+  const hasDebriefTab = !debrief.readOnly && canOfferDebrief(debrief);
   return [
     { value: 'keyPoints', label: SECTION_LABELS.keyPoints },
     ...(hasQuiz ? [{ value: 'quiz', label: 'Quiz' } as const] : []),

@@ -48,7 +48,9 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 
+import { deletePreparedDebrief } from '#/db/prepared-debriefs';
 import {
+  discardPreparedDebrief,
   prepareDebrief,
   sourceFingerprint,
   takePreparedDebrief,
@@ -141,6 +143,28 @@ describe('prepareDebrief', () => {
     expect(await prepareDebrief(k)).toBe('no-source');
     expect(m.generateTest).not.toHaveBeenCalled();
     expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
+  });
+
+  it('deletes any stored row when the source is gone (ledger T8)', async () => {
+    // A row left behind would keep the lesson debrief-bearing in the course
+    // SQL (call 11) for a debrief nobody can now generate — so course percent
+    // could never reach 100.
+    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('body') });
+    m.resolveDebriefSource.mockResolvedValue(null);
+    expect(await prepareDebrief(k)).toBe('no-source');
+    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(k);
+    expect(m.rows.has(rowKey(k))).toBe(false);
+  });
+});
+
+describe('discardPreparedDebrief', () => {
+  it('deletes the row for exactly this pilot, course and lesson', async () => {
+    await discardPreparedDebrief(k);
+    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      lessonSlug: 'l1',
+    });
   });
 });
 

@@ -2,7 +2,6 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
 import { videoLanguageAtom } from '#/atoms/video-language';
-import { canDebriefFromTranscript } from '#/components/lesson-material/compute-transcript-debrief';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
@@ -88,18 +87,6 @@ export const LessonPlayerContainer = ({
     setReachedEnd(true);
   }, [setReachedEnd]);
 
-  // A source the server can actually resolve: the authored material's body
-  // text, or — on a lesson with no material at all — this video's caption
-  // transcript. Without one there is nothing to prepare.
-  const canDebrief =
-    Boolean(material?.text) ||
-    canDebriefFromTranscript({
-      hasDebrief,
-      // Already resolved into this component's own props — the same
-      // `captions === null` the material panel reads off the query.
-      hasCaptions: !videoState.captionsUnavailable,
-    });
-
   // viper7 starts writing the debrief as soon as the video plays, so it is
   // ready the moment the debrief opens (24h after the lesson is done) rather
   // than generating while the pilot waits on Start.
@@ -107,8 +94,12 @@ export const LessonPlayerContainer = ({
     courseSlug,
     lessonSlug,
     playing: !playerState.paused,
+    // The shared `canOfferDebrief` inputs: the material's body text, else
+    // this video's caption transcript (`captions === null` resolved into the
+    // props — the same answer `playbackHasCaptions` gives the material panel).
     hasDebrief,
-    canDebrief,
+    materialText: material?.text,
+    transcriptUsable: !videoState.captionsUnavailable,
     readOnly,
   });
 

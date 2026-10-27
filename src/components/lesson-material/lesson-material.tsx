@@ -17,6 +17,12 @@ type LessonMaterialProps = {
   courseSlug: string;
   /** `lessons.has_debrief` — the admin's switch for the Debrief tab. */
   hasDebrief: boolean;
+  /**
+   * The video has a caption transcript (`playbackHasCaptions`). A material row
+   * with no body text still gets the Debrief tab from it — the generator
+   * falls through to the transcript (see `canOfferDebrief`).
+   */
+  transcriptUsable: boolean;
   /** Called with each newly selected tab, so the container can record it. */
   onTabSelected?: (tab: string) => void;
   /** The lesson was completed at an earlier level — quiz/debrief writes must be inert. */
@@ -27,6 +33,7 @@ export const LessonMaterialView = ({
   material,
   courseSlug,
   hasDebrief,
+  transcriptUsable,
   onTabSelected,
   readOnly,
 }: LessonMaterialProps) => {
@@ -34,10 +41,15 @@ export const LessonMaterialView = ({
 
   const tabs = computeMaterialTabs({
     hasQuiz: (material.quiz?.length ?? 0) > 0,
-    // Body text is enough: when no key points were authored the server
-    // derives them from that text (see resolveDebriefSource). Read-only
-    // lessons get no debrief clock (call 12), so no tab either.
-    hasDebriefTab: hasDebrief && !readOnly && Boolean(material.text),
+    // The generator's own rule (call 11): body text, or failing that the
+    // video's caption transcript. Read-only lessons get no debrief clock
+    // (call 12), so no tab either.
+    debrief: {
+      hasDebrief,
+      materialText: material.text,
+      transcriptUsable,
+      readOnly,
+    },
     extraTab: material.extraTab,
   });
   const has = (value: string) => tabs.some((tab) => tab.value === value);

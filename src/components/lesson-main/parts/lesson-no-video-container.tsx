@@ -1,5 +1,6 @@
 import { usePrepareDebriefOnVisit } from '#/data-hooks/use-prepare-debrief';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
+import { canOfferDebrief } from '#/lib/debrief-offer';
 import { LessonNoVideo } from './lesson-no-video';
 
 type LessonNoVideoContainerProps = {
@@ -35,19 +36,17 @@ export const LessonNoVideoContainer = ({
   const { data } = useLessonMaterial({ courseSlug, lessonSlug });
   const material = data && !data.locked ? data.material : null;
 
-  // Mirrors LessonMaterialView's `hasDebriefTab`. The transcript fallback
-  // cannot apply here: this branch exists precisely because the lesson has no
-  // video.
-  const canDebrief = Boolean(material?.text);
-  const withDebrief = hasDebrief && canDebrief && !readOnly;
-
-  usePrepareDebriefOnVisit({
-    courseSlug,
-    lessonSlug,
+  // The shared `canOfferDebrief` rule, as the Debrief tab asks it. The
+  // transcript fallback cannot apply here: this branch exists precisely
+  // because the lesson has no video.
+  const offer = {
     hasDebrief,
-    canDebrief,
-    readOnly,
-  });
+    materialText: material?.text,
+    transcriptUsable: false,
+  };
+  const withDebrief = canOfferDebrief(offer) && !readOnly;
+
+  usePrepareDebriefOnVisit({ courseSlug, lessonSlug, ...offer, readOnly });
 
   return (
     <LessonNoVideo
