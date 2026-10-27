@@ -27,6 +27,7 @@
     "db:migrate-video-captions": "dotenv -e .env.local -- tsx src/db/migrate-video-captions.ts",
     "db:migrate-video-calls": "dotenv -e .env.local -- tsx src/db/migrate-video-calls.ts",
     "db:migrate-viper-context": "dotenv -e .env.local -- tsx src/db/migrate-viper-context.ts",
+    "db:migrate-debrief-review": "dotenv -e .env.local -- tsx src/db/migrate-debrief-review.ts",
     "db:migrate-lesson-embeddings": "dotenv -e .env.local -- tsx src/db/migrate-lesson-embeddings.ts",
     "db:migrate-lesson-placements": "dotenv -e .env.local -- tsx src/db/migrate-lesson-placements.ts",
     "db:relax-lesson-columns": "dotenv -e .env.local -- tsx src/db/migrate-relax-lesson-columns.ts",
