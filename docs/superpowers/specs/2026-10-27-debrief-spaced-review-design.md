@@ -238,6 +238,10 @@ and ring flip without a reload (refetch at `availableAt`).
     meaning existed only to stop those becoming a progress requirement; the
     debrief no longer counts toward progress at all, so the generator's own
     rule (`resolveDebriefSource`) decides whether the Debrief tab exists.
+    For course percent and course-done (SQL, which cannot fetch captions), a
+    lesson counts as debrief-bearing when it has material text, or once the
+    server has prepared or saved a debrief for that pilot — so a lesson whose
+    captions prove unusable can never hold a course open forever.
 12. **Read-only and out-of-tier lessons get no debrief clock and no D.** The
     generate and save routes refuse them (as save already does for out-of-tier),
     so a D can never appear that the pilot cannot clear.
