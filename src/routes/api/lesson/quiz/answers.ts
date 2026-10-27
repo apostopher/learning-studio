@@ -53,10 +53,10 @@ export async function submitLessonQuizHandler(
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is
-  // load-bearing now: what this writes feeds `lessonPercent`, and in a
-  // video-less course that is enough to drive `maybePromote` into writing a
-  // durable level row and sending a real promotion email — for a course the
-  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // load-bearing now: what this writes can take a lesson to 100%, and in a
+  // video-less course `settleProgress` then records the completion and runs
+  // promotion, which can write a durable level row and send a real promotion
+  // email — for a course the caller does not own. A null gate (no such lesson, or a WIP one) collapses
   // into the same 403 rather than a distinguishable 404, matching
   // report-video-progress and the playback route: telling the two apart hands
   // an enumeration oracle to any signed-in caller.

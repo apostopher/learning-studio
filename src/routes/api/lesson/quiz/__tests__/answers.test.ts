@@ -115,9 +115,10 @@ describe('out-of-tier quiz submissions are refused', () => {
 
 /**
  * A signed-in caller is not a subscriber. A saved attempt feeds `quizPlayed`
- * → `lessonPercent`, and in a video-less course that is enough to drive
- * `settleProgress` into appending a durable level row and sending a real
- * promotion email for a course the caller does not own.
+ * → `lessonPercent`, and in a video-less course that is enough for
+ * `settleProgress` to record the completion and then run promotion, which can
+ * append a durable level row and send a real promotion email for a course the
+ * caller does not own.
  */
 describe('quiz submit from a non-subscriber', () => {
   it('403s without recording the attempt or checking promotion', async () => {

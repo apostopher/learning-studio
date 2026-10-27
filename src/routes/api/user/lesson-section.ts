@@ -28,7 +28,9 @@ const sectionTapSchema = z.object({
  * prerequisite LOCKS are deliberately not re-checked, matching
  * `/api/user/last-viewed` — the tab only renders inside material the gate
  * already released, and the worst forgery achieves is a learner inflating
- * their own progress ring, which gates nothing (see D1).
+ * their own progress ring. That can complete a lesson of theirs, which the
+ * debrief clock and the next lesson's unlock then read, but only within a
+ * course they are already subscribed to.
  *
  * The LEVEL check is different in kind and IS enforced, because here the
  * progress ring is not cosmetic: tapped sections feed `lessonPercent`, and the
@@ -64,10 +66,10 @@ export async function recordLessonSectionHandler(
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is
-  // load-bearing now: what this writes feeds `lessonPercent`, and in a
-  // video-less course that is enough to drive `maybePromote` into writing a
-  // durable level row and sending a real promotion email — for a course the
-  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
+  // load-bearing now: what this writes can take a lesson to 100%, and in a
+  // video-less course `settleProgress` then records the completion and runs
+  // promotion, which can write a durable level row and send a real promotion
+  // email — for a course the caller does not own. A null gate (no such lesson, or a WIP one) collapses
   // into the same 403 rather than a distinguishable 404, matching
   // report-video-progress and the playback route: telling the two apart hands
   // an enumeration oracle to any signed-in caller.

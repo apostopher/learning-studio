@@ -371,7 +371,7 @@ describe('a lesson that asks nothing', () => {
   });
 });
 
-describe('watched vs percent (D19)', () => {
+describe('watched vs percent', () => {
   it('reports watched only for a fully watched video, never for completion', () => {
     // A lesson at 100% with no video must NOT report watched — that field
     // feeds the prerequisite gate, and setting it would silently turn sections

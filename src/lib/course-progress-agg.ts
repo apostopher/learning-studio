@@ -193,7 +193,8 @@ function lessonPercent(row: LessonProgressRow): number {
 
 /**
  * Whether this lesson's VIDEO is fully watched — deliberately NOT "is the
- * lesson complete" (D19).
+ * lesson complete". (Ledger D19, superseded by the debrief spaced-review
+ * design: prerequisites now read the sticky `done`, not this.)
  *
  * This feeds the lesson's OWN material lock (`GateProgress.watched`) and
  * library unlocks (`watchedLessonSlugs`). Prerequisites read the sticky `done`

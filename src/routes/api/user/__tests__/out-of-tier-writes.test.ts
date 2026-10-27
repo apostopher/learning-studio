@@ -160,10 +160,11 @@ describe('out-of-tier writes are refused', () => {
 });
 
 /**
- * A signed-in caller is not a subscriber. Every one of these writes feeds
- * `lessonPercent`, and in a video-less course a percent of 100 is enough to
- * drive `settleProgress` into appending a durable level row and sending a real
- * promotion email — for a course the caller does not own.
+ * A signed-in caller is not a subscriber. Every one of these writes can move
+ * `lessonPercent`, and in a video-less course a percent of 100 is enough for
+ * `settleProgress` to record the completion and then run promotion, which can
+ * append a durable level row and send a real promotion email — for a course
+ * the caller does not own.
  *
  * Each case asserts the WRITER and the PROMOTER were not reached, not merely
  * the status: a 403 issued after the write would have handed over exactly what

@@ -40,7 +40,8 @@ const SaveResultsInputSchema = z.object({
  * second tab submitting after the debrief relocked must not add an attempt.
  *
  * Every refusal comes before the write, because what this writes is what the
- * debrief schedule, course percent and promotion read.
+ * debrief schedule and course percent read, and `settleProgress` runs the
+ * promotion check straight after it.
  */
 export async function saveTestResultsHandler(
   request: Request,
