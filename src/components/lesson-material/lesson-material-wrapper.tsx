@@ -17,7 +17,7 @@ import {
 import { LessonMaterialView } from './lesson-material';
 import { LessonMaterialSkeleton } from './lesson-material-skeleton';
 import { AdminPreviewNote } from './parts/admin-preview-note';
-import { DebriefQuizContainer } from './parts/debrief-quiz-container';
+import { DebriefPanelContainer } from './parts/debrief-panel-container';
 import { LessonDebriefSection } from './parts/lesson-debrief-section';
 import { MaterialLocked } from './parts/material-locked';
 
@@ -94,7 +94,7 @@ export const LessonMaterialWrapper = ({
           hasCaptions: playbackHasCaptions(video.data),
         }) ? (
         <LessonDebriefSection>
-          <DebriefQuizContainer
+          <DebriefPanelContainer
             courseSlug={courseSlug}
             lessonSlug={lessonSlug}
             readOnly={state.readOnly}

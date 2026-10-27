@@ -4,7 +4,7 @@ import type { LessonMaterial } from '#/db/lesson';
 import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
 import { computeMaterialTabs, resolveActiveTab } from './compute-material-tabs';
 import { Assignments } from './parts/assignments';
-import { DebriefQuizContainer } from './parts/debrief-quiz-container';
+import { DebriefPanelContainer } from './parts/debrief-panel-container';
 import { JobOfTheDay } from './parts/job-of-the-day';
 import { KeyPoints } from './parts/key-points';
 import { Links } from './parts/links';
@@ -87,7 +87,7 @@ export const LessonMaterialView = ({
 
       {has('debrief') ? (
         <Tabs.Panel value="debrief" className="outline-hidden">
-          <DebriefQuizContainer
+          <DebriefPanelContainer
             courseSlug={courseSlug}
             lessonSlug={material.lessonSlug}
             readOnly={readOnly}

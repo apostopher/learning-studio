@@ -36,6 +36,36 @@ async function postDebriefJson(url: string, body: unknown): Promise<Response> {
   });
 }
 
+/**
+ * generate or save-results answered 409 `{ error: 'not-open' }`: the debrief
+ * is not open now (a tab left open across the 24h boundary, or another tab
+ * already submitted). Not a failure to show the pilot — it means the Debrief
+ * panel's state is stale; see `refreshIfNotOpen`.
+ */
+export class DebriefNotOpenError extends Error {
+  constructor() {
+    super('Debrief is not open');
+    this.name = 'DebriefNotOpenError';
+  }
+}
+
+/**
+ * If `error` is a not-open refusal, refetch that lesson's debrief status so
+ * the panel moves to the state the server is actually in, and report it
+ * handled. Any other error is left to the caller.
+ */
+export function refreshIfNotOpen(
+  queryClient: QueryClient,
+  { courseSlug, lessonSlug }: LessonRef,
+  error: unknown,
+): boolean {
+  if (!(error instanceof DebriefNotOpenError)) return false;
+  void queryClient.invalidateQueries({
+    queryKey: dataKeys.debriefStatus(courseSlug, lessonSlug),
+  });
+  return true;
+}
+
 export async function postGenerateTest({
   courseSlug,
   lessonSlug,
@@ -44,6 +74,7 @@ export async function postGenerateTest({
     courseSlug,
     lessonSlug,
   });
+  if (response.status === 409) throw new DebriefNotOpenError();
   if (!response.ok) throw new Error('Failed to generate test');
   return (await response.json()) as AITest;
 }
@@ -81,6 +112,7 @@ export async function postSaveResults({
     evaluations,
     totalScore,
   });
+  if (response.status === 409) throw new DebriefNotOpenError();
   if (!response.ok) throw new Error('Failed to save results');
   return response.json();
 }
@@ -116,8 +148,10 @@ export const useTotalScore = () => useAtomValue(totalScoreAtom);
 export const useTestResults = (lessonSlug: string) =>
   useAtomValue(testResultsAtomFamily(lessonSlug));
 
-// Mutation: Generate a new test
+// Mutation: Generate a new test. Resolves null when the server says the
+// debrief is not open — the status refetch then moves the panel on.
 export function useGenerateTest() {
+  const queryClient = useQueryClient();
   const setTest = useSetAtom(currentTestAtom);
   const setIsGenerating = useSetAtom(isGeneratingAtom);
   const setIndex = useSetAtom(currentQuestionIndexAtom);
@@ -135,11 +169,14 @@ export function useGenerateTest() {
         const test = await postGenerateTest(lesson);
         setTest(test);
         return test;
+      } catch (error) {
+        if (refreshIfNotOpen(queryClient, lesson, error)) return null;
+        throw error;
       } finally {
         setIsGenerating(false);
       }
     },
-    [setTest, setIsGenerating, setIndex, setEvaluations],
+    [queryClient, setTest, setIsGenerating, setIndex, setEvaluations],
   );
 }
 
@@ -213,6 +250,9 @@ export function useEvaluateAnswer() {
 // `courseSlug` comes from the caller rather than the session atoms: the test
 // carries its own `lessonSlug` (see debrief-session-owner.ts), but the course
 // it is being taken in is the container's, from the route.
+//
+// Resolves null when the server refuses the save as not open (a stale tab):
+// nothing was recorded, and the status refetch moves the panel on.
 export function useSaveResults() {
   const queryClient = useQueryClient();
   return useAtomCallback(
@@ -223,19 +263,23 @@ export function useSaveResults() {
         const totalScore = get(totalScoreAtom);
 
         if (!test) throw new Error('No test to save');
+        const lesson = { courseSlug, lessonSlug: test.lessonSlug };
 
-        const json = await postSaveResults({
-          courseSlug,
-          test,
-          evaluations,
-          totalScore,
-        });
+        let json: unknown;
+        try {
+          json = await postSaveResults({
+            courseSlug,
+            test,
+            evaluations,
+            totalScore,
+          });
+        } catch (error) {
+          if (refreshIfNotOpen(queryClient, lesson, error)) return null;
+          throw error;
+        }
         const promotion = extractPromotion(json);
         if (promotion) set(pendingPromotionAtom, promotion);
-        void invalidateAfterSave(queryClient, {
-          courseSlug,
-          lessonSlug: test.lessonSlug,
-        });
+        void invalidateAfterSave(queryClient, lesson);
         return json;
       },
       [queryClient],

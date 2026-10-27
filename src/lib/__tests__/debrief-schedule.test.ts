@@ -4,6 +4,7 @@ import {
   type DebriefFacts,
   debriefBadge,
   isPass,
+  msUntil,
 } from '#/lib/debrief-schedule';
 
 const now = new Date('2026-10-27T12:00:00Z');
@@ -108,5 +109,20 @@ describe('debriefBadge', () => {
     expect(
       debriefBadge({ kind: 'waiting', availableAt: hoursAgo(-1) }),
     ).toBeNull();
+  });
+});
+
+describe('msUntil', () => {
+  it('is the milliseconds from now to the instant', () => {
+    expect(msUntil('2026-10-27T12:00:05Z', now)).toBe(5_000);
+  });
+
+  it('is 0 for an instant already past, so a refetch fires at once', () => {
+    expect(msUntil(hoursAgo(1), now)).toBe(0);
+  });
+
+  it("is clamped to setTimeout's ceiling, which otherwise fires immediately", () => {
+    // setTimeout treats any delay above 2^31-1 ms (~24.8 days) as 0.
+    expect(msUntil('2027-06-01T00:00:00Z', now)).toBe(2_147_483_647);
   });
 });

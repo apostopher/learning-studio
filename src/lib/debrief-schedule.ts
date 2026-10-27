@@ -62,3 +62,17 @@ export function debriefBadge(state: DebriefState): 'debrief' | 'passed' | null {
       return null;
   }
 }
+
+/** The longest delay `setTimeout` honours; anything above it fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/**
+ * Milliseconds from `now` until the ISO instant `iso`, for scheduling a
+ * refetch the moment a debrief opens. Clamped to `[0, 2^31-1]`: a past instant
+ * fires at once, and a far-future one waits the longest a timer can rather
+ * than overflowing to an immediate fire.
+ */
+export function msUntil(iso: string, now: Date): number {
+  const ms = Date.parse(iso) - now.getTime();
+  return Math.min(Math.max(ms, 0), MAX_TIMEOUT_MS);
+}

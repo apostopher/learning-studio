@@ -1,4 +1,5 @@
 import { Loader2, NotebookPen } from 'lucide-react';
+import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 type DebriefIntroProps = {
@@ -6,23 +7,22 @@ type DebriefIntroProps = {
   onStart: () => void;
   /** Completed at an earlier level — Start must be disabled, not silently inert. */
   readOnly: boolean;
+  /** A retake after a below-par attempt — the questions are new. */
+  retake: boolean;
 };
 
 const REASON_ID = 'debrief-intro-readonly-reason';
 
 /**
- * The Debrief tab before a debrief has been generated.
- *
- * This tab used to render nothing at all when no test was in memory, which was
- * survivable while the post-video overlay was the only way in — dismiss it or
- * reload and the debrief was simply gone. Now that the tab is the primary
- * entry point (and the only one on a lesson with no video), it needs a state
- * that says what it is and how to start it.
+ * The Debrief tab once the debrief is open, before it has been generated.
+ * The tab is the only way in, so it says what the debrief is, what passes it,
+ * and how to start it.
  */
 export const DebriefIntro = ({
   loading,
   onStart,
   readOnly,
+  retake,
 }: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
     {/*
@@ -31,7 +31,10 @@ export const DebriefIntro = ({
       one source would be wrong half the time.
     */}
     <p className="text-secondary text-sm">
-      A short set of questions on this lesson. Your answers are scored and
+      {retake
+        ? `Your last attempt was below ${DEBRIEF_PAR_SCORE}, so this is a fresh set of questions.`
+        : 'A short set of questions on this lesson.'}{' '}
+      Score {DEBRIEF_PAR_SCORE} or more to pass. Your answers are scored and
       saved.
     </p>
     <button
