@@ -213,4 +213,78 @@ describe('LessonLink', () => {
     const link = screen.getByRole('link', { name: /Pitch and roll/ });
     expect(link.textContent).toContain('Finish the Intro module first');
   });
+
+  describe('debrief ring', () => {
+    const ring = (over = {}) => ({
+      percent: 100,
+      badge: null as 'debrief' | 'passed' | null,
+      ariaLabel: 'Lesson Pitch and roll, 100% complete, debrief ready',
+      refreshAt: null,
+      ...over,
+    });
+
+    it('names the progressbar from the ring and shows a D when a debrief is available', async () => {
+      await renderInRouter(
+        <LessonLink
+          courseSlug="c"
+          moduleSlug="m"
+          lesson={lesson}
+          rank={1}
+          isActive={false}
+          progressPercent={100}
+          ring={ring({ badge: 'debrief' })}
+        />,
+      );
+      const bar = screen.getByRole('progressbar');
+      expect(bar.getAttribute('aria-label')).toBe(
+        'Lesson Pitch and roll, 100% complete, debrief ready',
+      );
+      expect(bar.textContent).toContain('D');
+      // Bigger ring so the glyph is legible.
+      expect(bar.style.width).toBe('24px');
+    });
+
+    it('shows a tick and no D, with a full ring, once passed', async () => {
+      await renderInRouter(
+        <LessonLink
+          courseSlug="c"
+          moduleSlug="m"
+          lesson={lesson}
+          rank={1}
+          isActive={false}
+          progressPercent={80}
+          ring={ring({
+            badge: 'passed',
+            ariaLabel: 'Lesson Pitch and roll, 100% complete, debrief passed',
+          })}
+        />,
+      );
+      const bar = screen.getByRole('progressbar');
+      expect(bar.textContent).not.toContain('D');
+      expect(bar.getAttribute('aria-valuenow')).toBe('100');
+      expect(bar.querySelector('svg.lucide-check')).not.toBeNull();
+    });
+
+    it('keeps the small plain ring when there is no badge', async () => {
+      await renderInRouter(
+        <LessonLink
+          courseSlug="c"
+          moduleSlug="m"
+          lesson={lesson}
+          rank={1}
+          isActive={false}
+          progressPercent={40}
+          ring={ring({
+            percent: 40,
+            ariaLabel: 'Lesson Pitch and roll, 40% complete',
+          })}
+        />,
+      );
+      const bar = screen.getByRole('progressbar');
+      expect(bar.style.width).toBe('20px');
+      expect(bar.getAttribute('aria-label')).toBe(
+        'Lesson Pitch and roll, 40% complete',
+      );
+    });
+  });
 });

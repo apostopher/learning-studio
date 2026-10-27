@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import type { LessonLock } from '#/lib/lesson-gating';
 import { lessonLockSentence } from '#/lib/lock-copy';
 import { CircularProgress } from '../ui/circular-progress';
+import type { LessonRing } from './compute-lesson-ring';
 import { LessonLockIcon } from './lesson-lock-icon';
 
 type LessonLike = { slug: string; name: string };
@@ -13,6 +14,8 @@ type LessonLinkProps = {
   rank: number;
   isActive: boolean;
   progressPercent: number;
+  /** Debrief-aware ring state; absent renders the plain lesson-progress ring. */
+  ring?: LessonRing;
   /** Absent or `{ kind: 'open' }` renders the row with no lock affordance. */
   lock?: LessonLock;
 };
@@ -36,6 +39,7 @@ export const LessonLink = ({
   rank,
   isActive,
   progressPercent,
+  ring,
   lock,
 }: LessonLinkProps) => {
   const reason = lock ? lockReason(lock) : null;
@@ -72,10 +76,12 @@ export const LessonLink = ({
       </span>
       {reason ? <LessonLockIcon /> : null}
       <CircularProgress
-        value={progressPercent}
-        size={20}
+        value={ring?.percent ?? progressPercent}
+        // 20px is too small for a legible glyph, so a badge gets 24.
+        size={ring?.badge ? 24 : 20}
         strokeWidth={10}
-        ariaLabel={`Lesson ${lesson.name} progress`}
+        ariaLabel={ring?.ariaLabel ?? `Lesson ${lesson.name} progress`}
+        badge={ring?.badge ?? undefined}
         showLabel={false}
       />
     </Link>

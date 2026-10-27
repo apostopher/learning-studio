@@ -1,4 +1,5 @@
 import type { LessonLock } from '#/lib/lesson-gating';
+import type { LessonRing } from './compute-lesson-ring';
 import { LessonLink } from './lesson-link';
 
 type LessonLike = { slug: string; name: string };
@@ -10,6 +11,7 @@ type LessonListProps = {
   activeLessonSlug: string | null;
   lessonPercents: Record<string, number>;
   lessonLocks: Record<string, LessonLock>;
+  lessonRings?: Record<string, LessonRing>;
 };
 
 export const LessonList = ({
@@ -19,6 +21,7 @@ export const LessonList = ({
   activeLessonSlug,
   lessonPercents,
   lessonLocks,
+  lessonRings,
 }: LessonListProps) => (
   <ul className="flex flex-col gap-sidebar-row-gap py-sidebar-row-block">
     {lessons.map((lesson, index) => (
@@ -30,6 +33,7 @@ export const LessonList = ({
           rank={index + 1}
           isActive={lesson.slug === activeLessonSlug}
           progressPercent={lessonPercents[lesson.slug] ?? 0}
+          ring={lessonRings?.[lesson.slug]}
           lock={lessonLocks[lesson.slug]}
         />
       </li>

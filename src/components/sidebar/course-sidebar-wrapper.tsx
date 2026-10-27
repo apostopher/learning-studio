@@ -1,9 +1,10 @@
 import { useParams } from '@tanstack/react-router';
-import { useAtom, useAtomValue } from 'jotai';
-import { useMemo } from 'react';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useMemo } from 'react';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { useMyLevel } from '#/data-hooks/use-my-level';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
+import { msUntil } from '#/lib/debrief-schedule';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import {
   courseHasAvailableLessons,
@@ -15,7 +16,21 @@ import {
 } from '../../atoms/sidebar';
 import { computeArchivedLessons } from './compute-archived-lessons';
 import { computeLessonLocks } from './compute-lesson-locks';
+import {
+  computeSidebarPercents,
+  earliestRefreshAt,
+} from './compute-sidebar-percents';
 import { CourseSidebar } from './course-sidebar';
+
+/**
+ * Bumped by the refresh timer to recompute the rings against a fresh clock.
+ * A counter, not a Date: a module-level `new Date()` would be frozen at server
+ * start and could be hours stale.
+ */
+const sidebarTickAtom = atom(0);
+
+/** Flips true once the client has mounted; see `mounted` in the container. */
+const sidebarMountedAtom = atom(false);
 
 type LessonLike = { slug: string; name: string };
 type ModuleLike = {
@@ -95,50 +110,47 @@ export const CourseSidebarWrapper = ({
   // straight to Advanced has a course ring permanently capped by Basic lessons
   // they can never open.
   //
-  // The arithmetic deliberately mirrors `aggregateCourseProgress`: module% is
-  // the rounded mean of its lessons' percents, and course% the rounded mean of
-  // the modules that HAVE lessons — an empty module does not vote, for the
-  // same reason it does not there.
-  const { lessonPercents, modulePercents, coursePercent } = useMemo(() => {
-    const lessonPercents: Record<string, number> = {};
-    const modulePercents: Record<number, number> = {};
-    const progress = progressQuery.data;
-    const details = visibleDetails;
-    if (!progress || !details) {
-      return { lessonPercents, modulePercents, coursePercent: 0 };
-    }
-
-    const percentByLessonId = new Map(
-      progress.lessons.map((lesson) => [lesson.lessonId, lesson.percent]),
+  // Module% is the mean of its visible lessons' percents (debriefs excluded);
+  // course% is `coursePercent` over the visible lessons, which also counts one
+  // item per debrief-bearing lesson. See computeSidebarPercents.
+  const tick = useAtomValue(sidebarTickAtom);
+  const bumpTick = useSetAtom(sidebarTickAtom);
+  // False on the server and during hydration, true after. The ring's
+  // accessible name carries a clock time in the viewer's timezone, which the
+  // server cannot know; rendering "later" until mounted keeps the first client
+  // render identical to the server HTML (the same guarantee as ClientGate, via an effect).
+  const [mounted, setMounted] = useAtom(sidebarMountedAtom);
+  useEffect(() => {
+    setMounted(true);
+  }, [setMounted]);
+  // `tick` is only a recompute trigger; the clock is read inside.
+  const { lessonPercents, modulePercents, coursePercent, lessonRings } =
+    // biome-ignore lint/correctness/useExhaustiveDependencies: tick forces a re-read of the clock
+    useMemo(
+      () =>
+        computeSidebarPercents(visibleDetails, progressQuery.data, new Date(), {
+          includeTime: mounted,
+        }),
+      [progressQuery.data, visibleDetails, tick, mounted],
     );
 
-    const countedModulePercents: number[] = [];
-    for (const mod of details.modules) {
-      let sum = 0;
-      for (const lesson of mod.lessons) {
-        // A lesson with no progress row has done nothing, which is 0 — not
-        // "unknown". Skipping it would divide by a smaller denominator and
-        // read as further along than the pilot is.
-        const percent = percentByLessonId.get(lesson.id) ?? 0;
-        lessonPercents[lesson.slug] = percent;
-        sum += percent;
-      }
-      const percent =
-        mod.lessons.length === 0 ? 0 : Math.round(sum / mod.lessons.length);
-      modulePercents[mod.id] = percent;
-      if (mod.lessons.length > 0) countedModulePercents.push(percent);
-    }
-
-    const coursePercent =
-      countedModulePercents.length === 0
-        ? 0
-        : Math.round(
-            countedModulePercents.reduce((total, p) => total + p, 0) /
-              countedModulePercents.length,
-          );
-
-    return { lessonPercents, modulePercents, coursePercent };
-  }, [progressQuery.data, visibleDetails]);
+  // One timer, for the soonest instant any ring changes (a debrief opening),
+  // so the D appears without a reload. Re-armed whenever the rings change,
+  // cleared on unmount. `msUntil` clamps a past instant to 0, which would fire
+  // at once; but then the recompute sees a clock past that instant, `refreshAt` moves on
+  // or becomes null, and the effect does not loop.
+  const refreshAt = useMemo(
+    () => earliestRefreshAt(lessonRings),
+    [lessonRings],
+  );
+  useEffect(() => {
+    if (refreshAt === null) return;
+    const id = setTimeout(
+      () => bumpTick((n) => n + 1),
+      msUntil(refreshAt, new Date()),
+    );
+    return () => clearTimeout(id);
+  }, [refreshAt, bumpTick]);
 
   // Computed client-side from the two queries above — never written back to
   // getCourseDetailsWithCache, whose Redis entry is shared across every
@@ -241,6 +253,7 @@ export const CourseSidebarWrapper = ({
       modulePercents={modulePercents}
       coursePercent={coursePercent}
       lessonLocks={lessonLocks}
+      lessonRings={lessonRings}
       level={
         viewingAsAuthor || !levelQuery.data || levelQuery.data.level === null
           ? null

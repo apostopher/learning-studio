@@ -18,6 +18,15 @@ import type { Atom } from 'jotai';
 import { atom, createStore, Provider } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The container now uses useEffect (the debrief refresh timer). Without this
+// shim `react` imported from src resolves to a different instance than the one
+// react-dom loads and the hook dispatcher is null.
+vi.mock('react', async () => {
+  const { createRequire } = await import('node:module');
+  const cjs = createRequire(import.meta.url)('react');
+  return { ...cjs, default: cjs };
+});
+
 type DetailsResult = {
   data: unknown;
   isLoading: boolean;
@@ -727,5 +736,50 @@ describe('CourseSidebarWrapper', () => {
         name: 'Module Advanced Only progress',
       }),
     ).toBeNull();
+  });
+
+  it('hands the ring the debrief state and counts the debrief in the course percent', async () => {
+    progressMock.mockReturnValue({
+      data: {
+        percent: 100,
+        lessons: [
+          {
+            lessonId: 1,
+            moduleId: 1,
+            percent: 100,
+            watched: true,
+            done: true,
+            outstanding: [],
+            debrief: {
+              doneAt: '2020-01-01T00:00:00.000Z',
+              passed: false,
+              lastFailedAt: null,
+              bearing: true,
+            },
+          },
+        ],
+        modules: [{ moduleId: 1, percent: 100 }],
+      },
+    });
+    await renderAt('/course/3d-airmanship/modules/fundamentals/lessons/pitch', {
+      data: archivableCourse,
+      isLoading: false,
+      isError: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Fundamentals/ }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole('progressbar', {
+          name: 'Lesson Pitch, 100% complete, debrief ready',
+        }).textContent,
+      ).toContain('D');
+    });
+    // Lesson 100 + unpassed debrief 0, over the one visible lesson.
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Course 3D Airmanship progress' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('50');
   });
 });

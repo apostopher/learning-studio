@@ -3,6 +3,7 @@ import type { LessonLock } from '#/lib/lesson-gating';
 import { readSidebarMotionTokens } from '../../lib/sidebar-motion';
 import { ArchivedLessonsSection } from './archived-lessons-section';
 import type { ArchivedLesson } from './compute-archived-lessons';
+import type { LessonRing } from './compute-lesson-ring';
 import { CourseSidebarHeader } from './course-sidebar-header';
 import { ModuleAccordion } from './module-accordion';
 import {
@@ -34,6 +35,7 @@ type CourseSidebarProps = {
   modulePercents?: Record<number, number>;
   coursePercent?: number;
   lessonLocks?: Record<string, LessonLock>;
+  lessonRings?: Record<string, LessonRing>;
   /** See CourseSidebarHeaderProps — absent/null means no badge. */
   level?: string | null;
   /** Lessons completed at an earlier level — see ArchivedLessonsSection. */
@@ -63,6 +65,7 @@ export const CourseSidebar = ({
   modulePercents,
   coursePercent,
   lessonLocks,
+  lessonRings,
   level,
   archivedLessons,
   archiveSectionOpen,
@@ -129,6 +132,7 @@ export const CourseSidebar = ({
                 lessonPercents={lessonPercents ?? {}}
                 modulePercents={modulePercents ?? {}}
                 lessonLocks={lessonLocks ?? {}}
+                lessonRings={lessonRings}
               />
             )}
             <ArchivedLessonsSection
