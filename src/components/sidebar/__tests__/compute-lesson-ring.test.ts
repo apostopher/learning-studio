@@ -61,14 +61,27 @@ describe('computeLessonRing', () => {
     expect(r.refreshAt).toBe('2026-10-28T15:40:00.000Z');
   });
 
-  it('shows nothing during the first 24h but schedules the refresh', () => {
+  it('shows no badge during the first 24h, says when the debrief opens, and schedules the refresh', () => {
     const r = computeLessonRing({
       ...base,
       debrief: facts({ doneAt: '2026-10-28T03:00:00Z' }) as never,
     });
     expect(r.badge).toBeNull();
     expect(r.refreshAt).toBe('2026-10-29T03:00:00.000Z');
-    expect(r.ariaLabel).toBe('Lesson X, 100% complete');
+    // The wait states its reason: no D yet because the debrief has not opened.
+    expect(r.ariaLabel).toBe(
+      'Lesson X, 100% complete, debrief opens Thu 29 Oct, 3:00 AM',
+    );
+  });
+
+  it('says the debrief opens later (SSR-safe) in the first 24h when includeTime is false', () => {
+    const r = computeLessonRing({
+      ...base,
+      includeTime: false,
+      debrief: facts({ doneAt: '2026-10-28T03:00:00Z' }) as never,
+    });
+    expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief opens later');
+    expect(r.refreshAt).toBe('2026-10-29T03:00:00.000Z');
   });
 
   it('shows the tick and a full ring when passed', () => {

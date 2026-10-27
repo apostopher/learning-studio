@@ -43,6 +43,8 @@ export function computeLessonRing(a: {
   const badge = debriefBadge(state);
   const percent = badge === 'passed' ? 100 : a.percent;
   const lead = `Lesson ${a.lessonName}, ${percent}% complete`;
+  const when = (availableAt: string) =>
+    includeTime ? formatDebriefTime(availableAt, a.now, a.timeZone) : 'later';
 
   switch (state.kind) {
     case 'passed':
@@ -59,22 +61,20 @@ export function computeLessonRing(a: {
         ariaLabel: `${lead}, debrief ready`,
         refreshAt: null,
       };
-    case 'retake-waiting': {
-      const when = includeTime
-        ? formatDebriefTime(state.availableAt, a.now, a.timeZone)
-        : 'later';
+    case 'retake-waiting':
       return {
         percent,
         badge,
-        ariaLabel: `${lead}, debrief reopens ${when}`,
+        ariaLabel: `${lead}, debrief reopens ${when(state.availableAt)}`,
         refreshAt: state.availableAt,
       };
-    }
+    // No D yet, but the wait still states its reason: the debrief has not
+    // opened, and when it will.
     case 'waiting':
       return {
         percent,
         badge,
-        ariaLabel: lead,
+        ariaLabel: `${lead}, debrief opens ${when(state.availableAt)}`,
         refreshAt: state.availableAt,
       };
     case 'not-done':
