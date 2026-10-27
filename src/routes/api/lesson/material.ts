@@ -8,6 +8,7 @@ import {
 } from '#/lib/lesson-gating';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { partitionQuiz } from '#/lib/lesson-quiz';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 /**
  * The exact union the four UI surfaces switch on. Every success body is
@@ -146,6 +147,20 @@ export async function getLessonMaterialHandler(
       await recordLessonVisit({ userId: session.user.id, lessonSlug });
     } catch (error) {
       console.error('Failed to record lesson visit:', error);
+    }
+
+    // A visit can be the last missing piece of a lesson (a video-less one), so
+    // settle completions and promotion now. Awaited so the write is not cut
+    // off by the response; the result is ignored — `promotion` is not part of
+    // this payload. It never throws; the catch is belt and braces so the learner
+    // always gets the material.
+    try {
+      await settleProgress({
+        userId: session.user.id,
+        courseSlug: gate.courseSlug,
+      });
+    } catch (error) {
+      console.error('Failed to settle progress after lesson visit:', error);
     }
 
     // No material row is NOT an error. Plenty of lessons are video-only, and

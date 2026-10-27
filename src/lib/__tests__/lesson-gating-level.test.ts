@@ -115,7 +115,9 @@ describe('level enforcement', () => {
   it('makes an out-of-tier lesson read-only when it was completed', async () => {
     m.getCurrentLevel.mockResolvedValue('intermediate');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 10, moduleId: 1, percent: 100, watched: true }],
+      lessons: [
+        { lessonId: 10, moduleId: 1, percent: 40, watched: true, done: true },
+      ],
     });
     const result = await evaluateLessonGate({
       userId: 'u1',
@@ -128,7 +130,15 @@ describe('level enforcement', () => {
   it('refuses an out-of-tier lesson that was never completed', async () => {
     m.getCurrentLevel.mockResolvedValue('intermediate');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 10, moduleId: 1, percent: 60, watched: false }],
+      lessons: [
+        {
+          lessonId: 10,
+          moduleId: 1,
+          percent: 100,
+          watched: false,
+          done: false,
+        },
+      ],
     });
     const result = await evaluateLessonGate({
       userId: 'u1',
@@ -241,7 +251,9 @@ describe("a lesson tagged 'none'", () => {
       ],
     });
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 12, moduleId: 1, percent: 100, watched: true }],
+      lessons: [
+        { lessonId: 12, moduleId: 1, percent: 100, watched: true, done: true },
+      ],
     });
     m.getCurrentLevel.mockResolvedValue('basic');
     const result = await evaluateLessonGate({
@@ -285,7 +297,9 @@ describe('strict levels: an untagged lesson, and a pilot with no level', () => {
       withLesson({ id: 13, slug: 'untagged-1', levels: [] }),
     );
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 13, moduleId: 1, percent: 100, watched: true }],
+      lessons: [
+        { lessonId: 13, moduleId: 1, percent: 100, watched: true, done: true },
+      ],
     });
     m.getCurrentLevel.mockResolvedValue('basic');
     const result = await evaluateLessonGate({
@@ -310,7 +324,9 @@ describe('strict levels: an untagged lesson, and a pilot with no level', () => {
   it('does not offer a no-level pilot a read-only copy of work they completed', async () => {
     m.getCurrentLevel.mockResolvedValue(null);
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 10, moduleId: 1, percent: 100, watched: true }],
+      lessons: [
+        { lessonId: 10, moduleId: 1, percent: 100, watched: true, done: true },
+      ],
     });
     const result = await evaluateLessonGate({
       userId: 'u1',

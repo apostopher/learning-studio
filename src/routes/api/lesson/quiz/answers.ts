@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { saveLessonQuizAnswers } from '#/db/lesson-quiz';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
-import type { Promotion } from '#/lib/promotion.server';
-import { maybePromote } from '#/lib/promotion.server';
+import { settleProgress } from '#/lib/settle-progress.server';
 import { CourseLessonQuizAnswersSchema } from '#/types';
 
 const SubmitQuizInputSchema = z.object({
@@ -93,20 +92,12 @@ export async function submitLessonQuizHandler(
       answers: parsed.data.answers,
     });
 
-    // Best-effort: a promotion-check failure must never fail the quiz
-    // attempt the pilot just recorded.
-    let promotion: Promotion | null = null;
-    try {
-      promotion = await maybePromote({
-        userId: session.user.id,
-        courseSlug: gate.courseSlug,
-      });
-    } catch (error) {
-      console.error(
-        'Promotion check failed; the quiz attempt was still recorded.',
-        error,
-      );
-    }
+    // Best-effort: `settleProgress` never throws, so a settle failure cannot
+    // fail the quiz attempt the pilot just recorded.
+    const promotion = await settleProgress({
+      userId: session.user.id,
+      courseSlug: gate.courseSlug,
+    });
 
     return Response.json({ ...row, promotion });
   } catch (error) {

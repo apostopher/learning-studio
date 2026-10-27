@@ -4,8 +4,7 @@ import { recordLessonSectionTap } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
-import type { Promotion } from '#/lib/promotion.server';
-import { maybePromote } from '#/lib/promotion.server';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 const sectionTapSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -107,20 +106,12 @@ export async function recordLessonSectionHandler(
     return Response.json({ error: 'Failed to save' }, { status: 500 });
   }
 
-  // Best-effort: a promotion-check failure must never fail the tap the pilot
-  // actually recorded.
-  let promotion: Promotion | null = null;
-  try {
-    promotion = await maybePromote({
-      userId: session.user.id,
-      courseSlug: gate.courseSlug,
-    });
-  } catch (error) {
-    console.error(
-      'Promotion check failed; progress was still recorded.',
-      error,
-    );
-  }
+  // Best-effort: `settleProgress` never throws, so a settle failure cannot fail
+  // the tap the pilot actually recorded.
+  const promotion = await settleProgress({
+    userId: session.user.id,
+    courseSlug: gate.courseSlug,
+  });
 
   return Response.json(
     { message: 'Section recorded', promotion },

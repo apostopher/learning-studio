@@ -6,7 +6,7 @@ const m = vi.hoisted(() => ({
   evaluateLessonGate: vi.fn(),
   recordLastViewedLesson: vi.fn(),
   recordLessonSectionTap: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -19,9 +19,11 @@ vi.mock('#/db/course-last-viewed', () => ({
 vi.mock('#/db/lesson-visit', () => ({
   recordLessonSectionTap: m.recordLessonSectionTap,
 }));
-// lesson-section calls maybePromote after a successful tap — stubbed so this
+// lesson-section calls settleProgress (never throws) after a successful tap — stubbed so this
 // file never reaches the real db/email modules it pulls in transitively.
-vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({
+  settleProgress: m.settleProgress,
+}));
 
 import { recordLastViewedHandler } from '../last-viewed';
 import { recordLessonSectionHandler } from '../lesson-section';
@@ -50,7 +52,7 @@ beforeEach(() => {
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.recordLastViewedLesson.mockResolvedValue(true);
   m.recordLessonSectionTap.mockResolvedValue(undefined);
-  m.maybePromote.mockResolvedValue(null);
+  m.settleProgress.mockResolvedValue(null);
 });
 
 /**
@@ -160,7 +162,7 @@ describe('out-of-tier writes are refused', () => {
 /**
  * A signed-in caller is not a subscriber. Every one of these writes feeds
  * `lessonPercent`, and in a video-less course a percent of 100 is enough to
- * drive `maybePromote` into appending a durable level row and sending a real
+ * drive `settleProgress` into appending a durable level row and sending a real
  * promotion email — for a course the caller does not own.
  *
  * Each case asserts the WRITER and the PROMOTER were not reached, not merely
@@ -181,7 +183,7 @@ describe('writes from a non-subscriber are refused', () => {
     );
     expect(res.status).toBe(403);
     expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
-    expect(m.maybePromote).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('403s a last-viewed write without moving the pointer', async () => {
@@ -276,5 +278,24 @@ describe('the course comes from the request', () => {
         courseId: 42,
       });
     });
+  });
+});
+
+describe('settling progress after a lesson-section tap', () => {
+  it('settles for the session user and the gate course, and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    m.settleProgress.mockResolvedValue(promotion);
+    const res = await recordLessonSectionHandler(
+      post('/api/user/lesson-section', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+        section: 'keyPoints',
+      }),
+    );
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

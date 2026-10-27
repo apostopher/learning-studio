@@ -9,7 +9,7 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   evaluateMCQ: vi.fn(),
   saveTestResult: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
   takePreparedDebrief: vi.fn(),
 }));
 
@@ -29,9 +29,11 @@ vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: m.evaluateFreeText,
   evaluateMCQ: m.evaluateMCQ,
 }));
-// save-results calls maybePromote after a successful write — stubbed so this
+// save-results calls settleProgress (never throws) after a successful write — stubbed so this
 // file never reaches the real db/email modules it pulls in transitively.
-vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({
+  settleProgress: m.settleProgress,
+}));
 
 // `#/ai/schemas` is deliberately NOT mocked: the real AITestQuestionSchema has
 // to run, or a malformed question in these fixtures would 400 before ever
@@ -74,7 +76,7 @@ beforeEach(() => {
   m.generateTest.mockResolvedValue({ lessonSlug: 'l1', questions: [] });
   m.evaluateFreeText.mockResolvedValue({ score: 80 });
   m.saveTestResult.mockResolvedValue({ id: 1 });
-  m.maybePromote.mockResolvedValue(null);
+  m.settleProgress.mockResolvedValue(null);
   m.takePreparedDebrief.mockResolvedValue(null);
 });
 
@@ -238,7 +240,7 @@ describe('save-results refuses out-of-tier lessons', () => {
 /**
  * A signed-in caller is not a subscriber. `generate` and `evaluate` already
  * refused one; `save-results` is the write, and a saved debrief feeds
- * `debriefAnswered` → `lessonPercent` → `maybePromote`.
+ * a passed debrief that gates promotion via `settleProgress`.
  */
 describe('save-results from a non-subscriber', () => {
   const savePayload = {
@@ -256,7 +258,7 @@ describe('save-results from a non-subscriber', () => {
     );
     expect(res.status).toBe(403);
     expect(m.saveTestResult).not.toHaveBeenCalled();
-    expect(m.maybePromote).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('403s an unknown lesson rather than writing against it', async () => {
@@ -433,5 +435,26 @@ describe('generate serves a prepared debrief', () => {
     );
     expect(res.status).toBe(200);
     expect(m.generateTest).toHaveBeenCalledWith('l1', ['k'], 'body');
+  });
+});
+
+describe('settling progress after a saved debrief', () => {
+  it('settles for the SESSION user (not the dev-user placeholder) and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    m.settleProgress.mockResolvedValue(promotion);
+    const res = await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+        test: { lessonSlug: 'l1', questions: [] },
+        evaluations: [],
+        totalScore: 80,
+      }),
+    );
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

@@ -5,7 +5,7 @@ const m = vi.hoisted(() => ({
   getSession: vi.fn(),
   evaluateLessonGate: vi.fn(),
   saveLessonQuizAnswers: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -15,9 +15,11 @@ vi.mock('#/lib/lesson-gating.server', () => ({
 vi.mock('#/db/lesson-quiz', () => ({
   saveLessonQuizAnswers: m.saveLessonQuizAnswers,
 }));
-// The route calls maybePromote after a successful write — stubbed so this
+// The route calls settleProgress (never throws) after a successful write — stubbed so this
 // file never reaches the real db/email modules it pulls in transitively.
-vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({
+  settleProgress: m.settleProgress,
+}));
 
 import { submitLessonQuizHandler } from '../answers';
 
@@ -54,7 +56,7 @@ beforeEach(() => {
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.saveLessonQuizAnswers.mockResolvedValue({ id: 1 });
-  m.maybePromote.mockResolvedValue(null);
+  m.settleProgress.mockResolvedValue(null);
 });
 
 /**
@@ -114,7 +116,7 @@ describe('out-of-tier quiz submissions are refused', () => {
 /**
  * A signed-in caller is not a subscriber. A saved attempt feeds `quizPlayed`
  * → `lessonPercent`, and in a video-less course that is enough to drive
- * `maybePromote` into appending a durable level row and sending a real
+ * `settleProgress` into appending a durable level row and sending a real
  * promotion email for a course the caller does not own.
  */
 describe('quiz submit from a non-subscriber', () => {
@@ -125,7 +127,7 @@ describe('quiz submit from a non-subscriber', () => {
     );
     expect(res.status).toBe(403);
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
-    expect(m.maybePromote).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('403s an unknown lesson rather than writing against it', async () => {
@@ -163,5 +165,20 @@ describe('the course comes from the request', () => {
       lessonSlug: 'l1',
       courseSlug: 'c-real',
     });
+  });
+});
+
+describe('settling progress after a quiz attempt', () => {
+  it('settles for the session user and the gate course, and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    m.settleProgress.mockResolvedValue(promotion);
+    const res = await submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', courseSlug: 'c1', answers }),
+    );
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

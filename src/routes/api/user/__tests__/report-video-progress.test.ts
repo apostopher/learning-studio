@@ -6,23 +6,23 @@ const {
   recordLessonProgress,
   evaluateLessonGate,
   getLessonIdBySlug,
-  maybePromote,
+  settleProgress,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   recordLessonProgress: vi.fn(),
   evaluateLessonGate: vi.fn(),
   getLessonIdBySlug: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/db/videos-progress', () => ({ recordLessonProgress }));
 vi.mock('#/lib/lesson-gating.server', () => ({ evaluateLessonGate }));
 vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
-// The route calls maybePromote after every successful write — stubbed so
+// The route calls settleProgress (never throws) after every successful write — stubbed so
 // this file never reaches the real db/email modules it pulls in
 // transitively (this route is the highest-frequency caller, the video
 // beacon).
-vi.mock('#/lib/promotion.server', () => ({ maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({ settleProgress }));
 
 import { reportVideoProgressHandler } from '../report-video-progress';
 
@@ -43,7 +43,7 @@ beforeEach(() => {
     lessonLock: { kind: 'open' },
   });
   getLessonIdBySlug.mockResolvedValue(10);
-  maybePromote.mockResolvedValue(null);
+  settleProgress.mockResolvedValue(null);
 });
 
 /**
@@ -205,5 +205,25 @@ describe('reportVideoProgressHandler', () => {
     );
     expect(res.status).toBe(403);
     expect(recordLessonProgress).not.toHaveBeenCalled();
+  });
+});
+
+describe('settling progress after a write', () => {
+  it('settles for the session user and the gate course, and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    settleProgress.mockResolvedValue(promotion);
+    evaluateLessonGate.mockResolvedValue({
+      subscribed: true,
+      courseSlug: 'c-gate',
+      lessonLock: { kind: 'open' },
+    });
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
+    );
+    expect(settleProgress).toHaveBeenCalledWith({
+      userId: 'user-1',
+      courseSlug: 'c-gate',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

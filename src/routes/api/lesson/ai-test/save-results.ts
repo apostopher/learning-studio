@@ -4,8 +4,7 @@ import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
 import { saveTestResult } from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
-import type { Promotion } from '#/lib/promotion.server';
-import { maybePromote } from '#/lib/promotion.server';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 const SaveResultsInputSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -73,8 +72,7 @@ export async function saveTestResultsHandler(
 
   // Refuse an out-of-tier lesson, in BOTH read-only states: a read-only
   // archive view may show a pilot the debrief they already did, never record a
-  // new one. A completed debrief sets `debriefAnswered`, which feeds
-  // `lessonPercent`, which is what the gate reads to decide `readOnly`.
+  // new one.
   //
   // `lessonLock`/`materialLock` are deliberately NOT honoured here — refusing
   // on those would newly 403 flows that succeed today, a separate decision with
@@ -88,14 +86,10 @@ export async function saveTestResultsHandler(
   }
 
   try {
-    // TODO: restore session.user.id when auth is re-enabled.
-    //
-    // NOTE: this placeholder is why the escalation path this guard closes is
-    // currently inert — `debriefAnswered` matches on `user_id`, so today every
-    // result lands on 'dev-user' and moves nobody's percent. The guard is
-    // written against the session user regardless, so it is already correct
-    // when the line below is fixed. Fixing it is a separate change: it would
-    // start counting debriefs toward every learner's progress.
+    // TODO: restore session.user.id when auth is re-enabled (Task 8 of the
+    // debrief plan fixes this write). Until then every result lands on
+    // 'dev-user' and counts for nobody; the guards above are written against
+    // the session user and are already correct once it is fixed.
     const result = await saveTestResult({
       userId: 'dev-user',
       lessonSlug,
@@ -104,22 +98,14 @@ export async function saveTestResultsHandler(
       totalScore,
     });
 
-    // Best-effort: a promotion-check failure must never fail the debrief the
-    // pilot just completed. Checked against the real session user, not the
+    // Best-effort: `settleProgress` never throws, so a settle failure cannot
+    // fail the debrief the pilot just completed. Settled against the real session user, not the
     // 'dev-user' placeholder above — this is already correct for when that
     // TODO is fixed.
-    let promotion: Promotion | null = null;
-    try {
-      promotion = await maybePromote({
-        userId: session.user.id,
-        courseSlug: gate.courseSlug,
-      });
-    } catch (error) {
-      console.error(
-        'Promotion check failed; the debrief was still saved.',
-        error,
-      );
-    }
+    const promotion = await settleProgress({
+      userId: session.user.id,
+      courseSlug: gate.courseSlug,
+    });
 
     return Response.json({ ...result, promotion });
   } catch (error) {
