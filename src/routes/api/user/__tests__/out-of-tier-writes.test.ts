@@ -57,9 +57,10 @@ beforeEach(() => {
 
 /**
  * These two routes are writes, and what they write feeds `lessonPercent` —
- * which the level gate reads back to decide whether an out-of-tier lesson
- * opens read-only. Left ungated, a caller could POST one tap per section on a
- * material-only lesson outside their tier, drive percent to 100, and turn
+ * and a lesson reaching 100% is recorded as the sticky `done`, which the level
+ * gate reads back to decide whether an out-of-tier lesson opens read-only.
+ * Left ungated, a caller could POST one tap per section on a material-only
+ * lesson outside their tier, drive percent to 100, and turn
  * `/api/lesson/material`'s `403 out-of-tier` into a 200 serving the full text.
  *
  * Every case asserts the WRITER was not called, not merely the status: a 403

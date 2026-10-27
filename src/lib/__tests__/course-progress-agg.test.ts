@@ -374,8 +374,9 @@ describe('a lesson that asks nothing', () => {
 describe('watched vs percent', () => {
   it('reports watched only for a fully watched video, never for completion', () => {
     // A lesson at 100% with no video must NOT report watched — that field
-    // feeds the prerequisite gate, and setting it would silently turn sections
-    // and debriefs into unlock requirements.
+    // feeds the material lock (the lesson's own video unlocking its tabs), so
+    // setting it from completion would unlock material for a video nobody
+    // watched. Prerequisites read the sticky `done` instead.
     const { lessons, watchedLessons } = aggregateCourseProgress('c', [
       row({ moduleId: 1, lessonId: 10, visited: true }),
       row({

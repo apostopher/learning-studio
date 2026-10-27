@@ -33,11 +33,12 @@ const sectionTapSchema = z.object({
  * course they are already subscribed to.
  *
  * The LEVEL check is different in kind and IS enforced, because here the
- * progress ring is not cosmetic: tapped sections feed `lessonPercent`, and the
- * level gate reads percent to decide whether an out-of-tier lesson opens
- * read-only. Without this, a caller could tap their way to 100% on a
- * material-only lesson outside their tier and turn its `403 out-of-tier` into
- * a 200 with the full material.
+ * progress ring is not cosmetic: tapped sections feed `lessonPercent`, a
+ * lesson reaching 100% is recorded as the sticky `done`, and the level gate
+ * reads `done` to decide whether an out-of-tier lesson opens read-only.
+ * Without this, a caller could tap their way to 100% on a material-only
+ * lesson outside their tier and turn its `403 out-of-tier` into a 200 with the
+ * full material.
  */
 export async function recordLessonSectionHandler(
   request: Request,
@@ -69,10 +70,11 @@ export async function recordLessonSectionHandler(
   // load-bearing now: what this writes can take a lesson to 100%, and in a
   // video-less course `settleProgress` then records the completion and runs
   // promotion, which can write a durable level row and send a real promotion
-  // email — for a course the caller does not own. A null gate (no such lesson, or a WIP one) collapses
-  // into the same 403 rather than a distinguishable 404, matching
-  // report-video-progress and the playback route: telling the two apart hands
-  // an enumeration oracle to any signed-in caller.
+  // email — for a course the caller does not own. A null gate (no such
+  // lesson, or a WIP one) collapses into the same 403 rather than a
+  // distinguishable 404, matching report-video-progress and the playback
+  // route: telling the two apart hands an enumeration oracle to any signed-in
+  // caller.
   //
   // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
   // that remains a separate decision with its own blast radius.
@@ -82,9 +84,10 @@ export async function recordLessonSectionHandler(
 
   // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
   // and an archive view must not write anything. It matters because what it
-  // writes feeds `lessonPercent`, and percent is exactly what the gate reads
-  // to decide `readOnly` — so a caller could POST their way from a
-  // `403 out-of-tier` to a 200 serving the full material.
+  // writes feeds `lessonPercent`, a lesson reaching 100% is recorded as the
+  // sticky `done`, and `done` is exactly what the gate reads to decide
+  // `readOnly` — so a caller could POST their way from a `403 out-of-tier` to
+  // a 200 serving the full material.
   //
   // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing on
   // those would newly 403 flows that succeed today, which is a separate
