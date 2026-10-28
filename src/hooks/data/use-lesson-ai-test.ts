@@ -1,3 +1,4 @@
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useAtomCallback } from 'jotai/utils';
 import { useCallback } from 'react';
@@ -14,6 +15,8 @@ import {
   totalScoreAtom,
 } from '#/atoms/lesson-ai-test';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
+import { invalidateLessonDoneReaders } from '#/data-hooks/invalidate-lesson-done';
+import { dataKeys } from '#/data-hooks/keys';
 import type { LessonRef } from '#/lib/lesson-ref';
 
 /**
@@ -34,6 +37,36 @@ async function postDebriefJson(url: string, body: unknown): Promise<Response> {
   });
 }
 
+/**
+ * generate or save-results answered 409 `{ error: 'not-open' }`: the debrief
+ * is not open now (a tab left open across the 24h boundary, or another tab
+ * already submitted). Not a failure to show the pilot — it means the Debrief
+ * panel's state is stale; see `refreshIfNotOpen`.
+ */
+export class DebriefNotOpenError extends Error {
+  constructor() {
+    super('Debrief is not open');
+    this.name = 'DebriefNotOpenError';
+  }
+}
+
+/**
+ * If `error` is a not-open refusal, refetch that lesson's debrief status so
+ * the panel moves to the state the server is actually in, and report it
+ * handled. Any other error is left to the caller.
+ */
+export function refreshIfNotOpen(
+  queryClient: QueryClient,
+  { courseSlug, lessonSlug }: LessonRef,
+  error: unknown,
+): boolean {
+  if (!(error instanceof DebriefNotOpenError)) return false;
+  void queryClient.invalidateQueries({
+    queryKey: dataKeys.debriefStatus(courseSlug, lessonSlug),
+  });
+  return true;
+}
+
 export async function postGenerateTest({
   courseSlug,
   lessonSlug,
@@ -42,6 +75,7 @@ export async function postGenerateTest({
     courseSlug,
     lessonSlug,
   });
+  if (response.status === 409) throw new DebriefNotOpenError();
   if (!response.ok) throw new Error('Failed to generate test');
   return (await response.json()) as AITest;
 }
@@ -79,8 +113,21 @@ export async function postSaveResults({
     evaluations,
     totalScore,
   });
+  if (response.status === 409) throw new DebriefNotOpenError();
   if (!response.ok) throw new Error('Failed to save results');
   return response.json();
+}
+
+/**
+ * A saved attempt can change the debrief's state (passed, or re-locked for
+ * 24h) and the course rollup's debrief badges. Invalidate rather than write
+ * a partial state: the server owns what the new state is.
+ */
+export function invalidateAfterSave(
+  queryClient: QueryClient,
+  lesson: LessonRef,
+) {
+  return invalidateLessonDoneReaders(queryClient, lesson);
 }
 
 // Read hooks — thin wrappers over atoms
@@ -95,8 +142,10 @@ export const useTotalScore = () => useAtomValue(totalScoreAtom);
 export const useTestResults = (lessonSlug: string) =>
   useAtomValue(testResultsAtomFamily(lessonSlug));
 
-// Mutation: Generate a new test
+// Mutation: Generate a new test. Resolves null when the server says the
+// debrief is not open — the status refetch then moves the panel on.
 export function useGenerateTest() {
+  const queryClient = useQueryClient();
   const setTest = useSetAtom(currentTestAtom);
   const setIsGenerating = useSetAtom(isGeneratingAtom);
   const setIndex = useSetAtom(currentQuestionIndexAtom);
@@ -114,11 +163,14 @@ export function useGenerateTest() {
         const test = await postGenerateTest(lesson);
         setTest(test);
         return test;
+      } catch (error) {
+        if (refreshIfNotOpen(queryClient, lesson, error)) return null;
+        throw error;
       } finally {
         setIsGenerating(false);
       }
     },
-    [setTest, setIsGenerating, setIndex, setEvaluations],
+    [queryClient, setTest, setIsGenerating, setIndex, setEvaluations],
   );
 }
 
@@ -192,24 +244,39 @@ export function useEvaluateAnswer() {
 // `courseSlug` comes from the caller rather than the session atoms: the test
 // carries its own `lessonSlug` (see debrief-session-owner.ts), but the course
 // it is being taken in is the container's, from the route.
+//
+// Resolves null when the server refuses the save as not open (a stale tab):
+// nothing was recorded, and the status refetch moves the panel on.
 export function useSaveResults() {
+  const queryClient = useQueryClient();
   return useAtomCallback(
-    useCallback(async (get, set, courseSlug: string) => {
-      const test = get(currentTestAtom);
-      const evaluations = get(evaluationsAtom);
-      const totalScore = get(totalScoreAtom);
+    useCallback(
+      async (get, set, courseSlug: string) => {
+        const test = get(currentTestAtom);
+        const evaluations = get(evaluationsAtom);
+        const totalScore = get(totalScoreAtom);
 
-      if (!test) throw new Error('No test to save');
+        if (!test) throw new Error('No test to save');
+        const lesson = { courseSlug, lessonSlug: test.lessonSlug };
 
-      const json = await postSaveResults({
-        courseSlug,
-        test,
-        evaluations,
-        totalScore,
-      });
-      const promotion = extractPromotion(json);
-      if (promotion) set(pendingPromotionAtom, promotion);
-      return json;
-    }, []),
+        let json: unknown;
+        try {
+          json = await postSaveResults({
+            courseSlug,
+            test,
+            evaluations,
+            totalScore,
+          });
+        } catch (error) {
+          if (refreshIfNotOpen(queryClient, lesson, error)) return null;
+          throw error;
+        }
+        const promotion = extractPromotion(json);
+        if (promotion) set(pendingPromotionAtom, promotion);
+        void invalidateAfterSave(queryClient, lesson);
+        return json;
+      },
+      [queryClient],
+    ),
   );
 }

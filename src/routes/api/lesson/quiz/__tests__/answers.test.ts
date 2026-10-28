@@ -5,7 +5,7 @@ const m = vi.hoisted(() => ({
   getSession: vi.fn(),
   evaluateLessonGate: vi.fn(),
   saveLessonQuizAnswers: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -15,9 +15,11 @@ vi.mock('#/lib/lesson-gating.server', () => ({
 vi.mock('#/db/lesson-quiz', () => ({
   saveLessonQuizAnswers: m.saveLessonQuizAnswers,
 }));
-// The route calls maybePromote after a successful write — stubbed so this
+// The route calls settleProgress (never throws) after a successful write — stubbed so this
 // file never reaches the real db/email modules it pulls in transitively.
-vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({
+  settleProgress: m.settleProgress,
+}));
 
 import { submitLessonQuizHandler } from '../answers';
 
@@ -54,7 +56,7 @@ beforeEach(() => {
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.saveLessonQuizAnswers.mockResolvedValue({ id: 1 });
-  m.maybePromote.mockResolvedValue(null);
+  m.settleProgress.mockResolvedValue(null);
 });
 
 /**
@@ -68,8 +70,7 @@ beforeEach(() => {
  * that already performed the write would have handed over the escalation.
  *
  * Both refuse in both read-only states — an archive view writes nothing —
- * and deliberately still ignore `lessonLock`/`materialLock`, pinned below so
- * the narrow scope cannot drift wider unnoticed.
+ * and a locked lesson is refused too.
  */
 describe('out-of-tier quiz submissions are refused', () => {
   const body = { lessonSlug: 'l1', courseSlug: 'c1', answers };
@@ -96,26 +97,33 @@ describe('out-of-tier quiz submissions are refused', () => {
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
   });
 
-  it('still records an attempt on a locked but in-tier lesson', async () => {
-    // The scope is deliberately narrow: honouring lessonLock here would 403
-    // flows that succeed today, which is a separate decision. If someone
-    // widens it, this goes red and they have to say so.
-    m.evaluateLessonGate.mockResolvedValue({
-      ...inTier,
-      lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
-      materialLock: { kind: 'video-locked' },
-    });
+  // The quiz only renders inside material the gate released, so an attempt
+  // on a locked lesson has no legitimate origin. Unrefused, a hand-made POST
+  // could take a video-less lesson to 100%, record it done, and unlock the
+  // next.
+  it.each([
+    [
+      'prerequisite-locked',
+      {
+        lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
+      },
+    ],
+    ['video-locked', { materialLock: { kind: 'video-locked' } }],
+  ])('403s an attempt on a %s lesson without recording it', async (_, locks) => {
+    m.evaluateLessonGate.mockResolvedValue({ ...inTier, ...locks });
     const res = await submitLessonQuizHandler(post(body));
-    expect(res.status).toBe(200);
-    expect(m.saveLessonQuizAnswers).toHaveBeenCalledOnce();
+    expect(res.status).toBe(403);
+    expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 });
 
 /**
  * A signed-in caller is not a subscriber. A saved attempt feeds `quizPlayed`
- * → `lessonPercent`, and in a video-less course that is enough to drive
- * `maybePromote` into appending a durable level row and sending a real
- * promotion email for a course the caller does not own.
+ * → `lessonPercent`, and in a video-less course that is enough for
+ * `settleProgress` to record the completion and then run promotion, which can
+ * append a durable level row and send a real promotion email for a course the
+ * caller does not own.
  */
 describe('quiz submit from a non-subscriber', () => {
   it('403s without recording the attempt or checking promotion', async () => {
@@ -125,7 +133,7 @@ describe('quiz submit from a non-subscriber', () => {
     );
     expect(res.status).toBe(403);
     expect(m.saveLessonQuizAnswers).not.toHaveBeenCalled();
-    expect(m.maybePromote).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('403s an unknown lesson rather than writing against it', async () => {
@@ -163,5 +171,20 @@ describe('the course comes from the request', () => {
       lessonSlug: 'l1',
       courseSlug: 'c-real',
     });
+  });
+});
+
+describe('settling progress after a quiz attempt', () => {
+  it('settles for the session user and the gate course, and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    m.settleProgress.mockResolvedValue(promotion);
+    const res = await submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', courseSlug: 'c1', answers }),
+    );
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

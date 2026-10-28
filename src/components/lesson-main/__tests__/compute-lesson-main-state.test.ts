@@ -266,7 +266,12 @@ describe('computeLessonMainState', () => {
         data: {
           locked: true,
           reason: 'lesson',
-          blockedBy: { lessonSlug: 'a', moduleSlug: 'm-1', lessonName: 'A' },
+          blockedBy: {
+            lessonSlug: 'a',
+            moduleSlug: 'm-1',
+            lessonName: 'A',
+            outstanding: [],
+          },
         },
         isLoading: false,
       },
@@ -282,7 +287,12 @@ describe('computeLessonMainState', () => {
       courseSlug: 'course-1',
       lock: {
         reason: 'lesson',
-        blockedBy: { lessonSlug: 'a', moduleSlug: 'm-1', lessonName: 'A' },
+        blockedBy: {
+          lessonSlug: 'a',
+          moduleSlug: 'm-1',
+          lessonName: 'A',
+          outstanding: [],
+        },
       },
     });
   });

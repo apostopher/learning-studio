@@ -1,5 +1,7 @@
-import { useSetAtom } from 'jotai';
-import { useEffect, useRef } from 'react';
+import { useAtom, useSetAtom } from 'jotai';
+import { useCallback, useEffect } from 'react';
+import type { AITest } from '#/ai/schemas';
+import { debriefSaveAtom, justSubmittedDebriefAtom } from '#/atoms/debrief';
 import {
   useAdvanceQuestion,
   useCurrentQuestion,
@@ -15,6 +17,8 @@ import {
   useTotalScore,
 } from '#/hooks/data/use-lesson-ai-test';
 import { DebriefIntro } from './debrief-intro';
+import { debriefSaveOutcome, debriefSaveState } from './debrief-save';
+import { DebriefSaveNotice } from './debrief-save-notice';
 import { debriefSessionForLesson } from './debrief-session-owner';
 import { EvaluationCard } from './evaluation-card';
 import {
@@ -37,12 +41,15 @@ type DebriefQuizContainerProps = {
   lessonSlug: string;
   /** The lesson was completed at an earlier level — generate/evaluate/save must be inert. */
   readOnly: boolean;
+  /** A retake after a below-par attempt — the intro says the questions are new. */
+  retake: boolean;
 };
 
 export const DebriefQuizContainer = ({
   courseSlug,
   lessonSlug,
   readOnly,
+  retake,
 }: DebriefQuizContainerProps) => {
   const sessionTest = useCurrentTest();
   const currentQuestion = useCurrentQuestion();
@@ -58,7 +65,8 @@ export const DebriefQuizContainer = ({
   const isGenerating = useIsGenerating();
   const setSelectedOption = useSetAtom(selectedOptionAtom);
   const setFreeTextAnswer = useSetAtom(freeTextAnswerAtom);
-  const savedRef = useRef(false);
+  const [saveRecord, setSaveRecord] = useAtom(debriefSaveAtom);
+  const setJustSubmitted = useSetAtom(justSubmittedDebriefAtom);
 
   // A debrief session belongs to the lesson it was generated for — see
   // debriefSessionForLesson for why that needs saying at all.
@@ -70,7 +78,6 @@ export const DebriefQuizContainer = ({
   // atom directly, can never post another lesson's answers under this slug.
   useEffect(() => {
     if (!isForeignSession) return;
-    savedRef.current = false;
     resetTest();
     setSelectedOption('');
     setFreeTextAnswer('');
@@ -82,22 +89,62 @@ export const DebriefQuizContainer = ({
     ? evaluations.find((e) => e.questionId === currentQuestion.id)
     : null;
 
+  const saveState = debriefSaveState(saveRecord, test);
+
+  // One save of this session, from the auto-save below or the pilot's retry.
+  // Each outcome is debriefSaveOutcome's: recorded, refused as not open (the
+  // session is stale — drop it so the panel follows the refetched status),
+  // or failed (keep the session and say so, with the same save on offer).
+  const submit = useCallback(
+    (session: AITest) => {
+      setSaveRecord({ test: session, state: 'saving' });
+      void Promise.allSettled([saveResults(courseSlug)]).then(([settled]) => {
+        switch (debriefSaveOutcome(settled)) {
+          case 'saved':
+            setSaveRecord({ test: session, state: 'saved' });
+            setJustSubmitted(lessonSlug);
+            return;
+          case 'not-open':
+            setSaveRecord(null);
+            resetTest();
+            setSelectedOption('');
+            setFreeTextAnswer('');
+            return;
+          case 'failed':
+            if (settled.status === 'rejected') console.error(settled.reason);
+            setSaveRecord({ test: session, state: 'failed' });
+            return;
+        }
+      });
+    },
+    [
+      courseSlug,
+      lessonSlug,
+      saveResults,
+      setSaveRecord,
+      setJustSubmitted,
+      resetTest,
+      setSelectedOption,
+      setFreeTextAnswer,
+    ],
+  );
+
   // The dangerous one: this fires from a rendered state the moment the last
   // evaluation lands, not a button press, so hiding the score report would
   // not stop it writing. See shouldAutoSaveDebrief's doc comment.
   useEffect(() => {
     if (
+      test === null ||
       !shouldAutoSaveDebrief({
         isComplete,
-        alreadySaved: savedRef.current,
+        alreadySaved: saveState !== 'unsaved',
         readOnly,
       })
     ) {
       return;
     }
-    savedRef.current = true;
-    saveResults(courseSlug).catch(console.error);
-  }, [isComplete, saveResults, readOnly, courseSlug]);
+    submit(test);
+  }, [isComplete, test, saveState, readOnly, submit]);
 
   // Not `return null`: this tab is now the primary way into the debrief — the
   // only way, on a lesson with no video — so an empty panel here would be a
@@ -111,6 +158,7 @@ export const DebriefQuizContainer = ({
           void generateTest({ courseSlug, lessonSlug });
         }}
         readOnly={readOnly}
+        retake={retake}
       />
     );
   }
@@ -121,13 +169,16 @@ export const DebriefQuizContainer = ({
         score={totalScore}
         questions={test.questions}
         evaluations={evaluations}
-        onRetake={async () => {
-          if (readOnly) return;
-          savedRef.current = false;
-          resetTest();
-          await generateTest({ courseSlug, lessonSlug });
-        }}
-        readOnly={readOnly}
+        footer={
+          saveState === 'saving' || saveState === 'failed' ? (
+            <DebriefSaveNotice
+              state={saveState}
+              onRetry={() => {
+                if (!readOnly) submit(test);
+              }}
+            />
+          ) : null
+        }
       />
     );
   }

@@ -7,6 +7,7 @@ import {
   type CourseLessonQuizAnswers,
   CourseLessonQuizAnswersSchema,
 } from '#/types';
+import { invalidateLessonDoneReaders } from './invalidate-lesson-done';
 import { dataKeys } from './keys';
 
 /**
@@ -55,9 +56,10 @@ export function useLessonQuizResult(lessonSlug: string) {
  * Record a completed attempt.
  *
  * On success the saved row is written straight into the result cache, so the
- * tab reads as completed without a refetch. Deliberately no `invalidateQueries`
- * — the response is the row, and a refetch would only re-fetch what we already
- * hold.
+ * tab reads as completed without a refetch — the response is the row, and a
+ * refetch would only re-fetch what we already hold. The readers of "done" ARE
+ * invalidated: the quiz is part of done, so a submit is often the step that
+ * finishes the lesson (see `invalidateLessonDoneReaders`).
  *
  * The route returns `{ ...row, promotion }`. `lessonQuizResultSchema` doesn't
  * declare `promotion`, so `.parse` on the raw response would silently strip
@@ -92,6 +94,7 @@ export function useSubmitLessonQuiz({ courseSlug, lessonSlug }: LessonRef) {
     onSuccess: ({ row, promotion }) => {
       queryClient.setQueryData(dataKeys.lessonQuizResult(lessonSlug), row);
       if (promotion) setPromotion(promotion);
+      void invalidateLessonDoneReaders(queryClient, { courseSlug, lessonSlug });
     },
   });
 }

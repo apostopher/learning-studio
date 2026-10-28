@@ -1,8 +1,6 @@
-import type { ReactNode, RefObject } from 'react';
+import type { ReactNode } from 'react';
 
 type LessonDebriefSectionProps = {
-  /** Scroll target for the post-video overlay — see LessonPlayerContainer. */
-  sectionRef?: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 };
 
@@ -17,10 +15,9 @@ type LessonDebriefSectionProps = {
  * hook-calling components in src/, which would make this untestable).
  */
 export const LessonDebriefSection = ({
-  sectionRef,
   children,
 }: LessonDebriefSectionProps) => (
-  <div ref={sectionRef} className="flex flex-col gap-4">
+  <div className="flex flex-col gap-4">
     <div className="border-b border-gray-6 pb-2">
       <h2 className="text-sm font-medium text-primary">Debrief</h2>
     </div>

@@ -1,8 +1,12 @@
 import { sql } from 'drizzle-orm';
+import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
+  isTrackedLessonSection,
   LESSON_VISIT_SECTION,
+  TRACKED_LESSON_SECTIONS,
   TRACKED_SECTIONS_SQL_LIST,
+  type TrackedLessonSection,
 } from '#/lib/lesson-visit-section';
 import { lessonMaterialProgressTable, lessonsTable } from '@/db/schema';
 
@@ -48,21 +52,22 @@ export const progressComponentColumns = (userId: string) => ({
    * would let a stray value demand a tab the learner is never shown, and the
    * lesson could then never complete.
    */
-  applicableSections: sql<number>`coalesce((
-    select
-        (case when json_array_length(m.key_points) > 0 then 1 else 0 end)
-      + (case when coalesce(m.pro_tips, '') <> '' then 1 else 0 end)
-      + (case when json_array_length(m.links) > 0 then 1 else 0 end)
-      + (case when coalesce(m.assignments, '') <> '' then 1 else 0 end)
-      + (case
+  applicableSectionNames: sql<string[]>`coalesce((
+    select array_remove(array[
+        (case when json_array_length(m.key_points) > 0 then 'keyPoints' end),
+        (case when coalesce(m.pro_tips, '') <> '' then 'proTips' end),
+        (case when json_array_length(m.links) > 0 then 'links' end),
+        (case when coalesce(m.assignments, '') <> '' then 'assignments' end),
+        (case
           when (select d.slug from disciplines d where d.id = ${lessonsTable.disciplineId}) = ${FLAGSHIP_DISCIPLINE_SLUG}
-            then (case when coalesce(m.job_of_the_day, '') <> '' then 1 else 0 end)
-          else (case when json_array_length(m.test_this) > 0 then 1 else 0 end)
+            then (case when coalesce(m.job_of_the_day, '') <> '' then 'jobOfTheDay' end)
+          else (case when json_array_length(m.test_this) > 0 then 'testThis' end)
         end)
+      ], null)
     from lesson_material m
     where m.lesson_slug = ${lessonsTable.slug}
     limit 1
-  ), 0)`,
+  ), '{}')`,
 
   /**
    * Distinct tracked sections this learner has selected.
@@ -71,9 +76,11 @@ export const progressComponentColumns = (userId: string) => ({
    * the same LEFT JOIN carries both the 'page' row and the section rows, and
    * DISTINCT keeps this correct even if that join ever multiplies.
    */
-  tappedSections: sql<number>`count(distinct ${lessonMaterialProgressTable.sectionName})
+  tappedSectionNames: sql<string[]>`coalesce(
+    array_agg(distinct ${lessonMaterialProgressTable.sectionName})
     filter (where ${lessonMaterialProgressTable.completed}
-      and ${lessonMaterialProgressTable.sectionName} in (${sql.raw(TRACKED_SECTIONS_SQL_LIST)}))`,
+      and ${lessonMaterialProgressTable.sectionName} in (${sql.raw(TRACKED_SECTIONS_SQL_LIST)})),
+    '{}')`,
 
   /** The authored quiz has at least one question. Approximate — see the ledger. */
   hasQuiz: sql<boolean>`exists (
@@ -83,22 +90,28 @@ export const progressComponentColumns = (userId: string) => ({
   )`,
 
   /**
-   * Whether the debrief COUNTS toward this lesson's completion — deliberately
-   * narrower than "a debrief can be generated".
+   * Whether the debrief counts toward the COURSE percent (call 11).
    *
-   * Authored key points AND body text, both from the material row. A debrief
-   * built from anything else is optional by design: a lesson with no material
-   * is complete once its video is watched, and a transcript-sourced debrief
-   * (see `resolveDebriefSource`) must not quietly become a second requirement
-   * on lessons that never asked for one. Same for key points derived from
-   * body text — reachable, scored when taken, never demanded.
+   * The switch is on AND either the lesson has authored body text, or the
+   * server has already produced a debrief for this pilot (prepared or taken).
+   * A transcript-only debrief therefore becomes bearing only once one really
+   * exists, so a lesson whose captions turn out unusable never blocks
+   * course-done.
    */
-  canDebrief: sql<boolean>`exists (
-    select 1 from lesson_material m
-    where m.lesson_slug = ${lessonsTable.slug}
-      and json_array_length(m.key_points) > 0
-      and coalesce(m.text, '') <> ''
-  )`,
+  debriefBearing: sql<boolean>`(${lessonsTable.hasDebrief} and (
+    exists (
+      select 1 from lesson_material m
+      where m.lesson_slug = ${lessonsTable.slug} and coalesce(m.text, '') <> ''
+    )
+    or exists (
+      select 1 from prepared_debriefs p
+      where p.user_id = ${userId} and p.lesson_slug = ${lessonsTable.slug}
+    )
+    or exists (
+      select 1 from lesson_test_results t
+      where t.user_id = ${userId} and t.lesson_slug = ${lessonsTable.slug}
+    )
+  ))`,
 
   quizPlayed: sql<boolean>`exists (
     select 1 from lesson_quiz_answers q
@@ -106,15 +119,34 @@ export const progressComponentColumns = (userId: string) => ({
   )`,
 
   /**
-   * `completed_at IS NOT NULL`, not row existence: rows are only written on
-   * full completion today (`debrief-quiz-container.tsx`), and testing the
-   * column stops a future partial save from silently counting as answered.
+   * Passed = a COMPLETED attempt at or above par. `completed_at IS NOT NULL`
+   * rather than row existence, so a partial save never counts.
    */
-  debriefAnswered: sql<boolean>`exists (
+  debriefPassed: sql<boolean>`exists (
     select 1 from lesson_test_results t
     where t.user_id = ${userId}
       and t.lesson_slug = ${lessonsTable.slug}
       and t.completed_at is not null
+      and t.total_score >= ${DEBRIEF_PAR_SCORE}
+  )`,
+
+  /**
+   * Latest completed below-par attempt; starts the retake wait. `completed_at`
+   * is a timezone-less timestamp that drizzle stores as UTC; `at time zone 'UTC'`
+   * makes the raw string carry an offset so `toIso` cannot read it as local time.
+   */
+  lastFailedDebriefAt: sql<Date | null>`(
+    select max(t.completed_at) at time zone 'UTC' from lesson_test_results t
+    where t.user_id = ${userId}
+      and t.lesson_slug = ${lessonsTable.slug}
+      and t.completed_at is not null
+      and t.total_score < ${DEBRIEF_PAR_SCORE}
+  )`,
+
+  /** When the lesson first reached 100% for this learner (sticky). */
+  doneAt: sql<Date | null>`(
+    select c.done_at from lesson_completions c
+    where c.user_id = ${userId} and c.lesson_id = ${lessonsTable.id}
   )`,
 
   visited: sql<boolean>`coalesce(bool_or(${lessonMaterialProgressTable.completed}
@@ -142,14 +174,31 @@ type ComponentRow = {
   videoRef: string | null;
   needsVideoWatch: boolean | null;
   hasDebrief: boolean | null;
-  applicableSections: number;
-  tappedSections: number;
+  applicableSectionNames: string[];
+  tappedSectionNames: string[];
   hasQuiz: boolean;
-  canDebrief: boolean;
   quizPlayed: boolean;
-  debriefAnswered: boolean;
+  debriefBearing: boolean | null;
+  debriefPassed: boolean;
+  lastFailedDebriefAt: Date | string | null;
+  doneAt: Date | string | null;
   visited: boolean;
 };
+
+/**
+ * Keep known section names, in TRACKED_LESSON_SECTIONS order, so the output is
+ * canonical whatever order Postgres returned them in.
+ */
+function toSectionNames(names: readonly string[]): TrackedLessonSection[] {
+  const known = new Set(names.filter(isTrackedLessonSection));
+  return TRACKED_LESSON_SECTIONS.filter((s) => known.has(s));
+}
+
+/** Raw `sql<Date>` columns come back as ISO-ish strings from the driver, Dates elsewhere. */
+function toIso(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
 
 /**
  * Map a selected row to the aggregator's component fields.
@@ -165,13 +214,15 @@ export function toComponentFields(row: ComponentRow) {
     // whether a lesson has a video.
     hasVideo: row.videoProvider !== null && row.videoRef !== null,
     needsVideoWatch: row.needsVideoWatch ?? false,
-    applicableSections: Number(row.applicableSections),
-    tappedSections: Number(row.tappedSections),
+    applicableSectionNames: toSectionNames(row.applicableSectionNames),
+    tappedSectionNames: toSectionNames(row.tappedSectionNames),
     hasDebrief: row.hasDebrief ?? false,
     hasQuiz: row.hasQuiz,
-    canDebrief: row.canDebrief,
     quizPlayed: row.quizPlayed,
-    debriefAnswered: row.debriefAnswered,
+    debriefBearing: row.debriefBearing ?? false,
+    debriefPassed: row.debriefPassed,
+    lastFailedDebriefAt: toIso(row.lastFailedDebriefAt),
+    doneAt: toIso(row.doneAt),
     visited: row.visited,
   };
 }

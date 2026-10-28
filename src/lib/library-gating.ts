@@ -9,9 +9,8 @@
  *
  * The unlock rule is deliberately `isLessonSatisfied` and nothing else (D5):
  * the same predicate that gates lesson material. Using `percent === 100` would
- * turn section taps and quizzes into download requirements, which is exactly
- * what D19 of the completion ledger rejected — and would leave us with no
- * vocabulary to write the lock reason with.
+ * turn section taps and quizzes into download requirements, and would leave us
+ * with no vocabulary to write the lock reason with.
  */
 
 import {

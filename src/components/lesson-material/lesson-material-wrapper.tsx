@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
-import { lessonMaterialRef } from '#/atoms/lesson-ai-test';
+import { useSetAtom } from 'jotai';
+import { useCallback, useEffect } from 'react';
+import { justSubmittedDebriefAtom } from '#/atoms/debrief';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import { useSectionTapRecorder } from '#/data-hooks/use-record-section-tap';
 import { queryKeys } from '#/hooks/data/keys';
@@ -12,13 +13,13 @@ import {
   isSectionTapRecordingEnabled,
 } from './compute-material-panel-state';
 import {
-  canDebriefFromTranscript,
   playbackHasCaptions,
+  showsTranscriptDebriefSection,
 } from './compute-transcript-debrief';
 import { LessonMaterialView } from './lesson-material';
 import { LessonMaterialSkeleton } from './lesson-material-skeleton';
 import { AdminPreviewNote } from './parts/admin-preview-note';
-import { DebriefQuizContainer } from './parts/debrief-quiz-container';
+import { DebriefPanelContainer } from './parts/debrief-panel-container';
 import { LessonDebriefSection } from './parts/lesson-debrief-section';
 import { MaterialLocked } from './parts/material-locked';
 
@@ -38,12 +39,11 @@ export const LessonMaterialWrapper = ({
   const query = useLessonMaterial(lessonRef);
   const details = useCourseDetails(courseSlug);
   // The same cached query the player made — read here only to learn whether
-  // the video has a caption track, which is what decides if a material-less
-  // lesson can still offer a transcript-sourced debrief.
+  // the video has a caption track, which is what decides whether a lesson
+  // without body text (no material row, or one with an empty body) can still
+  // offer a transcript-sourced debrief.
   const video = useLessonVideo(lessonRef);
-  const tabsRef = useRef<HTMLDivElement>(null);
-
-  lessonMaterialRef.current = tabsRef.current;
+  const transcriptUsable = playbackHasCaptions(video.data);
 
   // Lesson slugs are globally unique (`lessons.slug` carries a UNIQUE
   // constraint), so this needs no module to scope it — which is just as well,
@@ -53,6 +53,16 @@ export const LessonMaterialWrapper = ({
     .find((l) => l.slug === lessonSlug);
 
   const state = computeMaterialPanelState(query);
+
+  // "Just submitted" lasts only while the pilot stays on the lesson: leaving
+  // it (another lesson, or off the lesson page) ends it, so any later visit
+  // during the retake wait shows only the reopen time.
+  const setJustSubmitted = useSetAtom(justSubmittedDebriefAtom);
+  useEffect(() => {
+    const leaving = lessonSlug;
+    return () =>
+      setJustSubmitted((current) => (current === leaving ? null : current));
+  }, [lessonSlug, setJustSubmitted]);
 
   // Only record taps once the panel is actually showing material, AND the
   // lesson is not a read-only archive view — a tab the learner never saw
@@ -89,18 +99,20 @@ export const LessonMaterialWrapper = ({
     // Nothing authored for this lesson — so no tab strip, and no error either:
     // the lesson is open and its video is above. The debrief still belongs to
     // the learner though, so it renders on its own below the video, generated
-    // from the video's transcript. `tabsRef` is reused as its scroll anchor so
-    // the post-video overlay's jump lands here (see LessonPlayerContainer).
+    // from the video's transcript. Not on a read-only lesson, which has no
+    // debrief clock (call 12) — the same rule as the Debrief tab.
     case 'empty':
-      return canDebriefFromTranscript({
+      return showsTranscriptDebriefSection({
         hasDebrief: lesson?.hasDebrief ?? false,
-        hasCaptions: playbackHasCaptions(video.data),
+        transcriptUsable,
+        readOnly: state.readOnly,
       }) ? (
-        <LessonDebriefSection sectionRef={tabsRef}>
-          <DebriefQuizContainer
+        <LessonDebriefSection>
+          <DebriefPanelContainer
             courseSlug={courseSlug}
             lessonSlug={lessonSlug}
             readOnly={state.readOnly}
+            headingLevel={3}
           />
         </LessonDebriefSection>
       ) : null;
@@ -113,11 +125,10 @@ export const LessonMaterialWrapper = ({
           <LessonMaterialView
             material={state.material}
             courseSlug={courseSlug}
-            tabsRef={tabsRef}
-            // Defaults to the authored quiz while the course payload is still
-            // in flight. Failing the other way would flash a Debrief tab on
-            // lessons that have none, and briefly hide a quiz that does exist.
+            // No Debrief tab while the course payload is still in flight:
+            // failing the other way would flash one on lessons that have none.
             hasDebrief={lesson?.hasDebrief ?? false}
+            transcriptUsable={transcriptUsable}
             onTabSelected={recordSectionTap}
             readOnly={state.readOnly}
           />

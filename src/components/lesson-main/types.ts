@@ -80,7 +80,7 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
-      /** Gates the post-video debrief overlay — see computePlayerOverlay. */
+      /** Whether the player prepares a debrief on first play — see usePrepareDebriefOnPlay. */
       hasDebrief: boolean;
       videoState: VideoFetchState;
     }

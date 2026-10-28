@@ -25,9 +25,21 @@ describe('isTierComplete', () => {
       isTierComplete({
         lessons,
         progress: [
-          { lessonId: 1, percent: 100 },
-          { lessonId: 2, percent: 100 },
-          { lessonId: 3, percent: 0 },
+          {
+            lessonId: 1,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+          {
+            lessonId: 2,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+          {
+            lessonId: 3,
+            done: false,
+            debrief: { bearing: false, passed: false },
+          },
         ],
         level: 'basic',
       }),
@@ -39,8 +51,16 @@ describe('isTierComplete', () => {
       isTierComplete({
         lessons,
         progress: [
-          { lessonId: 1, percent: 100 },
-          { lessonId: 2, percent: 40 },
+          {
+            lessonId: 1,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+          {
+            lessonId: 2,
+            done: false,
+            debrief: { bearing: false, passed: false },
+          },
         ],
         level: 'basic',
       }),
@@ -51,7 +71,13 @@ describe('isTierComplete', () => {
     expect(
       isTierComplete({
         lessons: [{ lessonId: 2, levels: [], isAvailable: true }],
-        progress: [{ lessonId: 2, percent: 100 }],
+        progress: [
+          {
+            lessonId: 2,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+        ],
         level: 'basic',
       }),
     ).toBe(false);
@@ -62,9 +88,21 @@ describe('isTierComplete', () => {
       isTierComplete({
         lessons,
         progress: [
-          { lessonId: 1, percent: 100 },
-          { lessonId: 2, percent: 100 },
-          { lessonId: 4, percent: 0 },
+          {
+            lessonId: 1,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+          {
+            lessonId: 2,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+          {
+            lessonId: 4,
+            done: false,
+            debrief: { bearing: false, passed: false },
+          },
         ],
         level: 'basic',
       }),
@@ -81,7 +119,77 @@ describe('isTierComplete', () => {
     expect(
       isTierComplete({
         lessons: [{ lessonId: 9, levels: ['advanced'], isAvailable: true }],
-        progress: [{ lessonId: 9, percent: 100 }],
+        progress: [
+          {
+            lessonId: 9,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+        ],
+        level: 'basic',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isTierComplete — debriefs', () => {
+  const lessons = [{ lessonId: 1, levels: ['basic'], isAvailable: true }];
+
+  it('is incomplete while a bearing debrief is unpassed', () => {
+    expect(
+      isTierComplete({
+        lessons,
+        progress: [
+          {
+            lessonId: 1,
+            done: true,
+            debrief: { bearing: true, passed: false },
+          },
+        ],
+        level: 'basic',
+      }),
+    ).toBe(false);
+  });
+
+  it('is complete when done and the bearing debrief is passed', () => {
+    expect(
+      isTierComplete({
+        lessons,
+        progress: [
+          { lessonId: 1, done: true, debrief: { bearing: true, passed: true } },
+        ],
+        level: 'basic',
+      }),
+    ).toBe(true);
+  });
+
+  it('needs only done for a non-bearing lesson', () => {
+    expect(
+      isTierComplete({
+        lessons,
+        progress: [
+          {
+            lessonId: 1,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+        ],
+        level: 'basic',
+      }),
+    ).toBe(true);
+  });
+
+  it('uses done, not percent', () => {
+    expect(
+      isTierComplete({
+        lessons,
+        progress: [
+          {
+            lessonId: 1,
+            done: false,
+            debrief: { bearing: false, passed: false },
+          },
+        ],
         level: 'basic',
       }),
     ).toBe(false);
@@ -97,7 +205,13 @@ describe("isTierComplete — a 'none' lesson", () => {
             { lessonId: 1, levels: [level], isAvailable: true },
             { lessonId: 2, levels: ['none'], isAvailable: true },
           ],
-          progress: [{ lessonId: 1, percent: 100 }],
+          progress: [
+            {
+              lessonId: 1,
+              done: true,
+              debrief: { bearing: false, passed: false },
+            },
+          ],
           level,
         }),
       ).toBe(true);
@@ -108,7 +222,13 @@ describe("isTierComplete — a 'none' lesson", () => {
     expect(
       isTierComplete({
         lessons: [{ lessonId: 2, levels: ['none'], isAvailable: true }],
-        progress: [{ lessonId: 2, percent: 100 }],
+        progress: [
+          {
+            lessonId: 2,
+            done: true,
+            debrief: { bearing: false, passed: false },
+          },
+        ],
         level: 'basic',
       }),
     ).toBe(false);

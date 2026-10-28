@@ -1,16 +1,18 @@
 import { watchedMilestones } from '#/lib/course-milestones';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
-import {
-  type DetailsCourse,
-  watchedLessonSlugs,
-} from '#/lib/lesson-gating-inputs';
+import { type DetailsCourse, gateProgress } from '#/lib/lesson-gating-inputs';
 import type { UserLevel } from '#/types';
 
 type CardResumeArgs = {
   details: DetailsCourse;
   /** Per-lesson distinct watched-milestone counts, straight from the grid query. */
   lessonHits: readonly { lessonId: number; watchedHits: number }[];
+  /**
+   * Lessons with a `lesson_completions` row — sticky done. These, not the
+   * watched videos, satisfy prerequisites.
+   */
+  doneLessonIds: ReadonlySet<number>;
   pointerLessonId: number | null;
   /**
    * The pilot's tier in this course, or null for an admin — who authors every
@@ -28,12 +30,13 @@ type CardResumeArgs = {
  *
  * Pure and in `src/lib/` on purpose: `src/db/course.ts` value-imports
  * `@/db/schema`, which vitest cannot resolve, so logic that needs tests cannot
- * live there. Mirrors `resolveResumeTarget`/`watchedLessonSlugs`, which are in
+ * live there. Mirrors `resolveResumeTarget`/`gateProgress`, which are in
  * `src/lib/` for the same reason.
  */
 export function resolveCardResume({
   details,
   lessonHits,
+  doneLessonIds,
   pointerLessonId,
   level,
   bypassLocks,
@@ -43,18 +46,29 @@ export function resolveCardResume({
   // mark a lesson complete after seconds of playback and unlock everything
   // downstream of it.
   //
-  // Built from the UNFILTERED payload deliberately: a lesson finished at an
+  // `watched` only decides material locks, which resume never reads; done is
+  // what unlocks the next lesson. No outstanding items: a card renders no
+  // lock copy.
+  //
+  // Built from the UNFILTERED payload deliberately: a lesson done at an
   // earlier tier still satisfies a visible lesson's prerequisite.
-  const watched = watchedLessonSlugs(details, {
-    lessons: lessonHits.map((hit) => ({
-      lessonId: hit.lessonId,
-      watched: hit.watchedHits === watchedMilestones.length,
+  const watchedIds = new Set(
+    lessonHits
+      .filter((hit) => hit.watchedHits === watchedMilestones.length)
+      .map((hit) => hit.lessonId),
+  );
+  const ids = new Set([...watchedIds, ...doneLessonIds]);
+  const progress = gateProgress(details, {
+    lessons: [...ids].map((lessonId) => ({
+      lessonId,
+      watched: watchedIds.has(lessonId),
+      done: doneLessonIds.has(lessonId),
     })),
   });
 
   return resolveResumeTargetForLevel({
     details,
-    watched,
+    progress,
     pointerLessonId,
     level,
     bypassLocks,

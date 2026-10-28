@@ -1,19 +1,20 @@
 import { Collapsible } from '@base-ui/react/collapsible';
-import { ChevronDown, RotateCcw } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
-import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
   score: number;
   questions: AITestQuestion[];
   evaluations: AIEvaluationResult[];
-  onRetake: () => void;
-  /** Completed at an earlier level — Retake must be disabled, not silently inert. */
-  readOnly: boolean;
+  /**
+   * Shown under the summary — the just-failed panel's "Next attempt opens"
+   * line. There is no Retake button: retakes happen only by the Debrief tab
+   * reopening 24h later (call 8).
+   */
+  footer?: ReactNode;
 };
-
-const REASON_ID = 'score-report-readonly-reason';
 
 const gradeLabel = (score: number): string => {
   if (score >= 90) return 'Excellent';
@@ -34,8 +35,7 @@ export const ScoreReport = ({
   score,
   questions,
   evaluations,
-  onRetake,
-  readOnly,
+  footer,
 }: ScoreReportProps) => {
   const correctCount = evaluations.filter((e) => e.score >= 70).length;
 
@@ -54,27 +54,7 @@ export const ScoreReport = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          // Inert handler, not just aria-disabled: aria-disabled does not
-          // block the click event the way native `disabled` did, so the
-          // component itself — not just every caller — must refuse to act.
-          onClick={() => {
-            if (!readOnly) onRetake();
-          }}
-          aria-disabled={readOnly || undefined}
-          aria-describedby={readOnly ? REASON_ID : undefined}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-6 bg-gray-1 px-4 py-2 text-sm font-medium text-primary hover:bg-gray-3 aria-disabled:pointer-events-none aria-disabled:opacity-60"
-        >
-          <RotateCcw className="size-4" aria-hidden="true" />
-          Retake Quiz
-        </button>
-        {/* Visible, not sr-only — same reasoning as DebriefIntro's reason text. */}
-        {readOnly && (
-          <p id={REASON_ID} className="text-xs text-tertiary">
-            {READ_ONLY_CONTROL_REASON}
-          </p>
-        )}
+        {footer}
       </div>
 
       {/* Question review */}
@@ -108,7 +88,7 @@ export const ScoreReport = ({
                 : question.question;
 
             return (
-              <Collapsible.Root key={question.id} className="group">
+              <Collapsible.Root key={question.id} className="group/question">
                 <Collapsible.Trigger className="flex w-full items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-start text-sm hover:bg-gray-2">
                   <span className="shrink-0 font-medium text-secondary">
                     Q{i + 1}
@@ -124,7 +104,7 @@ export const ScoreReport = ({
                     {truncatedQuestion}
                   </span>
                   <ChevronDown
-                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]:rotate-180"
+                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]/question:rotate-180"
                     aria-hidden="true"
                   />
                 </Collapsible.Trigger>
@@ -143,7 +123,7 @@ export const ScoreReport = ({
                       </span>
                       <p className="text-sm text-primary">
                         {userAnswerDisplay || (
-                          <span className="italic text-gray-9">
+                          <span className="italic text-tertiary">
                             No answer provided
                           </span>
                         )}

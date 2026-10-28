@@ -3,17 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
   getSession: vi.fn(),
-  evaluateLessonGate: vi.fn(),
-  getCourseDetailsWithCache: vi.fn(),
+  getDebriefAccess: vi.fn(),
   prepareDebrief: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
-vi.mock('#/lib/lesson-gating.server', () => ({
-  evaluateLessonGate: m.evaluateLessonGate,
-}));
-vi.mock('#/db/course', () => ({
-  getCourseDetailsWithCache: m.getCourseDetailsWithCache,
+vi.mock('#/lib/debrief-access.server', () => ({
+  getDebriefAccess: m.getDebriefAccess,
 }));
 vi.mock('#/lib/prepared-debrief.server', () => ({
   prepareDebrief: m.prepareDebrief,
@@ -28,32 +24,43 @@ const post = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-const watchingGate = {
-  courseSlug: 'c1',
+const access = (state: unknown) => ({
+  ok: true,
   courseId: 7,
-  subscribed: true,
-  level: 'basic',
-  outOfTier: null,
-  lessonLock: { kind: 'open' },
-  materialLock: { kind: 'video-locked' },
-};
-
-const detailsWith = (hasDebrief: boolean) => ({
-  modules: [{ lessons: [{ slug: 'l1', hasDebrief }] }],
+  lessonId: 41,
+  state,
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
-  m.evaluateLessonGate.mockResolvedValue(watchingGate);
-  m.getCourseDetailsWithCache.mockResolvedValue(detailsWith(true));
+  m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
   m.prepareDebrief.mockResolvedValue('prepared');
 });
 
 const body = { lessonSlug: 'l1', courseSlug: 'c1' };
 
 describe('prepare', () => {
-  it('prepares for this pilot, in the course the request names', async () => {
+  it('asks the access authority about this pilot, in the course the request names', async () => {
+    await prepareTestHandler(post(body));
+    expect(m.getDebriefAccess).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c1',
+      now: expect.any(Date),
+    });
+  });
+
+  it.each([
+    ['not-done (video still playing)', { kind: 'not-done' }],
+    ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
+    ['open', { kind: 'open', retake: false }],
+    [
+      'retake-waiting',
+      { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
+    ],
+  ])('prepares for this pilot when the state is %s', async (_why, state) => {
+    m.getDebriefAccess.mockResolvedValue(access(state));
     const res = await prepareTestHandler(post(body));
     expect(res.status).toBe(204);
     expect(m.prepareDebrief).toHaveBeenCalledWith({
@@ -63,39 +70,30 @@ describe('prepare', () => {
     });
   });
 
-  it('returns no body, so nothing about the debrief leaks before the video', async () => {
+  it('returns no body, so nothing about the debrief leaks before it opens', async () => {
     const res = await prepareTestHandler(post(body));
     expect(await res.text()).toBe('');
   });
 
-  it.each([
-    ['the material is already unlocked', { materialLock: { kind: 'open' } }],
-    ['the pilot is not subscribed', { subscribed: false }],
-    [
-      'the lesson is prerequisite-locked',
-      { lessonLock: { kind: 'lesson-locked' } },
-    ],
-    ['the lesson is out of tier', { outOfTier: { readOnly: false } }],
-  ])('skips the model when %s', async (_why, override) => {
-    m.evaluateLessonGate.mockResolvedValue({ ...watchingGate, ...override });
+  it('skips the model once the debrief is passed', async () => {
+    m.getDebriefAccess.mockResolvedValue(access({ kind: 'passed' }));
     const res = await prepareTestHandler(post(body));
     expect(res.status).toBe(204);
     expect(m.prepareDebrief).not.toHaveBeenCalled();
   });
 
-  it('skips a lesson whose tab 2 is the authored quiz', async () => {
-    m.getCourseDetailsWithCache.mockResolvedValue(detailsWith(false));
-    await prepareTestHandler(post(body));
+  it.each([
+    ['refused (out-of-tier, locked, unsubscribed, unknown)', 403],
+    ['has no debrief', 404],
+  ])('skips the model, with a body-less 204, when access is %s', async (_why, status) => {
+    m.getDebriefAccess.mockResolvedValue({ ok: false, status });
+    const res = await prepareTestHandler(post(body));
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
     expect(m.prepareDebrief).not.toHaveBeenCalled();
   });
 
-  it('skips a lesson the gate cannot find', async () => {
-    m.evaluateLessonGate.mockResolvedValue(null);
-    await prepareTestHandler(post(body));
-    expect(m.prepareDebrief).not.toHaveBeenCalled();
-  });
-
-  it('swallows a failed preparation — Start still generates on demand', async () => {
+  it('swallows a failed preparation — the debrief still generates on demand', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     m.prepareDebrief.mockRejectedValue(new Error('model down'));
     const res = await prepareTestHandler(post(body));
@@ -106,7 +104,7 @@ describe('prepare', () => {
     m.getSession.mockResolvedValue(null);
     const res = await prepareTestHandler(post(body));
     expect(res.status).toBe(401);
-    expect(m.evaluateLessonGate).not.toHaveBeenCalled();
+    expect(m.getDebriefAccess).not.toHaveBeenCalled();
   });
 
   it('400s without a courseSlug', async () => {

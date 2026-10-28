@@ -2,6 +2,7 @@ import {
   evaluateLessonLock,
   type GateCourse,
   type GateLesson,
+  type GateProgress,
   type LessonLock,
 } from '#/lib/lesson-gating';
 
@@ -26,8 +27,8 @@ export type ResumeTarget =
 
 export type ResolveResumeArgs = {
   course: GateCourse;
-  /** Lesson slugs whose video this learner has watched — see watchedLessonSlugs. */
-  watched: ReadonlySet<string>;
+  /** This learner's progress as the gate reads it — see gateProgress. */
+  progress: GateProgress;
   /**
    * Slug of the learner's last-viewed lesson, or null when they have never
    * opened one here. A slug that no longer exists in the course is treated
@@ -92,7 +93,7 @@ const toTarget = (found: Located): ResumeTarget => ({
  */
 export function resolveResumeTarget({
   course,
-  watched,
+  progress,
   pointerLessonSlug,
   bypassLocks = false,
 }: ResolveResumeArgs): ResumeTarget {
@@ -100,7 +101,7 @@ export function resolveResumeTarget({
   if (all.length === 0) return { kind: 'none', reason: 'no-lessons' };
 
   const lockOf = (slug: string): LessonLock =>
-    bypassLocks ? OPEN : evaluateLessonLock(course, slug, watched);
+    bypassLocks ? OPEN : evaluateLessonLock(course, slug, progress);
   const firstOpen = () =>
     all.find((c) => lockOf(c.lesson.slug).kind === 'open');
 

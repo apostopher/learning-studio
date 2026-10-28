@@ -23,7 +23,12 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lock: {
       locked: true,
       reason: 'lesson',
-      blockedBy: { lessonSlug: 'l0', moduleSlug: 'm1', lessonName: 'L0' },
+      blockedBy: {
+        lessonSlug: 'l0',
+        moduleSlug: 'm1',
+        lessonName: 'L0',
+        outstanding: [],
+      },
     },
   },
   ready: {

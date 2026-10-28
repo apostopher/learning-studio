@@ -1,3 +1,4 @@
+import { canOfferDebrief } from '#/lib/debrief-offer';
 import type { PlaybackResult } from '#/lib/video-providers/resolve.server';
 
 /**
@@ -20,24 +21,27 @@ export function playbackHasCaptions(
   return video.captions !== null;
 }
 
-export type TranscriptDebriefArgs = {
+export type TranscriptDebriefSectionArgs = {
   /** `lessons.has_debrief` — the admin's switch, authoritative as everywhere else. */
   hasDebrief: boolean;
   /** See `playbackHasCaptions`. */
-  hasCaptions: boolean;
+  transcriptUsable: boolean;
+  /** Completed at an earlier level — no debrief clock (call 12). */
+  readOnly: boolean;
 };
 
 /**
- * Whether a lesson with no material row can still offer a debrief.
- *
- * Kept as a named function rather than an inline `&&` because two surfaces have
- * to agree on the answer — the post-video overlay's button and the debrief
- * section below the player. When they disagreed previously the button appeared
- * and generated nothing.
+ * Whether a lesson with NO material row shows the debrief on its own below
+ * the player. The shared `canOfferDebrief` rule with no body text — which is
+ * what "no material row" means — so it can only come from the transcript.
  */
-export function canDebriefFromTranscript({
+export function showsTranscriptDebriefSection({
   hasDebrief,
-  hasCaptions,
-}: TranscriptDebriefArgs): boolean {
-  return hasDebrief && hasCaptions;
+  transcriptUsable,
+  readOnly,
+}: TranscriptDebriefSectionArgs): boolean {
+  return (
+    !readOnly &&
+    canOfferDebrief({ hasDebrief, materialText: null, transcriptUsable })
+  );
 }

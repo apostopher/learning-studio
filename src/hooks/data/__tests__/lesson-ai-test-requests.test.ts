@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
+import type { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  DebriefNotOpenError,
+  invalidateAfterSave,
   postEvaluateAnswer,
   postGenerateTest,
   postSaveResults,
+  refreshIfNotOpen,
 } from '../use-lesson-ai-test';
 
 afterEach(() => vi.restoreAllMocks());
@@ -84,5 +88,99 @@ describe('debrief requests carry the course', () => {
       evaluations: [],
       totalScore: 80,
     });
+  });
+});
+
+describe('invalidateAfterSave', () => {
+  it('invalidates the debrief status of that lesson and the course progress', async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const setQueryData = vi.fn();
+    await invalidateAfterSave(
+      { invalidateQueries, setQueryData } as unknown as QueryClient,
+      lesson,
+    );
+    expect(invalidateQueries.mock.calls.map((c) => c[0].queryKey)).toEqual([
+      ['user', 'debrief-status', 'ppl', 'l1'],
+      ['course', 'progress-summary', 'ppl'],
+    ]);
+    expect(setQueryData).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * generate and save-results answer 409 `{ error: 'not-open' }` when the
+ * debrief is not open now — a tab left open across the 24h boundary, or a
+ * second tab that already submitted. That is not a failure to show; it means
+ * the panel's state is stale.
+ */
+describe('a debrief that is not open', () => {
+  function stub409() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: 'not-open',
+          availableAt: '2026-10-28T15:40:00.000Z',
+        }),
+      }),
+    );
+  }
+
+  it('generate rejects with DebriefNotOpenError on a 409', async () => {
+    stub409();
+    await expect(postGenerateTest(lesson)).rejects.toBeInstanceOf(
+      DebriefNotOpenError,
+    );
+  });
+
+  it('save-results rejects with DebriefNotOpenError on a 409', async () => {
+    stub409();
+    await expect(
+      postSaveResults({
+        courseSlug: 'ppl',
+        test: { lessonSlug: 'l1', questions: [] },
+        evaluations: [],
+        totalScore: 40,
+      }),
+    ).rejects.toBeInstanceOf(DebriefNotOpenError);
+  });
+
+  it('any other failure is still a plain error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }),
+    );
+    const error = await postGenerateTest(lesson).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(DebriefNotOpenError);
+  });
+
+  it("refreshIfNotOpen refetches that lesson's debrief status so the panel moves on", () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const handled = refreshIfNotOpen(
+      { invalidateQueries } as unknown as QueryClient,
+      lesson,
+      new DebriefNotOpenError(),
+    );
+    expect(handled).toBe(true);
+    expect(invalidateQueries.mock.calls.map((c) => c[0].queryKey)).toEqual([
+      ['user', 'debrief-status', 'ppl', 'l1'],
+    ]);
+  });
+
+  it('refreshIfNotOpen leaves any other error to its caller', () => {
+    const invalidateQueries = vi.fn();
+    expect(
+      refreshIfNotOpen(
+        { invalidateQueries } as unknown as QueryClient,
+        lesson,
+        new Error('Failed to generate test'),
+      ),
+    ).toBe(false);
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });

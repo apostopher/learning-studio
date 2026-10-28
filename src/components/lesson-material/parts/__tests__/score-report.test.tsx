@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
 import { ScoreReport } from '../score-report';
 
@@ -29,58 +29,29 @@ const evaluations: AIEvaluationResult[] = [
   },
 ];
 
-const props = {
-  score: 80,
-  questions,
-  evaluations,
-  onRetake: () => {},
-  readOnly: false,
-};
+const props = { score: 80, questions, evaluations };
 
 describe('ScoreReport', () => {
-  it('fires onRetake when pressed normally', async () => {
-    const onRetake = vi.fn();
-    render(<ScoreReport {...props} onRetake={onRetake} />);
-
-    await userEvent.click(screen.getByRole('button', { name: /Retake Quiz/ }));
-    expect(onRetake).toHaveBeenCalledOnce();
-  });
-
-  it('is enabled and carries no reason when not read-only', () => {
+  it('has no Retake button — retakes happen only by the tab reopening (call 8)', () => {
     render(<ScoreReport {...props} />);
-    const button = screen.getByRole('button', { name: /Retake Quiz/ });
-    expect(button.hasAttribute('aria-disabled')).toBe(false);
-    expect(button.hasAttribute('aria-describedby')).toBe(false);
+    expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();
   });
 
-  describe('read-only', () => {
-    it('disables Retake and never fires it, even if clicked', async () => {
-      const onRetake = vi.fn();
-      render(<ScoreReport {...props} onRetake={onRetake} readOnly={true} />);
+  it('renders the footer it is given in the summary', () => {
+    render(
+      <ScoreReport
+        {...props}
+        footer={<p>Next attempt opens Tue 28 Oct, 3:40 PM</p>}
+      />,
+    );
+    expect(
+      screen.getByText('Next attempt opens Tue 28 Oct, 3:40 PM'),
+    ).toBeDefined();
+  });
 
-      const button = screen.getByRole('button', { name: /Retake Quiz/ });
-      // aria-disabled, not native disabled: the control must stay in the
-      // tab order (and thus reachable + its aria-describedby announced) for
-      // a keyboard/screen-reader user — see Minor 3 of the review.
-      expect(button.getAttribute('aria-disabled')).toBe('true');
-
-      await userEvent.click(button);
-      expect(onRetake).not.toHaveBeenCalled();
-    });
-
-    it('states the reason where assistive tech reaches it, not just visually', () => {
-      render(<ScoreReport {...props} readOnly={true} />);
-
-      const button = screen.getByRole('button', { name: /Retake Quiz/ });
-      const describedById = button.getAttribute('aria-describedby');
-      expect(describedById).toBeTruthy();
-
-      const reason = document.getElementById(describedById as string);
-      expect(reason).not.toBeNull();
-      expect(reason?.textContent).toContain(
-        'you completed this lesson at an earlier level',
-      );
-      expect(reason?.className).not.toContain('sr-only');
-    });
+  it('expands a question to the answer given', async () => {
+    render(<ScoreReport {...props} />);
+    await userEvent.click(screen.getByRole('button', { name: /What is V1/ }));
+    expect(screen.getByText('Correct.')).toBeDefined();
   });
 });

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { inlineDirSign } from '#/lib/inline-direction';
 import type { LessonLock } from '#/lib/lesson-gating';
 import { CircularProgress } from '../ui/circular-progress';
+import type { LessonRing } from './compute-lesson-ring';
 import { LessonList } from './lesson-list';
 
 type LessonLike = { slug: string; name: string };
@@ -23,6 +24,7 @@ type ModuleItemProps = {
   modulePercent: number;
   lessonPercents: Record<string, number>;
   lessonLocks: Record<string, LessonLock>;
+  lessonRings?: Record<string, LessonRing>;
 };
 
 const TRIGGER_CLASSES = [
@@ -59,6 +61,7 @@ export const ModuleItem = ({
   modulePercent,
   lessonPercents,
   lessonLocks,
+  lessonRings,
 }: ModuleItemProps) => (
   <Accordion.Item value={module.slug} className="flex flex-col">
     <Accordion.Header>
@@ -104,6 +107,7 @@ export const ModuleItem = ({
                 activeLessonSlug={activeLessonSlug}
                 lessonPercents={lessonPercents}
                 lessonLocks={lessonLocks}
+                lessonRings={lessonRings}
               />
             </motion.div>
           </motion.div>

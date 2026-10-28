@@ -120,7 +120,11 @@ describe('filterGatedLessons', () => {
     const kept = filterGatedLessons(
       [row('a', 'A body'), row('b', 'B body')],
       course,
-      new Set(['a']),
+      {
+        watched: new Set(['a']),
+        done: new Set(['a']),
+        outstanding: new Map(),
+      },
       false,
     );
     // A student locked out of B must not be able to ask the chat for it.
@@ -131,7 +135,7 @@ describe('filterGatedLessons', () => {
     const kept = filterGatedLessons(
       [row('a', 'A body'), row('b', 'B body')],
       course,
-      new Set(),
+      { watched: new Set(), done: new Set(), outstanding: new Map() },
       true,
     );
     expect(kept).toHaveLength(2);

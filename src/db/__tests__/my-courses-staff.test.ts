@@ -76,13 +76,15 @@ vi.mock('#/db/progress-components', () => ({
   toComponentFields: () => ({
     hasVideo: true,
     needsVideoWatch: true,
-    applicableSections: 0,
-    tappedSections: 0,
+    applicableSectionNames: [],
+    tappedSectionNames: [],
     hasDebrief: false,
     hasQuiz: false,
-    canDebrief: false,
     quizPlayed: false,
-    debriefAnswered: false,
+    debriefBearing: false,
+    debriefPassed: false,
+    lastFailedDebriefAt: null,
+    doneAt: null,
     visited: false,
   }),
 }));
@@ -132,6 +134,26 @@ beforeEach(() => {
   );
   m.getStaffCourseIds.mockResolvedValue(new Set<number>());
   m.resolveCardResume.mockReturnValue({ kind: 'none', reason: 'no-lessons' });
+});
+
+describe('getMyCourses — done lessons', () => {
+  it('hands each card the lessons with a completion row in that course', async () => {
+    // `doneAt` is the row's `lesson_completions` subquery. Done, not watched,
+    // is what unlocks the next lesson, so the card must receive it.
+    dbState.rows = [
+      { ...row(7, 'own-course', 'A'), lessonId: 70, doneAt: new Date() },
+      { ...row(7, 'own-course', 'A'), lessonId: 71, doneAt: null },
+      { ...row(8, 'other-course', 'B'), lessonId: 80, doneAt: null },
+    ];
+
+    await getMyCourses('u1');
+
+    const doneOf = (id: number) =>
+      (argsForCourse(id) as unknown as { doneLessonIds: Set<number> })
+        .doneLessonIds;
+    expect([...doneOf(7)]).toEqual([70]);
+    expect([...doneOf(8)]).toEqual([]);
+  });
 });
 
 describe('getMyCourses — course staff', () => {

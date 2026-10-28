@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { useCallback, useRef } from 'react';
 import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
@@ -7,6 +7,7 @@ import {
   isTrackedLessonSection,
   type TrackedLessonSection,
 } from '#/lib/lesson-visit-section';
+import { invalidateLessonDoneReaders } from './invalidate-lesson-done';
 import { saveJson } from './save-json';
 
 /**
@@ -28,8 +29,13 @@ export type RecordSectionTapInput = LessonRef & {
  *
  * `/api/user/lesson-section` returns a `promotion` alongside the save, so
  * `parse` pulls it out and the pending-promotion atom gets set on success.
+ *
+ * A tap is often the step that finishes the lesson ("done" includes the tabs),
+ * so success also refreshes the readers of "done" — the course rollup and the
+ * lesson's debrief status (see `invalidateLessonDoneReaders`).
  */
 export function useRecordSectionTap() {
+  const queryClient = useQueryClient();
   const setPromotion = useSetAtom(pendingPromotionAtom);
 
   return useMutation({
@@ -41,8 +47,9 @@ export function useRecordSectionTap() {
         parse: extractPromotion,
       }),
     retry: 1,
-    onSuccess: (promotion) => {
+    onSuccess: (promotion, { courseSlug, lessonSlug }) => {
       if (promotion) setPromotion(promotion);
+      void invalidateLessonDoneReaders(queryClient, { courseSlug, lessonSlug });
     },
   });
 }

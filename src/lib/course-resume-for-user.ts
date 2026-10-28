@@ -8,7 +8,7 @@ import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
-import { watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
+import { gateProgress } from '#/lib/lesson-gating-inputs';
 
 /**
  * The session half of `getCourseResumeTarget`, kept OUT of the server fn's
@@ -90,18 +90,18 @@ export async function resumeTargetForUser({
   // tier to be filtered by — the same short-circuit `evaluateLessonGate`
   // makes.
   const [progress, level] = viewingAsAuthor
-    ? [{ lessons: [] as { lessonId: number; watched: boolean }[] }, null]
+    ? [{ lessons: [] }, null]
     : await Promise.all([
         getCourseProgress({ userId, slug: courseSlug }),
         getCurrentLevel(userId, details.id),
       ]);
 
-  // `watched` is deliberately computed from the UNFILTERED payload while
+  // `progress` is deliberately computed from the UNFILTERED payload while
   // the course handed to the predicate is filtered — see
   // resolveResumeTargetForLevel for why the two halves must differ.
   return resolveResumeTargetForLevel({
     details,
-    watched: watchedLessonSlugs(details, progress),
+    progress: gateProgress(details, progress),
     pointerLessonId,
     level,
     bypassLocks: viewingAsAuthor,

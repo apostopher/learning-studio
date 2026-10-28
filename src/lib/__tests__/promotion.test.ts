@@ -53,10 +53,27 @@ beforeEach(() => {
 });
 
 describe('maybePromote', () => {
+  it('does not promote while a bearing debrief is unpassed', async () => {
+    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        {
+          lessonId: 1,
+          done: true,
+          debrief: { bearing: true, passed: false },
+        },
+      ],
+    });
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+  });
+
   it('writes the next rung when the tier is finished', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
 
     const result = await maybePromote({ userId: 'u1', courseSlug: 'rt' });
@@ -72,7 +89,13 @@ describe('maybePromote', () => {
   it('writes nothing when the tier is unfinished', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 50 }],
+      lessons: [
+        {
+          lessonId: 1,
+          done: false,
+          debrief: { bearing: false, passed: false },
+        },
+      ],
     });
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
@@ -90,7 +113,9 @@ describe('maybePromote', () => {
   it('emails the pilot on promotion', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
 
     await maybePromote({ userId: 'u1', courseSlug: 'rt' });
@@ -105,7 +130,9 @@ describe('maybePromote', () => {
   it('still reports the promotion when the email fails', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
     m.sendLevelPromotionEmail.mockRejectedValue(new Error('resend down'));
 
@@ -138,8 +165,8 @@ describe('maybePromote', () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
       lessons: [
-        { lessonId: 1, percent: 100 },
-        { lessonId: 2, percent: 100 },
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+        { lessonId: 2, done: true, debrief: { bearing: false, passed: false } },
       ],
     });
 
@@ -157,7 +184,9 @@ describe('maybePromote', () => {
     });
     m.getCurrentLevel.mockResolvedValue('intermediate');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
@@ -182,8 +211,8 @@ describe('maybePromote', () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
       lessons: [
-        { lessonId: 1, percent: 100 },
-        { lessonId: 2, percent: 100 },
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+        { lessonId: 2, done: true, debrief: { bearing: false, passed: false } },
       ],
     });
 
@@ -211,8 +240,12 @@ describe('maybePromote', () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
       lessons: [
-        { lessonId: 1, percent: 0 },
-        { lessonId: 2, percent: 100 },
+        {
+          lessonId: 1,
+          done: false,
+          debrief: { bearing: false, passed: false },
+        },
+        { lessonId: 2, done: true, debrief: { bearing: false, passed: false } },
       ],
     });
 
@@ -240,8 +273,8 @@ describe('maybePromote', () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
       lessons: [
-        { lessonId: 1, percent: 100 },
-        { lessonId: 2, percent: 100 },
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+        { lessonId: 2, done: true, debrief: { bearing: false, passed: false } },
       ],
     });
 
@@ -266,7 +299,9 @@ describe('maybePromote', () => {
     });
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
 
     expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
@@ -280,8 +315,8 @@ describe('maybePromote', () => {
     m.getCurrentLevel.mockResolvedValue(null);
     m.getCourseProgress.mockResolvedValue({
       lessons: [
-        { lessonId: 1, percent: 100 },
-        { lessonId: 2, percent: 100 },
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+        { lessonId: 2, done: true, debrief: { bearing: false, passed: false } },
       ],
     });
 
@@ -300,7 +335,9 @@ describe('maybePromote', () => {
   it('sends no email and reports nothing when the insert was skipped', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 1, percent: 100 }],
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
     });
     m.insertEarnedLevelRow.mockResolvedValue(null);
 

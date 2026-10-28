@@ -15,9 +15,9 @@ export type Promotion = { id: number; from: UserLevel; to: UserLevel };
 /**
  * Promote the pilot if they have just finished their tier.
  *
- * Called after every progress write, because there is no single "lesson
+ * Called (via `settleProgress`) after every progress write, because there is no single "lesson
  * completed" event — completion emerges from section taps, video milestones,
- * quiz submissions and debrief saves independently.
+ * quiz submissions and passed debriefs independently.
  *
  * Only ever writes upward. Recomputation that could write downward was
  * rejected: one new Basic lesson would demote every Advanced pilot at once and,

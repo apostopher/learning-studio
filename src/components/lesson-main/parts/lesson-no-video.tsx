@@ -1,4 +1,4 @@
-import { BookOpen, NotebookPen, VideoOff } from 'lucide-react';
+import { BookOpen, VideoOff } from 'lucide-react';
 
 type LessonNoVideoProps = {
   lessonName: string;
@@ -8,8 +8,8 @@ type LessonNoVideoProps = {
    * to tell "still being built" apart from "deliberately reading-only".
    */
   videoExpected: boolean;
-  /** Omitted when no debrief can be started — the tab would not exist either. */
-  onDebrief?: () => void;
+  /** Whether the lesson has a Debrief tab below — named in the heading. */
+  withDebrief: boolean;
 };
 
 /**
@@ -21,14 +21,14 @@ type LessonNoVideoProps = {
  * describes what the lesson IS, and keeps the missing-video note for the case
  * where the admin's own config says a video was expected.
  *
- * The Debrief button is a shortcut, not the only door — the Debrief tab below
- * carries the same action. It sits here because this is exactly where the
- * post-video overlay's button appears on lessons that do have a video.
+ * No Debrief button: it was a shortcut to the Debrief tab, like the post-video
+ * button, and both went when the debrief moved to opening 24h after the
+ * lesson is done. The tab below says when it opens.
  */
 export const LessonNoVideo = ({
   lessonName,
   videoExpected,
-  onDebrief,
+  withDebrief,
 }: LessonNoVideoProps) => (
   // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics
   <div className="lesson-card" role="status">
@@ -49,7 +49,7 @@ export const LessonNoVideo = ({
     <h2 className="lesson-card__heading">
       {videoExpected
         ? 'No video for this lesson yet'
-        : `${lessonName} is reading${onDebrief ? ' and debrief' : ''}`}
+        : `${lessonName} is reading${withDebrief ? ' and debrief' : ''}`}
     </h2>
 
     <p>
@@ -62,16 +62,5 @@ export const LessonNoVideo = ({
         'Work through the material below.'
       )}
     </p>
-
-    {onDebrief ? (
-      <button
-        type="button"
-        onClick={onDebrief}
-        className="mt-2 inline-flex items-center gap-2 rounded-md bg-accent-9 px-4 py-2 text-sm font-medium text-accent-contrast hover:bg-accent-10"
-      >
-        <NotebookPen size={16} aria-hidden="true" />
-        Debrief
-      </button>
-    ) : null}
   </div>
 );

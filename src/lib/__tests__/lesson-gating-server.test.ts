@@ -66,23 +66,23 @@ const details = {
   ],
 };
 
-const progress = (watchedLessonIds: number[]) => ({
-  lessons: [
-    {
-      lessonId: 10,
-      moduleId: 1,
-      videoId: 'vid-a',
-      percent: 0,
-      watched: watchedLessonIds.includes(10),
-    },
-    {
-      lessonId: 11,
-      moduleId: 1,
-      videoId: 'vid-b',
-      percent: 0,
-      watched: watchedLessonIds.includes(11),
-    },
-  ],
+/**
+ * `done` defaults to `watched`: most cases here are about the material lock,
+ * where the two coincide. The cases about done-vs-watched pass both.
+ */
+const progress = (
+  watchedLessonIds: number[],
+  doneLessonIds: number[] = watchedLessonIds,
+  outstanding: Record<number, unknown[]> = {},
+) => ({
+  lessons: [10, 11].map((lessonId) => ({
+    lessonId,
+    moduleId: 1,
+    percent: 0,
+    watched: watchedLessonIds.includes(lessonId),
+    done: doneLessonIds.includes(lessonId),
+    outstanding: outstanding[lessonId] ?? [],
+  })),
 });
 
 describe('evaluateLessonGate', () => {
@@ -148,7 +148,10 @@ describe('evaluateLessonGate', () => {
     ).toBeNull();
   });
 
-  it('locks a lesson whose prerequisite is unwatched', async () => {
+  it('locks a lesson whose prerequisite is not done, carrying what is left', async () => {
+    getCourseProgress.mockResolvedValue(
+      progress([], [], { 10: [{ kind: 'video' }, { kind: 'quiz' }] }),
+    );
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'b',
@@ -159,10 +162,39 @@ describe('evaluateLessonGate', () => {
       lessonSlug: 'a',
       moduleSlug: 'm1',
       lessonName: 'A',
+      outstanding: [{ kind: 'video' }, { kind: 'quiz' }],
     });
   });
 
-  it('opens the lesson but locks material once the prerequisite is watched', async () => {
+  it('keeps the lesson locked when the prerequisite is watched but not done', async () => {
+    getCourseProgress.mockResolvedValue(
+      progress([10], [], { 10: [{ kind: 'section', section: 'proTips' }] }),
+    );
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'b',
+      courseSlug: 'c1',
+    });
+    expect(result?.lessonLock).toEqual({
+      kind: 'lesson-locked',
+      lessonSlug: 'a',
+      moduleSlug: 'm1',
+      lessonName: 'A',
+      outstanding: [{ kind: 'section', section: 'proTips' }],
+    });
+  });
+
+  it('unlocks the prerequisite lesson own material on watched, not done', async () => {
+    getCourseProgress.mockResolvedValue(progress([10], []));
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'a',
+      courseSlug: 'c1',
+    });
+    expect(result?.materialLock).toEqual({ kind: 'open' });
+  });
+
+  it('opens the lesson but locks material once the prerequisite is done', async () => {
     getCourseProgress.mockResolvedValue(progress([10]));
     const result = await evaluateLessonGate({
       userId: 'u1',
@@ -238,7 +270,7 @@ describe('evaluateLessonGate', () => {
     ).rejects.toThrow(/c1/);
   });
 
-  it('maps watched progress by lesson id, not by video id', async () => {
+  it('maps progress by lesson id, not by video id', async () => {
     // progress-summary keys by lessonId; the predicate keys by lesson slug.
     // Getting this mapping wrong silently unlocks or locks the wrong lesson.
     getCourseProgress.mockResolvedValue({
@@ -246,9 +278,10 @@ describe('evaluateLessonGate', () => {
         {
           lessonId: 10,
           moduleId: 1,
-          videoId: 'vid-a',
           percent: 100,
           watched: true,
+          done: true,
+          outstanding: [],
         },
       ],
     });

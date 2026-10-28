@@ -1,7 +1,6 @@
-import { useSetAtom } from 'jotai';
-import { useCallback } from 'react';
-import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
+import { usePrepareDebriefOnVisit } from '#/data-hooks/use-prepare-debrief';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
+import { canOfferDebrief } from '#/lib/debrief-offer';
 import { LessonNoVideo } from './lesson-no-video';
 
 type LessonNoVideoContainerProps = {
@@ -11,23 +10,17 @@ type LessonNoVideoContainerProps = {
   hasDebrief: boolean;
   /** `needsVideoWatch` — the admin's statement that a video belongs here. */
   videoExpected: boolean;
-  /**
-   * The lesson was completed at an earlier level. The Debrief shortcut only
-   * switches tabs, so offering it here would deposit the pilot on a Debrief
-   * panel whose Start is disabled — a button that leads to a dead end reads as
-   * a broken app, not as a deliberately inert archive.
-   */
+  /** Completed at an earlier level — such a lesson has no Debrief tab. */
   readOnly: boolean;
 };
 
 /**
  * Supplies the no-video card with the one thing it cannot know on its own:
- * whether a debrief can actually be started.
+ * whether the lesson has a Debrief tab, which the heading names.
  *
- * The card's button only NAVIGATES — it selects the Debrief tab and scrolls to
- * it, leaving generation to `DebriefIntro` there. Duplicating the generate
- * call would give this lesson two places that can kick off the same request,
- * and the tab has to handle the idle case regardless.
+ * Also where a video-less lesson's debrief is prepared, on first visit: such
+ * a lesson never mounts the player, whose prepare-on-play covers every
+ * lesson with a video.
  *
  * `useLessonMaterial` is the same cached query the material panel below is
  * already using, so reading it here costs no extra request.
@@ -40,32 +33,26 @@ export const LessonNoVideoContainer = ({
   videoExpected,
   readOnly,
 }: LessonNoVideoContainerProps) => {
-  const setActiveTab = useSetAtom(activeTabAtom);
   const { data } = useLessonMaterial({ courseSlug, lessonSlug });
   const material = data && !data.locked ? data.material : null;
 
-  // Mirrors computeMaterialTabs: no generator input means no Debrief tab, so
-  // a shortcut to it would land on a tab that does not exist. Body text alone
-  // is enough now — the server derives key points from it when none were
-  // authored (see resolveDebriefSource). The transcript fallback cannot apply
-  // here: this branch exists precisely because the lesson has no video.
-  const canDebrief = hasDebrief && Boolean(material?.text) && !readOnly;
+  // The shared `canOfferDebrief` rule, as the Debrief tab asks it. The
+  // transcript fallback cannot apply here: this branch exists precisely
+  // because the lesson has no video.
+  const offer = {
+    hasDebrief,
+    materialText: material?.text,
+    transcriptUsable: false,
+  };
+  const withDebrief = canOfferDebrief(offer) && !readOnly;
 
-  const onDebrief = useCallback(() => {
-    setActiveTab('quiz');
-    queueMicrotask(() => {
-      lessonMaterialRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    });
-  }, [setActiveTab]);
+  usePrepareDebriefOnVisit({ courseSlug, lessonSlug, ...offer, readOnly });
 
   return (
     <LessonNoVideo
       lessonName={lessonName}
       videoExpected={videoExpected}
-      onDebrief={canDebrief ? onDebrief : undefined}
+      withDebrief={withDebrief}
     />
   );
 };

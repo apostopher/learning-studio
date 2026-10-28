@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type ShouldPrepareDebriefArgs,
   shouldPrepareDebrief,
+  shouldPrepareDebriefOnVisit,
   usePrepareDebrief,
 } from '#/data-hooks/use-prepare-debrief';
 
@@ -49,24 +50,78 @@ describe('shouldPrepareDebrief', () => {
   const watching: ShouldPrepareDebriefArgs = {
     playing: true,
     hasDebrief: true,
-    canDebrief: true,
-    materialLocked: true,
+    materialText: 'body',
+    transcriptUsable: false,
     readOnly: false,
     alreadyRequested: false,
   };
 
-  it('fires when a debrief lesson starts playing behind its video lock', () => {
+  it('fires when a debrief lesson starts playing', () => {
     expect(shouldPrepareDebrief(watching)).toBe(true);
+  });
+
+  it('fires from captions alone, even on an empty-bodied material row', () => {
+    expect(
+      shouldPrepareDebrief({
+        ...watching,
+        materialText: '',
+        transcriptUsable: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('still fires on a rewatch once the video is watched', () => {
+    // The debrief no longer opens when the video unlocks the material: it
+    // opens 24h after the lesson is done, and the server prepares in every
+    // state short of passed. Holding off once the material unlocked meant a
+    // pilot who watched before this shipped never got a head start at all.
+    // The old gate rides along untyped so this goes red if it comes back.
+    const unlocked = { materialLocked: false };
+    expect(shouldPrepareDebrief({ ...watching, ...unlocked })).toBe(true);
   });
 
   it.each<[string, Partial<ShouldPrepareDebriefArgs>]>([
     ['before the video plays', { playing: false }],
-    ['when tab 2 is the authored quiz', { hasDebrief: false }],
-    ['when there is nothing to generate from', { canDebrief: false }],
-    ['once the video is already watched', { materialLocked: false }],
+    ['when the lesson has no debrief', { hasDebrief: false }],
+    [
+      'when there is nothing to generate from',
+      { materialText: null, transcriptUsable: false },
+    ],
     ['on a read-only archive view', { readOnly: true }],
     ['a second time for the same lesson', { alreadyRequested: true }],
   ])('holds off %s', (_why, override) => {
     expect(shouldPrepareDebrief({ ...watching, ...override })).toBe(false);
+  });
+});
+
+/**
+ * Video-less lessons never mount the player, so prepare-on-play never runs
+ * for them. Spec ("When generation runs"): they prepare on first visit.
+ */
+describe('shouldPrepareDebriefOnVisit', () => {
+  const visiting = {
+    hasDebrief: true,
+    materialText: 'body',
+    transcriptUsable: false,
+    readOnly: false,
+    alreadyRequested: false,
+  };
+
+  it('fires on the first visit to a video-less debrief lesson', () => {
+    expect(shouldPrepareDebriefOnVisit(visiting)).toBe(true);
+  });
+
+  it.each<[string, Partial<typeof visiting>]>([
+    ['when the lesson has no debrief', { hasDebrief: false }],
+    [
+      'until the material has loaded with something to generate from',
+      { materialText: undefined },
+    ],
+    ['on a read-only archive view', { readOnly: true }],
+    ['a second time for the same lesson', { alreadyRequested: true }],
+  ])('holds off %s', (_why, override) => {
+    expect(shouldPrepareDebriefOnVisit({ ...visiting, ...override })).toBe(
+      false,
+    );
   });
 });

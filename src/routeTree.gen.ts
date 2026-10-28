@@ -44,6 +44,7 @@ import { Route as ApiCourseProgressSummaryRouteImport } from './routes/api/cours
 import { Route as ApiCourseSkaProfileRouteImport } from './routes/api/course/ska-profile'
 import { Route as ApiCronBlobSweepRouteImport } from './routes/api/cron/blob-sweep'
 import { Route as ApiCronNewsScrapeRouteImport } from './routes/api/cron/news-scrape'
+import { Route as ApiLessonDebriefStatusRouteImport } from './routes/api/lesson/debrief-status'
 import { Route as ApiLessonMaterialRouteImport } from './routes/api/lesson/material'
 import { Route as ApiLessonPlaybackRouteImport } from './routes/api/lesson/playback'
 import { Route as ApiTavusWebhookRouteImport } from './routes/api/tavus/webhook'
@@ -292,6 +293,11 @@ const ApiCronBlobSweepRoute = ApiCronBlobSweepRouteImport.update({
 const ApiCronNewsScrapeRoute = ApiCronNewsScrapeRouteImport.update({
   id: '/api/cron/news-scrape',
   path: '/api/cron/news-scrape',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonDebriefStatusRoute = ApiLessonDebriefStatusRouteImport.update({
+  id: '/api/lesson/debrief-status',
+  path: '/api/lesson/debrief-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLessonMaterialRoute = ApiLessonMaterialRouteImport.update({
@@ -745,6 +751,7 @@ export interface FileRoutesByFullPath {
   '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
+  '/api/lesson/debrief-status': typeof ApiLessonDebriefStatusRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/tavus/webhook': typeof ApiTavusWebhookRoute
@@ -852,6 +859,7 @@ export interface FileRoutesByTo {
   '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
+  '/api/lesson/debrief-status': typeof ApiLessonDebriefStatusRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/tavus/webhook': typeof ApiTavusWebhookRoute
@@ -963,6 +971,7 @@ export interface FileRoutesById {
   '/api/course/ska-profile': typeof ApiCourseSkaProfileRoute
   '/api/cron/blob-sweep': typeof ApiCronBlobSweepRoute
   '/api/cron/news-scrape': typeof ApiCronNewsScrapeRoute
+  '/api/lesson/debrief-status': typeof ApiLessonDebriefStatusRoute
   '/api/lesson/material': typeof ApiLessonMaterialRoute
   '/api/lesson/playback': typeof ApiLessonPlaybackRoute
   '/api/tavus/webhook': typeof ApiTavusWebhookRoute
@@ -1074,6 +1083,7 @@ export interface FileRouteTypes {
     | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
+    | '/api/lesson/debrief-status'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/tavus/webhook'
@@ -1181,6 +1191,7 @@ export interface FileRouteTypes {
     | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
+    | '/api/lesson/debrief-status'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/tavus/webhook'
@@ -1291,6 +1302,7 @@ export interface FileRouteTypes {
     | '/api/course/ska-profile'
     | '/api/cron/blob-sweep'
     | '/api/cron/news-scrape'
+    | '/api/lesson/debrief-status'
     | '/api/lesson/material'
     | '/api/lesson/playback'
     | '/api/tavus/webhook'
@@ -1394,6 +1406,7 @@ export interface RootRouteChildren {
   ApiCourseSkaProfileRoute: typeof ApiCourseSkaProfileRoute
   ApiCronBlobSweepRoute: typeof ApiCronBlobSweepRoute
   ApiCronNewsScrapeRoute: typeof ApiCronNewsScrapeRoute
+  ApiLessonDebriefStatusRoute: typeof ApiLessonDebriefStatusRoute
   ApiLessonMaterialRoute: typeof ApiLessonMaterialRoute
   ApiLessonPlaybackRoute: typeof ApiLessonPlaybackRoute
   ApiTavusWebhookRoute: typeof ApiTavusWebhookRoute
@@ -1667,6 +1680,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/news-scrape'
       fullPath: '/api/cron/news-scrape'
       preLoaderRoute: typeof ApiCronNewsScrapeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/debrief-status': {
+      id: '/api/lesson/debrief-status'
+      path: '/api/lesson/debrief-status'
+      fullPath: '/api/lesson/debrief-status'
+      preLoaderRoute: typeof ApiLessonDebriefStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/material': {
@@ -2607,6 +2627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseSkaProfileRoute: ApiCourseSkaProfileRoute,
   ApiCronBlobSweepRoute: ApiCronBlobSweepRoute,
   ApiCronNewsScrapeRoute: ApiCronNewsScrapeRoute,
+  ApiLessonDebriefStatusRoute: ApiLessonDebriefStatusRoute,
   ApiLessonMaterialRoute: ApiLessonMaterialRoute,
   ApiLessonPlaybackRoute: ApiLessonPlaybackRoute,
   ApiTavusWebhookRoute: ApiTavusWebhookRoute,

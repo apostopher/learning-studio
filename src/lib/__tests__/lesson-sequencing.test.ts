@@ -5,9 +5,10 @@ import {
   type GateCourse,
   type GateLesson,
   type GateLessonDependency,
+  type GateProgress,
 } from '#/lib/lesson-gating';
 
-/** A lesson that CAN block: available, has a video, and must be watched. */
+/** A lesson with a video that must be watched. */
 const blocking = (
   slug: string,
   dependsOn: GateLessonDependency[] = [],
@@ -21,11 +22,24 @@ const blocking = (
   dependsOn,
 });
 
-/** Reading-only: no video, so `isLessonSatisfied` is unconditionally true. */
+/** Reading-only: no video. It still blocks until it is done. */
 const reading = (
   slug: string,
   dependsOn: GateLessonDependency[] = [],
 ): GateLesson => ({ ...blocking(slug, dependsOn), hasVideo: false });
+
+/** Unavailable (WIP): the only kind of lesson that can never block. */
+const wip = (slug: string): GateLesson => ({
+  ...blocking(slug),
+  isAvailable: false,
+});
+
+/** Progress where exactly these lessons are done (and watched). */
+const done = (...slugs: string[]): GateProgress => ({
+  watched: new Set(slugs),
+  done: new Set(slugs),
+  outstanding: new Map(),
+});
 
 const course = (
   ...modules: {
@@ -72,13 +86,21 @@ describe('the derived chain', () => {
     expect(prereqs(c, 'b')).toEqual([]);
   });
 
-  it('skips a lesson that cannot block, and reports what it skipped', () => {
-    // THE bug this rule exists for. `isLessonSatisfied` returns true for a
-    // video-less lesson whether or not that lesson is itself locked, so
-    // chaining `c` to `b` would open `c` to a learner who has watched nothing.
+  it('chains through a video-less lesson, which must be done like any other', () => {
     const c = course({
       slug: 'm',
       lessons: [blocking('a'), reading('b'), blocking('c')],
+    });
+    expect(prereqs(c, 'c')).toEqual(['b']);
+    expect(explainLessonPrerequisites(c, 'c').skipped).toEqual([]);
+  });
+
+  it('skips an unavailable lesson, and reports what it skipped', () => {
+    // A WIP lesson can never be done, so chaining to it would strand every
+    // lesson after it.
+    const c = course({
+      slug: 'm',
+      lessons: [blocking('a'), wip('b'), blocking('c')],
     });
     expect(prereqs(c, 'c')).toEqual(['a']);
     const explanation = explainLessonPrerequisites(c, 'c');
@@ -88,7 +110,7 @@ describe('the derived chain', () => {
   it('leaves a lesson open when nothing before it can block', () => {
     const c = course({
       slug: 'm',
-      lessons: [reading('a'), reading('b'), blocking('c')],
+      lessons: [wip('a'), wip('b'), blocking('c')],
     });
     expect(prereqs(c, 'c')).toEqual([]);
   });
@@ -98,8 +120,8 @@ describe('the derived chain', () => {
     // `explainLessonPrerequisites` alone would pass with the expansion wired
     // to nothing.
     const c = course({ slug: 'm', lessons: [blocking('a'), blocking('b')] });
-    expect(evaluateLessonLock(c, 'b', new Set()).kind).toBe('lesson-locked');
-    expect(evaluateLessonLock(c, 'b', new Set(['a'])).kind).toBe('open');
+    expect(evaluateLessonLock(c, 'b', done()).kind).toBe('lesson-locked');
+    expect(evaluateLessonLock(c, 'b', done('a')).kind).toBe('open');
   });
 
   it('does not leak past a video-less lesson', () => {
@@ -107,9 +129,14 @@ describe('the derived chain', () => {
       slug: 'm',
       lessons: [blocking('a'), reading('b'), blocking('c')],
     });
-    // Watched nothing: `c` must still be locked, by `a`.
-    expect(evaluateLessonLock(c, 'c', new Set()).kind).toBe('lesson-locked');
-    expect(evaluateLessonLock(c, 'c', new Set(['a'])).kind).toBe('open');
+    // Done nothing: `c` must still be locked, by `b`, and stays locked until
+    // `b` itself is done — finishing `a` alone is not enough.
+    expect(evaluateLessonLock(c, 'c', done())).toMatchObject({
+      kind: 'lesson-locked',
+      lessonSlug: 'b',
+    });
+    expect(evaluateLessonLock(c, 'c', done('a')).kind).toBe('lesson-locked');
+    expect(evaluateLessonLock(c, 'c', done('a', 'b')).kind).toBe('open');
   });
 });
 
@@ -190,9 +217,9 @@ describe('forward edges', () => {
         blocking('b', [{ lessonSlug: 'a' }]),
       ],
     });
-    expect(evaluateLessonLock(c, 'a', new Set()).kind).toBe('open');
-    expect(evaluateLessonLock(c, 'b', new Set()).kind).toBe('lesson-locked');
-    expect(evaluateLessonLock(c, 'b', new Set(['a'])).kind).toBe('open');
+    expect(evaluateLessonLock(c, 'a', done()).kind).toBe('open');
+    expect(evaluateLessonLock(c, 'b', done()).kind).toBe('lesson-locked');
+    expect(evaluateLessonLock(c, 'b', done('a')).kind).toBe('open');
   });
 
   it('are dropped across modules too', () => {
@@ -223,6 +250,6 @@ describe('unresolvable edges', () => {
       lessons: [blocking('a'), blocking('b', [{ lessonSlug: 'deleted' }])],
     });
     expect(prereqs(c, 'b')).toEqual([]);
-    expect(evaluateLessonLock(c, 'b', new Set()).kind).toBe('open');
+    expect(evaluateLessonLock(c, 'b', done()).kind).toBe('open');
   });
 });

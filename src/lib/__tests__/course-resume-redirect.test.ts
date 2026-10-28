@@ -77,6 +77,8 @@ describe('resumeCourseOrExplain', () => {
       kind: 'module-locked',
       moduleSlug: 'm1',
       moduleName: 'Module One',
+      lessonsLeft: 1,
+      next: { lessonName: 'First lesson', outstanding: [] },
     } as const;
     await expect(
       call({ kind: 'none', reason: 'all-locked', lock }),

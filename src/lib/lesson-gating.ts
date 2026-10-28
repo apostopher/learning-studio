@@ -6,9 +6,34 @@
  * must never disagree, so this file has no DB, network, or React dependency.
  * See docs/superpowers/specs/2026-07-30-lesson-gating-ledger.md.
  *
+ * Two different progress facts feed it, and they are not interchangeable:
+ * the lesson's OWN material unlocks on its video being watched, while every
+ * prerequisite — lesson or module — is met only when that lesson is DONE
+ * (100% of video, tabs and quiz; sticky, from `lesson_completions`).
+ *
  * Admin bypass is deliberately NOT modelled here — callers skip the predicate
  * entirely for admins, so this stays a pure statement about student progress.
  */
+
+import type { OutstandingItem } from '#/lib/course-progress-agg';
+
+/**
+ * A learner's progress as the gate reads it, keyed by lesson slug.
+ *
+ * Built by `gateProgress` from the course payload and the progress summary.
+ */
+export type GateProgress = {
+  /** Video fully watched — drives ONLY the lesson's own material lock. */
+  watched: ReadonlySet<string>;
+  /** Sticky done — drives lesson and module prerequisites. */
+  done: ReadonlySet<string>;
+  /**
+   * What each lesson still needs, so a lock can say what to do next.
+   * Per lesson slug; may be empty where copy is not needed (card resume).
+   * A missing entry reads as nothing outstanding.
+   */
+  outstanding: ReadonlyMap<string, readonly OutstandingItem[]>;
+};
 
 export type GateLessonDependency = {
   lessonSlug: string;
@@ -55,12 +80,22 @@ export type GateCourse = { modules: readonly GateModule[] };
 
 export type LessonLock =
   | { kind: 'open' }
-  | { kind: 'module-locked'; moduleSlug: string; moduleName: string }
+  | {
+      kind: 'module-locked';
+      moduleSlug: string;
+      moduleName: string;
+      /** Available lessons in the prerequisite module not yet done. */
+      lessonsLeft: number;
+      /** The first of those, in rank order, and what it still needs. */
+      next: { lessonName: string; outstanding: readonly OutstandingItem[] };
+    }
   | {
       kind: 'lesson-locked';
       lessonSlug: string;
       moduleSlug: string;
       lessonName: string;
+      /** What the blocking lesson still needs before it is done. */
+      outstanding: readonly OutstandingItem[];
     };
 
 export type MaterialLock = { kind: 'open' } | { kind: 'video-locked' };
@@ -70,12 +105,22 @@ export type LockedMaterialResponse =
   | {
       locked: true;
       reason: 'lesson';
-      blockedBy: { lessonSlug: string; moduleSlug: string; lessonName: string };
+      blockedBy: {
+        lessonSlug: string;
+        moduleSlug: string;
+        lessonName: string;
+        outstanding: readonly OutstandingItem[];
+      };
     }
   | {
       locked: true;
       reason: 'module';
-      blockedBy: { moduleSlug: string; moduleName: string };
+      blockedBy: {
+        moduleSlug: string;
+        moduleName: string;
+        lessonsLeft: number;
+        next: { lessonName: string; outstanding: readonly OutstandingItem[] };
+      };
     };
 
 /**
@@ -132,12 +177,15 @@ const OPEN_LESSON: LessonLock = { kind: 'open' };
 const OPEN_MATERIAL: MaterialLock = { kind: 'open' };
 
 /**
- * Whether a lesson's own video requirement is met.
+ * Whether a lesson's own video requirement is met. Drives the lesson's own
+ * material lock and library unlocks — NOT prerequisites, which need the
+ * prerequisite lesson to be done (see `isPrerequisiteMet`).
  *
  * Three escapes, all deliberate: an unavailable (WIP) lesson is outside gate
- * logic entirely; a lesson with watching switched off cannot block; and a
- * lesson with no video has nothing to watch — needsVideoWatch defaults to
- * true, so blocking there would strand every video-less lesson forever.
+ * logic entirely; a lesson with watching switched off does not lock its own
+ * material; and a lesson with no video has nothing to watch. These escapes
+ * only concern the lesson's own material — as a prerequisite, such a lesson
+ * still blocks until it is done.
  */
 export function isLessonSatisfied(
   lesson: GateLesson,
@@ -163,18 +211,32 @@ function locate(
 }
 
 /**
- * Whether this lesson is capable of blocking anything — the exact inverse of
- * `isLessonSatisfied`'s three escapes.
+ * Whether this lesson is capable of blocking anything. Only an unavailable
+ * (WIP) lesson cannot: no student action can make it done.
  *
- * The chain skips lessons that fail this, and that is not a nicety. A lesson
- * with no video is satisfied whether or not it is itself locked, so pointing
- * at one does not merely fail to gate: it breaks the transitivity this
- * predicate relies on to justify walking direct edges only. Chained naively,
- * `1 → 2 → 3 → 4 → 5` with a video-less lesson 4 opens lesson 5 to a learner
- * who has watched nothing at all.
+ * Video-less and watch-optional lessons block like any other now, because a
+ * prerequisite is met by the lesson being DONE, which every reachable lesson
+ * can become (a visit and its tabs, at minimum).
  */
 function canBlock(lesson: GateLesson): boolean {
-  return lesson.isAvailable && lesson.needsVideoWatch && lesson.hasVideo;
+  return lesson.isAvailable;
+}
+
+/** Whether a prerequisite lesson stops gating its dependents. */
+function isPrerequisiteMet(
+  lesson: GateLesson,
+  progress: GateProgress,
+): boolean {
+  return !canBlock(lesson) || progress.done.has(lesson.slug);
+}
+
+const NOTHING_OUTSTANDING: readonly OutstandingItem[] = [];
+
+function outstandingOf(
+  progress: GateProgress,
+  lessonSlug: string,
+): readonly OutstandingItem[] {
+  return progress.outstanding.get(lessonSlug) ?? NOTHING_OUTSTANDING;
 }
 
 /**
@@ -309,15 +371,26 @@ export function explainLessonPrerequisites(
  * assignment, so unsatisfiable edges appear routinely; failing closed on them
  * silently kills whole chains of content.
  *
- * Only direct edges are walked. Transitivity emerges because a locked lesson
- * is unplayable, so its video cannot be watched, so its dependents stay
- * locked — which holds ONLY for prerequisites that can block at all, hence
- * `canBlock` and the chain's skipping. See `effectivePrerequisites`.
+ * Only direct edges are walked. Transitivity holds because a locked lesson
+ * serves no material and records no visit, so it cannot become done, so its
+ * dependents stay locked. The one lesson that cannot become done — an
+ * unavailable one — is also one that never blocks, so it can never strand a
+ * chain. See `canBlock` and `effectivePrerequisites`.
+ *
+ * Caveat: video progress and the visit are written only past the lesson lock,
+ * but section taps (`/api/user/lesson-section`) and quiz answers
+ * (`/api/lesson/quiz/answers`) do not yet refuse a locked lesson. Through the
+ * app a locked lesson shows no tabs and no quiz, so the argument holds; a
+ * hand-crafted request against a lesson with no required video could still
+ * complete it out of order.
+ *
+ * Every lock carries what the learner still has to do (`outstanding`), so the
+ * lock copy can name it rather than say "finish the previous lesson".
  */
 export function evaluateLessonLock(
   course: GateCourse,
   lessonSlug: string,
-  watchedLessonSlugs: ReadonlySet<string>,
+  progress: GateProgress,
 ): LessonLock {
   const found = locate(course, lessonSlug);
   // An unknown lesson is not this function's error to report — callers 404.
@@ -327,22 +400,27 @@ export function evaluateLessonLock(
   for (const prereqSlug of module.dependsOn) {
     const prereq = course.modules.find((m) => m.slug === prereqSlug);
     if (!prereq) continue;
-    const satisfied = prereq.lessons
-      .filter((l) => l.isAvailable)
-      .every((l) => isLessonSatisfied(l, watchedLessonSlugs));
-    if (!satisfied) {
+    const unfinished = prereq.lessons.filter(
+      (l) => !isPrerequisiteMet(l, progress),
+    );
+    if (unfinished.length > 0) {
+      const [next] = unfinished;
       return {
         kind: 'module-locked',
         moduleSlug: prereq.slug,
         moduleName: prereq.name,
+        lessonsLeft: unfinished.length,
+        next: {
+          lessonName: next.name,
+          outstanding: outstandingOf(progress, next.slug),
+        },
       };
     }
   }
 
   for (const depLesson of effectivePrerequisites(course, module, lesson, index)
     .prerequisites) {
-    if (!depLesson.isAvailable) continue;
-    if (!isLessonSatisfied(depLesson, watchedLessonSlugs)) {
+    if (!isPrerequisiteMet(depLesson, progress)) {
       const depModule =
         course.modules.find((m) =>
           m.lessons.some((l) => l.slug === depLesson.slug),
@@ -352,6 +430,7 @@ export function evaluateLessonLock(
         lessonSlug: depLesson.slug,
         moduleSlug: depModule.slug,
         lessonName: depLesson.name,
+        outstanding: outstandingOf(progress, depLesson.slug),
       };
     }
   }
@@ -361,16 +440,17 @@ export function evaluateLessonLock(
 
 /**
  * Whether the lesson's material is readable, assuming evaluateLessonLock is
- * already open. The lesson's own video controls this gate and no other.
+ * already open. The lesson's own video controls this gate and no other — so
+ * it reads `progress.watched`, never `progress.done`.
  */
 export function evaluateMaterialLock(
   course: GateCourse,
   lessonSlug: string,
-  watchedLessonSlugs: ReadonlySet<string>,
+  progress: GateProgress,
 ): MaterialLock {
   const found = locate(course, lessonSlug);
   if (!found) return OPEN_MATERIAL;
-  return isLessonSatisfied(found.lesson, watchedLessonSlugs)
+  return isLessonSatisfied(found.lesson, progress.watched)
     ? OPEN_MATERIAL
     : { kind: 'video-locked' };
 }
@@ -390,6 +470,8 @@ export function lockedResponse(
       blockedBy: {
         moduleSlug: lessonLock.moduleSlug,
         moduleName: lessonLock.moduleName,
+        lessonsLeft: lessonLock.lessonsLeft,
+        next: lessonLock.next,
       },
     };
   }
@@ -401,6 +483,7 @@ export function lockedResponse(
         lessonSlug: lessonLock.lessonSlug,
         moduleSlug: lessonLock.moduleSlug,
         lessonName: lessonLock.lessonName,
+        outstanding: lessonLock.outstanding,
       },
     };
   }

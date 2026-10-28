@@ -1,8 +1,9 @@
+import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { evaluateLessonLock, type LessonLock } from '#/lib/lesson-gating';
 import {
   type DetailsCourse,
+  gateProgress,
   toGateCourse,
-  watchedLessonSlugs,
 } from '#/lib/lesson-gating-inputs';
 
 /**
@@ -29,18 +30,29 @@ import {
 export function computeLessonLocks(
   details: DetailsCourse | undefined,
   progress:
-    | { lessons: readonly { lessonId: number; watched: boolean }[] }
+    | {
+        lessons: readonly {
+          lessonId: number;
+          watched: boolean;
+          done: boolean;
+          outstanding: readonly OutstandingItem[];
+        }[];
+      }
     | undefined,
   isAdmin = false,
 ): Record<string, LessonLock> {
   if (isAdmin) return {};
   if (!details || !progress) return {};
   const course = toGateCourse(details);
-  const watched = watchedLessonSlugs(details, progress);
+  const progressBySlug = gateProgress(details, progress);
   const locks: Record<string, LessonLock> = {};
   for (const module of course.modules) {
     for (const lesson of module.lessons) {
-      locks[lesson.slug] = evaluateLessonLock(course, lesson.slug, watched);
+      locks[lesson.slug] = evaluateLessonLock(
+        course,
+        lesson.slug,
+        progressBySlug,
+      );
     }
   }
   return locks;

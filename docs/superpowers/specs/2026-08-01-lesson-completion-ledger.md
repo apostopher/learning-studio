@@ -4,6 +4,11 @@ Supersedes the first draft of this file (video/visit only). Decisions D1, D2,
 D4, D7–D9 survive from it unchanged; D3, D5 and D6 are void, replaced by the
 component model below.
 
+> **Superseded in part.** D1, D19 and D21 no longer describe the product; see
+> the [debrief spaced-review design](2026-10-27-debrief-spaced-review-design.md). Completion now gates
+> the next lesson (via the sticky `lesson_completions` row, D1 and D19), and
+> Quiz and Debrief are separate tabs (D21). The rows below are kept as history.
+
 ## Goal
 
 A lesson's percentage becomes the mean of the things the lesson actually asks
@@ -46,7 +51,7 @@ At most **three** components apply to any lesson.
 
 | #   | Decision | Chosen | Rationale |
 | --- | -------- | ------ | --------- |
-| D1  | Does completion drive the prerequisite gate? | No — display only | Unchanged. `watched` keeps driving `isLessonSatisfied`; the lock taxonomy has no kind that could explain a section or debrief requirement |
+| D1  | ~~Does completion drive the prerequisite gate?~~ **Superseded** ([debrief spaced-review design](2026-10-27-debrief-spaced-review-design.md): the next lesson unlocks only when the previous is done) | No — display only | Unchanged. `watched` keeps driving `isLessonSatisfied`; the lock taxonomy has no kind that could explain a section or debrief requirement |
 | D2  | Do progress queries filter WIP lessons? | Yes, `isAvailable = true`, in the JOIN | Unchanged, already implemented |
 | D4  | Empty modules | Excluded from the course average | Unchanged, already implemented |
 | D7  | Where are visits/sections stored? | `lesson_material_progress`, `completed = true` | Table confirmed present in the deployed DB. `'page'` for the lesson visit, one row per tab for sections |
@@ -58,13 +63,13 @@ At most **three** components apply to any lesson.
 | D13 | Does `keyPoints` count? | Yes, and it is effectively free | It is the default tab (`atoms/lesson-ai-test.ts:30`), tapped on arrival. Excluding it would be more honest but adds a permanent special case |
 | D14 | When is the debrief applicable? | When `has_debrief` AND the generator has what it needs (`keyPoints`, `text`) — **and we make it reachable without a video** | Chosen over "reachability incl. hasVideo". See D15 |
 | D15 | How does a no-video lesson reach the debrief? | Primarily the **Debrief tab** (D21); plus a shortcut button **in the no-video card**, in the slot the video player would occupy | The card button mirrors what the overlay does for video lessons — a prompt, not the only door. Requires rewriting that card's copy — see below |
-| D21 | Quiz vs debrief | Tab 2 is **Quiz XOR Debrief, decided by `has_debrief` alone**. On ⇒ the Quiz tab never renders, even if the debrief cannot generate | Chosen over falling back to the quiz. Predictable for admins: the tab's identity depends on one flag, not on content completeness. The cost is surfaced in the admin UI (D23) rather than handled silently |
+| D21 | ~~Quiz vs debrief~~ **Superseded** (Quiz and Debrief are independent tabs; the debrief opens 24h after done) | Tab 2 is **Quiz XOR Debrief, decided by `has_debrief` alone**. On ⇒ the Quiz tab never renders, even if the debrief cannot generate | Chosen over falling back to the quiz. Predictable for admins: the tab's identity depends on one flag, not on content completeness. The cost is surfaced in the admin UI (D23) rather than handled silently |
 | D22 | Does the quiz/debrief tab count as a tapped section? | **No** | It has a real completion signal of its own. Counting the tap too would pay a learner twice for one tab and give partial credit for tapping and bouncing. Sections are `keyPoints`, `proTips`, `links`, `assignments`, `jobOfTheDay` |
 | D23 | Telling the admin that Debrief hides the quiz | A note under the Debrief toggle when it is On and the lesson has a quiz, naming the count — *"Debrief replaces the lesson quiz. This lesson's N quiz questions are hidden from learners."* | Needs `hasQuiz` on `BoardLesson` and a `LEFT JOIN lesson_material` in the board query; the board reads `lessonsTable` only today. A generic "this may hide the quiz" line without the count is barely better than silence |
 | D16 | Does `has_debrief` now gate the overlay? | Yes | Closes the regression against the old platform, which gated the button on it (`course-content.tsx:91`). Currently `DebriefOverlay` renders regardless |
 | D17 | Quiz / debrief signals | Read `lesson_quiz_answers` and `lesson_test_results` directly | They already hold this. Writing duplicate rows into `lesson_material_progress` would create two sources of truth for "did the quiz" |
 | D18 | "Debrief answered" means | `lesson_test_results.completedAt IS NOT NULL` | Rows are only written on full completion (`debrief-quiz-container.tsx:52`); no partial state is persisted anywhere. Testing the column, not row existence, stops a future partial save counting |
-| D19 | Does `watched` still equal `percent === 100`? | **No — they diverge** | Forced by D1. `watched` stays "video fully watched" because it feeds the gate; `percent` is now composite. `watchedLessons` therefore counts videos watched, not lessons complete. Nothing renders it today |
+| D19 | ~~Does `watched` still equal `percent === 100`?~~ **Superseded** (prerequisites read the sticky `done`, not `watched`) | **No — they diverge** | Forced by D1. `watched` stays "video fully watched" because it feeds the gate; `percent` is now composite. `watchedLessons` therefore counts videos watched, not lessons complete. Nothing renders it today |
 | D20 | How are section taps written? | Client mutation to a new endpoint, deduped per section per lesson | A tab tap is not observable server-side, and unlike the `'page'` write there is no request that implies it. Not a beacon: taps happen mid-session, so a normal fetch can retry |
 
 ## Consequences to implement

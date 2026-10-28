@@ -1,4 +1,5 @@
 import { type ResumeTarget, resolveResumeTarget } from '#/lib/course-resume';
+import type { GateProgress } from '#/lib/lesson-gating';
 import { type DetailsCourse, toGateCourse } from '#/lib/lesson-gating-inputs';
 import {
   courseHasAvailableLessons,
@@ -10,10 +11,10 @@ export type ResolveResumeForLevelArgs = {
   /** The UNFILTERED course payload, exactly as the cache returns it. */
   details: DetailsCourse;
   /**
-   * Lesson slugs whose video this pilot has watched, computed from the
-   * UNFILTERED payload by the caller — see the note below on why.
+   * This pilot's progress as the gate reads it, computed from the UNFILTERED
+   * payload by the caller (`gateProgress`) — see the note below on why.
    */
-  watched: ReadonlySet<string>;
+  progress: GateProgress;
   /** The resume pointer as stored: a lesson FK, or null on a first visit. */
   pointerLessonId: number | null;
   /**
@@ -43,9 +44,9 @@ export type ResolveResumeForLevelArgs = {
  *
  * - the COURSE handed to the predicate is level-filtered, so a lesson the
  *   pilot cannot see can neither be resumed into nor named as a blocker;
- * - `watched` is computed from the UNFILTERED payload, so a lesson finished at
+ * - `progress` is computed from the UNFILTERED payload, so a lesson done at
  *   an earlier tier still satisfies a prerequisite of a visible one. Filtering
- *   it out of `watched` would lock visible lessons behind invisible ones.
+ *   it out of `progress` would lock visible lessons behind invisible ones.
  *
  * The pointer is resolved against the FILTERED tree too: a pointer parked on
  * an out-of-tier lesson (which is exactly where a promotion leaves it) must
@@ -54,13 +55,13 @@ export type ResolveResumeForLevelArgs = {
  */
 export function resolveResumeTargetForLevel({
   details,
-  watched,
+  progress,
   pointerLessonId,
   level,
   bypassLocks,
 }: ResolveResumeForLevelArgs): ResumeTarget {
   if (bypassLocks) {
-    return resolveForTree(details, watched, pointerLessonId, true);
+    return resolveForTree(details, progress, pointerLessonId, true);
   }
 
   // Said before anything is filtered, so the empty state names the real
@@ -76,13 +77,13 @@ export function resolveResumeTargetForLevel({
     return { kind: 'none', reason: 'no-lessons-at-level' };
   }
 
-  return resolveForTree(visible, watched, pointerLessonId, false);
+  return resolveForTree(visible, progress, pointerLessonId, false);
 }
 
 /** Resolve against the tree this viewer can see (filtered, or whole for an author). */
 function resolveForTree(
   visible: DetailsCourse,
-  watched: ReadonlySet<string>,
+  progress: GateProgress,
   pointerLessonId: number | null,
   bypassLocks: boolean,
 ): ResumeTarget {
@@ -98,7 +99,7 @@ function resolveForTree(
 
   return resolveResumeTarget({
     course: toGateCourse(visible),
-    watched,
+    progress,
     pointerLessonSlug,
     bypassLocks,
   });

@@ -8,8 +8,15 @@ export type TierCompletionInput = {
     levels: readonly string[];
     isAvailable: boolean;
   }[];
-  /** From `getCourseProgress`. `percent === 100` is the definition of done. */
-  progress: readonly { lessonId: number; percent: number }[];
+  /**
+   * From `getCourseProgress`. A lesson counts once it is `done` (sticky) and,
+   * if it bears a debrief, that debrief is passed.
+   */
+  progress: readonly {
+    lessonId: number;
+    done: boolean;
+    debrief: { bearing: boolean; passed: boolean };
+  }[];
   level: UserLevel;
 };
 
@@ -21,10 +28,10 @@ export function nextLevel(level: UserLevel): UserLevel | null {
 /**
  * Has the pilot finished every lesson they can reach at their current tier?
  *
- * "Finished" reuses the app's existing definition — `lessonPercent === 100`
- * from `aggregateCourseProgress` — rather than inventing a second, stricter
- * notion. Note this is deliberately NOT `watched`, which is weaker and is what
- * the prerequisite gate uses.
+ * "Finished" means the lesson is `done` (sticky 100% of video, tabs and quiz,
+ * recorded in `lesson_completions`) AND, for a debrief-bearing lesson, the
+ * debrief is passed. Deliberately NOT `watched`, which is weaker and is what
+ * the prerequisite gate uses, and NOT live `percent`, which can fall.
  *
  * Strict: only lessons tagged with exactly this tier count — the same
  * `isLessonVisibleAtLevel` the pilot's view uses, so an untagged `[]` or
@@ -35,9 +42,7 @@ export function nextLevel(level: UserLevel): UserLevel | null {
  * on every single progress write, forever.
  */
 export function isTierComplete(input: TierCompletionInput): boolean {
-  const percentByLesson = new Map(
-    input.progress.map((p) => [p.lessonId, p.percent]),
-  );
+  const byLesson = new Map(input.progress.map((p) => [p.lessonId, p]));
 
   const reachable = input.lessons.filter(
     (lesson) =>
@@ -46,7 +51,9 @@ export function isTierComplete(input: TierCompletionInput): boolean {
 
   if (reachable.length === 0) return false;
 
-  return reachable.every(
-    (lesson) => (percentByLesson.get(lesson.lessonId) ?? 0) === 100,
-  );
+  return reachable.every((lesson) => {
+    const row = byLesson.get(lesson.lessonId);
+    if (!row?.done) return false;
+    return !row.debrief.bearing || row.debrief.passed;
+  });
 }

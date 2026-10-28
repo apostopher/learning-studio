@@ -6,7 +6,7 @@ const m = vi.hoisted(() => ({
   evaluateLessonGate: vi.fn(),
   recordLastViewedLesson: vi.fn(),
   recordLessonSectionTap: vi.fn(),
-  maybePromote: vi.fn(),
+  settleProgress: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -19,9 +19,11 @@ vi.mock('#/db/course-last-viewed', () => ({
 vi.mock('#/db/lesson-visit', () => ({
   recordLessonSectionTap: m.recordLessonSectionTap,
 }));
-// lesson-section calls maybePromote after a successful tap — stubbed so this
+// lesson-section calls settleProgress (never throws) after a successful tap — stubbed so this
 // file never reaches the real db/email modules it pulls in transitively.
-vi.mock('#/lib/promotion.server', () => ({ maybePromote: m.maybePromote }));
+vi.mock('#/lib/settle-progress.server', () => ({
+  settleProgress: m.settleProgress,
+}));
 
 import { recordLastViewedHandler } from '../last-viewed';
 import { recordLessonSectionHandler } from '../lesson-section';
@@ -50,22 +52,23 @@ beforeEach(() => {
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.recordLastViewedLesson.mockResolvedValue(true);
   m.recordLessonSectionTap.mockResolvedValue(undefined);
-  m.maybePromote.mockResolvedValue(null);
+  m.settleProgress.mockResolvedValue(null);
 });
 
 /**
  * These two routes are writes, and what they write feeds `lessonPercent` —
- * which the level gate reads back to decide whether an out-of-tier lesson
- * opens read-only. Left ungated, a caller could POST one tap per section on a
- * material-only lesson outside their tier, drive percent to 100, and turn
+ * and a lesson reaching 100% is recorded as the sticky `done`, which the level
+ * gate reads back to decide whether an out-of-tier lesson opens read-only.
+ * Left ungated, a caller could POST one tap per section on a material-only
+ * lesson outside their tier, drive percent to 100, and turn
  * `/api/lesson/material`'s `403 out-of-tier` into a 200 serving the full text.
  *
  * Every case asserts the WRITER was not called, not merely the status: a 403
  * that already performed the write would have handed over the escalation.
  *
- * Both refuse in both read-only states — an archive view writes nothing — and
- * both deliberately still ignore `lessonLock`/`materialLock`, which is
- * asserted below so the narrow scope cannot drift wider unnoticed.
+ * Both refuse in both read-only states — an archive view writes nothing.
+ * lesson-section also refuses a locked lesson; last-viewed deliberately does
+ * not, since the resume pointer moves no progress.
  */
 describe('out-of-tier writes are refused', () => {
   describe('lesson-section', () => {
@@ -97,20 +100,29 @@ describe('out-of-tier writes are refused', () => {
       expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
     });
 
-    it('still records a tap on a locked but in-tier lesson', async () => {
-      // The scope is deliberately narrow: honouring lessonLock here would 403
-      // flows that succeed today, which is a separate decision. If someone
-      // widens it, this goes red and they have to say so.
-      m.evaluateLessonGate.mockResolvedValue({
-        ...inTier,
-        lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
-        materialLock: { kind: 'video-locked' },
-      });
+    // Tabs only render inside material the gate released, so a tap on a
+    // locked lesson has no legitimate origin. Unrefused, a hand-made POST could
+    // take a video-less lesson to 100%, record it done, and unlock the next.
+    it.each([
+      [
+        'prerequisite-locked',
+        {
+          lessonLock: {
+            kind: 'lesson-locked',
+            lessonSlug: 'a',
+            moduleSlug: 'm',
+          },
+        },
+      ],
+      ['video-locked', { materialLock: { kind: 'video-locked' } }],
+    ])('403s a tap on a %s lesson without recording it', async (_, locks) => {
+      m.evaluateLessonGate.mockResolvedValue({ ...inTier, ...locks });
       const res = await recordLessonSectionHandler(
         post('/api/user/lesson-section', body),
       );
-      expect(res.status).toBe(201);
-      expect(m.recordLessonSectionTap).toHaveBeenCalledOnce();
+      expect(res.status).toBe(403);
+      expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
+      expect(m.settleProgress).not.toHaveBeenCalled();
     });
   });
 
@@ -158,10 +170,11 @@ describe('out-of-tier writes are refused', () => {
 });
 
 /**
- * A signed-in caller is not a subscriber. Every one of these writes feeds
- * `lessonPercent`, and in a video-less course a percent of 100 is enough to
- * drive `maybePromote` into appending a durable level row and sending a real
- * promotion email — for a course the caller does not own.
+ * A signed-in caller is not a subscriber. Every one of these writes can move
+ * `lessonPercent`, and in a video-less course a percent of 100 is enough for
+ * `settleProgress` to record the completion and then run promotion, which can
+ * append a durable level row and send a real promotion email — for a course
+ * the caller does not own.
  *
  * Each case asserts the WRITER and the PROMOTER were not reached, not merely
  * the status: a 403 issued after the write would have handed over exactly what
@@ -181,7 +194,7 @@ describe('writes from a non-subscriber are refused', () => {
     );
     expect(res.status).toBe(403);
     expect(m.recordLessonSectionTap).not.toHaveBeenCalled();
-    expect(m.maybePromote).not.toHaveBeenCalled();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('403s a last-viewed write without moving the pointer', async () => {
@@ -276,5 +289,24 @@ describe('the course comes from the request', () => {
         courseId: 42,
       });
     });
+  });
+});
+
+describe('settling progress after a lesson-section tap', () => {
+  it('settles for the session user and the gate course, and returns its promotion', async () => {
+    const promotion = { id: 5, from: 'basic', to: 'intermediate' };
+    m.settleProgress.mockResolvedValue(promotion);
+    const res = await recordLessonSectionHandler(
+      post('/api/user/lesson-section', {
+        lessonSlug: 'l1',
+        courseSlug: 'c1',
+        section: 'keyPoints',
+      }),
+    );
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual(promotion);
   });
 });

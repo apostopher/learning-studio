@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { resolveResumeTarget } from '#/lib/course-resume';
-import type { GateCourse } from '#/lib/lesson-gating';
+import type { GateCourse, GateProgress } from '#/lib/lesson-gating';
+
+/** Progress where exactly these lessons are done (and watched). */
+const done = (...slugs: string[]): GateProgress => ({
+  watched: new Set(slugs),
+  done: new Set(slugs),
+  outstanding: new Map(),
+});
 
 /**
  * A lesson that blocks its dependents until watched: available, has a video,
@@ -56,7 +63,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: linear,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'l1' });
@@ -70,7 +77,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'real' });
@@ -91,7 +98,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm2', lessonSlug: 'open' });
@@ -103,7 +110,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: linear,
-          watched: new Set(['l1']),
+          progress: done('l1'),
           pointerLessonSlug: 'l2',
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'l2' });
@@ -113,7 +120,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: linear,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: 'deleted',
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'l1' });
@@ -125,7 +132,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: linear,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: 'l2',
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'l1' });
@@ -141,7 +148,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: 'c',
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'a' });
@@ -152,7 +159,7 @@ describe('resolveResumeTarget', () => {
       // m2 must not be deposited at the very first lesson of the course.
       const target = resolveResumeTarget({
         course: linear,
-        watched: new Set(['l1', 'l2']),
+        progress: done('l1', 'l2'),
         pointerLessonSlug: 'l4',
       });
       expect(target).toEqual({
@@ -176,7 +183,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: 'c',
         }),
       ).toEqual({ kind: 'lesson', moduleSlug: 'm1', lessonSlug: 'a' });
@@ -190,7 +197,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: linear,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: 'l2',
           bypassLocks: true,
         }),
@@ -211,7 +218,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
           bypassLocks: true,
         }),
@@ -222,7 +229,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: { modules: [] },
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
           bypassLocks: true,
         }),
@@ -235,7 +242,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: { modules: [] },
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({ kind: 'none', reason: 'no-lessons' });
@@ -249,7 +256,7 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({ kind: 'none', reason: 'no-lessons' });
@@ -270,13 +277,19 @@ describe('resolveResumeTarget', () => {
       expect(
         resolveResumeTarget({
           course: c,
-          watched: new Set(),
+          progress: done(),
           pointerLessonSlug: null,
         }),
       ).toEqual({
         kind: 'none',
         reason: 'all-locked',
-        lock: { kind: 'module-locked', moduleSlug: 'm2', moduleName: 'm2' },
+        lock: {
+          kind: 'module-locked',
+          moduleSlug: 'm2',
+          moduleName: 'm2',
+          lessonsLeft: 1,
+          next: { lessonName: 'y', outstanding: [] },
+        },
       });
     });
   });

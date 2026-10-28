@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
+import type { GateProgress } from '#/lib/lesson-gating';
+
+/** Progress where exactly these lessons are done (and watched). */
+const done = (...slugs: string[]): GateProgress => ({
+  watched: new Set(slugs),
+  done: new Set(slugs),
+  outstanding: new Map(),
+});
 
 const lesson = (
   id: number,
@@ -64,7 +72,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('never resumes into an out-of-tier lesson the pilot has not completed', () => {
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: 'intermediate',
       bypassLocks: false,
@@ -82,7 +90,7 @@ describe('resolveResumeTargetForLevel', () => {
     // rearranged and you were sent backwards" reading that §5 exists to stop.
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set(['basic-intro']),
+      progress: done('basic-intro'),
       pointerLessonId: 1,
       level: 'intermediate',
       bypassLocks: false,
@@ -111,7 +119,7 @@ describe('resolveResumeTargetForLevel', () => {
 
     const result = resolveResumeTargetForLevel({
       details: chained,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: 'intermediate',
       bypassLocks: false,
@@ -139,7 +147,7 @@ describe('resolveResumeTargetForLevel', () => {
 
     const result = resolveResumeTargetForLevel({
       details: locked,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: 'intermediate',
       bypassLocks: false,
@@ -157,7 +165,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('filters nothing for an admin, who has no tier', () => {
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: null,
       bypassLocks: true,
@@ -169,7 +177,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('still resumes an in-tier pointer', () => {
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: 1,
       level: 'basic',
       bypassLocks: false,
@@ -181,7 +189,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('reports no-lessons-at-level when the course has lessons but none at the pilot’s level', () => {
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: 'advanced',
       bypassLocks: false,
@@ -196,7 +204,7 @@ describe('resolveResumeTargetForLevel', () => {
     };
     const result = resolveResumeTargetForLevel({
       details: untagged,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: 1,
       level: 'basic',
       bypassLocks: false,
@@ -208,7 +216,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('reports no-level for a pilot whose level has not been set, never a lesson', () => {
     const result = resolveResumeTargetForLevel({
       details,
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: 1,
       level: null,
       bypassLocks: false,
@@ -220,7 +228,7 @@ describe('resolveResumeTargetForLevel', () => {
   it('still reports no-lessons for a course with nothing published', () => {
     const result = resolveResumeTargetForLevel({
       details: { modules: [] },
-      watched: new Set<string>(),
+      progress: done(),
       pointerLessonId: null,
       level: 'basic',
       bypassLocks: false,

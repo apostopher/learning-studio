@@ -2362,6 +2362,11 @@ export const lessonTestResultsTable = pgTable(
       table.userId,
       table.lessonSlug,
     ),
+    index('lesson_test_results_user_lesson_completed_idx').on(
+      table.userId,
+      table.lessonSlug,
+      table.completedAt,
+    ),
   ],
 );
 
@@ -2391,6 +2396,67 @@ export const lessonTestResultsTableRelations = relations(
       references: [lessonsTable.slug],
     }),
   }),
+);
+
+/**
+ * One row per learner per lesson, written the first time the lesson is marked
+ * done. `doneAt` is sticky: the debrief opens 24h after this, so it must not
+ * move when the lesson is revisited. Created by migrate-debrief-review.ts,
+ * not drizzle-kit push — keep the two in step.
+ */
+export const lessonCompletionsTable = pgTable(
+  'lesson_completions',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    doneAt: timestamp('done_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('lesson_completions_user_lesson_idx').on(t.userId, t.lessonId),
+  ],
+);
+
+/**
+ * A debrief quiz generated ahead of time so it is ready when the 24h wait
+ * ends. One per learner per lesson per course. `sourceFingerprint` is the
+ * sha256 of the source text the questions were generated from, so a stale
+ * prepared debrief can be detected and regenerated. Created by
+ * migrate-debrief-review.ts, not drizzle-kit push — keep the two in step.
+ */
+export const preparedDebriefsTable = pgTable(
+  'prepared_debriefs',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    lessonSlug: text('lesson_slug')
+      .notNull()
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    test: json('test').notNull(),
+    /** sha256 of the source text the questions were generated from (call 14). */
+    sourceFingerprint: text('source_fingerprint').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('prepared_debriefs_user_course_lesson_idx').on(
+      t.userId,
+      t.courseId,
+      t.lessonSlug,
+    ),
+  ],
 );
 
 /**

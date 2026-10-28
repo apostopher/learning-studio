@@ -4,8 +4,7 @@ import { recordLessonSectionTap } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
-import type { Promotion } from '#/lib/promotion.server';
-import { maybePromote } from '#/lib/promotion.server';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 const sectionTapSchema = z.object({
   lessonSlug: z.string().min(1),
@@ -23,20 +22,19 @@ const sectionTapSchema = z.object({
 /**
  * Record that the logged-in learner opened a material tab.
  *
- * Any user SUBSCRIBED to the course may record their own tap: it is their own
- * navigation within content they are already being served, the user comes from
- * the session rather than the body, and the section is enumerated. The
- * prerequisite LOCKS are deliberately not re-checked, matching
- * `/api/user/last-viewed` — the tab only renders inside material the gate
- * already released, and the worst forgery achieves is a learner inflating
- * their own progress ring, which gates nothing (see D1).
+ * Any user SUBSCRIBED to the course may record their own tap on a lesson the
+ * gate has released: the user comes from the session rather than the body, and
+ * the section is enumerated. The prerequisite and video LOCKS are enforced,
+ * unlike `/api/user/last-viewed`, because a tap moves progress: it can
+ * complete a lesson, which the debrief clock and the next lesson's unlock read.
  *
- * The LEVEL check is different in kind and IS enforced, because here the
- * progress ring is not cosmetic: tapped sections feed `lessonPercent`, and the
- * level gate reads percent to decide whether an out-of-tier lesson opens
- * read-only. Without this, a caller could tap their way to 100% on a
- * material-only lesson outside their tier and turn its `403 out-of-tier` into
- * a 200 with the full material.
+ * The LEVEL check is enforced for the same reason — the progress ring is not
+ * cosmetic: tapped sections feed `lessonPercent`, a
+ * lesson reaching 100% is recorded as the sticky `done`, and the level gate
+ * reads `done` to decide whether an out-of-tier lesson opens read-only.
+ * Without this, a caller could tap their way to 100% on a material-only
+ * lesson outside their tier and turn its `403 out-of-tier` into a 200 with the
+ * full material.
  */
 export async function recordLessonSectionHandler(
   request: Request,
@@ -65,34 +63,38 @@ export async function recordLessonSectionHandler(
   });
   // A signed-in caller is not automatically a subscriber. `evaluateLessonGate`
   // has always answered this question; this route just never asked it. It is
-  // load-bearing now: what this writes feeds `lessonPercent`, and in a
-  // video-less course that is enough to drive `maybePromote` into writing a
-  // durable level row and sending a real promotion email — for a course the
-  // caller does not own. A null gate (no such lesson, or a WIP one) collapses
-  // into the same 403 rather than a distinguishable 404, matching
-  // report-video-progress and the playback route: telling the two apart hands
-  // an enumeration oracle to any signed-in caller.
-  //
-  // `lessonLock`/`materialLock` are still deliberately NOT honoured here —
-  // that remains a separate decision with its own blast radius.
+  // load-bearing now: what this writes can take a lesson to 100%, and in a
+  // video-less course `settleProgress` then records the completion and runs
+  // promotion, which can write a durable level row and send a real promotion
+  // email — for a course the caller does not own. A null gate (no such
+  // lesson, or a WIP one) collapses into the same 403 rather than a
+  // distinguishable 404, matching report-video-progress and the playback
+  // route: telling the two apart hands an enumeration oracle to any signed-in
+  // caller.
   if (!gate?.subscribed) {
     return new Response('Forbidden', { status: 403 });
   }
 
   // Refuse an out-of-tier lesson, in BOTH read-only states: this is a write,
   // and an archive view must not write anything. It matters because what it
-  // writes feeds `lessonPercent`, and percent is exactly what the gate reads
-  // to decide `readOnly` — so a caller could POST their way from a
-  // `403 out-of-tier` to a 200 serving the full material.
+  // writes feeds `lessonPercent`, a lesson reaching 100% is recorded as the
+  // sticky `done`, and `done` is exactly what the gate reads to decide
+  // `readOnly` — so a caller could POST their way from a `403 out-of-tier` to
+  // a 200 serving the full material.
   //
-  // `lessonLock`/`materialLock` are deliberately NOT honoured here. Refusing on
-  // those would newly 403 flows that succeed today, which is a separate
-  // decision with its own blast radius (see this handler's doc comment).
-  // Refusing on `outOfTier` alone matches what the pilot can see: under strict
-  // levels an untagged lesson, a lesson at another level, and every lesson for
-  // a pilot with no level is either refused outright or held only as a
-  // read-only archive, so a write to it has no legitimate origin.
+  // Under strict levels an untagged lesson, a lesson at another level, and
+  // every lesson for a pilot with no level is either refused outright or held
+  // only as a read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // Refuse a locked lesson too, prerequisite or video. The tab only renders
+  // inside material the gate released, so a write here has no legitimate
+  // origin — and what it writes can take a video-less lesson to 100%, record
+  // it done, and unlock the next lesson without the pilot having earned it.
+  // Same 403 as every other refusal, so the route is not an oracle.
+  if (gate.lessonLock.kind !== 'open' || gate.materialLock.kind !== 'open') {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -107,20 +109,12 @@ export async function recordLessonSectionHandler(
     return Response.json({ error: 'Failed to save' }, { status: 500 });
   }
 
-  // Best-effort: a promotion-check failure must never fail the tap the pilot
-  // actually recorded.
-  let promotion: Promotion | null = null;
-  try {
-    promotion = await maybePromote({
-      userId: session.user.id,
-      courseSlug: gate.courseSlug,
-    });
-  } catch (error) {
-    console.error(
-      'Promotion check failed; progress was still recorded.',
-      error,
-    );
-  }
+  // Best-effort: `settleProgress` never throws, so a settle failure cannot fail
+  // the tap the pilot actually recorded.
+  const promotion = await settleProgress({
+    userId: session.user.id,
+    courseSlug: gate.courseSlug,
+  });
 
   return Response.json(
     { message: 'Section recorded', promotion },

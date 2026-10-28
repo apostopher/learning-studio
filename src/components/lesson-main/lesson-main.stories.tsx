@@ -58,6 +58,7 @@ export const Locked: Story = {
           lessonSlug: 'stabilized-approach',
           moduleSlug: 'approach-and-landing',
           lessonName: 'Stabilized approach',
+          outstanding: [],
         },
       },
     },
@@ -76,6 +77,8 @@ export const LockedByModule: Story = {
         blockedBy: {
           moduleSlug: 'approach-and-landing',
           moduleName: 'Approach and landing',
+          lessonsLeft: 1,
+          next: { lessonName: 'First lesson', outstanding: [] },
         },
       },
     },

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { OutstandingItem } from '#/lib/course-progress-agg';
 import {
   evaluateLessonLock,
   evaluateMaterialLock,
   type GateCourse,
   type GateLesson,
+  type GateProgress,
   isLessonSatisfied,
   isMaterialReadOnly,
   lockedResponse,
@@ -21,6 +23,157 @@ const lesson = (over: Partial<GateLesson> = {}): GateLesson => ({
 });
 
 const course = (modules: GateCourse['modules']): GateCourse => ({ modules });
+
+/** Progress for the predicate. `done` defaults to `watched` so old cases read the same. */
+const gp = ({
+  watched = [],
+  done = watched,
+  outstanding = {},
+}: {
+  watched?: string[];
+  done?: string[];
+  outstanding?: Record<string, OutstandingItem[]>;
+} = {}): GateProgress => ({
+  watched: new Set(watched),
+  done: new Set(done),
+  outstanding: new Map(Object.entries(outstanding)),
+});
+
+describe('gating on done', () => {
+  const chain = (a: Partial<GateLesson> = {}) =>
+    course([
+      {
+        slug: 'm1',
+        name: 'Module One',
+        dependsOn: [],
+        sequentialLessons: true,
+        lessons: [
+          lesson({ slug: 'a', name: 'A', ...a }),
+          lesson({ slug: 'b', name: 'B' }),
+        ],
+      },
+    ]);
+
+  it('next lesson locks until previous is done, even when its video is watched', () => {
+    const outstanding: OutstandingItem[] = [
+      { kind: 'quiz' },
+      { kind: 'section', section: 'keyPoints' },
+    ];
+    expect(
+      evaluateLessonLock(
+        chain(),
+        'b',
+        gp({ watched: ['a'], done: [], outstanding: { a: outstanding } }),
+      ),
+    ).toEqual({
+      kind: 'lesson-locked',
+      lessonSlug: 'a',
+      moduleSlug: 'm1',
+      lessonName: 'A',
+      outstanding,
+    });
+  });
+
+  it('opens when previous is done', () => {
+    expect(evaluateLessonLock(chain(), 'b', gp({ done: ['a'] }))).toEqual({
+      kind: 'open',
+    });
+  });
+
+  it('gate reads done set, not percent', () => {
+    // Done is sticky: a lesson that later grew a new tab still counts.
+    expect(
+      evaluateLessonLock(
+        chain(),
+        'b',
+        gp({ done: ['a'], outstanding: { a: [{ kind: 'quiz' }] } }),
+      ),
+    ).toEqual({ kind: 'open' });
+  });
+
+  it('video-less lesson now blocks the chain', () => {
+    expect(
+      evaluateLessonLock(
+        chain({ hasVideo: false }),
+        'b',
+        gp({ outstanding: { a: [{ kind: 'visit' }] } }),
+      ),
+    ).toEqual({
+      kind: 'lesson-locked',
+      lessonSlug: 'a',
+      moduleSlug: 'm1',
+      lessonName: 'A',
+      outstanding: [{ kind: 'visit' }],
+    });
+  });
+
+  it('a lesson that needs no video watch still blocks the chain until done', () => {
+    expect(
+      evaluateLessonLock(chain({ needsVideoWatch: false }), 'b', gp()).kind,
+    ).toBe('lesson-locked');
+  });
+
+  it('unavailable lesson never blocks', () => {
+    expect(
+      evaluateLessonLock(chain({ isAvailable: false }), 'b', gp()),
+    ).toEqual({ kind: 'open' });
+  });
+
+  it('reports no outstanding items when none were supplied', () => {
+    const lock = evaluateLessonLock(chain(), 'b', gp());
+    expect(lock).toMatchObject({ kind: 'lesson-locked', outstanding: [] });
+  });
+
+  it('module lock names count and first unfinished lesson', () => {
+    const c = course([
+      {
+        slug: 'm1',
+        name: 'Module One',
+        dependsOn: [],
+        sequentialLessons: false,
+        lessons: [
+          lesson({ slug: 'x', name: 'X' }),
+          lesson({ slug: 'wip', name: 'WIP', isAvailable: false }),
+          lesson({ slug: 'y', name: 'Y' }),
+          lesson({ slug: 'z', name: 'Z' }),
+        ],
+      },
+      {
+        slug: 'm2',
+        name: 'Module Two',
+        dependsOn: ['m1'],
+        sequentialLessons: false,
+        lessons: [lesson({ slug: 'b', name: 'B' })],
+      },
+    ]);
+    expect(
+      evaluateLessonLock(
+        c,
+        'b',
+        gp({
+          watched: ['x', 'y', 'z'],
+          done: ['x'],
+          outstanding: { y: [{ kind: 'quiz' }], z: [{ kind: 'visit' }] },
+        }),
+      ),
+    ).toEqual({
+      kind: 'module-locked',
+      moduleSlug: 'm1',
+      moduleName: 'Module One',
+      lessonsLeft: 2,
+      next: { lessonName: 'Y', outstanding: [{ kind: 'quiz' }] },
+    });
+  });
+
+  it('material lock still uses watched', () => {
+    expect(evaluateMaterialLock(chain(), 'a', gp({ done: ['a'] }))).toEqual({
+      kind: 'video-locked',
+    });
+    expect(
+      evaluateMaterialLock(chain(), 'a', gp({ watched: ['a'], done: [] })),
+    ).toEqual({ kind: 'open' });
+  });
+});
 
 describe('isLessonSatisfied', () => {
   it('is satisfied once the video is watched', () => {
@@ -74,17 +227,21 @@ describe('evaluateLessonLock', () => {
   ]);
 
   it('locks on the module gate before the lesson gate', () => {
-    expect(evaluateLessonLock(twoModules, 'b', new Set())).toEqual({
+    expect(evaluateLessonLock(twoModules, 'b', gp())).toEqual({
       kind: 'module-locked',
       moduleSlug: 'm1',
       moduleName: 'Module One',
+      lessonsLeft: 1,
+      next: { lessonName: 'A', outstanding: [] },
     });
   });
 
   it('opens once every available lesson of the prerequisite module is satisfied', () => {
-    expect(evaluateLessonLock(twoModules, 'b', new Set(['a']))).toEqual({
-      kind: 'open',
-    });
+    expect(evaluateLessonLock(twoModules, 'b', gp({ watched: ['a'] }))).toEqual(
+      {
+        kind: 'open',
+      },
+    );
   });
 
   it('names the blocking lesson when only the lesson gate fails', () => {
@@ -100,11 +257,12 @@ describe('evaluateLessonLock', () => {
         ],
       },
     ]);
-    expect(evaluateLessonLock(c, 'b', new Set())).toEqual({
+    expect(evaluateLessonLock(c, 'b', gp())).toEqual({
       kind: 'lesson-locked',
       lessonSlug: 'a',
       moduleSlug: 'm1',
       lessonName: 'A',
+      outstanding: [],
     });
   });
 
@@ -123,7 +281,7 @@ describe('evaluateLessonLock', () => {
         ],
       },
     ]);
-    expect(evaluateLessonLock(c, 'b', new Set())).toEqual({ kind: 'open' });
+    expect(evaluateLessonLock(c, 'b', gp())).toEqual({ kind: 'open' });
   });
 
   it('ignores a prerequisite lesson or module that does not exist', () => {
@@ -142,7 +300,7 @@ describe('evaluateLessonLock', () => {
         ],
       },
     ]);
-    expect(evaluateLessonLock(c, 'b', new Set())).toEqual({ kind: 'open' });
+    expect(evaluateLessonLock(c, 'b', gp())).toEqual({ kind: 'open' });
   });
 
   it('resolves a same-module dependency with no moduleSlug', () => {
@@ -158,7 +316,7 @@ describe('evaluateLessonLock', () => {
         ],
       },
     ]);
-    expect(evaluateLessonLock(c, 'b', new Set(['a']))).toEqual({
+    expect(evaluateLessonLock(c, 'b', gp({ watched: ['a'] }))).toEqual({
       kind: 'open',
     });
   });
@@ -183,7 +341,7 @@ describe('evaluateLessonLock', () => {
         lessons: [lesson({ slug: 'b', name: 'B' })],
       },
     ]);
-    expect(evaluateLessonLock(c, 'b', new Set(['a']))).toEqual({
+    expect(evaluateLessonLock(c, 'b', gp({ watched: ['a'] }))).toEqual({
       kind: 'open',
     });
   });
@@ -201,10 +359,10 @@ describe('evaluateMaterialLock', () => {
   ]);
 
   it('locks material until the lesson video is watched', () => {
-    expect(evaluateMaterialLock(c, 'a', new Set())).toEqual({
+    expect(evaluateMaterialLock(c, 'a', gp())).toEqual({
       kind: 'video-locked',
     });
-    expect(evaluateMaterialLock(c, 'a', new Set(['a']))).toEqual({
+    expect(evaluateMaterialLock(c, 'a', gp({ watched: ['a'] }))).toEqual({
       kind: 'open',
     });
   });
@@ -214,13 +372,24 @@ describe('lockedResponse', () => {
   it('reports the module gate as the reason', () => {
     expect(
       lockedResponse(
-        { kind: 'module-locked', moduleSlug: 'm1', moduleName: 'M' },
+        {
+          kind: 'module-locked',
+          moduleSlug: 'm1',
+          moduleName: 'M',
+          lessonsLeft: 2,
+          next: { lessonName: 'Y', outstanding: [{ kind: 'quiz' }] },
+        },
         { kind: 'open' },
       ),
     ).toEqual({
       locked: true,
       reason: 'module',
-      blockedBy: { moduleSlug: 'm1', moduleName: 'M' },
+      blockedBy: {
+        moduleSlug: 'm1',
+        moduleName: 'M',
+        lessonsLeft: 2,
+        next: { lessonName: 'Y', outstanding: [{ kind: 'quiz' }] },
+      },
     });
   });
 
@@ -232,13 +401,19 @@ describe('lockedResponse', () => {
           lessonSlug: 'a',
           moduleSlug: 'm1',
           lessonName: 'A',
+          outstanding: [{ kind: 'video' }],
         },
         { kind: 'open' },
       ),
     ).toEqual({
       locked: true,
       reason: 'lesson',
-      blockedBy: { lessonSlug: 'a', moduleSlug: 'm1', lessonName: 'A' },
+      blockedBy: {
+        lessonSlug: 'a',
+        moduleSlug: 'm1',
+        lessonName: 'A',
+        outstanding: [{ kind: 'video' }],
+      },
     });
   });
 

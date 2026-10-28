@@ -1,4 +1,5 @@
-import type { GateCourse } from '#/lib/lesson-gating';
+import type { OutstandingItem } from '#/lib/course-progress-agg';
+import type { GateCourse, GateProgress } from '#/lib/lesson-gating';
 
 /**
  * The subset of the course payload the gate needs. Declared structurally
@@ -51,8 +52,51 @@ export function toGateCourse(details: DetailsCourse): GateCourse {
   };
 }
 
+function slugsById(details: DetailsCourse): Map<number, string> {
+  const slugById = new Map<number, string>();
+  for (const module of details.modules) {
+    for (const lesson of module.lessons) slugById.set(lesson.id, lesson.slug);
+  }
+  return slugById;
+}
+
 /**
- * The lesson slugs whose video this user has watched.
+ * Everything the gate reads about this learner, keyed by slug.
+ *
+ * Progress is keyed by lessonId while the predicate is keyed by slug, so the
+ * course payload supplies the id→slug mapping — pass the UNFILTERED payload,
+ * so a lesson done at an earlier tier still satisfies a visible lesson's
+ * prerequisite. `outstanding` is optional per row: callers that never render
+ * lock copy (card resume) leave it out and get an empty list.
+ */
+export function gateProgress(
+  details: DetailsCourse,
+  progress: {
+    lessons: readonly {
+      lessonId: number;
+      watched: boolean;
+      done: boolean;
+      outstanding?: readonly OutstandingItem[];
+    }[];
+  },
+): GateProgress {
+  const slugById = slugsById(details);
+  const watched = new Set<string>();
+  const done = new Set<string>();
+  const outstanding = new Map<string, readonly OutstandingItem[]>();
+  for (const row of progress.lessons) {
+    const slug = slugById.get(row.lessonId);
+    if (!slug) continue;
+    if (row.watched) watched.add(slug);
+    if (row.done) done.add(slug);
+    if (row.outstanding) outstanding.set(slug, row.outstanding);
+  }
+  return { watched, done, outstanding };
+}
+
+/**
+ * The lesson slugs whose video this user has watched. Library file unlocks
+ * still key on this (library ledger D5); lesson gating uses `gateProgress`.
  *
  * Progress is keyed by lessonId while the predicate is keyed by slug, so the
  * course payload supplies the id→slug mapping. Keying by the lesson's video
@@ -62,10 +106,7 @@ export function watchedLessonSlugs(
   details: DetailsCourse,
   progress: { lessons: readonly { lessonId: number; watched: boolean }[] },
 ): Set<string> {
-  const slugById = new Map<number, string>();
-  for (const module of details.modules) {
-    for (const lesson of module.lessons) slugById.set(lesson.id, lesson.slug);
-  }
+  const slugById = slugsById(details);
   const watched = new Set<string>();
   for (const row of progress.lessons) {
     if (!row.watched) continue;

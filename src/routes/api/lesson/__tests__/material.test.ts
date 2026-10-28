@@ -1,18 +1,25 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSession, evaluateLessonGate, getLessonMaterial, recordLessonVisit } =
-  vi.hoisted(() => ({
-    getSession: vi.fn(),
-    evaluateLessonGate: vi.fn(),
-    getLessonMaterial: vi.fn(),
-    recordLessonVisit: vi.fn(),
-  }));
+const {
+  getSession,
+  evaluateLessonGate,
+  getLessonMaterial,
+  recordLessonVisit,
+  settleProgress,
+} = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  evaluateLessonGate: vi.fn(),
+  getLessonMaterial: vi.fn(),
+  recordLessonVisit: vi.fn(),
+  settleProgress: vi.fn(),
+}));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/lib/lesson-gating.server', () => ({ evaluateLessonGate }));
 vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
 vi.mock('#/db/lesson-visit', () => ({ recordLessonVisit }));
+vi.mock('#/lib/settle-progress.server', () => ({ settleProgress }));
 
 import { getLessonMaterialHandler } from '../material';
 
@@ -38,6 +45,7 @@ describe('getLessonMaterialHandler', () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     evaluateLessonGate.mockResolvedValue(openGate);
     getLessonMaterial.mockResolvedValue(material);
+    settleProgress.mockResolvedValue(null);
   });
 
   it('401s an anonymous caller without touching the database', async () => {
@@ -88,13 +96,19 @@ describe('getLessonMaterialHandler', () => {
         lessonSlug: 'a',
         moduleSlug: 'm1',
         lessonName: 'A',
+        outstanding: [],
       },
     });
     const body = await (await getLessonMaterialHandler(req())).json();
     expect(body).toEqual({
       locked: true,
       reason: 'lesson',
-      blockedBy: { lessonSlug: 'a', moduleSlug: 'm1', lessonName: 'A' },
+      blockedBy: {
+        lessonSlug: 'a',
+        moduleSlug: 'm1',
+        lessonName: 'A',
+        outstanding: [],
+      },
     });
   });
 
@@ -296,5 +310,59 @@ describe('recording the visit', () => {
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ locked: false });
+  });
+});
+
+describe('settling progress after a material visit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    evaluateLessonGate.mockResolvedValue(openGate);
+    getLessonMaterial.mockResolvedValue(material);
+    recordLessonVisit.mockResolvedValue(undefined);
+    settleProgress.mockResolvedValue(null);
+  });
+
+  it('settles for the session user and gate course, after the visit is recorded', async () => {
+    const order: string[] = [];
+    recordLessonVisit.mockImplementation(async () => {
+      order.push('visit');
+    });
+    settleProgress.mockImplementation(async () => {
+      order.push('settle');
+      return null;
+    });
+    await getLessonMaterialHandler(req());
+    expect(settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect(order).toEqual(['visit', 'settle']);
+  });
+
+  it('does not settle on a locked response', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      lessonLock: { kind: 'lesson-locked', lessonSlug: 'a', moduleSlug: 'm' },
+    });
+    await getLessonMaterialHandler(req());
+    expect(settleProgress).not.toHaveBeenCalled();
+  });
+
+  it('does not settle on the read-only archive path', async () => {
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      level: 'intermediate',
+      outOfTier: { readOnly: true },
+    });
+    await getLessonMaterialHandler(req());
+    expect(settleProgress).not.toHaveBeenCalled();
+  });
+
+  it('still returns the material when settleProgress rejects', async () => {
+    settleProgress.mockRejectedValue(new Error('boom'));
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(200);
+    expect((await res.json()).material).toEqual(material);
   });
 });

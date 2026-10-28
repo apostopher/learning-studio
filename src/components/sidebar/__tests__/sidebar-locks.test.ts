@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { computeLessonLocks } from '../compute-lesson-locks';
 
 const details = {
@@ -35,29 +36,43 @@ const details = {
   ],
 };
 
+type Row = {
+  lessonId: number;
+  watched: boolean;
+  done: boolean;
+  outstanding: OutstandingItem[];
+};
+const row = (lessonId: number, over: Partial<Row> = {}): Row => ({
+  lessonId,
+  watched: false,
+  done: false,
+  outstanding: [],
+  ...over,
+});
+
 describe('computeLessonLocks', () => {
-  it('locks a lesson whose prerequisite is unwatched', () => {
+  it('locks a lesson whose prerequisite is not done, naming what is left', () => {
     const locks = computeLessonLocks(details, {
       lessons: [
-        { lessonId: 10, watched: false },
-        { lessonId: 11, watched: false },
+        row(10, { watched: true, outstanding: [{ kind: 'quiz' }] }),
+        row(11),
       ],
     });
+    // Watched is not enough: the prerequisite must be DONE, and the lock
+    // carries the prerequisite's outstanding items for the row's copy.
     expect(locks.b).toEqual({
       kind: 'lesson-locked',
       lessonSlug: 'a',
       moduleSlug: 'm1',
       lessonName: 'A',
+      outstanding: [{ kind: 'quiz' }],
     });
     expect(locks.a).toEqual({ kind: 'open' });
   });
 
-  it('opens the lesson once the prerequisite is watched', () => {
+  it('opens the lesson once the prerequisite is done', () => {
     const locks = computeLessonLocks(details, {
-      lessons: [
-        { lessonId: 10, watched: true },
-        { lessonId: 11, watched: false },
-      ],
+      lessons: [row(10, { watched: true, done: true }), row(11)],
     });
     expect(locks.b).toEqual({ kind: 'open' });
   });
@@ -71,12 +86,7 @@ describe('computeLessonLocks', () => {
     // sidebar was a lie in the permissive direction: they clicked it and it
     // opened. Same inputs as the first test, which proves 'b' would otherwise
     // be locked here.
-    const progress = {
-      lessons: [
-        { lessonId: 10, watched: false },
-        { lessonId: 11, watched: false },
-      ],
-    };
+    const progress = { lessons: [row(10), row(11)] };
     expect(computeLessonLocks(details, progress, false).b).toMatchObject({
       kind: 'lesson-locked',
     });

@@ -1,21 +1,13 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { AnimatePresence } from 'motion/react';
 import { useCallback, useId } from 'react';
-import { activeTabAtom, lessonMaterialRef } from '#/atoms/lesson-ai-test';
 import { videoLanguageAtom } from '#/atoms/video-language';
-import { canDebriefFromTranscript } from '#/components/lesson-material/compute-transcript-debrief';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
-import { DebriefOverlay } from '#/components/video-player/parts/debrief-overlay';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
 import { usePrepareDebriefOnPlay } from '#/data-hooks/use-prepare-debrief';
 import { useVideoProgress } from '#/data-hooks/use-video-progress';
-import {
-  useCurrentTest,
-  useGenerateTest,
-  useIsGenerating,
-} from '#/hooks/data/use-lesson-ai-test';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { isMaterialReadOnly } from '#/lib/lesson-gating';
@@ -28,7 +20,7 @@ type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
   courseSlug: string;
   lessonSlug: string;
-  /** `lessons.has_debrief` — with it off, tab 2 is the authored quiz. */
+  /** `lessons.has_debrief` — decides whether the debrief is prepared on first play. */
   hasDebrief: boolean;
 };
 
@@ -63,7 +55,6 @@ export const LessonPlayerContainer = ({
   // would trade that for a second copy of the at-the-end rule living apart
   // from computePlayerOverlay, which is the drift this feature keeps paying for.
   const playerState = useAtomValue(videoPlayerStateAtomFamily(playerId));
-  const setActiveTab = useSetAtom(activeTabAtom);
   const setVideoLanguage = useSetAtom(videoLanguageAtom);
   const languageOptions = videoState.languages.map((code) => ({
     code,
@@ -80,9 +71,6 @@ export const LessonPlayerContainer = ({
     },
     [setVideoLanguage, videoState.lang],
   );
-  const isGenerating = useIsGenerating();
-  const currentTest = useCurrentTest();
-  const generateTest = useGenerateTest();
   const material = data && !data.locked ? data.material : null;
   // Task 11 routes 'lesson'/'module' locks to a page-level gate that never
   // mounts this container, so 'video' is the only reason this component
@@ -99,46 +87,19 @@ export const LessonPlayerContainer = ({
     setReachedEnd(true);
   }, [setReachedEnd]);
 
-  const onDebrief = useCallback(async () => {
-    // Read-only guard first: this generates NEW debrief content, which
-    // read-only forbids the same as evaluating or saving one.
-    if (readOnly) return;
-    // No guard on the material's contents any more: the server resolves what
-    // the debrief is generated from (material, else the video transcript), and
-    // `canDebrief` below already decides whether to offer the button at all.
-    const test = await generateTest({ courseSlug, lessonSlug });
-    if (test) {
-      setActiveTab('quiz');
-      queueMicrotask(() => {
-        lessonMaterialRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-      });
-    }
-  }, [generateTest, courseSlug, lessonSlug, readOnly, setActiveTab]);
-
-  // A source the server can actually resolve: the authored material's body
-  // text, or — on a lesson with no material at all — this video's caption
-  // transcript. Without one, the button would generate nothing.
-  const canDebrief =
-    Boolean(material?.text) ||
-    canDebriefFromTranscript({
-      hasDebrief,
-      // Already resolved into this component's own props — the same
-      // `captions === null` the material panel reads off the query.
-      hasCaptions: !videoState.captionsUnavailable,
-    });
-
   // viper7 starts writing the debrief as soon as the video plays, so it is
-  // waiting when the video unlocks it rather than generating on the button.
+  // ready the moment the debrief opens (24h after the lesson is done) rather
+  // than generating while the pilot waits on Start.
   usePrepareDebriefOnPlay({
     courseSlug,
     lessonSlug,
     playing: !playerState.paused,
+    // The shared `canOfferDebrief` inputs: the material's body text, else
+    // this video's caption transcript (`captions === null` resolved into the
+    // props — the same answer `playbackHasCaptions` gives the material panel).
     hasDebrief,
-    canDebrief,
-    materialLocked,
+    materialText: material?.text,
+    transcriptUsable: !videoState.captionsUnavailable,
     readOnly,
   });
 
@@ -150,9 +111,6 @@ export const LessonPlayerContainer = ({
       duration: playerState.duration,
     },
     materialLocked,
-    hasCurrentTest: Boolean(currentTest),
-    hasDebrief,
-    canDebrief,
   });
 
   return (
@@ -180,13 +138,10 @@ export const LessonPlayerContainer = ({
       onLanguageChange={onLanguageChange}
       overlay={
         <AnimatePresence>
-          {/* Neither overlay makes sense on an archive view: 'coverage' nudges
-              toward finishing a lesson that is already done, and 'debrief'
-              would generate new content that read-only forbids saving. */}
-          {readOnly ? null : overlayKind === 'coverage' ? (
+          {/* Not on an archive view: the coverage notice nudges toward
+              finishing a lesson that is already done. */}
+          {!readOnly && overlayKind === 'coverage' ? (
             <CoverageNotice hit={hit} total={watchedMilestones.length} />
-          ) : overlayKind === 'debrief' ? (
-            <DebriefOverlay loading={isGenerating} onDebrief={onDebrief} />
           ) : null}
         </AnimatePresence>
       }

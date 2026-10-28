@@ -6,8 +6,7 @@
  * GLOBAL atoms with no reset on lesson navigation. A session started on one
  * lesson therefore survives into the next one, where the container would
  * render it as if it were this lesson's: skipping `DebriefIntro` entirely and,
- * once complete, drawing a foreign `ScoreReport` under this lesson — with a
- * Retake that claims the pilot completed *this* one at an earlier level.
+ * once complete, drawing a foreign `ScoreReport` under this lesson.
  *
  * `AITest` already carries its own `lessonSlug` — it is what `useSaveResults`
  * posts with — so ownership is decidable without keying five atoms by slug.
