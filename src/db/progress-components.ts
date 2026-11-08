@@ -1,4 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
+import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
+import { watchedMilestones } from '#/lib/course-milestones';
 import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
@@ -8,7 +10,6 @@ import {
   TRACKED_SECTIONS_SQL_LIST,
   type TrackedLessonSection,
 } from '#/lib/lesson-visit-section';
-import { lessonMaterialProgressTable, lessonsTable } from '@/db/schema';
 
 /**
  * The component facts both progress queries select, in one place.
@@ -22,6 +23,35 @@ import { lessonMaterialProgressTable, lessonsTable } from '@/db/schema';
  * render must not pull lesson body text or quiz JSON across the wire just to
  * learn whether a quiz exists.
  */
+
+/**
+ * When this learner finished watching the lesson's video: the moment the LAST
+ * watched-milestone (10..95, see `isVideoWatched`) was first reached. Null
+ * until every one has been. `videos_progress` is append-only, so a milestone's
+ * first hit never moves, and neither does this.
+ *
+ * Starts the debrief clock (`debriefClockStart`). Shared by the progress
+ * rollup and `getDebriefFacts`, so the lesson list and the debrief routes
+ * cannot disagree about when the debrief opens.
+ *
+ * `created_at` is a timezone-less timestamp written by `now()`;
+ * `at time zone 'UTC'` makes the raw string carry an offset so `toIso` cannot
+ * read it as local time (as `lastFailedDebriefAt` does).
+ */
+export const videoWatchedAtSql = (
+  userId: string,
+  lessonId: SQL | typeof lessonsTable.id | number,
+) => sql<Date | null>`(
+  select case when count(*) = ${watchedMilestones.length}
+    then max(f.first_at) at time zone 'UTC' end
+  from (
+    select min(v.created_at) as first_at from videos_progress v
+    where v.user_id = ${userId}
+      and v.lesson_id = ${lessonId}
+      and v.progress in (${sql.raw(watchedMilestones.join(', '))})
+    group by v.progress
+  ) f
+)`;
 
 /**
  * Correlated EXISTS/scalar subqueries rather than joins, deliberately.
@@ -149,6 +179,9 @@ export const progressComponentColumns = (userId: string) => ({
     where c.user_id = ${userId} and c.lesson_id = ${lessonsTable.id}
   )`,
 
+  /** When the video was finished; starts the debrief clock. See videoWatchedAtSql. */
+  videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
+
   visited: sql<boolean>`coalesce(bool_or(${lessonMaterialProgressTable.completed}
     and ${lessonMaterialProgressTable.sectionName} = ${LESSON_VISIT_SECTION}), false)`,
 });
@@ -182,6 +215,7 @@ type ComponentRow = {
   debriefPassed: boolean;
   lastFailedDebriefAt: Date | string | null;
   doneAt: Date | string | null;
+  videoWatchedAt: Date | string | null;
   visited: boolean;
 };
 
@@ -223,6 +257,7 @@ export function toComponentFields(row: ComponentRow) {
     debriefPassed: row.debriefPassed,
     lastFailedDebriefAt: toIso(row.lastFailedDebriefAt),
     doneAt: toIso(row.doneAt),
+    videoWatchedAt: toIso(row.videoWatchedAt),
     visited: row.visited,
   };
 }

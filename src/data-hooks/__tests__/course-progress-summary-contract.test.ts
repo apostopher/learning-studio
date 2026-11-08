@@ -27,6 +27,7 @@ describe('courseProgressSummarySchema accepts real aggregateCourseProgress outpu
       debriefPassed: false,
       lastFailedDebriefAt: null,
       doneAt: null,
+      videoWatchedAt: null,
       visited: false,
     };
     const real = aggregateCourseProgress('ppl', [
@@ -38,6 +39,7 @@ describe('courseProgressSummarySchema accepts real aggregateCourseProgress outpu
         hasVideo: true,
         needsVideoWatch: true,
         watchedHits: 18,
+        videoWatchedAt: '2026-10-01T00:00:00.000Z',
       },
       {
         ...base,

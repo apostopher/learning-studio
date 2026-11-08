@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeMaterialTabs,
+  defaultMaterialTab,
   resolveActiveTab,
 } from '../compute-material-tabs';
 
@@ -112,7 +113,14 @@ describe('computeMaterialTabs — closing tab', () => {
       debrief: debriefOn(false),
       extraTab: 'testThis',
     });
-    expect(resolveActiveTab(tabs, 'jobOfTheDay')).toBe('keyPoints');
+    expect(
+      resolveActiveTab(
+        tabs,
+        { lessonSlug: 'l1', tab: 'jobOfTheDay' },
+        'l1',
+        'keyPoints',
+      ),
+    ).toBe('keyPoints');
   });
 });
 
@@ -122,27 +130,100 @@ describe('resolveActiveTab', () => {
     debrief: debriefOn(true),
     extraTab: 'jobOfTheDay',
   });
+  const on = (lessonSlug: string, tab: string) => ({ lessonSlug, tab });
 
-  it('keeps a selection that exists', () => {
-    expect(resolveActiveTab(tabs, 'proTips')).toBe('proTips');
-    expect(resolveActiveTab(tabs, 'debrief')).toBe('debrief');
+  it("keeps the pilot's selection on the lesson they made it on", () => {
+    expect(resolveActiveTab(tabs, on('l1', 'proTips'), 'l1', 'debrief')).toBe(
+      'proTips',
+    );
+    expect(resolveActiveTab(tabs, on('l1', 'debrief'), 'l1', 'keyPoints')).toBe(
+      'debrief',
+    );
+  });
+
+  it("opens a different lesson on that lesson's default, not the last lesson's tab", () => {
+    expect(resolveActiveTab(tabs, on('l1', 'links'), 'l2', 'debrief')).toBe(
+      'debrief',
+    );
+    expect(resolveActiveTab(tabs, on('l1', 'links'), 'l2', 'keyPoints')).toBe(
+      'keyPoints',
+    );
+  });
+
+  it('opens on the default before anything is selected', () => {
+    expect(resolveActiveTab(tabs, null, 'l1', 'debrief')).toBe('debrief');
   });
 
   it('falls back to Key Points when the selected tab is gone', () => {
-    // activeTabAtom is global and is not reset between lessons, so a learner
-    // who was on the Debrief tab can land on a lesson that has none. Without
-    // this the panel renders a strip with nothing selected and no body — a
-    // blank screen with no explanation.
+    // A tab can vanish under a selection (an admin switches the debrief off).
+    // Without this the panel renders a strip with nothing selected and no
+    // body — a blank screen with no explanation.
     const noDebrief = computeMaterialTabs({
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
     });
-    expect(resolveActiveTab(noDebrief, 'debrief')).toBe('keyPoints');
+    expect(
+      resolveActiveTab(noDebrief, on('l1', 'debrief'), 'l1', 'keyPoints'),
+    ).toBe('keyPoints');
   });
 
   it('falls back for a value that was never a tab', () => {
-    expect(resolveActiveTab(tabs, 'downloads')).toBe('keyPoints');
+    expect(
+      resolveActiveTab(tabs, on('l1', 'downloads'), 'l1', 'keyPoints'),
+    ).toBe('keyPoints');
+  });
+});
+
+describe('defaultMaterialTab', () => {
+  const now = new Date('2026-11-09T12:00:00Z');
+  const withDebrief = computeMaterialTabs({
+    hasQuiz: true,
+    debrief: debriefOn(true),
+    extraTab: 'jobOfTheDay',
+  });
+  const facts = (over: Record<string, unknown> = {}) => ({
+    clockStartAt: '2026-11-08T00:00:00Z', // well past the 12h wait
+    passed: false,
+    lastFailedAt: null,
+    bearing: true,
+    ...over,
+  });
+
+  it('opens on Debrief when the debrief is ready (the sidebar shows D)', () => {
+    expect(defaultMaterialTab(withDebrief, facts(), now)).toBe('debrief');
+  });
+
+  it('opens on Debrief while a retake is pending (still D)', () => {
+    expect(
+      defaultMaterialTab(
+        withDebrief,
+        facts({ lastFailedAt: '2026-11-09T11:00:00Z' }),
+        now,
+      ),
+    ).toBe('debrief');
+  });
+
+  it.each([
+    ['not started', facts({ clockStartAt: null })],
+    ['still in the wait', facts({ clockStartAt: '2026-11-09T11:00:00Z' })],
+    ['passed', facts({ passed: true })],
+    ['not debrief-bearing', facts({ bearing: false })],
+  ])('opens on Key Points when the debrief is %s', (_why, debrief) => {
+    expect(defaultMaterialTab(withDebrief, debrief, now)).toBe('keyPoints');
+  });
+
+  it('opens on Key Points while progress is still loading', () => {
+    expect(defaultMaterialTab(withDebrief, undefined, now)).toBe('keyPoints');
+  });
+
+  it('opens on Key Points when the lesson offers no Debrief tab', () => {
+    const noDebrief = computeMaterialTabs({
+      hasQuiz: true,
+      debrief: debriefOn(false),
+      extraTab: 'jobOfTheDay',
+    });
+    expect(defaultMaterialTab(noDebrief, facts(), now)).toBe('keyPoints');
   });
 });
 

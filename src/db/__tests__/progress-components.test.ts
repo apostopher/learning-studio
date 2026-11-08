@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // toComponentFields is pure; the module's top level only builds sql fragments
 // from schema columns, so a bare stub of the schema is enough.
-vi.mock('@/db/schema', () => ({
+vi.mock('#/db/schema', () => ({
   lessonMaterialProgressTable: {},
   lessonsTable: {},
 }));
@@ -22,6 +22,7 @@ const base = {
   debriefPassed: false,
   lastFailedDebriefAt: null as Date | string | null,
   doneAt: null as Date | string | null,
+  videoWatchedAt: null as Date | string | null,
   visited: false,
 };
 
@@ -36,6 +37,14 @@ describe('toComponentFields', () => {
     expect(out.lastFailedDebriefAt).toBe('2026-10-02T12:30:00.000Z');
     expect(toComponentFields(base).doneAt).toBeNull();
     expect(toComponentFields(base).lastFailedDebriefAt).toBeNull();
+  });
+
+  it('maps the video-watched time to ISO', () => {
+    expect(
+      toComponentFields({ ...base, videoWatchedAt: '2026-10-01 06:00:00+00' })
+        .videoWatchedAt,
+    ).toBe('2026-10-01T06:00:00.000Z');
+    expect(toComponentFields(base).videoWatchedAt).toBeNull();
   });
 
   it('parses offset-bearing driver strings to the same instant', () => {

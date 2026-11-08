@@ -16,7 +16,7 @@ export type { PreparedDebriefKey };
  * How long one preparation blocks another for the same pilot and lesson.
  * Covers pause/play, a reload mid-video and a second tab — each of which
  * would otherwise pay for its own model run. Dedupe only, never a clock: the
- * prepared test itself lives in Postgres, because it has to survive the 24h
+ * prepared test itself lives in Postgres, because it has to survive the 12h
  * wait before the debrief opens (a Redis TTL could expire and lose it).
  */
 const CLAIM_TTL_SECONDS = 60 * 30;

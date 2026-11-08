@@ -17,7 +17,7 @@ const details = {
   ],
 };
 const d = (passed: boolean, bearing = true) => ({
-  doneAt: '2026-10-20T00:00:00Z',
+  clockStartAt: '2026-10-20T00:00:00Z',
   passed,
   lastFailedAt: null,
   bearing,

@@ -1,5 +1,5 @@
 import { watchedMilestones } from './course-milestones';
-import type { DebriefFacts } from './debrief-schedule';
+import { type DebriefFacts, debriefClockStart } from './debrief-schedule';
 import type { TrackedLessonSection } from './lesson-visit-section';
 
 /**
@@ -50,6 +50,8 @@ export type LessonProgressRow = {
   lastFailedDebriefAt: string | null;
   /** ISO. When the lesson first reached 100% (sticky), from lesson_completions. */
   doneAt: string | null;
+  /** ISO. When the video was finished (first full coverage). Starts the debrief clock. */
+  videoWatchedAt: string | null;
 
   /** The learner has opened this lesson's page at least once. */
   visited: boolean;
@@ -102,9 +104,9 @@ function tappedApplicable(row: LessonProgressRow): TrackedLessonSection[] {
  * on it: a lesson with no video is not asked to watch one, a tab with nothing
  * behind it is not asked to be opened.
  *
- * The debrief is NOT a component: it opens 24h after the lesson is done, so it
- * counts toward the course percent instead (see coursePercent). The authored
- * quiz always counts.
+ * The debrief is NOT a component: it opens 12h after the video is watched (or
+ * the lesson is done), so it counts toward the course percent instead (see
+ * coursePercent). The authored quiz always counts.
  *
  * Continuous, not discrete (D10): video and sections have a real partial
  * state; the quiz is 0 or 1.
@@ -238,7 +240,7 @@ export function aggregateCourseProgress(
       done: row.doneAt !== null,
       outstanding: lessonOutstanding(row),
       debrief: {
-        doneAt: row.doneAt,
+        clockStartAt: debriefClockStart(row.videoWatchedAt, row.doneAt),
         passed: row.debriefPassed,
         lastFailedAt: row.lastFailedDebriefAt,
         bearing: row.debriefBearing,

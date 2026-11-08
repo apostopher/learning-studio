@@ -10,7 +10,9 @@ import {
 } from '#/data-hooks/use-lesson-quiz-result';
 import {
   emptyQuizProgress,
+  newQuizSeed,
   partitionQuiz,
+  quizForAttempt,
   revealAnnouncement,
 } from '#/lib/lesson-quiz';
 import type { CourseLessonQuiz } from '#/types';
@@ -76,7 +78,7 @@ const LessonQuizClient = ({
   });
   const userId = session?.user?.id ?? '';
 
-  const { askable } = partitionQuiz(quiz);
+  const { askable: authored } = partitionQuiz(quiz);
   const result = useLessonQuizResult(lessonSlug);
   const submit = useSubmitLessonQuiz({ courseSlug, lessonSlug });
 
@@ -85,6 +87,15 @@ const LessonQuizClient = ({
     quizProgressAtomFamily(storageKey),
   );
   const [isRetaking, setIsRetaking] = useAtom(retakingAtomFamily(storageKey));
+
+  // This attempt's order: questions and options shuffled by its seed, so every
+  // retake meets them afresh while a reload mid-attempt keeps them where they
+  // were. Every positional read below (view, cursor, reveal) uses this.
+  const seed = storedProgress.seed ?? null;
+  const askable = quizForAttempt(authored, storedProgress);
+  // Read by `advance`, which keeps a stable identity (see viewRef below).
+  const seedRef = useRef(seed);
+  seedRef.current = seed;
 
   const view = computeLessonQuizView({
     askable,
@@ -122,6 +133,7 @@ const LessonQuizClient = ({
       index: current.index + 1,
       answers: current.answers,
       revealedQuestionId: null,
+      seed: seedRef.current,
     });
   }, [readOnly, setProgress]);
 
@@ -136,9 +148,10 @@ const LessonQuizClient = ({
         index: view.index,
         answers: { ...view.answers, [question.id]: optionId },
         revealedQuestionId: question.id,
+        seed,
       });
     },
-    [askable, readOnly, setProgress, view],
+    [askable, readOnly, seed, setProgress, view],
   );
 
   const revealedQuestionId =
@@ -152,8 +165,9 @@ const LessonQuizClient = ({
 
   /**
    * A correct answer dwells, then advances itself. A wrong one waits for the
-   * student — the correct option is the only feedback this quiz carries, and
-   * that is exactly the moment they need to read it.
+   * student to press Next, so the "wrong" mark is seen. The correct option is
+   * deliberately NOT shown (see `quizOptionState`): it would let the retake be
+   * memorised.
    *
    * The timer lives in an effect so it is cleared on unmount: the quiz sits in
    * a tab panel, and a student who switches tabs inside the dwell window must
@@ -220,7 +234,9 @@ const LessonQuizClient = ({
     if (readOnly) return;
     submittedRef.current = false;
     submit.reset();
-    setProgress(emptyQuizProgress);
+    // A new seed: the retake asks the same questions in a new order, with
+    // each question's options reshuffled.
+    setProgress({ ...emptyQuizProgress, seed: newQuizSeed() });
     setIsRetaking(true);
   }, [readOnly, setIsRetaking, setProgress, submit]);
 

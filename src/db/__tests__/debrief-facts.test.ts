@@ -5,7 +5,8 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 /**
  * `getDebriefFacts` is the route-side twin of the progress SQL in
- * `progress-components.ts` (`debriefPassed`, `lastFailedDebriefAt`, `doneAt`).
+ * `progress-components.ts` (`debriefPassed`, `lastFailedDebriefAt`, `doneAt`,
+ * `videoWatchedAt`).
  * The two must agree for the same rows, or the lesson list would show a red D
  * the generate route refuses to open (or the reverse).
  */
@@ -13,6 +14,7 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 const m = vi.hoisted(() => ({
   queue: [] as unknown[][],
   wheres: [] as unknown[],
+  selects: [] as Record<string, unknown>[],
 }));
 
 function chain(result: unknown) {
@@ -31,16 +33,24 @@ function chain(result: unknown) {
 }
 
 vi.mock('#/db', () => ({
-  db: { select: () => chain(m.queue.shift() ?? []) },
+  db: {
+    select: (fields: Record<string, unknown>) => {
+      m.selects.push(fields);
+      return chain(m.queue.shift() ?? []);
+    },
+  },
 }));
 
 import { getDebriefAttempts, getDebriefFacts } from '#/db/lesson-test';
+import { videoWatchedAtSql } from '#/db/progress-components';
+import { lessonsTable } from '#/db/schema';
 
 const at = (iso: string) => new Date(iso);
 
 beforeEach(() => {
   m.queue.length = 0;
   m.wheres.length = 0;
+  m.selects.length = 0;
 });
 
 describe('getDebriefAttempts', () => {
@@ -70,8 +80,10 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
   const facts = async (
     attempts: { id: number; totalScore: number; completedAt: Date }[],
     doneAt: Date | null,
+    // Raw `sql<Date>` columns arrive from the driver as offset-bearing strings.
+    videoWatchedAt: string | null = null,
   ) => {
-    m.queue.push(attempts, doneAt ? [{ doneAt }] : []);
+    m.queue.push(attempts, doneAt ? [{ doneAt }] : [], [{ videoWatchedAt }]);
     return getDebriefFacts('u1', 'l1', 41);
   };
 
@@ -86,16 +98,44 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
 
   it('nothing recorded → not done, not passed, never failed', async () => {
     expect(await facts([], null)).toEqual({
-      doneAt: null,
+      clockStartAt: null,
       passed: false,
       lastFailedAt: null,
     });
   });
 
-  it('doneAt is the ISO of the sticky completion', async () => {
-    expect((await facts([], at('2026-10-25T00:00:00.000Z'))).doneAt).toBe(
+  it('with no watched video, the clock starts at the sticky completion', async () => {
+    expect((await facts([], at('2026-10-25T00:00:00.000Z'))).clockStartAt).toBe(
       '2026-10-25T00:00:00.000Z',
     );
+  });
+
+  it('the clock starts when the video is watched, even before the lesson is done', async () => {
+    expect((await facts([], null, '2026-10-24 06:00:00+00')).clockStartAt).toBe(
+      '2026-10-24T06:00:00.000Z',
+    );
+    expect(
+      (
+        await facts(
+          [],
+          at('2026-10-25T00:00:00.000Z'),
+          '2026-10-24 06:00:00+00',
+        )
+      ).clockStartAt,
+    ).toBe('2026-10-24T06:00:00.000Z');
+  });
+
+  it('reads the video-watched time with the shared progress fragment, for this user and lesson id', async () => {
+    await facts([], null);
+    expect(renderSql(m.selects[2]?.videoWatchedAt as SQL)).toBe(
+      renderSql(videoWatchedAtSql('u1', lessonsTable.id)),
+    );
+    expect(renderSqlParams(m.selects[2]?.videoWatchedAt as SQL)).toEqual(
+      renderSqlParams(videoWatchedAtSql('u1', lessonsTable.id)),
+    );
+    const where = m.wheres[2] as SQL;
+    expect(renderSql(where)).toBe('"lessons"."id" = $1');
+    expect(renderSqlParams(where)).toEqual([41]);
   });
 
   it('passed = any attempt at or above par (70)', async () => {
@@ -128,7 +168,7 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
     );
     // Reported independently of `passed`, exactly as the SQL selects both.
     expect(f).toEqual({
-      doneAt: '2026-10-19T00:00:00.000Z',
+      clockStartAt: '2026-10-19T00:00:00.000Z',
       passed: true,
       lastFailedAt: '2026-10-26T08:00:00.000Z',
     });

@@ -46,7 +46,7 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     // The single authority on whether this pilot may take this debrief now:
     // subscription, prerequisites, level (out-of-tier refused in BOTH
     // read-only states — generating is new assessment work) and has_debrief,
-    // then the 24h schedule. All before the source lookup and the model, so a
+    // then the 12h schedule. All before the source lookup and the model, so a
     // refusal costs no tokens.
     const access = await getDebriefAccess({
       userId: session.user.id,
@@ -59,7 +59,7 @@ export async function generateTestHandler(request: Request): Promise<Response> {
         status: access.status,
       });
     }
-    // Not done yet, inside the 24h wait, waiting to retake, or already passed.
+    // Not done yet, inside the 12h wait, waiting to retake, or already passed.
     // The client hiding the button is not the gate; this is.
     if (access.state.kind !== 'open') {
       return debriefNotOpen(access.state);

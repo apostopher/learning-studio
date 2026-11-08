@@ -29,7 +29,7 @@ const summary = {
       done: true,
       outstanding: [],
       debrief: {
-        doneAt: '2026-10-01T00:00:00.000Z',
+        clockStartAt: '2026-10-01T00:00:00.000Z',
         passed: false,
         lastFailedAt: null,
         bearing: true,
@@ -43,7 +43,7 @@ const summary = {
       done: false,
       outstanding: [{ kind: 'video' }, { kind: 'section', section: 'links' }],
       debrief: {
-        doneAt: null,
+        clockStartAt: null,
         passed: false,
         lastFailedAt: null,
         bearing: false,

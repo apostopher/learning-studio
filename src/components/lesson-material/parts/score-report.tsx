@@ -11,7 +11,7 @@ type ScoreReportProps = {
   /**
    * Shown under the summary — the just-failed panel's "Next attempt opens"
    * line. There is no Retake button: retakes happen only by the Debrief tab
-   * reopening 24h later (call 8).
+   * reopening 12h later (call 8).
    */
   footer?: ReactNode;
 };

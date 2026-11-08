@@ -25,7 +25,11 @@ export type DebriefStatusAttempt = {
 
 export type DebriefStatusResponse = {
   state: DebriefState;
-  /** What is left to finish the lesson; non-empty only when `not-done`. */
+  /**
+   * What is left to start the debrief clock; non-empty only when `not-done`.
+   * Just the video when the lesson asks for one (watching it starts the
+   * clock), otherwise everything left to finish the lesson.
+   */
   lessonOutstanding: OutstandingItem[];
   /**
    * Present ONLY when state.kind === 'passed' — history is hidden until then.
@@ -78,9 +82,12 @@ export async function debriefStatusHandler(
     let lessonOutstanding: OutstandingItem[] = [];
     if (state.kind === 'not-done') {
       const progress = await getCourseProgress({ userId, slug: courseSlug });
-      lessonOutstanding =
+      const outstanding =
         progress.lessons.find((l) => l.lessonId === access.lessonId)
           ?.outstanding ?? [];
+      lessonOutstanding = outstanding.some((i) => i.kind === 'video')
+        ? [{ kind: 'video' }]
+        : outstanding;
     }
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };

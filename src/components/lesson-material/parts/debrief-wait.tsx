@@ -1,7 +1,7 @@
 import { Clock, Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
+import { DEBRIEF_DELAY_LABEL, DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { describeOutstanding } from '#/lib/lock-copy';
 
 type DebriefWaitProps = {
@@ -37,12 +37,21 @@ export const DebriefWait = (props: DebriefWaitProps) => {
   const headingId = `${props.idBase}-heading`;
   const bodyId = `${props.idBase}-body`;
 
+  // On a video lesson only the video starts the clock, so the route reports
+  // just that; anywhere else the clock starts when the lesson is done.
+  const videoOnly =
+    props.kind === 'not-done' &&
+    props.outstanding.length === 1 &&
+    props.outstanding[0]?.kind === 'video';
+
   const heading =
     props.kind === 'not-done'
-      ? 'Debrief locked until you finish this lesson'
+      ? videoOnly
+        ? 'Debrief locked until you watch the video'
+        : 'Debrief locked until you finish this lesson'
       : props.kind === 'waiting'
-        ? 'Debrief opens 24 hours after you finished this lesson'
-        : 'Next attempt opens 24 hours after your last one';
+        ? `Debrief opens after a wait of ${DEBRIEF_DELAY_LABEL}`
+        : `Next attempt opens ${DEBRIEF_DELAY_LABEL} after your last one`;
 
   const todo =
     props.kind === 'not-done' ? describeOutstanding(props.outstanding) : '';
@@ -73,9 +82,11 @@ export const DebriefWait = (props: DebriefWaitProps) => {
       >
         {props.kind === 'not-done' ? (
           <p>
-            {todo
-              ? `Opens 24 hours after you finish this lesson — ${todo}.`
-              : 'Opens 24 hours after you finish this lesson.'}
+            {videoOnly
+              ? `Opens ${DEBRIEF_DELAY_LABEL} after you finish watching the video.`
+              : todo
+                ? `Opens ${DEBRIEF_DELAY_LABEL} after you finish this lesson — ${todo}.`
+                : `Opens ${DEBRIEF_DELAY_LABEL} after you finish this lesson.`}
           </p>
         ) : props.kind === 'waiting' ? (
           <>

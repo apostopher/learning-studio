@@ -751,7 +751,7 @@ describe('CourseSidebarWrapper', () => {
             done: true,
             outstanding: [],
             debrief: {
-              doneAt: '2020-01-01T00:00:00.000Z',
+              clockStartAt: '2020-01-01T00:00:00.000Z',
               passed: false,
               lastFailedAt: null,
               bearing: true,

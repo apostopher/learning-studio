@@ -39,7 +39,7 @@ async function postDebriefJson(url: string, body: unknown): Promise<Response> {
 
 /**
  * generate or save-results answered 409 `{ error: 'not-open' }`: the debrief
- * is not open now (a tab left open across the 24h boundary, or another tab
+ * is not open now (a tab left open across the 12h boundary, or another tab
  * already submitted). Not a failure to show the pilot — it means the Debrief
  * panel's state is stale; see `refreshIfNotOpen`.
  */
@@ -120,7 +120,7 @@ export async function postSaveResults({
 
 /**
  * A saved attempt can change the debrief's state (passed, or re-locked for
- * 24h) and the course rollup's debrief badges. Invalidate rather than write
+ * 12h) and the course rollup's debrief badges. Invalidate rather than write
  * a partial state: the server owns what the new state is.
  */
 export function invalidateAfterSave(

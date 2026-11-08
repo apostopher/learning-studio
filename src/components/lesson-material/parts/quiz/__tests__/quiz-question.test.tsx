@@ -69,6 +69,22 @@ describe('QuizQuestion', () => {
     expect(onNext).toHaveBeenCalledOnce();
   });
 
+  it('marks a wrong pick without revealing which option was right', () => {
+    const { container } = render(
+      <QuizQuestion {...props} chosenOptionId="b" revealed />,
+    );
+    // A check would point at the right answer; only the pick's X may show.
+    expect(container.querySelectorAll('svg.lucide-check')).toHaveLength(0);
+    expect(container.querySelectorAll('svg.lucide-x')).toHaveLength(1);
+  });
+
+  it('confirms a right pick with its check', () => {
+    const { container } = render(
+      <QuizQuestion {...props} chosenOptionId="a" revealed />,
+    );
+    expect(container.querySelectorAll('svg.lucide-check')).toHaveLength(1);
+  });
+
   it('offers no Next after a correct answer, which advances itself', () => {
     render(<QuizQuestion {...props} chosenOptionId="a" revealed />);
     expect(screen.queryByRole('button', { name: /Next/ })).toBeNull();

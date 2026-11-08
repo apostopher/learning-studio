@@ -45,7 +45,7 @@ beforeEach(() => {
   m.evaluateLessonGate.mockResolvedValue(openGate);
   m.getCourseDetailsWithCache.mockResolvedValue(detailsWith(true));
   m.getDebriefFacts.mockResolvedValue({
-    doneAt: null,
+    clockStartAt: null,
     passed: false,
     lastFailedAt: null,
   });
@@ -99,7 +99,7 @@ describe('getDebriefAccess state', () => {
 
   it('returns computeDebriefState of those facts at `now`', async () => {
     m.getDebriefFacts.mockResolvedValue({
-      doneAt: '2026-10-27T00:00:00.000Z',
+      clockStartAt: '2026-10-27T06:00:00.000Z',
       passed: false,
       lastFailedAt: null,
     });
@@ -107,13 +107,13 @@ describe('getDebriefAccess state', () => {
       ok: true,
       courseId: 7,
       lessonId: 41,
-      state: { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' },
+      state: { kind: 'waiting', availableAt: '2026-10-27T18:00:00.000Z' },
     });
   });
 
-  it('is open 24h after done', async () => {
+  it('is open 12h after the clock starts', async () => {
     m.getDebriefFacts.mockResolvedValue({
-      doneAt: '2026-10-26T12:00:00.000Z',
+      clockStartAt: '2026-10-27T00:00:00.000Z',
       passed: false,
       lastFailedAt: null,
     });

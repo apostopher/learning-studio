@@ -79,6 +79,13 @@ export type QuizProgress = {
    * while a wrong answer is being held for the student to read.
    */
   revealedQuestionId: string | null;
+  /**
+   * This attempt's shuffle (see `quizForAttempt`): drawn fresh for every
+   * attempt so a retake meets the questions and options in a new order.
+   * Absent or null keeps authored order — progress saved before shuffling
+   * existed must not be scrambled out from under its answered prefix.
+   */
+  seed?: number | null;
 };
 
 export const emptyQuizProgress: QuizProgress = {
@@ -86,6 +93,67 @@ export const emptyQuizProgress: QuizProgress = {
   answers: {},
   revealedQuestionId: null,
 };
+
+/** A fresh shuffle seed for a new attempt: an unsigned 32-bit integer. */
+export function newQuizSeed(): number {
+  return Math.floor(Math.random() * 2 ** 32);
+}
+
+/**
+ * mulberry32 — a tiny seeded PRNG. Deterministic on purpose: the order must
+ * survive a reload mid-attempt, so it is derived from the stored seed rather
+ * than drawn afresh on every render.
+ */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+/** Fisher–Yates over a copy. */
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j] as T, out[i] as T];
+  }
+  return out;
+}
+
+/**
+ * The quiz in this seed's order: the questions shuffled, and each question's
+ * options shuffled. Only reorders — ids, and so `correctOptionId`, answers and
+ * scoring, are untouched. The authored quiz is not mutated.
+ */
+export function shuffleQuiz(
+  quiz: CourseLessonQuiz,
+  seed: number,
+): CourseLessonQuiz {
+  const random = seededRandom(seed);
+  return shuffled(quiz, random).map((question) => ({
+    ...question,
+    options: shuffled(question.options, random),
+  }));
+}
+
+/**
+ * The questions as this attempt shows them. Everything that walks the quiz by
+ * position — the view, restore, the answer snapshot — must use this, not the
+ * authored order, or the cursor would point at a different question than the
+ * one on screen.
+ */
+export function quizForAttempt(
+  askable: CourseLessonQuiz,
+  progress: QuizProgress,
+): CourseLessonQuiz {
+  const seed = progress.seed ?? null;
+  return seed === null ? askable : shuffleQuiz(askable, seed);
+}
 
 /**
  * Whether restored progress still describes the quiz as it exists now.
@@ -165,55 +233,43 @@ export function quizGradeLabel({ correct, total }: QuizScore): string {
 /** How a single option should render once a question has been answered. */
 export type QuizOptionState = 'idle' | 'correct' | 'wrong' | 'dimmed';
 
+/**
+ * `showAnswer` false: a wrong pick marks only the pick, and the correct option
+ * stays unmarked — showing it would let the next attempt be memorised. The
+ * quiz itself never shows the answer; the end-of-quiz review does, and only
+ * after a perfect score (when every pick already is the answer).
+ */
 export function quizOptionState({
   optionId,
   correctOptionId,
   chosenOptionId,
   revealed,
+  showAnswer,
 }: {
   optionId: string;
   correctOptionId: string;
   chosenOptionId: string | undefined;
   revealed: boolean;
+  showAnswer: boolean;
 }): QuizOptionState {
   if (!revealed) return 'idle';
-  if (optionId === correctOptionId) return 'correct';
-  if (optionId === chosenOptionId) return 'wrong';
+  if (optionId === chosenOptionId) {
+    return optionId === correctOptionId ? 'correct' : 'wrong';
+  }
+  if (showAnswer && optionId === correctOptionId) return 'correct';
   return 'dimmed';
 }
 
 /**
  * What the live region announces after an answer. The reveal is otherwise
- * purely visual, so a screen-reader user would hear nothing at all.
+ * purely visual, so a screen-reader user would hear nothing at all. A wrong
+ * answer is never followed by the right one — see `quizOptionState`.
  */
 export function revealAnnouncement(
   question: CourseLessonQuizQuestion,
   chosenOptionId: string,
 ): string {
-  if (chosenOptionId === question.correctOptionId) return 'Correct.';
-  const correct = question.options.find(
-    (option) => option.id === question.correctOptionId,
-  );
-  const index = question.options.findIndex(
-    (option) => option.id === question.correctOptionId,
-  );
-  return `Incorrect. The correct answer is ${optionLetter(index)}: ${stripHtml(
-    correct?.value ?? '',
-  )}`;
-}
-
-/**
- * Quiz content is stored as HTML (see the note in `quiz-field.tsx` — the
- * schema's "markdown" description is stale). Announcements are read aloud, so
- * tags have to come off before they reach the live region.
- */
-export function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return chosenOptionId === question.correctOptionId
+    ? 'Correct.'
+    : 'Incorrect.';
 }

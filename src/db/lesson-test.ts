@@ -7,8 +7,17 @@ import {
   AITestSchema,
 } from '#/ai/schemas';
 import { db } from '#/db';
-import { DEBRIEF_PAR_SCORE, type DebriefFacts } from '#/lib/debrief-schedule';
-import { lessonCompletionsTable, lessonTestResultsTable } from './schema';
+import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  DEBRIEF_PAR_SCORE,
+  type DebriefFacts,
+  debriefClockStart,
+} from '#/lib/debrief-schedule';
+import {
+  lessonCompletionsTable,
+  lessonsTable,
+  lessonTestResultsTable,
+} from './schema';
 
 export async function saveTestResult(data: {
   userId: string;
@@ -164,13 +173,15 @@ export async function getDebriefAttemptReports(
 
 /**
  * The schedule facts for one pilot's debrief on one lesson — the route-side
- * twin of `debriefPassed`, `lastFailedDebriefAt` and `doneAt` in
- * `progress-components.ts`, with the same rules:
+ * twin of `debriefPassed`, `lastFailedDebriefAt`, `doneAt` and
+ * `videoWatchedAt` in `progress-components.ts`, with the same rules:
  *
  * - passed: a completed attempt with `total_score >= DEBRIEF_PAR_SCORE`;
  * - lastFailedAt: the latest completed attempt with `total_score < par`,
  *   reported whether or not a pass also exists (the SQL selects both);
- * - doneAt: the sticky `lesson_completions.done_at` for (user, lesson id).
+ * - clockStartAt: the earlier of the video's first full coverage (the same
+ *   `videoWatchedAtSql` fragment) and the sticky `lesson_completions.done_at`
+ *   for (user, lesson id) — see `debriefClockStart`.
  *
  * The two must agree, or the lesson list would show a debrief the generate
  * route refuses to open, or the reverse.
@@ -180,7 +191,7 @@ export async function getDebriefFacts(
   lessonSlug: string,
   lessonId: number,
 ): Promise<DebriefFacts> {
-  const [attempts, completions] = await Promise.all([
+  const [attempts, completions, watched] = await Promise.all([
     getDebriefAttempts(userId, lessonSlug),
     db
       .select({ doneAt: lessonCompletionsTable.doneAt })
@@ -192,15 +203,25 @@ export async function getDebriefFacts(
         ),
       )
       .limit(1),
+    db
+      .select({ videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id) })
+      .from(lessonsTable)
+      .where(eq(lessonsTable.id, lessonId))
+      .limit(1),
   ]);
 
   const failedMs = attempts
     .filter((a) => a.totalScore < DEBRIEF_PAR_SCORE)
     .map((a) => Date.parse(a.completedAt));
   const doneAt = completions[0]?.doneAt ?? null;
+  // A raw `sql<Date>` column: the driver hands back an offset-bearing string.
+  const videoWatchedAt = watched[0]?.videoWatchedAt ?? null;
 
   return {
-    doneAt: doneAt === null ? null : doneAt.toISOString(),
+    clockStartAt: debriefClockStart(
+      videoWatchedAt === null ? null : new Date(videoWatchedAt).toISOString(),
+      doneAt === null ? null : doneAt.toISOString(),
+    ),
     passed: attempts.some((a) => a.totalScore >= DEBRIEF_PAR_SCORE),
     lastFailedAt:
       failedMs.length === 0

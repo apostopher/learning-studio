@@ -36,4 +36,17 @@ describe('CircularProgress', () => {
     const bar = screen.getByRole('progressbar');
     expect(bar.textContent).not.toContain('25%');
   });
+
+  it('a passed debrief is a solid success disc with a tick in its contrast colour', () => {
+    const { container } = render(
+      <CircularProgress value={40} ariaLabel="Debrief passed" badge="passed" />,
+    );
+    const bar = screen.getByRole('progressbar', { name: 'Debrief passed' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    const tick = container.querySelector('svg.lucide-check');
+    const disc = tick?.parentElement;
+    expect(disc?.className).toMatch(/\bbg-success\b/);
+    expect(disc?.className).toMatch(/\brounded-full\b/);
+    expect(disc?.className).toMatch(/\btext-on-success\b/);
+  });
 });
