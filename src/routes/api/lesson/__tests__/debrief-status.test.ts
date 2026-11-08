@@ -108,12 +108,19 @@ describe('debrief-status', () => {
     expect(m.getCourseProgress).not.toHaveBeenCalled();
   });
 
-  it('returns the outstanding items of this lesson when not done', async () => {
+  it('returns only the video when not done and the video is outstanding — watching it starts the clock', async () => {
     m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
     m.getCourseProgress.mockResolvedValue({
       lessons: [
         { lessonId: 40, outstanding: [{ kind: 'quiz' }] },
-        { lessonId: 41, outstanding: [{ kind: 'video' }, { kind: 'visit' }] },
+        {
+          lessonId: 41,
+          outstanding: [
+            { kind: 'video' },
+            { kind: 'quiz' },
+            { kind: 'section', section: 'links' },
+          ],
+        },
       ],
     });
     const body = await (await debriefStatusHandler(get(QS))).json();
@@ -121,11 +128,28 @@ describe('debrief-status', () => {
       userId: 'u1',
       slug: 'c1',
     });
-    expect(body.lessonOutstanding).toEqual([
-      { kind: 'video' },
-      { kind: 'visit' },
-    ]);
+    expect(body.lessonOutstanding).toEqual([{ kind: 'video' }]);
     expect('attempts' in body).toBe(false);
+  });
+
+  it('returns everything left to finish the lesson when there is no video to watch', async () => {
+    m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        {
+          lessonId: 41,
+          outstanding: [
+            { kind: 'quiz' },
+            { kind: 'section', section: 'links' },
+          ],
+        },
+      ],
+    });
+    const body = await (await debriefStatusHandler(get(QS))).json();
+    expect(body.lessonOutstanding).toEqual([
+      { kind: 'quiz' },
+      { kind: 'section', section: 'links' },
+    ]);
   });
 
   it('returns no outstanding items when the lesson is absent from progress', async () => {

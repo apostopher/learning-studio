@@ -151,6 +151,13 @@ export const env = createEnv({
 
     VITE_LOGO_LIGHT: logoStr,
     VITE_LOGO_DARK: logoStr,
+
+    // Minutes a debrief stays closed after the video is watched (and after a
+    // below-par attempt). Unset → 12 hours. Set it low (e.g. 1) to test the
+    // debrief locally; never set it in production. Read by
+    // src/lib/debrief-schedule.ts through import.meta.env, so the browser and
+    // the server agree; declared here so a bad value fails at boot.
+    VITE_DEBRIEF_DELAY_MINUTES: z.coerce.number().positive().optional(),
   },
 
   runtimeEnv: process.env,

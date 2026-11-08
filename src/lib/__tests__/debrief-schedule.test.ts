@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeDebriefState,
+  DEBRIEF_DELAY_LABEL,
+  DEBRIEF_DELAY_MS,
   type DebriefFacts,
   debriefBadge,
+  debriefClockStart,
+  formatDebriefDelay,
   isPass,
   msUntil,
+  parseDebriefDelayMinutes,
 } from '#/lib/debrief-schedule';
 
 const now = new Date('2026-10-27T12:00:00Z');
@@ -12,7 +17,7 @@ const hoursAgo = (h: number) =>
   new Date(now.getTime() - h * 3_600_000).toISOString();
 
 const facts = (overrides: Partial<DebriefFacts>): DebriefFacts => ({
-  doneAt: null,
+  clockStartAt: null,
   passed: false,
   lastFailedAt: null,
   ...overrides,
@@ -25,58 +30,113 @@ describe('computeDebriefState', () => {
     });
   });
 
-  it('is not-done when there is no doneAt and it is not passed', () => {
-    expect(computeDebriefState(facts({ doneAt: null }), now)).toEqual({
+  it('is not-done when the clock has not started and it is not passed', () => {
+    expect(computeDebriefState(facts({ clockStartAt: null }), now)).toEqual({
       kind: 'not-done',
     });
   });
 
-  it('is waiting for the first 24h after done', () => {
-    expect(computeDebriefState(facts({ doneAt: hoursAgo(1) }), now)).toEqual({
+  it('is waiting for the first 12h after the clock starts', () => {
+    expect(
+      computeDebriefState(facts({ clockStartAt: hoursAgo(1) }), now),
+    ).toEqual({
       kind: 'waiting',
-      availableAt: '2026-10-28T11:00:00.000Z',
+      availableAt: '2026-10-27T23:00:00.000Z',
     });
   });
 
-  it('is open exactly 24h after done (boundary inclusive)', () => {
-    expect(computeDebriefState(facts({ doneAt: hoursAgo(24) }), now)).toEqual({
-      kind: 'open',
-      retake: false,
-    });
+  it('is still waiting just inside 12h', () => {
+    expect(
+      computeDebriefState(facts({ clockStartAt: hoursAgo(11.99) }), now).kind,
+    ).toBe('waiting');
   });
 
-  it('is retake-waiting for 24h after a below-par attempt', () => {
+  it('is open exactly 12h after the clock starts (boundary inclusive)', () => {
+    expect(
+      computeDebriefState(facts({ clockStartAt: hoursAgo(12) }), now),
+    ).toEqual({ kind: 'open', retake: false });
+  });
+
+  it('is retake-waiting for 12h after a below-par attempt', () => {
     expect(
       computeDebriefState(
-        facts({ doneAt: hoursAgo(48), lastFailedAt: hoursAgo(2) }),
+        facts({ clockStartAt: hoursAgo(48), lastFailedAt: hoursAgo(2) }),
         now,
       ),
     ).toEqual({
       kind: 'retake-waiting',
-      availableAt: '2026-10-28T10:00:00.000Z',
+      availableAt: '2026-10-27T22:00:00.000Z',
     });
   });
 
-  it('is open for retake once 24h have passed since the failed attempt', () => {
+  it('is open for retake once 12h have passed since the failed attempt', () => {
     expect(
       computeDebriefState(
-        facts({ doneAt: hoursAgo(48), lastFailedAt: hoursAgo(25) }),
+        facts({ clockStartAt: hoursAgo(48), lastFailedAt: hoursAgo(12) }),
         now,
       ),
     ).toEqual({ kind: 'open', retake: true });
   });
 
-  it('uses the later of doneAt and lastFailedAt when history is backfilled', () => {
-    // lastFailedAt is earlier than doneAt: the schedule runs from doneAt.
+  it('uses the later of clockStartAt and lastFailedAt when history is backfilled', () => {
+    // lastFailedAt is earlier than the clock start: the schedule runs from it.
     expect(
       computeDebriefState(
-        facts({ doneAt: hoursAgo(1), lastFailedAt: hoursAgo(100) }),
+        facts({ clockStartAt: hoursAgo(1), lastFailedAt: hoursAgo(100) }),
         now,
       ),
     ).toEqual({
       kind: 'retake-waiting',
-      availableAt: new Date(Date.parse(hoursAgo(1)) + 86_400_000).toISOString(),
+      availableAt: '2026-10-27T23:00:00.000Z',
     });
+  });
+});
+
+describe('the debrief delay', () => {
+  it('is 12 hours by default', () => {
+    expect(DEBRIEF_DELAY_MS).toBe(12 * 3_600_000);
+    expect(DEBRIEF_DELAY_LABEL).toBe('12 hours');
+  });
+
+  it('reads VITE_DEBRIEF_DELAY_MINUTES as minutes', () => {
+    expect(parseDebriefDelayMinutes('1')).toBe(1);
+    expect(parseDebriefDelayMinutes('0.5')).toBe(0.5);
+    expect(parseDebriefDelayMinutes(90)).toBe(90);
+  });
+
+  it('falls back to 12 hours when unset or unusable, never to zero', () => {
+    for (const raw of [undefined, null, '', 'abc', '0', '-5', 'Infinity']) {
+      expect(parseDebriefDelayMinutes(raw)).toBe(720);
+    }
+  });
+
+  it('is labelled in hours when whole, else minutes', () => {
+    expect(formatDebriefDelay(720)).toBe('12 hours');
+    expect(formatDebriefDelay(60)).toBe('1 hour');
+    expect(formatDebriefDelay(1)).toBe('1 minute');
+    expect(formatDebriefDelay(90)).toBe('90 minutes');
+  });
+});
+
+describe('debriefClockStart', () => {
+  const video = '2026-10-27T08:00:00.000Z';
+  const done = '2026-10-27T10:00:00.000Z';
+
+  it('starts when the video is watched, before the lesson is done', () => {
+    expect(debriefClockStart(video, null)).toBe(video);
+  });
+
+  it('starts at done when there is no watched video', () => {
+    expect(debriefClockStart(null, done)).toBe(done);
+  });
+
+  it('takes whichever came first', () => {
+    expect(debriefClockStart(video, done)).toBe(video);
+    expect(debriefClockStart(done, video)).toBe(video);
+  });
+
+  it('has not started when neither has happened', () => {
+    expect(debriefClockStart(null, null)).toBeNull();
   });
 });
 

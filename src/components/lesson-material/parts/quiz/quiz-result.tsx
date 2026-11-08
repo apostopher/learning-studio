@@ -36,7 +36,9 @@ const scoreToneClass = ({ correct, total }: QuizScore) => {
 };
 
 /**
- * The last slide: the score, then every question reviewed.
+ * The last slide: the score, then every question reviewed — but only after a
+ * perfect score. Below it the review is withheld (with the reason stated), so
+ * a pilot cannot read the key at 4/5 and memorise their way to 5/5.
  *
  * Rendered entirely from the answers snapshot rather than from today's
  * `material.quiz`. Admins edit quizzes live, so reviewing against the current
@@ -52,6 +54,7 @@ export const QuizResult = ({
   readOnly,
 }: QuizResultProps) => {
   const score = scoreQuizAnswers(answers);
+  const perfect = score.total > 0 && score.correct === score.total;
 
   return (
     <div className="flex flex-col gap-6">
@@ -117,42 +120,50 @@ export const QuizResult = ({
       <div className="flex flex-col gap-4">
         <h3 className="text-base font-semibold text-primary">Review</h3>
 
-        <ol className="flex flex-col gap-5">
-          {answers.map((question, questionIndex) => (
-            <li key={question.id} className="flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-inverted px-1.5 text-[11px] font-semibold tabular-nums text-gray-1"
-                >
-                  {questionIndex + 1}
-                </span>
-                <div
-                  className="material-prose min-w-0 flex-1 text-sm font-medium leading-relaxed text-primary"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: quiz prose is stored as sanitized HTML upstream, same as key points
-                  dangerouslySetInnerHTML={{ __html: question.question }}
-                />
-              </div>
-
-              <ul className="flex flex-col gap-2">
-                {question.options.map((option, optionIndex) => (
-                  <QuizOption
-                    key={option.id}
-                    letter={optionLetter(optionIndex)}
-                    html={option.value}
-                    reducedMotion={reducedMotion}
-                    state={quizOptionState({
-                      optionId: option.id,
-                      correctOptionId: question.correctOptionId,
-                      chosenOptionId: question.userOptionId,
-                      revealed: true,
-                    })}
+        {!perfect ? (
+          <p className="text-sm text-secondary">
+            The answers appear once you score {score.total}/{score.total}, so a
+            retake tests what you know rather than what you remember.
+          </p>
+        ) : (
+          <ol className="flex flex-col gap-5">
+            {answers.map((question, questionIndex) => (
+              <li key={question.id} className="flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-inverted px-1.5 text-[11px] font-semibold tabular-nums text-gray-1"
+                  >
+                    {questionIndex + 1}
+                  </span>
+                  <div
+                    className="material-prose min-w-0 flex-1 text-sm font-medium leading-relaxed text-primary"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: quiz prose is stored as sanitized HTML upstream, same as key points
+                    dangerouslySetInnerHTML={{ __html: question.question }}
                   />
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ol>
+                </div>
+
+                <ul className="flex flex-col gap-2">
+                  {question.options.map((option, optionIndex) => (
+                    <QuizOption
+                      key={option.id}
+                      letter={optionLetter(optionIndex)}
+                      html={option.value}
+                      reducedMotion={reducedMotion}
+                      state={quizOptionState({
+                        optionId: option.id,
+                        correctOptionId: question.correctOptionId,
+                        chosenOptionId: question.userOptionId,
+                        revealed: true,
+                        showAnswer: true,
+                      })}
+                    />
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   );

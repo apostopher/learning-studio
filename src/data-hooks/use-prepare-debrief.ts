@@ -6,7 +6,7 @@ import { saveJson } from './save-json';
 
 /**
  * Ask the server to start generating this lesson's debrief now, so it is ready
- * the moment it opens (24h after the lesson is done).
+ * the moment it opens (12h after the video is watched).
  *
  * Fire-and-forget like useRecordLastViewed: generation takes a while, the
  * response carries nothing, and it should outlive the learner navigating on.
@@ -44,8 +44,8 @@ export type ShouldPrepareDebriefArgs = DebriefOfferArgs & {
  * usePrepareDebriefOnPlay, extracted so it can be tested without rendering a
  * hook (see nextLastViewedWrite for the same split).
  *
- * No gate on the material being locked any more: the debrief opens 24h after
- * the lesson is done, not when the video unlocks the material, and the server
+ * No gate on the material being locked any more: the debrief opens 12h after
+ * the video is watched, not when the video unlocks the material, and the server
  * prepares in every state short of passed. A repeat is a server-side no-op
  * (a stored test built from the current source is kept).
  */

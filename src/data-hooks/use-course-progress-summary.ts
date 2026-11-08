@@ -21,7 +21,7 @@ const lessonProgressSchema = z.object({
   done: z.boolean(),
   outstanding: z.array(outstandingItemSchema),
   debrief: z.object({
-    doneAt: z.string().nullable(),
+    clockStartAt: z.string().nullable(),
     passed: z.boolean(),
     lastFailedAt: z.string().nullable(),
     bearing: z.boolean(),

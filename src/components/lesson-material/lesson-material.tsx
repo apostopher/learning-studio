@@ -2,7 +2,12 @@ import { Tabs } from '@base-ui/react/tabs';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LessonMaterial } from '#/db/lesson';
 import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
-import { computeMaterialTabs, resolveActiveTab } from './compute-material-tabs';
+import {
+  computeMaterialTabs,
+  type DebriefTabFacts,
+  defaultMaterialTab,
+  resolveActiveTab,
+} from './compute-material-tabs';
 import { Assignments } from './parts/assignments';
 import { DebriefPanelContainer } from './parts/debrief-panel-container';
 import { JobOfTheDay } from './parts/job-of-the-day';
@@ -27,6 +32,12 @@ type LessonMaterialProps = {
   onTabSelected?: (tab: string) => void;
   /** The lesson was completed at an earlier level — quiz/debrief writes must be inert. */
   readOnly: boolean;
+  /**
+   * This lesson's debrief facts from the course progress summary (undefined
+   * while loading). A debrief waiting for the pilot makes Debrief the tab the
+   * lesson opens on.
+   */
+  debriefFacts: DebriefTabFacts | undefined;
 };
 
 export const LessonMaterialView = ({
@@ -36,6 +47,7 @@ export const LessonMaterialView = ({
   transcriptUsable,
   onTabSelected,
   readOnly,
+  debriefFacts,
 }: LessonMaterialProps) => {
   const [activeTab, setActiveTab] = useActiveTab();
 
@@ -53,13 +65,18 @@ export const LessonMaterialView = ({
     extraTab: material.extraTab,
   });
   const has = (value: string) => tabs.some((tab) => tab.value === value);
-  const selected = resolveActiveTab(tabs, activeTab);
+  const selected = resolveActiveTab(
+    tabs,
+    activeTab,
+    material.lessonSlug,
+    defaultMaterialTab(tabs, debriefFacts, new Date()),
+  );
 
   return (
     <Tabs.Root
       value={selected}
       onValueChange={(val) => {
-        setActiveTab(val as string);
+        setActiveTab({ lessonSlug: material.lessonSlug, tab: val as string });
         onTabSelected?.(val as string);
       }}
       className="flex flex-col gap-4"

@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { CourseLessonQuizQuestion } from '#/types';
 import {
   buildQuizAnswers,
+  newQuizSeed,
   partitionQuiz,
   type QuizProgress,
+  quizForAttempt,
   quizGradeLabel,
   quizOptionState,
   restoreQuizProgress,
   revealAnnouncement,
   scoreQuizAnswers,
-  stripHtml,
+  shuffleQuiz,
 } from '../lesson-quiz';
 
 const question = (
@@ -218,7 +220,7 @@ describe('quizGradeLabel', () => {
 });
 
 describe('quizOptionState', () => {
-  const base = { correctOptionId: 'a', chosenOptionId: 'b' };
+  const base = { correctOptionId: 'a', chosenOptionId: 'b', showAnswer: true };
 
   it('is idle for every option before the reveal', () => {
     expect(quizOptionState({ ...base, optionId: 'a', revealed: false })).toBe(
@@ -245,6 +247,26 @@ describe('quizOptionState', () => {
         chosenOptionId: 'a',
         optionId: 'a',
         revealed: true,
+        showAnswer: true,
+      }),
+    ).toBe('correct');
+  });
+
+  it('without the answer, a wrong pick marks only the pick — the correct option is not given away', () => {
+    const hidden = { ...base, revealed: true, showAnswer: false };
+    expect(quizOptionState({ ...hidden, optionId: 'a' })).toBe('dimmed');
+    expect(quizOptionState({ ...hidden, optionId: 'b' })).toBe('wrong');
+    expect(quizOptionState({ ...hidden, optionId: 'c' })).toBe('dimmed');
+  });
+
+  it('without the answer, a right pick is still confirmed', () => {
+    expect(
+      quizOptionState({
+        correctOptionId: 'a',
+        chosenOptionId: 'a',
+        optionId: 'a',
+        revealed: true,
+        showAnswer: false,
       }),
     ).toBe('correct');
   });
@@ -255,21 +277,105 @@ describe('revealAnnouncement', () => {
     expect(revealAnnouncement(question(), 'a')).toBe('Correct.');
   });
 
-  it('reads the correct option aloud, without markup, when wrong', () => {
-    expect(revealAnnouncement(question(), 'b')).toBe(
-      'Incorrect. The correct answer is A: Decision speed',
-    );
+  it('says only "Incorrect." when wrong — never reads the correct option aloud', () => {
+    expect(revealAnnouncement(question(), 'b')).toBe('Incorrect.');
   });
 });
 
-describe('stripHtml', () => {
-  it('removes tags and collapses whitespace', () => {
-    expect(stripHtml('<p>Decision <strong>speed</strong></p>')).toBe(
-      'Decision speed',
-    );
+describe('shuffleQuiz', () => {
+  // Five questions of four options: 120 × 24⁵ arrangements, so two different
+  // seeds landing on the same one is vanishingly unlikely.
+  const quiz: CourseLessonQuizQuestion[] = ['q1', 'q2', 'q3', 'q4', 'q5'].map(
+    (id) =>
+      question({
+        id,
+        question: `<p>${id}?</p>`,
+        options: ['a', 'b', 'c', 'd'].map((o) => ({
+          id: o,
+          value: `<p>${id}${o}</p>`,
+        })),
+        correctOptionId: 'c',
+      }),
+  );
+  const order = (q: CourseLessonQuizQuestion[]) =>
+    q.map((x) => `${x.id}:${x.options.map((o) => o.id).join('')}`).join(' ');
+
+  it('is the same order for the same seed, so a reload mid-attempt keeps it', () => {
+    expect(order(shuffleQuiz(quiz, 42))).toBe(order(shuffleQuiz(quiz, 42)));
   });
 
-  it('decodes the entities the editor emits', () => {
-    expect(stripHtml('<p>V1&nbsp;&amp;&nbsp;V2</p>')).toBe('V1 & V2');
+  it('reorders questions AND options between seeds', () => {
+    const seen = new Set(
+      [1, 2, 3, 4, 5].map((seed) => order(shuffleQuiz(quiz, seed))),
+    );
+    expect(seen.size).toBe(5);
+    const firstQuestions = new Set(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => shuffleQuiz(quiz, seed)[0]?.id),
+    );
+    expect(firstQuestions.size).toBeGreaterThan(1);
+    const q1Options = new Set(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((seed) =>
+        shuffleQuiz(quiz, seed)
+          .find((q) => q.id === 'q1')
+          ?.options.map((o) => o.id)
+          .join(''),
+      ),
+    );
+    expect(q1Options.size).toBeGreaterThan(1);
+  });
+
+  it('only reorders: every question, option and correct answer survives intact', () => {
+    const shuffled = shuffleQuiz(quiz, 7);
+    expect([...shuffled].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+      quiz.map((q) => ({
+        ...q,
+        options: expect.arrayContaining(q.options),
+      })),
+    );
+    for (const q of shuffled) {
+      expect(q.options).toHaveLength(4);
+      expect(q.correctOptionId).toBe('c');
+    }
+  });
+
+  it('does not mutate the authored quiz', () => {
+    const before = order(quiz);
+    shuffleQuiz(quiz, 3);
+    expect(order(quiz)).toBe(before);
+  });
+});
+
+describe('quizForAttempt', () => {
+  const quiz = ['q1', 'q2', 'q3'].map((id) => question({ id }));
+
+  it("shows the attempt's own shuffle", () => {
+    const progress: QuizProgress = {
+      index: 0,
+      answers: {},
+      revealedQuestionId: null,
+      seed: 9,
+    };
+    expect(quizForAttempt(quiz, progress)).toEqual(shuffleQuiz(quiz, 9));
+  });
+
+  it('keeps authored order for progress saved before shuffling existed', () => {
+    // A pilot mid-attempt across the deploy must not have their answered
+    // prefix scrambled out from under them (restoreQuizProgress would
+    // discard it).
+    const legacy = { index: 1, answers: { q1: 'a' }, revealedQuestionId: null };
+    expect(quizForAttempt(quiz, legacy)).toBe(quiz);
+    expect(quizForAttempt(quiz, { ...legacy, seed: null })).toBe(quiz);
+  });
+});
+
+describe('newQuizSeed', () => {
+  it('is a fresh unsigned 32-bit integer each time', () => {
+    const seeds = Array.from({ length: 20 }, newQuizSeed);
+    for (const seed of seeds) {
+      expect(Number.isInteger(seed)).toBe(true);
+      expect(seed).toBeGreaterThanOrEqual(0);
+      expect(seed).toBeLessThan(2 ** 32);
+    }
+    expect(new Set(seeds).size).toBeGreaterThan(15);
   });
 });

@@ -27,7 +27,14 @@ export const totalScoreAtom = atom((get) => {
   return Math.round(sum / evaluations.length);
 });
 
-export const activeTabAtom = atom('keyPoints');
+/**
+ * The material tab the pilot last selected, and on which lesson. Null until
+ * they pick one; a selection only applies to its own lesson (see
+ * `resolveActiveTab`).
+ */
+export const activeTabAtom = atom<{ lessonSlug: string; tab: string } | null>(
+  null,
+);
 
 // Atom family for fetching past test results per lesson
 export const testResultsAtomFamily = atomFamily((lessonSlug: string) =>

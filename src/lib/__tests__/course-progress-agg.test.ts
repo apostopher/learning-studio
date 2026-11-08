@@ -40,6 +40,7 @@ const row = (
   debriefPassed: false,
   lastFailedDebriefAt: null,
   doneAt: null,
+  videoWatchedAt: null,
   visited: false,
   ...over,
 });
@@ -233,11 +234,39 @@ describe('done and debrief facts', () => {
       }),
     ]);
     expect(lessons[0].debrief).toEqual({
-      doneAt: '2026-10-01T00:00:00Z',
+      clockStartAt: '2026-10-01T00:00:00Z',
       passed: true,
       lastFailedAt: '2026-10-02T00:00:00Z',
       bearing: true,
     });
+  });
+
+  it('starts the debrief clock when the video is watched, before the lesson is done', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        videoWatchedAt: '2026-10-01T08:00:00Z',
+        doneAt: null,
+      }),
+      row({
+        moduleId: 1,
+        lessonId: 11,
+        videoWatchedAt: '2026-10-01T08:00:00Z',
+        doneAt: '2026-10-03T00:00:00Z',
+      }),
+    ]);
+    expect(lessons.map((l) => [l.done, l.debrief.clockStartAt])).toEqual([
+      [false, '2026-10-01T08:00:00Z'],
+      [true, '2026-10-01T08:00:00Z'],
+    ]);
+  });
+
+  it('starts the debrief clock at done when there is no watched video', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({ moduleId: 1, lessonId: 10, doneAt: '2026-10-03T00:00:00Z' }),
+    ]);
+    expect(lessons[0].debrief.clockStartAt).toBe('2026-10-03T00:00:00Z');
   });
 });
 

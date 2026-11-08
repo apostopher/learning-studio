@@ -88,7 +88,7 @@ export const LessonPlayerContainer = ({
   }, [setReachedEnd]);
 
   // viper7 starts writing the debrief as soon as the video plays, so it is
-  // ready the moment the debrief opens (24h after the lesson is done) rather
+  // ready the moment the debrief opens (12h after the video is watched) rather
   // than generating while the pilot waits on Start.
   usePrepareDebriefOnPlay({
     courseSlug,

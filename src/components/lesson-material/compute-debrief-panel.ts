@@ -70,7 +70,7 @@ export function computeDebriefPanel({
   const state = status.data?.state;
 
   // A half-answered debrief is never taken away: a refocus refetch that
-  // lands after the 24h boundary (or a pass in another tab) must not swap the
+  // lands after the 12h boundary (or a pass in another tab) must not swap the
   // question out from under the pilot. The save is the server's to refuse.
   if (sessionInProgress) {
     return {
@@ -130,7 +130,7 @@ export function debriefSessionProgress(
 
 /**
  * Whether the completed session in memory is a saved attempt the debrief has
- * since reopened past — the page stayed open through the 24h wait, or the
+ * since reopened past — the page stayed open through the 12h wait, or the
  * pilot came back to the lesson after it. Left in place, its old score report
  * would sit where the fresh debrief's Start belongs, with no way on (Retake
  * is gone, call 8).
@@ -166,7 +166,7 @@ export function isStaleDebriefSession({
  * - While a stale session is being cleared, mount nothing that could save it:
  *   DebriefQuizContainer auto-saves a complete session it has not saved, and
  *   a child's effect runs before its parent's reset — it would record the old
- *   attempt again against the reopened debrief and re-lock it for 24h.
+ *   attempt again against the reopened debrief and re-lock it for 12h.
  * - just-failed reports the session in memory; if that is gone (another
  *   lesson's debrief replaced it), only the reopen time is left to show.
  */

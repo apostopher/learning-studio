@@ -22,7 +22,7 @@ type LessonNoVideoProps = {
  * where the admin's own config says a video was expected.
  *
  * No Debrief button: it was a shortcut to the Debrief tab, like the post-video
- * button, and both went when the debrief moved to opening 24h after the
+ * button, and both went when the debrief moved to opening hours after the
  * lesson is done. The tab below says when it opens.
  */
 export const LessonNoVideo = ({

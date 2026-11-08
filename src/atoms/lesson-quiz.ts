@@ -1,6 +1,10 @@
 import { atomWithStorage } from 'jotai/utils';
 import { atomFamily } from 'jotai-family';
-import { emptyQuizProgress, type QuizProgress } from '#/lib/lesson-quiz';
+import {
+  emptyQuizProgress,
+  newQuizSeed,
+  type QuizProgress,
+} from '#/lib/lesson-quiz';
 
 /**
  * Mid-quiz progress for the lesson's authored quiz, persisted per user per
@@ -27,7 +31,10 @@ import { emptyQuizProgress, type QuizProgress } from '#/lib/lesson-quiz';
 export const quizProgressAtomFamily = atomFamily((key: string) =>
   atomWithStorage<QuizProgress>(
     `quiz-progress:${key}`,
-    emptyQuizProgress,
+    // A first attempt is shuffled too. The seed lives in memory until the
+    // first answer persists it; reloading before then just reshuffles an
+    // attempt with nothing answered.
+    { ...emptyQuizProgress, seed: newQuizSeed() },
     undefined,
     { getOnInit: true },
   ),

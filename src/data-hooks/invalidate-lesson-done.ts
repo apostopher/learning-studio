@@ -11,7 +11,8 @@ import { dataKeys } from './keys';
  * coverage completing). Two readers depend on it:
  *
  * - the course progress summary — the sidebar ring and its lock copy;
- * - this lesson's debrief status — the Debrief tab's 24h wait starts at done.
+ * - this lesson's debrief status — the Debrief tab's 12h wait starts at video-watched or done,
+ *   whichever is first.
  *
  * Invalidated rather than written: the server owns both answers.
  */

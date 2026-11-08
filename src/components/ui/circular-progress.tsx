@@ -10,7 +10,7 @@ type CircularProgressProps = {
   className?: string;
   /**
    * `debrief`: a red disc with "D" inside the ring. `passed`: the ring forced
-   * full with a tick. The accessible name is `ariaLabel`; the glyphs are
+   * full around a solid green disc with a tick. The accessible name is `ariaLabel`; the glyphs are
    * decorative.
    */
   badge?: 'debrief' | 'passed';
@@ -96,13 +96,16 @@ export const CircularProgress = ({
       {badge === 'passed' ? (
         <span
           aria-hidden="true"
-          // The ring's own stroke is accent-9 (gold), but gold-9 is 1.66:1 on
-          // the light panel (#d9cc3d on #fff) and fails the 3:1 non-text floor
-          // there. text-accent-text (--color-gold-text) is the same hue and
-          // measures: light #494520 on #fff 9.74:1, on #f4f7fc 9.07:1, on the
-          // active row accent-3 #eeebc3 8.03:1; dark #f0e677 on #1A2F40
-          // 10.69:1, on accent-3 #413d0d 8.58:1.
-          className="absolute inset-0 flex items-center justify-center text-accent-text"
+          // A solid disc like the D, so "debrief passed" reads at a glance.
+          // Contrast, computed (WCAG 2.1 relative luminance) from
+          // theme.generated.css: text-on-success (--color-success-contrast)
+          // on bg-success (--color-success-solid) is #0f271a on #3dd68c =
+          // 8.45:1 in dark and #000 on #30a46c = 6.65:1 in light. NOT white:
+          // white measures 1.88:1 on the dark solid and 3.16:1 on the light
+          // one, under the 3:1 floor for an icon in dark. The disc itself is
+          // 7.34:1 against the dark panel (#1A2F40) and 5.9:1 on the active
+          // row (accent-3 #413d0d).
+          className="absolute inset-[3px] flex items-center justify-center rounded-full bg-success text-on-success"
         >
           <Check size={12} strokeWidth={3} />
         </span>

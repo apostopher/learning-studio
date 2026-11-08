@@ -1,4 +1,9 @@
 import { canOfferDebrief, type DebriefOfferArgs } from '#/lib/debrief-offer';
+import {
+  computeDebriefState,
+  type DebriefFacts,
+  debriefBadge,
+} from '#/lib/debrief-schedule';
 import type { MaterialExtraTab } from '#/lib/flagship-course';
 import { SECTION_LABELS } from '#/lib/lock-copy';
 
@@ -37,8 +42,8 @@ export type ComputeMaterialTabsArgs = {
  *
  * Quiz and Debrief are independent. They used to be mutually exclusive (one
  * `'quiz'` slot whose label flipped — ledger D21, superseded): the debrief now
- * opens 24h after the lesson is done, and the quiz is part of being done, so
- * hiding one behind the other would make the lesson impossible to finish.
+ * opens 12h after the video is watched, and the quiz is part of being done,
+ * so hiding one behind the other would make the lesson impossible to finish.
  * Debrief gets its own value; reusing `'quiz'` only existed for the
  * post-video button's tab jump, which is gone.
  *
@@ -65,18 +70,51 @@ export function computeMaterialTabs({
   ];
 }
 
+/** One lesson's debrief facts, as the course progress summary carries them. */
+export type DebriefTabFacts = DebriefFacts & { bearing: boolean };
+
+/** What the pilot last selected, and on which lesson (`activeTabAtom`). */
+export type ChosenTab = { lessonSlug: string; tab: string };
+
 /**
- * The tab to actually show, given what the learner last selected.
+ * The tab a lesson opens on: Debrief when the debrief is waiting for the pilot
+ * (the sidebar ring shows D — ready, or a retake pending), otherwise Key
+ * Points. `debrief` is this lesson's entry from the course progress summary;
+ * undefined while it loads.
+ */
+export function defaultMaterialTab(
+  tabs: readonly MaterialTab[],
+  debrief: DebriefTabFacts | undefined,
+  now: Date,
+): MaterialTabValue {
+  const offersDebrief = tabs.some((tab) => tab.value === 'debrief');
+  if (
+    offersDebrief &&
+    debrief?.bearing &&
+    debriefBadge(computeDebriefState(debrief, now)) === 'debrief'
+  ) {
+    return 'debrief';
+  }
+  return 'keyPoints';
+}
+
+/**
+ * The tab to actually show.
  *
- * `activeTabAtom` is global rather than per-lesson and is not reset between
- * lessons, so a learner who was on the Debrief tab can land on a lesson that
- * has none. Without this the panel would render a tab strip with nothing
- * selected and no panel body — a blank screen with no explanation.
+ * A selection belongs to the lesson it was made on: arriving at another
+ * lesson opens that lesson's own default (`defaultMaterialTab`), so a lesson
+ * with a debrief waiting opens on it. A selection naming a tab this lesson
+ * does not have falls back to Key Points — otherwise the panel would render a
+ * tab strip with nothing selected and no body, a blank screen with no
+ * explanation.
  */
 export function resolveActiveTab(
   tabs: readonly MaterialTab[],
-  activeTab: string,
+  chosen: ChosenTab | null,
+  lessonSlug: string,
+  defaultTab: MaterialTabValue,
 ): MaterialTabValue {
-  const match = tabs.find((tab) => tab.value === activeTab);
+  if (chosen?.lessonSlug !== lessonSlug) return defaultTab;
+  const match = tabs.find((tab) => tab.value === chosen.tab);
   return match ? match.value : 'keyPoints';
 }

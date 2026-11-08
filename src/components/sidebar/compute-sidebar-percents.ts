@@ -18,7 +18,7 @@ type ProgressLike = {
 };
 
 const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
-  doneAt: null,
+  clockStartAt: null,
   passed: false,
   lastFailedAt: null,
   bearing: false,
@@ -31,7 +31,7 @@ const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
  * cannot see.
  *
  * Module percent is the rounded mean of its lessons' percents and excludes
- * debriefs (a debrief opens 24h after the lesson is done, so it is not part of
+ * debriefs (a debrief opens 12h after the video is watched, so it is not part of
  * "finishing" the lesson). The course percent is `coursePercent`, which adds
  * one item per debrief-bearing lesson. A lesson with no progress row has done
  * nothing: 0, with no debrief.

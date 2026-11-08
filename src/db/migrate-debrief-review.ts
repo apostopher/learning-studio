@@ -3,7 +3,7 @@ import { db } from '#/db';
 
 /**
  * Adds `lesson_completions` (sticky lesson done time) and `prepared_debriefs`
- * (debrief quizzes generated ahead of the 24h wait) for spaced-review debriefs,
+ * (debrief quizzes generated ahead of the 12h wait) for spaced-review debriefs,
  * plus an index on `lesson_test_results` for looking up completed tests by
  * user and lesson.
  *

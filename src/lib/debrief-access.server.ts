@@ -22,8 +22,8 @@ export type DebriefAccess =
  *   only after the gate has passed.
  *
  * Not refused on the material lock: preparation runs while the video plays
- * (`video-locked`), and a lesson cannot be done — so the debrief cannot be
- * open — before its video is watched.
+ * (`video-locked`), and the debrief clock cannot start on a video lesson
+ * until its video is watched (or the lesson is done).
  *
  * Admins and course staff get every LOCK bypassed by `evaluateLessonGate`, but
  * not the schedule: there is no author preview of debriefs, so their own

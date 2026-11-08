@@ -44,8 +44,28 @@ describe('QuizResult', () => {
     expect(screen.getByText('Keep practicing!')).toBeTruthy();
   });
 
-  it('reviews every question, not just the ones answered wrong', () => {
-    render(<QuizResult {...props} />);
+  it('withholds the answers below a perfect score, and says why', () => {
+    // Showing the key after 4/5 lets the next attempt be memorised.
+    const { container } = render(<QuizResult {...props} />);
+    expect(screen.queryByText('What is V1?')).toBeNull();
+    expect(screen.queryByText('What is Vr?')).toBeNull();
+    expect(screen.queryByText('Rotation speed')).toBeNull();
+    expect(container.querySelectorAll('svg.lucide-check')).toHaveLength(0);
+    expect(
+      screen.getByRole('heading', { name: 'Review' }).nextElementSibling
+        ?.textContent,
+    ).toBe(
+      'The answers appear once you score 2/2, so a retake tests what you know rather than what you remember.',
+    );
+  });
+
+  it('reviews every question after a perfect score', () => {
+    const perfect = answers.map((q) => ({
+      ...q,
+      userOptionId: q.correctOptionId,
+    }));
+    render(<QuizResult {...props} answers={perfect} />);
+    expect(screen.getByText('2/2')).toBeTruthy();
     expect(screen.getByText('What is V1?')).toBeTruthy();
     expect(screen.getByText('What is Vr?')).toBeTruthy();
   });
@@ -53,7 +73,11 @@ describe('QuizResult', () => {
   it('leaves review options as static content', () => {
     // Only Retake is actionable here. Rendering a dozen disabled option buttons
     // makes a screen reader announce a dozen unavailable controls.
-    render(<QuizResult {...props} />);
+    const perfect = answers.map((q) => ({
+      ...q,
+      userOptionId: q.correctOptionId,
+    }));
+    render(<QuizResult {...props} answers={perfect} />);
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 

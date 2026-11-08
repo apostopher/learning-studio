@@ -3,6 +3,7 @@ import { useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
 import { justSubmittedDebriefAtom } from '#/atoms/debrief';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
+import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { useSectionTapRecorder } from '#/data-hooks/use-record-section-tap';
 import { queryKeys } from '#/hooks/data/keys';
 import { useCourseDetails } from '#/hooks/data/use-course-details';
@@ -53,6 +54,13 @@ export const LessonMaterialWrapper = ({
     .find((l) => l.slug === lessonSlug);
 
   const state = computeMaterialPanelState(query);
+
+  // The same cached rollup the sidebar ring reads, so the Debrief tab opens
+  // first exactly when the ring shows D.
+  const progress = useCourseProgressSummary(courseSlug);
+  const debriefFacts = progress.data?.lessons.find(
+    (l) => lesson !== undefined && l.lessonId === lesson.id,
+  )?.debrief;
 
   // "Just submitted" lasts only while the pilot stays on the lesson: leaving
   // it (another lesson, or off the lesson page) ends it, so any later visit
@@ -131,6 +139,7 @@ export const LessonMaterialWrapper = ({
             transcriptUsable={transcriptUsable}
             onTabSelected={recordSectionTap}
             readOnly={state.readOnly}
+            debriefFacts={debriefFacts}
           />
         </>
       );

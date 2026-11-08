@@ -71,6 +71,9 @@ export const QuizQuestion = ({
               correctOptionId: question.correctOptionId,
               chosenOptionId,
               revealed,
+              // Never mid-quiz: marking the right option after a wrong pick
+              // lets the next attempt be memorised.
+              showAnswer: false,
             })}
             // No handler in read-only, which makes QuizOption render each row
             // as static content rather than a dozen dead buttons — the same

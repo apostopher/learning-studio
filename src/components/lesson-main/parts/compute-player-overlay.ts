@@ -56,8 +56,8 @@ function isRestingAtEnd({
  * goes back to the video) can have a test that could ever go red.
  *
  * There used to be a second overlay: a Debrief button at the end of the
- * video. It went when the debrief moved to opening 24h after the lesson is
- * done (spaced review) — at the end of the video there is nothing to take
+ * video. It went when the debrief moved to opening hours after the video is
+ * watched (spaced review) — at the end of the video there is nothing to take
  * yet, and the Debrief tab says when there will be.
  */
 export function computePlayerOverlay({

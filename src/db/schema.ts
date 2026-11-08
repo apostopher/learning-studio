@@ -2400,8 +2400,8 @@ export const lessonTestResultsTableRelations = relations(
 
 /**
  * One row per learner per lesson, written the first time the lesson is marked
- * done. `doneAt` is sticky: the debrief opens 24h after this, so it must not
- * move when the lesson is revisited. Created by migrate-debrief-review.ts,
+ * done. `doneAt` is sticky: the debrief clock can start here (see
+ * `debriefClockStart`), so it must not move when the lesson is revisited. Created by migrate-debrief-review.ts,
  * not drizzle-kit push — keep the two in step.
  */
 export const lessonCompletionsTable = pgTable(
@@ -2424,7 +2424,7 @@ export const lessonCompletionsTable = pgTable(
 );
 
 /**
- * A debrief quiz generated ahead of time so it is ready when the 24h wait
+ * A debrief quiz generated ahead of time so it is ready when the 12h wait
  * ends. One per learner per lesson per course. `sourceFingerprint` is the
  * sha256 of the source text the questions were generated from, so a stale
  * prepared debrief can be detected and regenerated. Created by

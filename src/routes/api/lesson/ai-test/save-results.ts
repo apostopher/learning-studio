@@ -84,7 +84,7 @@ export async function saveTestResultsHandler(
       totalScore,
     });
 
-    // Below par: the debrief relocks for 24h, then reopens with a FRESH set.
+    // Below par: the debrief relocks for 12h, then reopens with a FRESH set.
     // Generate it now, in the background, so it is ready when it reopens. Not
     // awaited — the pilot is waiting on this response, not on the model.
     if (!isPass(totalScore)) {
