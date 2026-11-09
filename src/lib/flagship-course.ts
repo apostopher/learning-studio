@@ -39,6 +39,17 @@ export function materialExtraTabFor(
     : 'testThis';
 }
 
+/**
+ * The closing tab's LABEL is the course's, not the lesson's (tester,
+ * 2026-11-09): the same remixed 3D Airmanship lesson reads "Job of the Day"
+ * inside the 3D Airmanship course and "TEST THIS!" in every other course.
+ * Only the label moves — which field the tab shows, and the progress key it
+ * records under, stay with the lesson's discipline (`materialExtraTabFor`).
+ */
+export function closingTabLabel(courseSlug: string): string {
+  return courseSlug === FLAGSHIP_COURSE_SLUG ? 'Job of the Day' : 'TEST THIS!';
+}
+
 export function findFlagshipCourse<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C['course'] | null {

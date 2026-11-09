@@ -10,7 +10,12 @@ type DebriefWaitProps = {
   /** 2 under the tab strip, 3 inside the material-less "Debrief" section. */
   headingLevel: 2 | 3;
 } & (
-  | { kind: 'not-done'; outstanding: readonly OutstandingItem[] }
+  | {
+      kind: 'not-done';
+      outstanding: readonly OutstandingItem[];
+      /** Names the closing tab in the to-do list (`sectionLabel`). */
+      courseSlug: string;
+    }
   /**
    * `time` is the formatted opening time inside `ClientGate`, so it is
    * absent on the server and the first client render. The heading never
@@ -50,11 +55,13 @@ export const DebriefWait = (props: DebriefWaitProps) => {
         ? 'Debrief locked until you watch the video'
         : 'Debrief locked until you finish this lesson'
       : props.kind === 'waiting'
-        ? `Debrief opens after a wait of ${DEBRIEF_DELAY_LABEL}`
+        ? 'We will debrief this KC tomorrow.'
         : `Next attempt opens ${DEBRIEF_DELAY_LABEL} after your last one`;
 
   const todo =
-    props.kind === 'not-done' ? describeOutstanding(props.outstanding) : '';
+    props.kind === 'not-done'
+      ? describeOutstanding(props.outstanding, props.courseSlug)
+      : '';
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics
@@ -90,11 +97,13 @@ export const DebriefWait = (props: DebriefWaitProps) => {
           </p>
         ) : props.kind === 'waiting' ? (
           <>
-            <p className="font-medium text-primary">Opens {props.time}.</p>
-            <p>
-              The wait means it tests what you remember rather than what you
-              just watched.
+            <p className="font-medium text-primary">
+              Today, just review the quiz, key points, pro tips and assignments.
             </p>
+            {/* "Tomorrow" is the tester's wording, but a morning watch opens
+                the same evening, so the exact time stays underneath. It is
+                client-only, so absent on the server render. */}
+            {props.time ? <p>Opens {props.time}.</p> : null}
           </>
         ) : (
           <>

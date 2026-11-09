@@ -27,9 +27,9 @@ type LessonLinkProps = {
  * not just on hover. The lock icon beside it is decorative and aria-hidden, so
  * the reason is announced exactly once.
  */
-function lockReason(lock: LessonLock): string | null {
+function lockReason(lock: LessonLock, courseSlug: string): string | null {
   if (lock.kind === 'open') return null;
-  return lessonLockSentence(lock);
+  return lessonLockSentence(lock, courseSlug);
 }
 
 export const LessonLink = ({
@@ -42,7 +42,7 @@ export const LessonLink = ({
   ring,
   lock,
 }: LessonLinkProps) => {
-  const reason = lock ? lockReason(lock) : null;
+  const reason = lock ? lockReason(lock, courseSlug) : null;
 
   const classes = [
     'sidebar-focus-ring',

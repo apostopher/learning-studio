@@ -89,6 +89,7 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
       hasQuiz: false,
       debrief,
       extraTab: 'testThis',
+      courseSlug: 'uas-16-week-course',
     });
     expect(tabs.some((t) => t.value === 'debrief')).toBe(expected);
 
@@ -130,6 +131,7 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
         hasQuiz: false,
         debrief,
         extraTab: 'testThis',
+        courseSlug: 'uas-16-week-course',
       }).some((t) => t.value === 'debrief'),
     ).toBe(false);
     expect(

@@ -161,6 +161,7 @@ export const DebriefPanelContainer = ({
           headingLevel={headingLevel}
           kind="not-done"
           outstanding={panel.outstanding}
+          courseSlug={courseSlug}
         />
       );
     case 'waiting':

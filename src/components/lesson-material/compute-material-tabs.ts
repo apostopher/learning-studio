@@ -5,7 +5,7 @@ import {
   debriefBadge,
 } from '#/lib/debrief-schedule';
 import type { MaterialExtraTab } from '#/lib/flagship-course';
-import { SECTION_LABELS } from '#/lib/lock-copy';
+import { sectionLabel } from '#/lib/lock-copy';
 
 export type MaterialTabValue =
   | 'keyPoints'
@@ -34,6 +34,8 @@ export type ComputeMaterialTabsArgs = {
    * every other (see `materialExtraTabFor`). Never both.
    */
   extraTab: MaterialExtraTab;
+  /** The course being viewed — it, not the lesson, names the closing tab. */
+  courseSlug: string;
 };
 
 /**
@@ -55,18 +57,19 @@ export function computeMaterialTabs({
   hasQuiz,
   debrief,
   extraTab,
+  courseSlug,
 }: ComputeMaterialTabsArgs): MaterialTab[] {
   const hasDebriefTab = !debrief.readOnly && canOfferDebrief(debrief);
+  const label = (section: Parameters<typeof sectionLabel>[0]) =>
+    sectionLabel(section, courseSlug);
   return [
-    { value: 'keyPoints', label: SECTION_LABELS.keyPoints },
+    { value: 'keyPoints', label: label('keyPoints') },
     ...(hasQuiz ? [{ value: 'quiz', label: 'Quiz' } as const] : []),
     ...(hasDebriefTab ? [{ value: 'debrief', label: 'Debrief' } as const] : []),
-    { value: 'proTips', label: SECTION_LABELS.proTips },
-    { value: 'links', label: SECTION_LABELS.links },
-    { value: 'assignments', label: SECTION_LABELS.assignments },
-    extraTab === 'jobOfTheDay'
-      ? { value: 'jobOfTheDay', label: SECTION_LABELS.jobOfTheDay }
-      : { value: 'testThis', label: SECTION_LABELS.testThis },
+    { value: 'proTips', label: label('proTips') },
+    { value: 'links', label: label('links') },
+    { value: 'assignments', label: label('assignments') },
+    { value: extraTab, label: label(extraTab) },
   ];
 }
 

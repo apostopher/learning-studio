@@ -30,6 +30,7 @@ export const MaterialLocked = ({ lock, courseSlug }: MaterialLockedProps) => {
             lock.reason === 'lesson'
               ? { kind: 'lesson-locked', ...lock.blockedBy }
               : { kind: 'module-locked', ...lock.blockedBy },
+            courseSlug,
           )}
         </p>
         {lock.reason === 'lesson' ? (

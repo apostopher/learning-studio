@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 import type { LessonLock } from '#/lib/lesson-gating';
-import { describeOutstanding, lessonLockSentence } from '#/lib/lock-copy';
+import {
+  describeOutstanding as describeIn,
+  lessonLockSentence as sentenceIn,
+} from '#/lib/lock-copy';
+
+const UAS = 'uas-16-week-course';
+/** Every case below that isn't about the closing tab reads the same in any course. */
+const describeOutstanding = (items: readonly OutstandingItem[]) =>
+  describeIn(items, UAS);
+const lessonLockSentence = (lock: Parameters<typeof sentenceIn>[0]) =>
+  sentenceIn(lock, UAS);
 
 const video: OutstandingItem = { kind: 'video' };
 const quiz: OutstandingItem = { kind: 'quiz' };
@@ -30,6 +41,31 @@ describe('describeOutstanding', () => {
   it('labels every section', () => {
     expect(describeOutstanding([sec('proTips')])).toBe('open Pro Tips');
     expect(describeOutstanding([sec('testThis')])).toBe('open TEST THIS!');
+  });
+  it('names the closing tab by the COURSE, not the lesson', () => {
+    // A 3D Airmanship lesson remixed into a UAS course: its tab there is
+    // TEST THIS!, whatever column holds its links.
+    expect(describeIn([sec('jobOfTheDay')], UAS)).toBe('open TEST THIS!');
+    expect(describeIn([sec('jobOfTheDay')], FLAGSHIP_COURSE_SLUG)).toBe(
+      'open Job of the Day',
+    );
+    expect(describeIn([sec('testThis')], FLAGSHIP_COURSE_SLUG)).toBe(
+      'open Job of the Day',
+    );
+  });
+  it('carries the course into the lock sentence', () => {
+    expect(
+      sentenceIn(
+        {
+          kind: 'lesson-locked',
+          lessonSlug: 'l4',
+          moduleSlug: 'm',
+          lessonName: 'Lesson 4',
+          outstanding: [sec('jobOfTheDay')],
+        },
+        UAS,
+      ),
+    ).toBe('Finish Lesson 4 first: open TEST THIS!.');
   });
 });
 

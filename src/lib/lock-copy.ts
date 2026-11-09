@@ -1,19 +1,32 @@
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import { closingTabLabel } from '#/lib/flagship-course';
 import type { LessonLock } from '#/lib/lesson-gating';
 import type { TrackedLessonSection } from '#/lib/lesson-visit-section';
 
 /**
- * Tab labels, as the pilot sees them. The single source: both the lock
- * sentences and `compute-material-tabs.ts` read this object.
+ * Tab labels, as the pilot sees them in `courseSlug`. The single source: both
+ * the lock sentences and `compute-material-tabs.ts` read it. The closing tab
+ * is named by the course, whichever field the lesson keeps its links in
+ * (`closingTabLabel`).
  */
-export const SECTION_LABELS: Record<TrackedLessonSection, string> = {
-  keyPoints: 'Key Points',
-  proTips: 'Pro Tips',
-  links: 'Links',
-  assignments: 'Assignments',
-  jobOfTheDay: 'Job of the Day',
-  testThis: 'TEST THIS!',
-};
+export function sectionLabel(
+  section: TrackedLessonSection,
+  courseSlug: string,
+): string {
+  switch (section) {
+    case 'keyPoints':
+      return 'Key Points';
+    case 'proTips':
+      return 'Pro Tips';
+    case 'links':
+      return 'Links';
+    case 'assignments':
+      return 'Assignments';
+    case 'jobOfTheDay':
+    case 'testThis':
+      return closingTabLabel(courseSlug);
+  }
+}
 
 /** "a", "a and b", "a, b and c". */
 function joinAnd(parts: readonly string[]): string {
@@ -25,14 +38,17 @@ function joinAnd(parts: readonly string[]): string {
  * What a pilot has to do, as a lowercase clause: "watch the video, take the
  * quiz, and open Links and Assignments". Sections fold into one "open" clause.
  */
-export function describeOutstanding(items: readonly OutstandingItem[]): string {
+export function describeOutstanding(
+  items: readonly OutstandingItem[],
+  courseSlug: string,
+): string {
   const actions: string[] = [];
   const sections: string[] = [];
   for (const item of items) {
     if (item.kind === 'video') actions.push('watch the video');
     else if (item.kind === 'quiz') actions.push('take the quiz');
     else if (item.kind === 'visit') actions.push('open the lesson');
-    else sections.push(SECTION_LABELS[item.section]);
+    else sections.push(sectionLabel(item.section, courseSlug));
   }
   if (sections.length > 0) actions.push(`open ${joinAnd(sections)}`);
 
@@ -43,15 +59,16 @@ export function describeOutstanding(items: readonly OutstandingItem[]): string {
 /** One sentence: why the pilot is locked out and exactly what unlocks it. */
 export function lessonLockSentence(
   lock: Exclude<LessonLock, { kind: 'open' }>,
+  courseSlug: string,
 ): string {
   if (lock.kind === 'lesson-locked') {
-    const todo = describeOutstanding(lock.outstanding);
+    const todo = describeOutstanding(lock.outstanding, courseSlug);
     return todo
       ? `Finish ${lock.lessonName} first: ${todo}.`
       : `Finish ${lock.lessonName} first.`;
   }
   const left = `${lock.lessonsLeft} ${lock.lessonsLeft === 1 ? 'lesson' : 'lessons'} left`;
-  const todo = describeOutstanding(lock.next.outstanding);
+  const todo = describeOutstanding(lock.next.outstanding, courseSlug);
   const next = todo
     ? `${lock.next.lessonName} — ${todo}`
     : lock.next.lessonName;

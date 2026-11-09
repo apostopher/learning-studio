@@ -24,6 +24,7 @@ export const LessonLocked = ({
     lock.reason === 'lesson'
       ? { kind: 'lesson-locked', ...lock.blockedBy }
       : { kind: 'module-locked', ...lock.blockedBy },
+    courseSlug,
   );
   return (
     // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics

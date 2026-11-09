@@ -73,7 +73,7 @@ export const LessonEmpty = ({ courseSlug, state }: LessonEmptyProps) => (
         {state.lock.kind !== 'open' ? (
           <>
             <p className="text-sm text-secondary">
-              {lessonLockSentence(state.lock)}
+              {lessonLockSentence(state.lock, courseSlug)}
             </p>
             {state.lock.kind === 'lesson-locked' ? (
               <a

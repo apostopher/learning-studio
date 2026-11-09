@@ -18,6 +18,7 @@ describe('DebriefWait', () => {
       <DebriefWait
         {...common}
         kind="not-done"
+        courseSlug="uas-16-week-course"
         outstanding={[{ kind: 'video' }]}
       />,
     );
@@ -34,6 +35,7 @@ describe('DebriefWait', () => {
       <DebriefWait
         {...common}
         kind="not-done"
+        courseSlug="uas-16-week-course"
         outstanding={[{ kind: 'quiz' }, { kind: 'section', section: 'links' }]}
       />,
     );
@@ -52,7 +54,14 @@ describe('DebriefWait', () => {
   });
 
   it('not-done with nothing listed still says what opens it', () => {
-    render(<DebriefWait {...common} kind="not-done" outstanding={[]} />);
+    render(
+      <DebriefWait
+        {...common}
+        kind="not-done"
+        courseSlug="uas-16-week-course"
+        outstanding={[]}
+      />,
+    );
     expect(
       screen.getByRole('status', {
         description: 'Opens 12 hours after you finish this lesson.',
@@ -60,24 +69,41 @@ describe('DebriefWait', () => {
     ).toBeDefined();
   });
 
-  it('waiting: the reason is the name, the time is in the description', () => {
-    render(<DebriefWait {...common} kind="waiting" time={TIME} />);
-    const panel = screen.getByRole('status', {
-      name: 'Debrief opens after a wait of 12 hours',
-    });
-    expect(panel).toBeDefined();
+  it("not-done: names a remixed 3D lesson's closing tab by the course it is viewed in", () => {
+    render(
+      <DebriefWait
+        {...common}
+        kind="not-done"
+        courseSlug="uas-16-week-course"
+        outstanding={[{ kind: 'section', section: 'jobOfTheDay' }]}
+      />,
+    );
     expect(
       screen.getByRole('status', {
-        description: /Opens Tue 28 Oct, 3:40 PM\./,
+        description:
+          'Opens 12 hours after you finish this lesson — open TEST THIS!.',
       }),
     ).toBeDefined();
   });
 
-  it('waiting before the client-only time renders: the name still states the reason', () => {
+  it("waiting: the tester's copy is the name, today's to-do then the time is the description", () => {
+    render(<DebriefWait {...common} kind="waiting" time={TIME} />);
+    expect(
+      screen.getByRole('status', {
+        name: 'We will debrief this KC tomorrow.',
+        description:
+          'Today, just review the quiz, key points, pro tips and assignments. Opens Tue 28 Oct, 3:40 PM.',
+      }),
+    ).toBeDefined();
+  });
+
+  it('waiting before the client-only time renders: no dangling "Opens ."', () => {
     render(<DebriefWait {...common} kind="waiting" time={null} />);
     expect(
       screen.getByRole('status', {
-        name: 'Debrief opens after a wait of 12 hours',
+        name: 'We will debrief this KC tomorrow.',
+        description:
+          'Today, just review the quiz, key points, pro tips and assignments.',
       }),
     ).toBeDefined();
   });

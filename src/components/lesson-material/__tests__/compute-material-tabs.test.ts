@@ -22,6 +22,7 @@ const values = ({
 }) =>
   computeMaterialTabs({
     extraTab: 'jobOfTheDay',
+    courseSlug: '3d-airmanship',
     hasQuiz,
     debrief: debriefOn(hasDebriefTab),
   }).map((t) => t.value);
@@ -34,6 +35,7 @@ describe('computeMaterialTabs', () => {
       hasQuiz: true,
       debrief: debriefOn(true),
       extraTab: 'jobOfTheDay',
+      courseSlug: '3d-airmanship',
     });
     expect(tabs).toEqual([
       { value: 'keyPoints', label: 'Key Points' },
@@ -85,6 +87,7 @@ describe('computeMaterialTabs — closing tab', () => {
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
+      courseSlug: '3d-airmanship',
     });
     expect(tabs.at(-1)).toEqual({
       value: 'jobOfTheDay',
@@ -98,11 +101,34 @@ describe('computeMaterialTabs — closing tab', () => {
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'testThis',
+      courseSlug: 'uas-16-week-course',
     });
     expect(tabs.at(-1)).toEqual({ value: 'testThis', label: 'TEST THIS!' });
     expect(tabs.map((t) => t.value)).not.toContain('jobOfTheDay');
     // One closing slot either way, so the strip is the same length.
     expect(tabs).toHaveLength(6);
+  });
+
+  it('labels a 3D Airmanship lesson TEST THIS! inside a UAS course', () => {
+    // The lesson is remixed into every course; the LABEL follows the course,
+    // the content (and the progress key) stays the lesson's.
+    const tabs = computeMaterialTabs({
+      hasQuiz: true,
+      debrief: debriefOn(false),
+      extraTab: 'jobOfTheDay',
+      courseSlug: 'uas-16-week-course',
+    });
+    expect(tabs.at(-1)).toEqual({ value: 'jobOfTheDay', label: 'TEST THIS!' });
+  });
+
+  it('labels the closing tab Job of the Day inside the 3D Airmanship course, whatever the lesson', () => {
+    const tabs = computeMaterialTabs({
+      hasQuiz: true,
+      debrief: debriefOn(false),
+      extraTab: 'testThis',
+      courseSlug: '3d-airmanship',
+    });
+    expect(tabs.at(-1)).toEqual({ value: 'testThis', label: 'Job of the Day' });
   });
 
   it('falls back to Key Points when the remembered tab is the other closing tab', () => {
@@ -112,6 +138,7 @@ describe('computeMaterialTabs — closing tab', () => {
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'testThis',
+      courseSlug: 'uas-16-week-course',
     });
     expect(
       resolveActiveTab(
@@ -129,6 +156,7 @@ describe('resolveActiveTab', () => {
     hasQuiz: true,
     debrief: debriefOn(true),
     extraTab: 'jobOfTheDay',
+    courseSlug: '3d-airmanship',
   });
   const on = (lessonSlug: string, tab: string) => ({ lessonSlug, tab });
 
@@ -162,6 +190,7 @@ describe('resolveActiveTab', () => {
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
+      courseSlug: '3d-airmanship',
     });
     expect(
       resolveActiveTab(noDebrief, on('l1', 'debrief'), 'l1', 'keyPoints'),
@@ -181,6 +210,7 @@ describe('defaultMaterialTab', () => {
     hasQuiz: true,
     debrief: debriefOn(true),
     extraTab: 'jobOfTheDay',
+    courseSlug: '3d-airmanship',
   });
   const facts = (over: Record<string, unknown> = {}) => ({
     clockStartAt: '2026-11-08T00:00:00Z', // well past the 12h wait
@@ -222,6 +252,7 @@ describe('defaultMaterialTab', () => {
       hasQuiz: true,
       debrief: debriefOn(false),
       extraTab: 'jobOfTheDay',
+      courseSlug: '3d-airmanship',
     });
     expect(defaultMaterialTab(noDebrief, facts(), now)).toBe('keyPoints');
   });
@@ -229,9 +260,12 @@ describe('defaultMaterialTab', () => {
 
 describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
   const has = (debrief: Parameters<typeof computeMaterialTabs>[0]['debrief']) =>
-    computeMaterialTabs({ hasQuiz: false, debrief, extraTab: 'testThis' }).some(
-      (t) => t.value === 'debrief',
-    );
+    computeMaterialTabs({
+      hasQuiz: false,
+      debrief,
+      extraTab: 'testThis',
+      courseSlug: 'uas-16-week-course',
+    }).some((t) => t.value === 'debrief');
 
   it('offers the tab on an empty-bodied material row when the video has captions', () => {
     // The defect: this lesson was prepared from its transcript and counted

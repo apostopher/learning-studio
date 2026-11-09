@@ -63,6 +63,7 @@ export const LessonMaterialView = ({
       readOnly,
     },
     extraTab: material.extraTab,
+    courseSlug,
   });
   const has = (value: string) => tabs.some((tab) => tab.value === value);
   const selected = resolveActiveTab(
