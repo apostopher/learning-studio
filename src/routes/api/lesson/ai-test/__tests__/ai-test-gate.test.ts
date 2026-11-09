@@ -371,6 +371,25 @@ describe('save-results', () => {
     });
   });
 
+  it("stores each answer's grading judgements, not just its score", async () => {
+    const evaluation = {
+      questionId: 'q1',
+      type: 'free-text',
+      score: 8,
+      userAnswer: 'a',
+      explanation: 'e',
+      essentialIdeas: [{ idea: 'Human in the loop', conveyed: 'partly' }],
+      incorrectClaims: ['x'],
+    };
+    await saveTestResultsHandler(
+      post('/api/lesson/ai-test/save-results', {
+        ...payload(),
+        evaluations: [evaluation],
+      }),
+    );
+    expect(m.saveTestResult.mock.calls[0][0].answers).toEqual([evaluation]);
+  });
+
   it('asks the access authority with the session user, both slugs and a clock', async () => {
     await save();
     expect(m.getDebriefAccess).toHaveBeenCalledWith({

@@ -18,7 +18,9 @@ export function evaluationPrompt(vars: {
    - \`fully\` — the student conveys it, however they phrase it
    - \`partly\` — they are on the right track but it is vague, incomplete or only implied
    - \`not\` — it is missing
-3. **List incorrect claims** — anything the student states that is factually wrong or unsafe according to the lesson. Only real errors: an idea that is merely missing is not an incorrect claim.
+3. **List incorrect claims** — statements of fact that the lesson contradicts, or that would be unsafe if a pilot acted on them. Each one costs the student marks, so list only real errors:
+   - An idea that is merely missing is not an incorrect claim.
+   - Analogies, comparisons, opinions and off-topic reasoning are not incorrect claims, even when they miss the point. Missing the point already costs the student the idea they failed to convey; it is never also an incorrect claim.
 4. **Explain** in 2–3 sentences, addressed to the student: what they got right, and which idea was missing or wrong. Be encouraging but accurate.
 
 ## The reference answer is ONE correct phrasing, not a template

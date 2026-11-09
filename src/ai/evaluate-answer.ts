@@ -31,12 +31,19 @@ export function evaluateMCQ(
 const CONVEYED_CREDIT = { fully: 1, partly: 0.5, not: 0 } as const;
 /** What each factually wrong or unsafe statement costs, in score points. */
 const INCORRECT_CLAIM_PENALTY = 25;
+/**
+ * The most the penalties may take, as a share of what the answer earned. Past
+ * this, a single flagged claim could zero an answer whose explanation credits
+ * the student with something — a number that contradicts its own feedback.
+ */
+const MAX_PENALTY_SHARE = 0.5;
 
 /**
  * The 0–100 score for a free-text answer, from the grader's judgements.
  *
  * Credit is the share of essential ideas the student conveyed — a "partly"
- * counts half — less a fixed penalty per incorrect claim. Computed here rather
+ * counts half — less a fixed penalty per incorrect claim, the penalties
+ * together taking at most half of that credit. Computed here rather
  * than asked of the model so that two answers meaning the same thing score the
  * same, however each is worded; see AIFreeTextEvalOutputSchema.
  */
@@ -48,8 +55,12 @@ export function scoreFreeTextEval({
   const credit =
     essentialIdeas.reduce((sum, i) => sum + CONVEYED_CREDIT[i.conveyed], 0) /
     essentialIdeas.length;
-  const score = credit * 100 - incorrectClaims.length * INCORRECT_CLAIM_PENALTY;
-  return Math.round(Math.min(100, Math.max(0, score)));
+  const earned = credit * 100;
+  const penalty = Math.min(
+    incorrectClaims.length * INCORRECT_CLAIM_PENALTY,
+    earned * MAX_PENALTY_SHARE,
+  );
+  return Math.round(Math.min(100, Math.max(0, earned - penalty)));
 }
 
 // AI-powered free-text evaluation — calls Sonnet
@@ -77,5 +88,7 @@ export async function evaluateFreeText(
     score: scoreFreeTextEval(object),
     userAnswer,
     explanation: object.explanation,
+    essentialIdeas: object.essentialIdeas,
+    incorrectClaims: object.incorrectClaims,
   };
 }

@@ -44,7 +44,7 @@ describe('scoreFreeTextEval', () => {
     ).toBe(75);
   });
 
-  it('takes 25 points off per incorrect claim, never below 0', () => {
+  it('takes 25 points off per incorrect claim', () => {
     expect(
       scoreFreeTextEval({
         essentialIdeas: [idea('fully')],
@@ -57,6 +57,25 @@ describe('scoreFreeTextEval', () => {
         incorrectClaims: ['a', 'b'],
       }),
     ).toBe(0);
+  });
+
+  it('lets incorrect claims take at most HALF of what the answer earned', () => {
+    // The RPGEN 02 Tesla answer: one idea partly conveyed of three (17
+    // earned), one claim flagged. It used to floor at 0, contradicting an
+    // explanation that opened "You correctly identified…".
+    expect(
+      scoreFreeTextEval({
+        essentialIdeas: [idea('partly'), idea('not'), idea('not')],
+        incorrectClaims: ['AI analogy'],
+      }),
+    ).toBe(8);
+    // A full answer with three wrong claims keeps half, not 25.
+    expect(
+      scoreFreeTextEval({
+        essentialIdeas: [idea('fully')],
+        incorrectClaims: ['a', 'b', 'c'],
+      }),
+    ).toBe(50);
   });
 
   it('rounds to a whole number', () => {
@@ -96,6 +115,13 @@ describe('evaluateFreeText', () => {
       score: 100,
       userAnswer: 'Squawk 7600, fly last ATC clearance.',
       explanation: 'Spot on.',
+      // The judgements the score came from travel with it, so a disputed
+      // score can be explained after the fact.
+      essentialIdeas: [
+        { idea: 'Transponder to the radio-failure code', conveyed: 'fully' },
+        { idea: 'Continue on the last clearance', conveyed: 'fully' },
+      ],
+      incorrectClaims: [],
     });
   });
 
@@ -114,6 +140,11 @@ describe('evaluateFreeText', () => {
     expect(prompt).toMatch(/grade what the student MEANS/);
     expect(prompt).toMatch(/ONE correct phrasing, not a template/);
     expect(prompt).toContain(question.expectedAnswer);
+    // An incorrect claim is something the lesson contradicts or that is
+    // unsafe — never an analogy, opinion or off-topic reasoning, which only
+    // cost the ideas they fail to convey.
+    expect(prompt).toMatch(/Analogies, comparisons, opinions/);
+    expect(prompt).toMatch(/never also an incorrect claim/);
     // The answer is fenced as data, so it cannot pose as grading instructions.
     expect(prompt).toContain(
       '<student_answer>\nSquawk 7600.\n</student_answer>',

@@ -63,26 +63,21 @@ export const EvaluatorOutputSchema = z.object({
 // idea, and `scoreFreeTextEval` turns that into a number. Asking a model for a
 // holistic 0–100 against a reference answer anchors it on the reference's
 // wording, so correct answers phrased differently lost marks.
+const EssentialIdeaSchema = z.object({
+  idea: z
+    .string()
+    .describe('One idea a correct answer must convey, in plain words'),
+  conveyed: z
+    .enum(['fully', 'partly', 'not'])
+    .describe("Whether the student's answer conveys this idea, in any wording"),
+});
+
 export const AIFreeTextEvalOutputSchema = z.object({
-  essentialIdeas: z
-    .array(
-      z.object({
-        idea: z
-          .string()
-          .describe('One idea a correct answer must convey, in plain words'),
-        conveyed: z
-          .enum(['fully', 'partly', 'not'])
-          .describe(
-            "Whether the student's answer conveys this idea, in any wording",
-          ),
-      }),
-    )
-    .min(1)
-    .max(5),
+  essentialIdeas: z.array(EssentialIdeaSchema).min(1).max(5),
   incorrectClaims: z
     .array(z.string())
     .describe(
-      "Statements in the student's answer that are factually wrong or unsafe according to the lesson. Empty if none.",
+      "Statements of fact in the student's answer that the lesson contradicts, or that are unsafe. Never analogies, comparisons, opinions or off-topic reasoning. Empty if none.",
     ),
   explanation: z.string(),
 });
@@ -94,6 +89,14 @@ export const AIEvaluationResultSchema = z.object({
   score: z.number().int().min(0).max(100),
   userAnswer: z.string(),
   explanation: z.string(),
+  /**
+   * Free-text only: the grader's judgements the score was computed from
+   * (`scoreFreeTextEval`), kept so a disputed score can be explained after
+   * the fact. Optional — MCQ has none, and attempts saved before 2026-11-09
+   * stored only the score.
+   */
+  essentialIdeas: z.array(EssentialIdeaSchema).optional(),
+  incorrectClaims: z.array(z.string()).optional(),
 });
 
 // Full test result
