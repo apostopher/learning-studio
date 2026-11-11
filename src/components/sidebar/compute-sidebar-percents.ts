@@ -21,6 +21,8 @@ const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
   clockStartAt: null,
   passed: false,
   lastFailedAt: null,
+  hasVideo: false,
+  rewatchedAt: null,
   bearing: false,
 };
 

@@ -8,6 +8,7 @@ const {
   ensureChat,
   appendMessages,
   resolveChatSkaProfile,
+  findRecentDebriefGaps,
   loadChatContext,
   waitUntil,
   compactChat,
@@ -18,6 +19,7 @@ const {
   ensureChat: vi.fn(),
   appendMessages: vi.fn(),
   resolveChatSkaProfile: vi.fn(),
+  findRecentDebriefGaps: vi.fn(),
   loadChatContext: vi.fn(),
   waitUntil: vi.fn(),
   compactChat: vi.fn(),
@@ -38,6 +40,7 @@ vi.mock('#/db/chat', () => ({ ensureChat, appendMessages, loadChatContext }));
 // transitively; the route only passes its result through to `buildChatStream`,
 // which is mocked too, so nothing here depends on its internals.
 vi.mock('#/lib/ska-profile.server', () => ({ resolveChatSkaProfile }));
+vi.mock('#/db/debrief-gaps', () => ({ findRecentDebriefGaps }));
 
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
 import { chatHandler } from '../chat';
@@ -57,6 +60,7 @@ beforeEach(() => {
     source: 'course',
   });
   resolveChatSkaProfile.mockResolvedValue(undefined);
+  findRecentDebriefGaps.mockResolvedValue([]);
   ensureChat.mockResolvedValue('chat-1');
   appendMessages.mockResolvedValue(undefined);
   loadChatContext.mockResolvedValue(null);
@@ -141,6 +145,22 @@ describe('chatHandler', () => {
     expect(buildChatStream).toHaveBeenCalledWith(
       expect.objectContaining({ courseSlug: undefined, userId: 'u1' }),
     );
+  });
+});
+
+describe('chatHandler — debrief gaps', () => {
+  it("passes the learner's debrief gaps through to buildChatStream", async () => {
+    const GAPS = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    findRecentDebriefGaps.mockResolvedValueOnce(GAPS);
+
+    await chatHandler(
+      postReq({
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+      }),
+    );
+
+    expect(findRecentDebriefGaps).toHaveBeenCalledWith('u1');
+    expect(buildChatStream.mock.calls[0][0].debriefGaps).toEqual(GAPS);
   });
 });
 

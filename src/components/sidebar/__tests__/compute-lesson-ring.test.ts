@@ -12,6 +12,8 @@ const facts = (over: Partial<Record<string, unknown>> = {}) => ({
   clockStartAt: '2026-10-26T09:00:00Z',
   passed: false,
   lastFailedAt: null,
+  hasVideo: false,
+  rewatchedAt: null,
   bearing: true,
   ...over,
 });
@@ -36,6 +38,21 @@ describe('computeLessonRing', () => {
     const r = computeLessonRing({ ...base, debrief: facts() as never });
     expect(r.badge).toBe('debrief');
     expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief ready');
+    expect(r.refreshAt).toBeNull();
+  });
+
+  it('keeps D and says the video must be rewatched after a below-par attempt on a video lesson', () => {
+    const r = computeLessonRing({
+      ...base,
+      debrief: facts({
+        hasVideo: true,
+        lastFailedAt: '2026-10-28T08:00:00Z',
+      }) as never,
+    });
+    expect(r.badge).toBe('debrief');
+    expect(r.ariaLabel).toBe(
+      'Lesson X, 100% complete, rewatch the video to redo the debrief',
+    );
     expect(r.refreshAt).toBeNull();
   });
 

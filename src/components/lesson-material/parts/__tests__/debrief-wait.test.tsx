@@ -112,10 +112,21 @@ describe('DebriefWait', () => {
     render(<DebriefWait {...common} kind="retake-waiting" time={TIME} />);
     const panel = screen.getByRole('status', {
       name: 'Next attempt opens 12 hours after your last one',
-      description: /Next attempt opens Tue 28 Oct, 3:40 PM\..*below 70/,
+      description: /Next attempt opens Tue 28 Oct, 3:40 PM\..*below 75/,
     });
     expect(panel.textContent).not.toMatch(/\d+\/100|correct/);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('rewatch: says the video must be watched again, and that the redo opens straight after', () => {
+    render(<DebriefWait {...common} kind="rewatch" />);
+    expect(
+      screen.getByRole('status', {
+        name: 'Rewatch the video to redo this debrief',
+        description:
+          'Your last debrief came in under 75. Watch this knowledge chunk again to the end, and a fresh debrief opens straight away.',
+      }),
+    ).toBeDefined();
   });
 
   it('takes the heading level of its context', () => {

@@ -42,7 +42,10 @@ vi.mock('#/db', () => ({
 }));
 
 import { getDebriefAttempts, getDebriefFacts } from '#/db/lesson-test';
-import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  videoRewatchedAtSql,
+  videoWatchedAtSql,
+} from '#/db/progress-components';
 import { lessonsTable } from '#/db/schema';
 
 const at = (iso: string) => new Date(iso);
@@ -82,8 +85,19 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
     doneAt: Date | null,
     // Raw `sql<Date>` columns arrive from the driver as offset-bearing strings.
     videoWatchedAt: string | null = null,
+    {
+      hasVideo = videoWatchedAt !== null,
+      videoRewatchedAt = null,
+    }: { hasVideo?: boolean; videoRewatchedAt?: string | null } = {},
   ) => {
-    m.queue.push(attempts, doneAt ? [{ doneAt }] : [], [{ videoWatchedAt }]);
+    m.queue.push(attempts, doneAt ? [{ doneAt }] : [], [
+      {
+        videoWatchedAt,
+        videoRewatchedAt,
+        videoProvider: hasVideo ? 'mux' : null,
+        videoRef: hasVideo ? 'ref' : null,
+      },
+    ]);
     return getDebriefFacts('u1', 'l1', 41);
   };
 
@@ -101,7 +115,32 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
       clockStartAt: null,
       passed: false,
       lastFailedAt: null,
+      hasVideo: false,
+      rewatchedAt: null,
     });
+  });
+
+  it('a video lesson done without its video has not started the clock', async () => {
+    expect(
+      (
+        await facts([], at('2026-10-25T00:00:00.000Z'), null, {
+          hasVideo: true,
+        })
+      ).clockStartAt,
+    ).toBeNull();
+  });
+
+  it('reports the rewatch, read with the shared progress fragment', async () => {
+    const f = await facts([], null, '2026-10-24 06:00:00+00', {
+      videoRewatchedAt: '2026-10-27 06:00:00+00',
+    });
+    expect(f).toMatchObject({
+      hasVideo: true,
+      rewatchedAt: '2026-10-27T06:00:00.000Z',
+    });
+    expect(renderSql(m.selects[2]?.videoRewatchedAt as SQL)).toBe(
+      renderSql(videoRewatchedAtSql('u1', lessonsTable.id, lessonsTable.slug)),
+    );
   });
 
   it('with no watched video, the clock starts at the sticky completion', async () => {
@@ -138,11 +177,11 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
     expect(renderSqlParams(where)).toEqual([41]);
   });
 
-  it('passed = any attempt at or above par (70)', async () => {
+  it('passed = any attempt at or above par (75)', async () => {
     expect(
       (
         await facts(
-          [{ id: 1, totalScore: 70, completedAt: at('2026-10-26T00:00:00Z') }],
+          [{ id: 1, totalScore: 75, completedAt: at('2026-10-26T00:00:00Z') }],
           null,
         )
       ).passed,
@@ -150,7 +189,7 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
     expect(
       (
         await facts(
-          [{ id: 1, totalScore: 69, completedAt: at('2026-10-26T00:00:00Z') }],
+          [{ id: 1, totalScore: 74, completedAt: at('2026-10-26T00:00:00Z') }],
           null,
         )
       ).passed,
@@ -171,6 +210,8 @@ describe('getDebriefFacts mirrors the progress SQL', () => {
       clockStartAt: '2026-10-19T00:00:00.000Z',
       passed: true,
       lastFailedAt: '2026-10-26T08:00:00.000Z',
+      hasVideo: false,
+      rewatchedAt: null,
     });
   });
 });

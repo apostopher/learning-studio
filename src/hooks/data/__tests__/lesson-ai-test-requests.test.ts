@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { dataKeys } from '#/data-hooks/keys';
 import {
   DebriefNotOpenError,
   invalidateAfterSave,
@@ -92,7 +93,7 @@ describe('debrief requests carry the course', () => {
 });
 
 describe('invalidateAfterSave', () => {
-  it('invalidates the debrief status of that lesson and the course progress', async () => {
+  it('invalidates the debrief status, the course progress, and the video progress (an owed rewatch)', async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const setQueryData = vi.fn();
     await invalidateAfterSave(
@@ -102,6 +103,7 @@ describe('invalidateAfterSave', () => {
     expect(invalidateQueries.mock.calls.map((c) => c[0].queryKey)).toEqual([
       ['user', 'debrief-status', 'ppl', 'l1'],
       ['course', 'progress-summary', 'ppl'],
+      dataKeys.lessonProgress('l1'),
     ]);
     expect(setQueryData).not.toHaveBeenCalled();
   });

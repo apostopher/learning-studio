@@ -90,7 +90,11 @@ describe('DebriefIntro', () => {
         retake={false}
       />,
     );
-    expect(screen.getByText(/Score 70 or more to pass/)).toBeDefined();
+    expect(
+      screen.getByText(
+        'Three questions on this lesson, answered in your own words. Average 75 or more to pass. If you fall short, three more follow, and your score is the average of all six.',
+      ),
+    ).toBeDefined();
   });
 
   it('says a retake is a fresh set of questions after a below-par attempt', () => {
@@ -103,7 +107,9 @@ describe('DebriefIntro', () => {
       />,
     );
     expect(
-      screen.getByText(/last attempt was below 70.*fresh set of questions/),
+      screen.getByText(
+        /last attempt was below 75, so these are fresh questions/,
+      ),
     ).toBeDefined();
   });
 });

@@ -41,6 +41,7 @@ const row = (
   lastFailedDebriefAt: null,
   doneAt: null,
   videoWatchedAt: null,
+  videoRewatchedAt: null,
   visited: false,
   ...over,
 });
@@ -237,7 +238,26 @@ describe('done and debrief facts', () => {
       clockStartAt: '2026-10-01T00:00:00Z',
       passed: true,
       lastFailedAt: '2026-10-02T00:00:00Z',
+      hasVideo: false,
+      rewatchedAt: null,
       bearing: true,
+    });
+  });
+
+  it('passes the rewatch through, so the D can flip when the video is watched again', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        videoWatchedAt: '2026-10-01T08:00:00Z',
+        lastFailedDebriefAt: '2026-10-02T00:00:00Z',
+        videoRewatchedAt: '2026-10-02T09:00:00Z',
+      }),
+    ]);
+    expect(lessons[0].debrief).toMatchObject({
+      hasVideo: true,
+      rewatchedAt: '2026-10-02T09:00:00Z',
     });
   });
 
@@ -246,12 +266,14 @@ describe('done and debrief facts', () => {
       row({
         moduleId: 1,
         lessonId: 10,
+        hasVideo: true,
         videoWatchedAt: '2026-10-01T08:00:00Z',
         doneAt: null,
       }),
       row({
         moduleId: 1,
         lessonId: 11,
+        hasVideo: true,
         videoWatchedAt: '2026-10-01T08:00:00Z',
         doneAt: '2026-10-03T00:00:00Z',
       }),
@@ -260,6 +282,18 @@ describe('done and debrief facts', () => {
       [false, '2026-10-01T08:00:00Z'],
       [true, '2026-10-01T08:00:00Z'],
     ]);
+  });
+
+  it("does not start a video lesson's clock on done alone — only the full watch does", () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        doneAt: '2026-10-03T00:00:00Z',
+      }),
+    ]);
+    expect(lessons[0].debrief.clockStartAt).toBeNull();
   });
 
   it('starts the debrief clock at done when there is no watched video', () => {

@@ -70,6 +70,7 @@ export function useMilestoneReporter(
   const queryClient = useQueryClient();
   const progress = useVideoProgress(lessonSlug);
   const milestonesHit = progress.data?.milestonesHit;
+  const rewatch = progress.data?.rewatch ?? null;
 
   const reportRef = useRef(report);
   reportRef.current = report;
@@ -82,7 +83,7 @@ export function useMilestoneReporter(
     if (readOnly) return;
     const { state, crossed, shouldReconcile } = computeMilestoneTick(
       stateRef.current,
-      { lessonSlug, currentTime, duration, milestonesHit },
+      { lessonSlug, currentTime, duration, milestonesHit, rewatch },
     );
     stateRef.current = state;
 
@@ -108,6 +109,7 @@ export function useMilestoneReporter(
     courseSlug,
     lessonSlug,
     milestonesHit,
+    rewatch,
     queryClient,
     readOnly,
   ]);

@@ -1,5 +1,6 @@
 import { DebriefStatusError } from '#/data-hooks/use-debrief-status';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import { debriefSetsProgress } from '#/lib/debrief-sets';
 import type { DebriefStatusResponse } from '#/routes/api/lesson/debrief-status';
 import { debriefSessionForLesson } from './parts/debrief-session-owner';
 
@@ -14,10 +15,15 @@ export type DebriefPanel =
   | { kind: 'waiting'; availableAt: string }
   /** Renders DebriefQuizContainer. */
   | { kind: 'take'; retake: boolean }
-  /** The attempt just submitted, below par: its score report + reopen time (call 2). */
-  | { kind: 'just-failed'; availableAt: string }
+  /**
+   * The attempt just submitted, below par: its score report + what reopens it
+   * (call 2) — a time, or null when it is the video rewatch.
+   */
+  | { kind: 'just-failed'; availableAt: string | null }
   /** ONLY the reopen time — no report, no history. */
   | { kind: 'retake-waiting'; availableAt: string }
+  /** Below par on a video lesson: rewatch it to redo. No report, no history. */
+  | { kind: 'rewatch-required' }
   | {
       kind: 'passed';
       attempts: NonNullable<DebriefStatusResponse['attempts']>;
@@ -103,6 +109,10 @@ export function computeDebriefPanel({
       return justSubmittedLessonSlug === lessonSlug
         ? { kind: 'just-failed', availableAt: data.state.availableAt }
         : { kind: 'retake-waiting', availableAt: data.state.availableAt };
+    case 'rewatch-required':
+      return justSubmittedLessonSlug === lessonSlug
+        ? { kind: 'just-failed', availableAt: null }
+        : { kind: 'rewatch-required' };
     case 'passed':
       return { kind: 'passed', attempts: data.attempts ?? [] };
     default: {
@@ -120,12 +130,16 @@ export type DebriefSessionProgress = 'none' | 'in-progress' | 'complete';
  */
 export function debriefSessionProgress(
   session: { lessonSlug: string; questions: readonly unknown[] } | null,
-  evaluatedCount: number,
+  scores: readonly number[],
   lessonSlug: string,
 ): DebriefSessionProgress {
   const own = debriefSessionForLesson(session, lessonSlug);
   if (own === null) return 'none';
-  return evaluatedCount >= own.questions.length ? 'complete' : 'in-progress';
+  // Complete when the sets the pilot is asked are answered: the first alone
+  // at par, both below it.
+  return debriefSetsProgress(scores, own.questions.length).complete
+    ? 'complete'
+    : 'in-progress';
 }
 
 /**
@@ -179,7 +193,9 @@ export function settleDebriefPanel(
 ): DebriefPanel {
   if (stale) return { kind: 'loading' };
   if (panel.kind === 'just-failed' && sessionProgress !== 'complete') {
-    return { kind: 'retake-waiting', availableAt: panel.availableAt };
+    return panel.availableAt === null
+      ? { kind: 'rewatch-required' }
+      : { kind: 'retake-waiting', availableAt: panel.availableAt };
   }
   return panel;
 }

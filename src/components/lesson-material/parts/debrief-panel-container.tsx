@@ -7,10 +7,12 @@ import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
 import {
   useCurrentTest,
+  useDebriefAttempt,
   useEvaluations,
   useResetTest,
   useTotalScore,
 } from '#/hooks/data/use-lesson-ai-test';
+import { debriefGaps } from '#/lib/debrief-gaps';
 import { DEBRIEF_PAR_SCORE, msUntil } from '#/lib/debrief-schedule';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
@@ -23,7 +25,7 @@ import { DebriefAttemptHistory } from './debrief-attempt-history';
 import { DebriefQuizContainer } from './debrief-quiz-container';
 import { debriefSaveState } from './debrief-save';
 import { debriefSessionForLesson } from './debrief-session-owner';
-import { DebriefWait } from './debrief-wait';
+import { DebriefWait, REWATCH_COPY } from './debrief-wait';
 import { freeTextAnswerAtom, selectedOptionAtom } from './question-card';
 import { ScoreReport } from './score-report';
 
@@ -72,13 +74,14 @@ export const DebriefPanelContainer = ({
   const session = useCurrentTest();
   const evaluations = useEvaluations();
   const totalScore = useTotalScore();
+  const attempt = useDebriefAttempt();
   const resetTest = useResetTest();
   const setSelectedOption = useSetAtom(selectedOptionAtom);
   const setFreeTextAnswer = useSetAtom(freeTextAnswerAtom);
 
   const sessionProgress = debriefSessionProgress(
     session,
-    evaluations.length,
+    evaluations.map((e) => e.score),
     lessonSlug,
   );
   const stale = isStaleDebriefSession({
@@ -182,6 +185,14 @@ export const DebriefPanelContainer = ({
           time={<DebriefTime iso={panel.availableAt} />}
         />
       );
+    case 'rewatch-required':
+      return (
+        <DebriefWait
+          idBase={idBase}
+          headingLevel={headingLevel}
+          kind="rewatch"
+        />
+      );
     case 'take':
       return (
         <DebriefQuizContainer
@@ -196,16 +207,21 @@ export const DebriefPanelContainer = ({
       return session ? (
         <ScoreReport
           score={totalScore}
-          questions={session.questions}
+          questions={session.questions.slice(0, attempt.asked)}
           evaluations={evaluations}
+          gaps={debriefGaps(evaluations)}
           footer={
-            <p className="text-sm text-secondary">
-              Below the pass mark of {DEBRIEF_PAR_SCORE}. Next attempt opens{' '}
-              <span className="font-medium text-primary">
-                <DebriefTime iso={panel.availableAt} />
-              </span>
-              , with fresh questions.
-            </p>
+            panel.availableAt === null ? (
+              <p className="text-sm text-secondary">{REWATCH_COPY}</p>
+            ) : (
+              <p className="text-sm text-secondary">
+                Below the pass mark of {DEBRIEF_PAR_SCORE}. Next attempt opens{' '}
+                <span className="font-medium text-primary">
+                  <DebriefTime iso={panel.availableAt} />
+                </span>
+                , with fresh questions.
+              </p>
+            )
           }
         />
       ) : null;
@@ -219,6 +235,7 @@ export const DebriefPanelContainer = ({
             passed: attempt.passed,
             questions: attempt.questions,
             evaluations: attempt.evaluations,
+            gaps: debriefGaps(attempt.evaluations),
           }))}
         />
       );

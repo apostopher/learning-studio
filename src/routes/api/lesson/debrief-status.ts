@@ -82,12 +82,16 @@ export async function debriefStatusHandler(
     let lessonOutstanding: OutstandingItem[] = [];
     if (state.kind === 'not-done') {
       const progress = await getCourseProgress({ userId, slug: courseSlug });
-      const outstanding =
-        progress.lessons.find((l) => l.lessonId === access.lessonId)
-          ?.outstanding ?? [];
-      lessonOutstanding = outstanding.some((i) => i.kind === 'video')
-        ? [{ kind: 'video' }]
-        : outstanding;
+      const lesson = progress.lessons.find(
+        (l) => l.lessonId === access.lessonId,
+      );
+      const outstanding = lesson?.outstanding ?? [];
+      // On a video lesson only the full watch starts the clock — even one
+      // done without its (optional) video — so the video is all there is to say.
+      lessonOutstanding =
+        lesson?.debrief?.hasVideo || outstanding.some((i) => i.kind === 'video')
+          ? [{ kind: 'video' }]
+          : outstanding;
     }
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };

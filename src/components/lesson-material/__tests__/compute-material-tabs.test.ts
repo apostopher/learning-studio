@@ -216,6 +216,8 @@ describe('defaultMaterialTab', () => {
     clockStartAt: '2026-11-08T00:00:00Z', // well past the 12h wait
     passed: false,
     lastFailedAt: null,
+    hasVideo: false,
+    rewatchedAt: null,
     bearing: true,
     ...over,
   });

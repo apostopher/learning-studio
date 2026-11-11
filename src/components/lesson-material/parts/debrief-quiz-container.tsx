@@ -1,12 +1,13 @@
 import { useAtom, useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
-import type { AITest } from '#/ai/schemas';
+import type { AIEvaluationResult, AITest } from '#/ai/schemas';
 import { debriefSaveAtom, justSubmittedDebriefAtom } from '#/atoms/debrief';
 import {
   useAdvanceQuestion,
   useCurrentQuestion,
   useCurrentQuestionIndex,
   useCurrentTest,
+  useDebriefAttempt,
   useEvaluateAnswer,
   useEvaluations,
   useGenerateTest,
@@ -16,6 +17,9 @@ import {
   useSaveResults,
   useTotalScore,
 } from '#/hooks/data/use-lesson-ai-test';
+import { debriefGaps } from '#/lib/debrief-gaps';
+import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
+import { DEBRIEF_SET_SIZE, debriefSetsProgress } from '#/lib/debrief-sets';
 import { DebriefIntro } from './debrief-intro';
 import { debriefSaveOutcome, debriefSaveState } from './debrief-save';
 import { DebriefSaveNotice } from './debrief-save-notice';
@@ -45,6 +49,13 @@ type DebriefQuizContainerProps = {
   retake: boolean;
 };
 
+/** The first set's average, for the notice that opens the second set. */
+const firstSetScore = (evaluations: readonly AIEvaluationResult[]) =>
+  debriefSetsProgress(
+    evaluations.slice(0, DEBRIEF_SET_SIZE).map((e) => e.score),
+    DEBRIEF_SET_SIZE,
+  ).score;
+
 export const DebriefQuizContainer = ({
   courseSlug,
   lessonSlug,
@@ -57,6 +68,7 @@ export const DebriefQuizContainer = ({
   const evaluations = useEvaluations();
   const isEvaluating = useIsEvaluating();
   const totalScore = useTotalScore();
+  const attempt = useDebriefAttempt();
   const evaluateAnswer = useEvaluateAnswer();
   const advanceQuestion = useAdvanceQuestion();
   const saveResults = useSaveResults();
@@ -83,8 +95,8 @@ export const DebriefQuizContainer = ({
     setFreeTextAnswer('');
   }, [isForeignSession, resetTest, setSelectedOption, setFreeTextAnswer]);
 
-  const isComplete =
-    test !== null && evaluations.length === test.questions.length;
+  // One set at par, or both below it — see debriefSetsProgress.
+  const isComplete = test !== null && attempt.complete;
   const currentEvaluation = currentQuestion
     ? evaluations.find((e) => e.questionId === currentQuestion.id)
     : null;
@@ -167,8 +179,9 @@ export const DebriefQuizContainer = ({
     return (
       <ScoreReport
         score={totalScore}
-        questions={test.questions}
+        questions={test.questions.slice(0, attempt.asked)}
         evaluations={evaluations}
+        gaps={debriefGaps(evaluations)}
         footer={
           saveState === 'saving' || saveState === 'failed' ? (
             <DebriefSaveNotice
@@ -202,8 +215,8 @@ export const DebriefQuizContainer = ({
         question={currentQuestion}
         evaluation={currentEvaluation}
         index={questionIndex}
-        total={test.questions.length}
-        isLast={questionIndex === test.questions.length - 1}
+        total={attempt.asked}
+        isLast={questionIndex === attempt.asked - 1}
         onNext={handleNext}
       />
     );
@@ -213,7 +226,12 @@ export const DebriefQuizContainer = ({
     <QuestionCard
       question={currentQuestion}
       index={questionIndex}
-      total={test.questions.length}
+      total={attempt.asked}
+      notice={
+        attempt.secondSet && questionIndex === DEBRIEF_SET_SIZE
+          ? `Your first ${DEBRIEF_SET_SIZE} answers averaged ${firstSetScore(evaluations)}, under the pass mark of ${DEBRIEF_PAR_SCORE}. Here are ${DEBRIEF_SET_SIZE} more — your score is the average of all six.`
+          : null
+      }
       isEvaluating={isEvaluating}
       onSubmit={handleSubmit}
       readOnly={readOnly}

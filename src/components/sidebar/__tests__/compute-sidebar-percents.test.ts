@@ -20,6 +20,8 @@ const d = (passed: boolean, bearing = true) => ({
   clockStartAt: '2026-10-20T00:00:00Z',
   passed,
   lastFailedAt: null,
+  hasVideo: false,
+  rewatchedAt: null,
   bearing,
 });
 const now = new Date('2026-10-28T09:00:00Z');

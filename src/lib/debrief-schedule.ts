@@ -1,4 +1,4 @@
-export const DEBRIEF_PAR_SCORE = 70;
+export const DEBRIEF_PAR_SCORE = 75;
 /** 12 hours, unless `VITE_DEBRIEF_DELAY_MINUTES` says otherwise. */
 const DEFAULT_DEBRIEF_DELAY_MINUTES = 12 * 60;
 
@@ -57,38 +57,48 @@ export const DEBRIEF_DELAY_LABEL = formatDebriefDelay(DEBRIEF_DELAY_MINUTES);
 /** ISO strings — these cross the wire inside CourseProgress. */
 export type DebriefFacts = {
   /**
-   * When the debrief clock started — see `debriefClockStart`. Null while
-   * neither the video is watched nor the lesson done.
+   * When the debrief clock started — see `debriefClockStart`. Null until the
+   * video is fully watched (a video lesson) or the lesson is done (no video).
    */
   clockStartAt: string | null;
   passed: boolean;
   lastFailedAt: string | null;
+  /** The lesson has a video: a below-par attempt is redone after rewatching it. */
+  hasVideo: boolean;
+  /**
+   * When the pilot finished rewatching the video after `lastFailedAt` — every
+   * watched-milestone reached again since then. Null until they have.
+   */
+  rewatchedAt: string | null;
 };
 
 export type DebriefState =
   | { kind: 'not-done' }
   | { kind: 'waiting'; availableAt: string } // the delay after the clock starts
   | { kind: 'open'; retake: boolean }
-  | { kind: 'retake-waiting'; availableAt: string } // after a below-par attempt
+  | { kind: 'retake-waiting'; availableAt: string } // after a below-par attempt, no video
+  | { kind: 'rewatch-required' } // after a below-par attempt: rewatch the video to redo
   | { kind: 'passed' };
 
 /**
- * The debrief clock starts the moment the pilot finishes watching the video,
- * or when the lesson is done, whichever came first. A video lesson therefore
- * starts it on the video alone; a lesson with no video (or whose video was
- * never watched) starts it when the lesson is done.
+ * On a lesson with a video, the debrief clock starts the moment the pilot
+ * finishes watching it — the same full watch that completes the video step —
+ * and nothing else starts it: a lesson that does not require the video can be
+ * done without it, and its debrief still waits for the watch. A lesson with no
+ * video starts the clock when it is done.
  *
- * Both inputs are ISO instants; the result is too.
+ * ISO instants in and out.
  */
-export function debriefClockStart(
-  videoWatchedAt: string | null,
-  doneAt: string | null,
-): string | null {
-  if (videoWatchedAt === null) return doneAt;
-  if (doneAt === null) return videoWatchedAt;
-  return Date.parse(videoWatchedAt) <= Date.parse(doneAt)
-    ? videoWatchedAt
-    : doneAt;
+export function debriefClockStart({
+  hasVideo,
+  videoWatchedAt,
+  doneAt,
+}: {
+  hasVideo: boolean;
+  videoWatchedAt: string | null;
+  doneAt: string | null;
+}): string | null {
+  return hasVideo ? videoWatchedAt : doneAt;
 }
 
 export function computeDebriefState(
@@ -110,9 +120,17 @@ export function computeDebriefState(
     };
   }
 
-  // The retake window runs from whichever is later: the clock start or the
-  // most recent failed attempt (backfilled history can put a failure before
-  // the clock start).
+  // Below par on a video lesson: the redo opens once the pilot has watched
+  // the knowledge chunk again, with no wait on top.
+  if (facts.hasVideo) {
+    return facts.rewatchedAt !== null
+      ? { kind: 'open', retake: true }
+      : { kind: 'rewatch-required' };
+  }
+
+  // No video to rewatch: the retake window runs from whichever is later: the
+  // clock start or the most recent failed attempt (backfilled history can put
+  // a failure before the clock start).
   const availableMs = Math.max(startMs, failedMs) + DEBRIEF_DELAY_MS;
   if (now.getTime() >= availableMs) return { kind: 'open', retake: true };
   return {
@@ -130,6 +148,7 @@ export function debriefBadge(state: DebriefState): 'debrief' | 'passed' | null {
   switch (state.kind) {
     case 'open':
     case 'retake-waiting':
+    case 'rewatch-required':
       return 'debrief';
     case 'passed':
       return 'passed';

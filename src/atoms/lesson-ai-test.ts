@@ -4,6 +4,7 @@ import { atomWithQuery } from 'jotai-tanstack-query';
 import type { AIEvaluationResult, AITest } from '#/ai/schemas';
 import type { LessonTestResultsSelect } from '#/db/schema';
 import { queryKeys } from '#/hooks/data/keys';
+import { debriefSetsProgress } from '#/lib/debrief-sets';
 
 // Writable atoms for test session state
 export const currentTestAtom = atom<AITest | null>(null);
@@ -20,12 +21,18 @@ export const currentQuestionAtom = atom((get) => {
   return test.questions[index] ?? null;
 });
 
-export const totalScoreAtom = atom((get) => {
-  const evaluations = get(evaluationsAtom);
-  if (evaluations.length === 0) return 0;
-  const sum = evaluations.reduce((acc, e) => acc + e.score, 0);
-  return Math.round(sum / evaluations.length);
-});
+/**
+ * Where the attempt in memory stands: which set is being asked, whether it is
+ * complete, and its score so far (see `debriefSetsProgress`).
+ */
+export const debriefAttemptAtom = atom((get) =>
+  debriefSetsProgress(
+    get(evaluationsAtom).map((e) => e.score),
+    get(currentTestAtom)?.questions.length ?? 0,
+  ),
+);
+
+export const totalScoreAtom = atom((get) => get(debriefAttemptAtom).score);
 
 /**
  * The material tab the pilot last selected, and on which lesson. Null until

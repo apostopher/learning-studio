@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
   AIEvaluationResultSchema,
   AIFreeTextEvalOutputSchema,
@@ -7,32 +7,32 @@ import {
   AITestMCQQuestionSchema,
   AITestQuestionSchema,
   EvaluatorOutputSchema,
-} from "../schemas";
+} from '../schemas';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const validMCQQuestion = {
-  id: "q1",
-  type: "mcq" as const,
-  question: "What is the **angle of attack**?",
+  id: 'q1',
+  type: 'mcq' as const,
+  question: 'What is the **angle of attack**?',
   options: [
-    { id: "a", value: "Option A" },
-    { id: "b", value: "Option B" },
-    { id: "c", value: "Option C" },
-    { id: "d", value: "Option D" },
+    { id: 'a', value: 'Option A' },
+    { id: 'b', value: 'Option B' },
+    { id: 'c', value: 'Option C' },
+    { id: 'd', value: 'Option D' },
   ],
-  correctOptionId: "a",
+  correctOptionId: 'a',
   keyPointIndex: 0,
 };
 
 const validFreeTextQuestion = {
-  id: "q2",
-  type: "free-text" as const,
-  question: "Explain the concept of **lift** in your own words.",
+  id: 'q2',
+  type: 'free-text' as const,
+  question: 'Explain the concept of **lift** in your own words.',
   expectedAnswer:
-    "Lift is the aerodynamic force perpendicular to the direction of flight.",
+    'Lift is the aerodynamic force perpendicular to the direction of flight.',
   keyPointIndex: 1,
 };
 
@@ -40,48 +40,48 @@ const validFreeTextQuestion = {
 // AITestMCQQuestionSchema
 // ---------------------------------------------------------------------------
 
-describe("AITestMCQQuestionSchema", () => {
-  it("accepts a valid MCQ question with exactly 4 options", () => {
+describe('AITestMCQQuestionSchema', () => {
+  it('accepts a valid MCQ question with exactly 4 options', () => {
     const result = AITestMCQQuestionSchema.safeParse(validMCQQuestion);
     expect(result.success).toBe(true);
   });
 
-  it("rejects a question with fewer than 4 options", () => {
+  it('rejects a question with fewer than 4 options', () => {
     const data = {
       ...validMCQQuestion,
       options: [
-        { id: "a", value: "Option A" },
-        { id: "b", value: "Option B" },
-        { id: "c", value: "Option C" },
+        { id: 'a', value: 'Option A' },
+        { id: 'b', value: 'Option B' },
+        { id: 'c', value: 'Option C' },
       ],
     };
     const result = AITestMCQQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
-  it("rejects a question with more than 4 options", () => {
+  it('rejects a question with more than 4 options', () => {
     const data = {
       ...validMCQQuestion,
       options: [
-        { id: "a", value: "Option A" },
-        { id: "b", value: "Option B" },
-        { id: "c", value: "Option C" },
-        { id: "d", value: "Option D" },
-        { id: "e", value: "Option E" },
+        { id: 'a', value: 'Option A' },
+        { id: 'b', value: 'Option B' },
+        { id: 'c', value: 'Option C' },
+        { id: 'd', value: 'Option D' },
+        { id: 'e', value: 'Option E' },
       ],
     };
     const result = AITestMCQQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
-  it("rejects a negative keyPointIndex", () => {
+  it('rejects a negative keyPointIndex', () => {
     const data = { ...validMCQQuestion, keyPointIndex: -1 };
     const result = AITestMCQQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
   it("rejects when type is not 'mcq'", () => {
-    const data = { ...validMCQQuestion, type: "free-text" };
+    const data = { ...validMCQQuestion, type: 'free-text' };
     const result = AITestMCQQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
@@ -91,26 +91,27 @@ describe("AITestMCQQuestionSchema", () => {
 // AITestFreeTextQuestionSchema
 // ---------------------------------------------------------------------------
 
-describe("AITestFreeTextQuestionSchema", () => {
-  it("accepts a valid free-text question", () => {
-    const result =
-      AITestFreeTextQuestionSchema.safeParse(validFreeTextQuestion);
+describe('AITestFreeTextQuestionSchema', () => {
+  it('accepts a valid free-text question', () => {
+    const result = AITestFreeTextQuestionSchema.safeParse(
+      validFreeTextQuestion,
+    );
     expect(result.success).toBe(true);
   });
 
   it("rejects when type is not 'free-text'", () => {
-    const data = { ...validFreeTextQuestion, type: "mcq" };
+    const data = { ...validFreeTextQuestion, type: 'mcq' };
     const result = AITestFreeTextQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
-  it("rejects a negative keyPointIndex", () => {
+  it('rejects a negative keyPointIndex', () => {
     const data = { ...validFreeTextQuestion, keyPointIndex: -1 };
     const result = AITestFreeTextQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
-  it("rejects when expectedAnswer is missing", () => {
+  it('rejects when expectedAnswer is missing', () => {
     const { expectedAnswer: _omitted, ...data } = validFreeTextQuestion;
     const result = AITestFreeTextQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
@@ -121,25 +122,25 @@ describe("AITestFreeTextQuestionSchema", () => {
 // AITestQuestionSchema (discriminated union)
 // ---------------------------------------------------------------------------
 
-describe("AITestQuestionSchema (discriminated union)", () => {
-  it("correctly parses an MCQ question", () => {
+describe('AITestQuestionSchema (discriminated union)', () => {
+  it('correctly parses an MCQ question', () => {
     const result = AITestQuestionSchema.safeParse(validMCQQuestion);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.type).toBe("mcq");
+      expect(result.data.type).toBe('mcq');
     }
   });
 
-  it("correctly parses a free-text question", () => {
+  it('correctly parses a free-text question', () => {
     const result = AITestQuestionSchema.safeParse(validFreeTextQuestion);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.type).toBe("free-text");
+      expect(result.data.type).toBe('free-text');
     }
   });
 
-  it("rejects an unknown type", () => {
-    const data = { ...validMCQQuestion, type: "essay" };
+  it('rejects an unknown type', () => {
+    const data = { ...validMCQQuestion, type: 'essay' };
     const result = AITestQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
@@ -149,25 +150,32 @@ describe("AITestQuestionSchema (discriminated union)", () => {
 // AITestGenerationOutputSchema
 // ---------------------------------------------------------------------------
 
-describe("AITestGenerationOutputSchema", () => {
-  it("accepts an array of mixed question types", () => {
+describe('AITestGenerationOutputSchema', () => {
+  it('accepts written questions', () => {
     const result = AITestGenerationOutputSchema.safeParse({
-      questions: [validMCQQuestion, validFreeTextQuestion],
+      questions: [validFreeTextQuestion, validFreeTextQuestion],
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts an empty questions array", () => {
+  it('rejects multiple choice — debriefs ask written questions only', () => {
+    const result = AITestGenerationOutputSchema.safeParse({
+      questions: [validMCQQuestion, validFreeTextQuestion],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an empty questions array', () => {
     const result = AITestGenerationOutputSchema.safeParse({ questions: [] });
     expect(result.success).toBe(true);
   });
 
-  it("rejects when questions is missing", () => {
+  it('rejects when questions is missing', () => {
     const result = AITestGenerationOutputSchema.safeParse({});
     expect(result.success).toBe(false);
   });
 
-  it("rejects when a question in the array is invalid", () => {
+  it('rejects when a question in the array is invalid', () => {
     const result = AITestGenerationOutputSchema.safeParse({
       questions: [{ ...validMCQQuestion, options: [] }],
     });
@@ -179,29 +187,29 @@ describe("AITestGenerationOutputSchema", () => {
 // EvaluatorOutputSchema
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorOutputSchema", () => {
-  it("accepts a valid evaluator output with pass results", () => {
+describe('EvaluatorOutputSchema', () => {
+  it('accepts a valid evaluator output with pass results', () => {
     const result = EvaluatorOutputSchema.safeParse({
       results: [
-        { questionId: "q1", pass: true, reason: "Clear and unambiguous." },
-        { questionId: "q2", pass: true, reason: "Good open-ended question." },
+        { questionId: 'q1', pass: true, reason: 'Clear and unambiguous.' },
+        { questionId: 'q2', pass: true, reason: 'Good open-ended question.' },
       ],
       allPassed: true,
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts results with some failures", () => {
+  it('accepts results with some failures', () => {
     const result = EvaluatorOutputSchema.safeParse({
       results: [
-        { questionId: "q1", pass: false, reason: "Question is ambiguous." },
+        { questionId: 'q1', pass: false, reason: 'Question is ambiguous.' },
       ],
       allPassed: false,
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts an empty results array", () => {
+  it('accepts an empty results array', () => {
     const result = EvaluatorOutputSchema.safeParse({
       results: [],
       allPassed: true,
@@ -209,16 +217,16 @@ describe("EvaluatorOutputSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects when allPassed is missing", () => {
+  it('rejects when allPassed is missing', () => {
     const result = EvaluatorOutputSchema.safeParse({
-      results: [{ questionId: "q1", pass: true, reason: "Good." }],
+      results: [{ questionId: 'q1', pass: true, reason: 'Good.' }],
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects when a result is missing the reason field", () => {
+  it('rejects when a result is missing the reason field', () => {
     const result = EvaluatorOutputSchema.safeParse({
-      results: [{ questionId: "q1", pass: true }],
+      results: [{ questionId: 'q1', pass: true }],
       allPassed: true,
     });
     expect(result.success).toBe(false);
@@ -229,58 +237,58 @@ describe("EvaluatorOutputSchema", () => {
 // AIEvaluationResultSchema
 // ---------------------------------------------------------------------------
 
-describe("AIEvaluationResultSchema", () => {
-  it("accepts a valid MCQ evaluation result", () => {
+describe('AIEvaluationResultSchema', () => {
+  it('accepts a valid MCQ evaluation result', () => {
     const result = AIEvaluationResultSchema.safeParse({
-      questionId: "q1",
-      type: "mcq",
+      questionId: 'q1',
+      type: 'mcq',
       score: 100,
-      userAnswer: "a",
-      explanation: "Correct answer selected.",
+      userAnswer: 'a',
+      explanation: 'Correct answer selected.',
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts a valid free-text evaluation result", () => {
+  it('accepts a valid free-text evaluation result', () => {
     const result = AIEvaluationResultSchema.safeParse({
-      questionId: "q2",
-      type: "free-text",
+      questionId: 'q2',
+      type: 'free-text',
       score: 75,
-      userAnswer: "Lift is an aerodynamic force.",
-      explanation: "Partially correct, missing detail on perpendicular force.",
+      userAnswer: 'Lift is an aerodynamic force.',
+      explanation: 'Partially correct, missing detail on perpendicular force.',
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects a score greater than 100", () => {
+  it('rejects a score greater than 100', () => {
     const result = AIEvaluationResultSchema.safeParse({
-      questionId: "q1",
-      type: "mcq",
+      questionId: 'q1',
+      type: 'mcq',
       score: 101,
-      userAnswer: "a",
-      explanation: "Over the limit.",
+      userAnswer: 'a',
+      explanation: 'Over the limit.',
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects a negative score", () => {
+  it('rejects a negative score', () => {
     const result = AIEvaluationResultSchema.safeParse({
-      questionId: "q1",
-      type: "mcq",
+      questionId: 'q1',
+      type: 'mcq',
       score: -1,
-      userAnswer: "a",
-      explanation: "Negative score.",
+      userAnswer: 'a',
+      explanation: 'Negative score.',
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects an unknown type value", () => {
+  it('rejects an unknown type value', () => {
     const result = AIEvaluationResultSchema.safeParse({
-      questionId: "q1",
-      type: "essay",
+      questionId: 'q1',
+      type: 'essay',
       score: 50,
-      userAnswer: "Some answer.",
-      explanation: "Unknown type.",
+      userAnswer: 'Some answer.',
+      explanation: 'Unknown type.',
     });
     expect(result.success).toBe(false);
   });
@@ -290,37 +298,37 @@ describe("AIEvaluationResultSchema", () => {
 // AIFreeTextEvalOutputSchema
 // ---------------------------------------------------------------------------
 
-describe("AIFreeTextEvalOutputSchema", () => {
+describe('AIFreeTextEvalOutputSchema', () => {
   const valid = {
     essentialIdeas: [
-      { idea: "Squawk 7600", conveyed: "fully" },
-      { idea: "Follow the last clearance", conveyed: "partly" },
+      { idea: 'Squawk 7600', conveyed: 'fully' },
+      { idea: 'Follow the last clearance', conveyed: 'partly' },
     ],
     incorrectClaims: [],
-    explanation: "You covered the transponder code.",
+    explanation: 'You covered the transponder code.',
   };
 
-  it("accepts per-idea judgements", () => {
+  it('accepts per-idea judgements', () => {
     expect(AIFreeTextEvalOutputSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects a judgement other than fully / partly / not", () => {
+  it('rejects a judgement other than fully / partly / not', () => {
     expect(
       AIFreeTextEvalOutputSchema.safeParse({
         ...valid,
-        essentialIdeas: [{ idea: "x", conveyed: "mostly" }],
+        essentialIdeas: [{ idea: 'x', conveyed: 'mostly' }],
       }).success,
     ).toBe(false);
   });
 
-  it("requires at least one essential idea", () => {
+  it('requires at least one essential idea', () => {
     expect(
       AIFreeTextEvalOutputSchema.safeParse({ ...valid, essentialIdeas: [] })
         .success,
     ).toBe(false);
   });
 
-  it("rejects when explanation is missing", () => {
+  it('rejects when explanation is missing', () => {
     const { explanation: _, ...rest } = valid;
     expect(AIFreeTextEvalOutputSchema.safeParse(rest).success).toBe(false);
   });

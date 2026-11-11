@@ -28,6 +28,7 @@ const attempts = [
     passed: true,
     questions: [question('p1', 'Passing attempt question')],
     evaluations: [evaluation('p1', 85)],
+    gaps: { missed: [], incorrect: [] },
   },
   {
     id: 1,
@@ -36,6 +37,7 @@ const attempts = [
     passed: false,
     questions: [question('f1', 'Failed attempt question')],
     evaluations: [evaluation('f1', 40)],
+    gaps: { missed: [], incorrect: [] },
   },
 ];
 

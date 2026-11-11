@@ -41,6 +41,37 @@ import {
 export const videoWatchedAtSql = (
   userId: string,
   lessonId: SQL | typeof lessonsTable.id | number,
+) => fullWatchAtSql(userId, lessonId, null);
+
+/**
+ * When this learner finished watching the video AGAIN after their latest
+ * below-par debrief: every watched-milestone reached afresh since that
+ * attempt. Null until they have, and with no below-par attempt at all. A
+ * below-par debrief on a video lesson reopens at this instant
+ * (`computeDebriefState`). Shared like `videoWatchedAtSql`.
+ */
+export const videoRewatchedAtSql = (
+  userId: string,
+  lessonId: SQL | typeof lessonsTable.id | number,
+  lessonSlug: SQL | typeof lessonsTable.slug | string,
+) =>
+  fullWatchAtSql(
+    userId,
+    lessonId,
+    sql`(
+      select max(t.completed_at) from lesson_test_results t
+      where t.user_id = ${userId}
+        and t.lesson_slug = ${lessonSlug}
+        and t.completed_at is not null
+        and t.total_score < ${DEBRIEF_PAR_SCORE}
+    )`,
+  );
+
+/** Both raw timestamps are `now()`-written and timezone-less, so they compare directly. */
+const fullWatchAtSql = (
+  userId: string,
+  lessonId: SQL | typeof lessonsTable.id | number,
+  after: SQL | null,
 ) => sql<Date | null>`(
   select case when count(*) = ${watchedMilestones.length}
     then max(f.first_at) at time zone 'UTC' end
@@ -49,6 +80,7 @@ export const videoWatchedAtSql = (
     where v.user_id = ${userId}
       and v.lesson_id = ${lessonId}
       and v.progress in (${sql.raw(watchedMilestones.join(', '))})
+      ${after === null ? sql`` : sql`and v.created_at > ${after}`}
     group by v.progress
   ) f
 )`;
@@ -182,6 +214,13 @@ export const progressComponentColumns = (userId: string) => ({
   /** When the video was finished; starts the debrief clock. See videoWatchedAtSql. */
   videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
 
+  /** When the video was rewatched after a below-par debrief. See videoRewatchedAtSql. */
+  videoRewatchedAt: videoRewatchedAtSql(
+    userId,
+    lessonsTable.id,
+    lessonsTable.slug,
+  ),
+
   visited: sql<boolean>`coalesce(bool_or(${lessonMaterialProgressTable.completed}
     and ${lessonMaterialProgressTable.sectionName} = ${LESSON_VISIT_SECTION}), false)`,
 });
@@ -216,6 +255,7 @@ type ComponentRow = {
   lastFailedDebriefAt: Date | string | null;
   doneAt: Date | string | null;
   videoWatchedAt: Date | string | null;
+  videoRewatchedAt: Date | string | null;
   visited: boolean;
 };
 
@@ -258,6 +298,7 @@ export function toComponentFields(row: ComponentRow) {
     lastFailedDebriefAt: toIso(row.lastFailedDebriefAt),
     doneAt: toIso(row.doneAt),
     videoWatchedAt: toIso(row.videoWatchedAt),
+    videoRewatchedAt: toIso(row.videoRewatchedAt),
     visited: row.visited,
   };
 }

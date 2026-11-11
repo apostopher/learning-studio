@@ -1,8 +1,11 @@
-import { Clock, Lock } from 'lucide-react';
+import { Clock, Lock, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { DEBRIEF_DELAY_LABEL, DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { describeOutstanding } from '#/lib/lock-copy';
+
+/** What reopens a below-par debrief on a video lesson. Shared with the just-failed report. */
+export const REWATCH_COPY = `Your last debrief came in under ${DEBRIEF_PAR_SCORE}. Watch this knowledge chunk again to the end, and a fresh debrief opens straight away.`;
 
 type DebriefWaitProps = {
   /** Unique per panel (`useId` in the container) — the aria ids hang off it. */
@@ -23,6 +26,8 @@ type DebriefWaitProps = {
    */
   | { kind: 'waiting'; time: ReactNode }
   | { kind: 'retake-waiting'; time: ReactNode }
+  /** Below par on a video lesson: the redo opens once the video is rewatched. */
+  | { kind: 'rewatch' }
 );
 
 /**
@@ -56,7 +61,9 @@ export const DebriefWait = (props: DebriefWaitProps) => {
         : 'Debrief locked until you finish this lesson'
       : props.kind === 'waiting'
         ? 'We will debrief this KC tomorrow.'
-        : `Next attempt opens ${DEBRIEF_DELAY_LABEL} after your last one`;
+        : props.kind === 'rewatch'
+          ? 'Rewatch the video to redo this debrief'
+          : `Next attempt opens ${DEBRIEF_DELAY_LABEL} after your last one`;
 
   const todo =
     props.kind === 'not-done'
@@ -74,6 +81,8 @@ export const DebriefWait = (props: DebriefWaitProps) => {
       <span className="flex size-10 items-center justify-center rounded-full bg-gray-a3 text-secondary">
         {props.kind === 'not-done' ? (
           <Lock className="size-5" aria-hidden="true" />
+        ) : props.kind === 'rewatch' ? (
+          <RotateCcw className="size-5" aria-hidden="true" />
         ) : (
           <Clock className="size-5" aria-hidden="true" />
         )}
@@ -95,6 +104,8 @@ export const DebriefWait = (props: DebriefWaitProps) => {
                 ? `Opens ${DEBRIEF_DELAY_LABEL} after you finish this lesson — ${todo}.`
                 : `Opens ${DEBRIEF_DELAY_LABEL} after you finish this lesson.`}
           </p>
+        ) : props.kind === 'rewatch' ? (
+          <p>{REWATCH_COPY}</p>
         ) : props.kind === 'waiting' ? (
           <>
             <p className="font-medium text-primary">

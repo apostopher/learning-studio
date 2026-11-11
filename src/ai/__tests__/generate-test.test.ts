@@ -10,83 +10,70 @@ vi.mock('ai', () => ({
 vi.mock('../ai-provider', () => ({ sonnet: 'sonnet', haiku: 'haiku' }));
 
 import { generateTest } from '../generate-test';
-import type { AITestMCQQuestion } from '../schemas';
+import type { AITestFreeTextQuestion } from '../schemas';
 
-const mcq = (id: string, values: string[]): AITestMCQQuestion => ({
+const essay = (id: string): AITestFreeTextQuestion => ({
   id,
-  type: 'mcq',
+  type: 'free-text',
   question: `${id}?`,
-  options: values.map((value, i) => ({ id: `${id}${'abcd'[i]}`, value })),
-  correctOptionId: `${id}b`,
+  expectedAnswer: `${id} answer`,
   keyPointIndex: 0,
 });
 
-const even = (id: string) =>
-  mcq(id, [
-    'Climb to the minimum safe altitude',
-    'Maintain the last assigned altitude',
-    'Descend to the published approach fix',
-    'Turn toward the nearest suitable airfield',
-  ]);
-
-/** Correct answer (b) is the long, qualified one — the classic tell. */
-const giveaway = mcq('q2', [
-  'Climb',
-  'Maintain the last assigned altitude and squawk 7600 until on the ground',
-  'Descend',
-  'Turn left',
-]);
-
-const allPass = (ids: string[]) => ({
+const verdicts = (ids: string[], failing: string[] = []) => ({
   output: {
     results: ids.map((questionId) => ({
       questionId,
-      pass: true,
-      reason: 'ok',
+      pass: !failing.includes(questionId),
+      reason: failing.includes(questionId) ? 'quotes the key point' : 'ok',
     })),
-    allPassed: true,
+    allPassed: failing.length === 0,
   },
 });
+
+const SIX = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'];
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('generateTest', () => {
-  it('sends a length giveaway to the optimiser even when the evaluator passed it', async () => {
-    const fixed = { ...even('q2r') };
+  it('asks the model for six written questions in two sets of three, and no multiple choice', async () => {
     m.generateText
-      .mockResolvedValueOnce({ output: { questions: [even('q1'), giveaway] } })
-      .mockResolvedValueOnce(allPass(['q1', 'q2']))
-      .mockResolvedValueOnce({ output: { questions: [fixed] } })
-      .mockResolvedValueOnce(allPass(['q1', 'q2r']));
-
-    const test = await generateTest('l1', ['kp'], 'body');
-
-    // The optimiser is the consumer of the verdict: it must be handed the
-    // giveaway question and told why.
-    const optimiserPrompt = m.generateText.mock.calls[2][0].prompt as string;
-    expect(optimiserPrompt).toContain('### Question ID: q2');
-    expect(optimiserPrompt).toMatch(/noticeably longer than every distractor/);
-    expect(optimiserPrompt).not.toContain('### Question ID: q1');
-
-    expect(test.questions.map((q) => q.id).sort()).toEqual(['q1', 'q2r']);
-  });
-
-  it("does not hand the learner the model's always-B ordering", async () => {
-    const ids = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'];
-    m.generateText
-      .mockResolvedValueOnce({ output: { questions: ids.map(even) } })
-      .mockResolvedValueOnce(allPass(ids));
+      .mockResolvedValueOnce({ output: { questions: SIX.map(essay) } })
+      .mockResolvedValueOnce(verdicts(SIX));
 
     const test = await generateTest('l1', ['a', 'b', 'c', 'd'], 'body');
 
-    const slots = test.questions.map((q) =>
-      q.type === 'mcq'
-        ? q.options.findIndex((o) => o.id === q.correctOptionId)
-        : -1,
+    const prompt = m.generateText.mock.calls[0][0].prompt as string;
+    expect(prompt).toMatch(/exactly 6 free-text questions/);
+    expect(prompt).toMatch(/Questions 1–3 are the first set/);
+    expect(prompt).toMatch(/Questions 4–6 are the second set/);
+    expect(prompt).not.toMatch(/MCQ|multiple-choice/i);
+    expect(test.questions.map((q) => q.type)).toEqual(
+      Array(6).fill('free-text'),
     );
-    const counts = [0, 1, 2, 3].map((s) => slots.filter((x) => x === s).length);
-    expect(counts).toEqual([2, 2, 2, 2]);
+  });
+
+  it('puts a regenerated question back in its own slot, so the sets keep their order', async () => {
+    m.generateText
+      .mockResolvedValueOnce({ output: { questions: SIX.map(essay) } })
+      .mockResolvedValueOnce(verdicts(SIX, ['q2']))
+      .mockResolvedValueOnce({ output: { questions: [essay('q2r')] } })
+      .mockResolvedValueOnce(verdicts(['q1', 'q2r', 'q3', 'q4', 'q5', 'q6']));
+
+    const test = await generateTest('l1', ['kp'], 'body');
+
+    const optimiserPrompt = m.generateText.mock.calls[2][0].prompt as string;
+    expect(optimiserPrompt).toContain('### Question ID: q2');
+    expect(optimiserPrompt).not.toContain('### Question ID: q1');
+    expect(test.questions.map((q) => q.id)).toEqual([
+      'q1',
+      'q2r',
+      'q3',
+      'q4',
+      'q5',
+      'q6',
+    ]);
   });
 });

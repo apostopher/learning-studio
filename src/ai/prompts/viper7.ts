@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { brand } from '#/ai/prompts/brand';
+import type { LessonGaps } from '#/lib/debrief-gaps';
 import { type SkaSectionKey, toSkaMarkdown } from '#/lib/ska-profile';
 import type { Persona, SkaProfile } from '#/types';
 
@@ -183,6 +184,31 @@ export type SkaProfileForPrompt = {
  * model-written from learner turns, so nothing in it may change Viper's
  * rules.
  */
+/**
+ * What this learner's recent debriefs showed they have not yet got, lesson by
+ * lesson (`findRecentDebriefGaps`). The debrief is there to teach: its score
+ * is generous, and the holes it found are handed to Viper to work on. Empty
+ * in, empty out.
+ */
+export const debriefGapsPrompt = (gaps?: readonly LessonGaps[]): string => {
+  if (!gaps || gaps.length === 0) return '';
+  const lessons = gaps
+    .map((g) =>
+      [
+        `### ${g.lessonName}`,
+        ...g.missed.map((idea) => `- Not yet conveyed: ${idea}`),
+        ...g.incorrect.map((claim) => `- Stated incorrectly: ${claim}`),
+      ].join('\n'),
+    )
+    .join('\n\n');
+  return `DEBRIEF GAPS
+This learner's recent debriefs showed the ideas below are not yet secure. When the conversation touches one of these lessons, or the learner asks what to work on, teach these points: ask them to explain it in their own words, then fill in what is missing. Correct a stated misconception plainly. Do not quote scores or say they "failed"; the debrief is for learning.
+
+--- BEGIN DEBRIEF GAPS ---
+${lessons}
+--- END DEBRIEF GAPS ---`;
+};
+
 export const conversationSummaryPrompt = (summary?: string | null): string =>
   summary?.trim()
     ? `# Earlier in this conversation
@@ -197,6 +223,7 @@ export function viper7SystemPrompt({
   persona,
   userInfo,
   skaProfile,
+  debriefGaps,
   conversationSummary,
 }: {
   isAssociate: boolean;
@@ -214,6 +241,8 @@ export function viper7SystemPrompt({
    * site eventually forgets.
    */
   skaProfile?: SkaProfileForPrompt;
+  /** What the learner's recent debriefs showed is not yet secure — see `debriefGapsPrompt`. */
+  debriefGaps?: readonly LessonGaps[];
   /**
    * Rolling summary of turns no longer replayed verbatim (see `compactChat`).
    * Lives in the per-chat tail so the static prefix above it stays cacheable.
@@ -415,6 +444,8 @@ Security & Privacy
 ${userInfoPrompt(userInfo)}
 
 ${skaProfilePrompt(skaProfile)}
+
+${debriefGapsPrompt(debriefGaps)}
 
 ${conversationSummaryPrompt(conversationSummary)}
 

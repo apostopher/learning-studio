@@ -22,6 +22,7 @@ beforeEach(() => {
   getLessonProgress.mockResolvedValue({
     milestonesHit: [10, 15],
     watched: false,
+    rewatch: null,
   });
   getLessonIdBySlug.mockResolvedValue(10);
 });
@@ -52,10 +53,14 @@ describe('getVideoProgressHandler', () => {
     expect(await res.json()).toEqual({
       milestonesHit: [10, 15],
       watched: false,
+      rewatch: null,
     });
+    // The slug reaches the read: it is how the owed rewatch finds the
+    // lesson's debrief attempts.
     expect(getLessonProgress).toHaveBeenCalledWith({
       userId: 'user-1',
       lessonId: 10,
+      lessonSlug: 'l1',
     });
   });
 
@@ -69,7 +74,12 @@ describe('getVideoProgressHandler', () => {
     // probing this endpoint. The body must be indistinguishable from a real,
     // never-started lesson's progress.
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ milestonesHit: [], watched: false });
+    // `rewatch: null` too — a never-started lesson has no debrief to owe one.
+    expect(await res.json()).toEqual({
+      milestonesHit: [],
+      watched: false,
+      rewatch: null,
+    });
     expect(getLessonProgress).not.toHaveBeenCalled();
   });
 

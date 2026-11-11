@@ -6,6 +6,7 @@ import {
 } from '#/ai/prompts/voice-mode';
 import { loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
+import { findRecentDebriefGaps } from '#/db/debrief-gaps';
 import { getCallByConversation } from '#/db/video-calls';
 import { env } from '#/env';
 import { getActiveOrgId } from '#/lib/active-org.server';
@@ -86,10 +87,11 @@ export async function tavusCompletionsHandler(
       if (!history.some((m) => m.role === 'user'))
         return once(VOICE_NO_TURN_REPLY);
 
-      const [persona, skaProfile, context] = await Promise.all([
+      const [persona, skaProfile, context, debriefGaps] = await Promise.all([
         resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
         resolveChatSkaProfile({ userId: call.userId, courseSlug }),
         loadChatContext(call.userId, call.chatId),
+        findRecentDebriefGaps(call.userId),
       ]);
       // loadChatContext already keeps only user/assistant rows and caps them.
       const prior = context?.entries.map((e) => e.message) ?? [];
@@ -111,6 +113,7 @@ export async function tavusCompletionsHandler(
         courseSlug,
         userId: call.userId,
         skaProfile,
+        debriefGaps,
         voice: { tavusRules },
         abortSignal: request.signal,
       });

@@ -2,6 +2,7 @@ import { Collapsible } from '@base-ui/react/collapsible';
 import { ChevronDown, CircleCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
+import type { DebriefGaps } from '#/lib/debrief-gaps';
 import { ScoreReport } from './score-report';
 
 export type DebriefAttemptRow = {
@@ -12,6 +13,7 @@ export type DebriefAttemptRow = {
   passed: boolean;
   questions: AITestQuestion[];
   evaluations: AIEvaluationResult[];
+  gaps: DebriefGaps;
 };
 
 type DebriefAttemptHistoryProps = {
@@ -73,6 +75,7 @@ export const DebriefAttemptHistory = ({
                 score={attempt.score}
                 questions={attempt.questions}
                 evaluations={attempt.evaluations}
+                gaps={attempt.gaps}
               />
             </Collapsible.Panel>
           </Collapsible.Root>

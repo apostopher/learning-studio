@@ -32,10 +32,11 @@ export const DebriefIntro = ({
     */}
     <p className="text-secondary text-sm">
       {retake
-        ? `Your last attempt was below ${DEBRIEF_PAR_SCORE}, so this is a fresh set of questions.`
-        : 'A short set of questions on this lesson.'}{' '}
-      Score {DEBRIEF_PAR_SCORE} or more to pass. Your answers are scored and
-      saved.
+        ? `Your last attempt was below ${DEBRIEF_PAR_SCORE}, so these are fresh questions. `
+        : ''}
+      Three questions on this lesson, answered in your own words. Average{' '}
+      {DEBRIEF_PAR_SCORE} or more to pass. If you fall short, three more follow,
+      and your score is the average of all six.
     </p>
     <button
       type="button"

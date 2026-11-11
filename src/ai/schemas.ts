@@ -31,9 +31,11 @@ export const AITestQuestionSchema = z.discriminatedUnion('type', [
   AITestFreeTextQuestionSchema,
 ]);
 
-// Generation output (what the AI returns)
+// Generation output (what the AI returns). Written questions only: debriefs
+// stopped asking MCQ on 2026-11-11. MCQ stays in `AITestQuestionSchema` so
+// attempts saved before then still parse and render.
 export const AITestGenerationOutputSchema = z.object({
-  questions: z.array(AITestQuestionSchema),
+  questions: z.array(AITestFreeTextQuestionSchema),
 });
 
 // Full test with lesson slug

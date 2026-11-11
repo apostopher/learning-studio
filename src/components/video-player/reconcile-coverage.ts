@@ -1,4 +1,8 @@
-export type ProgressSnapshot = { milestonesHit: number[]; watched: boolean };
+export type ProgressSnapshot = {
+  milestonesHit: number[];
+  watched: boolean;
+  rewatch?: { since: string; milestonesHit: number[] } | null;
+};
 
 /**
  * Called once, the moment the client believes it has covered every milestone.
@@ -29,9 +33,13 @@ export async function reconcileCoverage({
   } catch {
     return [];
   }
-  if (snapshot.watched) return [];
+  // A rewatch owed is measured against its own milestones: the first watch's
+  // are all on the server already, and would hide a dropped rewatch report.
+  if (snapshot.watched && !snapshot.rewatch) return [];
 
-  const onServer = new Set(snapshot.milestonesHit);
+  const onServer = new Set(
+    snapshot.rewatch?.milestonesHit ?? snapshot.milestonesHit,
+  );
   const missing = [...reported]
     .filter((m) => !onServer.has(m))
     .sort((a, b) => a - b);

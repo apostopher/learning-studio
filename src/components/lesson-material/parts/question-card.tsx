@@ -160,6 +160,8 @@ type QuestionCardProps = {
   question: AITestQuestion;
   index: number;
   total: number;
+  /** Shown above the question — the second set's opening note, else null. */
+  notice?: string | null;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
   /**
@@ -174,6 +176,7 @@ export const QuestionCard = ({
   question,
   index,
   total,
+  notice = null,
   isEvaluating,
   onSubmit,
   readOnly,
@@ -196,6 +199,12 @@ export const QuestionCard = ({
           {question.type === 'mcq' ? 'Multiple choice' : 'Free text'}
         </span>
       </div>
+
+      {notice && (
+        <p className="rounded-lg border border-gray-6 bg-gray-3 px-3 py-2.5 text-sm text-secondary">
+          {notice}
+        </p>
+      )}
 
       {/* Question text */}
       <p className="text-sm font-medium leading-relaxed text-primary">

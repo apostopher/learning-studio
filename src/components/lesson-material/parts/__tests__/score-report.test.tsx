@@ -49,6 +49,30 @@ describe('ScoreReport', () => {
     ).toBeDefined();
   });
 
+  it('lists what is worth revisiting — the ideas missed and the claims that were wrong', () => {
+    render(
+      <ScoreReport
+        {...props}
+        gaps={{
+          missed: ['A human pilot commands the aircraft over a radio link'],
+          incorrect: ["Tesla's boat steered itself"],
+        }}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Worth revisiting' });
+    expect(section.textContent).toContain(
+      'A human pilot commands the aircraft over a radio link',
+    );
+    expect(section.textContent).toContain("Tesla's boat steered itself");
+  });
+
+  it('has no revisit section when nothing was missed', () => {
+    render(<ScoreReport {...props} gaps={{ missed: [], incorrect: [] }} />);
+    expect(
+      screen.queryByRole('region', { name: 'Worth revisiting' }),
+    ).toBeNull();
+  });
+
   it('expands a question to the answer given', async () => {
     render(<ScoreReport {...props} />);
     await userEvent.click(screen.getByRole('button', { name: /What is V1/ }));

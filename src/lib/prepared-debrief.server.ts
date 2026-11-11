@@ -34,12 +34,25 @@ function claimKey({
 }
 
 /**
- * sha256 hex of the text a debrief is generated from. Stored with the
- * prepared test and compared at claim time, so a test built from material or
- * a transcript that has since changed is never served (spec call 14).
+ * The shape of debrief `generateTest` builds. Part of the fingerprint, so a
+ * change of shape retires every test prepared in the old one. Bump it with
+ * any change a prepared test must not outlive.
+ *
+ * essay-sets-v1 (2026-11-11): six written questions in two sets of three,
+ * replacing 20 mixed MCQ and written questions.
+ */
+const DEBRIEF_FORMAT = 'essay-sets-v1';
+
+/**
+ * sha256 hex of the debrief format and the text a debrief is generated from.
+ * Stored with the prepared test and compared at claim time, so a test built
+ * from material or a transcript that has since changed — or in an older
+ * format — is never served (spec call 14).
  */
 export function sourceFingerprint(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
+  return createHash('sha256')
+    .update(`${DEBRIEF_FORMAT}\n${text}`)
+    .digest('hex');
 }
 
 export type PrepareOutcome =

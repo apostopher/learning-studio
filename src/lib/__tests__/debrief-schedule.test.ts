@@ -20,6 +20,8 @@ const facts = (overrides: Partial<DebriefFacts>): DebriefFacts => ({
   clockStartAt: null,
   passed: false,
   lastFailedAt: null,
+  hasVideo: false,
+  rewatchedAt: null,
   ...overrides,
 });
 
@@ -78,6 +80,33 @@ describe('computeDebriefState', () => {
     ).toEqual({ kind: 'open', retake: true });
   });
 
+  it('on a video lesson, waits for a full rewatch after a below-par attempt — not for a clock', () => {
+    expect(
+      computeDebriefState(
+        facts({
+          hasVideo: true,
+          clockStartAt: hoursAgo(48),
+          lastFailedAt: hoursAgo(100),
+        }),
+        now,
+      ),
+    ).toEqual({ kind: 'rewatch-required' });
+  });
+
+  it('on a video lesson, opens the redo the moment the rewatch is complete', () => {
+    expect(
+      computeDebriefState(
+        facts({
+          hasVideo: true,
+          clockStartAt: hoursAgo(48),
+          lastFailedAt: hoursAgo(2),
+          rewatchedAt: hoursAgo(1),
+        }),
+        now,
+      ),
+    ).toEqual({ kind: 'open', retake: true });
+  });
+
   it('uses the later of clockStartAt and lastFailedAt when history is backfilled', () => {
     // lastFailedAt is earlier than the clock start: the schedule runs from it.
     expect(
@@ -122,32 +151,57 @@ describe('debriefClockStart', () => {
   const video = '2026-10-27T08:00:00.000Z';
   const done = '2026-10-27T10:00:00.000Z';
 
-  it('starts when the video is watched, before the lesson is done', () => {
-    expect(debriefClockStart(video, null)).toBe(video);
+  it('on a video lesson, starts only when the video is fully watched', () => {
+    expect(
+      debriefClockStart({
+        hasVideo: true,
+        videoWatchedAt: video,
+        doneAt: done,
+      }),
+    ).toBe(video);
+    expect(
+      debriefClockStart({
+        hasVideo: true,
+        videoWatchedAt: video,
+        doneAt: null,
+      }),
+    ).toBe(video);
   });
 
-  it('starts at done when there is no watched video', () => {
-    expect(debriefClockStart(null, done)).toBe(done);
+  it('on a video lesson, a lesson done without the video does not start it', () => {
+    // A lesson that does not require the video can be done without it; the
+    // debrief still waits for the full watch.
+    expect(
+      debriefClockStart({ hasVideo: true, videoWatchedAt: null, doneAt: done }),
+    ).toBeNull();
   });
 
-  it('takes whichever came first', () => {
-    expect(debriefClockStart(video, done)).toBe(video);
-    expect(debriefClockStart(done, video)).toBe(video);
-  });
-
-  it('has not started when neither has happened', () => {
-    expect(debriefClockStart(null, null)).toBeNull();
+  it('on a lesson with no video, starts when the lesson is done', () => {
+    expect(
+      debriefClockStart({
+        hasVideo: false,
+        videoWatchedAt: null,
+        doneAt: done,
+      }),
+    ).toBe(done);
+    expect(
+      debriefClockStart({
+        hasVideo: false,
+        videoWatchedAt: null,
+        doneAt: null,
+      }),
+    ).toBeNull();
   });
 });
 
 describe('isPass', () => {
-  it('passes at par (70) and above', () => {
-    expect(isPass(70)).toBe(true);
+  it('passes at par (75) and above', () => {
+    expect(isPass(75)).toBe(true);
     expect(isPass(100)).toBe(true);
   });
 
   it('fails below par', () => {
-    expect(isPass(69)).toBe(false);
+    expect(isPass(74)).toBe(false);
   });
 });
 
@@ -158,6 +212,8 @@ describe('debriefBadge', () => {
     expect(
       debriefBadge({ kind: 'retake-waiting', availableAt: hoursAgo(-1) }),
     ).toBe('debrief');
+    // Rewatching is the pilot's next step, so the lesson still asks for them.
+    expect(debriefBadge({ kind: 'rewatch-required' })).toBe('debrief');
   });
 
   it('shows passed for passed', () => {

@@ -2,6 +2,8 @@ import { Collapsible } from '@base-ui/react/collapsible';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
+import type { DebriefGaps } from '#/lib/debrief-gaps';
+import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
@@ -14,11 +16,13 @@ type ScoreReportProps = {
    * reopening 12h later (call 8).
    */
   footer?: ReactNode;
+  /** What the answers showed is not yet secure (`debriefGaps`); a list when non-empty. */
+  gaps?: DebriefGaps;
 };
 
 const gradeLabel = (score: number): string => {
   if (score >= 90) return 'Excellent';
-  if (score >= 70) return 'Good';
+  if (score >= DEBRIEF_PAR_SCORE) return 'Good';
   if (score >= 50) return 'Needs Review';
   return 'Keep Practicing';
 };
@@ -36,8 +40,13 @@ export const ScoreReport = ({
   questions,
   evaluations,
   footer,
+  gaps,
 }: ScoreReportProps) => {
-  const correctCount = evaluations.filter((e) => e.score >= 70).length;
+  const correctCount = evaluations.filter(
+    (e) => e.score >= DEBRIEF_PAR_SCORE,
+  ).length;
+  const hasGaps =
+    gaps !== undefined && (gaps.missed.length > 0 || gaps.incorrect.length > 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,6 +65,31 @@ export const ScoreReport = ({
 
         {footer}
       </div>
+
+      {hasGaps && (
+        <section
+          aria-labelledby="debrief-revisit-heading"
+          className="flex flex-col gap-2 rounded-xl border border-gray-6 bg-gray-2 px-5 py-4"
+        >
+          <h2
+            id="debrief-revisit-heading"
+            className="text-base font-semibold text-primary"
+          >
+            Worth revisiting
+          </h2>
+          <ul className="flex list-disc flex-col gap-1 ps-5 text-sm text-primary">
+            {gaps.missed.map((idea) => (
+              <li key={`m-${idea}`}>{idea}</li>
+            ))}
+            {gaps.incorrect.map((claim) => (
+              <li key={`i-${claim}`}>
+                <span className="text-secondary">Not quite right: </span>
+                {claim}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Question review */}
       <div className="flex flex-col gap-3">

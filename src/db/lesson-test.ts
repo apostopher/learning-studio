@@ -7,7 +7,10 @@ import {
   AITestSchema,
 } from '#/ai/schemas';
 import { db } from '#/db';
-import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  videoRewatchedAtSql,
+  videoWatchedAtSql,
+} from '#/db/progress-components';
 import {
   DEBRIEF_PAR_SCORE,
   type DebriefFacts,
@@ -180,7 +183,7 @@ export async function getDebriefAttemptReports(
  * - lastFailedAt: the latest completed attempt with `total_score < par`,
  *   reported whether or not a pass also exists (the SQL selects both);
  * - clockStartAt: the earlier of the video's first full coverage (the same
- *   `videoWatchedAtSql` fragment) and the sticky `lesson_completions.done_at`
+ *   `videoWatchedAtSql` fragment) on a video lesson, else the sticky `lesson_completions.done_at`
  *   for (user, lesson id) — see `debriefClockStart`.
  *
  * The two must agree, or the lesson list would show a debrief the generate
@@ -204,7 +207,16 @@ export async function getDebriefFacts(
       )
       .limit(1),
     db
-      .select({ videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id) })
+      .select({
+        videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
+        videoRewatchedAt: videoRewatchedAtSql(
+          userId,
+          lessonsTable.id,
+          lessonsTable.slug,
+        ),
+        videoProvider: lessonsTable.videoProvider,
+        videoRef: lessonsTable.videoRef,
+      })
       .from(lessonsTable)
       .where(eq(lessonsTable.id, lessonId))
       .limit(1),
@@ -214,14 +226,23 @@ export async function getDebriefFacts(
     .filter((a) => a.totalScore < DEBRIEF_PAR_SCORE)
     .map((a) => Date.parse(a.completedAt));
   const doneAt = completions[0]?.doneAt ?? null;
-  // A raw `sql<Date>` column: the driver hands back an offset-bearing string.
-  const videoWatchedAt = watched[0]?.videoWatchedAt ?? null;
+  // Raw `sql<Date>` columns: the driver hands back offset-bearing strings.
+  const iso = (v: Date | string | null | undefined) =>
+    v == null ? null : new Date(v).toISOString();
+  const lesson = watched[0];
+  // The same two columns the rollup's `hasVideo` reads.
+  const hasVideo =
+    (lesson?.videoProvider ?? null) !== null &&
+    (lesson?.videoRef ?? null) !== null;
 
   return {
-    clockStartAt: debriefClockStart(
-      videoWatchedAt === null ? null : new Date(videoWatchedAt).toISOString(),
-      doneAt === null ? null : doneAt.toISOString(),
-    ),
+    clockStartAt: debriefClockStart({
+      hasVideo,
+      videoWatchedAt: iso(lesson?.videoWatchedAt),
+      doneAt: doneAt === null ? null : doneAt.toISOString(),
+    }),
+    hasVideo,
+    rewatchedAt: iso(lesson?.videoRewatchedAt),
     passed: attempts.some((a) => a.totalScore >= DEBRIEF_PAR_SCORE),
     lastFailedAt:
       failedMs.length === 0

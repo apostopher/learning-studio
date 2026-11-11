@@ -469,8 +469,8 @@ describe('save-results', () => {
     expect(res.status).toBe(200);
   });
 
-  it('does not prepare anything after a pass (70 is par)', async () => {
-    await save(70);
+  it('does not prepare anything after a pass (75 is par)', async () => {
+    await save(75);
     expect(m.prepareDebrief).not.toHaveBeenCalled();
     expect(m.waitUntil).not.toHaveBeenCalled();
   });

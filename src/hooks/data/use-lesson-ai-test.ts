@@ -8,6 +8,7 @@ import {
   currentQuestionAtom,
   currentQuestionIndexAtom,
   currentTestAtom,
+  debriefAttemptAtom,
   evaluationsAtom,
   isEvaluatingAtom,
   isGeneratingAtom,
@@ -18,6 +19,7 @@ import { extractPromotion, pendingPromotionAtom } from '#/atoms/promotion';
 import { invalidateLessonDoneReaders } from '#/data-hooks/invalidate-lesson-done';
 import { dataKeys } from '#/data-hooks/keys';
 import type { LessonRef } from '#/lib/lesson-ref';
+import { attemptToSave } from './debrief-attempt-to-save';
 
 /**
  * The three debrief requests, factored out of the hooks below and exported so
@@ -119,15 +121,22 @@ export async function postSaveResults({
 }
 
 /**
- * A saved attempt can change the debrief's state (passed, or re-locked for
- * 12h) and the course rollup's debrief badges. Invalidate rather than write
+ * A saved attempt can change the debrief's state (passed, or re-locked until
+ * a rewatch or for 12h) and the course rollup's debrief badges. Invalidate rather than write
  * a partial state: the server owns what the new state is.
  */
 export function invalidateAfterSave(
   queryClient: QueryClient,
   lesson: LessonRef,
 ) {
-  return invalidateLessonDoneReaders(queryClient, lesson);
+  return Promise.all([
+    invalidateLessonDoneReaders(queryClient, lesson),
+    // A below-par attempt on a video lesson starts a rewatch, which the video
+    // progress read names — the player re-seeds from it (see `owedRewatch`).
+    queryClient.invalidateQueries({
+      queryKey: dataKeys.lessonProgress(lesson.lessonSlug),
+    }),
+  ]);
 }
 
 // Read hooks — thin wrappers over atoms
@@ -139,6 +148,7 @@ export const useEvaluations = () => useAtomValue(evaluationsAtom);
 export const useIsGenerating = () => useAtomValue(isGeneratingAtom);
 export const useIsEvaluating = () => useAtomValue(isEvaluatingAtom);
 export const useTotalScore = () => useAtomValue(totalScoreAtom);
+export const useDebriefAttempt = () => useAtomValue(debriefAttemptAtom);
 export const useTestResults = (lessonSlug: string) =>
   useAtomValue(testResultsAtomFamily(lessonSlug));
 
@@ -252,20 +262,15 @@ export function useSaveResults() {
   return useAtomCallback(
     useCallback(
       async (get, set, courseSlug: string) => {
-        const test = get(currentTestAtom);
-        const evaluations = get(evaluationsAtom);
-        const totalScore = get(totalScoreAtom);
-
-        if (!test) throw new Error('No test to save');
-        const lesson = { courseSlug, lessonSlug: test.lessonSlug };
+        const session = get(currentTestAtom);
+        if (!session) throw new Error('No test to save');
+        const lesson = { courseSlug, lessonSlug: session.lessonSlug };
 
         let json: unknown;
         try {
           json = await postSaveResults({
             courseSlug,
-            test,
-            evaluations,
-            totalScore,
+            ...attemptToSave(session, get(evaluationsAtom)),
           });
         } catch (error) {
           if (refreshIfNotOpen(queryClient, lesson, error)) return null;

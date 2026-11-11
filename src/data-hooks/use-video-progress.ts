@@ -7,6 +7,14 @@ export const videoProgressSchema = z.object({
   milestonesHit: z.array(z.number()),
   /** Whether the video counts as watched (every milestone except 100). */
   watched: z.boolean(),
+  /**
+   * A below-par debrief is owed a rewatch: the milestones reached since that
+   * attempt (`owedRewatch`). The reporter seeds from these while present.
+   */
+  rewatch: z
+    .object({ since: z.string(), milestonesHit: z.array(z.number()) })
+    .nullable()
+    .default(null),
 });
 
 export type VideoProgress = z.infer<typeof videoProgressSchema>;

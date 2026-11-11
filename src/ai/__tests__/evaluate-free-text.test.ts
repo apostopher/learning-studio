@@ -35,13 +35,29 @@ describe('scoreFreeTextEval', () => {
     ).toBe(100);
   });
 
-  it('counts a partly-conveyed idea as half', () => {
+  it('gives full marks at 80% of the ideas conveyed — the debrief teaches, it does not hunt', () => {
+    expect(
+      scoreFreeTextEval({
+        essentialIdeas: [
+          idea('fully'),
+          idea('fully'),
+          idea('fully'),
+          idea('fully'),
+          idea('not'),
+        ],
+        incorrectClaims: [],
+      }),
+    ).toBe(100);
+  });
+
+  it('counts a partly-conveyed idea as half, scaled so 80% is full marks', () => {
+    // 75% conveyed ÷ 0.8
     expect(
       scoreFreeTextEval({
         essentialIdeas: [idea('fully'), idea('partly')],
         incorrectClaims: [],
       }),
-    ).toBe(75);
+    ).toBe(94);
   });
 
   it('takes 25 points off per incorrect claim', () => {
@@ -60,7 +76,7 @@ describe('scoreFreeTextEval', () => {
   });
 
   it('lets incorrect claims take at most HALF of what the answer earned', () => {
-    // The RPGEN 02 Tesla answer: one idea partly conveyed of three (17
+    // The RPGEN 02 Tesla answer: one idea partly conveyed of three (21
     // earned), one claim flagged. It used to floor at 0, contradicting an
     // explanation that opened "You correctly identified…".
     expect(
@@ -68,7 +84,7 @@ describe('scoreFreeTextEval', () => {
         essentialIdeas: [idea('partly'), idea('not'), idea('not')],
         incorrectClaims: ['AI analogy'],
       }),
-    ).toBe(8);
+    ).toBe(10);
     // A full answer with three wrong claims keeps half, not 25.
     expect(
       scoreFreeTextEval({
@@ -84,7 +100,7 @@ describe('scoreFreeTextEval', () => {
         essentialIdeas: [idea('fully'), idea('not'), idea('not')],
         incorrectClaims: [],
       }),
-    ).toBe(33);
+    ).toBe(42);
   });
 });
 

@@ -1,6 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { viper7Quotes, viper7SystemPrompt } from '#/ai/prompts/viper7';
 
+describe('viper7SystemPrompt — debrief gaps', () => {
+  const GAPS = [
+    {
+      lessonName: 'RPGEN 02 PAST to PRESENT',
+      missed: ['A human pilot commands the aircraft over a radio link'],
+      incorrect: ["Tesla's boat steered itself"],
+    },
+  ];
+
+  it("tells Viper what each lesson's debrief showed the learner has not yet got, and to teach it", () => {
+    const s = viper7SystemPrompt({ isAssociate: false, debriefGaps: GAPS });
+    expect(s).toContain('RPGEN 02 PAST to PRESENT');
+    expect(s).toContain(
+      'A human pilot commands the aircraft over a radio link',
+    );
+    expect(s).toContain("Tesla's boat steered itself");
+    expect(s).toMatch(/teach/i);
+  });
+
+  it('says nothing about debriefs when there are no gaps', () => {
+    expect(
+      viper7SystemPrompt({ isAssociate: false, debriefGaps: [] }),
+    ).not.toContain('DEBRIEF GAPS');
+    expect(viper7SystemPrompt({ isAssociate: false })).not.toContain(
+      'DEBRIEF GAPS',
+    );
+  });
+});
+
 describe('viper7SystemPrompt', () => {
   it('injects user name/callsign when provided', () => {
     const s = viper7SystemPrompt({

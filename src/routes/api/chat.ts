@@ -10,6 +10,7 @@ import { buildChatStream } from '#/ai/chat';
 import { compactChat, shouldCompact } from '#/ai/compact-chat';
 import { appendMessages, ensureChat, loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
+import { findRecentDebriefGaps } from '#/db/debrief-gaps';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
@@ -88,7 +89,7 @@ export async function chatHandler(request: Request): Promise<Response> {
 
   const { chatId: requestChatId, messages, courseSlug } = parsed.data;
 
-  const [persona, skaProfile] = await Promise.all([
+  const [persona, skaProfile, debriefGaps] = await Promise.all([
     // Personas are org-level and a course may pin its own: this resolves
     // `course_orgs.personaId` → the org default → null (prompt defaults).
     // It reads published `content` only — a persona's unpublished
@@ -98,6 +99,8 @@ export async function chatHandler(request: Request): Promise<Response> {
     // context — see resolveChatSkaProfile. Joins the existing parallel read
     // rather than adding a round trip of its own.
     resolveChatSkaProfile({ userId: session.user.id, courseSlug }),
+    // What their recent debriefs showed is not yet secure, for Viper to teach.
+    findRecentDebriefGaps(session.user.id),
   ]);
 
   const userInfo = {
@@ -157,6 +160,7 @@ export async function chatHandler(request: Request): Promise<Response> {
         courseSlug,
         userId: session.user.id,
         skaProfile,
+        debriefGaps,
         // `BuildChatStreamOptions.writer` is typed as `{ write: (p: unknown) => void }`
         // (loosened so #/ai/chat doesn't need to import ai@6's UIMessageStreamWriter
         // type directly) which is contravariantly narrower than the real ai@6

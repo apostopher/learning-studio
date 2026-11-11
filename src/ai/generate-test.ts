@@ -1,13 +1,13 @@
 import { generateText, Output } from 'ai';
+import { DEBRIEF_QUESTION_COUNT, DEBRIEF_SET_SIZE } from '#/lib/debrief-sets';
 import { haiku, sonnet } from './ai-provider';
-import { balanceAnswerPositions, withLengthGiveaways } from './mcq-answer-bias';
 import { evaluatorPrompt } from './prompts/evaluator';
 import { generationPrompt } from './prompts/generation';
 import { optimizerPrompt } from './prompts/optimizer';
 import {
   type AITest,
+  type AITestFreeTextQuestion,
   AITestGenerationOutputSchema,
-  type AITestQuestion,
   type EvaluatorOutput,
   EvaluatorOutputSchema,
 } from './schemas';
@@ -17,10 +17,7 @@ const MAX_RETRIES = 2;
 async function generate(
   keyPoints: string[],
   text: string,
-  questionCount: number,
-  mcqCount: number,
-  freeTextCount: number,
-): Promise<AITestQuestion[]> {
+): Promise<AITestFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
     output: Output.object({
@@ -29,9 +26,8 @@ async function generate(
     prompt: generationPrompt({
       keyPoints,
       text,
-      questionCount,
-      mcqCount,
-      freeTextCount,
+      questionCount: DEBRIEF_QUESTION_COUNT,
+      setSize: DEBRIEF_SET_SIZE,
     }),
   });
   return output.questions;
@@ -40,7 +36,7 @@ async function generate(
 async function evaluate(
   keyPoints: string[],
   text: string,
-  questions: AITestQuestion[],
+  questions: AITestFreeTextQuestion[],
 ): Promise<EvaluatorOutput> {
   const { output } = await generateText({
     model: haiku,
@@ -55,9 +51,9 @@ async function evaluate(
 async function optimize(
   keyPoints: string[],
   text: string,
-  failedQuestions: AITestQuestion[],
+  failedQuestions: AITestFreeTextQuestion[],
   evaluatorFeedback: EvaluatorOutput['results'],
-): Promise<AITestQuestion[]> {
+): Promise<AITestFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
     output: Output.object({
@@ -73,51 +69,46 @@ async function optimize(
   return output.questions;
 }
 
+/**
+ * A debrief: six written questions, the first set of three then the second
+ * (see `debriefSetsProgress` for when the second is asked). Written answers
+ * only — a pilot explains, they do not pick.
+ *
+ * Generate with Sonnet, quality-check with Haiku, regenerate failures with
+ * Sonnet (at most twice). A regenerated question takes its original's slot,
+ * so a question written for the second set never moves into the first.
+ */
 export async function generateTest(
   lessonSlug: string,
   keyPoints: string[],
   text: string,
 ): Promise<AITest> {
-  const questionCount = keyPoints.length * 2;
-  const mcqCount = Math.round(questionCount * 0.7);
-  const freeTextCount = questionCount - mcqCount;
-
-  // Step 1: Generate initial questions using Sonnet
-  let questions = await generate(
-    keyPoints,
-    text,
-    questionCount,
-    mcqCount,
-    freeTextCount,
+  let questions = (await generate(keyPoints, text)).slice(
+    0,
+    DEBRIEF_QUESTION_COUNT,
   );
 
-  // Step 2-3: Evaluate with Haiku, optimize failures with Sonnet (max 2 retries)
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const evaluation = await evaluate(keyPoints, text, questions);
-    // The model judges quality; length is measured, so a correct option that
-    // is visibly the longest is caught even when the evaluator lets it pass.
-    const results = withLengthGiveaways(evaluation.results, questions);
-
-    const hasFailed = results.some((r) => !r.pass);
-    if (!hasFailed) break;
-
+    const { results } = await evaluate(keyPoints, text, questions);
     const failedIds = new Set(
       results.filter((r) => !r.pass).map((r) => r.questionId),
     );
-    const failedQuestions = questions.filter((q) => failedIds.has(q.id));
-    const passedQuestions = questions.filter((q) => !failedIds.has(q.id));
-    const failedFeedback = results.filter((r) => !r.pass);
+    if (failedIds.size === 0) break;
 
+    const failedQuestions = questions.filter((q) => failedIds.has(q.id));
     const regenerated = await optimize(
       keyPoints,
       text,
       failedQuestions,
-      failedFeedback,
+      results.filter((r) => !r.pass),
     );
-    questions = [...passedQuestions, ...regenerated];
+    // In order, one for one; a failure the optimiser returned nothing for
+    // keeps its original rather than shrinking the debrief.
+    let next = 0;
+    questions = questions.map((q) =>
+      failedIds.has(q.id) ? (regenerated[next++] ?? q) : q,
+    );
   }
 
-  // Last, so regenerated questions are placed too: the model's own ordering
-  // (correct answer mostly B) never reaches the learner.
-  return { lessonSlug, questions: balanceAnswerPositions(questions) };
+  return { lessonSlug, questions };
 }

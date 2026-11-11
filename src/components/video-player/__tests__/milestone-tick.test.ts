@@ -185,3 +185,81 @@ describe('computeMilestoneTick', () => {
     expect(next.state.reported.size).toBe(0);
   });
 });
+
+describe('computeMilestoneTick — rewatch after a below-par debrief', () => {
+  const ALL = [
+    10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95,
+  ];
+  const rewatch = (since: string, milestonesHit: number[] = []) => ({
+    since,
+    milestonesHit,
+  });
+
+  it('reports milestones the pilot already reached once, again, while a rewatch is owed', () => {
+    let state = initialMilestoneReporterState;
+    ({ state } = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 9,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z'),
+    }));
+    const result = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 10.5,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z'),
+    });
+    expect(result.crossed).toEqual([10]);
+  });
+
+  it('re-seeds when a fresh failure starts a new rewatch, on the same lesson and page', () => {
+    // Fully watched and seeded; then the debrief is failed and the progress
+    // refetch names a rewatch. Without the re-seed the reporter would think
+    // everything was already reported and the rewatch could never finish.
+    let state = initialMilestoneReporterState;
+    ({ state } = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 9,
+      duration: DURATION,
+      milestonesHit: ALL,
+    }));
+    ({ state } = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 9.2,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z'),
+    }));
+    const result = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 10.5,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z'),
+    });
+    expect(result.crossed).toEqual([10]);
+  });
+
+  it('reconciles once the rewatch itself is complete', () => {
+    const almost = ALL.filter((m) => m !== 95);
+    let state = initialMilestoneReporterState;
+    ({ state } = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 94,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z', almost),
+    }));
+    const result = computeMilestoneTick(state, {
+      lessonSlug: 'v1',
+      currentTime: 95.5,
+      duration: DURATION,
+      milestonesHit: ALL,
+      rewatch: rewatch('2026-11-11T10:00:00.000Z', almost),
+    });
+    expect(result.crossed).toEqual([95]);
+    expect(result.shouldReconcile).toBe(true);
+  });
+});

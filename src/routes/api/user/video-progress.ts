@@ -4,7 +4,11 @@ import { getLessonProgress } from '#/db/videos-progress';
 import { auth } from '#/lib/auth';
 
 /** The progress shape for a lesson nothing has ever been recorded against. */
-const ZERO_PROGRESS = { milestonesHit: [] as number[], watched: false };
+const ZERO_PROGRESS = {
+  milestonesHit: [] as number[],
+  watched: false,
+  rewatch: null,
+};
 
 /**
  * Read the logged-in user's progress for a single lesson (`?lessonSlug=`) —
@@ -45,6 +49,7 @@ export async function getVideoProgressHandler(
     const progress = await getLessonProgress({
       userId: session.user.id,
       lessonId,
+      lessonSlug,
     });
     return Response.json(progress);
   } catch (error) {

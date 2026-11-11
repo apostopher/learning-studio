@@ -52,6 +52,8 @@ export type LessonProgressRow = {
   doneAt: string | null;
   /** ISO. When the video was finished (first full coverage). Starts the debrief clock. */
   videoWatchedAt: string | null;
+  /** ISO. When the video was watched again after the latest below-par debrief. */
+  videoRewatchedAt: string | null;
 
   /** The learner has opened this lesson's page at least once. */
   visited: boolean;
@@ -240,9 +242,15 @@ export function aggregateCourseProgress(
       done: row.doneAt !== null,
       outstanding: lessonOutstanding(row),
       debrief: {
-        clockStartAt: debriefClockStart(row.videoWatchedAt, row.doneAt),
+        clockStartAt: debriefClockStart({
+          hasVideo: row.hasVideo,
+          videoWatchedAt: row.videoWatchedAt,
+          doneAt: row.doneAt,
+        }),
         passed: row.debriefPassed,
         lastFailedAt: row.lastFailedDebriefAt,
+        hasVideo: row.hasVideo,
+        rewatchedAt: row.videoRewatchedAt,
         bearing: row.debriefBearing,
       },
     });

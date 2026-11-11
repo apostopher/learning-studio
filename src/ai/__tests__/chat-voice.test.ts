@@ -15,9 +15,10 @@ vi.mock('ai', () => ({
   streamText,
 }));
 vi.mock('#/ai/ai-provider', () => ({ geminiFlash: 'model' }));
-vi.mock('#/ai/prompts/viper7', () => ({
-  viper7SystemPrompt: () => 'BASE PROMPT',
+const { viper7SystemPrompt } = vi.hoisted(() => ({
+  viper7SystemPrompt: vi.fn((_opts: Record<string, unknown>) => 'BASE PROMPT'),
 }));
+vi.mock('#/ai/prompts/viper7', () => ({ viper7SystemPrompt }));
 vi.mock('#/ai/tools/search-kb', () => ({ makeSearchKBTool: () => 'searchKB' }));
 vi.mock('#/ai/tools/check-flyability', () => ({
   makeCheckFlyabilityTool: () => 'checkFlyability',
@@ -29,6 +30,16 @@ import { VOICE_MODE_PROMPT } from '#/ai/prompts/voice-mode';
 const base = { messages: [], uiMessages: [], subscriptions: [], userId: 'u1' };
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('buildChatStream — debrief gaps', () => {
+  it("hands the learner's debrief gaps to the system prompt", async () => {
+    const debriefGaps = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    await buildChatStream({ ...base, debriefGaps });
+    expect(viper7SystemPrompt.mock.calls[0]?.[0].debriefGaps).toEqual(
+      debriefGaps,
+    );
+  });
+});
 
 describe('buildChatStream', () => {
   it('text chat: base prompt only, word chunking so replies stream as written', async () => {

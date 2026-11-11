@@ -1,9 +1,9 @@
-import type { AITestQuestion, EvaluatorOutput } from '../schemas';
+import type { AITestFreeTextQuestion, EvaluatorOutput } from '../schemas';
 
 export function optimizerPrompt(vars: {
   keyPoints: string[];
   text: string;
-  failedQuestions: AITestQuestion[];
+  failedQuestions: AITestFreeTextQuestion[];
   evaluatorFeedback: EvaluatorOutput['results'];
 }): string {
   const { keyPoints, text, failedQuestions, evaluatorFeedback } = vars;
@@ -23,19 +23,19 @@ export function optimizerPrompt(vars: {
     };
   });
 
-  return `You are an expert aviation training question writer. Some quiz questions failed a quality review. Your task is to regenerate ONLY those failed questions, fixing the specific issues identified.
+  return `You are an expert aviation training question writer. Some debrief questions failed a quality review. Your task is to regenerate ONLY those failed questions, fixing the specific issues identified.
 
 ## Rules
 
 - Regenerate ONLY the questions listed below — do not modify passing questions
-- Keep the same \`type\` (mcq / free-text) and \`keyPointIndex\` as the original
+- Keep the same \`type\` (free-text) and \`keyPointIndex\` as the original, and return them in the order listed
 - Generate NEW unique IDs — do NOT reuse the original question IDs (e.g. if original was \`"q2"\`, use \`"q2r"\` or a fresh identifier)
 - Directly address the evaluator's stated reason for failure
 - Follow all original generation rules:
   - NEVER directly quote or reference the key point text
   - Scenario-based, application-focused questions
-  - MCQ: exactly 4 plausible but distinguishable options, all of similar length and detail — the correct option must not be the longest or most qualified, or otherwise identifiable from its form
-  - Free-text: concise \`expectedAnswer\` (1–3 sentences)
+  - Invite explanation or reasoning, not one-word answers
+  - A concise \`expectedAnswer\` (1–3 sentences)
   - Question text in markdown
 
 ## Key Points

@@ -14,6 +14,7 @@ import {
 import { VOICE_MODE_PROMPT } from '#/ai/prompts/voice-mode';
 import { makeCheckFlyabilityTool } from '#/ai/tools/check-flyability';
 import { makeSearchKBTool } from '#/ai/tools/search-kb';
+import type { LessonGaps } from '#/lib/debrief-gaps';
 import { isAssociateFrom } from '#/lib/is-associate';
 import type { Persona } from '#/types';
 
@@ -48,6 +49,8 @@ export type BuildChatStreamOptions = {
    * existed.
    */
   skaProfile?: SkaProfileForPrompt;
+  /** The learner's recent debrief gaps, for Viper to teach (`findRecentDebriefGaps`). */
+  debriefGaps?: readonly LessonGaps[];
   /**
    * Tavus video call. Appends the voice prompt and Tavus's own rules
    * (emotion tags, speech punctuation) to the system prompt.
@@ -105,6 +108,7 @@ export async function buildChatStream({
   courseSlug,
   userId,
   skaProfile,
+  debriefGaps,
   voice,
   abortSignal,
   conversationSummary,
@@ -145,6 +149,7 @@ export async function buildChatStream({
     persona,
     userInfo,
     skaProfile,
+    debriefGaps,
     conversationSummary,
   });
 

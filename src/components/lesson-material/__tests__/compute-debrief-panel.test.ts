@@ -27,7 +27,7 @@ const attempt = (id: number, totalScore: number): DebriefStatusAttempt => ({
   id,
   totalScore,
   completedAt: '2026-10-27T10:00:00.000Z',
-  passed: totalScore >= 70,
+  passed: totalScore >= 75,
   questions: [],
   evaluations: [],
 });
@@ -138,6 +138,20 @@ describe('computeDebriefPanel', () => {
     ).toEqual({ kind: 'just-failed', availableAt: AT });
   });
 
+  it('shows the just-submitted attempt with the rewatch to do, on a video lesson', () => {
+    expect(
+      panel(loaded({ kind: 'rewatch-required' }), {
+        justSubmittedLessonSlug: LESSON,
+      }),
+    ).toEqual({ kind: 'just-failed', availableAt: null });
+  });
+
+  it('asks for the rewatch on a later visit to a video lesson', () => {
+    expect(panel(loaded({ kind: 'rewatch-required' }))).toEqual({
+      kind: 'rewatch-required',
+    });
+  });
+
   it('shows ONLY the reopen time when the attempt submitted this session was another lesson', () => {
     expect(
       panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
@@ -204,22 +218,36 @@ describe('computeDebriefPanel', () => {
 });
 
 describe('debriefSessionProgress', () => {
-  const session = { lessonSlug: LESSON, questions: [{}, {}] };
+  /** A prepared debrief: two sets of three. */
+  const session = { lessonSlug: LESSON, questions: [{}, {}, {}, {}, {}, {}] };
 
   it('is none with no session, or a session for another lesson', () => {
-    expect(debriefSessionProgress(null, 0, LESSON)).toBe('none');
+    expect(debriefSessionProgress(null, [], LESSON)).toBe('none');
     expect(
-      debriefSessionProgress({ ...session, lessonSlug: 'other' }, 2, LESSON),
+      debriefSessionProgress({ ...session, lessonSlug: 'other' }, [90], LESSON),
     ).toBe('none');
   });
 
-  it('is in-progress until every question is evaluated', () => {
-    expect(debriefSessionProgress(session, 0, LESSON)).toBe('in-progress');
-    expect(debriefSessionProgress(session, 1, LESSON)).toBe('in-progress');
+  it('is in-progress until the first set is answered', () => {
+    expect(debriefSessionProgress(session, [], LESSON)).toBe('in-progress');
+    expect(debriefSessionProgress(session, [90, 90], LESSON)).toBe(
+      'in-progress',
+    );
   });
 
-  it('is complete once every question is evaluated', () => {
-    expect(debriefSessionProgress(session, 2, LESSON)).toBe('complete');
+  it('is complete after a first set at par, with the second set never asked', () => {
+    expect(debriefSessionProgress(session, [90, 80, 75], LESSON)).toBe(
+      'complete',
+    );
+  });
+
+  it('runs on into the second set after a first set below par', () => {
+    expect(debriefSessionProgress(session, [50, 50, 50], LESSON)).toBe(
+      'in-progress',
+    );
+    expect(
+      debriefSessionProgress(session, [50, 50, 50, 90, 90, 90], LESSON),
+    ).toBe('complete');
   });
 });
 
@@ -296,6 +324,15 @@ describe('settleDebriefPanel', () => {
         { sessionProgress: 'none', stale: false },
       ),
     ).toEqual({ kind: 'retake-waiting', availableAt: AT });
+  });
+
+  it("falls back to the rewatch ask when a video lesson's just-submitted session is gone", () => {
+    expect(
+      settleDebriefPanel(
+        { kind: 'just-failed', availableAt: null },
+        { sessionProgress: 'none', stale: false },
+      ),
+    ).toEqual({ kind: 'rewatch-required' });
   });
 
   it('keeps just-failed when the submitted session is there to report', () => {

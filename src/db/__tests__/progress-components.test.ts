@@ -23,6 +23,7 @@ const base = {
   lastFailedDebriefAt: null as Date | string | null,
   doneAt: null as Date | string | null,
   videoWatchedAt: null as Date | string | null,
+  videoRewatchedAt: null as Date | string | null,
   visited: false,
 };
 

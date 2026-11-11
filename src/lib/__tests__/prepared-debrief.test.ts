@@ -70,6 +70,8 @@ const test = {
   ],
 };
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+/** The fingerprint `prepareDebrief` stamps today. */
+const current = (s: string) => sha256(`essay-sets-v1\n${s}`);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -89,9 +91,15 @@ beforeEach(() => {
 });
 
 describe('sourceFingerprint', () => {
-  it('is the sha256 hex of the source text', () => {
-    expect(sourceFingerprint('body')).toBe(sha256('body'));
+  it('is the sha256 hex of the debrief format and the source text', () => {
+    expect(sourceFingerprint('body')).toBe(sha256('essay-sets-v1\nbody'));
     expect(sourceFingerprint('body')).not.toBe(sourceFingerprint('body2'));
+  });
+
+  it('never matches a debrief prepared before written-only sets (2026-11-11)', () => {
+    // Those rows were stamped with the bare source hash and hold 20 mixed
+    // questions; a mismatch makes the claim discard them and generate fresh.
+    expect(sourceFingerprint('body')).not.toBe(sha256('body'));
   });
 });
 
@@ -103,25 +111,25 @@ describe('prepareDebrief', () => {
     expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
       k,
       test,
-      sha256('body'),
+      current('body'),
     );
   });
 
   it('skips the model when a row with the CURRENT fingerprint already exists', async () => {
-    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('body') });
+    m.rows.set(rowKey(k), { test, sourceFingerprint: current('body') });
     expect(await prepareDebrief(k)).toBe('already-prepared');
     expect(m.generateTest).not.toHaveBeenCalled();
     expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
   });
 
   it('regenerates over a row whose source has since changed', async () => {
-    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('old body') });
+    m.rows.set(rowKey(k), { test, sourceFingerprint: current('old body') });
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.generateTest).toHaveBeenCalledOnce();
     expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
       k,
       test,
-      sha256('body'),
+      current('body'),
     );
   });
 
@@ -149,7 +157,7 @@ describe('prepareDebrief', () => {
     // A row left behind would keep the lesson debrief-bearing in the course
     // SQL (call 11) for a debrief nobody can now generate — so course percent
     // could never reach 100.
-    m.rows.set(rowKey(k), { test, sourceFingerprint: sha256('body') });
+    m.rows.set(rowKey(k), { test, sourceFingerprint: current('body') });
     m.resolveDebriefSource.mockResolvedValue(null);
     expect(await prepareDebrief(k)).toBe('no-source');
     expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(k);
@@ -171,28 +179,28 @@ describe('discardPreparedDebrief', () => {
 describe('takePreparedDebrief', () => {
   it('returns the test once, so a retake gets fresh questions', async () => {
     await prepareDebrief(k);
-    expect(await takePreparedDebrief(k, sha256('body'))).toEqual(test);
-    expect(await takePreparedDebrief(k, sha256('body'))).toBeNull();
+    expect(await takePreparedDebrief(k, current('body'))).toEqual(test);
+    expect(await takePreparedDebrief(k, current('body'))).toBeNull();
   });
 
   it('is per pilot', async () => {
     await prepareDebrief(k);
     expect(
-      await takePreparedDebrief({ ...k, userId: 'u2' }, sha256('body')),
+      await takePreparedDebrief({ ...k, userId: 'u2' }, current('body')),
     ).toBeNull();
   });
 
   it('returns null on a fingerprint mismatch, and the stale row is gone', async () => {
     await prepareDebrief(k);
-    expect(await takePreparedDebrief(k, sha256('edited body'))).toBeNull();
+    expect(await takePreparedDebrief(k, current('edited body'))).toBeNull();
     expect(m.rows.has(rowKey(k))).toBe(false);
   });
 
   it('treats a row that no longer parses as a miss', async () => {
     m.rows.set(rowKey(k), {
       test: { nope: 1 },
-      sourceFingerprint: sha256('body'),
+      sourceFingerprint: current('body'),
     });
-    expect(await takePreparedDebrief(k, sha256('body'))).toBeNull();
+    expect(await takePreparedDebrief(k, current('body'))).toBeNull();
   });
 });

@@ -132,6 +132,17 @@ describe('debrief-status', () => {
     expect('attempts' in body).toBe(false);
   });
 
+  it('returns the video on a lesson done without its optional video — only the full watch starts the clock', async () => {
+    m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 41, outstanding: [], debrief: { hasVideo: true } },
+      ],
+    });
+    const body = await (await debriefStatusHandler(get(QS))).json();
+    expect(body.lessonOutstanding).toEqual([{ kind: 'video' }]);
+  });
+
   it('returns everything left to finish the lesson when there is no video to watch', async () => {
     m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
     m.getCourseProgress.mockResolvedValue({

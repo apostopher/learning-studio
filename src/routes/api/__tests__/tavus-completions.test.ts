@@ -8,12 +8,14 @@ const {
   buildChatStream,
   resolvePersonaForChat,
   resolveChatSkaProfile,
+  findRecentDebriefGaps,
 } = vi.hoisted(() => ({
   getCallByConversation: vi.fn(),
   loadChatContext: vi.fn(),
   buildChatStream: vi.fn(),
   resolvePersonaForChat: vi.fn(),
   resolveChatSkaProfile: vi.fn(),
+  findRecentDebriefGaps: vi.fn(),
 }));
 vi.mock('#/env', () => ({ env: { TAVUS_LLM_SECRET: 's'.repeat(32) } }));
 vi.mock('#/db/video-calls', () => ({ getCallByConversation }));
@@ -22,6 +24,7 @@ vi.mock('#/ai/chat', () => ({ buildChatStream }));
 vi.mock('#/db/course-orgs', () => ({ resolvePersonaForChat }));
 vi.mock('#/lib/active-org.server', () => ({ getActiveOrgId: () => 7 }));
 vi.mock('#/lib/ska-profile.server', () => ({ resolveChatSkaProfile }));
+vi.mock('#/db/debrief-gaps', () => ({ findRecentDebriefGaps }));
 
 import {
   VOICE_FALLBACK_REPLY,
@@ -109,6 +112,7 @@ beforeEach(() => {
     content: { basicInfo: 'published' },
   });
   resolveChatSkaProfile.mockResolvedValue(undefined);
+  findRecentDebriefGaps.mockResolvedValue([]);
   buildChatStream.mockImplementation(async () => ({
     textStream: gen([
       '<emotion value="content"/>',
@@ -151,6 +155,14 @@ describe('tavusCompletionsHandler', () => {
       'Custom LLM configuration test successful.',
     );
     expect(getCallByConversation).not.toHaveBeenCalled();
+  });
+
+  it("gives buildChatStream the learner's debrief gaps, so a call can teach them too", async () => {
+    const GAPS = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    findRecentDebriefGaps.mockResolvedValueOnce(GAPS);
+    await spokenText(await tavusCompletionsHandler(req()));
+    expect(findRecentDebriefGaps).toHaveBeenCalledWith('u1');
+    expect(buildChatStream.mock.calls[0]?.[0].debriefGaps).toEqual(GAPS);
   });
 
   it("gives buildChatStream the call's learner, course, persona and cleaned history", async () => {
