@@ -1,44 +1,65 @@
 import { describe, expect, it } from 'vitest';
-import { DebriefStatusError } from '#/data-hooks/use-debrief-status';
-import type { OutstandingItem } from '#/lib/course-progress-agg';
-import type { DebriefState } from '#/lib/debrief-schedule';
 import type {
-  DebriefStatusAttempt,
-  DebriefStatusResponse,
-} from '#/routes/api/lesson/debrief-status';
+  DebriefAnswerResult,
+  DebriefAttemptView,
+} from '#/data-hooks/use-debrief-attempt';
+import {
+  type DebriefStatus,
+  DebriefStatusError,
+} from '#/data-hooks/use-debrief-status';
+import type { OutstandingItem } from '#/lib/course-progress-agg';
+import {
+  DEBRIEF_RETAKE_DELAY_MS,
+  type DebriefState,
+} from '#/lib/debrief-schedule';
 import {
   computeDebriefPanel,
+  currentDebriefQuestion,
   DEBRIEF_FAILED_COPY,
   DEBRIEF_REFUSED_COPY,
-  debriefSessionProgress,
-  isStaleDebriefSession,
-  settleDebriefPanel,
+  type FinishedDebrief,
+  finishedDebriefReport,
+  isStaleFinishedDebrief,
+  revisitNotesOf,
 } from '../compute-debrief-panel';
 
 const LESSON = 'radio-calls';
 const AT = '2026-10-28T15:40:00.000Z';
+const FINISHED_AT = Date.parse('2026-10-28T09:40:00.000Z');
 
 const outstanding: OutstandingItem[] = [
   { kind: 'video' },
   { kind: 'section', section: 'links' },
 ];
 
-const attempt = (id: number, totalScore: number): DebriefStatusAttempt => ({
+type Attempts = NonNullable<DebriefStatus['attempts']>;
+
+const historyAttempt = (id: number, totalScore: number): Attempts[number] => ({
   id,
   totalScore,
   completedAt: '2026-10-27T10:00:00.000Z',
-  passed: totalScore >= 75,
+  passed: totalScore === 100,
   questions: [],
   evaluations: [],
 });
 
 const loaded = (
   state: DebriefState,
-  extra: Partial<DebriefStatusResponse> = {},
+  extra: Partial<DebriefStatus> = {},
+  dataUpdatedAt = FINISHED_AT + 1,
 ) => ({
   isPending: false,
   isError: false,
+  dataUpdatedAt,
   data: { state, lessonOutstanding: [], ...extra },
+});
+
+const finished = (over: Partial<FinishedDebrief> = {}): FinishedDebrief => ({
+  lessonSlug: LESSON,
+  finishedAt: FINISHED_AT,
+  mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+  revisitNotes: ['Note A'],
+  ...over,
 });
 
 const panel = (
@@ -49,23 +70,33 @@ const panel = (
 ) =>
   computeDebriefPanel({
     status,
-    justSubmittedLessonSlug: null,
+    finished: null,
     lessonSlug: LESSON,
-    sessionInProgress: false,
+    attemptInProgress: false,
     ...over,
   });
 
 describe('computeDebriefPanel', () => {
   it('is loading until the status arrives', () => {
-    expect(panel({ isPending: true, isError: false, data: undefined })).toEqual(
-      { kind: 'loading' },
-    );
+    expect(
+      panel({
+        isPending: true,
+        isError: false,
+        dataUpdatedAt: 0,
+        data: undefined,
+      }),
+    ).toEqual({ kind: 'loading' });
   });
 
   it('is an error when the status failed with nothing to fall back on', () => {
-    expect(panel({ isPending: false, isError: true, data: undefined })).toEqual(
-      { kind: 'error', refused: false, message: DEBRIEF_FAILED_COPY },
-    );
+    expect(
+      panel({
+        isPending: false,
+        isError: true,
+        dataUpdatedAt: 0,
+        data: undefined,
+      }),
+    ).toEqual({ kind: 'error', refused: false, message: DEBRIEF_FAILED_COPY });
   });
 
   it.each([
@@ -76,6 +107,7 @@ describe('computeDebriefPanel', () => {
         isPending: false,
         isError: true,
         error: new DebriefStatusError(code),
+        dataUpdatedAt: 0,
         data: undefined,
       }),
     ).toEqual({ kind: 'error', refused: true, message: DEBRIEF_REFUSED_COPY });
@@ -86,15 +118,14 @@ describe('computeDebriefPanel', () => {
     ['a network failure', new TypeError('Failed to fetch')],
   ])('blames the connection only for %s', (_why, error) => {
     expect(
-      panel({ isPending: false, isError: true, error, data: undefined }),
+      panel({
+        isPending: false,
+        isError: true,
+        error,
+        dataUpdatedAt: 0,
+        data: undefined,
+      }),
     ).toEqual({ kind: 'error', refused: false, message: DEBRIEF_FAILED_COPY });
-  });
-
-  it('copy: a refusal never tells the pilot to check their connection', () => {
-    expect(DEBRIEF_REFUSED_COPY).toBe(
-      "This debrief isn't available for this lesson.",
-    );
-    expect(DEBRIEF_FAILED_COPY).toMatch(/Check your connection/);
   });
 
   it('keeps showing the last known state when only a background refetch failed', () => {
@@ -102,6 +133,7 @@ describe('computeDebriefPanel', () => {
       panel({
         isPending: false,
         isError: true,
+        dataUpdatedAt: 1,
         data: {
           state: { kind: 'waiting', availableAt: AT },
           lessonOutstanding: [],
@@ -123,44 +155,19 @@ describe('computeDebriefPanel', () => {
     });
   });
 
-  it.each([false, true])('opens to take (retake=%s)', (retake) => {
-    expect(panel(loaded({ kind: 'open', retake }))).toEqual({
+  it.each([
+    [false, false],
+    [true, false],
+    [true, true],
+  ])('opens to take (retake=%s, resume=%s)', (retake, resume) => {
+    expect(panel(loaded({ kind: 'open', retake, resume }))).toEqual({
       kind: 'take',
       retake,
+      resume,
     });
   });
 
-  it('shows the just-submitted attempt when the below-par save was this lesson (call 2)', () => {
-    expect(
-      panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
-        justSubmittedLessonSlug: LESSON,
-      }),
-    ).toEqual({ kind: 'just-failed', availableAt: AT });
-  });
-
-  it('shows the just-submitted attempt with the rewatch to do, on a video lesson', () => {
-    expect(
-      panel(loaded({ kind: 'rewatch-required' }), {
-        justSubmittedLessonSlug: LESSON,
-      }),
-    ).toEqual({ kind: 'just-failed', availableAt: null });
-  });
-
-  it('asks for the rewatch on a later visit to a video lesson', () => {
-    expect(panel(loaded({ kind: 'rewatch-required' }))).toEqual({
-      kind: 'rewatch-required',
-    });
-  });
-
-  it('shows ONLY the reopen time when the attempt submitted this session was another lesson', () => {
-    expect(
-      panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
-        justSubmittedLessonSlug: 'another-lesson',
-      }),
-    ).toEqual({ kind: 'retake-waiting', availableAt: AT });
-  });
-
-  it('shows ONLY the reopen time on a later visit, with nothing submitted this session', () => {
+  it('retake-waiting carries the time the next attempt opens', () => {
     expect(panel(loaded({ kind: 'retake-waiting', availableAt: AT }))).toEqual({
       kind: 'retake-waiting',
       availableAt: AT,
@@ -168,7 +175,7 @@ describe('computeDebriefPanel', () => {
   });
 
   it('hands passed the attempts history, passing first as the server sent it', () => {
-    const attempts = [attempt(2, 85), attempt(1, 40)];
+    const attempts = [historyAttempt(2, 100), historyAttempt(1, 40)];
     expect(panel(loaded({ kind: 'passed' }, { attempts }))).toEqual({
       kind: 'passed',
       attempts,
@@ -182,174 +189,247 @@ describe('computeDebriefPanel', () => {
     });
   });
 
-  describe('a debrief in progress', () => {
+  describe('an attempt just finished on this lesson', () => {
+    it('shows its report with the countdown to the time the server gives', () => {
+      expect(
+        panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
+          finished: finished(),
+        }),
+      ).toEqual({ kind: 'finished', report: finished(), availableAt: AT });
+    });
+
+    it('counts down from its own finish while the status still says open', () => {
+      // The refetch that follows the last answer has not landed yet.
+      expect(
+        panel(loaded({ kind: 'open', retake: false, resume: true }, {}, 1), {
+          finished: finished(),
+        }),
+      ).toEqual({
+        kind: 'finished',
+        report: finished(),
+        availableAt: new Date(
+          FINISHED_AT + DEBRIEF_RETAKE_DELAY_MS,
+        ).toISOString(),
+      });
+    });
+
+    it('a pass has no countdown', () => {
+      const passed = finished({
+        mastery: { cleared: 7, total: 7, percent: 100, passed: true },
+        revisitNotes: [],
+      });
+      expect(panel(loaded({ kind: 'passed' }), { finished: passed })).toEqual({
+        kind: 'finished',
+        report: passed,
+        availableAt: null,
+      });
+    });
+
+    it("another lesson's report is not shown here", () => {
+      expect(
+        panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
+          finished: finished({ lessonSlug: 'another-lesson' }),
+        }),
+      ).toEqual({ kind: 'retake-waiting', availableAt: AT });
+    });
+
+    it('gives way to the fresh debrief once a status fetched after it says open', () => {
+      expect(
+        panel(loaded({ kind: 'open', retake: true, resume: false }), {
+          finished: finished(),
+        }),
+      ).toEqual({ kind: 'take', retake: true, resume: false });
+    });
+  });
+
+  describe('an attempt in progress', () => {
     it('stays take when a refetch says the debrief is no longer open', () => {
-      // The 24h clock is the server's; a window refocus refetch must not yank
-      // a half-answered debrief out from under the pilot.
       for (const state of [
         { kind: 'retake-waiting', availableAt: AT },
         { kind: 'waiting', availableAt: AT },
         { kind: 'passed' },
         { kind: 'not-done' },
       ] satisfies DebriefState[]) {
-        expect(panel(loaded(state), { sessionInProgress: true }).kind).toBe(
-          'take',
-        );
+        expect(panel(loaded(state), { attemptInProgress: true })).toEqual({
+          kind: 'take',
+          retake: false,
+          resume: true,
+        });
       }
     });
-
-    it('stays take while the status is refetching from scratch', () => {
-      expect(
-        panel(
-          { isPending: true, isError: false, data: undefined },
-          { sessionInProgress: true },
-        ).kind,
-      ).toBe('take');
-    });
-
-    it('keeps the retake flag the status gave it', () => {
-      expect(
-        panel(loaded({ kind: 'open', retake: true }), {
-          sessionInProgress: true,
-        }),
-      ).toEqual({ kind: 'take', retake: true });
-    });
   });
 });
 
-describe('debriefSessionProgress', () => {
-  /** A prepared debrief: two sets of three. */
-  const session = { lessonSlug: LESSON, questions: [{}, {}, {}, {}, {}, {}] };
-
-  it('is none with no session, or a session for another lesson', () => {
-    expect(debriefSessionProgress(null, [], LESSON)).toBe('none');
+describe('isStaleFinishedDebrief', () => {
+  it('is stale only for this lesson, with an open status fetched after the finish', () => {
+    const open = loaded({ kind: 'open', retake: true, resume: false });
+    expect(isStaleFinishedDebrief(finished(), LESSON, open)).toBe(true);
     expect(
-      debriefSessionProgress({ ...session, lessonSlug: 'other' }, [90], LESSON),
-    ).toBe('none');
-  });
-
-  it('is in-progress until the first set is answered', () => {
-    expect(debriefSessionProgress(session, [], LESSON)).toBe('in-progress');
-    expect(debriefSessionProgress(session, [90, 90], LESSON)).toBe(
-      'in-progress',
-    );
-  });
-
-  it('is complete after a first set at par, with the second set never asked', () => {
-    expect(debriefSessionProgress(session, [90, 80, 75], LESSON)).toBe(
-      'complete',
-    );
-  });
-
-  it('runs on into the second set after a first set below par', () => {
-    expect(debriefSessionProgress(session, [50, 50, 50], LESSON)).toBe(
-      'in-progress',
-    );
-    expect(
-      debriefSessionProgress(session, [50, 50, 50, 90, 90, 90], LESSON),
-    ).toBe('complete');
-  });
-});
-
-describe('isStaleDebriefSession', () => {
-  const base = {
-    sessionProgress: 'complete' as const,
-    sessionSaved: true,
-    status: {
-      isFetching: false,
-      data: loaded({ kind: 'open', retake: true }).data,
-    },
-  };
-
-  it('is stale once the debrief has reopened after this session was saved', () => {
-    // The page stayed open through the 24h wait: the old score report would
-    // otherwise sit where the fresh debrief's Start belongs, with no way on.
-    // Keyed on the save, not on the just-submitted marker — that is cleared
-    // on leaving the lesson, and the saved session outlives it.
-    expect(isStaleDebriefSession(base)).toBe(true);
-  });
-
-  it('is not stale while the post-save refetch is still in flight', () => {
-    // Between the save and its refetch the cached status still says open —
-    // that is the old status, not a reopening.
-    expect(
-      isStaleDebriefSession({
-        ...base,
-        status: { ...base.status, isFetching: true },
+      isStaleFinishedDebrief(finished(), LESSON, {
+        ...open,
+        dataUpdatedAt: FINISHED_AT - 1,
       }),
     ).toBe(false);
-  });
-
-  it('is not stale for a session not yet complete, or not (yet) saved', () => {
+    expect(isStaleFinishedDebrief(finished(), 'other', open)).toBe(false);
+    expect(isStaleFinishedDebrief(null, LESSON, open)).toBe(false);
     expect(
-      isStaleDebriefSession({ ...base, sessionProgress: 'in-progress' }),
+      isStaleFinishedDebrief(
+        finished(),
+        LESSON,
+        loaded({ kind: 'retake-waiting', availableAt: AT }),
+      ),
     ).toBe(false);
-    // Saving, or failed: the report is the only place the retry lives.
-    expect(isStaleDebriefSession({ ...base, sessionSaved: false })).toBe(false);
-  });
-
-  it('is not stale while the debrief is still closed or passed', () => {
-    for (const state of [
-      { kind: 'retake-waiting', availableAt: AT },
-      { kind: 'passed' },
-    ] satisfies DebriefState[]) {
-      expect(
-        isStaleDebriefSession({
-          ...base,
-          status: { isFetching: false, data: loaded(state).data },
-        }),
-      ).toBe(false);
-    }
   });
 });
 
-describe('settleDebriefPanel', () => {
-  it('mounts nothing that could re-save while a stale session is being cleared', () => {
-    // DebriefQuizContainer auto-saves a complete session on mount, and a
-    // child's effect runs before its parent's reset — so rendering it here
-    // would record the old attempt a second time, against the reopened
-    // debrief, and re-lock it for another 24h.
+const attemptView = (
+  over: Partial<DebriefAttemptView> = {},
+): DebriefAttemptView => ({
+  attemptId: 9,
+  questions: [
+    { id: 'q1', question: 'One?' },
+    { id: 'q2', question: 'Two?' },
+    { id: 'q3', question: 'Three?' },
+  ],
+  answered: [],
+  draft: null,
+  mastery: { cleared: 0, total: 3 },
+  ...over,
+});
+
+describe('currentDebriefQuestion', () => {
+  it('resumes at the first unanswered question, with its draft', () => {
     expect(
-      settleDebriefPanel(
-        { kind: 'take', retake: true },
-        { sessionProgress: 'complete', stale: true },
+      currentDebriefQuestion(
+        attemptView({
+          answered: [{ questionId: 'q1', score: 80, revisitNote: '' }],
+          draft: { questionId: 'q2', text: 'half an answer' },
+        }),
       ),
-    ).toEqual({ kind: 'loading' });
+    ).toEqual({
+      question: { id: 'q2', question: 'Two?' },
+      index: 1,
+      total: 3,
+      draft: 'half an answer',
+    });
   });
 
-  it('falls back to only the reopen time when the just-submitted session is no longer in memory', () => {
+  it('ignores a draft saved for another question', () => {
     expect(
-      settleDebriefPanel(
-        { kind: 'just-failed', availableAt: AT },
-        { sessionProgress: 'none', stale: false },
-      ),
-    ).toEqual({ kind: 'retake-waiting', availableAt: AT });
+      currentDebriefQuestion(
+        attemptView({ draft: { questionId: 'q3', text: 'later' } }),
+      )?.draft,
+    ).toBe('');
   });
 
-  it("falls back to the rewatch ask when a video lesson's just-submitted session is gone", () => {
+  it('is null once every question is answered', () => {
     expect(
-      settleDebriefPanel(
-        { kind: 'just-failed', availableAt: null },
-        { sessionProgress: 'none', stale: false },
+      currentDebriefQuestion(
+        attemptView({
+          answered: ['q1', 'q2', 'q3'].map((questionId) => ({
+            questionId,
+            score: 50,
+            revisitNote: '',
+          })),
+        }),
       ),
-    ).toEqual({ kind: 'rewatch-required' });
+    ).toBeNull();
+  });
+});
+
+describe('revisitNotesOf', () => {
+  it('keeps non-empty notes once each, in question order, not answer order', () => {
+    expect(
+      revisitNotesOf(attemptView().questions, [
+        { questionId: 'q3', revisitNote: 'Third note' },
+        { questionId: 'q1', revisitNote: '  First note ' },
+        { questionId: 'q2', revisitNote: '' },
+        { questionId: 'q4', revisitNote: 'Not a question of this attempt' },
+      ]),
+    ).toEqual(['First note', 'Third note']);
   });
 
-  it('keeps just-failed when the submitted session is there to report', () => {
+  it('drops a note repeated by a later answer', () => {
     expect(
-      settleDebriefPanel(
-        { kind: 'just-failed', availableAt: AT },
-        { sessionProgress: 'complete', stale: false },
-      ),
-    ).toEqual({ kind: 'just-failed', availableAt: AT });
+      revisitNotesOf(attemptView().questions, [
+        { questionId: 'q1', revisitNote: 'Same' },
+        { questionId: 'q2', revisitNote: 'Same' },
+      ]),
+    ).toEqual(['Same']);
   });
 
-  it('passes every other panel through', () => {
+  it('skips legacy evaluations with no note', () => {
     expect(
-      settleDebriefPanel(
-        { kind: 'waiting', availableAt: AT },
-        { sessionProgress: 'none', stale: false },
-      ),
-    ).toEqual({ kind: 'waiting', availableAt: AT });
+      revisitNotesOf(attemptView().questions, [{ questionId: 'q1' }]),
+    ).toEqual([]);
+  });
+});
+
+describe('finishedDebriefReport', () => {
+  const result = (
+    over: Partial<DebriefAnswerResult> = {},
+  ): DebriefAnswerResult => ({
+    evaluation: { score: 40, revisitNote: 'Last note' },
+    mastery: { cleared: 2, total: 3, percent: 67 },
+    finished: 'all-answered',
+    promotion: null,
+    ...over,
+  });
+
+  it('reports mastery and every note of the attempt, the last answer included', () => {
+    const attempt = attemptView({
+      answered: [
+        { questionId: 'q1', score: 90, revisitNote: '' },
+        { questionId: 'q2', score: 30, revisitNote: 'Second note' },
+      ],
+    });
+    expect(
+      finishedDebriefReport({
+        lessonSlug: LESSON,
+        attempt,
+        questionId: 'q3',
+        result: result(),
+        now: FINISHED_AT,
+      }),
+    ).toEqual({
+      lessonSlug: LESSON,
+      finishedAt: FINISHED_AT,
+      mastery: { cleared: 2, total: 3, percent: 67, passed: false },
+      revisitNotes: ['Second note', 'Last note'],
+    });
+  });
+
+  it('all-cleared is a pass at 100 with nothing to revisit', () => {
+    expect(
+      finishedDebriefReport({
+        lessonSlug: LESSON,
+        attempt: attemptView({
+          answered: [{ questionId: 'q1', score: 30, revisitNote: 'Old' }],
+        }),
+        questionId: 'q2',
+        result: result({
+          mastery: { cleared: 3, total: 3, percent: 100 },
+          finished: 'all-cleared',
+        }),
+        now: FINISHED_AT,
+      }),
+    ).toEqual({
+      lessonSlug: LESSON,
+      finishedAt: FINISHED_AT,
+      mastery: { cleared: 3, total: 3, percent: 100, passed: true },
+      revisitNotes: [],
+    });
+  });
+
+  it('is null while the attempt goes on', () => {
+    expect(
+      finishedDebriefReport({
+        lessonSlug: LESSON,
+        attempt: attemptView(),
+        questionId: 'q1',
+        result: result({ finished: null }),
+        now: FINISHED_AT,
+      }),
+    ).toBeNull();
   });
 });

@@ -150,3 +150,10 @@ describe('QuestionCard read-only', () => {
     expect(screen.queryByText(READ_ONLY_CONTROL_REASON)).toBeNull();
   });
 });
+
+describe('QuestionCard count', () => {
+  it('says which question this is, of how many', () => {
+    setup({ index: 1, total: 7 });
+    expect(screen.getByText('Question 2 of 7')).toBeDefined();
+  });
+});

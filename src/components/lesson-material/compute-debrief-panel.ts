@@ -1,8 +1,28 @@
-import { DebriefStatusError } from '#/data-hooks/use-debrief-status';
+import type {
+  DebriefAnswerResult,
+  DebriefAttemptView,
+} from '#/data-hooks/use-debrief-attempt';
+import {
+  type DebriefStatus,
+  DebriefStatusError,
+} from '#/data-hooks/use-debrief-status';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import { debriefSetsProgress } from '#/lib/debrief-sets';
-import type { DebriefStatusResponse } from '#/routes/api/lesson/debrief-status';
-import { debriefSessionForLesson } from './parts/debrief-session-owner';
+import { masteryPercent } from '#/lib/debrief-mastery';
+import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
+
+/**
+ * An attempt that finished while the pilot was on its lesson: what its score
+ * report shows. Kept in `justFinishedDebriefAtom` because the status refetch
+ * that follows the last answer moves the debrief on (retake-waiting, or
+ * passed) and the report must survive that.
+ */
+export type FinishedDebrief = {
+  lessonSlug: string;
+  /** `Date.now()` when the last answer was graded. */
+  finishedAt: number;
+  mastery: { cleared: number; total: number; percent: number; passed: boolean };
+  revisitNotes: string[];
+};
 
 export type DebriefPanel =
   | { kind: 'loading' }
@@ -13,35 +33,34 @@ export type DebriefPanel =
   | { kind: 'error'; refused: boolean; message: string }
   | { kind: 'not-done'; outstanding: readonly OutstandingItem[] }
   | { kind: 'waiting'; availableAt: string }
-  /** Renders DebriefQuizContainer. */
-  | { kind: 'take'; retake: boolean }
+  /** Renders DebriefQuizContainer. `resume`: an attempt is already open. */
+  | { kind: 'take'; retake: boolean; resume: boolean }
   /**
-   * The attempt just submitted, below par: its score report + what reopens it
-   * (call 2) — a time, or null when it is the video rewatch.
+   * The attempt just finished on this lesson: its report, and the countdown
+   * to the next attempt (null once passed).
    */
-  | { kind: 'just-failed'; availableAt: string | null }
-  /** ONLY the reopen time — no report, no history. */
+  | { kind: 'finished'; report: FinishedDebrief; availableAt: string | null }
+  /** A later visit during the 6 h wait: the countdown only. */
   | { kind: 'retake-waiting'; availableAt: string }
-  /** Below par on a video lesson: rewatch it to redo. No report, no history. */
-  | { kind: 'rewatch-required' }
-  | {
-      kind: 'passed';
-      attempts: NonNullable<DebriefStatusResponse['attempts']>;
-    };
+  | { kind: 'passed'; attempts: NonNullable<DebriefStatus['attempts']> };
+
+type StatusView = {
+  isPending: boolean;
+  isError: boolean;
+  /** The query's error — a `DebriefStatusError` carries the HTTP status. */
+  error?: unknown;
+  data: DebriefStatus | undefined;
+  /** When `data` was fetched (TanStack's `dataUpdatedAt`, ms). */
+  dataUpdatedAt: number;
+};
 
 export type ComputeDebriefPanelArgs = {
-  status: {
-    isPending: boolean;
-    isError: boolean;
-    /** The query's error — a `DebriefStatusError` carries the HTTP status. */
-    error?: unknown;
-    data: DebriefStatusResponse | undefined;
-  };
-  /** `justSubmittedDebriefAtom`. */
-  justSubmittedLessonSlug: string | null;
+  status: StatusView;
+  /** `justFinishedDebriefAtom`. */
+  finished: FinishedDebrief | null;
   lessonSlug: string;
-  /** An in-memory debrief session for this lesson exists and is not complete. */
-  sessionInProgress: boolean;
+  /** This lesson's attempt is loaded on the page (the attempt cache holds it). */
+  attemptInProgress: boolean;
 };
 
 /** The route refused this pilot this lesson's debrief (403 or 404). */
@@ -61,6 +80,26 @@ function isRefusal(error: unknown): boolean {
 }
 
 /**
+ * Whether the just-finished report has been overtaken: a status fetched
+ * after the finish says the debrief is open again (the 6 h ran out while the
+ * page stayed open). Fetched AFTER matters: until the refetch that follows
+ * the last answer lands, the cached status still says open, and that is the
+ * attempt just finished, not a reopening.
+ */
+export function isStaleFinishedDebrief(
+  finished: FinishedDebrief | null,
+  lessonSlug: string,
+  status: Pick<StatusView, 'data' | 'dataUpdatedAt'>,
+): boolean {
+  return (
+    finished !== null &&
+    finished.lessonSlug === lessonSlug &&
+    status.data?.state.kind === 'open' &&
+    status.dataUpdatedAt > finished.finishedAt
+  );
+}
+
+/**
  * What the Debrief tab shows, from the server's state for this pilot.
  *
  * Pure because `DebriefPanelContainer` cannot be rendered under Vitest (the
@@ -69,19 +108,33 @@ function isRefusal(error: unknown): boolean {
  */
 export function computeDebriefPanel({
   status,
-  justSubmittedLessonSlug,
+  finished,
   lessonSlug,
-  sessionInProgress,
+  attemptInProgress,
 }: ComputeDebriefPanelArgs): DebriefPanel {
   const state = status.data?.state;
 
-  // A half-answered debrief is never taken away: a refocus refetch that
-  // lands after the 12h boundary (or a pass in another tab) must not swap the
-  // question out from under the pilot. The save is the server's to refuse.
-  if (sessionInProgress) {
+  const own = finished?.lessonSlug === lessonSlug ? finished : null;
+  if (own && !isStaleFinishedDebrief(own, lessonSlug, status)) {
+    return {
+      kind: 'finished',
+      report: own,
+      availableAt: own.mastery.passed
+        ? null
+        : state?.kind === 'retake-waiting'
+          ? state.availableAt
+          : new Date(own.finishedAt + DEBRIEF_RETAKE_DELAY_MS).toISOString(),
+    };
+  }
+
+  // A half-answered attempt is never taken away: a refocus refetch (or a
+  // pass in another tab) must not swap the question out from under the
+  // pilot. The answer is the server's to refuse.
+  if (attemptInProgress) {
     return {
       kind: 'take',
       retake: state?.kind === 'open' ? state.retake : false,
+      resume: true,
     };
   }
 
@@ -104,15 +157,13 @@ export function computeDebriefPanel({
     case 'waiting':
       return { kind: 'waiting', availableAt: data.state.availableAt };
     case 'open':
-      return { kind: 'take', retake: data.state.retake };
+      return {
+        kind: 'take',
+        retake: data.state.retake,
+        resume: data.state.resume,
+      };
     case 'retake-waiting':
-      return justSubmittedLessonSlug === lessonSlug
-        ? { kind: 'just-failed', availableAt: data.state.availableAt }
-        : { kind: 'retake-waiting', availableAt: data.state.availableAt };
-    case 'rewatch-required':
-      return justSubmittedLessonSlug === lessonSlug
-        ? { kind: 'just-failed', availableAt: null }
-        : { kind: 'rewatch-required' };
+      return { kind: 'retake-waiting', availableAt: data.state.availableAt };
     case 'passed':
       return { kind: 'passed', attempts: data.attempts ?? [] };
     default: {
@@ -122,80 +173,85 @@ export function computeDebriefPanel({
   }
 }
 
-export type DebriefSessionProgress = 'none' | 'in-progress' | 'complete';
-
 /**
- * Where this lesson's in-memory debrief session stands. A session for another
- * lesson counts as none (see `debriefSessionForLesson`).
+ * The question the pilot is on: the first one not yet answered, with the
+ * draft saved for it ('' when the draft is for another question). Null once
+ * every question is answered.
  */
-export function debriefSessionProgress(
-  session: { lessonSlug: string; questions: readonly unknown[] } | null,
-  scores: readonly number[],
-  lessonSlug: string,
-): DebriefSessionProgress {
-  const own = debriefSessionForLesson(session, lessonSlug);
-  if (own === null) return 'none';
-  // Complete when the sets the pilot is asked are answered: the first alone
-  // at par, both below it.
-  return debriefSetsProgress(scores, own.questions.length).complete
-    ? 'complete'
-    : 'in-progress';
+export function currentDebriefQuestion(attempt: DebriefAttemptView): {
+  question: { id: string; question: string };
+  index: number;
+  total: number;
+  draft: string;
+} | null {
+  const answered = new Set(attempt.answered.map((a) => a.questionId));
+  const index = attempt.questions.findIndex((q) => !answered.has(q.id));
+  const question = attempt.questions[index];
+  if (index < 0 || question === undefined) return null;
+  return {
+    question,
+    index,
+    total: attempt.questions.length,
+    draft: attempt.draft?.questionId === question.id ? attempt.draft.text : '',
+  };
 }
 
 /**
- * Whether the completed session in memory is a saved attempt the debrief has
- * since reopened past — the page stayed open through the 12h wait, or the
- * pilot came back to the lesson after it. Left in place, its old score report
- * would sit where the fresh debrief's Start belongs, with no way on (Retake
- * is gone, call 8).
- *
- * Keyed on the session's save (`debriefSaveState === 'saved'`), not on the
- * just-submitted marker, which is cleared when the pilot leaves the lesson.
- * A session still saving, or whose save failed, is never stale: its report is
- * where the retry lives.
- *
- * `isFetching` matters: between a save and its refetch the cached status
- * still says `open`, and that is the old status, not a reopening.
+ * "Worth revisiting": the grader's note on each answer, in question order,
+ * each once, empty ones dropped. An answer that cleared its chunk carries no
+ * note (the grader writes none), so only holes are listed.
  */
-export function isStaleDebriefSession({
-  sessionProgress,
-  sessionSaved,
-  status,
-}: {
-  sessionProgress: DebriefSessionProgress;
-  sessionSaved: boolean;
-  status: { isFetching: boolean; data: DebriefStatusResponse | undefined };
-}): boolean {
-  return (
-    sessionProgress === 'complete' &&
-    sessionSaved &&
-    !status.isFetching &&
-    status.data?.state.kind === 'open'
-  );
-}
-
-/**
- * The panel to actually render, given what is in memory.
- *
- * - While a stale session is being cleared, mount nothing that could save it:
- *   DebriefQuizContainer auto-saves a complete session it has not saved, and
- *   a child's effect runs before its parent's reset — it would record the old
- *   attempt again against the reopened debrief and re-lock it for 12h.
- * - just-failed reports the session in memory; if that is gone (another
- *   lesson's debrief replaced it), only the reopen time is left to show.
- */
-export function settleDebriefPanel(
-  panel: DebriefPanel,
-  {
-    sessionProgress,
-    stale,
-  }: { sessionProgress: DebriefSessionProgress; stale: boolean },
-): DebriefPanel {
-  if (stale) return { kind: 'loading' };
-  if (panel.kind === 'just-failed' && sessionProgress !== 'complete') {
-    return panel.availableAt === null
-      ? { kind: 'rewatch-required' }
-      : { kind: 'retake-waiting', availableAt: panel.availableAt };
+export function revisitNotesOf(
+  questions: readonly { id: string }[],
+  evaluations: readonly { questionId: string; revisitNote?: string }[],
+): string[] {
+  const notes = new Set<string>();
+  for (const question of questions) {
+    for (const e of evaluations) {
+      if (e.questionId !== question.id) continue;
+      const note = e.revisitNote?.trim();
+      if (note) notes.add(note);
+    }
   }
-  return panel;
+  return [...notes];
+}
+
+/**
+ * The report of an attempt the answer `result` just finished, from the
+ * attempt as it stood before that answer plus the answer itself. Null while
+ * the attempt goes on. A pass (every chunk cleared) is 100 with nothing to
+ * revisit.
+ */
+export function finishedDebriefReport({
+  lessonSlug,
+  attempt,
+  questionId,
+  result,
+  now,
+}: {
+  lessonSlug: string;
+  attempt: DebriefAttemptView;
+  questionId: string;
+  result: DebriefAnswerResult;
+  now: number;
+}): FinishedDebrief | null {
+  if (result.finished === null) return null;
+  const passed = result.finished === 'all-cleared';
+  const { cleared, total } = result.mastery;
+  return {
+    lessonSlug,
+    finishedAt: now,
+    mastery: {
+      cleared,
+      total,
+      percent: masteryPercent({ cleared, total, passed }),
+      passed,
+    },
+    revisitNotes: passed
+      ? []
+      : revisitNotesOf(attempt.questions, [
+          ...attempt.answered.filter((a) => a.questionId !== questionId),
+          { questionId, revisitNote: result.evaluation.revisitNote },
+        ]),
+  };
 }

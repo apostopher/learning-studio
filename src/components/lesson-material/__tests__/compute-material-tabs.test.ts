@@ -215,9 +215,9 @@ describe('defaultMaterialTab', () => {
   const facts = (over: Record<string, unknown> = {}) => ({
     clockStartAt: '2026-11-08T00:00:00Z', // well past the 12h wait
     passed: false,
-    lastFailedAt: null,
-    hasVideo: false,
-    rewatchedAt: null,
+    lastFinishedAt: null,
+    hasOpenAttempt: false,
+    mastery: null,
     bearing: true,
     ...over,
   });
@@ -230,7 +230,7 @@ describe('defaultMaterialTab', () => {
     expect(
       defaultMaterialTab(
         withDebrief,
-        facts({ lastFailedAt: '2026-11-09T11:00:00Z' }),
+        facts({ lastFinishedAt: '2026-11-09T11:00:00Z' }),
         now,
       ),
     ).toBe('debrief');

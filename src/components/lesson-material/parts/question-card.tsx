@@ -156,7 +156,7 @@ export const QuestionCard = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-tertiary tabular-nums">
-          {index + 1} of {total}
+          Question {index + 1} of {total}
         </span>
       </div>
 

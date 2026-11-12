@@ -203,13 +203,24 @@ export function useStartDebrief({
  * Grade one answer. On success the attempt cache gets the answer and the new
  * mastery, the status and course progress are invalidated, and a promotion in
  * the response is queued for the interstitial.
+ *
+ * `onAnswered` runs first, synchronously, while the attempt cache still holds
+ * the attempt as it was before this answer. The Debrief panel records a
+ * finished attempt's report there, so it swaps to the report in the same
+ * render the cache moves on, never showing a skipped question in between
+ * (the short circuit ends an attempt with questions left unanswered).
  */
-export function useAnswerDebrief() {
+export function useAnswerDebrief({
+  onAnswered,
+}: {
+  onAnswered?: (result: DebriefAnswerResult, input: AnswerDebriefInput) => void;
+} = {}) {
   const queryClient = useQueryClient();
   const setPromotion = useSetAtom(pendingPromotionAtom);
   return useMutation({
     mutationFn: postDebriefAnswer,
     onSuccess: (result, input) => {
+      onAnswered?.(result, input);
       if (result.promotion) setPromotion(result.promotion);
       return applyAnswerResult(queryClient, input, result);
     },

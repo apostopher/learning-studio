@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
-import { justSubmittedDebriefAtom } from '#/atoms/debrief';
+import { justFinishedDebriefAtom } from '#/atoms/debrief';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { useSectionTapRecorder } from '#/data-hooks/use-record-section-tap';
@@ -62,15 +62,17 @@ export const LessonMaterialWrapper = ({
     (l) => lesson !== undefined && l.lessonId === lesson.id,
   )?.debrief;
 
-  // "Just submitted" lasts only while the pilot stays on the lesson: leaving
-  // it (another lesson, or off the lesson page) ends it, so any later visit
-  // during the retake wait shows only the reopen time.
-  const setJustSubmitted = useSetAtom(justSubmittedDebriefAtom);
+  // A just-finished attempt's report lasts only while the pilot stays on the
+  // lesson: leaving it (another lesson, or off the lesson page) ends it, so
+  // any later visit during the retake wait shows only the countdown.
+  const setJustFinished = useSetAtom(justFinishedDebriefAtom);
   useEffect(() => {
     const leaving = lessonSlug;
     return () =>
-      setJustSubmitted((current) => (current === leaving ? null : current));
-  }, [lessonSlug, setJustSubmitted]);
+      setJustFinished((current) =>
+        current?.lessonSlug === leaving ? null : current,
+      );
+  }, [lessonSlug, setJustFinished]);
 
   // Only record taps once the panel is actually showing material, AND the
   // lesson is not a read-only archive view — a tab the learner never saw

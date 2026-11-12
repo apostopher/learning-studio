@@ -108,25 +108,30 @@ describe('DebriefWait', () => {
     ).toBeDefined();
   });
 
-  it('retake-waiting: ONLY the reopen time — no score, no history', () => {
-    render(<DebriefWait {...common} kind="retake-waiting" time={TIME} />);
-    const panel = screen.getByRole('status', {
-      name: 'Next attempt opens 12 hours after your last one',
-      description: /Next attempt opens Tue 28 Oct, 3:40 PM\..*below 75/,
+  it('retake-waiting: heads with the live countdown, and says why it is closed', () => {
+    render(
+      <DebriefWait
+        {...common}
+        kind="retake-waiting"
+        countdown="5 h 40 min"
+        time={TIME}
+        announcement=""
+      />,
+    );
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(heading.textContent?.startsWith('Your next debrief opens in')).toBe(
+      true,
+    );
+    expect(heading.textContent).toBe('Your next debrief opens in 5 h 40 min');
+    // The panel's accessible name is the reason it is closed; its
+    // description says what opens it.
+    const panel = screen.getByRole('region', {
+      name: 'Your next debrief opens in 5 h 40 min',
     });
-    expect(panel.textContent).not.toMatch(/\d+\/100|correct/);
+    expect(panel.textContent).toContain('Opens Tue 28 Oct, 3:40 PM.');
+    expect(panel.textContent).toMatch(/6 hours after your last attempt/);
+    expect(panel.textContent).not.toMatch(/\d+\/100|correct|below 75/);
     expect(screen.queryByRole('button')).toBeNull();
-  });
-
-  it('rewatch: says the video must be watched again, and that the redo opens straight after', () => {
-    render(<DebriefWait {...common} kind="rewatch" />);
-    expect(
-      screen.getByRole('status', {
-        name: 'Rewatch the video to redo this debrief',
-        description:
-          'Your last debrief came in under 75. Watch this knowledge chunk again to the end, and a fresh debrief opens straight away.',
-      }),
-    ).toBeDefined();
   });
 
   it('takes the heading level of its context', () => {

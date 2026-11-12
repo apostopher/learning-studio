@@ -81,7 +81,7 @@ describe('DebriefIntro', () => {
     });
   });
 
-  it('states the pass mark before the pilot starts', () => {
+  it('says how the debrief is passed before the pilot starts', () => {
     render(
       <DebriefIntro
         loading={false}
@@ -92,12 +92,12 @@ describe('DebriefIntro', () => {
     );
     expect(
       screen.getByText(
-        'Three questions on this lesson, answered in your own words. Average 75 or more to pass. If you fall short, three more follow, and your score is the average of all six.',
+        'One question for each knowledge chunk in this lesson, answered in your own words. Score 70 or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.',
       ),
     ).toBeDefined();
   });
 
-  it('says a retake is a fresh set of questions after a below-par attempt', () => {
+  it('says a retake asks fresh questions on what is not yet cleared', () => {
     render(
       <DebriefIntro
         loading={false}
@@ -108,8 +108,22 @@ describe('DebriefIntro', () => {
     );
     expect(
       screen.getByText(
-        /last attempt was below 75, so these are fresh questions/,
+        'Fresh questions on the knowledge chunks you have not cleared yet, plus one or two you have, answered in your own words. Score 70 or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.',
       ),
+    ).toBeDefined();
+  });
+
+  it('says it is preparing while the questions are written', () => {
+    render(
+      <DebriefIntro
+        loading={true}
+        onStart={vi.fn()}
+        readOnly={false}
+        retake={false}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /Preparing debrief/ }),
     ).toBeDefined();
   });
 });

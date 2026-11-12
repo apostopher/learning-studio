@@ -1,81 +1,76 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
-import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
+import { describe, expect, it, vi } from 'vitest';
 import { ScoreReport } from '../score-report';
 
-const questions: AITestQuestion[] = [
-  {
-    id: 'q1',
-    type: 'mcq',
-    question: 'What is V1?',
-    options: [
-      { id: 'a', value: 'Decision speed' },
-      { id: 'b', value: 'Rotation speed' },
-    ],
-    correctOptionId: 'a',
-    keyPointIndex: 0,
+// Capture what the ring was handed: the report's number IS the ring's prop.
+const ringProps = vi.hoisted(() => [] as { score: number }[]);
+vi.mock('../score-ring', () => ({
+  ScoreRing: (props: { score: number }) => {
+    ringProps.push(props);
+    return null;
   },
-];
+}));
 
-const evaluations: AIEvaluationResult[] = [
-  {
-    questionId: 'q1',
-    type: 'mcq',
-    score: 80,
-    userAnswer: 'a',
-    explanation: 'Correct.',
-  },
-];
-
-const props = { score: 80, questions, evaluations };
+const holes = {
+  mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+  revisitNotes: [
+    'Lift depends on airspeed squared, so halving speed quarters lift — your answer said it halves.',
+    'A stall is about angle of attack, not speed; you tied it to a minimum speed.',
+  ],
+};
 
 describe('ScoreReport', () => {
-  it('has no Retake button — retakes happen only by the tab reopening (call 8)', () => {
-    render(<ScoreReport {...props} />);
-    expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();
+  it('rings the mastery percent and states the cleared count', () => {
+    ringProps.length = 0;
+    render(<ScoreReport {...holes} headingLevel={2} />);
+    expect(ringProps.at(-1)?.score).toBe(71);
+    expect(screen.getByText('5 of 7 knowledge chunks cleared')).toBeDefined();
   });
 
-  it('renders the footer it is given in the summary', () => {
-    render(
-      <ScoreReport
-        {...props}
-        footer={<p>Next attempt opens Tue 28 Oct, 3:40 PM</p>}
-      />,
-    );
-    expect(
-      screen.getByText('Next attempt opens Tue 28 Oct, 3:40 PM'),
-    ).toBeDefined();
-  });
-
-  it('lists what is worth revisiting — the ideas missed and the claims that were wrong', () => {
-    render(
-      <ScoreReport
-        {...props}
-        gaps={{
-          missed: ['A human pilot commands the aircraft over a radio link'],
-          incorrect: ["Tesla's boat steered itself"],
-        }}
-      />,
-    );
+  it('renders each revisit note as its own paragraph, word for word', () => {
+    render(<ScoreReport {...holes} headingLevel={2} />);
     const section = screen.getByRole('region', { name: 'Worth revisiting' });
-    expect(section.textContent).toContain(
-      'A human pilot commands the aircraft over a radio link',
+    const paragraphs = [...section.querySelectorAll('p')].map(
+      (p) => p.textContent,
     );
-    expect(section.textContent).toContain("Tesla's boat steered itself");
+    expect(paragraphs).toEqual(holes.revisitNotes);
+    expect(section.querySelector('ul, li')).toBeNull();
   });
 
-  it('has no revisit section when nothing was missed', () => {
-    render(<ScoreReport {...props} gaps={{ missed: [], incorrect: [] }} />);
+  it('a pass rings 100 and lists nothing to revisit', () => {
+    ringProps.length = 0;
+    render(
+      <ScoreReport
+        mastery={{ cleared: 7, total: 7, percent: 100, passed: true }}
+        revisitNotes={['should not show']}
+        headingLevel={2}
+      />,
+    );
+    expect(ringProps.at(-1)?.score).toBe(100);
+    expect(screen.getByText('7 of 7 knowledge chunks cleared')).toBeDefined();
+    expect(
+      screen.queryByRole('region', { name: 'Worth revisiting' }),
+    ).toBeNull();
+    expect(screen.queryByText('should not show')).toBeNull();
+  });
+
+  it('has no revisit section when there are no notes', () => {
+    render(<ScoreReport {...holes} revisitNotes={[]} headingLevel={2} />);
     expect(
       screen.queryByRole('region', { name: 'Worth revisiting' }),
     ).toBeNull();
   });
 
-  it('expands a question to the answer given', async () => {
-    render(<ScoreReport {...props} />);
-    await userEvent.click(screen.getByRole('button', { name: /What is V1/ }));
-    expect(screen.getByText('Correct.')).toBeDefined();
+  it('renders the footer it is given, and offers no Retake button', () => {
+    render(
+      <ScoreReport
+        {...holes}
+        headingLevel={2}
+        footer={<p>Your next debrief opens in 6 h</p>}
+      />,
+    );
+    expect(screen.getByText('Your next debrief opens in 6 h')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();
   });
 });

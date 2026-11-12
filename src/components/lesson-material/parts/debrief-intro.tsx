@@ -1,5 +1,5 @@
 import { Loader2, NotebookPen } from 'lucide-react';
-import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
+import { CHUNK_CLEAR_SCORE } from '#/lib/debrief-mastery';
 import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 type DebriefIntroProps = {
@@ -7,11 +7,13 @@ type DebriefIntroProps = {
   onStart: () => void;
   /** Completed at an earlier level — Start must be disabled, not silently inert. */
   readOnly: boolean;
-  /** A retake after a below-par attempt — the questions are new. */
+  /** A later attempt: fresh questions on the chunks not yet cleared. */
   retake: boolean;
 };
 
 const REASON_ID = 'debrief-intro-readonly-reason';
+
+const HOW_IT_WORKS = `Score ${CHUNK_CLEAR_SCORE} or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.`;
 
 /**
  * The Debrief tab once the debrief is open, before it has been generated.
@@ -25,18 +27,11 @@ export const DebriefIntro = ({
   retake,
 }: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
-    {/*
-      No longer "generated from its key points": on a lesson with no material
-      the questions come from the video's own transcript, and copy that names
-      one source would be wrong half the time.
-    */}
     <p className="text-secondary text-sm">
       {retake
-        ? `Your last attempt was below ${DEBRIEF_PAR_SCORE}, so these are fresh questions. `
-        : ''}
-      Three questions on this lesson, answered in your own words. Average{' '}
-      {DEBRIEF_PAR_SCORE} or more to pass. If you fall short, three more follow,
-      and your score is the average of all six.
+        ? 'Fresh questions on the knowledge chunks you have not cleared yet, plus one or two you have, answered in your own words. '
+        : 'One question for each knowledge chunk in this lesson, answered in your own words. '}
+      {HOW_IT_WORKS}
     </p>
     <button
       type="button"

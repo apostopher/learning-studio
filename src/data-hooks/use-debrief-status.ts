@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
-import { AIEvaluationResultSchema, AITestQuestionSchema } from '#/ai/schemas';
 import { TRACKED_LESSON_SECTIONS } from '#/lib/lesson-visit-section';
 import { dataKeys } from './keys';
 
@@ -17,7 +16,11 @@ const outstandingItemSchema = z.discriminatedUnion('kind', [
 const debriefStateSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('not-done') }),
   z.object({ kind: z.literal('waiting'), availableAt: z.string() }),
-  z.object({ kind: z.literal('open'), retake: z.boolean() }),
+  z.object({
+    kind: z.literal('open'),
+    retake: z.boolean(),
+    resume: z.boolean(),
+  }),
   z.object({ kind: z.literal('retake-waiting'), availableAt: z.string() }),
   z.object({ kind: z.literal('passed') }),
 ]);
@@ -32,8 +35,17 @@ export const debriefStatusSchema = z.object({
         totalScore: z.number(),
         completedAt: z.string(),
         passed: z.boolean(),
-        questions: z.array(AITestQuestionSchema),
-        evaluations: z.array(AIEvaluationResultSchema),
+        // As `toClientAttempt` projects them: question text only, and a
+        // grade with no grading key. A legacy multiple-choice attempt has
+        // lost its options here, so history shows question and score only.
+        questions: z.array(z.object({ id: z.string(), question: z.string() })),
+        evaluations: z.array(
+          z.object({
+            questionId: z.string(),
+            score: z.number(),
+            revisitNote: z.string().optional(),
+          }),
+        ),
       }),
     )
     .optional(),

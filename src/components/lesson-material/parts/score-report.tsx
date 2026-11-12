@@ -1,199 +1,79 @@
-import { Collapsible } from '@base-ui/react/collapsible';
-import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
-import type { DebriefGaps } from '#/lib/debrief-gaps';
-import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
-  score: number;
-  questions: AITestQuestion[];
-  evaluations: AIEvaluationResult[];
   /**
-   * Shown under the summary — the just-failed panel's "Next attempt opens"
-   * line. There is no Retake button: retakes happen only by the Debrief tab
-   * reopening 12h later (call 8).
+   * Knowledge-chunk mastery after the attempt. `percent` is
+   * `masteryPercent` — 100 once passed — and is what the ring shows.
+   */
+  mastery: { cleared: number; total: number; percent: number; passed: boolean };
+  /**
+   * "Worth revisiting": the grader's note on each hole, one paragraph each
+   * (`revisitNotesOf`). Not shown once passed.
+   */
+  revisitNotes: readonly string[];
+  /** 2 under the tab strip, 3 inside the material-less "Debrief" section. */
+  headingLevel: 2 | 3;
+  /**
+   * Under the summary: the countdown to the next attempt. There is no Retake
+   * button — the next attempt opens only when the wait is over.
    */
   footer?: ReactNode;
-  /** What the answers showed is not yet secure (`debriefGaps`); a list when non-empty. */
-  gaps?: DebriefGaps;
 };
 
-const gradeLabel = (score: number): string => {
-  if (score >= 90) return 'Excellent';
-  if (score >= DEBRIEF_PAR_SCORE) return 'Good';
-  if (score >= 50) return 'Needs Review';
-  return 'Keep Practicing';
-};
-
-const scoreBadgeClass = (score: number) => {
-  if (score >= 80)
-    return 'border border-success-7 bg-success-3 text-success-text';
-  if (score >= 50)
-    return 'border border-warning-7 bg-warning-3 text-warning-text';
-  return 'border border-error-7 bg-error-3 text-error-text';
-};
-
+/**
+ * The report of a finished debrief attempt: mastery so far as a ring and a
+ * count of chunks cleared, then what is worth revisiting, in readable prose.
+ *
+ * Presentational and hookless.
+ */
 export const ScoreReport = ({
-  score,
-  questions,
-  evaluations,
+  mastery,
+  revisitNotes,
+  headingLevel,
   footer,
-  gaps,
 }: ScoreReportProps) => {
-  const correctCount = evaluations.filter(
-    (e) => e.score >= DEBRIEF_PAR_SCORE,
-  ).length;
-  const hasGaps =
-    gaps !== undefined && (gaps.missed.length > 0 || gaps.incorrect.length > 0);
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  const notes = mastery.passed ? [] : revisitNotes;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Summary card */}
       <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 rounded-xl border border-gray-6 bg-gray-2 px-6 py-8 text-center">
-        <ScoreRing score={score} size={96} strokeWidth={8} />
+        <ScoreRing score={mastery.percent} size={96} strokeWidth={8} />
 
         <div className="flex flex-col gap-1">
-          <p className="text-xl font-semibold text-primary">
-            {gradeLabel(score)}
-          </p>
+          <Heading className="text-xl font-semibold text-primary">
+            {mastery.passed ? 'Debrief passed' : 'Attempt finished'}
+          </Heading>
           <p className="text-sm text-secondary">
-            {correctCount} of {questions.length} questions correct
+            {mastery.cleared} of {mastery.total} knowledge chunks cleared
           </p>
         </div>
 
         {footer}
       </div>
 
-      {hasGaps && (
+      {notes.length > 0 && (
         <section
           aria-labelledby="debrief-revisit-heading"
-          className="flex flex-col gap-2 rounded-xl border border-gray-6 bg-gray-2 px-5 py-4"
+          className="flex flex-col gap-3 rounded-xl border border-gray-6 bg-gray-2 px-5 py-4"
         >
-          <h2
+          <Heading
             id="debrief-revisit-heading"
             className="text-base font-semibold text-primary"
           >
             Worth revisiting
-          </h2>
-          <ul className="flex list-disc flex-col gap-1 ps-5 text-sm text-primary">
-            {gaps.missed.map((idea) => (
-              <li key={`m-${idea}`}>{idea}</li>
-            ))}
-            {gaps.incorrect.map((claim) => (
-              <li key={`i-${claim}`}>
-                <span className="text-secondary">Not quite right: </span>
-                {claim}
-              </li>
-            ))}
-          </ul>
+          </Heading>
+          {notes.map((note) => (
+            <p
+              key={note}
+              className="max-w-prose text-sm leading-relaxed text-primary"
+            >
+              {note}
+            </p>
+          ))}
         </section>
       )}
-
-      {/* Question review */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-primary">
-          Question Review
-        </h2>
-
-        <div className="flex flex-col gap-2">
-          {questions.map((question, i) => {
-            const evaluation = evaluations.find(
-              (e) => e.questionId === question.id,
-            );
-
-            const userAnswerDisplay =
-              question.type === 'mcq' && evaluation
-                ? (question.options.find((o) => o.id === evaluation.userAnswer)
-                    ?.value ?? evaluation.userAnswer)
-                : (evaluation?.userAnswer ?? '—');
-
-            const correctAnswerDisplay =
-              question.type === 'mcq'
-                ? (question.options.find(
-                    (o) => o.id === question.correctOptionId,
-                  )?.value ?? question.correctOptionId)
-                : null;
-
-            const truncatedQuestion =
-              question.question.length > 80
-                ? `${question.question.slice(0, 80)}…`
-                : question.question;
-
-            return (
-              <Collapsible.Root key={question.id} className="group/question">
-                <Collapsible.Trigger className="flex w-full items-center gap-3 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2.5 text-start text-sm hover:bg-gray-2">
-                  <span className="shrink-0 font-medium text-secondary">
-                    Q{i + 1}
-                  </span>
-                  {evaluation && (
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${scoreBadgeClass(evaluation.score)}`}
-                    >
-                      {evaluation.score}/100
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-primary">
-                    {truncatedQuestion}
-                  </span>
-                  <ChevronDown
-                    className="size-4 shrink-0 text-tertiary transition-transform duration-200 group-data-[open]/question:rotate-180"
-                    aria-hidden="true"
-                  />
-                </Collapsible.Trigger>
-
-                <Collapsible.Panel className="overflow-hidden data-[ending-hidden]:animate-collapse data-[starting-hidden]:animate-collapse">
-                  <div className="flex flex-col gap-3 rounded-b-lg border border-t-0 border-gray-6 bg-gray-1 px-3 pb-4 pt-3">
-                    {/* Full question */}
-                    <p className="text-sm font-medium text-primary">
-                      {question.question}
-                    </p>
-
-                    {/* Your answer */}
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
-                        Your answer
-                      </span>
-                      <p className="text-sm text-primary">
-                        {userAnswerDisplay || (
-                          <span className="italic text-tertiary">
-                            No answer provided
-                          </span>
-                        )}
-                      </p>
-                    </div>
-
-                    {/* Correct answer (MCQ only) */}
-                    {correctAnswerDisplay && (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
-                          Correct answer
-                        </span>
-                        <p className="text-sm text-success-text">
-                          {correctAnswerDisplay}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Explanation */}
-                    {evaluation?.explanation && (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
-                          Explanation
-                        </span>
-                        <p className="text-sm leading-relaxed text-primary">
-                          {evaluation.explanation}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </Collapsible.Panel>
-              </Collapsible.Root>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 };

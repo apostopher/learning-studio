@@ -2,93 +2,90 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import type { AIEvaluationResult, AITestQuestion } from '#/ai/schemas';
-import { DebriefAttemptHistory } from '../debrief-attempt-history';
+import {
+  DebriefAttemptHistory,
+  type DebriefAttemptRow,
+} from '../debrief-attempt-history';
 
-const question = (id: string, text: string): AITestQuestion => ({
-  id,
-  type: 'free-text',
-  question: text,
-  expectedAnswer: 'x',
-  keyPointIndex: 0,
-});
-const evaluation = (id: string, score: number): AIEvaluationResult => ({
-  questionId: id,
-  type: 'free-text',
-  score,
-  userAnswer: 'my answer',
-  explanation: 'because',
-});
-
-const attempts = [
+const attempts: DebriefAttemptRow[] = [
   {
     id: 2,
     when: 'Wed 29 Oct, 9:00 AM',
-    score: 85,
+    score: 100,
     passed: true,
-    questions: [question('p1', 'Passing attempt question')],
-    evaluations: [evaluation('p1', 85)],
-    gaps: { missed: [], incorrect: [] },
+    questions: [{ id: 'p1', question: 'Passing attempt question' }],
+    evaluations: [{ questionId: 'p1', score: 85, revisitNote: '' }],
   },
   {
     id: 1,
     when: 'Tue 28 Oct, 3:40 PM',
     score: 40,
     passed: false,
-    questions: [question('f1', 'Failed attempt question')],
-    evaluations: [evaluation('f1', 40)],
-    gaps: { missed: [], incorrect: [] },
+    questions: [{ id: 'f1', question: 'Failed attempt question' }],
+    evaluations: [
+      {
+        questionId: 'f1',
+        score: 40,
+        revisitNote: 'Revisit why the checklist comes first.',
+      },
+    ],
   },
 ];
 
 describe('DebriefAttemptHistory', () => {
-  it('lists every attempt in the order given, with date, score and outcome (call 3)', () => {
+  it('lists every attempt in the order given, with date, score and outcome', () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(2);
     expect(items[0].textContent).toContain('Wed 29 Oct, 9:00 AM');
-    expect(items[0].textContent).toContain('85/100');
+    expect(items[0].textContent).toContain('100%');
     expect(items[0].textContent).toContain('Passed');
     expect(items[1].textContent).toContain('Tue 28 Oct, 3:40 PM');
-    expect(items[1].textContent).toContain('40/100');
-    expect(items[1].textContent).toContain('Below par');
+    expect(items[1].textContent).toContain('40%');
+    expect(items[1].textContent).toContain('Not yet passed');
   });
 
-  it("expands an attempt to that attempt's own score report", async () => {
+  it('expands an attempt to its own questions, each with its score and note', async () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     const failed = screen.getAllByRole('listitem')[1];
     await userEvent.click(
       within(failed).getByRole('button', { name: /Tue 28 Oct/ }),
     );
     expect(within(failed).getByText('Failed attempt question')).toBeDefined();
+    expect(within(failed).getByText('40/100')).toBeDefined();
+    expect(
+      within(failed).getByText('Revisit why the checklist comes first.'),
+    ).toBeDefined();
     expect(screen.queryByText('Passing attempt question')).toBeNull();
+  });
+
+  it('renders a legacy multiple-choice attempt as question and score only', async () => {
+    // Projected for the client, an old MCQ attempt has no options left and
+    // its "answer" is an option id: neither is shown.
+    render(
+      <DebriefAttemptHistory
+        attempts={[
+          {
+            id: 3,
+            when: 'Mon 1 Sep, 8:00 AM',
+            score: 80,
+            passed: true,
+            questions: [{ id: 'm1', question: 'What is V1?' }],
+            evaluations: [{ questionId: 'm1', score: 100 }],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    await userEvent.click(
+      within(item).getByRole('button', { name: /Mon 1 Sep/ }),
+    );
+    expect(within(item).getByText('What is V1?')).toBeDefined();
+    expect(within(item).getByText('100/100')).toBeDefined();
   });
 
   it('offers no retake from history', () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();
-  });
-
-  it("rotates only the chevron of the attempt opened, not every question's inside it", async () => {
-    // Tailwind's unnamed `group-data-[open]:` matches ANY open `.group`
-    // ancestor, and ScoreReport's question rows are groups too.
-    render(<DebriefAttemptHistory attempts={attempts} />);
-    const passed = screen.getAllByRole('listitem')[0];
-    await userEvent.click(
-      within(passed).getByRole('button', { name: /Wed 29 Oct/ }),
-    );
-    const chevrons = passed.querySelectorAll('svg.lucide-chevron-down');
-    expect(chevrons.length).toBe(2);
-    expect(chevrons[0].getAttribute('class')).toContain(
-      'group-data-[open]/attempt:rotate-180',
-    );
-    expect(chevrons[1].getAttribute('class')).toContain(
-      'group-data-[open]/question:rotate-180',
-    );
-    for (const chevron of chevrons) {
-      expect(chevron.getAttribute('class')).not.toMatch(
-        /(^|\s)group-data-\[open\]:/,
-      );
-    }
   });
 });
