@@ -1,8 +1,8 @@
 import { generateText, Output } from 'ai';
-import { DEBRIEF_QUESTION_COUNT, DEBRIEF_SET_SIZE } from '#/lib/debrief-sets';
+import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { haiku, sonnet } from './ai-provider';
 import { evaluatorPrompt } from './prompts/evaluator';
-import { generationPrompt } from './prompts/generation';
+import { generationPrompt, type QuestionSlot } from './prompts/generation';
 import { optimizerPrompt } from './prompts/optimizer';
 import {
   type AITest,
@@ -14,54 +14,58 @@ import {
 
 const MAX_RETRIES = 2;
 
+type Ctx = {
+  chunks: KnowledgeChunk[];
+  context: string;
+  slots: QuestionSlot[];
+};
+
 async function generate(
-  keyPoints: string[],
-  text: string,
+  ctx: Ctx,
+  avoidQuestions: string[],
 ): Promise<AITestFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
-    output: Output.object({
-      schema: AITestGenerationOutputSchema,
-    }),
+    output: Output.object({ schema: AITestGenerationOutputSchema }),
     prompt: generationPrompt({
-      keyPoints,
-      text,
-      questionCount: DEBRIEF_QUESTION_COUNT,
-      setSize: DEBRIEF_SET_SIZE,
+      chunks: ctx.chunks,
+      slots: ctx.slots,
+      text: ctx.context,
+      avoidQuestions,
     }),
   });
   return output.questions;
 }
 
 async function evaluate(
-  keyPoints: string[],
-  text: string,
+  ctx: Ctx,
   questions: AITestFreeTextQuestion[],
 ): Promise<EvaluatorOutput> {
   const { output } = await generateText({
     model: haiku,
-    output: Output.object({
-      schema: EvaluatorOutputSchema,
+    output: Output.object({ schema: EvaluatorOutputSchema }),
+    prompt: evaluatorPrompt({
+      chunks: ctx.chunks,
+      text: ctx.context,
+      questions,
     }),
-    prompt: evaluatorPrompt({ keyPoints, text, questions }),
   });
   return output;
 }
 
 async function optimize(
-  keyPoints: string[],
-  text: string,
+  ctx: Ctx,
   failedQuestions: AITestFreeTextQuestion[],
+  focusByQuestionId: Record<string, string>,
   evaluatorFeedback: EvaluatorOutput['results'],
 ): Promise<AITestFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
-    output: Output.object({
-      schema: AITestGenerationOutputSchema,
-    }),
+    output: Output.object({ schema: AITestGenerationOutputSchema }),
     prompt: optimizerPrompt({
-      keyPoints,
-      text,
+      chunks: ctx.chunks,
+      focusByQuestionId,
+      text: ctx.context,
       failedQuestions,
       evaluatorFeedback,
     }),
@@ -69,45 +73,107 @@ async function optimize(
   return output.questions;
 }
 
+/** Ids are ours, not the model's: `q1..qN` by slot order. */
+const withSlotIds = (questions: AITestFreeTextQuestion[]) =>
+  questions.map((q, i) => ({ ...q, id: `q${i + 1}` }));
+
 /**
- * A debrief: six written questions, the first set of three then the second
- * (see `debriefSetsProgress` for when the second is asked). Written answers
- * only — a pilot explains, they do not pick.
+ * A debrief: one written question per slot, the pilot's holes first and then
+ * the spaced-review chunks. Each question's `chunkIds[0]` is its slot's chunk.
  *
  * Generate with Sonnet, quality-check with Haiku, regenerate failures with
- * Sonnet (at most twice). A regenerated question takes its original's slot,
- * so a question written for the second set never moves into the first.
+ * Sonnet (at most twice). A regenerated question takes its original's slot.
+ * Afterwards code checks the tagging itself — a question whose focus chunk is
+ * not its slot's, or that cites an unknown chunk, gets one more optimise call,
+ * and if it is still wrong its tags are overwritten with `[slotChunkId]`. A
+ * slot is never dropped.
  */
-export async function generateTest(
-  lessonSlug: string,
-  keyPoints: string[],
-  text: string,
-): Promise<AITest> {
-  let questions = (await generate(keyPoints, text)).slice(
-    0,
-    DEBRIEF_QUESTION_COUNT,
-  );
+export async function generateTest(input: {
+  lessonSlug: string;
+  chunks: KnowledgeChunk[];
+  context: string;
+  focus: { holes: string[]; review: string[] };
+  avoidQuestions: string[];
+}): Promise<AITest> {
+  const { lessonSlug, chunks, context, focus, avoidQuestions } = input;
+  const slots: QuestionSlot[] = [
+    ...focus.holes.map((chunkId) => ({ chunkId, kind: 'hole' as const })),
+    ...focus.review.map((chunkId) => ({ chunkId, kind: 'review' as const })),
+  ];
+  const ctx: Ctx = { chunks, context, slots };
+  const slotCount = slots.length;
+  if (slotCount === 0) return { lessonSlug, questions: [] };
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const { results } = await evaluate(keyPoints, text, questions);
-    const failedIds = new Set(
-      results.filter((r) => !r.pass).map((r) => r.questionId),
+  const generated = await generate(ctx, avoidQuestions);
+  if (generated.length < slotCount) {
+    // A hole without a question would be skipped silently; refuse instead.
+    throw new Error(
+      `Question generation returned ${generated.length} of ${slotCount} questions`,
     );
-    if (failedIds.size === 0) break;
+  }
+  const questions = withSlotIds(generated.slice(0, slotCount));
 
-    const failedQuestions = questions.filter((q) => failedIds.has(q.id));
+  /** Regenerate the questions at `indexes`, each back into its own slot. */
+  const regenerate = async (
+    indexes: number[],
+    feedback: EvaluatorOutput['results'],
+  ) => {
+    const failed = indexes.map((i) => questions[i]);
+    const focusByQuestionId = Object.fromEntries(
+      indexes.map((i) => [questions[i].id, slots[i].chunkId]),
+    );
     const regenerated = await optimize(
-      keyPoints,
-      text,
-      failedQuestions,
-      results.filter((r) => !r.pass),
+      ctx,
+      failed,
+      focusByQuestionId,
+      feedback,
     );
     // In order, one for one; a failure the optimiser returned nothing for
     // keeps its original rather than shrinking the debrief.
-    let next = 0;
-    questions = questions.map((q) =>
-      failedIds.has(q.id) ? (regenerated[next++] ?? q) : q,
+    indexes.forEach((slot, n) => {
+      const r = regenerated[n];
+      if (r) questions[slot] = { ...r, id: questions[slot].id };
+    });
+  };
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const { results } = await evaluate(ctx, questions);
+    const failing = results.filter((r) => !r.pass);
+    const failedIds = new Set(failing.map((r) => r.questionId));
+    if (failedIds.size === 0) break;
+    await regenerate(
+      questions.flatMap((q, i) => (failedIds.has(q.id) ? [i] : [])),
+      failing,
     );
+  }
+
+  const known = new Set(chunks.map((c) => c.id));
+  const problem = (q: AITestFreeTextQuestion, i: number): string | null => {
+    const unknown = q.chunkIds.filter((id) => !known.has(id));
+    if (unknown.length > 0) {
+      return `Cites unknown chunk id(s) ${unknown.join(', ')}; use only ids from the Knowledge Chunks list.`;
+    }
+    if (q.chunkIds[0] !== slots[i].chunkId) {
+      return `chunkIds[0] is \`${q.chunkIds[0]}\` but this slot's focus chunk is \`${slots[i].chunkId}\`; it must come first and the question must test it.`;
+    }
+    return null;
+  };
+  const badSlots = () =>
+    questions.flatMap((q, i) => (problem(q, i) ? [i] : []));
+
+  const bad = badSlots();
+  if (bad.length > 0) {
+    await regenerate(
+      bad,
+      bad.map((i) => ({
+        questionId: questions[i].id,
+        pass: false,
+        reason: problem(questions[i], i) ?? '',
+      })),
+    );
+    for (const i of badSlots()) {
+      questions[i] = { ...questions[i], chunkIds: [slots[i].chunkId] };
+    }
   }
 
   return { lessonSlug, questions };

@@ -33,6 +33,7 @@ const validFreeTextQuestion = {
   question: 'Explain the concept of **lift** in your own words.',
   expectedAnswer:
     'Lift is the aerodynamic force perpendicular to the direction of flight.',
+  chunkIds: ['v2-c3'],
   keyPointIndex: 1,
 };
 
@@ -109,6 +110,28 @@ describe('AITestFreeTextQuestionSchema', () => {
     const data = { ...validFreeTextQuestion, keyPointIndex: -1 };
     const result = AITestFreeTextQuestionSchema.safeParse(data);
     expect(result.success).toBe(false);
+  });
+
+  it('requires one or two chunk ids', () => {
+    for (const chunkIds of [[], ['a', 'b', 'c']]) {
+      expect(
+        AITestFreeTextQuestionSchema.safeParse({
+          ...validFreeTextQuestion,
+          chunkIds,
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      AITestFreeTextQuestionSchema.safeParse({
+        ...validFreeTextQuestion,
+        chunkIds: ['v2-c3', 'v2-c4'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('parses without keyPointIndex — it is legacy', () => {
+    const { keyPointIndex: _omitted, ...data } = validFreeTextQuestion;
+    expect(AITestFreeTextQuestionSchema.safeParse(data).success).toBe(true);
   });
 
   it('rejects when expectedAnswer is missing', () => {
@@ -300,15 +323,15 @@ describe('AIEvaluationResultSchema', () => {
 
 describe('AIFreeTextEvalOutputSchema', () => {
   const valid = {
-    essentialIdeas: [
-      { idea: 'Squawk 7600', conveyed: 'fully' },
-      { idea: 'Follow the last clearance', conveyed: 'partly' },
+    chunkJudgements: [
+      { chunkId: 'v2-c1', conveyed: 'fully', note: 'Said 7600.' },
+      { chunkId: 'v2-c2', conveyed: 'partly', note: 'Vague on route.' },
     ],
     incorrectClaims: [],
-    explanation: 'You covered the transponder code.',
+    revisitNote: 'You named the code but not the route.',
   };
 
-  it('accepts per-idea judgements', () => {
+  it('accepts per-chunk judgements', () => {
     expect(AIFreeTextEvalOutputSchema.safeParse(valid).success).toBe(true);
   });
 
@@ -316,20 +339,45 @@ describe('AIFreeTextEvalOutputSchema', () => {
     expect(
       AIFreeTextEvalOutputSchema.safeParse({
         ...valid,
-        essentialIdeas: [{ idea: 'x', conveyed: 'mostly' }],
+        chunkJudgements: [{ chunkId: 'a', conveyed: 'mostly', note: '' }],
       }).success,
     ).toBe(false);
   });
 
-  it('requires at least one essential idea', () => {
+  it('requires at least one chunk judgement', () => {
     expect(
-      AIFreeTextEvalOutputSchema.safeParse({ ...valid, essentialIdeas: [] })
+      AIFreeTextEvalOutputSchema.safeParse({ ...valid, chunkJudgements: [] })
         .success,
     ).toBe(false);
   });
 
-  it('rejects when explanation is missing', () => {
-    const { explanation: _, ...rest } = valid;
+  it('rejects when revisitNote is missing', () => {
+    const { revisitNote: _, ...rest } = valid;
     expect(AIFreeTextEvalOutputSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+describe('AIEvaluationResultSchema chunk fields', () => {
+  it('accepts chunkScores and revisitNote, and still parses legacy rows', () => {
+    const base = {
+      questionId: 'q1',
+      type: 'free-text' as const,
+      score: 50,
+      userAnswer: 'a',
+      explanation: '',
+    };
+    expect(
+      AIEvaluationResultSchema.safeParse({
+        ...base,
+        chunkScores: { 'v2-c1': 75 },
+        revisitNote: 'x',
+      }).success,
+    ).toBe(true);
+    expect(
+      AIEvaluationResultSchema.safeParse({
+        ...base,
+        essentialIdeas: [{ idea: 'x', conveyed: 'fully' }],
+      }).success,
+    ).toBe(true);
   });
 });

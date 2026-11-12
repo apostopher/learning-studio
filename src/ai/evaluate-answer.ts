@@ -1,12 +1,13 @@
 import { generateObject } from 'ai';
+import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { sonnet } from './ai-provider';
 import { evaluationPrompt } from './prompts/evaluation';
 import {
   type AIEvaluationResult,
-  type AIFreeTextEvalOutput,
   AIFreeTextEvalOutputSchema,
   type AITestFreeTextQuestion,
   type AITestMCQQuestion,
+  type ChunkJudgement,
 } from './schemas';
 
 // Deterministic MCQ evaluation — no AI call
@@ -28,56 +29,45 @@ export function evaluateMCQ(
   };
 }
 
-const CONVEYED_CREDIT = { fully: 1, partly: 0.5, not: 0 } as const;
+const CONVEYED_CREDIT = { fully: 100, partly: 50, not: 0 } as const;
 /** What each factually wrong or unsafe statement costs, in score points. */
 const INCORRECT_CLAIM_PENALTY = 25;
 /**
- * The most the penalties may take, as a share of what the answer earned. Past
- * this, a single flagged claim could zero an answer whose explanation credits
- * the student with something — a number that contradicts its own feedback.
+ * The most the penalties may take, as a share of what the chunk earned. Past
+ * this, a single flagged claim could zero a chunk the answer credits the
+ * student with — a number that contradicts its own feedback.
  */
 const MAX_PENALTY_SHARE = 0.5;
-/**
- * The share of essential ideas that earns full marks. The debrief is there to
- * teach: an answer carrying most of the ideas has understood the point, and
- * what it left out is logged as a gap (`essentialIdeas`) for the score report
- * and Viper rather than docked to the bone.
- */
-const FULL_MARKS_SHARE = 0.8;
 
 /**
- * The 0–100 score for a free-text answer, from the grader's judgements.
- *
- * Credit is the share of essential ideas the student conveyed — a "partly"
- * counts half — scaled so 80% of them is full marks, less a fixed penalty
- * per incorrect claim, the penalties
- * together taking at most half of that credit. Computed here rather
- * than asked of the model so that two answers meaning the same thing score the
- * same, however each is worded; see AIFreeTextEvalOutputSchema.
+ * The 0–100 score for one chunk, from the grader's judgement: fully 100,
+ * partly 50, not 0, less 25 per incorrect claim, the penalties together taking
+ * at most half of what was earned. Computed here rather than asked of the
+ * model so two answers meaning the same thing score the same, however worded.
  */
-export function scoreFreeTextEval({
-  essentialIdeas,
-  incorrectClaims,
-}: Pick<AIFreeTextEvalOutput, 'essentialIdeas' | 'incorrectClaims'>): number {
-  if (essentialIdeas.length === 0) return 0;
-  const credit =
-    essentialIdeas.reduce((sum, i) => sum + CONVEYED_CREDIT[i.conveyed], 0) /
-    essentialIdeas.length;
-  const earned = Math.min(100, (credit / FULL_MARKS_SHARE) * 100);
+export function scoreChunkJudgement(
+  j: Pick<ChunkJudgement, 'conveyed'>,
+  incorrectClaims: number,
+): number {
+  const earned = CONVEYED_CREDIT[j.conveyed];
   const penalty = Math.min(
-    incorrectClaims.length * INCORRECT_CLAIM_PENALTY,
+    incorrectClaims * INCORRECT_CLAIM_PENALTY,
     earned * MAX_PENALTY_SHARE,
   );
-  return Math.round(Math.min(100, Math.max(0, earned - penalty)));
+  return Math.round(Math.max(0, earned - penalty));
 }
 
-// AI-powered free-text evaluation — calls Sonnet
+// AI-powered free-text evaluation — judges ONLY the chunks the question cites
 export async function evaluateFreeText(
   question: AITestFreeTextQuestion,
   userAnswer: string,
-  keyPoints: string[],
-  text: string,
+  chunks: KnowledgeChunk[],
+  context: string,
 ): Promise<AIEvaluationResult> {
+  const judged = question.chunkIds
+    .map((id) => chunks.find((c) => c.id === id))
+    .filter((c): c is KnowledgeChunk => c !== undefined);
+
   const { object } = await generateObject({
     model: sonnet,
     schema: AIFreeTextEvalOutputSchema,
@@ -85,18 +75,34 @@ export async function evaluateFreeText(
       question: question.question,
       expectedAnswer: question.expectedAnswer,
       userAnswer,
-      keyPoints,
-      text,
+      chunks: judged,
+      text: context,
     }),
   });
+
+  // One score per chunk the question cites; a chunk the grader skipped counts
+  // as not conveyed, and judgements of chunks it was not asked about are dropped.
+  const claims = object.incorrectClaims.length;
+  const chunkScores: Record<string, number> = {};
+  let allFully = true;
+  for (const id of question.chunkIds) {
+    const j = object.chunkJudgements.find((x) => x.chunkId === id);
+    if (j?.conveyed !== 'fully') allFully = false;
+    chunkScores[id] = scoreChunkJudgement(j ?? { conveyed: 'not' }, claims);
+  }
+  const scores = Object.values(chunkScores);
+  const score = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  // Enforced here, not only in the prompt: a note on a perfect answer is noise.
+  const revisitNote = allFully && claims === 0 ? '' : object.revisitNote;
 
   return {
     questionId: question.id,
     type: 'free-text',
-    score: scoreFreeTextEval(object),
+    score,
     userAnswer,
-    explanation: object.explanation,
-    essentialIdeas: object.essentialIdeas,
+    explanation: revisitNote,
+    chunkScores,
+    revisitNote,
     incorrectClaims: object.incorrectClaims,
   };
 }

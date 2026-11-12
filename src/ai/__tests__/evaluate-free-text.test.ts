@@ -6,8 +6,14 @@ const m = vi.hoisted(() => ({ generateObject: vi.fn() }));
 vi.mock('ai', () => ({ generateObject: m.generateObject }));
 vi.mock('../ai-provider', () => ({ sonnet: 'sonnet' }));
 
-import { evaluateFreeText, scoreFreeTextEval } from '../evaluate-answer';
+import { evaluateFreeText, scoreChunkJudgement } from '../evaluate-answer';
 import type { AITestFreeTextQuestion } from '../schemas';
+
+const chunks = [
+  { id: 'v2-c1', title: 'Radio-failure code', summary: 'Squawk 7600.' },
+  { id: 'v2-c2', title: 'Last clearance', summary: 'Fly the last route.' },
+  { id: 'v2-c3', title: 'Unrelated chunk', summary: 'Hold entries.' },
+];
 
 const question: AITestFreeTextQuestion = {
   id: 'q1',
@@ -15,153 +21,139 @@ const question: AITestFreeTextQuestion = {
   question: 'Your radio fails in IMC. What do you do?',
   expectedAnswer:
     'Set the transponder to 7600 and continue on the last assigned route and altitude.',
-  keyPointIndex: 0,
+  chunkIds: ['v2-c1', 'v2-c2'],
 };
+
+const judgement = (chunkId: string, conveyed: 'fully' | 'partly' | 'not') => ({
+  chunkId,
+  conveyed,
+  note: `${chunkId} ${conveyed}`,
+});
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('scoreFreeTextEval', () => {
-  const idea = (conveyed: 'fully' | 'partly' | 'not') => ({
-    idea: 'x',
-    conveyed,
+describe('scoreChunkJudgement', () => {
+  it('scores fully 100, partly 50, not 0', () => {
+    expect(scoreChunkJudgement(judgement('a', 'fully'), 0)).toBe(100);
+    expect(scoreChunkJudgement(judgement('a', 'partly'), 0)).toBe(50);
+    expect(scoreChunkJudgement(judgement('a', 'not'), 0)).toBe(0);
   });
 
-  it('gives full marks when every idea is conveyed', () => {
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('fully'), idea('fully')],
-        incorrectClaims: [],
-      }),
-    ).toBe(100);
-  });
-
-  it('gives full marks at 80% of the ideas conveyed — the debrief teaches, it does not hunt', () => {
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [
-          idea('fully'),
-          idea('fully'),
-          idea('fully'),
-          idea('fully'),
-          idea('not'),
-        ],
-        incorrectClaims: [],
-      }),
-    ).toBe(100);
-  });
-
-  it('counts a partly-conveyed idea as half, scaled so 80% is full marks', () => {
-    // 75% conveyed ÷ 0.8
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('fully'), idea('partly')],
-        incorrectClaims: [],
-      }),
-    ).toBe(94);
-  });
-
-  it('takes 25 points off per incorrect claim', () => {
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('fully')],
-        incorrectClaims: ['Squawk 7700 for radio failure'],
-      }),
-    ).toBe(75);
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('not')],
-        incorrectClaims: ['a', 'b'],
-      }),
-    ).toBe(0);
-  });
-
-  it('lets incorrect claims take at most HALF of what the answer earned', () => {
-    // The RPGEN 02 Tesla answer: one idea partly conveyed of three (21
-    // earned), one claim flagged. It used to floor at 0, contradicting an
-    // explanation that opened "You correctly identified…".
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('partly'), idea('not'), idea('not')],
-        incorrectClaims: ['AI analogy'],
-      }),
-    ).toBe(10);
-    // A full answer with three wrong claims keeps half, not 25.
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('fully')],
-        incorrectClaims: ['a', 'b', 'c'],
-      }),
-    ).toBe(50);
-  });
-
-  it('rounds to a whole number', () => {
-    expect(
-      scoreFreeTextEval({
-        essentialIdeas: [idea('fully'), idea('not'), idea('not')],
-        incorrectClaims: [],
-      }),
-    ).toBe(42);
+  it('takes 25 off per incorrect claim, at most half of what was earned', () => {
+    expect(scoreChunkJudgement(judgement('a', 'fully'), 1)).toBe(75);
+    expect(scoreChunkJudgement(judgement('a', 'fully'), 3)).toBe(50);
+    expect(scoreChunkJudgement(judgement('a', 'partly'), 1)).toBe(25);
+    expect(scoreChunkJudgement(judgement('a', 'not'), 4)).toBe(0);
   });
 });
 
 describe('evaluateFreeText', () => {
-  it("scores from the grader's per-idea judgements, not a number it chose", async () => {
-    // A terse expert answer: same meaning as the reference, none of its words.
+  it('scores each chunk, applying the claim penalty per chunk, and averages them', async () => {
     m.generateObject.mockResolvedValue({
       object: {
-        essentialIdeas: [
-          { idea: 'Transponder to the radio-failure code', conveyed: 'fully' },
-          { idea: 'Continue on the last clearance', conveyed: 'fully' },
+        chunkJudgements: [
+          judgement('v2-c1', 'fully'),
+          judgement('v2-c2', 'partly'),
         ],
-        incorrectClaims: [],
-        explanation: 'Spot on.',
+        incorrectClaims: ['Squawk 7700'],
+        revisitNote: 'You missed the route.',
       },
     });
 
     const result = await evaluateFreeText(
       question,
-      'Squawk 7600, fly last ATC clearance.',
-      ['kp'],
+      'Squawk 7700.',
+      chunks,
       'body',
     );
 
     expect(result).toEqual({
       questionId: 'q1',
       type: 'free-text',
-      score: 100,
-      userAnswer: 'Squawk 7600, fly last ATC clearance.',
-      explanation: 'Spot on.',
-      // The judgements the score came from travel with it, so a disputed
-      // score can be explained after the fact.
-      essentialIdeas: [
-        { idea: 'Transponder to the radio-failure code', conveyed: 'fully' },
-        { idea: 'Continue on the last clearance', conveyed: 'fully' },
-      ],
-      incorrectClaims: [],
+      score: 50,
+      userAnswer: 'Squawk 7700.',
+      explanation: 'You missed the route.',
+      chunkScores: { 'v2-c1': 75, 'v2-c2': 25 },
+      revisitNote: 'You missed the route.',
+      incorrectClaims: ['Squawk 7700'],
     });
   });
 
-  it('tells the grader to judge meaning, with the reference as one phrasing', async () => {
+  it('forces an empty revisitNote when everything is fully conveyed with no incorrect claims', async () => {
     m.generateObject.mockResolvedValue({
       object: {
-        essentialIdeas: [{ idea: 'x', conveyed: 'fully' }],
+        chunkJudgements: [
+          judgement('v2-c1', 'fully'),
+          judgement('v2-c2', 'fully'),
+        ],
         incorrectClaims: [],
-        explanation: '.',
+        revisitNote: 'Nice, but maybe revisit something.',
+      },
+    });
+    const result = await evaluateFreeText(question, 'a', chunks, 'body');
+    expect(result.revisitNote).toBe('');
+    expect(result.score).toBe(100);
+  });
+
+  it('keeps the note when a fully conveyed answer still has an incorrect claim', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [judgement('v2-c1', 'fully')],
+        incorrectClaims: ['wrong'],
+        revisitNote: 'One claim was wrong.',
+      },
+    });
+    const result = await evaluateFreeText(
+      { ...question, chunkIds: ['v2-c1'] },
+      'a',
+      chunks,
+      'body',
+    );
+    expect(result.revisitNote).toBe('One claim was wrong.');
+  });
+
+  it('ignores judgements for chunks the question did not cite, and scores a missing judgement as not conveyed', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [
+          judgement('v2-c1', 'fully'),
+          judgement('v2-c3', 'fully'),
+        ],
+        incorrectClaims: [],
+        revisitNote: 'Route missing.',
+      },
+    });
+    const result = await evaluateFreeText(question, 'a', chunks, 'body');
+    expect(result.chunkScores).toEqual({ 'v2-c1': 100, 'v2-c2': 0 });
+    expect(result.score).toBe(50);
+  });
+
+  it('lists only the question’s chunks in the grader prompt, and fences the answer', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [judgement('v2-c1', 'fully')],
+        incorrectClaims: [],
+        revisitNote: '',
       },
     });
 
-    await evaluateFreeText(question, 'Squawk 7600.', ['kp'], 'body');
+    await evaluateFreeText(
+      { ...question, chunkIds: ['v2-c1'] },
+      'Squawk 7600.',
+      chunks,
+      'body',
+    );
 
     const prompt = m.generateObject.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain('v2-c1');
+    expect(prompt).toContain('Radio-failure code');
+    expect(prompt).not.toContain('v2-c2');
+    expect(prompt).not.toContain('Unrelated chunk');
     expect(prompt).toMatch(/grade what the student MEANS/);
     expect(prompt).toMatch(/ONE correct phrasing, not a template/);
     expect(prompt).toContain(question.expectedAnswer);
-    // An incorrect claim is something the lesson contradicts or that is
-    // unsafe — never an analogy, opinion or off-topic reasoning, which only
-    // cost the ideas they fail to convey.
     expect(prompt).toMatch(/Analogies, comparisons, opinions/);
     expect(prompt).toMatch(/never also an incorrect claim/);
-    // The answer is fenced as data, so it cannot pose as grading instructions.
     expect(prompt).toContain(
       '<student_answer>\nSquawk 7600.\n</student_answer>',
     );
