@@ -83,7 +83,7 @@ describe('migrate-knowledge-chunks', () => {
     expect(backfill).toMatch(/on conflict do nothing/i);
   });
 
-  it('backfills LEGACY rows only, so re-running after deploy never turns a chunk attempt\'s mastery percent into a pass', () => {
+  it("backfills LEGACY rows only, so re-running after deploy never turns a chunk attempt's mastery percent into a pass", () => {
     const all = sqls();
     const at = all.findIndex((s) => /insert into "debrief_passes"/i.test(s));
     const backfill = all[at];
