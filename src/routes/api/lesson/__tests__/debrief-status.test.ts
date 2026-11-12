@@ -135,9 +135,7 @@ describe('debrief-status', () => {
   it('returns the video on a lesson done without its optional video — only the full watch starts the clock', async () => {
     m.getDebriefAccess.mockResolvedValue(access({ kind: 'not-done' }));
     m.getCourseProgress.mockResolvedValue({
-      lessons: [
-        { lessonId: 41, outstanding: [], debrief: { hasVideo: true } },
-      ],
+      lessons: [{ lessonId: 41, outstanding: [], debrief: { hasVideo: true } }],
     });
     const body = await (await debriefStatusHandler(get(QS))).json();
     expect(body.lessonOutstanding).toEqual([{ kind: 'video' }]);
@@ -172,9 +170,9 @@ describe('debrief-status', () => {
   it('once passed, lists attempts passing first then newest first, with their score-report data', async () => {
     m.getDebriefAccess.mockResolvedValue(access({ kind: 'passed' }));
     m.getDebriefAttemptReports.mockResolvedValue([
-      report(4, 40, '2026-10-27T10:00:00.000Z'),
-      report(3, 85, '2026-10-26T10:00:00.000Z'),
-      report(2, 30, '2026-10-25T10:00:00.000Z'),
+      { ...report(4, 40, '2026-10-27T10:00:00.000Z'), passed: false },
+      { ...report(3, 85, '2026-10-26T10:00:00.000Z'), passed: true },
+      { ...report(2, 30, '2026-10-25T10:00:00.000Z'), passed: false },
     ]);
     const body = await (await debriefStatusHandler(get(QS))).json();
     expect(m.getDebriefAttemptReports).toHaveBeenCalledWith('u1', 'l1');

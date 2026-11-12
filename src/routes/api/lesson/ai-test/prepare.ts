@@ -54,6 +54,7 @@ export async function prepareTestHandler(request: Request): Promise<Response> {
       userId: session.user.id,
       courseId: access.courseId,
       lessonSlug,
+      lessonId: access.lessonId,
     });
     return skipped;
   } catch (error) {

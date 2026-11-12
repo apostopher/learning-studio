@@ -54,7 +54,7 @@ describe('prepare', () => {
   it.each([
     ['not-done (video still playing)', { kind: 'not-done' }],
     ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
-    ['open', { kind: 'open', retake: false }],
+    ['open', { kind: 'open', retake: false, resume: false }],
     [
       'retake-waiting',
       { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
@@ -67,6 +67,7 @@ describe('prepare', () => {
       userId: 'u1',
       courseId: 7,
       lessonSlug: 'l1',
+      lessonId: 41,
     });
   });
 

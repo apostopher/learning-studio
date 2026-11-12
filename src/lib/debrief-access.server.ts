@@ -9,8 +9,9 @@ export type DebriefAccess =
 
 /**
  * Gate + level + hasDebrief + facts → state. The single server authority on
- * "may this pilot take/see this debrief now". `generate`, `save-results` and
- * `prepare` all ask here, so they cannot disagree about it.
+ * "may this pilot take/see this debrief now". The debrief `start`, `answer`
+ * and `prepare` routes and `debrief-status` all ask here, so they cannot
+ * disagree about it.
  *
  * Refusals:
  * - 403 for an unknown lesson, a non-subscriber, a prerequisite-locked lesson,

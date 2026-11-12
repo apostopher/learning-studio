@@ -45,6 +45,20 @@ describe('migrate-knowledge-chunks', () => {
     }
   });
 
+  it('allows at most one open chunk-format attempt per pilot and lesson, after the format column exists', () => {
+    const all = sqls();
+    const idx = all.findIndex((s) =>
+      /lesson_test_results_one_open_attempt_idx/i.test(s),
+    );
+    expect(all[idx]).toBe(
+      `create unique index if not exists "lesson_test_results_one_open_attempt_idx" on "lesson_test_results" ("user_id","lesson_slug") where "completed_at" is null and "format" = 'knowledge-chunks-v1'`,
+    );
+    const formatCol = all.findIndex((s) =>
+      /add column if not exists "format"/i.test(s),
+    );
+    expect(idx).toBeGreaterThan(formatCol);
+  });
+
   it('backfills legacy passes from completed attempts scoring >= 75, idempotently', () => {
     const backfill = sqls().find((s) =>
       /insert into "debrief_passes"/i.test(s),

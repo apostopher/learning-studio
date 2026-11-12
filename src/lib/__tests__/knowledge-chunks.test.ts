@@ -160,7 +160,11 @@ describe('ensureLessonChunks', () => {
     const r = await ensureLessonChunks(1, 'l', 2);
     expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
     expect(m.upsertLessonChunks).not.toHaveBeenCalled();
-    expect(r).toEqual({ version: 3, chunks: stored.chunks });
+    expect(r).toEqual({
+      version: 3,
+      chunks: stored.chunks,
+      context: source.context,
+    });
   });
 
   it('first store is version 1 with v1- prefixed ids and no matching', async () => {
@@ -209,7 +213,11 @@ describe('ensureLessonChunks', () => {
     const arg = m.upsertLessonChunks.mock.calls[0][0];
     expect(arg.version).toBe(2);
     expect(arg.previousMapping).toEqual({ 'v1-c1': 'v2-c2', 'v1-c2': null });
-    expect(r).toEqual({ version: 2, chunks: newStored });
+    expect(r).toEqual({
+      version: 2,
+      chunks: newStored,
+      context: source.context,
+    });
     // upsert and carry-over share ONE transaction, and upsert got that tx.
     expect(m.commits).toBe(1);
     expect(m.upsertLessonChunks.mock.calls[0][1]).toBe(m.tx);

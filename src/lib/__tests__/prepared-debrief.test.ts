@@ -8,15 +8,16 @@ type Row = { test: unknown; sourceFingerprint: string };
 const m = vi.hoisted(() => ({
   claims: new Map<string, string>(),
   rows: new Map<string, { test: unknown; sourceFingerprint: string }>(),
-  resolveDebriefSource: vi.fn(),
+  ensureLessonChunks: vi.fn(),
+  selectMastery: vi.fn(),
+  selectAskedQuestions: vi.fn(),
   generateTest: vi.fn(),
   upsertPreparedDebrief: vi.fn(),
 }));
 
 const rowKey = (k: Key) => `${k.userId}:${k.courseId}:${k.lessonSlug}`;
 
-// A Map standing in for Upstash. Only the claim lock lives in Redis now; the
-// prepared test itself is a Postgres row (it has to outlive the 24h wait).
+// A Map standing in for Upstash: only the claim lock lives in Redis.
 vi.mock('#/integrations/upstash/redis', () => ({
   redis: {
     set: vi.fn(async (key: string, value: string, opts?: { nx?: boolean }) => {
@@ -43,8 +44,12 @@ vi.mock('#/db/prepared-debriefs', () => ({
     return row;
   }),
 }));
-vi.mock('#/lib/lesson-debrief-source.server', () => ({
-  resolveDebriefSource: m.resolveDebriefSource,
+vi.mock('#/lib/knowledge-chunks.server', () => ({
+  ensureLessonChunks: m.ensureLessonChunks,
+}));
+vi.mock('#/db/debrief-attempts', () => ({
+  selectMastery: m.selectMastery,
+  selectAskedQuestions: m.selectAskedQuestions,
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 
@@ -52,11 +57,17 @@ import { deletePreparedDebrief } from '#/db/prepared-debriefs';
 import {
   discardPreparedDebrief,
   prepareDebrief,
-  sourceFingerprint,
+  preparedFingerprint,
   takePreparedDebrief,
 } from '../prepared-debrief.server';
 
-const k: Key = { userId: 'u1', courseId: 7, lessonSlug: 'l1' };
+const key: Key = { userId: 'u1', courseId: 7, lessonSlug: 'l1' };
+const k = { ...key, lessonId: 41 };
+const chunks = [
+  { id: 'v2-c1', title: 'a', summary: 'A' },
+  { id: 'v2-c2', title: 'b', summary: 'B' },
+  { id: 'v2-c3', title: 'c', summary: 'C' },
+];
 const test = {
   lessonSlug: 'l1',
   questions: [
@@ -65,77 +76,120 @@ const test = {
       type: 'free-text',
       question: 'Why?',
       expectedAnswer: 'Because.',
-      keyPointIndex: 0,
+      chunkIds: ['v2-c2'],
     },
   ],
 };
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
-/** The fingerprint `prepareDebrief` stamps today. */
-const current = (s: string) => sha256(`essay-sets-v1\n${s}`);
+/** One cleared chunk (c1), one weak hole (c2), one never asked (c3). */
+const masteryRows = [
+  { chunkId: 'v2-c1', latestScore: 90, clearedAt: new Date() },
+  { chunkId: 'v2-c2', latestScore: 40, clearedAt: null },
+];
+/** What `planAttemptFocus` makes of `masteryRows`. */
+const focus = { holes: ['v2-c3', 'v2-c2'], review: ['v2-c1'] };
 
 beforeEach(() => {
   vi.clearAllMocks();
   m.claims.clear();
   m.rows.clear();
   m.upsertPreparedDebrief.mockImplementation(
-    async (key: Key, t: unknown, fp: string) => {
-      m.rows.set(rowKey(key), { test: t, sourceFingerprint: fp } satisfies Row);
+    async (kk: Key, t: unknown, fp: string) => {
+      m.rows.set(rowKey(kk), { test: t, sourceFingerprint: fp } satisfies Row);
     },
   );
-  m.resolveDebriefSource.mockResolvedValue({
-    kind: 'material',
-    keyPoints: ['k'],
-    context: 'body',
+  m.ensureLessonChunks.mockResolvedValue({
+    version: 2,
+    chunks,
+    context: 'ctx',
   });
+  m.selectMastery.mockResolvedValue(masteryRows);
+  m.selectAskedQuestions.mockResolvedValue(['Asked before?']);
   m.generateTest.mockResolvedValue(test);
 });
 
-describe('sourceFingerprint', () => {
-  it('is the sha256 hex of the debrief format and the source text', () => {
-    expect(sourceFingerprint('body')).toBe(sha256('essay-sets-v1\nbody'));
-    expect(sourceFingerprint('body')).not.toBe(sourceFingerprint('body2'));
+describe('preparedFingerprint', () => {
+  it('is sha256 of the format, the chunk version and the SORTED focus ids', () => {
+    expect(preparedFingerprint(2, focus)).toBe(
+      sha256(
+        JSON.stringify([
+          'knowledge-chunks-v1',
+          2,
+          ['v2-c2', 'v2-c3'],
+          ['v2-c1'],
+        ]),
+      ),
+    );
   });
 
-  it('never matches a debrief prepared before written-only sets (2026-11-11)', () => {
-    // Those rows were stamped with the bare source hash and hold 20 mixed
-    // questions; a mismatch makes the claim discard them and generate fresh.
-    expect(sourceFingerprint('body')).not.toBe(sha256('body'));
+  it('ignores focus order but not version, holes or review', () => {
+    const fp = preparedFingerprint(2, focus);
+    expect(
+      preparedFingerprint(2, { holes: ['v2-c2', 'v2-c3'], review: ['v2-c1'] }),
+    ).toBe(fp);
+    expect(preparedFingerprint(3, focus)).not.toBe(fp);
+    expect(
+      preparedFingerprint(2, { holes: ['v2-c3'], review: ['v2-c1', 'v2-c2'] }),
+    ).not.toBe(fp);
   });
 });
 
 describe('prepareDebrief', () => {
-  it('writes the test built from the resolved source, stamped with its fingerprint', async () => {
+  it('generates for the focus current mastery calls for, avoiding questions already asked', async () => {
     expect(await prepareDebrief(k)).toBe('prepared');
-    expect(m.resolveDebriefSource).toHaveBeenCalledWith('l1', 7);
-    expect(m.generateTest).toHaveBeenCalledWith('l1', ['k'], 'body');
+    expect(m.ensureLessonChunks).toHaveBeenCalledWith(41, 'l1', 7);
+    expect(m.selectMastery).toHaveBeenCalledWith('u1', 41);
+    expect(m.selectAskedQuestions).toHaveBeenCalledWith('u1', 'l1');
+    expect(m.generateTest).toHaveBeenCalledWith({
+      lessonSlug: 'l1',
+      chunks,
+      context: 'ctx',
+      focus,
+      avoidQuestions: ['Asked before?'],
+    });
     expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
-      k,
+      key,
       test,
-      current('body'),
+      preparedFingerprint(2, focus),
     );
   });
 
-  it('skips the model when a row with the CURRENT fingerprint already exists', async () => {
-    m.rows.set(rowKey(k), { test, sourceFingerprint: current('body') });
+  it('skips the model when a test for the CURRENT version and focus is stored', async () => {
+    m.rows.set(rowKey(key), {
+      test,
+      sourceFingerprint: preparedFingerprint(2, focus),
+    });
     expect(await prepareDebrief(k)).toBe('already-prepared');
     expect(m.generateTest).not.toHaveBeenCalled();
-    expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
   });
 
-  it('regenerates over a row whose source has since changed', async () => {
-    m.rows.set(rowKey(k), { test, sourceFingerprint: current('old body') });
+  it('regenerates when mastery moved on since the stored test', async () => {
+    m.rows.set(rowKey(key), {
+      test,
+      sourceFingerprint: preparedFingerprint(2, {
+        holes: ['v2-c1', 'v2-c2', 'v2-c3'],
+        review: [],
+      }),
+    });
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.generateTest).toHaveBeenCalledOnce();
-    expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
-      k,
-      test,
-      current('body'),
+  });
+
+  it('asks nothing once every current chunk is cleared', async () => {
+    m.selectMastery.mockResolvedValue(
+      chunks.map((c) => ({
+        chunkId: c.id,
+        latestScore: 90,
+        clearedAt: new Date(),
+      })),
     );
+    expect(await prepareDebrief(k)).toBe('nothing-to-ask');
+    expect(m.generateTest).not.toHaveBeenCalled();
   });
 
   it('runs the model once while a claim is held (pause/play, reload)', async () => {
     await prepareDebrief(k);
-    m.rows.clear(); // even with nothing stored, the claim dedupes
+    m.rows.clear();
     expect(await prepareDebrief(k)).toBe('already-claimed');
     expect(m.generateTest).toHaveBeenCalledTimes(1);
   });
@@ -146,61 +200,57 @@ describe('prepareDebrief', () => {
     expect(await prepareDebrief(k)).toBe('prepared');
   });
 
-  it('stores nothing for a lesson with no debrief source', async () => {
-    m.resolveDebriefSource.mockResolvedValue(null);
+  it('deletes any stored row and stores nothing when the lesson has no chunks (ledger T8)', async () => {
+    m.rows.set(rowKey(key), { test, sourceFingerprint: 'x' });
+    m.ensureLessonChunks.mockResolvedValue(null);
     expect(await prepareDebrief(k)).toBe('no-source');
+    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(key);
+    expect(m.rows.has(rowKey(key))).toBe(false);
     expect(m.generateTest).not.toHaveBeenCalled();
-    expect(m.upsertPreparedDebrief).not.toHaveBeenCalled();
-  });
-
-  it('deletes any stored row when the source is gone (ledger T8)', async () => {
-    // A row left behind would keep the lesson debrief-bearing in the course
-    // SQL (call 11) for a debrief nobody can now generate — so course percent
-    // could never reach 100.
-    m.rows.set(rowKey(k), { test, sourceFingerprint: current('body') });
-    m.resolveDebriefSource.mockResolvedValue(null);
-    expect(await prepareDebrief(k)).toBe('no-source');
-    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(k);
-    expect(m.rows.has(rowKey(k))).toBe(false);
   });
 });
 
 describe('discardPreparedDebrief', () => {
   it('deletes the row for exactly this pilot, course and lesson', async () => {
-    await discardPreparedDebrief(k);
-    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith({
-      userId: 'u1',
-      courseId: 7,
-      lessonSlug: 'l1',
-    });
+    await discardPreparedDebrief(key);
+    expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(key);
   });
 });
 
 describe('takePreparedDebrief', () => {
+  const fp = () => preparedFingerprint(2, focus);
+
   it('returns the test once, so a retake gets fresh questions', async () => {
     await prepareDebrief(k);
-    expect(await takePreparedDebrief(k, current('body'))).toEqual(test);
-    expect(await takePreparedDebrief(k, current('body'))).toBeNull();
+    expect(await takePreparedDebrief(key, fp())).toEqual(test);
+    expect(await takePreparedDebrief(key, fp())).toBeNull();
   });
 
   it('is per pilot', async () => {
     await prepareDebrief(k);
     expect(
-      await takePreparedDebrief({ ...k, userId: 'u2' }, current('body')),
+      await takePreparedDebrief({ ...key, userId: 'u2' }, fp()),
     ).toBeNull();
   });
 
   it('returns null on a fingerprint mismatch, and the stale row is gone', async () => {
     await prepareDebrief(k);
-    expect(await takePreparedDebrief(k, current('edited body'))).toBeNull();
-    expect(m.rows.has(rowKey(k))).toBe(false);
+    expect(
+      await takePreparedDebrief(key, preparedFingerprint(3, focus)),
+    ).toBeNull();
+    expect(m.rows.has(rowKey(key))).toBe(false);
   });
 
-  it('treats a row that no longer parses as a miss', async () => {
-    m.rows.set(rowKey(k), {
-      test: { nope: 1 },
-      sourceFingerprint: current('body'),
+  it('treats an untagged (pre-chunk) or unreadable row as a miss', async () => {
+    m.rows.set(rowKey(key), {
+      test: {
+        lessonSlug: 'l1',
+        questions: [{ ...test.questions[0], chunkIds: undefined }],
+      },
+      sourceFingerprint: fp(),
     });
-    expect(await takePreparedDebrief(k, current('body'))).toBeNull();
+    expect(await takePreparedDebrief(key, fp())).toBeNull();
+    m.rows.set(rowKey(key), { test: { nope: 1 }, sourceFingerprint: fp() });
+    expect(await takePreparedDebrief(key, fp())).toBeNull();
   });
 });

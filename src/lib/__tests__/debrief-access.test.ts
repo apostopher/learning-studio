@@ -47,7 +47,9 @@ beforeEach(() => {
   m.getDebriefFacts.mockResolvedValue({
     clockStartAt: null,
     passed: false,
-    lastFailedAt: null,
+    lastFinishedAt: null,
+    hasOpenAttempt: false,
+    mastery: null,
   });
 });
 
@@ -101,7 +103,9 @@ describe('getDebriefAccess state', () => {
     m.getDebriefFacts.mockResolvedValue({
       clockStartAt: '2026-10-27T06:00:00.000Z',
       passed: false,
-      lastFailedAt: null,
+      lastFinishedAt: null,
+      hasOpenAttempt: false,
+      mastery: null,
     });
     expect(await getDebriefAccess(args)).toEqual({
       ok: true,
@@ -115,10 +119,47 @@ describe('getDebriefAccess state', () => {
     m.getDebriefFacts.mockResolvedValue({
       clockStartAt: '2026-10-27T00:00:00.000Z',
       passed: false,
-      lastFailedAt: null,
+      lastFinishedAt: null,
+      hasOpenAttempt: false,
+      mastery: null,
     });
     const access = await getDebriefAccess(args);
-    expect(access.ok && access.state).toEqual({ kind: 'open', retake: false });
+    expect(access.ok && access.state).toEqual({
+      kind: 'open',
+      retake: false,
+      resume: false,
+    });
+  });
+
+  it('an open attempt resumes whatever the clock says', async () => {
+    m.getDebriefFacts.mockResolvedValue({
+      clockStartAt: null,
+      passed: false,
+      lastFinishedAt: '2026-10-27T11:00:00.000Z',
+      hasOpenAttempt: true,
+      mastery: { cleared: 1, total: 4 },
+    });
+    const access = await getDebriefAccess(args);
+    expect(access.ok && access.state).toEqual({
+      kind: 'open',
+      retake: true,
+      resume: true,
+    });
+  });
+
+  it('waits 6h after a finished attempt', async () => {
+    m.getDebriefFacts.mockResolvedValue({
+      clockStartAt: '2026-10-25T00:00:00.000Z',
+      passed: false,
+      lastFinishedAt: '2026-10-27T10:00:00.000Z',
+      hasOpenAttempt: false,
+      mastery: { cleared: 1, total: 4 },
+    });
+    const access = await getDebriefAccess(args);
+    expect(access.ok && access.state).toEqual({
+      kind: 'retake-waiting',
+      availableAt: '2026-10-27T16:00:00.000Z',
+    });
   });
 
   it('does not refuse on a video-locked material lock — preparation runs while the video plays', async () => {

@@ -91,3 +91,40 @@ export function planAttemptFocus(
       .map((c) => c.id),
   };
 }
+
+/** A stored mastery row, as far as the rules here care. */
+type StoredMastery = {
+  chunkId: string;
+  latestScore: number;
+  clearedAt: Date | null;
+};
+
+/**
+ * Stored mastery rows as `ChunkMastery`, keeping only rows for `chunks` (the
+ * lesson's CURRENT list). Rows for an older version — kept for pilots who
+ * passed before a regeneration — never count.
+ */
+export function masteryOf(
+  chunks: KnowledgeChunk[],
+  rows: StoredMastery[],
+): ChunkMastery[] {
+  const current = new Set(chunks.map((c) => c.id));
+  return rows
+    .filter((r) => current.has(r.chunkId))
+    .map((r) => ({
+      chunkId: r.chunkId,
+      latestScore: r.latestScore,
+      cleared: r.clearedAt !== null,
+    }));
+}
+
+/** Chunks cleared of the current total — the one debrief number. */
+export function masteryCounts(
+  chunks: KnowledgeChunk[],
+  rows: StoredMastery[],
+): { cleared: number; total: number } {
+  return {
+    cleared: masteryOf(chunks, rows).filter((r) => r.cleared).length,
+    total: chunks.length,
+  };
+}

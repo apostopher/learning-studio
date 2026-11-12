@@ -6,6 +6,8 @@ import {
   isAllCleared,
   type KnowledgeChunk,
   MAX_KNOWLEDGE_CHUNKS,
+  masteryCounts,
+  masteryOf,
   masteryPercent,
   planAttemptFocus,
 } from '#/lib/debrief-mastery';
@@ -111,5 +113,31 @@ describe('planAttemptFocus', () => {
     const plan = planAttemptFocus(chunks(3), [row('c1', 90, true)]);
     expect(plan.holes).toEqual(['c2', 'c3']);
     expect(plan.review).toEqual(['c1']);
+  });
+});
+
+describe('masteryOf (stored rows → mastery against the CURRENT chunk list)', () => {
+  const current = [
+    { id: 'v2-c1', title: 'a', summary: '' },
+    { id: 'v2-c2', title: 'b', summary: '' },
+    { id: 'v2-c3', title: 'c', summary: '' },
+  ];
+  const stored = [
+    { chunkId: 'v2-c1', latestScore: 80, clearedAt: new Date() },
+    { chunkId: 'v2-c2', latestScore: 40, clearedAt: null },
+    // A previous version's row (a passed pilot's, never carried over): not counted.
+    { chunkId: 'v1-c9', latestScore: 90, clearedAt: new Date() },
+  ];
+
+  it('keeps only rows for current chunk ids, cleared = clearedAt set', () => {
+    expect(masteryOf(current, stored)).toEqual([
+      { chunkId: 'v2-c1', latestScore: 80, cleared: true },
+      { chunkId: 'v2-c2', latestScore: 40, cleared: false },
+    ]);
+  });
+
+  it('counts cleared of total against the current list', () => {
+    expect(masteryCounts(current, stored)).toEqual({ cleared: 1, total: 3 });
+    expect(masteryCounts([], stored)).toEqual({ cleared: 0, total: 0 });
   });
 });

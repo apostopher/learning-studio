@@ -59,11 +59,18 @@ export function mapToCurrentChunkIds(
   return out;
 }
 
-type Stored = { version: number; chunks: KnowledgeChunk[] };
+/**
+ * The current chunks, plus the context they were resolved alongside — what
+ * question generation reads next, returned so a caller does not resolve the
+ * source (a transcript fetch) a second time.
+ */
+type Stored = { version: number; chunks: KnowledgeChunk[]; context: string };
 
 const toStored = (
   row: { version: number; chunks: KnowledgeChunk[] } | null,
-): Stored | null => (row ? { version: row.version, chunks: row.chunks } : null);
+  context: string,
+): Stored | null =>
+  row ? { version: row.version, chunks: row.chunks, context } : null;
 
 /**
  * The lesson's current knowledge chunks, generating them when missing or when
@@ -81,18 +88,22 @@ export async function ensureLessonChunks(
   const fingerprint = chunkFingerprint(source);
 
   const current = await selectLessonChunks(lessonId);
-  if (current?.sourceFingerprint === fingerprint) return toStored(current);
+  if (current?.sourceFingerprint === fingerprint) {
+    return toStored(current, source.context);
+  }
 
   const claimed = await redis.set(claimKey(lessonId), '1', {
     nx: true,
     ex: CLAIM_TTL_SECONDS,
   });
-  if (claimed !== 'OK') return toStored(current);
+  if (claimed !== 'OK') return toStored(current, source.context);
 
   try {
     // Re-read: the previous holder may have just finished.
     const latest = await selectLessonChunks(lessonId);
-    if (latest?.sourceFingerprint === fingerprint) return toStored(latest);
+    if (latest?.sourceFingerprint === fingerprint) {
+      return toStored(latest, source.context);
+    }
 
     const generated = await generateKnowledgeChunks({
       keyPoints: source.keyPoints,
@@ -121,7 +132,7 @@ export async function ensureLessonChunks(
       );
       if (mapping) await carryOverMastery(lessonId, mapping, version, tx);
     });
-    return { version, chunks };
+    return { version, chunks, context: source.context };
   } finally {
     await redis.del(claimKey(lessonId));
   }

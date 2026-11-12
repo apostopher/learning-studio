@@ -5,10 +5,8 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 /**
  * `getDebriefFacts` is the route-side twin of the progress SQL in
- * `progress-components.ts` (`debriefPassed`, `lastFailedDebriefAt`, `doneAt`,
- * `videoWatchedAt`).
- * The two must agree for the same rows, or the lesson list would show a red D
- * the generate route refuses to open (or the reverse).
+ * `progress-components.ts`. The two must agree for the same rows, or the
+ * lesson list would show a D the start route refuses to open (or the reverse).
  */
 
 const m = vi.hoisted(() => ({
@@ -41,11 +39,12 @@ vi.mock('#/db', () => ({
   },
 }));
 
-import { getDebriefAttempts, getDebriefFacts } from '#/db/lesson-test';
 import {
-  videoRewatchedAtSql,
-  videoWatchedAtSql,
-} from '#/db/progress-components';
+  getDebriefAttemptReports,
+  getDebriefAttempts,
+  getDebriefFacts,
+} from '#/db/lesson-test';
+import { videoWatchedAtSql } from '#/db/progress-components';
 import { lessonsTable } from '#/db/schema';
 
 const at = (iso: string) => new Date(iso);
@@ -79,139 +78,179 @@ describe('getDebriefAttempts', () => {
   });
 });
 
-describe('getDebriefFacts mirrors the progress SQL', () => {
-  const facts = async (
-    attempts: { id: number; totalScore: number; completedAt: Date }[],
-    doneAt: Date | null,
+describe('getDebriefFacts', () => {
+  type Opts = {
+    lastFinishedAt?: Date | null;
+    hasOpen?: boolean | null;
+    passed?: boolean;
+    doneAt?: Date | null;
     // Raw `sql<Date>` columns arrive from the driver as offset-bearing strings.
-    videoWatchedAt: string | null = null,
-    {
-      hasVideo = videoWatchedAt !== null,
-      videoRewatchedAt = null,
-    }: { hasVideo?: boolean; videoRewatchedAt?: string | null } = {},
-  ) => {
-    m.queue.push(attempts, doneAt ? [{ doneAt }] : [], [
-      {
-        videoWatchedAt,
-        videoRewatchedAt,
-        videoProvider: hasVideo ? 'mux' : null,
-        videoRef: hasVideo ? 'ref' : null,
-      },
-    ]);
+    videoWatchedAt?: string | null;
+    hasVideo?: boolean;
+    chunkRow?: { version: number; chunks: { id: string }[] } | null;
+    cleared?: string[];
+  };
+  const facts = async ({
+    lastFinishedAt = null,
+    hasOpen = null,
+    passed = false,
+    doneAt = null,
+    videoWatchedAt = null,
+    hasVideo = videoWatchedAt !== null,
+    chunkRow = null,
+    cleared = [],
+  }: Opts = {}) => {
+    m.queue.push(
+      [{ lastFinishedAt, hasOpen }],
+      passed ? [{ id: 1 }] : [],
+      doneAt ? [{ doneAt }] : [],
+      [
+        {
+          videoWatchedAt,
+          videoProvider: hasVideo ? 'mux' : null,
+          videoRef: hasVideo ? 'ref' : null,
+        },
+      ],
+      chunkRow ? [chunkRow] : [],
+      cleared.map((chunkId) => ({ chunkId })),
+    );
     return getDebriefFacts('u1', 'l1', 41);
   };
 
-  it('reads doneAt from lesson_completions by user and lesson id', async () => {
-    await facts([], at('2026-10-25T00:00:00.000Z'));
+  it('nothing recorded → no clock, not passed, never finished, nothing open, no chunks', async () => {
+    expect(await facts()).toEqual({
+      clockStartAt: null,
+      passed: false,
+      lastFinishedAt: null,
+      hasOpenAttempt: false,
+      mastery: null,
+    });
+  });
+
+  it('reads attempts for this pilot and lesson: the latest finish over ALL rows, and an open chunk-format row', async () => {
+    const f = await facts({
+      lastFinishedAt: at('2026-10-26T08:00:00.000Z'),
+      hasOpen: true,
+    });
+    expect(f.lastFinishedAt).toBe('2026-10-26T08:00:00.000Z');
+    expect(f.hasOpenAttempt).toBe(true);
+    // No format filter on the max: legacy rows count, so a pilot with only
+    // old below-par attempts waits 6h from the last of them.
+    expect(renderSql(m.selects[0]?.lastFinishedAt as SQL)).toBe(
+      'max("lesson_test_results"."completed_at")',
+    );
+    expect(renderSql(m.selects[0]?.hasOpen as SQL)).toBe(
+      'bool_or("lesson_test_results"."completed_at" is null and "lesson_test_results"."format" = $1)',
+    );
+    expect(renderSqlParams(m.selects[0]?.hasOpen as SQL)).toEqual([
+      'knowledge-chunks-v1',
+    ]);
+    const where = m.wheres[0] as SQL;
+    expect(renderSql(where)).toBe(
+      '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2)',
+    );
+    expect(renderSqlParams(where)).toEqual(['u1', 'l1']);
+  });
+
+  it('passed = a row in debrief_passes for this pilot and lesson slug', async () => {
+    expect((await facts({ passed: true })).passed).toBe(true);
     const where = m.wheres[1] as SQL;
+    expect(renderSql(where)).toBe(
+      '("debrief_passes"."user_id" = $1 and "debrief_passes"."lesson_slug" = $2)',
+    );
+    expect(renderSqlParams(where)).toEqual(['u1', 'l1']);
+  });
+
+  it('mastery counts cleared rows against the CURRENT chunk list only', async () => {
+    const f = await facts({
+      chunkRow: {
+        version: 2,
+        chunks: [{ id: 'v2-c1' }, { id: 'v2-c2' }, { id: 'v2-c3' }],
+      },
+      cleared: ['v2-c1', 'v1-c2'],
+    });
+    expect(f.mastery).toEqual({ cleared: 1, total: 3 });
+    expect(renderSql(m.wheres[4] as SQL)).toBe(
+      '"lesson_knowledge_chunks"."lesson_id" = $1',
+    );
+    expect(renderSqlParams(m.wheres[4] as SQL)).toEqual([41]);
+    expect(renderSql(m.wheres[5] as SQL)).toBe(
+      '("debrief_chunk_mastery"."user_id" = $1 and "debrief_chunk_mastery"."lesson_id" = $2 and "debrief_chunk_mastery"."cleared_at" is not null)',
+    );
+    expect(renderSqlParams(m.wheres[5] as SQL)).toEqual(['u1', 41]);
+  });
+
+  it('reads doneAt from lesson_completions by user and lesson id', async () => {
+    await facts({ doneAt: at('2026-10-25T00:00:00.000Z') });
+    const where = m.wheres[2] as SQL;
     expect(renderSql(where)).toBe(
       '("lesson_completions"."user_id" = $1 and "lesson_completions"."lesson_id" = $2)',
     );
     expect(renderSqlParams(where)).toEqual(['u1', 41]);
   });
 
-  it('nothing recorded → not done, not passed, never failed', async () => {
-    expect(await facts([], null)).toEqual({
-      clockStartAt: null,
-      passed: false,
-      lastFailedAt: null,
-      hasVideo: false,
-      rewatchedAt: null,
-    });
-  });
-
   it('a video lesson done without its video has not started the clock', async () => {
     expect(
-      (
-        await facts([], at('2026-10-25T00:00:00.000Z'), null, {
-          hasVideo: true,
-        })
-      ).clockStartAt,
+      (await facts({ doneAt: at('2026-10-25T00:00:00.000Z'), hasVideo: true }))
+        .clockStartAt,
     ).toBeNull();
   });
 
-  it('reports the rewatch, read with the shared progress fragment', async () => {
-    const f = await facts([], null, '2026-10-24 06:00:00+00', {
-      videoRewatchedAt: '2026-10-27 06:00:00+00',
-    });
-    expect(f).toMatchObject({
-      hasVideo: true,
-      rewatchedAt: '2026-10-27T06:00:00.000Z',
-    });
-    expect(renderSql(m.selects[2]?.videoRewatchedAt as SQL)).toBe(
-      renderSql(videoRewatchedAtSql('u1', lessonsTable.id, lessonsTable.slug)),
-    );
-  });
-
-  it('with no watched video, the clock starts at the sticky completion', async () => {
-    expect((await facts([], at('2026-10-25T00:00:00.000Z'))).clockStartAt).toBe(
-      '2026-10-25T00:00:00.000Z',
-    );
+  it('with no video, the clock starts at the sticky completion', async () => {
+    expect(
+      (await facts({ doneAt: at('2026-10-25T00:00:00.000Z') })).clockStartAt,
+    ).toBe('2026-10-25T00:00:00.000Z');
   });
 
   it('the clock starts when the video is watched, even before the lesson is done', async () => {
-    expect((await facts([], null, '2026-10-24 06:00:00+00')).clockStartAt).toBe(
-      '2026-10-24T06:00:00.000Z',
-    );
     expect(
-      (
-        await facts(
-          [],
-          at('2026-10-25T00:00:00.000Z'),
-          '2026-10-24 06:00:00+00',
-        )
-      ).clockStartAt,
+      (await facts({ videoWatchedAt: '2026-10-24 06:00:00+00' })).clockStartAt,
     ).toBe('2026-10-24T06:00:00.000Z');
   });
 
   it('reads the video-watched time with the shared progress fragment, for this user and lesson id', async () => {
-    await facts([], null);
-    expect(renderSql(m.selects[2]?.videoWatchedAt as SQL)).toBe(
+    await facts();
+    expect(renderSql(m.selects[3]?.videoWatchedAt as SQL)).toBe(
       renderSql(videoWatchedAtSql('u1', lessonsTable.id)),
     );
-    expect(renderSqlParams(m.selects[2]?.videoWatchedAt as SQL)).toEqual(
+    expect(renderSqlParams(m.selects[3]?.videoWatchedAt as SQL)).toEqual(
       renderSqlParams(videoWatchedAtSql('u1', lessonsTable.id)),
     );
-    const where = m.wheres[2] as SQL;
+    const where = m.wheres[3] as SQL;
     expect(renderSql(where)).toBe('"lessons"."id" = $1');
     expect(renderSqlParams(where)).toEqual([41]);
   });
+});
 
-  it('passed = any attempt at or above par (75)', async () => {
-    expect(
-      (
-        await facts(
-          [{ id: 1, totalScore: 75, completedAt: at('2026-10-26T00:00:00Z') }],
-          null,
-        )
-      ).passed,
-    ).toBe(true);
-    expect(
-      (
-        await facts(
-          [{ id: 1, totalScore: 74, completedAt: at('2026-10-26T00:00:00Z') }],
-          null,
-        )
-      ).passed,
-    ).toBe(false);
-  });
-
-  it('lastFailedAt = the LATEST below-par completion, whatever the row order', async () => {
-    const f = await facts(
-      [
-        { id: 1, totalScore: 40, completedAt: at('2026-10-20T00:00:00.000Z') },
-        { id: 3, totalScore: 65, completedAt: at('2026-10-26T08:00:00.000Z') },
-        { id: 2, totalScore: 90, completedAt: at('2026-10-27T00:00:00.000Z') },
-      ],
-      at('2026-10-19T00:00:00.000Z'),
-    );
-    // Reported independently of `passed`, exactly as the SQL selects both.
-    expect(f).toEqual({
-      clockStartAt: '2026-10-19T00:00:00.000Z',
-      passed: true,
-      lastFailedAt: '2026-10-26T08:00:00.000Z',
-      hasVideo: false,
-      rewatchedAt: null,
+describe('getDebriefAttemptReports', () => {
+  it('passed = a legacy attempt at or above 75, or a chunk attempt that cleared everything', async () => {
+    const row = (
+      id: number,
+      totalScore: number,
+      format: string | null,
+      finishedReason: string | null,
+    ) => ({
+      id,
+      totalScore,
+      completedAt: at('2026-11-01T00:00:00.000Z'),
+      questions: null,
+      answers: null,
+      format,
+      finishedReason,
     });
+    m.queue.push([
+      row(1, 75, null, null),
+      row(2, 74, null, null),
+      row(3, 100, 'knowledge-chunks-v1', 'all-cleared'),
+      // 6 of 7 chunks is 86% but NOT a pass: a hole is left.
+      row(4, 86, 'knowledge-chunks-v1', 'all-answered'),
+    ]);
+    const reports = await getDebriefAttemptReports('u1', 'l1');
+    expect(reports.map((r) => [r.id, r.passed])).toEqual([
+      [1, true],
+      [2, false],
+      [3, true],
+      [4, false],
+    ]);
   });
 });

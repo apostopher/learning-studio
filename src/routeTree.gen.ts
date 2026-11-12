@@ -75,11 +75,11 @@ import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/cour
 import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
 import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/course/onboarding/start'
 import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/course/onboarding/status'
-import { Route as ApiLessonAiTestEvaluateRouteImport } from './routes/api/lesson/ai-test/evaluate'
-import { Route as ApiLessonAiTestGenerateRouteImport } from './routes/api/lesson/ai-test/generate'
 import { Route as ApiLessonAiTestPrepareRouteImport } from './routes/api/lesson/ai-test/prepare'
 import { Route as ApiLessonAiTestResultsRouteImport } from './routes/api/lesson/ai-test/results'
-import { Route as ApiLessonAiTestSaveResultsRouteImport } from './routes/api/lesson/ai-test/save-results'
+import { Route as ApiLessonDebriefAnswerRouteImport } from './routes/api/lesson/debrief/answer'
+import { Route as ApiLessonDebriefDraftRouteImport } from './routes/api/lesson/debrief/draft'
+import { Route as ApiLessonDebriefStartRouteImport } from './routes/api/lesson/debrief/start'
 import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
 import { Route as ApiLessonQuizResultRouteImport } from './routes/api/lesson/quiz/result'
 import { Route as ApiLibraryDownloadFileIdRouteImport } from './routes/api/library/download.$fileId'
@@ -465,16 +465,6 @@ const ApiCourseOnboardingStatusRoute =
     path: '/api/course/onboarding/status',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiLessonAiTestEvaluateRoute = ApiLessonAiTestEvaluateRouteImport.update({
-  id: '/api/lesson/ai-test/evaluate',
-  path: '/api/lesson/ai-test/evaluate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiLessonAiTestGenerateRoute = ApiLessonAiTestGenerateRouteImport.update({
-  id: '/api/lesson/ai-test/generate',
-  path: '/api/lesson/ai-test/generate',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiLessonAiTestPrepareRoute = ApiLessonAiTestPrepareRouteImport.update({
   id: '/api/lesson/ai-test/prepare',
   path: '/api/lesson/ai-test/prepare',
@@ -485,12 +475,21 @@ const ApiLessonAiTestResultsRoute = ApiLessonAiTestResultsRouteImport.update({
   path: '/api/lesson/ai-test/results',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiLessonAiTestSaveResultsRoute =
-  ApiLessonAiTestSaveResultsRouteImport.update({
-    id: '/api/lesson/ai-test/save-results',
-    path: '/api/lesson/ai-test/save-results',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const ApiLessonDebriefAnswerRoute = ApiLessonDebriefAnswerRouteImport.update({
+  id: '/api/lesson/debrief/answer',
+  path: '/api/lesson/debrief/answer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonDebriefDraftRoute = ApiLessonDebriefDraftRouteImport.update({
+  id: '/api/lesson/debrief/draft',
+  path: '/api/lesson/debrief/draft',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLessonDebriefStartRoute = ApiLessonDebriefStartRouteImport.update({
+  id: '/api/lesson/debrief/start',
+  path: '/api/lesson/debrief/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLessonQuizAnswersRoute = ApiLessonQuizAnswersRouteImport.update({
   id: '/api/lesson/quiz/answers',
   path: '/api/lesson/quiz/answers',
@@ -782,11 +781,11 @@ export interface FileRoutesByFullPath {
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
-  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
-  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
-  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
+  '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
@@ -890,11 +889,11 @@ export interface FileRoutesByTo {
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
-  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
-  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
-  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
+  '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
@@ -1002,11 +1001,11 @@ export interface FileRoutesById {
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
   '/api/course/onboarding/start': typeof ApiCourseOnboardingStartRoute
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
-  '/api/lesson/ai-test/evaluate': typeof ApiLessonAiTestEvaluateRoute
-  '/api/lesson/ai-test/generate': typeof ApiLessonAiTestGenerateRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/ai-test/results': typeof ApiLessonAiTestResultsRoute
-  '/api/lesson/ai-test/save-results': typeof ApiLessonAiTestSaveResultsRoute
+  '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
+  '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
   '/api/lesson/quiz/result': typeof ApiLessonQuizResultRoute
   '/api/library/download/$fileId': typeof ApiLibraryDownloadFileIdRoute
@@ -1114,11 +1113,11 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
     | '/api/course/onboarding/status'
-    | '/api/lesson/ai-test/evaluate'
-    | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
-    | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/draft'
+    | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
@@ -1222,11 +1221,11 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
     | '/api/course/onboarding/status'
-    | '/api/lesson/ai-test/evaluate'
-    | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
-    | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/draft'
+    | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
@@ -1333,11 +1332,11 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/reply'
     | '/api/course/onboarding/start'
     | '/api/course/onboarding/status'
-    | '/api/lesson/ai-test/evaluate'
-    | '/api/lesson/ai-test/generate'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/ai-test/results'
-    | '/api/lesson/ai-test/save-results'
+    | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/draft'
+    | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
     | '/api/lesson/quiz/result'
     | '/api/library/download/$fileId'
@@ -1424,11 +1423,11 @@ export interface RootRouteChildren {
   ApiCourseOnboardingReplyRoute: typeof ApiCourseOnboardingReplyRoute
   ApiCourseOnboardingStartRoute: typeof ApiCourseOnboardingStartRoute
   ApiCourseOnboardingStatusRoute: typeof ApiCourseOnboardingStatusRoute
-  ApiLessonAiTestEvaluateRoute: typeof ApiLessonAiTestEvaluateRoute
-  ApiLessonAiTestGenerateRoute: typeof ApiLessonAiTestGenerateRoute
   ApiLessonAiTestPrepareRoute: typeof ApiLessonAiTestPrepareRoute
   ApiLessonAiTestResultsRoute: typeof ApiLessonAiTestResultsRoute
-  ApiLessonAiTestSaveResultsRoute: typeof ApiLessonAiTestSaveResultsRoute
+  ApiLessonDebriefAnswerRoute: typeof ApiLessonDebriefAnswerRoute
+  ApiLessonDebriefDraftRoute: typeof ApiLessonDebriefDraftRoute
+  ApiLessonDebriefStartRoute: typeof ApiLessonDebriefStartRoute
   ApiLessonQuizAnswersRoute: typeof ApiLessonQuizAnswersRoute
   ApiLessonQuizResultRoute: typeof ApiLessonQuizResultRoute
   ApiLibraryDownloadFileIdRoute: typeof ApiLibraryDownloadFileIdRoute
@@ -1899,20 +1898,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCourseOnboardingStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/lesson/ai-test/evaluate': {
-      id: '/api/lesson/ai-test/evaluate'
-      path: '/api/lesson/ai-test/evaluate'
-      fullPath: '/api/lesson/ai-test/evaluate'
-      preLoaderRoute: typeof ApiLessonAiTestEvaluateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/lesson/ai-test/generate': {
-      id: '/api/lesson/ai-test/generate'
-      path: '/api/lesson/ai-test/generate'
-      fullPath: '/api/lesson/ai-test/generate'
-      preLoaderRoute: typeof ApiLessonAiTestGenerateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/lesson/ai-test/prepare': {
       id: '/api/lesson/ai-test/prepare'
       path: '/api/lesson/ai-test/prepare'
@@ -1927,11 +1912,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLessonAiTestResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/lesson/ai-test/save-results': {
-      id: '/api/lesson/ai-test/save-results'
-      path: '/api/lesson/ai-test/save-results'
-      fullPath: '/api/lesson/ai-test/save-results'
-      preLoaderRoute: typeof ApiLessonAiTestSaveResultsRouteImport
+    '/api/lesson/debrief/answer': {
+      id: '/api/lesson/debrief/answer'
+      path: '/api/lesson/debrief/answer'
+      fullPath: '/api/lesson/debrief/answer'
+      preLoaderRoute: typeof ApiLessonDebriefAnswerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/debrief/draft': {
+      id: '/api/lesson/debrief/draft'
+      path: '/api/lesson/debrief/draft'
+      fullPath: '/api/lesson/debrief/draft'
+      preLoaderRoute: typeof ApiLessonDebriefDraftRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/debrief/start': {
+      id: '/api/lesson/debrief/start'
+      path: '/api/lesson/debrief/start'
+      fullPath: '/api/lesson/debrief/start'
+      preLoaderRoute: typeof ApiLessonDebriefStartRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/quiz/answers': {
@@ -2646,11 +2645,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseOnboardingReplyRoute: ApiCourseOnboardingReplyRoute,
   ApiCourseOnboardingStartRoute: ApiCourseOnboardingStartRoute,
   ApiCourseOnboardingStatusRoute: ApiCourseOnboardingStatusRoute,
-  ApiLessonAiTestEvaluateRoute: ApiLessonAiTestEvaluateRoute,
-  ApiLessonAiTestGenerateRoute: ApiLessonAiTestGenerateRoute,
   ApiLessonAiTestPrepareRoute: ApiLessonAiTestPrepareRoute,
   ApiLessonAiTestResultsRoute: ApiLessonAiTestResultsRoute,
-  ApiLessonAiTestSaveResultsRoute: ApiLessonAiTestSaveResultsRoute,
+  ApiLessonDebriefAnswerRoute: ApiLessonDebriefAnswerRoute,
+  ApiLessonDebriefDraftRoute: ApiLessonDebriefDraftRoute,
+  ApiLessonDebriefStartRoute: ApiLessonDebriefStartRoute,
   ApiLessonQuizAnswersRoute: ApiLessonQuizAnswersRoute,
   ApiLessonQuizResultRoute: ApiLessonQuizResultRoute,
   ApiLibraryDownloadFileIdRoute: ApiLibraryDownloadFileIdRoute,

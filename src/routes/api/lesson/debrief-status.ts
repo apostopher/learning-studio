@@ -6,7 +6,7 @@ import { getDebriefAttemptReports } from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
-import { type DebriefState, isPass } from '#/lib/debrief-schedule';
+import type { DebriefState } from '#/lib/debrief-schedule';
 
 const QuerySchema = z.object({
   lessonSlug: z.string().min(1),
@@ -96,11 +96,7 @@ export async function debriefStatusHandler(
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };
     if (state.kind === 'passed') {
-      const reports = await getDebriefAttemptReports(userId, lessonSlug);
-      const attempts = reports.map((a) => ({
-        ...a,
-        passed: isPass(a.totalScore),
-      }));
+      const attempts = await getDebriefAttemptReports(userId, lessonSlug);
       // Array#sort is stable: the newest-first order survives within a group.
       body.attempts = [
         ...attempts.filter((a) => a.passed),
