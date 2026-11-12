@@ -13,10 +13,13 @@ import {
   type DebriefState,
 } from '#/lib/debrief-schedule';
 import {
+  attemptFormat,
   computeDebriefPanel,
+  countdownTarget,
   currentDebriefQuestion,
   DEBRIEF_FAILED_COPY,
   DEBRIEF_REFUSED_COPY,
+  debriefQuizView,
   type FinishedDebrief,
   finishedDebriefReport,
   isStaleFinishedDebrief,
@@ -431,5 +434,126 @@ describe('finishedDebriefReport', () => {
         now: FINISHED_AT,
       }),
     ).toBeNull();
+  });
+});
+
+describe('debriefQuizView', () => {
+  const base = {
+    readOnly: false,
+    enabled: true,
+    resume: false,
+    notOpen: null,
+    hasAttempt: false,
+    startError: null,
+    hasCurrent: false,
+  } as const;
+
+  it('a 409 on a fresh Start shows the countdown, never the intro (Start pressed state cleared)', () => {
+    expect(
+      debriefQuizView({
+        ...base,
+        enabled: false,
+        notOpen: { availableAt: AT },
+      }),
+    ).toBe('not-open-countdown');
+  });
+
+  it('a 409 with no time says it is checking, never the intro', () => {
+    expect(
+      debriefQuizView({
+        ...base,
+        enabled: false,
+        notOpen: { availableAt: null },
+      }),
+    ).toBe('not-open-checking');
+  });
+
+  it('not-open wins over a loaded attempt', () => {
+    expect(
+      debriefQuizView({
+        ...base,
+        hasAttempt: true,
+        hasCurrent: true,
+        notOpen: { availableAt: AT },
+      }),
+    ).toBe('not-open-countdown');
+  });
+
+  it('read-only is the inert intro, whatever else holds', () => {
+    expect(
+      debriefQuizView({
+        ...base,
+        readOnly: true,
+        notOpen: { availableAt: AT },
+      }),
+    ).toBe('read-only');
+  });
+
+  it.each([
+    [{ enabled: false }, 'intro'],
+    [{ startError: 'no-source' }, 'no-source'],
+    [{ startError: 'failed' }, 'start-failed'],
+    [{}, 'starting'],
+    [{ resume: true }, 'resuming'],
+    [{ hasAttempt: true }, 'scoring'],
+    [{ hasAttempt: true, hasCurrent: true }, 'question'],
+  ] as const)('%o → %s', (over, view) => {
+    expect(debriefQuizView({ ...base, ...over })).toBe(view);
+  });
+});
+
+describe('countdownTarget', () => {
+  it('a finished report keeps one announcement key while its time is corrected by the server', () => {
+    const before = countdownTarget({
+      kind: 'finished',
+      report: finished(),
+      availableAt: '2026-10-28T15:40:00.000Z',
+    });
+    const after = countdownTarget({
+      kind: 'finished',
+      report: finished(),
+      availableAt: '2026-10-28T15:40:01.234Z',
+    });
+    expect(before.announceKey).toBe(after.announceKey);
+    expect(after.availableAt).toBe('2026-10-28T15:40:01.234Z');
+  });
+
+  it('the 12 h wait refetches when it opens but announces no retake countdown', () => {
+    expect(countdownTarget({ kind: 'waiting', availableAt: AT })).toEqual({
+      availableAt: AT,
+      announceKey: null,
+    });
+  });
+
+  it('retake-waiting counts down and announces', () => {
+    expect(
+      countdownTarget({ kind: 'retake-waiting', availableAt: AT }),
+    ).toEqual({ availableAt: AT, announceKey: `retake:${AT}` });
+  });
+
+  it('a pass has nothing to count down to', () => {
+    expect(
+      countdownTarget({
+        kind: 'finished',
+        report: finished(),
+        availableAt: null,
+      }),
+    ).toEqual({ availableAt: null, announceKey: null });
+  });
+});
+
+describe('attemptFormat', () => {
+  it('an attempt whose answers carry revisit notes is a chunk attempt', () => {
+    expect(
+      attemptFormat([
+        { questionId: 'q1', score: 80, revisitNote: '' },
+        { questionId: 'q2', score: 30, revisitNote: 'n' },
+      ]),
+    ).toBe('chunk');
+  });
+
+  it('an attempt with no revisit notes at all is legacy', () => {
+    expect(attemptFormat([{ questionId: 'm1', score: 100 }])).toBe('legacy');
+    expect(attemptFormat([])).toBe('legacy');
   });
 });

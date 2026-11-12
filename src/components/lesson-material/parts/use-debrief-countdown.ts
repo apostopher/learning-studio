@@ -28,13 +28,16 @@ const REFETCH_GRACE_MS = 1_000;
  * `availableAt`, so the tick re-arms itself and asks again, backing off
  * (`reopenRetryDelay`). A new `availableAt` restarts it; null stops it.
  *
- * Screen readers hear `debriefCountdownAnnouncementAtom`, set once here when
- * the countdown starts — never on a tick. Client-only (an effect), so the
- * clock time is formatted in the pilot's own timezone.
+ * Screen readers hear `debriefCountdownAnnouncementAtom`, set once per
+ * `announceKey` — never on a tick, and not again when the same countdown's
+ * time is corrected (a finished report's estimate replaced by the server's).
+ * A null key announces nothing (the 12 h first wait). Client-only (an
+ * effect), so the clock time is formatted in the pilot's own timezone.
  */
 export function useDebriefCountdown(
   availableAt: string | null,
   refetch: () => Promise<unknown>,
+  announceKey: string | null,
 ) {
   const setCountdown = useSetAtom(debriefCountdownAtom);
   const setAnnouncement = useSetAtom(debriefCountdownAnnouncementAtom);
@@ -45,6 +48,21 @@ export function useDebriefCountdown(
   useEffect(() => {
     refetchRef.current = refetch;
   }, [refetch]);
+  // The instant the announcement names, read when its key changes.
+  const availableAtRef = useRef(availableAt);
+  useEffect(() => {
+    availableAtRef.current = availableAt;
+  }, [availableAt]);
+
+  useEffect(() => {
+    const at = availableAtRef.current;
+    if (announceKey === null || at === null) return;
+    const opensAt = Date.parse(at);
+    setAnnouncement(
+      `Your next debrief opens in ${formatCountdown(opensAt - Date.now())}, at ${formatDebriefTime(at, new Date())}.`,
+    );
+    return () => setAnnouncement('');
+  }, [announceKey, setAnnouncement]);
 
   useEffect(() => {
     if (availableAt === null) return;
@@ -70,16 +88,12 @@ export function useDebriefCountdown(
       refetchRef.current().then(rearm, rearm);
     }
 
-    setAnnouncement(
-      `Your next debrief opens in ${formatCountdown(opensAt - Date.now())}, at ${formatDebriefTime(availableAt, new Date())}.`,
-    );
     tick();
 
     return () => {
       cancelled = true;
       if (timer.current !== null) clearTimeout(timer.current);
       timer.current = null;
-      setAnnouncement('');
     };
-  }, [availableAt, setCountdown, setAnnouncement]);
+  }, [availableAt, setCountdown]);
 }

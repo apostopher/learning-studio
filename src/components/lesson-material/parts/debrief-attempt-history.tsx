@@ -9,16 +9,22 @@ export type DebriefAttemptRow = {
   /** The attempt's score: chunk mastery for a chunk attempt, 0–100. */
   score: number;
   passed: boolean;
+  /**
+   * `attemptFormat`. Mastery is the only number a chunk attempt shows, so
+   * its answers carry no score; a legacy attempt keeps its per-answer scores.
+   */
+  format: 'chunk' | 'legacy';
   /** Question text only, as the status route projects it. */
   questions: readonly { id: string; question: string }[];
   /**
    * Each answer's grade. A legacy multiple-choice attempt reaches the client
-   * without its options, so no answer is shown for any attempt: question and
-   * score, plus the grader's note where a chunk attempt has one.
+   * without its options and its `userAnswer` is an option id, so a legacy
+   * answer is never shown: question and score only.
    */
   evaluations: readonly {
     questionId: string;
     score: number;
+    userAnswer?: string;
     revisitNote?: string;
   }[];
 };
@@ -92,6 +98,8 @@ export const DebriefAttemptHistory = ({
                     (e) => e.questionId === question.id,
                   );
                   const note = evaluation?.revisitNote?.trim();
+                  const answer = evaluation?.userAnswer?.trim();
+                  const chunk = attempt.format === 'chunk';
                   return (
                     <li
                       key={question.id}
@@ -104,7 +112,7 @@ export const DebriefAttemptHistory = ({
                         <p className="min-w-0 flex-1 text-primary">
                           {question.question}
                         </p>
-                        {evaluation && (
+                        {!chunk && evaluation && (
                           <span
                             className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${scoreBadgeClass(evaluation.score)}`}
                           >
@@ -112,7 +120,17 @@ export const DebriefAttemptHistory = ({
                           </span>
                         )}
                       </div>
-                      {note ? (
+                      {chunk && answer ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-secondary">
+                            Your answer
+                          </span>
+                          <p className="max-w-prose text-sm leading-relaxed text-primary">
+                            {answer}
+                          </p>
+                        </div>
+                      ) : null}
+                      {chunk && note ? (
                         <p className="max-w-prose text-sm leading-relaxed text-secondary">
                           {note}
                         </p>

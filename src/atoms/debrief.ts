@@ -18,6 +18,18 @@ export const justFinishedDebriefAtom = atom<FinishedDebrief | null>(null);
  */
 export const debriefStartRequestedAtom = atom<string | null>(null);
 
+/**
+ * The start route's last 409 for this lesson ("not open"), with the time it
+ * gave. Kept in an atom, not read off the query error, so it outlives the
+ * Start press being cleared: the quiz shows the countdown, never Start again
+ * with no reason (`debriefQuizView`). Cleared when an attempt loads, and
+ * when the panel leaves `take`.
+ */
+export const debriefNotOpenAtom = atom<{
+  lessonSlug: string;
+  availableAt: string | null;
+} | null>(null);
+
 /** A paste, drop, copy or cut was just refused in the answer box. */
 export const debriefPasteBlockedAtom = atom(false);
 

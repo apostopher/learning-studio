@@ -1,5 +1,4 @@
 import { Loader2, NotebookPen } from 'lucide-react';
-import { CHUNK_CLEAR_SCORE } from '#/lib/debrief-mastery';
 import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 type DebriefIntroProps = {
@@ -13,7 +12,9 @@ type DebriefIntroProps = {
 
 const REASON_ID = 'debrief-intro-readonly-reason';
 
-const HOW_IT_WORKS = `Score ${CHUNK_CLEAR_SCORE} or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.`;
+// No per-answer number: mastery is the only debrief number (R15).
+const HOW_IT_WORKS =
+  'Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.';
 
 /**
  * The Debrief tab once the debrief is open, before it has been generated.
@@ -29,8 +30,8 @@ export const DebriefIntro = ({
   <div className="flex flex-col items-start gap-3 py-2">
     <p className="text-secondary text-sm">
       {retake
-        ? 'Fresh questions on the knowledge chunks you have not cleared yet, plus one or two you have, answered in your own words. '
-        : 'One question for each knowledge chunk in this lesson, answered in your own words. '}
+        ? 'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. '
+        : 'Each question checks one knowledge chunk of this lesson, answered in your own words. '}
       {HOW_IT_WORKS}
     </p>
     <button

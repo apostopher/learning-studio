@@ -255,3 +255,99 @@ export function finishedDebriefReport({
         ]),
   };
 }
+
+/**
+ * What the countdown runs to, and the key its once-only announcement is
+ * tied to (null: no announcement).
+ *
+ * - A finished report keys on the finish, not the instant. Its time is first
+ *   estimated from the finish, then corrected by the server's, and one
+ *   attempt must be announced once.
+ * - The 12 h wait still refetches when it opens, but it is not a retake: it
+ *   announces nothing.
+ */
+export function countdownTarget(panel: DebriefPanel): {
+  availableAt: string | null;
+  announceKey: string | null;
+} {
+  switch (panel.kind) {
+    case 'waiting':
+      return { availableAt: panel.availableAt, announceKey: null };
+    case 'retake-waiting':
+      return {
+        availableAt: panel.availableAt,
+        announceKey: `retake:${panel.availableAt}`,
+      };
+    case 'finished':
+      return panel.availableAt === null
+        ? { availableAt: null, announceKey: null }
+        : {
+            availableAt: panel.availableAt,
+            announceKey: `finished:${panel.report.finishedAt}`,
+          };
+    default:
+      return { availableAt: null, announceKey: null };
+  }
+}
+
+/**
+ * A passed-history attempt's format. A chunk attempt's answers carry a
+ * revisit note (empty when the chunk was shown), a legacy one's never do.
+ * Mastery is the only number a chunk attempt shows; a legacy attempt keeps
+ * its per-answer scores.
+ */
+export function attemptFormat(
+  evaluations: readonly {
+    questionId: string;
+    score: number;
+    revisitNote?: string;
+  }[],
+): 'chunk' | 'legacy' {
+  return evaluations.some((e) => e.revisitNote !== undefined)
+    ? 'chunk'
+    : 'legacy';
+}
+
+export type DebriefQuizView =
+  | 'read-only'
+  | 'not-open-countdown'
+  | 'not-open-checking'
+  | 'intro'
+  | 'no-source'
+  | 'start-failed'
+  | 'starting'
+  | 'resuming'
+  | 'scoring'
+  | 'question';
+
+/**
+ * Which branch `DebriefQuizContainer` renders. Order matters: a 409 from
+ * start (`notOpen`) wins over the intro, or a refused Start would offer
+ * Start again with no reason and no time.
+ */
+export function debriefQuizView(v: {
+  readOnly: boolean;
+  /** The start query may run: Start pressed, or resuming. */
+  enabled: boolean;
+  resume: boolean;
+  /** This lesson's last start answer was 409, with the time it gave. */
+  notOpen: { availableAt: string | null } | null;
+  hasAttempt: boolean;
+  startError: 'no-source' | 'failed' | null;
+  /** An unanswered question is left. */
+  hasCurrent: boolean;
+}): DebriefQuizView {
+  if (v.readOnly) return 'read-only';
+  if (v.notOpen) {
+    return v.notOpen.availableAt === null
+      ? 'not-open-checking'
+      : 'not-open-countdown';
+  }
+  if (!v.hasAttempt && !v.enabled) return 'intro';
+  if (v.startError === 'no-source') return 'no-source';
+  if (!v.hasAttempt) {
+    if (v.startError === 'failed') return 'start-failed';
+    return v.resume ? 'resuming' : 'starting';
+  }
+  return v.hasCurrent ? 'question' : 'scoring';
+}

@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import {
   debriefCountdownAnnouncementAtom,
   debriefCountdownAtom,
+  debriefNotOpenAtom,
   debriefOpenedAnnouncementAtom,
   justFinishedDebriefAtom,
 } from '#/atoms/debrief';
@@ -19,8 +20,9 @@ import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
 import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
+  attemptFormat,
   computeDebriefPanel,
-  type DebriefPanel,
+  countdownTarget,
   isStaleFinishedDebrief,
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
@@ -54,18 +56,6 @@ const DebriefTime = ({ iso }: { iso: string }) => (
   <ClientGate>{() => formatDebriefTime(iso, new Date())}</ClientGate>
 );
 
-/** The instant this panel counts down to, if any: the tick also refetches. */
-const countdownTarget = (panel: DebriefPanel): string | null => {
-  switch (panel.kind) {
-    case 'waiting':
-    case 'retake-waiting':
-    case 'finished':
-      return panel.availableAt;
-    default:
-      return null;
-  }
-};
-
 /**
  * The Debrief tab: reads this pilot's debrief state and renders the panel
  * `computeDebriefPanel` picks. Every branch lives in that pure module; this
@@ -91,6 +81,7 @@ export const DebriefPanelContainer = ({
   const countdown = useAtomValue(debriefCountdownAtom);
   const announcement = useAtomValue(debriefCountdownAnnouncementAtom);
   const [opened, setOpened] = useAtom(debriefOpenedAnnouncementAtom);
+  const setNotOpen = useSetAtom(debriefNotOpenAtom);
 
   const panel = computeDebriefPanel({
     status,
@@ -118,7 +109,10 @@ export const DebriefPanelContainer = ({
       queryKey: dataKeys.debriefAttempt(lessonSlug),
       exact: true,
     });
-  }, [panel.kind, queryClient, lessonSlug]);
+    setNotOpen((current) =>
+      current?.lessonSlug === lessonSlug ? null : current,
+    );
+  }, [panel.kind, queryClient, lessonSlug, setNotOpen]);
 
   // Screen readers hear the countdown once when it starts (its own status)
   // and once when it opens — here, in a region that outlives the countdown.
@@ -136,9 +130,9 @@ export const DebriefPanelContainer = ({
     }
   }, [panel.kind, setOpened]);
 
-  const availableAt = countdownTarget(panel);
+  const { availableAt, announceKey } = countdownTarget(panel);
   const { refetch } = status;
-  useDebriefCountdown(availableAt, refetch);
+  useDebriefCountdown(availableAt, refetch, announceKey);
   const countdownText = (iso: string) =>
     formatCountdown(
       countdown?.availableAt === iso
@@ -255,6 +249,7 @@ export const DebriefPanelContainer = ({
               when: <DebriefTime iso={attempt.completedAt} />,
               score: attempt.totalScore,
               passed: attempt.passed,
+              format: attemptFormat(attempt.evaluations),
               questions: attempt.questions,
               evaluations: attempt.evaluations,
             }))}

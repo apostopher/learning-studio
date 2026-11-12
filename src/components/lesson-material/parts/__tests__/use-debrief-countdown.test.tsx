@@ -23,14 +23,19 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-function setup(availableAt: string | null, refetch = vi.fn(async () => {})) {
+function setup(
+  availableAt: string | null,
+  refetch = vi.fn(async () => {}),
+  announceKey: string | null = availableAt,
+) {
   const store = createStore();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <Provider store={store}>{children}</Provider>
   );
   const view = renderHook(
-    ({ at }: { at: string | null }) => useDebriefCountdown(at, refetch),
-    { wrapper, initialProps: { at: availableAt } },
+    ({ at, k }: { at: string | null; k: string | null }) =>
+      useDebriefCountdown(at, refetch, k),
+    { wrapper, initialProps: { at: availableAt, k: announceKey } },
   );
   return { store, refetch, view };
 }
@@ -85,9 +90,9 @@ describe('useDebriefCountdown', () => {
   it('re-arms on a new opening time, and stops when there is none', async () => {
     const { refetch, view, store } = setup(new Date(NOW + 1_000).toISOString());
     const later = new Date(NOW + 3_600_000).toISOString();
-    view.rerender({ at: later });
+    view.rerender({ at: later, k: later });
     expect(store.get(debriefCountdownAtom)?.availableAt).toBe(later);
-    view.rerender({ at: null });
+    view.rerender({ at: null, k: null });
     await act(() => vi.advanceTimersByTimeAsync(4 * 3_600_000));
     expect(refetch).not.toHaveBeenCalled();
   });
@@ -97,5 +102,23 @@ describe('useDebriefCountdown', () => {
     view.unmount();
     await act(() => vi.advanceTimersByTimeAsync(60_000));
     expect(refetch).not.toHaveBeenCalled();
+  });
+
+  it('announces once per key: a corrected time under the same key is not re-announced', () => {
+    const first = new Date(NOW + 6 * 3_600_000).toISOString();
+    const { store, view } = setup(first, undefined, 'finished:1');
+    const said = store.get(debriefCountdownAnnouncementAtom);
+    expect(said).toMatch(/^Your next debrief opens in 6 h/);
+    const corrected = new Date(NOW + 5 * 3_600_000).toISOString();
+    view.rerender({ at: corrected, k: 'finished:1' });
+    expect(store.get(debriefCountdownAtom)?.availableAt).toBe(corrected);
+    expect(store.get(debriefCountdownAnnouncementAtom)).toBe(said);
+  });
+
+  it('counts down without announcing when there is no key (the 12 h wait)', () => {
+    const at = new Date(NOW + 3_600_000).toISOString();
+    const { store } = setup(at, undefined, null);
+    expect(store.get(debriefCountdownAtom)?.msLeft).toBe(3_600_000);
+    expect(store.get(debriefCountdownAnnouncementAtom)).toBe('');
   });
 });

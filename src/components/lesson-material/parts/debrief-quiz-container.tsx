@@ -1,9 +1,10 @@
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import {
   debriefCountdownAnnouncementAtom,
   debriefCountdownAtom,
+  debriefNotOpenAtom,
   debriefPasteBlockedAtom,
   debriefStartRequestedAtom,
   justFinishedDebriefAtom,
@@ -24,6 +25,7 @@ import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   currentDebriefQuestion,
+  debriefQuizView,
   finishedDebriefReport,
 } from '../compute-debrief-panel';
 import { DebriefIntro } from './debrief-intro';
@@ -123,8 +125,10 @@ export const DebriefQuizContainer = ({
   const metrics = useAnswerMetrics();
   const { mutate: saveDraft } = useSaveDebriefDraft();
   const answer = useAnswerDebrief({
-    // `attempt` is the attempt as it stood when this answer was sent: the
-    // mutation keeps the options it was started with.
+    // `attempt` is from the latest render (TanStack v5 hands the running
+    // mutation each render's options). That is still the attempt WITHOUT
+    // this answer: `onAnswered` runs before `applyAnswerResult` writes it
+    // to the cache, and nothing else adds it.
     onAnswered: (result, input) => {
       if (!attempt) return;
       const report = finishedDebriefReport({
@@ -141,17 +145,44 @@ export const DebriefQuizContainer = ({
   });
 
   // ─── 409 from start: the debrief is not open after all ──────────────────
+  // Recorded in an atom so it outlives the Start press being cleared:
+  // `debriefQuizView` puts it before the intro, so a refused Start shows the
+  // countdown and its reason, never Start again.
+  const [notOpenRecord, setNotOpen] = useAtom(debriefNotOpenAtom);
   const notOpen =
+    notOpenRecord?.lessonSlug === lessonSlug ? notOpenRecord : null;
+  const startNotOpen =
     start.error instanceof DebriefNotOpenError ? start.error : null;
   useEffect(() => {
-    if (notOpen === null) return;
-    if (notOpen.promotion) setPromotion(notOpen.promotion);
+    if (startNotOpen === null) return;
+    setNotOpen({ lessonSlug, availableAt: startNotOpen.availableAt });
+    if (startNotOpen.promotion) setPromotion(startNotOpen.promotion);
     setStartRequested(null);
     // The status moves the panel on (retake-waiting, passed).
     void refetchStatus();
-  }, [notOpen, setPromotion, setStartRequested, refetchStatus]);
+  }, [
+    startNotOpen,
+    lessonSlug,
+    setNotOpen,
+    setPromotion,
+    setStartRequested,
+    refetchStatus,
+  ]);
+  // An attempt loaded after all (the countdown's refetch opened it).
+  const loaded = start.status === 'success';
+  useEffect(() => {
+    if (loaded)
+      setNotOpen((current) =>
+        current?.lessonSlug === lessonSlug ? null : current,
+      );
+  }, [loaded, lessonSlug, setNotOpen]);
   // If the status has not caught up, count down to the time start gave.
-  useDebriefCountdown(notOpen?.availableAt ?? null, refetchStart);
+  // `refetch` runs even with the query disabled (Start press cleared).
+  useDebriefCountdown(
+    notOpen?.availableAt ?? null,
+    refetchStart,
+    notOpen?.availableAt ? `not-open:${notOpen.availableAt}` : null,
+  );
 
   // A refused answer means this page's attempt is out of date: reload it.
   const answerRefused =
@@ -190,54 +221,69 @@ export const DebriefQuizContainer = ({
   const draftForCurrent = useRef('');
   draftForCurrent.current = current?.draft ?? '';
   const { reset: resetMetrics } = metrics;
-  useEffect(() => {
+  // A layout effect, so the next question never paints with the previous
+  // answer still in the box. Any pending draft (for the previous question)
+  // is sent first, reading the box before it is overwritten.
+  useLayoutEffect(() => {
     if (questionKey === null) return;
+    flushDraft();
     store.set(freeTextAnswerAtom, draftForCurrent.current);
     setPasteBlocked(false);
     resetMetrics();
-  }, [questionKey, store, setPasteBlocked, resetMetrics]);
+  }, [questionKey, flushDraft, store, setPasteBlocked, resetMetrics]);
 
-  if (readOnly || (!attempt && !enabled)) {
-    return (
-      <DebriefIntro
-        loading={false}
-        onStart={() => {
-          if (!readOnly) setStartRequested(lessonSlug);
-        }}
-        readOnly={readOnly}
-        retake={retake}
-      />
-    );
-  }
+  const view = debriefQuizView({
+    readOnly,
+    enabled,
+    resume,
+    notOpen,
+    hasAttempt: attempt !== undefined,
+    startError:
+      start.error instanceof DebriefNoSourceError
+        ? 'no-source'
+        : start.isError
+          ? 'failed'
+          : null,
+    hasCurrent: current !== null,
+  });
 
-  if (notOpen) {
-    if (notOpen.availableAt === null) {
+  switch (view) {
+    case 'read-only':
+    case 'intro':
+      return (
+        <DebriefIntro
+          loading={false}
+          onStart={() => {
+            if (!readOnly) setStartRequested(lessonSlug);
+          }}
+          readOnly={readOnly}
+          retake={retake}
+        />
+      );
+    case 'not-open-checking':
       return <LoadingLine label="Checking your debrief…" />;
+    case 'not-open-countdown': {
+      const at = notOpen?.availableAt ?? '';
+      return (
+        <DebriefWait
+          idBase={idBase}
+          headingLevel={headingLevel}
+          kind="retake-waiting"
+          countdown={formatCountdown(
+            countdown?.availableAt === at
+              ? countdown.msLeft
+              : Date.parse(at) - Date.now(),
+          )}
+          time={<DebriefTime iso={at} />}
+          announcement={announcement}
+        />
+      );
     }
-    return (
-      <DebriefWait
-        idBase={idBase}
-        headingLevel={headingLevel}
-        kind="retake-waiting"
-        countdown={formatCountdown(
-          countdown?.availableAt === notOpen.availableAt
-            ? countdown.msLeft
-            : Date.parse(notOpen.availableAt) - Date.now(),
-        )}
-        time={<DebriefTime iso={notOpen.availableAt} />}
-        announcement={announcement}
-      />
-    );
-  }
-
-  if (start.error instanceof DebriefNoSourceError) {
-    return (
-      <p className="py-2 text-sm text-secondary">{DEBRIEF_NO_SOURCE_COPY}</p>
-    );
-  }
-
-  if (!attempt) {
-    if (start.isError) {
+    case 'no-source':
+      return (
+        <p className="py-2 text-sm text-secondary">{DEBRIEF_NO_SOURCE_COPY}</p>
+      );
+    case 'start-failed':
       return (
         <LessonError
           message={DEBRIEF_START_FAILED_COPY}
@@ -245,22 +291,29 @@ export const DebriefQuizContainer = ({
           subject="your debrief"
         />
       );
+    case 'resuming':
+      return <LoadingLine label="Picking up where you left off…" />;
+    case 'starting':
+      return (
+        <DebriefIntro
+          loading={true}
+          onStart={() => {}}
+          readOnly={false}
+          retake={retake}
+        />
+      );
+    case 'scoring':
+      // Every question answered: the finishing answer's report is on its
+      // way (`justFinishedDebriefAtom`), or the status refetch is.
+      return <LoadingLine label="Scoring your debrief…" />;
+    case 'question':
+      break;
+    default: {
+      const _exhaustive: never = view;
+      return _exhaustive;
     }
-    return resume ? (
-      <LoadingLine label="Picking up where you left off…" />
-    ) : (
-      <DebriefIntro
-        loading={true}
-        onStart={() => {}}
-        readOnly={false}
-        retake={retake}
-      />
-    );
   }
-
-  // Every question answered: the finishing answer's report is on its way
-  // (`justFinishedDebriefAtom`), or the status refetch is.
-  if (!current) return <LoadingLine label="Scoring your debrief…" />;
+  if (!attempt || !current) return null;
 
   const isCurrentAnswer = answer.variables?.questionId === current.question.id;
 

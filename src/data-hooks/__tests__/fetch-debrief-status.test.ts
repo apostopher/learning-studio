@@ -98,6 +98,17 @@ describe('fetchDebriefStatus — what the route sends now', () => {
       [{ id: 'm1', question: 'What is V1?' }],
     ]);
     expect(status.attempts?.[1]?.evaluations[0]?.score).toBe(0);
+    // History shows a chunk answer as given, and tells legacy from chunk by
+    // whether a revisit note is there at all.
+    expect(status.attempts?.[0]?.evaluations[0]).toEqual({
+      questionId: 'q1',
+      score: 80,
+      userAnswer: 'Because',
+      revisitNote: '',
+    });
+    expect(status.attempts?.[1]?.evaluations[0]).not.toHaveProperty(
+      'revisitNote',
+    );
   });
 
   it('rejects the retired rewatch state', async () => {

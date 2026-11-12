@@ -81,7 +81,7 @@ describe('DebriefIntro', () => {
     });
   });
 
-  it('says how the debrief is passed before the pilot starts', () => {
+  it('says how the debrief is done before the pilot starts, with no per-answer number', () => {
     render(
       <DebriefIntro
         loading={false}
@@ -92,7 +92,7 @@ describe('DebriefIntro', () => {
     );
     expect(
       screen.getByText(
-        'One question for each knowledge chunk in this lesson, answered in your own words. Score 70 or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.',
+        'Each question checks one knowledge chunk of this lesson, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
       ),
     ).toBeDefined();
   });
@@ -108,7 +108,7 @@ describe('DebriefIntro', () => {
     );
     expect(
       screen.getByText(
-        'Fresh questions on the knowledge chunks you have not cleared yet, plus one or two you have, answered in your own words. Score 70 or more on a chunk to clear it; clear them all to pass. Your answer saves as you type, so you can come back and finish later.',
+        'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
       ),
     ).toBeDefined();
   });

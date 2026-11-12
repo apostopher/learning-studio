@@ -43,6 +43,9 @@ export const debriefStatusSchema = z.object({
           z.object({
             questionId: z.string(),
             score: z.number(),
+            // Shown for a chunk attempt only: a legacy MCQ "answer" is an
+            // option id with its options gone.
+            userAnswer: z.string(),
             revisitNote: z.string().optional(),
           }),
         ),

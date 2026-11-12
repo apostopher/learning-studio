@@ -13,19 +13,24 @@ const attempts: DebriefAttemptRow[] = [
     when: 'Wed 29 Oct, 9:00 AM',
     score: 100,
     passed: true,
+    format: 'chunk',
     questions: [{ id: 'p1', question: 'Passing attempt question' }],
-    evaluations: [{ questionId: 'p1', score: 85, revisitNote: '' }],
+    evaluations: [
+      { questionId: 'p1', score: 85, userAnswer: 'My answer', revisitNote: '' },
+    ],
   },
   {
     id: 1,
     when: 'Tue 28 Oct, 3:40 PM',
     score: 40,
     passed: false,
+    format: 'chunk',
     questions: [{ id: 'f1', question: 'Failed attempt question' }],
     evaluations: [
       {
         questionId: 'f1',
         score: 40,
+        userAnswer: 'Because it is quicker',
         revisitNote: 'Revisit why the checklist comes first.',
       },
     ],
@@ -33,7 +38,7 @@ const attempts: DebriefAttemptRow[] = [
 ];
 
 describe('DebriefAttemptHistory', () => {
-  it('lists every attempt in the order given, with date, score and outcome', () => {
+  it('lists every attempt in the order given, with date, mastery and outcome', () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(2);
@@ -45,23 +50,25 @@ describe('DebriefAttemptHistory', () => {
     expect(items[1].textContent).toContain('Not yet passed');
   });
 
-  it('expands an attempt to its own questions, each with its score and note', async () => {
+  it('expands a chunk attempt to question, the answer given and its note, with no per-answer number', async () => {
+    // Mastery is the only debrief number (R15): no "/100" on chunk answers.
     render(<DebriefAttemptHistory attempts={attempts} />);
     const failed = screen.getAllByRole('listitem')[1];
     await userEvent.click(
       within(failed).getByRole('button', { name: /Tue 28 Oct/ }),
     );
     expect(within(failed).getByText('Failed attempt question')).toBeDefined();
-    expect(within(failed).getByText('40/100')).toBeDefined();
+    expect(within(failed).getByText('Because it is quicker')).toBeDefined();
     expect(
       within(failed).getByText('Revisit why the checklist comes first.'),
     ).toBeDefined();
+    expect(failed.textContent).not.toContain('/100');
     expect(screen.queryByText('Passing attempt question')).toBeNull();
   });
 
   it('renders a legacy multiple-choice attempt as question and score only', async () => {
     // Projected for the client, an old MCQ attempt has no options left and
-    // its "answer" is an option id: neither is shown.
+    // its "answer" is an option id: not shown.
     render(
       <DebriefAttemptHistory
         attempts={[
@@ -70,8 +77,9 @@ describe('DebriefAttemptHistory', () => {
             when: 'Mon 1 Sep, 8:00 AM',
             score: 80,
             passed: true,
+            format: 'legacy',
             questions: [{ id: 'm1', question: 'What is V1?' }],
-            evaluations: [{ questionId: 'm1', score: 100 }],
+            evaluations: [{ questionId: 'm1', score: 100, userAnswer: 'b' }],
           },
         ]}
       />,
@@ -82,6 +90,7 @@ describe('DebriefAttemptHistory', () => {
     );
     expect(within(item).getByText('What is V1?')).toBeDefined();
     expect(within(item).getByText('100/100')).toBeDefined();
+    expect(within(item).queryByText('b')).toBeNull();
   });
 
   it('offers no retake from history', () => {
