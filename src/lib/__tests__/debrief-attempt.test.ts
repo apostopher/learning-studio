@@ -380,6 +380,47 @@ describe('answerQuestion', () => {
     expect(m.row?.answers).toHaveLength(1);
   });
 
+  it('reads the current chunk list FOR SHARE inside the answer transaction', async () => {
+    await answer('q1');
+    expect(m.selectCurrentChunks).toHaveBeenCalledWith(41, m.tx, {
+      forShare: true,
+    });
+  });
+
+  it('a replayed answer reports the finish only if it was the answer that finished the attempt', async () => {
+    m.row = attemptRow({
+      answers: [
+        evaluation('q1', { 'v1-c2': 40 }),
+        evaluation('q2', { 'v1-c1': 90 }),
+      ],
+      completedAt: new Date('2026-11-12T01:00:00Z'),
+      totalScore: 50,
+      finishedReason: 'all-answered',
+    });
+    expect(await answer('q1')).toMatchObject({ ok: true, finished: null });
+    expect(await answer('q2')).toMatchObject({
+      ok: true,
+      finished: 'all-answered',
+    });
+    expect(m.evaluateFreeText).not.toHaveBeenCalled();
+  });
+
+  it('a lost race on a non-finishing question does not report the finish a later answer caused', async () => {
+    // While this tab graded q1, another recorded q1 AND then finished the
+    // attempt on q2: theirs stands for q1, and q1 did not finish it.
+    m.lockedRow = attemptRow({
+      answers: [
+        evaluation('q1', { 'v1-c2': 40 }),
+        evaluation('q2', { 'v1-c1': 90 }),
+      ],
+      completedAt: new Date('2026-11-12T01:00:00Z'),
+      totalScore: 50,
+      finishedReason: 'all-answered',
+    });
+    expect(await answer('q1')).toMatchObject({ ok: true, finished: null });
+    expect(m.updateAttempt).not.toHaveBeenCalled();
+  });
+
   it('a second tab that loses the race returns the winner’s evaluation and writes nothing', async () => {
     const winner = evaluation('q1', { 'v1-c2': 90 });
     // Graded, but by the time it locks the row the other tab has committed.

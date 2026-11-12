@@ -116,14 +116,17 @@ const toAnswered = (e: AIEvaluationResult): AnsweredQuestion => ({
 /**
  * The lesson's current chunk list, for counting mastery. Falls back to the
  * attempt's own snapshot when the lesson no longer has stored chunks, so an
- * open attempt still shows a sensible count.
+ * open attempt still shows a sensible count. Inside a transaction (`ex`) the
+ * row is read `for share` (see `selectCurrentChunks`).
  */
 async function currentChunksOr(
   lessonId: number,
   fallback: KnowledgeChunk[],
   ex?: Tx,
 ) {
-  const row = await selectCurrentChunks(lessonId, ex);
+  const row = ex
+    ? await selectCurrentChunks(lessonId, ex, { forShare: true })
+    : await selectCurrentChunks(lessonId);
   return {
     chunks: row?.chunks ?? fallback,
     version: row?.version ?? null,
@@ -432,7 +435,12 @@ async function storedResult(
     selectMastery(userId, lessonId),
   ]);
   const counts = masteryCounts(current.chunks, rows);
-  const finished = row.finishedReason ?? null;
+  // Answers are recorded in order and none follow the finish, so the last
+  // one is the answer that finished the attempt. Only it reports the finish:
+  // a replay (or a lost race) of an earlier answer did not end anything.
+  const finishedBy = parseAnswers(row).at(-1)?.questionId;
+  const finished =
+    finishedBy === evaluation.questionId ? (row.finishedReason ?? null) : null;
   return {
     ok: true,
     evaluation: {

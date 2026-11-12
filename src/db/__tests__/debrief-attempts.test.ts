@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { SQL } from 'drizzle-orm';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
@@ -51,6 +52,7 @@ import {
   insertPass,
   lockAttempt,
   selectAskedQuestions,
+  selectCurrentChunks,
   selectOpenAttempt,
   updateDraft,
   upsertMastery,
@@ -132,6 +134,47 @@ describe('lockAttempt', () => {
     expect(call('for').args).toEqual(['update']);
     expect(whereSql()).toBe('"lesson_test_results"."id" = $1');
     expect(whereParams()).toEqual([4]);
+  });
+});
+
+describe('selectCurrentChunks', () => {
+  it('in the answer transaction, reads the chunk row FOR SHARE so a regeneration cannot commit under it', async () => {
+    const tx = db as never;
+    m.queue.push([]);
+    await selectCurrentChunks(41, tx, { forShare: true });
+    expect(call('for').args).toEqual(['share']);
+    expect(whereSql()).toBe('"lesson_knowledge_chunks"."lesson_id" = $1');
+  });
+
+  it('outside a transaction it takes no lock', async () => {
+    m.queue.push([]);
+    await selectCurrentChunks(41);
+    expect(call('for')).toBeUndefined();
+  });
+
+  it('renders the locking clause in the SQL itself', async () => {
+    // A real query builder (no connection): capture what is built, then let
+    // the await fail, since nothing can execute it.
+    // drizzle's select methods (`where`, `limit`, `for`) build in place and
+    // return the same query, so the one `from` returns is the final query.
+    let built: { toSQL: () => { sql: string } } | undefined;
+    const qb = new QueryBuilder();
+    const ex = {
+      select: (fields: Parameters<QueryBuilder['select']>[0]) => {
+        const selecting = qb.select(fields);
+        return {
+          from: (table: Parameters<typeof selecting.from>[0]) => {
+            const query = selecting.from(table);
+            built = query;
+            return query;
+          },
+        };
+      },
+    } as never;
+    await selectCurrentChunks(41, ex, { forShare: true }).catch(() => {});
+    expect(built?.toSQL().sql).toBe(
+      'select "version", "chunks", "previous_mapping" from "lesson_knowledge_chunks" where "lesson_knowledge_chunks"."lesson_id" = $1 limit $2 for share',
+    );
   });
 });
 
