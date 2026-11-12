@@ -3,11 +3,12 @@ import type { FinishedDebrief } from '#/components/lesson-material/compute-debri
 
 /**
  * The debrief attempt finished while the pilot has been on its lesson: what
- * its score report shows. Set the moment the last answer is graded, so the
- * report survives the status moving on to retake-waiting or passed. Cleared
- * when the pilot leaves the lesson (LessonMaterialWrapper), so a later visit
- * during the wait shows the countdown alone; and when the debrief reopens
- * while the page stays open (`isStaleFinishedDebrief`).
+ * its score report shows. Set the moment the last answer is graded, it only
+ * bridges the moment before the status refetch lands — a retake-waiting
+ * status then carries the same report from the server (mastery and revisit
+ * notes), which is what a reload or a later visit shows. Cleared when the
+ * pilot leaves the lesson (LessonMaterialWrapper), and when the debrief
+ * reopens while the page stays open (`isStaleFinishedDebrief`).
  */
 export const justFinishedDebriefAtom = atom<FinishedDebrief | null>(null);
 
