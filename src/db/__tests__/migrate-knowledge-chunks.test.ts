@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('#/db', () => ({ db: {} }));
 
+import { getTableConfig } from 'drizzle-orm/pg-core';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import { KNOWLEDGE_CHUNKS_STATEMENTS } from '../migrate-knowledge-chunks';
+import { lessonTestResultsTable } from '../schema';
 
 const sqls = () =>
   KNOWLEDGE_CHUNKS_STATEMENTS.map((s) => new PgDialect().sqlToQuery(s).sql);
@@ -51,12 +54,23 @@ describe('migrate-knowledge-chunks', () => {
       /lesson_test_results_one_open_attempt_idx/i.test(s),
     );
     expect(all[idx]).toBe(
-      `create unique index if not exists "lesson_test_results_one_open_attempt_idx" on "lesson_test_results" ("user_id","lesson_slug") where "completed_at" is null and "format" = 'knowledge-chunks-v1'`,
+      `create unique index if not exists "lesson_test_results_one_open_attempt_idx" on "lesson_test_results" ("user_id","lesson_slug") where "completed_at" is null and "format" = '${DEBRIEF_ATTEMPT_FORMAT}'`,
     );
     const formatCol = all.findIndex((s) =>
       /add column if not exists "format"/i.test(s),
     );
     expect(idx).toBeGreaterThan(formatCol);
+  });
+
+  it('the schema mirrors the same predicate, with the same format constant', () => {
+    const idx = getTableConfig(lessonTestResultsTable).indexes.find(
+      (i) => i.config.name === 'lesson_test_results_one_open_attempt_idx',
+    );
+    expect(idx?.config.unique).toBe(true);
+    const where = idx?.config.where;
+    expect(where && new PgDialect().sqlToQuery(where).sql).toBe(
+      `"lesson_test_results"."completed_at" is null and "lesson_test_results"."format" = '${DEBRIEF_ATTEMPT_FORMAT}'`,
+    );
   });
 
   it('backfills legacy passes from completed attempts scoring >= 75, idempotently', () => {

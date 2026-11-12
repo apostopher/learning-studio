@@ -4,6 +4,7 @@ import { auth } from '#/lib/auth';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
 import { startOrResumeAttempt } from '#/lib/debrief-attempt.server';
 import { debriefNotOpen } from '#/lib/debrief-not-open';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 /**
  * `courseSlug` because a lesson can be placed in several courses, each with
@@ -65,7 +66,12 @@ export async function startDebriefHandler(request: Request): Promise<Response> {
       lessonSlug,
     });
     if (!result.ok) {
-      if (result.reason === 'passed') return debriefNotOpen({ kind: 'passed' });
+      if (result.reason === 'passed') {
+        // The pass was just recorded (carry-over had cleared every chunk), so
+        // course progress and promotion move now, as on any other pass.
+        const promotion = await settleProgress({ userId, courseSlug });
+        return Response.json({ error: 'not-open', promotion }, { status: 409 });
+      }
       // Not a 500: nothing is broken. The lesson has nothing to build a
       // debrief from, and the UI does not offer one.
       return Response.json(

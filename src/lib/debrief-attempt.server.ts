@@ -458,18 +458,32 @@ async function storedResult(
   };
 }
 
+export type DraftOutcome = 'saved' | 'forbidden' | 'wrong-question';
+
 /**
  * Save the answer being typed, so a closed tab loses nothing. Only on the
- * pilot's own unfinished attempt; false when that guard matched nothing.
+ * pilot's own unfinished attempt (`forbidden` otherwise), and only for its
+ * current question — the first unanswered one (`wrong-question` otherwise),
+ * since that is the only draft a resume restores. The write itself is
+ * guarded again, so an attempt finished in between is still `forbidden`.
  */
 export async function saveDraft(d: {
   userId: string;
   attemptId: number;
   questionId: string;
   text: string;
-}): Promise<boolean> {
-  return updateDraft(d.userId, d.attemptId, {
+}): Promise<DraftOutcome> {
+  const row = await selectAttempt(d.attemptId);
+  if (!row || !isChunkAttempt(row, d.userId) || row.completedAt !== null) {
+    return 'forbidden';
+  }
+  const answered = new Set(parseAnswers(row).map((e) => e.questionId));
+  const current = parseStored(row).questions.find((q) => !answered.has(q.id));
+  if (current?.id !== d.questionId) return 'wrong-question';
+
+  const saved = await updateDraft(d.userId, d.attemptId, {
     questionId: d.questionId,
     text: d.text.slice(0, DEBRIEF_ANSWER_MAX_CHARS),
   });
+  return saved ? 'saved' : 'forbidden';
 }

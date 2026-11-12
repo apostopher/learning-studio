@@ -73,7 +73,7 @@ beforeEach(() => {
     mastery: { cleared: 1, total: 2, percent: 50 },
     finished: null,
   });
-  m.saveDraft.mockResolvedValue(true);
+  m.saveDraft.mockResolvedValue('saved');
   m.settleProgress.mockResolvedValue({ level: 'advanced' });
 });
 
@@ -144,11 +144,23 @@ describe('start', () => {
     expect((await start()).status).toBe(422);
   });
 
-  it('409s as passed when every chunk turned out to be cleared already', async () => {
+  it('a pass recorded at start (every chunk already cleared) settles progress and returns the promotion', async () => {
     m.startOrResumeAttempt.mockResolvedValue({ ok: false, reason: 'passed' });
     const res = await start();
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
     expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: 'not-open' });
+    expect(await res.json()).toEqual({
+      error: 'not-open',
+      promotion: { level: 'advanced' },
+    });
+  });
+
+  it('does not settle on an ordinary start', async () => {
+    await start();
+    expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
   it('401s without a session, 400s without a courseSlug, 500s on a failure', async () => {
@@ -277,9 +289,14 @@ describe('draft', () => {
     expect(res.status).toBe(204);
   });
 
-  it('403s a finished or someone else’s attempt (the guarded write matched nothing)', async () => {
-    m.saveDraft.mockResolvedValue(false);
+  it('403s a finished or someone else’s attempt', async () => {
+    m.saveDraft.mockResolvedValue('forbidden');
     expect((await save()).status).toBe(403);
+  });
+
+  it('400s a draft for a question that is not the current one', async () => {
+    m.saveDraft.mockResolvedValue('wrong-question');
+    expect((await save()).status).toBe(400);
   });
 
   it('accepts an empty draft (the pilot cleared the box)', async () => {

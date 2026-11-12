@@ -3,9 +3,12 @@ import { AITestGenerationQuestionSchema } from '#/ai/schemas';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 
 /**
- * `lesson_test_results.format` of a chunk-based, server-graded attempt.
- * Legacy rows (client-graded essay sets) have null. Also a literal in the
- * one-open-attempt partial index (schema.ts, migrate-knowledge-chunks.ts).
+ * The ONE debrief format tag. It is:
+ * - `lesson_test_results.format` of a chunk-based, server-graded attempt
+ *   (legacy client-graded rows have null);
+ * - the literal in the one-open-attempt partial index (schema.ts and
+ *   migrate-knowledge-chunks.ts render it from here);
+ * - part of every prepared test's fingerprint, so a bump retires them all.
  */
 export const DEBRIEF_ATTEMPT_FORMAT = 'knowledge-chunks-v1';
 

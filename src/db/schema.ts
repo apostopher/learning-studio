@@ -20,6 +20,7 @@ import {
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import type { AnswerMetrics } from '#/lib/answer-metrics';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import {
   AddressSchema,
@@ -2378,13 +2379,13 @@ export const lessonTestResultsTable = pgTable(
       table.completedAt,
     ),
     // At most one OPEN chunk-format attempt per pilot and lesson, so two tabs
-    // starting at once cannot both get one. The format is a literal: an index
-    // predicate cannot take a bound parameter. Keep in step with
-    // migrate-knowledge-chunks.ts and DEBRIEF_ATTEMPT_FORMAT.
+    // starting at once cannot both get one. The format is inlined as a
+    // literal (an index predicate cannot take a bound parameter), rendered
+    // from DEBRIEF_ATTEMPT_FORMAT like migrate-knowledge-chunks.ts.
     uniqueIndex('lesson_test_results_one_open_attempt_idx')
       .on(table.userId, table.lessonSlug)
       .where(
-        sql`${table.completedAt} is null and ${table.format} = 'knowledge-chunks-v1'`,
+        sql`${table.completedAt} is null and ${table.format} = ${sql.raw(`'${DEBRIEF_ATTEMPT_FORMAT}'`)}`,
       ),
   ],
 );

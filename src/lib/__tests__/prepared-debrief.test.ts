@@ -54,6 +54,7 @@ vi.mock('#/db/debrief-attempts', () => ({
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 
 import { deletePreparedDebrief } from '#/db/prepared-debriefs';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import {
   discardPreparedDebrief,
   prepareDebrief,
@@ -109,11 +110,15 @@ beforeEach(() => {
 });
 
 describe('preparedFingerprint', () => {
+  it('stamps the ONE shared format constant', () => {
+    expect(DEBRIEF_ATTEMPT_FORMAT).toBe('knowledge-chunks-v1');
+  });
+
   it('is sha256 of the format, the chunk version and the SORTED focus ids', () => {
     expect(preparedFingerprint(2, focus)).toBe(
       sha256(
         JSON.stringify([
-          'knowledge-chunks-v1',
+          DEBRIEF_ATTEMPT_FORMAT,
           2,
           ['v2-c2', 'v2-c3'],
           ['v2-c1'],

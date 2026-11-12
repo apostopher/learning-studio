@@ -13,6 +13,7 @@ import {
   upsertPreparedDebrief,
 } from '#/db/prepared-debriefs';
 import { redis } from '#/integrations/upstash/redis';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import {
   isAllCleared,
   masteryOf,
@@ -44,17 +45,8 @@ function claimKey({
 }
 
 /**
- * The shape of debrief `generateTest` builds. Part of the fingerprint, so a
- * change of shape retires every test prepared in the old one. Bump it with
- * any change a prepared test must not outlive.
- *
- * knowledge-chunks-v1 (2026-11-12): one chunk-tagged written question per
- * hole plus spaced review, replacing the two essay sets.
- */
-const DEBRIEF_FORMAT = 'knowledge-chunks-v1';
-
-/**
- * sha256 hex of the debrief format, the lesson's chunk version and the
+ * sha256 hex of the debrief format (`DEBRIEF_ATTEMPT_FORMAT` — bump it with
+ * any change a prepared test or open attempt must not outlive), the lesson's chunk version and the
  * attempt focus (sorted, so order never matters). A prepared test is served
  * only when all three still match: the chunks were not regenerated since (a
  * source change bumps the version) and the pilot's holes and review are the
@@ -67,7 +59,7 @@ export function preparedFingerprint(
   return createHash('sha256')
     .update(
       JSON.stringify([
-        DEBRIEF_FORMAT,
+        DEBRIEF_ATTEMPT_FORMAT,
         chunkVersion,
         [...focus.holes].sort(),
         [...focus.review].sort(),

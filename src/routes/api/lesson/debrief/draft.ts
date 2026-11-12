@@ -14,7 +14,8 @@ const DraftInputSchema = z.object({
 /**
  * Autosave the answer being typed (debounced by the client), so a closed tab
  * or dropped connection loses nothing. 204 on success; 403 when the attempt
- * is not the session pilot's own unfinished one.
+ * is not the session pilot's own unfinished one; 400 when the question is
+ * not the attempt's current (first unanswered) one.
  */
 export async function saveDraftHandler(request: Request): Promise<Response> {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -32,8 +33,17 @@ export async function saveDraftHandler(request: Request): Promise<Response> {
   }
 
   try {
-    const saved = await saveDraft({ userId: session.user.id, ...parsed.data });
-    return saved
+    const outcome = await saveDraft({
+      userId: session.user.id,
+      ...parsed.data,
+    });
+    if (outcome === 'wrong-question') {
+      return Response.json(
+        { error: 'A draft is only kept for the current question' },
+        { status: 400 },
+      );
+    }
+    return outcome === 'saved'
       ? new Response(null, { status: 204 })
       : new Response('Forbidden', { status: 403 });
   } catch (error) {

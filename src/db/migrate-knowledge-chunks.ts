@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '#/db';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 
 /**
  * Adds the tables behind chunk-based debriefs: `lesson_knowledge_chunks`
@@ -52,7 +53,8 @@ export const KNOWLEDGE_CHUNKS_STATEMENTS = [
   sql`alter table "lesson_test_results" add column if not exists "finished_reason" text`,
   // One open chunk-format attempt per pilot and lesson (concurrent starts).
   // Every row is legacy (format null) when this first runs, so it cannot fail.
-  sql`create unique index if not exists "lesson_test_results_one_open_attempt_idx" on "lesson_test_results" ("user_id","lesson_slug") where "completed_at" is null and "format" = 'knowledge-chunks-v1'`,
+  // The format is inlined, never bound: an index predicate takes no parameters.
+  sql`create unique index if not exists "lesson_test_results_one_open_attempt_idx" on "lesson_test_results" ("user_id","lesson_slug") where "completed_at" is null and "format" = ${sql.raw(`'${DEBRIEF_ATTEMPT_FORMAT}'`)}`,
   sql`create table if not exists "debrief_answer_logs" (
     "id" integer generated always as identity primary key,
     "attempt_id" integer not null references "lesson_test_results"("id") on delete cascade,

@@ -524,31 +524,50 @@ describe('answerQuestion', () => {
 });
 
 describe('saveDraft', () => {
-  it('writes the draft through the owner-and-unfinished guard, capped at 10,000 characters', async () => {
+  const draft = (questionId: string, text = 'half') =>
+    saveDraft({ userId: 'u1', attemptId: 5, questionId, text });
+
+  it('writes the draft for the current question, capped at 10,000 characters', async () => {
     m.updateDraft.mockResolvedValue(true);
-    expect(
-      await saveDraft({
-        userId: 'u1',
-        attemptId: 5,
-        questionId: 'q1',
-        text: 'x'.repeat(12_000),
-      }),
-    ).toBe(true);
+    expect(await draft('q1', 'x'.repeat(12_000))).toBe('saved');
     expect(m.updateDraft).toHaveBeenCalledWith('u1', 5, {
       questionId: 'q1',
       text: 'x'.repeat(10_000),
     });
   });
 
-  it('false when the guard matched nothing', async () => {
+  it('the current question is the first unanswered one', async () => {
+    m.row = attemptRow({ answers: [evaluation('q1', { 'v1-c2': 40 })] });
+    m.updateDraft.mockResolvedValue(true);
+    expect(await draft('q2')).toBe('saved');
+  });
+
+  it.each([
+    ['a later question', 'q2'],
+    ['a question not in the attempt', 'q9'],
+  ])('refuses %s without writing', async (_why, questionId) => {
+    expect(await draft(questionId)).toBe('wrong-question');
+    expect(m.updateDraft).not.toHaveBeenCalled();
+  });
+
+  it('refuses a question already answered', async () => {
+    m.row = attemptRow({ answers: [evaluation('q1', { 'v1-c2': 40 })] });
+    expect(await draft('q1')).toBe('wrong-question');
+    expect(m.updateDraft).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['another pilot’s attempt', { userId: 'u2' }],
+    ['a finished attempt', { completedAt: new Date() }],
+    ['a legacy attempt', { format: null }],
+  ])('forbids %s', async (_why, over) => {
+    m.row = attemptRow(over);
+    expect(await draft('q1')).toBe('forbidden');
+    expect(m.updateDraft).not.toHaveBeenCalled();
+  });
+
+  it('forbidden when the guarded write matched nothing (finished meanwhile)', async () => {
     m.updateDraft.mockResolvedValue(false);
-    expect(
-      await saveDraft({
-        userId: 'u1',
-        attemptId: 5,
-        questionId: 'q1',
-        text: 'x',
-      }),
-    ).toBe(false);
+    expect(await draft('q1')).toBe('forbidden');
   });
 });

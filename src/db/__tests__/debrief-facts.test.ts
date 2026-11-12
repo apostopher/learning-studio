@@ -43,6 +43,7 @@ import {
   getDebriefAttemptReports,
   getDebriefAttempts,
   getDebriefFacts,
+  getTestResults,
 } from '#/db/lesson-test';
 import { videoWatchedAtSql } from '#/db/progress-components';
 import { lessonsTable } from '#/db/schema';
@@ -252,5 +253,74 @@ describe('getDebriefAttemptReports', () => {
       [3, true],
       [4, false],
     ]);
+  });
+});
+
+/** A finished chunk-format row as stored: the full grading snapshot. */
+const chunkRow = {
+  id: 9,
+  userId: 'u1',
+  lessonSlug: 'l1',
+  totalScore: 50,
+  completedAt: at('2026-11-01T00:00:00.000Z'),
+  createdAt: at('2026-11-01T00:00:00.000Z'),
+  format: 'knowledge-chunks-v1',
+  chunkVersion: 1,
+  draft: null,
+  finishedReason: 'all-answered',
+  questions: {
+    lessonSlug: 'l1',
+    questions: [
+      {
+        id: 'q1',
+        type: 'free-text',
+        question: 'Why?',
+        expectedAnswer: 'RUBRIC',
+        chunkIds: ['v1-c1'],
+      },
+    ],
+    chunks: [{ id: 'v1-c1', title: 'AoA', summary: 'SUMMARY' }],
+    context: 'TRANSCRIPT',
+  },
+  answers: [
+    {
+      questionId: 'q1',
+      type: 'free-text',
+      score: 50,
+      userAnswer: 'mine',
+      explanation: 'note',
+      chunkScores: { 'v1-c1': 50 },
+      revisitNote: 'note',
+    },
+  ],
+};
+const leaks = (v: unknown) =>
+  [
+    'expectedAnswer',
+    'RUBRIC',
+    'chunkIds',
+    'SUMMARY',
+    'TRANSCRIPT',
+    'context',
+  ].filter((s) => JSON.stringify(v).includes(s));
+
+describe('rows the client can receive never carry the grading key', () => {
+  it('getTestResults (the results route) projects every row', async () => {
+    m.queue.push([chunkRow]);
+    const rows = await getTestResults('u1', 'l1');
+    expect(leaks(rows)).toEqual([]);
+    expect(rows[0]).toMatchObject({
+      id: 9,
+      totalScore: 50,
+      questions: [{ id: 'q1', question: 'Why?' }],
+      evaluations: [{ questionId: 'q1', score: 50, revisitNote: 'note' }],
+    });
+  });
+
+  it('getDebriefAttemptReports (the passed branch of debrief-status) projects every row', async () => {
+    m.queue.push([chunkRow]);
+    const reports = await getDebriefAttemptReports('u1', 'l1');
+    expect(leaks(reports)).toEqual([]);
+    expect(reports[0].questions).toEqual([{ id: 'q1', question: 'Why?' }]);
   });
 });

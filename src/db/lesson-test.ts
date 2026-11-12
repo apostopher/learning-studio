@@ -1,13 +1,11 @@
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import {
-  type AIEvaluationResult,
-  AIEvaluationResultSchema,
-  type AITestQuestion,
-  AITestSchema,
-} from '#/ai/schemas';
 import { db } from '#/db';
 import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  type ClientAttemptQuestion,
+  type ClientEvaluation,
+  toClientAttempt,
+} from '#/lib/client-debrief-attempt';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { type DebriefFacts, debriefClockStart } from '#/lib/debrief-schedule';
@@ -20,13 +18,29 @@ import {
   lessonTestResultsTable,
 } from './schema';
 
+export type ClientTestResult = {
+  id: number;
+  lessonSlug: string;
+  totalScore: number | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  format: string | null;
+  finishedReason: 'all-answered' | 'all-cleared' | null;
+  questions: ClientAttemptQuestion[];
+  evaluations: ClientEvaluation[];
+};
+
 /**
- * This pilot's FINISHED attempts on a lesson, newest first. Never an open
- * one: an open chunk-format attempt stores its expected answers, chunks and
- * context for grading, and the pilot must not be able to read them mid-attempt.
+ * This pilot's FINISHED attempts on a lesson, newest first, for the results
+ * route. Never an open one, and every row goes through `toClientAttempt`: a
+ * chunk-format row stores its grading key (expected answers, chunk tags and
+ * summaries, context), which must never reach the pilot.
  */
-export async function getTestResults(userId: string, lessonSlug: string) {
-  return db
+export async function getTestResults(
+  userId: string,
+  lessonSlug: string,
+): Promise<ClientTestResult[]> {
+  const rows = await db
     .select()
     .from(lessonTestResultsTable)
     .where(
@@ -37,6 +51,16 @@ export async function getTestResults(userId: string, lessonSlug: string) {
       ),
     )
     .orderBy(desc(lessonTestResultsTable.createdAt));
+  return rows.map((row) => ({
+    id: row.id,
+    lessonSlug: row.lessonSlug,
+    totalScore: row.totalScore,
+    completedAt: row.completedAt,
+    createdAt: row.createdAt,
+    format: row.format,
+    finishedReason: row.finishedReason,
+    ...toClientAttempt(row),
+  }));
 }
 
 export type DebriefAttempt = {
@@ -97,9 +121,9 @@ export async function getDebriefAttempts(
 
 export type DebriefAttemptReport = DebriefAttempt & {
   /** The questions asked, as saved. Empty if the stored JSON is unreadable. */
-  questions: AITestQuestion[];
-  /** The pilot's answers and their evaluations. Empty if unreadable. */
-  evaluations: AIEvaluationResult[];
+  questions: ClientAttemptQuestion[];
+  /** The pilot's answers and their grades. Empty if unreadable. */
+  evaluations: ClientEvaluation[];
   /** Whether THIS attempt passed — see `attemptPassed`. */
   passed: boolean;
 };
@@ -115,17 +139,15 @@ const LEGACY_PASS_SCORE = 75;
  * score alone cannot say so, since an attempt that finished with a hole left
  * scores its mastery percent (6 of 7 = 86). A legacy attempt passed at 75.
  */
-function attemptPassed(row: {
-  format: string | null;
-  finishedReason: string | null;
-  totalScore: number;
-}): boolean {
-  return row.format === null
-    ? row.totalScore >= LEGACY_PASS_SCORE
-    : row.finishedReason === 'all-cleared';
+function attemptPassed(
+  format: string | null,
+  finishedReason: string | null,
+  totalScore: number,
+): boolean {
+  return format === null
+    ? totalScore >= LEGACY_PASS_SCORE
+    : finishedReason === 'all-cleared';
 }
-
-const storedEvaluationsSchema = z.array(AIEvaluationResultSchema);
 
 /**
  * Finished attempts WITH the data a score report renders — only for a pilot
@@ -168,16 +190,14 @@ export async function getDebriefAttemptReports(
 
   return rows.flatMap((row) => {
     if (row.completedAt === null || row.totalScore === null) return [];
-    const test = AITestSchema.safeParse(row.questions);
-    const evaluations = storedEvaluationsSchema.safeParse(row.answers);
     return [
       {
         id: row.id,
         totalScore: row.totalScore,
         completedAt: row.completedAt.toISOString(),
-        questions: test.success ? test.data.questions : [],
-        evaluations: evaluations.success ? evaluations.data : [],
-        passed: attemptPassed({ ...row, totalScore: row.totalScore }),
+        // Projected: the stored JSON holds the grading key.
+        ...toClientAttempt(row),
+        passed: attemptPassed(row.format, row.finishedReason, row.totalScore),
       },
     ];
   });
