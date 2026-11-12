@@ -32,20 +32,7 @@ export type MilestoneTickInput = {
   duration: number;
   /** `useVideoProgress(lessonSlug).data?.milestonesHit` — undefined until the seed lands. */
   milestonesHit: number[] | undefined;
-  /**
-   * `useVideoProgress(lessonSlug).data?.rewatch`: a below-par debrief is owed
-   * a rewatch, and these are the milestones reached since it. While present
-   * the reporter seeds from THEM, so the rewatch is reported milestone by
-   * milestone even though every one was reached before.
-   */
-  rewatch?: { since: string; milestonesHit: number[] } | null;
 };
-
-/** What the reporter is seeded for: the lesson, and the rewatch if one is owed. */
-const seedKeyOf = (input: MilestoneTickInput) =>
-  input.rewatch
-    ? `${input.lessonSlug}@${input.rewatch.since}`
-    : input.lessonSlug;
 
 export type MilestoneTickResult = {
   state: MilestoneReporterState;
@@ -107,14 +94,15 @@ export function computeMilestoneTick(
   // `data` is undefined across a query-key change until the NEW key
   // resolves. Do not add either option to that hook — it would make stale
   // seeding here possible.
-  // A rewatch owed (or a new one, after another failure) re-seeds the same
-  // lesson from the rewatch's own milestones, and earns its own reconcile.
-  const seedKey = seedKeyOf(input);
-  if (input.lessonSlug && input.milestonesHit && state.seededFor !== seedKey) {
+  if (
+    input.lessonSlug &&
+    input.milestonesHit &&
+    state.seededFor !== input.lessonSlug
+  ) {
     state = {
       ...state,
-      reported: new Set(input.rewatch?.milestonesHit ?? input.milestonesHit),
-      seededFor: seedKey,
+      reported: new Set(input.milestonesHit),
+      seededFor: input.lessonSlug,
       reconciled: false,
     };
   }
@@ -135,7 +123,7 @@ export function computeMilestoneTick(
     // worst one tick is treated as a spurious seek and deferred, not lost.
     return noop;
   }
-  if (state.seededFor !== seedKey) return noop;
+  if (state.seededFor !== input.lessonSlug) return noop;
 
   const prevTime = state.lastTime;
   const advance = input.currentTime - prevTime;

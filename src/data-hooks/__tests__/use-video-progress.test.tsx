@@ -32,11 +32,9 @@ describe('useVideoProgress', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/user/video-progress?lessonSlug=lesson%20a%2Fb',
     );
-    // A server without the rewatch field still parses: nothing is owed.
     expect(result.current.data).toEqual({
       milestonesHit: [10, 15, 20],
       watched: false,
-      rewatch: null,
     });
   });
 

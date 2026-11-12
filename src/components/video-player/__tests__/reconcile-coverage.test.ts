@@ -54,24 +54,3 @@ describe('reconcileCoverage', () => {
     ).resolves.toEqual([]);
   });
 });
-
-describe('reconcileCoverage — rewatch', () => {
-  it('re-reports a rewatch milestone the server missed, though the first watch is complete', async () => {
-    const report = vi.fn();
-    const fetchProgress = vi.fn().mockResolvedValue({
-      milestonesHit: [10, 15, 20],
-      watched: true,
-      rewatch: { since: '2026-11-11T10:00:00.000Z', milestonesHit: [10, 15] },
-    });
-
-    const resent = await reconcileCoverage({
-      lessonSlug: 'v1',
-      reported: new Set([10, 15, 20]),
-      report,
-      fetchProgress,
-    });
-
-    expect(resent).toEqual([20]);
-    expect(report).toHaveBeenCalledWith({ lessonSlug: 'v1', progress: 20 });
-  });
-});

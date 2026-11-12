@@ -2,6 +2,7 @@ import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
 import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
+import { masteryFromCounts } from '#/lib/debrief-mastery';
 import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
   isTrackedLessonSection,
@@ -144,7 +145,7 @@ type DebriefFactRow = {
 };
 
 /** Raw `sql<Date>` columns come back as ISO-ish strings from the driver, Dates elsewhere. */
-function toIso(value: Date | string | null | undefined): string | null {
+export function toIso(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
@@ -155,10 +156,7 @@ export function toDebriefFactFields(row: DebriefFactRow) {
     passed: row.debriefPassed,
     lastFinishedAt: toIso(row.lastFinishedDebriefAt),
     hasOpenAttempt: row.hasOpenDebrief,
-    mastery:
-      row.chunksTotal === null
-        ? null
-        : { cleared: row.chunksCleared, total: row.chunksTotal },
+    mastery: masteryFromCounts(row.chunksCleared, row.chunksTotal),
   };
 }
 

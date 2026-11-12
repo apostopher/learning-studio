@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
 import { computeLessonRing } from '../compute-lesson-ring';
 
 const now = new Date('2026-10-28T09:00:00Z');
@@ -50,7 +51,11 @@ describe('computeLessonRing', () => {
     expect(r.ariaLabel).toBe(
       'Lesson X, 100% complete, debrief reopens Wed 28 Oct, 9:40 AM',
     );
-    expect(r.refreshAt).toBe('2026-10-28T09:40:00.000Z');
+    expect(r.refreshAt).toBe(
+      new Date(
+        Date.parse('2026-10-28T03:40:00Z') + DEBRIEF_RETAKE_DELAY_MS,
+      ).toISOString(),
+    );
   });
 
   it('omits the time (SSR-safe) when includeTime is false', () => {
@@ -60,7 +65,11 @@ describe('computeLessonRing', () => {
       debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
     expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief reopens later');
-    expect(r.refreshAt).toBe('2026-10-28T09:40:00.000Z');
+    expect(r.refreshAt).toBe(
+      new Date(
+        Date.parse('2026-10-28T03:40:00Z') + DEBRIEF_RETAKE_DELAY_MS,
+      ).toISOString(),
+    );
   });
 
   it('shows no badge during the first 12h, says when the debrief opens, and schedules the refresh', () => {

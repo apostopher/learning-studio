@@ -32,6 +32,14 @@ export function applyChunkScore(
   };
 }
 
+/** Stored chunk counts as `DebriefFacts.mastery`: null when no chunks are stored. */
+export function masteryFromCounts(
+  cleared: number,
+  total: number | null,
+): { cleared: number; total: number } | null {
+  return total === null ? null : { cleared, total };
+}
+
 /** Percent of chunks cleared; 100 once passed, 0 with no chunks. */
 export function masteryPercent(m: {
   cleared: number;

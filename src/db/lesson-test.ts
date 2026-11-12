@@ -3,6 +3,7 @@ import { db } from '#/db';
 import {
   debriefFactColumns,
   toDebriefFactFields,
+  toIso,
   videoWatchedAtSql,
 } from '#/db/progress-components';
 import {
@@ -246,6 +247,7 @@ export async function getDebriefFacts(
         videoRef: lessonsTable.videoRef,
       })
       .from(lessonsTable)
+      // The fact fragments key on `lessons.slug`; pin it to the slug asked for.
       .where(
         and(eq(lessonsTable.id, lessonId), eq(lessonsTable.slug, lessonSlug)),
       )
@@ -258,13 +260,11 @@ export async function getDebriefFacts(
   const hasVideo =
     (lesson?.videoProvider ?? null) !== null &&
     (lesson?.videoRef ?? null) !== null;
-  const iso = (v: Date | string | null | undefined) =>
-    v == null ? null : new Date(v).toISOString();
 
   return {
     clockStartAt: debriefClockStart({
       hasVideo,
-      videoWatchedAt: iso(lesson?.videoWatchedAt),
+      videoWatchedAt: toIso(lesson?.videoWatchedAt),
       doneAt: doneAt === null ? null : doneAt.toISOString(),
     }),
     ...toDebriefFactFields(
