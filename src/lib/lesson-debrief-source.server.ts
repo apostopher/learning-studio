@@ -1,6 +1,8 @@
 import { getDerivedKeyPoints } from '#/db/derived-key-points';
 import { getLessonMaterial } from '#/db/lesson';
+import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getLessonTranscript } from '#/db/lesson-transcript';
+import { getHomeCourseIdForLesson } from '#/db/placements';
 
 export type DebriefSource = {
   /**
@@ -9,7 +11,12 @@ export type DebriefSource = {
    */
   kind: 'material' | 'material-derived' | 'transcript';
   keyPoints: string[];
-  text: string;
+  /**
+   * What chunk generation and the debrief questions read alongside the key
+   * points: the home-course transcript when there is one, else the material
+   * text.
+   */
+  context: string;
 };
 
 /**
@@ -42,27 +49,30 @@ export async function resolveDebriefSource(
 ): Promise<DebriefSource | null> {
   const material = await getLessonMaterial(lessonSlug);
 
+  // Chunks are per lesson, not per course, so the transcript comes from the
+  // lesson's home course (see `getHomeCourseIdForLesson`), falling back to the
+  // course being served when the lesson is unplaced.
+  const lessonId = await getLessonIdBySlug(lessonSlug);
+  const homeCourseId =
+    (lessonId === null ? null : await getHomeCourseIdForLesson(lessonId)) ??
+    courseId;
+  const transcript = await getLessonTranscript(lessonSlug, {
+    courseId: homeCourseId,
+  });
+
   if (material?.text) {
+    const context = transcript ?? material.text;
     if (material.keyPoints?.length) {
-      return {
-        kind: 'material',
-        keyPoints: material.keyPoints,
-        text: material.text,
-      };
+      return { kind: 'material', keyPoints: material.keyPoints, context };
     }
     const derived = await getDerivedKeyPoints(material.text);
     if (derived.length > 0) {
-      return {
-        kind: 'material-derived',
-        keyPoints: derived,
-        text: material.text,
-      };
+      return { kind: 'material-derived', keyPoints: derived, context };
     }
   }
 
-  const transcript = await getLessonTranscript(lessonSlug, { courseId });
   if (!transcript) return null;
   const keyPoints = await getDerivedKeyPoints(transcript);
   if (keyPoints.length === 0) return null;
-  return { kind: 'transcript', keyPoints, text: transcript };
+  return { kind: 'transcript', keyPoints, context: transcript };
 }

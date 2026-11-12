@@ -1,12 +1,21 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getLessonMaterial, getLessonTranscript, getDerivedKeyPoints } =
-  vi.hoisted(() => ({
-    getLessonMaterial: vi.fn(),
-    getLessonTranscript: vi.fn(),
-    getDerivedKeyPoints: vi.fn(),
-  }));
+const {
+  getLessonMaterial,
+  getLessonTranscript,
+  getDerivedKeyPoints,
+  getLessonIdBySlug,
+  getHomeCourseIdForLesson,
+} = vi.hoisted(() => ({
+  getLessonMaterial: vi.fn(),
+  getLessonTranscript: vi.fn(),
+  getDerivedKeyPoints: vi.fn(),
+  getLessonIdBySlug: vi.fn(),
+  getHomeCourseIdForLesson: vi.fn(),
+}));
+vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
+vi.mock('#/db/placements', () => ({ getHomeCourseIdForLesson }));
 
 vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
 vi.mock('#/db/lesson-transcript', () => ({ getLessonTranscript }));
@@ -20,6 +29,8 @@ describe('resolveDebriefSource', () => {
     getLessonMaterial.mockResolvedValue(null);
     getLessonTranscript.mockResolvedValue(null);
     getDerivedKeyPoints.mockResolvedValue(['derived one', 'derived two']);
+    getLessonIdBySlug.mockResolvedValue(42);
+    getHomeCourseIdForLesson.mockResolvedValue(null);
   });
 
   it('uses the authored material verbatim when it has key points and text', async () => {
@@ -31,12 +42,10 @@ describe('resolveDebriefSource', () => {
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material',
       keyPoints: ['authored'],
-      text: 'lesson body',
+      context: 'lesson body',
     });
-    // The authored lesson wins outright: no derivation, and the transcript is
-    // never even looked up.
+    // The authored lesson wins outright for the key points: no derivation.
     expect(getDerivedKeyPoints).not.toHaveBeenCalled();
-    expect(getLessonTranscript).not.toHaveBeenCalled();
   });
 
   it('derives key points from the material text when none were authored', async () => {
@@ -45,12 +54,11 @@ describe('resolveDebriefSource', () => {
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material-derived',
       keyPoints: ['derived one', 'derived two'],
-      text: 'lesson body',
+      context: 'lesson body',
     });
     // Derived FROM the material, not from the video — the authored lesson is
-    // still the source whenever there is one.
+    // still the source of the key points whenever there is one.
     expect(getDerivedKeyPoints).toHaveBeenCalledWith('lesson body');
-    expect(getLessonTranscript).not.toHaveBeenCalled();
   });
 
   it('falls back to the video transcript when the lesson has no material', async () => {
@@ -59,7 +67,7 @@ describe('resolveDebriefSource', () => {
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'transcript',
       keyPoints: ['derived one', 'derived two'],
-      text: 'spoken words from the video',
+      context: 'spoken words from the video',
     });
     expect(getDerivedKeyPoints).toHaveBeenCalledWith(
       'spoken words from the video',
@@ -88,5 +96,43 @@ describe('resolveDebriefSource', () => {
     // generateTest asks for `keyPoints.length * 2` questions, so an empty list
     // would generate a debrief of zero questions rather than fail.
     await expect(resolveDebriefSource('l-1', 7)).resolves.toBeNull();
+  });
+
+  it('uses the home-course transcript as context when the lesson has material', async () => {
+    getLessonMaterial.mockResolvedValue({
+      text: 'lesson body',
+      keyPoints: ['authored'],
+    });
+    getHomeCourseIdForLesson.mockResolvedValue(3);
+    getLessonTranscript.mockResolvedValue('the transcript');
+
+    const source = await resolveDebriefSource('l-1', 7);
+
+    expect(source).toEqual({
+      kind: 'material',
+      keyPoints: ['authored'],
+      context: 'the transcript',
+    });
+    // Home course (3), not the course being served (7).
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 3 });
+  });
+
+  it('uses the material text as context when there is no transcript', async () => {
+    getLessonMaterial.mockResolvedValue({
+      text: 'lesson body',
+      keyPoints: ['authored'],
+    });
+    getLessonTranscript.mockResolvedValue(null);
+
+    const source = await resolveDebriefSource('l-1', 7);
+    expect(source?.context).toBe('lesson body');
+  });
+
+  it('falls back to the passed courseId when the lesson has no home course', async () => {
+    getLessonMaterial.mockResolvedValue({ text: 'b', keyPoints: ['a'] });
+    getLessonTranscript.mockResolvedValue('t');
+
+    await resolveDebriefSource('l-1', 7);
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
   });
 });

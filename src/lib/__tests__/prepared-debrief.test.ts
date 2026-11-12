@@ -85,7 +85,7 @@ beforeEach(() => {
   m.resolveDebriefSource.mockResolvedValue({
     kind: 'material',
     keyPoints: ['k'],
-    text: 'body',
+    context: 'body',
   });
   m.generateTest.mockResolvedValue(test);
 });

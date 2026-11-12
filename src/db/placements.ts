@@ -89,6 +89,29 @@ export async function getCourseIdsForLesson(
 }
 
 /**
+ * The course a lesson "lives in" for things that must pick exactly one — the
+ * debrief's knowledge chunks are generated once per lesson, not per course.
+ *
+ * The repo has no single clear notion (placement is membership; see above), so
+ * the rule is: the course that OWNS one of the lesson's modules
+ * (`modules.course_id` via `module_lessons`), lowest course id first. Null when
+ * the lesson is unplaced; callers fall back to the course being served. Owner,
+ * not membership, so a remix borrowing the module never becomes its "home".
+ */
+export async function getHomeCourseIdForLesson(
+  lessonId: number,
+): Promise<number | null> {
+  const rows = await db
+    .select({ courseId: modulesTable.courseId })
+    .from(moduleLessonsTable)
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .where(eq(moduleLessonsTable.lessonId, lessonId))
+    .orderBy(modulesTable.courseId)
+    .limit(1);
+  return rows[0]?.courseId ?? null;
+}
+
+/**
  * The module holding a lesson's placement in ONE course, or null when the
  * course does not teach it.
  *

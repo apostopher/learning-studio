@@ -91,7 +91,7 @@ export async function evaluateAnswerHandler(
       question as AITestFreeTextQuestion,
       userAnswer,
       source.keyPoints,
-      source.text,
+      source.context,
     );
     return Response.json(result);
   } catch (error) {

@@ -88,11 +88,15 @@ export async function generateTestHandler(request: Request): Promise<Response> {
     // source as it is NOW — material or captions edited since are a miss.
     const prepared = await takePreparedDebrief(
       key,
-      sourceFingerprint(source.text),
+      sourceFingerprint(source.context),
     );
     if (prepared) return Response.json(prepared);
 
-    const test = await generateTest(lessonSlug, source.keyPoints, source.text);
+    const test = await generateTest(
+      lessonSlug,
+      source.keyPoints,
+      source.context,
+    );
     return Response.json(test);
   } catch (error) {
     console.error('Failed to generate test:', error);

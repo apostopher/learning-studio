@@ -88,14 +88,14 @@ export async function prepareDebrief(
       await discardPreparedDebrief(k);
       return 'no-source';
     }
-    const fingerprint = sourceFingerprint(source.text);
+    const fingerprint = sourceFingerprint(source.context);
     if ((await selectPreparedFingerprint(k)) === fingerprint) {
       return 'already-prepared';
     }
     const test = await generateTest(
       k.lessonSlug,
       source.keyPoints,
-      source.text,
+      source.context,
     );
     await upsertPreparedDebrief(k, test, fingerprint);
     return 'prepared';
