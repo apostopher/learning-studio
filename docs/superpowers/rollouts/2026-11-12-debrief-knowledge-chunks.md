@@ -9,9 +9,9 @@ Lesson debriefs now track each pilot's mastery of AI-generated knowledge chunks 
 1. Run `pnpm db:migrate-knowledge-chunks` against production FIRST.
    - It creates `lesson_knowledge_chunks`, `debrief_chunk_mastery`, `debrief_passes` and `debrief_answer_logs`, plus their unique indexes.
    - It adds nullable columns `format`, `chunk_version`, `draft` and `finished_reason` to `lesson_test_results`, and a partial unique index allowing one open chunk-format attempt per pilot and lesson.
-   - It backfills `debrief_passes` from legacy completed attempts with `total_score >= 75` (one row per pilot and lesson, earliest `completed_at`). `on conflict do nothing`.
+   - It backfills `debrief_passes` from LEGACY completed attempts (`format is null`) with `total_score >= 75` (one row per pilot and lesson, earliest `completed_at`). `on conflict do nothing`.
    - It runs in one transaction and prints a single line: `Knowledge chunk tables are in place and legacy passes backfilled.` It does NOT print a legacy-pass count. To read the count, run this BEFORE migrating (the source count, since `debrief_passes` does not exist yet): `select count(*) from (select 1 from lesson_test_results where completed_at is not null and total_score >= 75 group by user_id, lesson_slug) t;`. Immediately after migrating, and before deploying, `select count(*) from debrief_passes;` should equal it.
-   - The backfill treats every attempt scoring 75 or more as a legacy pass. That is only correct because the migration runs before the new build is deployed, so never run it for the first time after deploying.
+   - Re-running it is safe at any time, before or after deploying. The backfill reads only legacy rows (`format is null`), so a chunk attempt — whose `total_score` is its mastery percent, e.g. 6 of 8 = 75 — never becomes a pass.
    - Run it a second time. It must finish with the same line and change nothing (the count is unchanged).
 2. Deploy.
 3. Spot-check one pilot's lesson ring and Debrief tab (a pilot who passed before should still show passed).
@@ -35,7 +35,15 @@ The new code selects the new tables and columns, so deploying first would error 
 
 ## Rollback
 
-Deploy the previous build. The new tables and columns are additive and ignored by old code. `debrief_passes` rows are kept. Pilots who pass under the new build only get a `debrief_passes` row, which the old build does not read, so after a rollback they appear un-passed on the old build until the new one is redeployed. Their rows are kept.
+Deploy the previous build. The new tables and columns are additive and ignored by old code, and `debrief_passes` rows are kept for a later redeploy.
+
+The old build does NOT ignore chunk attempts, though. Every finished chunk attempt is a `lesson_test_results` row with `completed_at` and a `total_score`: 100 when it cleared every chunk, otherwise the pilot's mastery percent at the finish. The old build reads those rows by score alone, so after a rollback:
+
+- an all-cleared attempt (100) reads as passed;
+- an attempt that finished with holes but a mastery of 75 or more (say 6 of 8) also reads as passed, though the new build never passed it;
+- an attempt below 75 reads as a failed attempt, which puts the pilot in the old build's rewatch-required state for that lesson.
+
+Unfinished chunk attempts (`completed_at` null) are ignored by the old build. A pass granted by carry-over alone (no attempt row) exists only in `debrief_passes`, which the old build does not read, so that pilot appears un-passed until the new build is redeployed.
 
 ## Cost
 

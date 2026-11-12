@@ -82,4 +82,17 @@ describe('migrate-knowledge-chunks', () => {
     expect(backfill).toMatch(/"completed_at" is not null/i);
     expect(backfill).toMatch(/on conflict do nothing/i);
   });
+
+  it('backfills LEGACY rows only, so re-running after deploy never turns a chunk attempt\'s mastery percent into a pass', () => {
+    const all = sqls();
+    const at = all.findIndex((s) => /insert into "debrief_passes"/i.test(s));
+    const backfill = all[at];
+    // A chunk attempt stores its mastery % as total_score (6 of 8 = 75).
+    expect(backfill).toMatch(/and "format" is null/i);
+    // The column it checks exists by then.
+    const formatCol = all.findIndex((s) =>
+      /add column if not exists "format"/i.test(s),
+    );
+    expect(at).toBeGreaterThan(formatCol);
+  });
 });

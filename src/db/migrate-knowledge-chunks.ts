@@ -64,10 +64,13 @@ export const KNOWLEDGE_CHUNKS_STATEMENTS = [
   )`,
   sql`create unique index if not exists "debrief_answer_logs_attempt_question_idx" on "debrief_answer_logs" ("attempt_id","question_id")`,
   // Legacy passes, kept permanent. Must run after debrief_passes exists.
+  // Legacy rows ONLY (`format` is null): a chunk attempt stores its mastery
+  // percent as total_score (6 of 8 = 75), so without this a re-run after
+  // deploy would grant unpassed pilots a permanent pass. Safe to re-run.
   sql`insert into "debrief_passes" ("user_id","lesson_slug","passed_at")
     select "user_id","lesson_slug", min("completed_at")
     from "lesson_test_results"
-    where "completed_at" is not null and "total_score" >= 75
+    where "completed_at" is not null and "total_score" >= 75 and "format" is null
     group by "user_id","lesson_slug"
     on conflict do nothing`,
 ];
