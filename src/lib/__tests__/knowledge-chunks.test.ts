@@ -21,6 +21,11 @@ const m = vi.hoisted(() => ({
   upsertLessonChunks: vi.fn(),
   txCalls: [] as { op: string; arg: unknown }[],
   clearedRows: [] as unknown[],
+  failSelect: false,
+  tx: null as unknown,
+  conflictCfg: null as unknown,
+  commits: 0,
+  rolledBack: [] as unknown[],
 }));
 
 vi.mock('#/integrations/upstash/redis', () => ({
@@ -51,6 +56,7 @@ vi.mock('#/db', () => {
       from: () => ({
         where: async (cond: unknown) => {
           m.txCalls.push({ op: 'select', arg: cond });
+          if (m.failSelect) throw new Error('carry-over failed');
           return m.clearedRows;
         },
       }),
@@ -61,13 +67,29 @@ vi.mock('#/db', () => {
       },
     }),
     insert: () => ({
-      values: async (rows: unknown) => {
-        m.txCalls.push({ op: 'insert', arg: rows });
-      },
+      values: (rows: unknown) => ({
+        onConflictDoUpdate: async (cfg: unknown) => {
+          m.txCalls.push({ op: 'insert', arg: rows });
+          m.conflictCfg = cfg;
+        },
+      }),
     }),
   };
+  m.tx = tx;
   return {
-    db: { transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) },
+    db: {
+      // Mimics rollback: work only counts as committed if the callback resolves.
+      transaction: async (fn: (t: typeof tx) => Promise<void>) => {
+        const before = m.txCalls.length;
+        try {
+          await fn(tx);
+          m.commits++;
+        } catch (e) {
+          m.rolledBack = m.txCalls.splice(before);
+          throw e;
+        }
+      },
+    },
   };
 });
 vi.mock('#/db/knowledge-chunks', async () => {
@@ -106,6 +128,10 @@ beforeEach(() => {
   m.stored = null;
   m.txCalls = [];
   m.clearedRows = [];
+  m.failSelect = false;
+  m.commits = 0;
+  m.rolledBack = [];
+  m.conflictCfg = null;
   m.resolveDebriefSource.mockResolvedValue(source);
   m.generateKnowledgeChunks.mockResolvedValue(gen);
   m.matchKnowledgeChunks.mockResolvedValue({ 'v1-c1': 'v2-c2', 'v1-c2': null });
@@ -184,6 +210,9 @@ describe('ensureLessonChunks', () => {
     expect(arg.version).toBe(2);
     expect(arg.previousMapping).toEqual({ 'v1-c1': 'v2-c2', 'v1-c2': null });
     expect(r).toEqual({ version: 2, chunks: newStored });
+    // upsert and carry-over share ONE transaction, and upsert got that tx.
+    expect(m.commits).toBe(1);
+    expect(m.upsertLessonChunks.mock.calls[0][1]).toBe(m.tx);
     // carryOver consumed the same mapping: v1-c1 -> v2-c2
     expect((m.txCalls[2].arg as { chunkId: string }[])[0].chunkId).toBe(
       'v2-c2',
@@ -231,15 +260,15 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: null });
+    await carryOverMastery(5, { c1: 'c2', c2: null }, 2);
     const [sel, del, ins] = m.txCalls;
     expect([sel.op, del.op, ins.op]).toEqual(['select', 'delete', 'insert']);
 
     for (const c of [sel, del]) {
       expect(renderSql(c.arg as SQL)).toBe(
-        '"debrief_chunk_mastery"."lesson_id" = $1 and not exists (select 1 from debrief_passes dp inner join lessons l on l.slug = dp.lesson_slug where dp.user_id = "debrief_chunk_mastery"."user_id" and l.id = $2)',
+        '"debrief_chunk_mastery"."lesson_id" = $1 and not exists (select 1 from debrief_passes dp inner join lessons l on l.slug = dp.lesson_slug where dp.user_id = "debrief_chunk_mastery"."user_id" and l.id = $2) and "debrief_chunk_mastery"."chunk_id" not like $3',
       );
-      expect(renderSqlParams(c.arg as SQL)).toEqual([5, 5]);
+      expect(renderSqlParams(c.arg as SQL)).toEqual([5, 5, 'v2-%']);
     }
     // c1 -> c2 keeps clearedAt and score; c2 (unmapped) is dropped.
     expect(ins.arg).toEqual([
@@ -259,7 +288,7 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 71, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 72, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: 'c1' });
+    await carryOverMastery(5, { c1: 'c2', c2: 'c1' }, 2);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
     expect(
       (m.txCalls[2].arg as { chunkId: string }[]).map((r) => r.chunkId),
@@ -270,8 +299,61 @@ describe('carryOverMastery', () => {
     m.clearedRows = [
       { userId: 'u1', chunkId: 'c1', latestScore: 20, clearedAt: null },
     ];
-    await carryOverMastery(5, { c1: 'c1' });
+    await carryOverMastery(5, { c1: 'c1' }, 2);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete']);
+  });
+});
+
+describe('carryOverMastery safety', () => {
+  it('only selects and deletes rows NOT at the new version; current rows survive', async () => {
+    await carryOverMastery(5, { c1: 'c2' }, 3);
+    for (const c of m.txCalls.filter((x) => x.op !== 'insert')) {
+      expect(renderSql(c.arg as SQL)).toContain(
+        '"debrief_chunk_mastery"."chunk_id" not like $3',
+      );
+      expect(renderSqlParams(c.arg as SQL)[2]).toBe('v3-%');
+    }
+  });
+
+  it('a mapped old cleared row colliding with an existing new row upserts cleared_at via coalesce', async () => {
+    const t = new Date();
+    m.clearedRows = [
+      { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
+    ];
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1' }, 2);
+    const cfg = m.conflictCfg as { target: unknown[]; set: { clearedAt: SQL } };
+    expect(cfg.target).toHaveLength(3);
+    expect(renderSql(cfg.set.clearedAt)).toBe(
+      'coalesce("debrief_chunk_mastery"."cleared_at", excluded.cleared_at)',
+    );
+  });
+
+  it('two old ids mapping to one new id insert it once', async () => {
+    const t = new Date();
+    m.clearedRows = [
+      { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
+      { userId: 'u1', chunkId: 'v1-c2', latestScore: 90, clearedAt: t },
+    ];
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1', 'v1-c2': 'v2-c1' }, 2);
+    expect(m.txCalls.at(-1)?.arg).toHaveLength(1);
+  });
+
+  it('carry-over throwing rolls back the chunk upsert', async () => {
+    m.stored = {
+      lessonId: 1,
+      version: 1,
+      sourceFingerprint: 'stale',
+      chunks: [{ id: 'v1-c1', title: 'o', summary: '' }],
+      previousMapping: null,
+    };
+    m.failSelect = true;
+    await expect(ensureLessonChunks(1, 'l', 2)).rejects.toThrow(
+      'carry-over failed',
+    );
+    expect(m.commits).toBe(0);
+    // the upsert ran on the transaction handle, never on bare db
+    expect(m.upsertLessonChunks.mock.calls[0][1]).toBe(m.tx);
+    expect(m.claims.size).toBe(0);
   });
 });
 

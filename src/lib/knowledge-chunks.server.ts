@@ -3,11 +3,13 @@ import { generateKnowledgeChunks } from '#/ai/generate-knowledge-chunks';
 import { matchKnowledgeChunks } from '#/ai/match-knowledge-chunks';
 import { db } from '#/db';
 import {
+  deleteStaleMastery,
+  type Executor,
+  insertCarriedMastery,
   selectLessonChunks,
-  unpassedMasteryRows,
+  selectStaleMastery,
   upsertLessonChunks,
 } from '#/db/knowledge-chunks';
-import { debriefChunkMasteryTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
@@ -104,14 +106,21 @@ export async function ensureLessonChunks(
       ? await matchKnowledgeChunks(latest.chunks, chunks)
       : null;
 
-    await upsertLessonChunks({
-      lessonId,
-      version,
-      sourceFingerprint: fingerprint,
-      chunks,
-      previousMapping: mapping,
+    // One transaction: a crash can never leave the new fingerprint stored
+    // with the carry-over undone (nothing would ever retry it).
+    await db.transaction(async (tx) => {
+      await upsertLessonChunks(
+        {
+          lessonId,
+          version,
+          sourceFingerprint: fingerprint,
+          chunks,
+          previousMapping: mapping,
+        },
+        tx,
+      );
+      if (mapping) await carryOverMastery(lessonId, mapping, version, tx);
     });
-    if (mapping) await carryOverMastery(lessonId, mapping);
     return { version, chunks };
   } finally {
     await redis.del(claimKey(lessonId));
@@ -119,40 +128,50 @@ export async function ensureLessonChunks(
 }
 
 /**
- * After a regeneration: for every pilot WITHOUT a permanent pass, keep their
- * cleared chunks that map to a new id (with `clearedAt` and `latestScore`) and
- * drop everything else. Done as delete-then-insert in one transaction, never
- * in-place id updates: a swap (c1->c2, c2->c1) would break the unique key.
+ * After a regeneration to `newVersion`: for every pilot WITHOUT a permanent
+ * pass, keep their cleared chunks that map to a new id (with `clearedAt` and
+ * `latestScore`) and drop the rest of their OLD-version rows. Rows already at
+ * `newVersion` are never touched. Delete-then-insert, never in-place id
+ * updates: a swap (c1->c2, c2->c1) would break the unique key. When the new id
+ * already has a row, it is kept and just ensured cleared.
+ *
+ * Pass `ex` to run inside the caller's transaction; otherwise opens its own.
  */
 export async function carryOverMastery(
   lessonId: number,
   mapping: Record<string, string | null>,
+  newVersion: number,
+  ex?: Executor,
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(debriefChunkMasteryTable)
-      .where(unpassedMasteryRows(lessonId));
-    await tx
-      .delete(debriefChunkMasteryTable)
-      .where(unpassedMasteryRows(lessonId));
+  const run = async (tx: Executor) => {
+    const rows = await selectStaleMastery(tx, lessonId, newVersion);
+    await deleteStaleMastery(tx, lessonId, newVersion);
 
-    const carried = rows.flatMap((r) => {
+    const carried = new Map<
+      string,
+      {
+        userId: string;
+        lessonId: number;
+        chunkId: string;
+        latestScore: number;
+        clearedAt: Date;
+      }
+    >();
+    for (const r of rows) {
       const chunkId = r.clearedAt ? mapping[r.chunkId] : null;
-      return chunkId && r.clearedAt
-        ? [
-            {
-              userId: r.userId,
-              lessonId,
-              chunkId,
-              latestScore: r.latestScore,
-              clearedAt: r.clearedAt,
-            },
-          ]
-        : [];
-    });
-    if (carried.length > 0) {
-      await tx.insert(debriefChunkMasteryTable).values(carried);
+      if (!chunkId || !r.clearedAt) continue;
+      const key = `${r.userId}\u0000${chunkId}`;
+      if (carried.has(key)) continue;
+      carried.set(key, {
+        userId: r.userId,
+        lessonId,
+        chunkId,
+        latestScore: r.latestScore,
+        clearedAt: r.clearedAt,
+      });
     }
-  });
+    if (carried.size > 0) await insertCarriedMastery(tx, [...carried.values()]);
+  };
+  if (ex) await run(ex);
+  else await db.transaction(async (tx) => run(tx));
 }
