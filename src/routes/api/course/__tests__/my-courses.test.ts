@@ -42,6 +42,17 @@ beforeEach(() => {
 });
 
 describe('getMyCoursesHandler', () => {
+  // Tester, 2026-11-12: "when you go to courses you should only see courses".
+  // 3D Airmanship is the library remixed into every course, not a course, so
+  // a pilot enrolled in it must not get a card for it.
+  it('never lists 3D Airmanship, even for a pilot enrolled in it', async () => {
+    const res = await getMyCoursesHandler(
+      new Request('http://test/api/course/my-courses'),
+    );
+    const slugs = ((await res.json()) as { slug: string }[]).map((c) => c.slug);
+    expect(slugs).toEqual(['instrument-rating']);
+  });
+
   it('401 when not authenticated', async () => {
     getSession.mockResolvedValueOnce(null);
     const res = await getMyCoursesHandler(
@@ -56,7 +67,7 @@ describe('getMyCoursesHandler', () => {
       new Request('http://test/api/course/my-courses'),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(courses);
+    expect(await res.json()).toEqual([courses[1]]);
     expect(getMyCourses).toHaveBeenCalledWith('user-1');
   });
 
