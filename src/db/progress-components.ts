@@ -1,4 +1,4 @@
-import { type SQL, sql } from 'drizzle-orm';
+import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
 import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
@@ -61,11 +61,23 @@ export const videoRewatchedAtSql = (
     sql`(
       select max(t.completed_at) from lesson_test_results t
       where t.user_id = ${userId}
-        and t.lesson_slug = ${lessonSlug}
+        and t.lesson_slug = ${outerRef(lessonSlug)}
         and t.completed_at is not null
         and t.total_score < ${DEBRIEF_PAR_SCORE}
     )`,
   );
+
+/**
+ * A column from the OUTER query, always table-qualified. In a single-table
+ * select drizzle renders a column bare (`"id"`), and inside these subqueries
+ * Postgres binds a bare name to the nearest scope — `videos_progress.id`, not
+ * `lessons.id` — so the watch was never found and every video lesson's
+ * debrief stayed locked (`getDebriefFacts`, prod 2026-11-12).
+ */
+const outerRef = (value: SQL | Column | number | string) =>
+  is(value, Column)
+    ? sql`${sql.identifier(getTableName(value.table))}.${sql.identifier(value.name)}`
+    : sql`${value}`;
 
 /** Both raw timestamps are `now()`-written and timezone-less, so they compare directly. */
 const fullWatchAtSql = (
@@ -78,7 +90,7 @@ const fullWatchAtSql = (
   from (
     select min(v.created_at) as first_at from videos_progress v
     where v.user_id = ${userId}
-      and v.lesson_id = ${lessonId}
+      and v.lesson_id = ${outerRef(lessonId)}
       and v.progress in (${sql.raw(watchedMilestones.join(', '))})
       ${after === null ? sql`` : sql`and v.created_at > ${after}`}
     group by v.progress
