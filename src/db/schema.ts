@@ -2355,6 +2355,14 @@ export const lessonTestResultsTable = pgTable(
     totalScore: integer('total_score'),
     completedAt: timestamp('completed_at', { mode: 'date' }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    /** 'knowledge-chunks-v1' for new attempts; null for legacy attempts. */
+    format: text('format'),
+    chunkVersion: integer('chunk_version'),
+    /** In-progress answer text, so a reload does not lose it. */
+    draft: jsonb('draft').$type<{ questionId: string; text: string } | null>(),
+    finishedReason: text('finished_reason').$type<
+      'all-answered' | 'all-cleared'
+    >(),
   },
   (table) => [
     index('lesson_test_results_user_id_idx').on(table.userId),
@@ -2509,3 +2517,110 @@ export const videoCalls = pgTable(
     index('video_calls_user_started_idx').on(t.userId, t.startedAt),
   ],
 );
+
+/**
+ * AI-generated knowledge chunks for a lesson, one row per lesson.
+ * `sourceFingerprint` detects stale chunks; `version` bumps on regeneration.
+ * `previousMapping` (old chunk id -> new chunk id | null) is written on
+ * regeneration so mastery rows can be carried over. Created by
+ * migrate-knowledge-chunks.ts, not drizzle-kit push — keep the two in step.
+ */
+export const lessonKnowledgeChunksTable = pgTable(
+  'lesson_knowledge_chunks',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    sourceFingerprint: text('source_fingerprint').notNull(),
+    // Structurally the KnowledgeChunk type produced in lib/debrief-mastery.ts.
+    chunks: jsonb('chunks')
+      .$type<{ id: string; title: string; summary: string }[]>()
+      .notNull(),
+    previousMapping: jsonb('previous_mapping').$type<Record<
+      string,
+      string | null
+    > | null>(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex('lesson_knowledge_chunks_lesson_idx').on(t.lessonId)],
+);
+export type LessonKnowledgeChunksSelect =
+  typeof lessonKnowledgeChunksTable.$inferSelect;
+
+/** Per-pilot mastery of one knowledge chunk. */
+export const debriefChunkMasteryTable = pgTable(
+  'debrief_chunk_mastery',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    chunkId: text('chunk_id').notNull(),
+    latestScore: integer('latest_score').notNull(),
+    clearedAt: timestamp('cleared_at', { mode: 'date', withTimezone: true }),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('debrief_chunk_mastery_user_lesson_chunk_idx').on(
+      t.userId,
+      t.lessonId,
+      t.chunkId,
+    ),
+  ],
+);
+export type DebriefChunkMasterySelect =
+  typeof debriefChunkMasteryTable.$inferSelect;
+
+/** Permanent debrief passes (includes backfilled legacy passes). */
+export const debriefPassesTable = pgTable(
+  'debrief_passes',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonSlug: text('lesson_slug')
+      .notNull()
+      .references(() => lessonsTable.slug, { onDelete: 'cascade' }),
+    passedAt: timestamp('passed_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('debrief_passes_user_lesson_idx').on(t.userId, t.lessonSlug),
+  ],
+);
+export type DebriefPassesSelect = typeof debriefPassesTable.$inferSelect;
+
+/** Per-answer metrics for a debrief attempt (AnswerMetrics). */
+export const debriefAnswerLogsTable = pgTable(
+  'debrief_answer_logs',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    attemptId: integer('attempt_id')
+      .notNull()
+      .references(() => lessonTestResultsTable.id, { onDelete: 'cascade' }),
+    questionId: text('question_id').notNull(),
+    metrics: jsonb('metrics').$type<Record<string, number>>().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('debrief_answer_logs_attempt_question_idx').on(
+      t.attemptId,
+      t.questionId,
+    ),
+  ],
+);
+export type DebriefAnswerLogsSelect =
+  typeof debriefAnswerLogsTable.$inferSelect;
