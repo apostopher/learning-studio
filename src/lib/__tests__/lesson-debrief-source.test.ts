@@ -21,7 +21,10 @@ vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
 vi.mock('#/db/lesson-transcript', () => ({ getLessonTranscript }));
 vi.mock('#/db/derived-key-points', () => ({ getDerivedKeyPoints }));
 
-import { resolveDebriefSource } from '../lesson-debrief-source.server';
+import {
+  resolveDebriefSource,
+  TRANSCRIPT_LOOKUP_TIMEOUT_MS,
+} from '../lesson-debrief-source.server';
 
 describe('resolveDebriefSource', () => {
   beforeEach(() => {
@@ -136,7 +139,7 @@ describe('resolveDebriefSource', () => {
     expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
   });
 
-  it('falls back to material text when the transcript lookup rejects for an authored lesson', async () => {
+  it('falls back to material text, flagged degraded, when the transcript lookup rejects for an authored lesson', async () => {
     getLessonMaterial.mockResolvedValue({
       text: 'lesson body',
       keyPoints: ['authored'],
@@ -144,10 +147,12 @@ describe('resolveDebriefSource', () => {
     getLessonTranscript.mockRejectedValue(new Error('mux down'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
+    // Degraded: chunk generation must not treat this as a changed source.
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material',
       keyPoints: ['authored'],
       context: 'lesson body',
+      degraded: true,
     });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
@@ -163,7 +168,46 @@ describe('resolveDebriefSource', () => {
 
     const source = await resolveDebriefSource('l-1', 7);
     expect(source?.context).toBe('lesson body');
+    expect(source?.degraded).toBe(true);
     warn.mockRestore();
+  });
+
+  it('a transcript lookup that hangs past the timeout is a failure: material text, degraded', async () => {
+    vi.useFakeTimers();
+    try {
+      getLessonMaterial.mockResolvedValue({
+        text: 'lesson body',
+        keyPoints: ['authored'],
+      });
+      getLessonTranscript.mockReturnValue(new Promise(() => {}));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const pending = resolveDebriefSource('l-1', 7);
+      await vi.advanceTimersByTimeAsync(TRANSCRIPT_LOOKUP_TIMEOUT_MS);
+      await expect(pending).resolves.toEqual({
+        kind: 'material',
+        keyPoints: ['authored'],
+        context: 'lesson body',
+        degraded: true,
+      });
+      warn.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a transcript that answers within the timeout is used, not degraded', async () => {
+    getLessonMaterial.mockResolvedValue({
+      text: 'lesson body',
+      keyPoints: ['authored'],
+    });
+    getLessonTranscript.mockResolvedValue('spoken');
+    const source = await resolveDebriefSource('l-1', 7);
+    expect(source).toEqual({
+      kind: 'material',
+      keyPoints: ['authored'],
+      context: 'spoken',
+    });
   });
 
   it('uses the passed courseId when the lesson slug resolves to no lesson id', async () => {

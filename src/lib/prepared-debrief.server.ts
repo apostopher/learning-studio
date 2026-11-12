@@ -73,7 +73,9 @@ export type PrepareOutcome =
   | 'already-prepared'
   | 'already-claimed'
   | 'nothing-to-ask'
-  | 'no-source';
+  | 'no-source'
+  /** Another request is generating the lesson's first chunks; try later. */
+  | 'chunks-busy';
 
 /**
  * Generate this pilot's next debrief ahead of time and park it server-side,
@@ -110,7 +112,13 @@ export async function prepareDebrief(
       k.lessonSlug,
       k.courseId,
     );
-    if (!lesson) {
+    if (lesson.kind === 'busy') {
+      // Not "no source": keep any prepared row, and free the claim so the
+      // next play prepares once the chunks have landed.
+      await redis.del(claimKey(key));
+      return 'chunks-busy';
+    }
+    if (lesson.kind === 'no-source') {
       await discardPreparedDebrief(key);
       return 'no-source';
     }

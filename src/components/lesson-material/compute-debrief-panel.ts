@@ -1,6 +1,10 @@
-import type {
-  DebriefAnswerResult,
-  DebriefAttemptView,
+import {
+  type DebriefAnswerResult,
+  type DebriefAttemptView,
+  DebriefNoSourceError,
+  DebriefNotOpenError,
+  DebriefPreparingError,
+  DebriefRequestError,
 } from '#/data-hooks/use-debrief-attempt';
 import {
   type DebriefStatus,
@@ -315,12 +319,93 @@ export function attemptFormat(
     : 'legacy';
 }
 
+/** The answer did not reach the grader. The text stays in the box. */
+export const DEBRIEF_ANSWER_FAILED_COPY =
+  "Your answer didn't send. Check your connection and submit it again.";
+
+/**
+ * The server refused the answer (4xx other than 403/404): this page's copy
+ * of the attempt is behind (answered in another tab). The attempt is reloaded.
+ */
+export const DEBRIEF_ANSWER_REFUSED_COPY =
+  "That answer wasn't accepted, so your debrief has been reloaded from where it stands. Check the question and submit again.";
+
+/**
+ * 403/404 on an answer: the attempt has closed (finished in another tab) or
+ * this debrief is no longer the pilot's to take here. The reload that follows
+ * shows which.
+ */
+export const DEBRIEF_ANSWER_FORBIDDEN_COPY =
+  "That answer wasn't accepted: this attempt has closed, or this debrief is no longer available to you. It has been reloaded to show where it stands.";
+
+/** What the alert under the question says about a failed answer. */
+export function answerErrorCopy(error: unknown): string {
+  if (error instanceof DebriefRequestError) {
+    if (error.status === 403 || error.status === 404) {
+      return DEBRIEF_ANSWER_FORBIDDEN_COPY;
+    }
+    if (error.status >= 400 && error.status < 500) {
+      return DEBRIEF_ANSWER_REFUSED_COPY;
+    }
+  }
+  return DEBRIEF_ANSWER_FAILED_COPY;
+}
+
+/** 422 from the start route. Says why there is nothing to start. */
+export const DEBRIEF_NO_SOURCE_COPY =
+  'There is nothing to debrief on this lesson yet: it has no key points or video transcript to ask about.';
+
+export const DEBRIEF_START_FAILED_COPY =
+  "Your debrief didn't load. Check your connection and try again.";
+
+/** The 503 retries ran out: still being prepared, not broken. */
+export const DEBRIEF_PREPARING_STALLED_COPY =
+  'Your debrief is taking longer than usual to prepare. Try again in a moment.';
+
+export type DebriefStartError =
+  | 'no-source'
+  | 'preparing'
+  | 'preparing-stalled'
+  | 'refused'
+  | 'failed';
+
+/**
+ * What the start query's failure means. `failureReason` is set while a
+ * retry is pending (`error` only once retries are exhausted), so a 503
+ * being retried reads as `preparing` from the first failure. A 409 is the
+ * not-open path (`debriefNotOpenAtom`), not an error here.
+ */
+export function startErrorOf(s: {
+  error: unknown;
+  failureReason: unknown;
+}): DebriefStartError | null {
+  if (s.error === null || s.error === undefined) {
+    return s.failureReason instanceof DebriefPreparingError
+      ? 'preparing'
+      : null;
+  }
+  const { error } = s;
+  if (error instanceof DebriefNotOpenError) return null;
+  if (error instanceof DebriefNoSourceError) return 'no-source';
+  if (error instanceof DebriefPreparingError) return 'preparing-stalled';
+  if (
+    error instanceof DebriefRequestError &&
+    (error.status === 403 || error.status === 404)
+  ) {
+    return 'refused';
+  }
+  return 'failed';
+}
+
 export type DebriefQuizView =
   | 'read-only'
   | 'not-open-countdown'
   | 'not-open-checking'
   | 'intro'
   | 'no-source'
+  | 'refused'
+  | 'preparing'
+  | 'preparing-stalled'
   | 'start-failed'
   | 'starting'
   | 'resuming'
@@ -330,7 +415,9 @@ export type DebriefQuizView =
 /**
  * Which branch `DebriefQuizContainer` renders. Order matters: a 409 from
  * start (`notOpen`) wins over the intro, or a refused Start would offer
- * Start again with no reason and no time.
+ * Start again with no reason and no time; and a 403/404 (`refused`) wins
+ * over a loaded attempt, or a pilot who lost access mid-attempt would keep
+ * answering a question the server will refuse.
  */
 export function debriefQuizView(v: {
   readOnly: boolean;
@@ -340,7 +427,7 @@ export function debriefQuizView(v: {
   /** This lesson's last start answer was 409, with the time it gave. */
   notOpen: { availableAt: string | null } | null;
   hasAttempt: boolean;
-  startError: 'no-source' | 'failed' | null;
+  startError: DebriefStartError | null;
   /** An unanswered question is left. */
   hasCurrent: boolean;
 }): DebriefQuizView {
@@ -350,9 +437,12 @@ export function debriefQuizView(v: {
       ? 'not-open-checking'
       : 'not-open-countdown';
   }
+  if (v.startError === 'refused') return 'refused';
   if (!v.hasAttempt && !v.enabled) return 'intro';
   if (v.startError === 'no-source') return 'no-source';
   if (!v.hasAttempt) {
+    if (v.startError === 'preparing') return 'preparing';
+    if (v.startError === 'preparing-stalled') return 'preparing-stalled';
     if (v.startError === 'failed') return 'start-failed';
     return v.resume ? 'resuming' : 'starting';
   }

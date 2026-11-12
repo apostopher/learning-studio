@@ -100,6 +100,7 @@ beforeEach(() => {
     },
   );
   m.ensureLessonChunks.mockResolvedValue({
+    kind: 'ready',
     version: 2,
     chunks,
     context: 'ctx',
@@ -207,11 +208,19 @@ describe('prepareDebrief', () => {
 
   it('deletes any stored row and stores nothing when the lesson has no chunks (ledger T8)', async () => {
     m.rows.set(rowKey(key), { test, sourceFingerprint: 'x' });
-    m.ensureLessonChunks.mockResolvedValue(null);
+    m.ensureLessonChunks.mockResolvedValue({ kind: 'no-source' });
     expect(await prepareDebrief(k)).toBe('no-source');
     expect(vi.mocked(deletePreparedDebrief)).toHaveBeenCalledWith(key);
     expect(m.rows.has(rowKey(key))).toBe(false);
     expect(m.generateTest).not.toHaveBeenCalled();
+  });
+
+  it('chunks busy (first generation in flight elsewhere): keeps any prepared row and releases its claim so a later play retries', async () => {
+    m.ensureLessonChunks.mockResolvedValue({ kind: 'busy' });
+    expect(await prepareDebrief(k)).toBe('chunks-busy');
+    expect(vi.mocked(deletePreparedDebrief)).not.toHaveBeenCalled();
+    expect(m.generateTest).not.toHaveBeenCalled();
+    expect(await prepareDebrief(k)).toBe('chunks-busy');
   });
 });
 

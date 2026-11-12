@@ -143,6 +143,14 @@ describe('start', () => {
     expect((await start()).status).toBe(422);
   });
 
+  it("503s, retryable, while the lesson's chunks are still being generated — never the no-source 422", async () => {
+    m.startOrResumeAttempt.mockResolvedValue({ ok: false, reason: 'busy' });
+    const res = await start();
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('2');
+    expect(await res.json()).toEqual({ error: 'preparing', retryable: true });
+  });
+
   it('a pass recorded at start (every chunk already cleared) settles progress and returns the promotion', async () => {
     m.startOrResumeAttempt.mockResolvedValue({ ok: false, reason: 'passed' });
     const res = await start();

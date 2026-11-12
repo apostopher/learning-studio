@@ -72,6 +72,8 @@ export type StartResult =
   | { ok: true; attempt: AttemptView }
   /** No chunks could be built: nothing to debrief from. */
   | { ok: false; reason: 'no-source' }
+  /** Another request is still generating the lesson's first chunks: retry. */
+  | { ok: false; reason: 'busy' }
   /** Every current chunk was already cleared: the pass is now recorded. */
   | { ok: false; reason: 'passed' };
 
@@ -168,7 +170,7 @@ export async function startOrResumeAttempt(k: {
   }
 
   const lesson = await ensureLessonChunks(k.lessonId, k.lessonSlug, k.courseId);
-  if (!lesson) return { ok: false, reason: 'no-source' };
+  if (lesson.kind !== 'ready') return { ok: false, reason: lesson.kind };
 
   const mastery = masteryOf(
     lesson.chunks,

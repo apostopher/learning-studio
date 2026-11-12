@@ -6,9 +6,13 @@ import {
   type DebriefAttemptView,
   DebriefNoSourceError,
   DebriefNotOpenError,
+  DebriefPreparingError,
+  DebriefRequestError,
   fetchStartDebrief,
   postDebriefAnswer,
   postDebriefDraft,
+  preparingRetry,
+  preparingRetryDelay,
 } from '#/data-hooks/use-debrief-attempt';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -62,6 +66,32 @@ describe('debrief attempt requests', () => {
     expect(e).toBeInstanceOf(DebriefNotOpenError);
     expect((e as DebriefNotOpenError).availableAt).toBe('2026-01-01T00:00:00Z');
     expect((e as DebriefNotOpenError).promotion).toEqual(promotion);
+  });
+
+  it('start 503 is a preparing error (chunks still being generated), not a failure', async () => {
+    stub(503, { error: 'preparing', retryable: true });
+    await expect(fetchStartDebrief(lesson)).rejects.toBeInstanceOf(
+      DebriefPreparingError,
+    );
+  });
+
+  it('start 403 carries its status, so the view can say it is refused', async () => {
+    stub(403);
+    const e = await fetchStartDebrief(lesson).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(DebriefRequestError);
+    expect((e as DebriefRequestError).status).toBe(403);
+  });
+
+  it('retries only a preparing start, a bounded number of times, backing off', () => {
+    const preparing = new DebriefPreparingError();
+    expect(preparingRetry(0, preparing)).toBe(true);
+    expect(preparingRetry(4, preparing)).toBe(true);
+    expect(preparingRetry(5, preparing)).toBe(false);
+    expect(preparingRetry(0, new DebriefNoSourceError())).toBe(false);
+    expect(preparingRetry(0, new DebriefRequestError('x', 500))).toBe(false);
+    expect([0, 1, 2, 3, 4, 5].map(preparingRetryDelay)).toEqual([
+      1000, 2000, 4000, 8000, 8000, 8000,
+    ]);
   });
 
   it('start 422 is a no-source error', async () => {

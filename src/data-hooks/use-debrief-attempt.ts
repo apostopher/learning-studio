@@ -71,6 +71,33 @@ export class DebriefNoSourceError extends Error {
   }
 }
 
+/**
+ * 503: another request is still generating this lesson's first chunk list.
+ * Not "nothing to debrief": `useStartDebrief` retries it (`preparingRetry`)
+ * while the tab says it is preparing.
+ */
+export class DebriefPreparingError extends Error {
+  constructor() {
+    super('This debrief is still being prepared');
+    this.name = 'DebriefPreparingError';
+  }
+}
+
+/** How many times a preparing start is retried before the tab gives up. */
+const PREPARING_RETRIES = 5;
+
+/** TanStack `retry`: only a preparing (503) start, at most 5 times. */
+export function preparingRetry(failureCount: number, error: unknown): boolean {
+  return (
+    error instanceof DebriefPreparingError && failureCount < PREPARING_RETRIES
+  );
+}
+
+/** TanStack `retryDelay`: 1 s, 2 s, 4 s, then every 8 s. */
+export function preparingRetryDelay(failureCount: number): number {
+  return Math.min(1000 * 2 ** failureCount, 8000);
+}
+
 /** Any other non-2xx answer, carrying its HTTP status. */
 export class DebriefRequestError extends Error {
   readonly status: number;
@@ -100,6 +127,7 @@ export async function fetchStartDebrief({
     throw new DebriefNotOpenError(await res.json().catch(() => null));
   }
   if (res.status === 422) throw new DebriefNoSourceError();
+  if (res.status === 503) throw new DebriefPreparingError();
   if (!res.ok)
     throw new DebriefRequestError('Failed to start debrief', res.status);
   return attemptViewSchema.parse(await res.json());
@@ -180,8 +208,9 @@ export function applyAnswerResult(
 
 /**
  * Start this pilot's debrief attempt or resume the open one. `staleTime: 0`
- * so a remount always re-reads what the server holds. Never retried: a 409
- * or 422 is an answer, not a blip.
+ * so a remount always re-reads what the server holds. Retried only while the
+ * lesson's chunks are still being generated (503, bounded backoff); a 409 or
+ * 422 is an answer, not a blip.
  */
 export function useStartDebrief({
   courseSlug,
@@ -193,7 +222,8 @@ export function useStartDebrief({
     queryFn: () => fetchStartDebrief({ courseSlug, lessonSlug }),
     enabled: enabled && courseSlug.length > 0 && lessonSlug.length > 0,
     staleTime: 0,
-    retry: false,
+    retry: preparingRetry,
+    retryDelay: preparingRetryDelay,
   });
 }
 

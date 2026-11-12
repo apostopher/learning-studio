@@ -13,7 +13,6 @@ import { pendingPromotionAtom } from '#/atoms/promotion';
 import { ClientGate } from '#/components/client-gate';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
 import {
-  DebriefNoSourceError,
   DebriefNotOpenError,
   DebriefRequestError,
   useAnswerDebrief,
@@ -24,9 +23,15 @@ import { useAnswerMetrics } from '#/hooks/use-answer-metrics';
 import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
+  answerErrorCopy,
   currentDebriefQuestion,
+  DEBRIEF_NO_SOURCE_COPY,
+  DEBRIEF_PREPARING_STALLED_COPY,
+  DEBRIEF_REFUSED_COPY,
+  DEBRIEF_START_FAILED_COPY,
   debriefQuizView,
   finishedDebriefReport,
+  startErrorOf,
 } from '../compute-debrief-panel';
 import { DebriefIntro } from './debrief-intro';
 import { DebriefWait } from './debrief-wait';
@@ -39,24 +44,6 @@ import { useDebriefCountdown } from './use-debrief-countdown';
 
 /** How long typing pauses before the answer box saves its draft. */
 const DRAFT_DEBOUNCE_MS = 800;
-
-/** The answer did not reach the grader. The text stays in the box. */
-export const DEBRIEF_ANSWER_FAILED_COPY =
-  "Your answer didn't send. Check your connection and submit it again.";
-
-/**
- * The server refused the answer (4xx): this page's copy of the attempt is
- * behind (answered or finished in another tab). The attempt is reloaded.
- */
-export const DEBRIEF_ANSWER_REFUSED_COPY =
-  "That answer wasn't accepted, so your debrief has been reloaded from where it stands. Check the question and submit again.";
-
-/** 422 from the start route. Says why there is nothing to start. */
-export const DEBRIEF_NO_SOURCE_COPY =
-  'There is nothing to debrief on this lesson yet: it has no key points or video transcript to ask about.';
-
-const DEBRIEF_START_FAILED_COPY =
-  "Your debrief didn't load. Check your connection and try again.";
 
 type DebriefQuizContainerProps = {
   /** The course the debrief is being taken in — every request below names it. */
@@ -187,7 +174,8 @@ export const DebriefQuizContainer = ({
     notOpen?.availableAt ? `not-open:${notOpen.availableAt}` : null,
   );
 
-  // A refused answer means this page's attempt is out of date: reload it.
+  // A refused answer means this page's attempt is out of date (or no longer
+  // the pilot's): reload it. A 403 there shows the refusal (`refused`).
   const answerRefused =
     answer.error instanceof DebriefRequestError &&
     answer.error.status >= 400 &&
@@ -241,12 +229,10 @@ export const DebriefQuizContainer = ({
     resume,
     notOpen,
     hasAttempt: attempt !== undefined,
-    startError:
-      start.error instanceof DebriefNoSourceError
-        ? 'no-source'
-        : start.isError
-          ? 'failed'
-          : null,
+    startError: startErrorOf({
+      error: start.error,
+      failureReason: start.failureReason,
+    }),
     hasCurrent: current !== null,
   });
 
@@ -286,6 +272,22 @@ export const DebriefQuizContainer = ({
     case 'no-source':
       return (
         <p className="py-2 text-sm text-secondary">{DEBRIEF_NO_SOURCE_COPY}</p>
+      );
+    case 'refused':
+      // 403/404: an answer, not a failure — no retry, nothing about the
+      // connection.
+      return (
+        <p className="py-2 text-sm text-secondary">{DEBRIEF_REFUSED_COPY}</p>
+      );
+    case 'preparing':
+      return <LoadingLine label="Preparing your debrief…" />;
+    case 'preparing-stalled':
+      return (
+        <LessonError
+          message={DEBRIEF_PREPARING_STALLED_COPY}
+          onRetry={() => void refetchStart()}
+          subject="your debrief"
+        />
       );
     case 'start-failed':
       return (
@@ -372,11 +374,7 @@ export const DebriefQuizContainer = ({
       />
       {/* Mounted empty, so the failure is announced when it lands. */}
       <p role="alert" className="text-sm text-error-text empty:hidden">
-        {answer.isError && isCurrentAnswer
-          ? answerRefused
-            ? DEBRIEF_ANSWER_REFUSED_COPY
-            : DEBRIEF_ANSWER_FAILED_COPY
-          : ''}
+        {answer.isError && isCurrentAnswer ? answerErrorCopy(answer.error) : ''}
       </p>
     </div>
   );

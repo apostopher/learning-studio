@@ -17,7 +17,29 @@ export type DebriefSource = {
    * text.
    */
   context: string;
+  /**
+   * Set when an authored lesson's transcript lookup FAILED (threw or timed
+   * out), so `context` fell back to the material text. Not a changed
+   * source: `ensureLessonChunks` keeps the stored chunks rather than
+   * regenerating from it (and again when the provider recovers).
+   */
+  degraded?: true;
 };
+
+/** How long the transcript lookup may take before it counts as failed. */
+export const TRANSCRIPT_LOOKUP_TIMEOUT_MS = 8_000;
+
+/** `promise`, or a rejection once `ms` have passed without it settling. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Transcript lookup timed out after ${ms} ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * What a lesson's debrief is generated FROM, resolved on the server.
@@ -52,9 +74,11 @@ export async function resolveDebriefSource(
   // Chunks are per lesson, not per course, so the transcript comes from the
   // lesson's home course (see `getHomeCourseIdForLesson`), falling back to the
   // course being served when the lesson is unplaced. Authored material never
-  // needed the transcript before, so for it a failed lookup degrades to the
-  // material text instead of breaking the lesson; with no material the
-  // transcript is the source and the error propagates as it always did.
+  // needed the transcript before, so for it a failed lookup (an error, or no
+  // answer within `TRANSCRIPT_LOOKUP_TIMEOUT_MS`) degrades to the material
+  // text instead of breaking the lesson, and says so (`degraded`); with no
+  // material the transcript is the source and the error propagates as it
+  // always did.
   const lookupTranscript = async (): Promise<string | null> => {
     const lessonId = await getLessonIdBySlug(lessonSlug);
     const homeCourseId =
@@ -63,15 +87,20 @@ export async function resolveDebriefSource(
     return getLessonTranscript(lessonSlug, { courseId: homeCourseId });
   };
   let transcript: string | null;
+  let degraded = false;
   if (material?.text) {
     try {
-      transcript = await lookupTranscript();
+      transcript = await withTimeout(
+        lookupTranscript(),
+        TRANSCRIPT_LOOKUP_TIMEOUT_MS,
+      );
     } catch (error) {
       console.warn(
         `Transcript lookup failed for ${lessonSlug}; using material text:`,
         error,
       );
       transcript = null;
+      degraded = true;
     }
   } else {
     transcript = await lookupTranscript();
@@ -79,12 +108,18 @@ export async function resolveDebriefSource(
 
   if (material?.text) {
     const context = transcript ?? material.text;
+    const flag = degraded ? { degraded: true as const } : {};
     if (material.keyPoints?.length) {
-      return { kind: 'material', keyPoints: material.keyPoints, context };
+      return {
+        kind: 'material',
+        keyPoints: material.keyPoints,
+        context,
+        ...flag,
+      };
     }
     const derived = await getDerivedKeyPoints(material.text);
     if (derived.length > 0) {
-      return { kind: 'material-derived', keyPoints: derived, context };
+      return { kind: 'material-derived', keyPoints: derived, context, ...flag };
     }
   }
 

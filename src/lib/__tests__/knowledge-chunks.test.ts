@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto';
 import type { SQL } from 'drizzle-orm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 type Stored = {
@@ -104,6 +104,8 @@ vi.mock('#/db/knowledge-chunks', async () => {
 });
 
 import {
+  CHUNKS_BUSY_POLL_MS,
+  CHUNKS_BUSY_WAIT_MS,
   carryOverMastery,
   chunkFingerprint,
   chunkIdVersion,
@@ -142,9 +144,9 @@ describe('ensureLessonChunks', () => {
     expect(chunkFingerprint(source)).toBe(fp);
   });
 
-  it('returns null with no source and never generates', async () => {
+  it('is no-source with no source and never generates', async () => {
     m.resolveDebriefSource.mockResolvedValue(null);
-    expect(await ensureLessonChunks(1, 'l', 2)).toBeNull();
+    expect(await ensureLessonChunks(1, 'l', 2)).toEqual({ kind: 'no-source' });
     expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
   });
 
@@ -161,6 +163,7 @@ describe('ensureLessonChunks', () => {
     expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
     expect(m.upsertLessonChunks).not.toHaveBeenCalled();
     expect(r).toEqual({
+      kind: 'ready',
       version: 3,
       chunks: stored.chunks,
       context: source.context,
@@ -182,7 +185,7 @@ describe('ensureLessonChunks', () => {
       'v1-c1',
       'v1-c2',
     ]);
-    expect(r?.chunks[0].id).toBe('v1-c1');
+    expect(r.kind === 'ready' && r.chunks[0]?.id).toBe('v1-c1');
     expect(m.claims.size).toBe(0);
   });
 
@@ -214,6 +217,7 @@ describe('ensureLessonChunks', () => {
     expect(arg.version).toBe(2);
     expect(arg.previousMapping).toEqual({ 'v1-c1': 'v2-c2', 'v1-c2': null });
     expect(r).toEqual({
+      kind: 'ready',
       version: 2,
       chunks: newStored,
       context: source.context,
@@ -239,17 +243,91 @@ describe('ensureLessonChunks', () => {
     m.claims.set('knowledge-chunks:claim:1', '1');
     const r = await ensureLessonChunks(1, 'l', 2);
     expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
-    expect(r?.version).toBe(1);
+    expect(r.kind === 'ready' && r.version).toBe(1);
   });
 
-  it('claim held and nothing stored: null', async () => {
-    m.claims.set('knowledge-chunks:claim:1', '1');
-    expect(await ensureLessonChunks(1, 'l', 2)).toBeNull();
+  describe('claim held and nothing stored yet (first generation in flight)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      m.claims.set('knowledge-chunks:claim:1', '1');
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('waits for the holder: chunks stored while it polls are returned ready', async () => {
+      const pending = ensureLessonChunks(1, 'l', 2);
+      await vi.advanceTimersByTimeAsync(CHUNKS_BUSY_POLL_MS);
+      m.stored = {
+        lessonId: 1,
+        version: 1,
+        sourceFingerprint: fp,
+        chunks: [{ id: 'v1-c1', title: 'x', summary: 'y' }],
+        previousMapping: null,
+      };
+      await vi.advanceTimersByTimeAsync(CHUNKS_BUSY_POLL_MS);
+      await expect(pending).resolves.toEqual({
+        kind: 'ready',
+        version: 1,
+        chunks: [{ id: 'v1-c1', title: 'x', summary: 'y' }],
+        context: source.context,
+      });
+      expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
+    });
+
+    it('is busy — never no-source — when nothing lands within the wait', async () => {
+      const pending = ensureLessonChunks(1, 'l', 2);
+      await vi.advanceTimersByTimeAsync(CHUNKS_BUSY_WAIT_MS);
+      await expect(pending).resolves.toEqual({ kind: 'busy' });
+      expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
+      // The holder's claim is theirs to release.
+      expect(m.claims.has('knowledge-chunks:claim:1')).toBe(true);
+    });
   });
 
-  it('empty generated list: null, nothing stored', async () => {
+  describe('degraded source (transcript lookup failed)', () => {
+    const degraded = {
+      kind: 'material',
+      keyPoints: ['a', 'b'],
+      context: 'material text',
+      degraded: true,
+    };
+
+    it('with a row stored: returns it unchanged — no claim, no generate, no match, no write', async () => {
+      const stored: Stored = {
+        lessonId: 1,
+        version: 4,
+        sourceFingerprint: fp, // built from the transcript, not this context
+        chunks: [{ id: 'v4-c1', title: 'x', summary: 'y' }],
+        previousMapping: { 'v3-c1': 'v4-c1' },
+      };
+      m.stored = stored;
+      m.resolveDebriefSource.mockResolvedValue(degraded);
+      const r = await ensureLessonChunks(1, 'l', 2);
+      expect(r).toEqual({
+        kind: 'ready',
+        version: 4,
+        chunks: stored.chunks,
+        context: 'material text',
+      });
+      expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
+      expect(m.matchKnowledgeChunks).not.toHaveBeenCalled();
+      expect(m.upsertLessonChunks).not.toHaveBeenCalled();
+      expect(m.txCalls).toEqual([]);
+      expect(m.claims.size).toBe(0);
+    });
+
+    it('with no row stored: generates, as there is nothing to keep', async () => {
+      m.resolveDebriefSource.mockResolvedValue(degraded);
+      const r = await ensureLessonChunks(1, 'l', 2);
+      expect(m.generateKnowledgeChunks).toHaveBeenCalledTimes(1);
+      expect(r.kind).toBe('ready');
+    });
+  });
+
+  it('empty generated list: no-source, nothing stored', async () => {
     m.generateKnowledgeChunks.mockResolvedValue([]);
-    expect(await ensureLessonChunks(1, 'l', 2)).toBeNull();
+    expect(await ensureLessonChunks(1, 'l', 2)).toEqual({ kind: 'no-source' });
     expect(m.upsertLessonChunks).not.toHaveBeenCalled();
     expect(m.claims.size).toBe(0);
   });

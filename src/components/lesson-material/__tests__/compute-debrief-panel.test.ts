@@ -4,6 +4,12 @@ import type {
   DebriefAttemptView,
 } from '#/data-hooks/use-debrief-attempt';
 import {
+  DebriefNoSourceError,
+  DebriefNotOpenError,
+  DebriefPreparingError,
+  DebriefRequestError,
+} from '#/data-hooks/use-debrief-attempt';
+import {
   type DebriefStatus,
   DebriefStatusError,
 } from '#/data-hooks/use-debrief-status';
@@ -14,16 +20,21 @@ import {
   type DebriefState,
 } from '#/lib/debrief-schedule';
 import {
+  answerErrorCopy,
   attemptFormat,
   computeDebriefPanel,
   countdownTarget,
   currentDebriefQuestion,
+  DEBRIEF_ANSWER_FAILED_COPY,
+  DEBRIEF_ANSWER_FORBIDDEN_COPY,
+  DEBRIEF_ANSWER_REFUSED_COPY,
   DEBRIEF_FAILED_COPY,
   DEBRIEF_REFUSED_COPY,
   debriefQuizView,
   type FinishedDebrief,
   finishedDebriefReport,
   isStaleFinishedDebrief,
+  startErrorOf,
 } from '../compute-debrief-panel';
 
 const LESSON = 'radio-calls';
@@ -539,12 +550,107 @@ describe('debriefQuizView', () => {
     [{ enabled: false }, 'intro'],
     [{ startError: 'no-source' }, 'no-source'],
     [{ startError: 'failed' }, 'start-failed'],
+    [{ startError: 'preparing' }, 'preparing'],
+    [{ startError: 'preparing-stalled' }, 'preparing-stalled'],
+    [{ startError: 'refused' }, 'refused'],
     [{}, 'starting'],
     [{ resume: true }, 'resuming'],
     [{ hasAttempt: true }, 'scoring'],
     [{ hasAttempt: true, hasCurrent: true }, 'question'],
   ] as const)('%o → %s', (over, view) => {
     expect(debriefQuizView({ ...base, ...over })).toBe(view);
+  });
+});
+
+describe('debriefQuizView refusals mid-attempt', () => {
+  it('a refused (403) start wins over a loaded attempt — never "check your connection", never the stale question', () => {
+    expect(
+      debriefQuizView({
+        readOnly: false,
+        enabled: true,
+        resume: true,
+        notOpen: null,
+        hasAttempt: true,
+        startError: 'refused',
+        hasCurrent: true,
+      }),
+    ).toBe('refused');
+  });
+});
+
+describe('startErrorOf', () => {
+  it.each([
+    ['nothing wrong', { error: null, failureReason: null }, null],
+    [
+      'a 503 being retried',
+      { error: null, failureReason: new DebriefPreparingError() },
+      'preparing',
+    ],
+    [
+      'a 503 after the retries ran out',
+      {
+        error: new DebriefPreparingError(),
+        failureReason: new DebriefPreparingError(),
+      },
+      'preparing-stalled',
+    ],
+    [
+      'a 422',
+      { error: new DebriefNoSourceError(), failureReason: null },
+      'no-source',
+    ],
+    [
+      'a 403',
+      { error: new DebriefRequestError('x', 403), failureReason: null },
+      'refused',
+    ],
+    [
+      'a 404',
+      { error: new DebriefRequestError('x', 404), failureReason: null },
+      'refused',
+    ],
+    [
+      'a 500',
+      { error: new DebriefRequestError('x', 500), failureReason: null },
+      'failed',
+    ],
+    [
+      'a network failure',
+      { error: new TypeError('fetch'), failureReason: null },
+      'failed',
+    ],
+    [
+      'a 409 (handled as not-open, not here)',
+      { error: new DebriefNotOpenError(null), failureReason: null },
+      null,
+    ],
+  ] as const)('%s → %s', (_n, input, kind) => {
+    expect(startErrorOf(input)).toBe(kind);
+  });
+});
+
+describe('answerErrorCopy', () => {
+  it('a 403/404 states that the attempt closed or access was lost — not the connection', () => {
+    for (const status of [403, 404]) {
+      const copy = answerErrorCopy(new DebriefRequestError('x', status));
+      expect(copy).toBe(DEBRIEF_ANSWER_FORBIDDEN_COPY);
+      expect(copy).not.toMatch(/connection/i);
+    }
+  });
+
+  it('another 4xx says the attempt was reloaded', () => {
+    expect(answerErrorCopy(new DebriefRequestError('x', 400))).toBe(
+      DEBRIEF_ANSWER_REFUSED_COPY,
+    );
+  });
+
+  it('a 5xx or network failure blames the connection', () => {
+    expect(answerErrorCopy(new DebriefRequestError('x', 500))).toBe(
+      DEBRIEF_ANSWER_FAILED_COPY,
+    );
+    expect(answerErrorCopy(new TypeError('fetch'))).toBe(
+      DEBRIEF_ANSWER_FAILED_COPY,
+    );
   });
 });
 

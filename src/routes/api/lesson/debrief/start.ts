@@ -72,6 +72,14 @@ export async function startDebriefHandler(request: Request): Promise<Response> {
         const promotion = await settleProgress({ userId, courseSlug });
         return Response.json({ error: 'not-open', promotion }, { status: 409 });
       }
+      if (result.reason === 'busy') {
+        // Another request is writing this lesson's first chunk list. Not
+        // "nothing to debrief": the client shows "Preparing" and retries.
+        return Response.json(
+          { error: 'preparing', retryable: true },
+          { status: 503, headers: { 'Retry-After': '2' } },
+        );
+      }
       // Not a 500: nothing is broken. The lesson has nothing to build a
       // debrief from, and the UI does not offer one.
       return Response.json(

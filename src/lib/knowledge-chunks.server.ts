@@ -60,56 +60,105 @@ export function mapToCurrentChunkIds(
 }
 
 /**
- * The current chunks, plus the context they were resolved alongside — what
- * question generation reads next, returned so a caller does not resolve the
- * source (a transcript fetch) a second time.
+ * What `ensureLessonChunks` found:
+ * - `ready`: the current chunks, plus the context they were resolved
+ *   alongside — what question generation reads next, returned so a caller
+ *   does not resolve the source (a transcript fetch) a second time;
+ * - `no-source`: there is nothing to debrief from (no source, or generation
+ *   produced no chunks);
+ * - `busy`: another request is generating this lesson's FIRST chunk list and
+ *   it did not land within `CHUNKS_BUSY_WAIT_MS`. Retry shortly — this is not
+ *   "nothing to debrief".
  */
-type Stored = { version: number; chunks: KnowledgeChunk[]; context: string };
+export type EnsuredChunks =
+  | {
+      kind: 'ready';
+      version: number;
+      chunks: KnowledgeChunk[];
+      context: string;
+    }
+  | { kind: 'no-source' }
+  | { kind: 'busy' };
 
-const toStored = (
-  row: { version: number; chunks: KnowledgeChunk[] } | null,
+/** How often a caller waiting on another's first generation re-reads. */
+export const CHUNKS_BUSY_POLL_MS = 500;
+/** How long it waits before answering `busy`. */
+export const CHUNKS_BUSY_WAIT_MS = 6_000;
+
+const ready = (
+  row: { version: number; chunks: KnowledgeChunk[] },
   context: string,
-): Stored | null =>
-  row ? { version: row.version, chunks: row.chunks, context } : null;
+): EnsuredChunks => ({
+  kind: 'ready',
+  version: row.version,
+  chunks: row.chunks,
+  context,
+});
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * The lesson's current knowledge chunks, generating them when missing or when
- * the source changed. Stored ids are version-scoped (`v2-c3`). Null when there
- * is no source or nothing could be generated, and when another caller holds
- * the regeneration claim and nothing is stored yet.
+ * the source changed. Stored ids are version-scoped (`v2-c3`).
+ *
+ * A DEGRADED source (the transcript lookup failed, so the context fell back
+ * to the material text) is not a changed source: with a row stored it is
+ * returned unchanged — no model call, no carry-over — or the lesson would
+ * regenerate now and again when the provider recovers, resetting unpassed
+ * pilots' uncleared chunks each time. Only with no row at all does a
+ * degraded source generate.
+ *
+ * When another caller holds the regeneration claim and nothing is stored
+ * yet, it polls for their result for up to `CHUNKS_BUSY_WAIT_MS`, then
+ * answers `busy`.
  */
 export async function ensureLessonChunks(
   lessonId: number,
   lessonSlug: string,
   courseId: number,
-): Promise<Stored | null> {
+): Promise<EnsuredChunks> {
   const source = await resolveDebriefSource(lessonSlug, courseId);
-  if (!source) return null;
+  if (!source) return { kind: 'no-source' };
   const fingerprint = chunkFingerprint(source);
 
   const current = await selectLessonChunks(lessonId);
-  if (current?.sourceFingerprint === fingerprint) {
-    return toStored(current, source.context);
+  if (
+    current &&
+    (source.degraded || current.sourceFingerprint === fingerprint)
+  ) {
+    return ready(current, source.context);
   }
 
   const claimed = await redis.set(claimKey(lessonId), '1', {
     nx: true,
     ex: CLAIM_TTL_SECONDS,
   });
-  if (claimed !== 'OK') return toStored(current, source.context);
+  if (claimed !== 'OK') {
+    if (current) return ready(current, source.context);
+    // The holder is writing the FIRST list: wait for it rather than calling
+    // the lesson empty.
+    for (let waited = 0; waited < CHUNKS_BUSY_WAIT_MS; ) {
+      await sleep(CHUNKS_BUSY_POLL_MS);
+      waited += CHUNKS_BUSY_POLL_MS;
+      const landed = await selectLessonChunks(lessonId);
+      if (landed) return ready(landed, source.context);
+    }
+    return { kind: 'busy' };
+  }
 
   try {
     // Re-read: the previous holder may have just finished.
     const latest = await selectLessonChunks(lessonId);
     if (latest?.sourceFingerprint === fingerprint) {
-      return toStored(latest, source.context);
+      return ready(latest, source.context);
     }
 
     const generated = await generateKnowledgeChunks({
       keyPoints: source.keyPoints,
       context: source.context,
     });
-    if (generated.length === 0) return null;
+    if (generated.length === 0) return { kind: 'no-source' };
 
     const version = (latest?.version ?? 0) + 1;
     const chunks = generated.map((c) => ({ ...c, id: `v${version}-${c.id}` }));
@@ -132,7 +181,7 @@ export async function ensureLessonChunks(
       );
       if (mapping) await carryOverMastery(lessonId, mapping, version, tx);
     });
-    return { version, chunks, context: source.context };
+    return { kind: 'ready', version, chunks, context: source.context };
   } finally {
     await redis.del(claimKey(lessonId));
   }
