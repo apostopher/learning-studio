@@ -3,11 +3,11 @@ import {
   computeDebriefState,
   DEBRIEF_DELAY_LABEL,
   DEBRIEF_DELAY_MS,
+  DEBRIEF_RETAKE_DELAY_MS,
   type DebriefFacts,
   debriefBadge,
   debriefClockStart,
   formatDebriefDelay,
-  isPass,
   msUntil,
   parseDebriefDelayMinutes,
 } from '#/lib/debrief-schedule';
@@ -19,9 +19,9 @@ const hoursAgo = (h: number) =>
 const facts = (overrides: Partial<DebriefFacts>): DebriefFacts => ({
   clockStartAt: null,
   passed: false,
-  lastFailedAt: null,
-  hasVideo: false,
-  rewatchedAt: null,
+  lastFinishedAt: null,
+  hasOpenAttempt: false,
+  mastery: null,
   ...overrides,
 });
 
@@ -56,68 +56,65 @@ describe('computeDebriefState', () => {
   it('is open exactly 12h after the clock starts (boundary inclusive)', () => {
     expect(
       computeDebriefState(facts({ clockStartAt: hoursAgo(12) }), now),
-    ).toEqual({ kind: 'open', retake: false });
+    ).toEqual({ kind: 'open', retake: false, resume: false });
   });
 
-  it('is retake-waiting for 12h after a below-par attempt', () => {
+  it('is retake-waiting for 6h after the last finished attempt', () => {
     expect(
       computeDebriefState(
-        facts({ clockStartAt: hoursAgo(48), lastFailedAt: hoursAgo(2) }),
+        facts({ clockStartAt: hoursAgo(48), lastFinishedAt: hoursAgo(2) }),
         now,
       ),
     ).toEqual({
       kind: 'retake-waiting',
-      availableAt: '2026-10-27T22:00:00.000Z',
+      availableAt: '2026-10-27T16:00:00.000Z',
     });
   });
 
-  it('is open for retake once 12h have passed since the failed attempt', () => {
+  it('is open for retake exactly 6h after the last finished attempt', () => {
     expect(
       computeDebriefState(
-        facts({ clockStartAt: hoursAgo(48), lastFailedAt: hoursAgo(12) }),
+        facts({ clockStartAt: hoursAgo(48), lastFinishedAt: hoursAgo(6) }),
         now,
       ),
-    ).toEqual({ kind: 'open', retake: true });
+    ).toEqual({ kind: 'open', retake: true, resume: false });
   });
 
-  it('on a video lesson, waits for a full rewatch after a below-par attempt — not for a clock', () => {
+  it('retake delay is a fixed 6 hours', () => {
+    expect(DEBRIEF_RETAKE_DELAY_MS).toBe(6 * 3_600_000);
+  });
+
+  it('gates a retake on lastFinishedAt even when the clock start is later', () => {
+    expect(
+      computeDebriefState(
+        facts({ clockStartAt: hoursAgo(1), lastFinishedAt: hoursAgo(100) }),
+        now,
+      ),
+    ).toEqual({ kind: 'open', retake: true, resume: false });
+  });
+
+  it('an open attempt resumes regardless of the clock', () => {
     expect(
       computeDebriefState(
         facts({
-          hasVideo: true,
-          clockStartAt: hoursAgo(48),
-          lastFailedAt: hoursAgo(100),
+          clockStartAt: hoursAgo(1),
+          lastFinishedAt: hoursAgo(1 / 60),
+          hasOpenAttempt: true,
         }),
         now,
       ),
-    ).toEqual({ kind: 'rewatch-required' });
-  });
-
-  it('on a video lesson, opens the redo the moment the rewatch is complete', () => {
-    expect(
-      computeDebriefState(
-        facts({
-          hasVideo: true,
-          clockStartAt: hoursAgo(48),
-          lastFailedAt: hoursAgo(2),
-          rewatchedAt: hoursAgo(1),
-        }),
-        now,
-      ),
-    ).toEqual({ kind: 'open', retake: true });
-  });
-
-  it('uses the later of clockStartAt and lastFailedAt when history is backfilled', () => {
-    // lastFailedAt is earlier than the clock start: the schedule runs from it.
-    expect(
-      computeDebriefState(
-        facts({ clockStartAt: hoursAgo(1), lastFailedAt: hoursAgo(100) }),
-        now,
-      ),
-    ).toEqual({
-      kind: 'retake-waiting',
-      availableAt: '2026-10-27T23:00:00.000Z',
+    ).toEqual({ kind: 'open', retake: true, resume: true });
+    expect(computeDebriefState(facts({ hasOpenAttempt: true }), now)).toEqual({
+      kind: 'open',
+      retake: false,
+      resume: true,
     });
+  });
+
+  it('passed beats an open attempt', () => {
+    expect(
+      computeDebriefState(facts({ passed: true, hasOpenAttempt: true }), now),
+    ).toEqual({ kind: 'passed' });
   });
 });
 
@@ -194,26 +191,17 @@ describe('debriefClockStart', () => {
   });
 });
 
-describe('isPass', () => {
-  it('passes at par (75) and above', () => {
-    expect(isPass(75)).toBe(true);
-    expect(isPass(100)).toBe(true);
-  });
-
-  it('fails below par', () => {
-    expect(isPass(74)).toBe(false);
-  });
-});
-
 describe('debriefBadge', () => {
   it('shows debrief for open and retake-waiting', () => {
-    expect(debriefBadge({ kind: 'open', retake: false })).toBe('debrief');
-    expect(debriefBadge({ kind: 'open', retake: true })).toBe('debrief');
+    expect(debriefBadge({ kind: 'open', retake: false, resume: false })).toBe(
+      'debrief',
+    );
+    expect(debriefBadge({ kind: 'open', retake: true, resume: false })).toBe(
+      'debrief',
+    );
     expect(
       debriefBadge({ kind: 'retake-waiting', availableAt: hoursAgo(-1) }),
     ).toBe('debrief');
-    // Rewatching is the pilot's next step, so the lesson still asks for them.
-    expect(debriefBadge({ kind: 'rewatch-required' })).toBe('debrief');
   });
 
   it('shows passed for passed', () => {

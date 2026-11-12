@@ -1,4 +1,3 @@
-export const DEBRIEF_PAR_SCORE = 75;
 /** 12 hours, unless `VITE_DEBRIEF_DELAY_MINUTES` says otherwise. */
 const DEFAULT_DEBRIEF_DELAY_MINUTES = 12 * 60;
 
@@ -28,8 +27,8 @@ export function formatDebriefDelay(minutes: number): string {
 }
 
 /**
- * How long a debrief stays closed after its clock starts, and after a
- * below-par attempt. Overridable with `VITE_DEBRIEF_DELAY_MINUTES` (e.g. `1`)
+ * How long a debrief stays closed after its clock starts (the first attempt).
+ * Overridable with `VITE_DEBRIEF_DELAY_MINUTES` (e.g. `1`)
  * to test locally. A VITE_ variable, not a server one: the sidebar ring
  * computes the debrief state in the browser too, and the two must agree.
  */
@@ -51,6 +50,8 @@ function readDelayEnv(): unknown {
   return import.meta.env.VITE_DEBRIEF_DELAY_MINUTES;
 }
 export const DEBRIEF_DELAY_MS = DEBRIEF_DELAY_MINUTES * 60_000;
+/** Wait after a finished attempt before the next one. Fixed, not env-overridable. */
+export const DEBRIEF_RETAKE_DELAY_MS = 6 * 3_600_000;
 /** The delay as the pilot reads it: "12 hours". */
 export const DEBRIEF_DELAY_LABEL = formatDebriefDelay(DEBRIEF_DELAY_MINUTES);
 
@@ -62,22 +63,19 @@ export type DebriefFacts = {
    */
   clockStartAt: string | null;
   passed: boolean;
-  lastFailedAt: string | null;
-  /** The lesson has a video: a below-par attempt is redone after rewatching it. */
-  hasVideo: boolean;
-  /**
-   * When the pilot finished rewatching the video after `lastFailedAt` — every
-   * watched-milestone reached again since then. Null until they have.
-   */
-  rewatchedAt: string | null;
+  /** When the most recent attempt finished; gates a retake. */
+  lastFinishedAt: string | null;
+  /** An attempt is in progress: the pilot resumes it, whatever the clock says. */
+  hasOpenAttempt: boolean;
+  /** Chunk mastery so far; null when the lesson has no chunks yet. */
+  mastery: { cleared: number; total: number } | null;
 };
 
 export type DebriefState =
   | { kind: 'not-done' }
   | { kind: 'waiting'; availableAt: string } // the delay after the clock starts
-  | { kind: 'open'; retake: boolean }
-  | { kind: 'retake-waiting'; availableAt: string } // after a below-par attempt, no video
-  | { kind: 'rewatch-required' } // after a below-par attempt: rewatch the video to redo
+  | { kind: 'open'; retake: boolean; resume: boolean }
+  | { kind: 'retake-waiting'; availableAt: string } // the 6h after a finished attempt
   | { kind: 'passed' };
 
 /**
@@ -106,41 +104,28 @@ export function computeDebriefState(
   now: Date,
 ): DebriefState {
   if (facts.passed) return { kind: 'passed' };
-  if (facts.clockStartAt === null) return { kind: 'not-done' };
 
-  const startMs = Date.parse(facts.clockStartAt);
-  const failedMs = facts.lastFailedAt ? Date.parse(facts.lastFailedAt) : null;
+  const retake = facts.lastFinishedAt !== null;
+  if (facts.hasOpenAttempt) return { kind: 'open', retake, resume: true };
 
-  if (failedMs === null) {
-    const availableMs = startMs + DEBRIEF_DELAY_MS;
-    if (now.getTime() >= availableMs) return { kind: 'open', retake: false };
+  if (facts.lastFinishedAt !== null) {
+    const availableMs =
+      Date.parse(facts.lastFinishedAt) + DEBRIEF_RETAKE_DELAY_MS;
+    if (now.getTime() >= availableMs) {
+      return { kind: 'open', retake: true, resume: false };
+    }
     return {
-      kind: 'waiting',
+      kind: 'retake-waiting',
       availableAt: new Date(availableMs).toISOString(),
     };
   }
 
-  // Below par on a video lesson: the redo opens once the pilot has watched
-  // the knowledge chunk again, with no wait on top.
-  if (facts.hasVideo) {
-    return facts.rewatchedAt !== null
-      ? { kind: 'open', retake: true }
-      : { kind: 'rewatch-required' };
+  if (facts.clockStartAt === null) return { kind: 'not-done' };
+  const availableMs = Date.parse(facts.clockStartAt) + DEBRIEF_DELAY_MS;
+  if (now.getTime() >= availableMs) {
+    return { kind: 'open', retake: false, resume: false };
   }
-
-  // No video to rewatch: the retake window runs from whichever is later: the
-  // clock start or the most recent failed attempt (backfilled history can put
-  // a failure before the clock start).
-  const availableMs = Math.max(startMs, failedMs) + DEBRIEF_DELAY_MS;
-  if (now.getTime() >= availableMs) return { kind: 'open', retake: true };
-  return {
-    kind: 'retake-waiting',
-    availableAt: new Date(availableMs).toISOString(),
-  };
-}
-
-export function isPass(totalScore: number): boolean {
-  return totalScore >= DEBRIEF_PAR_SCORE;
+  return { kind: 'waiting', availableAt: new Date(availableMs).toISOString() };
 }
 
 /** Ring badge: 'debrief' for open and retake-waiting, 'passed' for passed, else null. */
@@ -148,7 +133,6 @@ export function debriefBadge(state: DebriefState): 'debrief' | 'passed' | null {
   switch (state.kind) {
     case 'open':
     case 'retake-waiting':
-    case 'rewatch-required':
       return 'debrief';
     case 'passed':
       return 'passed';

@@ -19,6 +19,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
+import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import {
   AddressSchema,
   type CourseLessonDependenciesSchema,
@@ -2534,10 +2535,7 @@ export const lessonKnowledgeChunksTable = pgTable(
       .references(() => lessonsTable.id, { onDelete: 'cascade' }),
     version: integer('version').notNull(),
     sourceFingerprint: text('source_fingerprint').notNull(),
-    // Structurally the KnowledgeChunk type produced in lib/debrief-mastery.ts.
-    chunks: jsonb('chunks')
-      .$type<{ id: string; title: string; summary: string }[]>()
-      .notNull(),
+    chunks: jsonb('chunks').$type<KnowledgeChunk[]>().notNull(),
     previousMapping: jsonb('previous_mapping').$type<Record<
       string,
       string | null
