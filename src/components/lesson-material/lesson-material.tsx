@@ -2,6 +2,7 @@ import { Tabs } from '@base-ui/react/tabs';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LessonMaterial } from '#/db/lesson';
 import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
+import { closingTabEmptyText } from '#/lib/flagship-course';
 import {
   computeMaterialTabs,
   type DebriefTabFacts,
@@ -140,13 +141,16 @@ export const LessonMaterialView = ({
 
       {material.extraTab === 'jobOfTheDay' ? (
         <Tabs.Panel value="jobOfTheDay" className="outline-hidden">
-          <JobOfTheDay jobOfTheDay={material.jobOfTheDay} />
+          <JobOfTheDay
+            jobOfTheDay={material.jobOfTheDay}
+            emptyText={closingTabEmptyText(courseSlug)}
+          />
         </Tabs.Panel>
       ) : (
         <Tabs.Panel value="testThis" className="outline-hidden">
           <Links
             links={material.testThis}
-            emptyText="Nothing to test for this lesson yet."
+            emptyText={closingTabEmptyText(courseSlug)}
           />
         </Tabs.Panel>
       )}

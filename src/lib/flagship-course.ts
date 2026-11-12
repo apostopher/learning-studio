@@ -50,6 +50,18 @@ export function closingTabLabel(courseSlug: string): string {
   return courseSlug === FLAGSHIP_COURSE_SLUG ? 'Job of the Day' : 'TEST THIS!';
 }
 
+/**
+ * The closing tab's empty note follows its label, not the field behind it:
+ * a remixed 3D Airmanship lesson in another course reads "TEST THIS!", so a
+ * note saying "No job of the day…" under it contradicts the tab (tester,
+ * 2026-11-12, 1K Wonders RPASGEN04).
+ */
+export function closingTabEmptyText(courseSlug: string): string {
+  return courseSlug === FLAGSHIP_COURSE_SLUG
+    ? 'No job of the day available for this lesson yet.'
+    : 'Nothing to test for this lesson yet.';
+}
+
 export function findFlagshipCourse<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C['course'] | null {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  closingTabEmptyText,
   courseRailBoards,
   FLAGSHIP_COURSE_SLUG,
   findFlagshipCourse,
@@ -99,5 +100,22 @@ describe('flagshipRailNote', () => {
   it('says nothing without a flagship, or in the flagship itself', () => {
     expect(flagshipRailNote(null, column(2, []))).toBeNull();
     expect(flagshipRailNote(flagship, column(6, []))).toBeNull();
+  });
+});
+
+describe('closingTabEmptyText', () => {
+  it('speaks of the Job of the Day inside the 3D Airmanship course', () => {
+    expect(closingTabEmptyText(FLAGSHIP_COURSE_SLUG)).toBe(
+      'No job of the day available for this lesson yet.',
+    );
+  });
+
+  // Tester, 2026-11-12: a remixed 3D Airmanship lesson in 1K Wonders
+  // (RPASGEN04) showed a "TEST THIS!" tab whose empty note said "No job of
+  // the day…". The note must match the label the course gives the tab.
+  it('speaks of TEST THIS! in every other course', () => {
+    expect(closingTabEmptyText('1k-wonders')).toBe(
+      'Nothing to test for this lesson yet.',
+    );
   });
 });
