@@ -11,6 +11,7 @@ import {
   type ClientEvaluation,
   toClientAttempt,
 } from '#/lib/client-debrief-attempt';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import { type DebriefFacts, debriefClockStart } from '#/lib/debrief-schedule';
 import {
   lessonCompletionsTable,
@@ -201,6 +202,38 @@ export async function getDebriefAttemptReports(
       },
     ];
   });
+}
+
+/**
+ * This pilot's latest FINISHED chunk-format attempt on a lesson, as stored —
+ * `questions` holds the grading key. Callers project it with
+ * `toClientAttempt` before anything reaches the pilot. Null when the pilot
+ * has none (no attempt yet, or only legacy ones).
+ */
+export async function selectLatestFinishedChunkAttempt(
+  userId: string,
+  lessonSlug: string,
+): Promise<{ questions: unknown; answers: unknown } | null> {
+  const [row] = await db
+    .select({
+      questions: lessonTestResultsTable.questions,
+      answers: lessonTestResultsTable.answers,
+    })
+    .from(lessonTestResultsTable)
+    .where(
+      and(
+        eq(lessonTestResultsTable.userId, userId),
+        eq(lessonTestResultsTable.lessonSlug, lessonSlug),
+        eq(lessonTestResultsTable.format, DEBRIEF_ATTEMPT_FORMAT),
+        isNotNull(lessonTestResultsTable.completedAt),
+      ),
+    )
+    .orderBy(
+      desc(lessonTestResultsTable.completedAt),
+      desc(lessonTestResultsTable.id),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /**

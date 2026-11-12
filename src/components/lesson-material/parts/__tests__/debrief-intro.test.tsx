@@ -13,6 +13,7 @@ describe('DebriefIntro', () => {
         onStart={onStart}
         readOnly={false}
         retake={false}
+        clearedSome={false}
       />,
     );
 
@@ -29,6 +30,7 @@ describe('DebriefIntro', () => {
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
+        clearedSome={false}
       />,
     );
     const button = screen.getByRole('button', { name: /Start debrief/ });
@@ -45,6 +47,7 @@ describe('DebriefIntro', () => {
           onStart={onStart}
           readOnly={true}
           retake={false}
+          clearedSome={false}
         />,
       );
 
@@ -65,6 +68,7 @@ describe('DebriefIntro', () => {
           onStart={vi.fn()}
           readOnly={true}
           retake={false}
+          clearedSome={false}
         />,
       );
 
@@ -88,6 +92,7 @@ describe('DebriefIntro', () => {
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
+        clearedSome={false}
       />,
     );
     expect(
@@ -97,13 +102,14 @@ describe('DebriefIntro', () => {
     ).toBeDefined();
   });
 
-  it('says a retake asks fresh questions on what is not yet cleared', () => {
+  it('says a retake asks fresh questions on what is not yet cleared, plus review of what is', () => {
     render(
       <DebriefIntro
         loading={false}
         onStart={vi.fn()}
         readOnly={false}
         retake={true}
+        clearedSome={true}
       />,
     );
     expect(
@@ -113,6 +119,24 @@ describe('DebriefIntro', () => {
     ).toBeDefined();
   });
 
+  it('promises no review of cleared chunks when nothing is cleared yet (e.g. only legacy attempts)', () => {
+    render(
+      <DebriefIntro
+        loading={false}
+        onStart={vi.fn()}
+        readOnly={false}
+        retake={true}
+        clearedSome={false}
+      />,
+    );
+    expect(
+      screen.getByText(
+        'Fresh questions on the knowledge chunks you have not shown yet, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText(/one or two you have/)).toBeNull();
+  });
+
   it('says it is preparing while the questions are written', () => {
     render(
       <DebriefIntro
@@ -120,6 +144,7 @@ describe('DebriefIntro', () => {
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
+        clearedSome={false}
       />,
     );
     expect(

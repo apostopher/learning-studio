@@ -218,7 +218,6 @@ describe('startOrResumeAttempt', () => {
           },
         ],
         draft: { questionId: 'q2', text: 'half' },
-        mastery: { cleared: 1, total: 2 },
       },
     });
     expect(m.generateTest).not.toHaveBeenCalled();

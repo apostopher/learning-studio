@@ -6,15 +6,17 @@ import {
   type DebriefStatus,
   DebriefStatusError,
 } from '#/data-hooks/use-debrief-status';
+import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { masteryPercent } from '#/lib/debrief-mastery';
 import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
 
 /**
  * An attempt that finished while the pilot was on its lesson: what its score
- * report shows. Kept in `justFinishedDebriefAtom` because the status refetch
- * that follows the last answer moves the debrief on (retake-waiting, or
- * passed) and the report must survive that.
+ * report shows. Kept in `justFinishedDebriefAtom` only to bridge the moment
+ * between the last answer and the status refetch landing: once it lands, a
+ * retake-waiting status carries the same report from the server, and a pass
+ * shows the pass report until the pilot leaves the lesson.
  */
 export type FinishedDebrief = {
   lessonSlug: string;
@@ -33,15 +35,28 @@ export type DebriefPanel =
   | { kind: 'error'; refused: boolean; message: string }
   | { kind: 'not-done'; outstanding: readonly OutstandingItem[] }
   | { kind: 'waiting'; availableAt: string }
-  /** Renders DebriefQuizContainer. `resume`: an attempt is already open. */
-  | { kind: 'take'; retake: boolean; resume: boolean }
+  /**
+   * Renders DebriefQuizContainer. `resume`: an attempt is already open.
+   * `clearedSome`: the pilot has cleared at least one current chunk, so a
+   * retake mixes one or two of them back in as review.
+   */
+  | { kind: 'take'; retake: boolean; resume: boolean; clearedSome: boolean }
   /**
    * The attempt just finished on this lesson: its report, and the countdown
    * to the next attempt (null once passed).
    */
   | { kind: 'finished'; report: FinishedDebrief; availableAt: string | null }
-  /** A later visit during the 6 h wait: the countdown only. */
-  | { kind: 'retake-waiting'; availableAt: string }
+  /**
+   * The 6 h wait, on any later visit: the report the server keeps (mastery
+   * and the last attempt's revisit notes) with the countdown beneath it.
+   * `report` is null when there is no chunk mastery to show (legacy
+   * attempts only): then the countdown stands alone.
+   */
+  | {
+      kind: 'retake-waiting';
+      availableAt: string;
+      report: Pick<FinishedDebrief, 'mastery' | 'revisitNotes'> | null;
+    }
   | { kind: 'passed'; attempts: NonNullable<DebriefStatus['attempts']> };
 
 type StatusView = {
@@ -113,6 +128,7 @@ export function computeDebriefPanel({
   attemptInProgress,
 }: ComputeDebriefPanelArgs): DebriefPanel {
   const state = status.data?.state;
+  const clearedSome = (status.data?.mastery?.cleared ?? 0) > 0;
 
   const own = finished?.lessonSlug === lessonSlug ? finished : null;
   if (own && !isStaleFinishedDebrief(own, lessonSlug, status)) {
@@ -135,6 +151,7 @@ export function computeDebriefPanel({
       kind: 'take',
       retake: state?.kind === 'open' ? state.retake : false,
       resume: true,
+      clearedSome,
     };
   }
 
@@ -161,9 +178,19 @@ export function computeDebriefPanel({
         kind: 'take',
         retake: data.state.retake,
         resume: data.state.resume,
+        clearedSome,
       };
     case 'retake-waiting':
-      return { kind: 'retake-waiting', availableAt: data.state.availableAt };
+      return {
+        kind: 'retake-waiting',
+        availableAt: data.state.availableAt,
+        report: data.mastery
+          ? {
+              mastery: { ...data.mastery, passed: false },
+              revisitNotes: data.revisitNotes ?? [],
+            }
+          : null,
+      };
     case 'passed':
       return { kind: 'passed', attempts: data.attempts ?? [] };
     default: {
@@ -194,26 +221,6 @@ export function currentDebriefQuestion(attempt: DebriefAttemptView): {
     total: attempt.questions.length,
     draft: attempt.draft?.questionId === question.id ? attempt.draft.text : '',
   };
-}
-
-/**
- * "Worth revisiting": the grader's note on each answer, in question order,
- * each once, empty ones dropped. An answer that cleared its chunk carries no
- * note (the grader writes none), so only holes are listed.
- */
-export function revisitNotesOf(
-  questions: readonly { id: string }[],
-  evaluations: readonly { questionId: string; revisitNote?: string }[],
-): string[] {
-  const notes = new Set<string>();
-  for (const question of questions) {
-    for (const e of evaluations) {
-      if (e.questionId !== question.id) continue;
-      const note = e.revisitNote?.trim();
-      if (note) notes.add(note);
-    }
-  }
-  return [...notes];
 }
 
 /**

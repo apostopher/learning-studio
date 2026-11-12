@@ -57,7 +57,6 @@ const view = {
   questions: [{ id: 'q1', question: 'Why?' }],
   answered: [],
   draft: null,
-  mastery: { cleared: 0, total: 2 },
 };
 
 beforeEach(() => {

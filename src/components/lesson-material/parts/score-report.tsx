@@ -14,6 +14,8 @@ type ScoreReportProps = {
   revisitNotes: readonly string[];
   /** 2 under the tab strip, 3 inside the material-less "Debrief" section. */
   headingLevel: 2 | 3;
+  /** The container's `useId`, so the revisit heading's id is unique per report. */
+  idBase: string;
   /**
    * Under the summary: the countdown to the next attempt. There is no Retake
    * button — the next attempt opens only when the wait is over.
@@ -31,10 +33,12 @@ export const ScoreReport = ({
   mastery,
   revisitNotes,
   headingLevel,
+  idBase,
   footer,
 }: ScoreReportProps) => {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const notes = mastery.passed ? [] : revisitNotes;
+  const revisitHeadingId = `${idBase}-revisit-heading`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,11 +59,11 @@ export const ScoreReport = ({
 
       {notes.length > 0 && (
         <section
-          aria-labelledby="debrief-revisit-heading"
+          aria-labelledby={revisitHeadingId}
           className="flex flex-col gap-3 rounded-xl border border-gray-6 bg-gray-2 px-5 py-4"
         >
           <Heading
-            id="debrief-revisit-heading"
+            id={revisitHeadingId}
             className="text-base font-semibold text-primary"
           >
             Worth revisiting

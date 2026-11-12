@@ -52,6 +52,14 @@ export const debriefStatusSchema = z.object({
       }),
     )
     .optional(),
+  // Between attempts only (retake-waiting, open for a retake): chunks cleared
+  // so far — null when the lesson has none stored — and the last attempt's
+  // "Worth revisiting", so a reload during the wait still shows them.
+  mastery: z
+    .object({ cleared: z.number(), total: z.number(), percent: z.number() })
+    .nullable()
+    .optional(),
+  revisitNotes: z.array(z.string()).optional(),
 });
 
 export type DebriefStatus = z.infer<typeof debriefStatusSchema>;

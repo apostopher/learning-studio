@@ -7,6 +7,7 @@ import {
   type DebriefStatus,
   DebriefStatusError,
 } from '#/data-hooks/use-debrief-status';
+import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import {
   DEBRIEF_RETAKE_DELAY_MS,
@@ -23,7 +24,6 @@ import {
   type FinishedDebrief,
   finishedDebriefReport,
   isStaleFinishedDebrief,
-  revisitNotesOf,
 } from '../compute-debrief-panel';
 
 const LESSON = 'radio-calls';
@@ -167,14 +167,55 @@ describe('computeDebriefPanel', () => {
       kind: 'take',
       retake,
       resume,
+      clearedSome: false,
     });
   });
 
-  it('retake-waiting carries the time the next attempt opens', () => {
-    expect(panel(loaded({ kind: 'retake-waiting', availableAt: AT }))).toEqual({
+  it.each([
+    [{ cleared: 2, total: 5, percent: 40 }, true],
+    [{ cleared: 0, total: 5, percent: 0 }, false],
+    [null, false],
+  ])('a retake says it mixes in cleared chunks only when some are cleared (%o)', (mastery, clearedSome) => {
+    expect(
+      panel(
+        loaded(
+          { kind: 'open', retake: true, resume: false },
+          { mastery, revisitNotes: [] },
+        ),
+      ),
+    ).toEqual({ kind: 'take', retake: true, resume: false, clearedSome });
+  });
+
+  it('retake-waiting shows the report from the status payload — mastery and notes — with the time the next attempt opens', () => {
+    expect(
+      panel(
+        loaded(
+          { kind: 'retake-waiting', availableAt: AT },
+          {
+            mastery: { cleared: 5, total: 7, percent: 71 },
+            revisitNotes: ['Note A', 'Note B'],
+          },
+        ),
+      ),
+    ).toEqual({
       kind: 'retake-waiting',
       availableAt: AT,
+      report: {
+        mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+        revisitNotes: ['Note A', 'Note B'],
+      },
     });
+  });
+
+  it('retake-waiting with no chunk mastery (legacy attempts only) is the countdown alone', () => {
+    expect(
+      panel(
+        loaded(
+          { kind: 'retake-waiting', availableAt: AT },
+          { mastery: null, revisitNotes: [] },
+        ),
+      ),
+    ).toEqual({ kind: 'retake-waiting', availableAt: AT, report: null });
   });
 
   it('hands passed the attempts history, passing first as the server sent it', () => {
@@ -233,7 +274,7 @@ describe('computeDebriefPanel', () => {
         panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
           finished: finished({ lessonSlug: 'another-lesson' }),
         }),
-      ).toEqual({ kind: 'retake-waiting', availableAt: AT });
+      ).toEqual({ kind: 'retake-waiting', availableAt: AT, report: null });
     });
 
     it('gives way to the fresh debrief once a status fetched after it says open', () => {
@@ -241,7 +282,12 @@ describe('computeDebriefPanel', () => {
         panel(loaded({ kind: 'open', retake: true, resume: false }), {
           finished: finished(),
         }),
-      ).toEqual({ kind: 'take', retake: true, resume: false });
+      ).toEqual({
+        kind: 'take',
+        retake: true,
+        resume: false,
+        clearedSome: false,
+      });
     });
   });
 
@@ -257,6 +303,7 @@ describe('computeDebriefPanel', () => {
           kind: 'take',
           retake: false,
           resume: true,
+          clearedSome: false,
         });
       }
     });
@@ -296,7 +343,6 @@ const attemptView = (
   ],
   answered: [],
   draft: null,
-  mastery: { cleared: 0, total: 3 },
   ...over,
 });
 
@@ -527,7 +573,11 @@ describe('countdownTarget', () => {
 
   it('retake-waiting counts down and announces', () => {
     expect(
-      countdownTarget({ kind: 'retake-waiting', availableAt: AT }),
+      countdownTarget({
+        kind: 'retake-waiting',
+        availableAt: AT,
+        report: null,
+      }),
     ).toEqual({ availableAt: AT, announceKey: `retake:${AT}` });
   });
 

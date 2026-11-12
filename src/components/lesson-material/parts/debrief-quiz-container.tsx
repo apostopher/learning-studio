@@ -66,6 +66,8 @@ type DebriefQuizContainerProps = {
   readOnly: boolean;
   /** A later attempt — the intro says the questions focus on what is not cleared. */
   retake: boolean;
+  /** Some chunk is cleared: the retake intro may promise review of it. */
+  clearedSome: boolean;
   /** An attempt is already open: load it straight away, no Start press. */
   resume: boolean;
   headingLevel: 2 | 3;
@@ -101,6 +103,7 @@ export const DebriefQuizContainer = ({
   lessonSlug,
   readOnly,
   retake,
+  clearedSome,
   resume,
   headingLevel,
   refetchStatus,
@@ -258,6 +261,7 @@ export const DebriefQuizContainer = ({
           }}
           readOnly={readOnly}
           retake={retake}
+          clearedSome={clearedSome}
         />
       );
     case 'not-open-checking':
@@ -300,6 +304,7 @@ export const DebriefQuizContainer = ({
           onStart={() => {}}
           readOnly={false}
           retake={retake}
+          clearedSome={clearedSome}
         />
       );
     case 'scoring':

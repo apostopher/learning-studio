@@ -26,7 +26,6 @@ const attemptViewSchema = z.object({
     }),
   ),
   draft: z.object({ questionId: z.string(), text: z.string() }).nullable(),
-  mastery: z.object({ cleared: z.number(), total: z.number() }),
 });
 export type DebriefAttemptView = z.infer<typeof attemptViewSchema>;
 
@@ -163,7 +162,6 @@ export function withAnswerRecorded(
       { questionId, ...result.evaluation },
     ],
     draft: null,
-    mastery: { cleared: result.mastery.cleared, total: result.mastery.total },
   };
 }
 

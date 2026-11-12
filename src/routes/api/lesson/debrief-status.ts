@@ -1,14 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { getCourseProgress } from '#/db/course-progress';
-import { getDebriefAttemptReports } from '#/db/lesson-test';
+import {
+  getDebriefAttemptReports,
+  selectLatestFinishedChunkAttempt,
+} from '#/db/lesson-test';
 import { auth } from '#/lib/auth';
-import type {
-  ClientAttemptQuestion,
-  ClientEvaluation,
+import {
+  type ClientAttemptQuestion,
+  type ClientEvaluation,
+  revisitNotesOf,
+  toClientAttempt,
 } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
+import { masteryPercent } from '#/lib/debrief-mastery';
 import type { DebriefState } from '#/lib/debrief-schedule';
 
 const QuerySchema = z.object({
@@ -39,6 +45,18 @@ export type DebriefStatusResponse = {
    * Passing attempts first, then newest first.
    */
   attempts?: DebriefStatusAttempt[];
+  /**
+   * Present ONLY between attempts — `retake-waiting`, and `open` for a retake.
+   * Chunks cleared of the lesson's current list; null when none are stored
+   * (a pilot with only legacy attempts on a lesson not yet chunked).
+   */
+  mastery?: { cleared: number; total: number; percent: number } | null;
+  /**
+   * With `mastery`: "Worth revisiting" from the latest finished chunk
+   * attempt, through `toClientAttempt` (never the stored snapshot, which
+   * holds the grading key). Empty when there is no such attempt.
+   */
+  revisitNotes?: string[];
 };
 
 /**
@@ -98,6 +116,26 @@ export async function debriefStatusHandler(
     }
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };
+    if (
+      state.kind === 'retake-waiting' ||
+      (state.kind === 'open' && state.retake)
+    ) {
+      // The report survives the wait: a reload, a later visit or another
+      // device shows mastery and what to revisit, not just the countdown.
+      const { mastery } = access;
+      const latest = await selectLatestFinishedChunkAttempt(userId, lessonSlug);
+      const projected = latest ? toClientAttempt(latest) : null;
+      body.mastery =
+        mastery === null
+          ? null
+          : {
+              ...mastery,
+              percent: masteryPercent({ ...mastery, passed: false }),
+            };
+      body.revisitNotes = projected
+        ? revisitNotesOf(projected.questions, projected.evaluations)
+        : [];
+    }
     if (state.kind === 'passed') {
       const attempts = await getDebriefAttemptReports(userId, lessonSlug);
       // Array#sort is stable: the newest-first order survives within a group.

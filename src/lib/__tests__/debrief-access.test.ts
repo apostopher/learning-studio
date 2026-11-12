@@ -112,6 +112,7 @@ describe('getDebriefAccess state', () => {
       courseId: 7,
       lessonId: 41,
       state: { kind: 'waiting', availableAt: '2026-10-27T18:00:00.000Z' },
+      mastery: null,
     });
   });
 
@@ -160,6 +161,8 @@ describe('getDebriefAccess state', () => {
       kind: 'retake-waiting',
       availableAt: '2026-10-27T16:00:00.000Z',
     });
+    // The status route shows it during the wait.
+    expect(access.ok && access.mastery).toEqual({ cleared: 1, total: 4 });
   });
 
   it('does not refuse on a video-locked material lock — preparation runs while the video plays', async () => {

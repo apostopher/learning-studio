@@ -65,3 +65,23 @@ export function toClientAttempt(row: {
       : [],
   };
 }
+
+/**
+ * "Worth revisiting": the grader's note on each answer, in question order,
+ * each once, empty ones dropped. An answer that cleared its chunk carries no
+ * note (the grader writes none), so only holes are listed.
+ */
+export function revisitNotesOf(
+  questions: readonly { id: string }[],
+  evaluations: readonly { questionId: string; revisitNote?: string }[],
+): string[] {
+  const notes = new Set<string>();
+  for (const question of questions) {
+    for (const e of evaluations) {
+      if (e.questionId !== question.id) continue;
+      const note = e.revisitNote?.trim();
+      if (note) notes.add(note);
+    }
+  }
+  return [...notes];
+}

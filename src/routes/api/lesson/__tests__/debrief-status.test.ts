@@ -5,6 +5,7 @@ const m = vi.hoisted(() => ({
   getSession: vi.fn(),
   getDebriefAccess: vi.fn(),
   getDebriefAttemptReports: vi.fn(),
+  selectLatestFinishedChunkAttempt: vi.fn(),
   getCourseProgress: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock('#/lib/debrief-access.server', () => ({
 }));
 vi.mock('#/db/lesson-test', () => ({
   getDebriefAttemptReports: m.getDebriefAttemptReports,
+  selectLatestFinishedChunkAttempt: m.selectLatestFinishedChunkAttempt,
 }));
 vi.mock('#/db/course-progress', () => ({
   getCourseProgress: m.getCourseProgress,
@@ -25,12 +27,68 @@ const get = (qs: string) =>
   new Request(`http://t/api/lesson/debrief-status${qs}`);
 const QS = '?lessonSlug=l1&courseSlug=c1';
 
-const access = (state: unknown) => ({
+const access = (
+  state: unknown,
+  mastery: { cleared: number; total: number } | null = null,
+) => ({
   ok: true,
   courseId: 7,
   lessonId: 41,
   state,
+  mastery,
 });
+
+/**
+ * A finished chunk attempt AS STORED: the snapshot carries the grading key
+ * (expected answers, chunk tags, chunk summaries, context) and each answer
+ * its chunk scores. None of it may reach the pilot.
+ */
+const storedChunkAttempt = {
+  questions: {
+    lessonSlug: 'l1',
+    questions: [
+      {
+        id: 'q1',
+        type: 'free-text',
+        question: 'Why does lift fall when you slow down?',
+        expectedAnswer: 'SECRET-EXPECTED-ANSWER-1',
+        chunkIds: ['v1-c1'],
+      },
+      {
+        id: 'q2',
+        type: 'free-text',
+        question: 'What sets the stall?',
+        expectedAnswer: 'SECRET-EXPECTED-ANSWER-2',
+        chunkIds: ['v1-c2'],
+      },
+    ],
+    chunks: [
+      { id: 'v1-c1', title: 'Lift', summary: 'SECRET-CHUNK-SUMMARY' },
+      { id: 'v1-c2', title: 'Stall', summary: 'SECRET-CHUNK-SUMMARY-2' },
+    ],
+    context: 'SECRET-LESSON-CONTEXT',
+  },
+  answers: [
+    {
+      questionId: 'q2',
+      type: 'free-text',
+      score: 40,
+      userAnswer: 'speed',
+      explanation: '',
+      revisitNote: 'A stall is about angle of attack, not speed.',
+      chunkScores: { 'v1-c2': 40 },
+    },
+    {
+      questionId: 'q1',
+      type: 'free-text',
+      score: 90,
+      userAnswer: 'lift goes with speed squared',
+      explanation: '',
+      revisitNote: '',
+      chunkScores: { 'v1-c1': 90 },
+    },
+  ],
+};
 
 const report = (id: number, totalScore: number, completedAt: string) => ({
   id,
@@ -45,6 +103,7 @@ beforeEach(() => {
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
   m.getDebriefAccess.mockResolvedValue(access({ kind: 'open', retake: false }));
   m.getDebriefAttemptReports.mockResolvedValue([]);
+  m.selectLatestFinishedChunkAttempt.mockResolvedValue(null);
   m.getCourseProgress.mockResolvedValue({ lessons: [] });
 });
 
@@ -81,18 +140,63 @@ describe('debrief-status', () => {
   });
 
   it.each([
-    ['open', { kind: 'open', retake: true }],
+    ['open (first attempt)', { kind: 'open', retake: false }],
     ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
+  ])('hides the attempt history and the report while %s', async (_n, state) => {
+    m.getDebriefAccess.mockResolvedValue(
+      access(state, { cleared: 0, total: 4 }),
+    );
+    const body = await (await debriefStatusHandler(get(QS))).json();
+    expect(body).toEqual({ state, lessonOutstanding: [] });
+    expect(m.getDebriefAttemptReports).not.toHaveBeenCalled();
+    expect(m.selectLatestFinishedChunkAttempt).not.toHaveBeenCalled();
+  });
+
+  it.each([
     [
       'retake-waiting',
       { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
     ],
-  ])('hides the attempt history while %s', async (_n, state) => {
-    m.getDebriefAccess.mockResolvedValue(access(state));
-    const body = await (await debriefStatusHandler(get(QS))).json();
-    expect(body).toEqual({ state, lessonOutstanding: [] });
+    ['open for a retake', { kind: 'open', retake: true, resume: false }],
+  ])("while %s, carries mastery and the last attempt's revisit notes — never its grading key", async (_n, state) => {
+    m.getDebriefAccess.mockResolvedValue(
+      access(state, { cleared: 5, total: 7 }),
+    );
+    m.selectLatestFinishedChunkAttempt.mockResolvedValue(storedChunkAttempt);
+    const res = await debriefStatusHandler(get(QS));
+    const text = await res.text();
+    const body = JSON.parse(text);
+
+    expect(m.selectLatestFinishedChunkAttempt).toHaveBeenCalledWith('u1', 'l1');
+    expect(body.state).toEqual(state);
+    expect(body.mastery).toEqual({ cleared: 5, total: 7, percent: 71 });
+    // Question order, not answer order; the cleared answer's empty note dropped.
+    expect(body.revisitNotes).toEqual([
+      'A stall is about angle of attack, not speed.',
+    ]);
     expect('attempts' in body).toBe(false);
-    expect(m.getDebriefAttemptReports).not.toHaveBeenCalled();
+    for (const secret of [
+      'SECRET',
+      'expectedAnswer',
+      'chunkIds',
+      'chunkScores',
+      'v1-c1',
+      'context',
+    ]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it('with no chunks stored and no chunk attempt (legacy only), mastery is null and there are no notes', async () => {
+    m.getDebriefAccess.mockResolvedValue(
+      access(
+        { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
+        null,
+      ),
+    );
+    const body = await (await debriefStatusHandler(get(QS))).json();
+    expect(body.mastery).toBeNull();
+    expect(body.revisitNotes).toEqual([]);
   });
 
   it('reads course progress only for a lesson that is not done', async () => {

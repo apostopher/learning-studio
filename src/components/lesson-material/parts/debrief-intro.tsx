@@ -8,6 +8,12 @@ type DebriefIntroProps = {
   readOnly: boolean;
   /** A later attempt: fresh questions on the chunks not yet cleared. */
   retake: boolean;
+  /**
+   * Some current chunk is cleared, so a retake mixes one or two back in as
+   * review. False for a pilot with nothing cleared (only legacy attempts, or
+   * a first chunk attempt that cleared nothing): the copy must not promise it.
+   */
+  clearedSome: boolean;
 };
 
 const REASON_ID = 'debrief-intro-readonly-reason';
@@ -26,11 +32,14 @@ export const DebriefIntro = ({
   onStart,
   readOnly,
   retake,
+  clearedSome,
 }: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
     <p className="text-secondary text-sm">
       {retake
-        ? 'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. '
+        ? clearedSome
+          ? 'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. '
+          : 'Fresh questions on the knowledge chunks you have not shown yet, answered in your own words. '
         : 'Each question checks one knowledge chunk of this lesson, answered in your own words. '}
       {HOW_IT_WORKS}
     </p>

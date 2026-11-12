@@ -26,6 +26,7 @@ The new code selects the new tables and columns, so deploying first would error 
 
 - [ ] Take a debrief on a video lesson to 100% across two attempts.
 - [ ] See the 6 h countdown between attempts.
+- [ ] Reload during the 6 h wait and confirm Worth revisiting is still shown (with mastery above the countdown).
 - [ ] Confirm paste is blocked and the note explaining it shows.
 - [ ] Reload mid-attempt and confirm it resumes with the draft.
 - [ ] Confirm the course percent shows the mastery item.

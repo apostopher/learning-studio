@@ -41,7 +41,6 @@ const attempt: DebriefAttemptView = {
   ],
   answered: [],
   draft: { questionId: 'q1', text: 'half' },
-  mastery: { cleared: 0, total: 4 },
 };
 
 describe('debrief attempt requests', () => {
@@ -128,7 +127,6 @@ describe('debrief attempt requests', () => {
       { questionId: 'q1', score: 80, revisitNote: 'n' },
     ]);
     expect(cached?.draft).toBeNull();
-    expect(cached?.mastery).toEqual({ cleared: 2, total: 4 });
     const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(dataKeys.debriefStatus('ppl', 'l1'));
     expect(keys).toContainEqual(dataKeys.courseProgressSummary('ppl'));

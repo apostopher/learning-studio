@@ -66,7 +66,6 @@ export type AttemptView = {
   questions: ClientQuestion[];
   answered: AnsweredQuestion[];
   draft: { questionId: string; text: string } | null;
-  mastery: { cleared: number; total: number };
 };
 
 export type StartResult =
@@ -130,16 +129,8 @@ async function currentChunksOr(
   };
 }
 
-async function toView(
-  row: AttemptRow,
-  userId: string,
-  lessonId: number,
-): Promise<AttemptView> {
+function toView(row: AttemptRow): AttemptView {
   const stored = parseStored(row);
-  const [current, rows] = await Promise.all([
-    currentChunksOr(lessonId, stored.chunks),
-    selectMastery(userId, lessonId),
-  ]);
   return {
     attemptId: row.id,
     // Picked field by field: the stored question carries `expectedAnswer`
@@ -150,7 +141,6 @@ async function toView(
     })),
     answered: parseAnswers(row).map(toAnswered),
     draft: row.draft ?? null,
-    mastery: masteryCounts(current.chunks, rows),
   };
 }
 
@@ -174,7 +164,7 @@ export async function startOrResumeAttempt(k: {
 }): Promise<StartResult> {
   const open = await selectOpenAttempt(k.userId, k.lessonSlug);
   if (open) {
-    return { ok: true, attempt: await toView(open, k.userId, k.lessonId) };
+    return { ok: true, attempt: toView(open) };
   }
 
   const lesson = await ensureLessonChunks(k.lessonId, k.lessonSlug, k.courseId);
@@ -228,7 +218,7 @@ export async function startOrResumeAttempt(k: {
   // Null: a concurrent start (another tab) inserted first — resume theirs.
   const row = inserted ?? (await selectOpenAttempt(k.userId, k.lessonSlug));
   if (!row) throw new Error('Debrief attempt vanished after a start conflict');
-  return { ok: true, attempt: await toView(row, k.userId, k.lessonId) };
+  return { ok: true, attempt: toView(row) };
 }
 
 /** Owner and lesson of an attempt, for the routes' gate. */

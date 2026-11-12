@@ -19,7 +19,6 @@ const attempt: DebriefAttemptView = {
   ],
   answered: [{ questionId: 'q1', score: 40, revisitNote: 'First note' }],
   draft: null,
-  mastery: { cleared: 0, total: 2 },
 };
 const metrics = {
   msOnQuestion: 1,

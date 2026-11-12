@@ -153,6 +153,21 @@ export const DebriefPanelContainer = ({
     </>
   );
 
+  /** Under a report: the countdown to the next attempt and why it waits. */
+  function retakeFooter(at: string) {
+    return (
+      <div className="flex flex-col gap-2 border-t border-gray-6 pt-4">
+        <DebriefCountdown
+          countdown={countdownText(at)}
+          clockTime={<DebriefTime iso={at} />}
+          announcement={announcement}
+          headingLevel={headingLevel}
+        />
+        <p className="text-sm text-secondary">{RETAKE_WAIT_REASON}</p>
+      </div>
+    );
+  }
+
   function renderPanel() {
     switch (panel.kind) {
       case 'loading':
@@ -198,7 +213,10 @@ export const DebriefPanelContainer = ({
           />
         );
       case 'retake-waiting':
-        return (
+        // The report the server keeps, so a reload or another device during
+        // the wait still shows mastery and what to revisit; the countdown
+        // alone only when there is no chunk mastery (legacy attempts only).
+        return panel.report === null ? (
           <DebriefWait
             idBase={idBase}
             headingLevel={headingLevel}
@@ -206,6 +224,14 @@ export const DebriefPanelContainer = ({
             countdown={countdownText(panel.availableAt)}
             time={<DebriefTime iso={panel.availableAt} />}
             announcement={announcement}
+          />
+        ) : (
+          <ScoreReport
+            mastery={panel.report.mastery}
+            revisitNotes={panel.report.revisitNotes}
+            headingLevel={headingLevel}
+            idBase={idBase}
+            footer={retakeFooter(panel.availableAt)}
           />
         );
       case 'take':
@@ -215,6 +241,7 @@ export const DebriefPanelContainer = ({
             lessonSlug={lessonSlug}
             readOnly={readOnly}
             retake={panel.retake}
+            clearedSome={panel.clearedSome}
             resume={panel.resume}
             headingLevel={headingLevel}
             refetchStatus={refetch}
@@ -226,18 +253,11 @@ export const DebriefPanelContainer = ({
             mastery={panel.report.mastery}
             revisitNotes={panel.report.revisitNotes}
             headingLevel={headingLevel}
+            idBase={idBase}
             footer={
-              panel.availableAt === null ? null : (
-                <div className="flex flex-col gap-2 border-t border-gray-6 pt-4">
-                  <DebriefCountdown
-                    countdown={countdownText(panel.availableAt)}
-                    clockTime={<DebriefTime iso={panel.availableAt} />}
-                    announcement={announcement}
-                    headingLevel={headingLevel}
-                  />
-                  <p className="text-sm text-secondary">{RETAKE_WAIT_REASON}</p>
-                </div>
-              )
+              panel.availableAt === null
+                ? null
+                : retakeFooter(panel.availableAt)
             }
           />
         );
