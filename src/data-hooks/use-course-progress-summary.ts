@@ -23,9 +23,10 @@ const lessonProgressSchema = z.object({
   debrief: z.object({
     clockStartAt: z.string().nullable(),
     passed: z.boolean(),
-    lastFailedAt: z.string().nullable(),
+    lastFinishedAt: z.string().nullable(),
+    hasOpenAttempt: z.boolean(),
+    mastery: z.object({ cleared: z.number(), total: z.number() }).nullable(),
     hasVideo: z.boolean(),
-    rewatchedAt: z.string().nullable(),
     bearing: z.boolean(),
   }),
 });

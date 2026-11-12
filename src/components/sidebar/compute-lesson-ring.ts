@@ -68,15 +68,6 @@ export function computeLessonRing(a: {
         ariaLabel: `${lead}, debrief reopens ${when(state.availableAt)}`,
         refreshAt: state.availableAt,
       };
-    // Nothing to wait for: the pilot's next step is the rewatch, and the
-    // video's own progress refetch flips the ring when it is done.
-    case 'rewatch-required':
-      return {
-        percent,
-        badge,
-        ariaLabel: `${lead}, rewatch the video to redo the debrief`,
-        refreshAt: null,
-      };
     // No D yet, but the wait still states its reason: the debrief has not
     // opened, and when it will.
     case 'waiting':

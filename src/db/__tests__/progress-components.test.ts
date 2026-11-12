@@ -20,10 +20,12 @@ const base = {
   quizPlayed: false,
   debriefBearing: true,
   debriefPassed: false,
-  lastFailedDebriefAt: null as Date | string | null,
+  lastFinishedDebriefAt: null as Date | string | null,
+  hasOpenDebrief: false,
+  chunksCleared: 0,
+  chunksTotal: null as number | null,
   doneAt: null as Date | string | null,
   videoWatchedAt: null as Date | string | null,
-  videoRewatchedAt: null as Date | string | null,
   visited: false,
 };
 
@@ -32,12 +34,12 @@ describe('toComponentFields', () => {
     const out = toComponentFields({
       ...base,
       doneAt: new Date('2026-10-01T00:00:00Z'),
-      lastFailedDebriefAt: new Date('2026-10-02T12:30:00Z'),
+      lastFinishedDebriefAt: new Date('2026-10-02T12:30:00Z'),
     });
     expect(out.doneAt).toBe('2026-10-01T00:00:00.000Z');
-    expect(out.lastFailedDebriefAt).toBe('2026-10-02T12:30:00.000Z');
+    expect(out.lastFinishedDebriefAt).toBe('2026-10-02T12:30:00.000Z');
     expect(toComponentFields(base).doneAt).toBeNull();
-    expect(toComponentFields(base).lastFailedDebriefAt).toBeNull();
+    expect(toComponentFields(base).lastFinishedDebriefAt).toBeNull();
   });
 
   it('maps the video-watched time to ISO', () => {
@@ -67,5 +69,21 @@ describe('toComponentFields', () => {
   it('passes the debrief facts through', () => {
     const out = toComponentFields({ ...base, debriefPassed: true });
     expect(out).toMatchObject({ debriefBearing: true, debriefPassed: true });
+  });
+
+  it('hands the chunk counts and open flag through unchanged', () => {
+    expect(
+      toComponentFields({
+        ...base,
+        hasOpenDebrief: true,
+        chunksCleared: 5,
+        chunksTotal: 7,
+      }),
+    ).toMatchObject({
+      hasOpenDebrief: true,
+      chunksCleared: 5,
+      chunksTotal: 7,
+    });
+    expect(toComponentFields(base).chunksTotal).toBeNull();
   });
 });

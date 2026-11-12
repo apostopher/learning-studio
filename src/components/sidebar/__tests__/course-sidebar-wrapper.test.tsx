@@ -753,7 +753,9 @@ describe('CourseSidebarWrapper', () => {
             debrief: {
               clockStartAt: '2020-01-01T00:00:00.000Z',
               passed: false,
-              lastFailedAt: null,
+              lastFinishedAt: null,
+              hasOpenAttempt: false,
+              mastery: { cleared: 5, total: 7 },
               bearing: true,
             },
           },
@@ -775,11 +777,12 @@ describe('CourseSidebarWrapper', () => {
         }).textContent,
       ).toContain('D');
     });
-    // Lesson 100 + unpassed debrief 0, over the one visible lesson.
+    // Lesson 100 + the debrief's chunk mastery 5/7 = 71, over the one visible
+    // lesson: (100 + 71) / 2 = 85.5 -> 86.
     expect(
       screen
         .getByRole('progressbar', { name: 'Course 3D Airmanship progress' })
         .getAttribute('aria-valuenow'),
-    ).toBe('50');
+    ).toBe('86');
   });
 });

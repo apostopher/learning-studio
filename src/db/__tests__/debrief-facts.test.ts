@@ -45,7 +45,10 @@ import {
   getDebriefFacts,
   getTestResults,
 } from '#/db/lesson-test';
-import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  debriefFactColumns,
+  videoWatchedAtSql,
+} from '#/db/progress-components';
 import { lessonsTable } from '#/db/schema';
 
 const at = (iso: string) => new Date(iso);
@@ -81,40 +84,38 @@ describe('getDebriefAttempts', () => {
 
 describe('getDebriefFacts', () => {
   type Opts = {
-    lastFinishedAt?: Date | null;
-    hasOpen?: boolean | null;
+    lastFinishedAt?: string | null;
+    hasOpen?: boolean;
     passed?: boolean;
     doneAt?: Date | null;
     // Raw `sql<Date>` columns arrive from the driver as offset-bearing strings.
     videoWatchedAt?: string | null;
     hasVideo?: boolean;
-    chunkRow?: { version: number; chunks: { id: string }[] } | null;
-    cleared?: string[];
+    chunksCleared?: number;
+    chunksTotal?: number | null;
   };
   const facts = async ({
     lastFinishedAt = null,
-    hasOpen = null,
+    hasOpen = false,
     passed = false,
     doneAt = null,
     videoWatchedAt = null,
     hasVideo = videoWatchedAt !== null,
-    chunkRow = null,
-    cleared = [],
+    chunksCleared = 0,
+    chunksTotal = null,
   }: Opts = {}) => {
-    m.queue.push(
-      [{ lastFinishedAt, hasOpen }],
-      passed ? [{ id: 1 }] : [],
-      doneAt ? [{ doneAt }] : [],
-      [
-        {
-          videoWatchedAt,
-          videoProvider: hasVideo ? 'mux' : null,
-          videoRef: hasVideo ? 'ref' : null,
-        },
-      ],
-      chunkRow ? [chunkRow] : [],
-      cleared.map((chunkId) => ({ chunkId })),
-    );
+    m.queue.push(doneAt ? [{ doneAt }] : [], [
+      {
+        debriefPassed: passed,
+        lastFinishedDebriefAt: lastFinishedAt,
+        hasOpenDebrief: hasOpen,
+        chunksCleared,
+        chunksTotal,
+        videoWatchedAt,
+        videoProvider: hasVideo ? 'mux' : null,
+        videoRef: hasVideo ? 'ref' : null,
+      },
+    ]);
     return getDebriefFacts('u1', 'l1', 41);
   };
 
@@ -128,62 +129,44 @@ describe('getDebriefFacts', () => {
     });
   });
 
-  it('reads attempts for this pilot and lesson: the latest finish over ALL rows, and an open chunk-format row', async () => {
-    const f = await facts({
-      lastFinishedAt: at('2026-10-26T08:00:00.000Z'),
-      hasOpen: true,
+  it('maps the shared fact columns: finish over ALL rows as ISO, open flag, passed, mastery', async () => {
+    expect(
+      await facts({
+        lastFinishedAt: '2026-10-26 08:00:00+00',
+        hasOpen: true,
+        passed: true,
+        chunksCleared: 5,
+        chunksTotal: 7,
+      }),
+    ).toEqual({
+      clockStartAt: null,
+      passed: true,
+      lastFinishedAt: '2026-10-26T08:00:00.000Z',
+      hasOpenAttempt: true,
+      mastery: { cleared: 5, total: 7 },
     });
-    expect(f.lastFinishedAt).toBe('2026-10-26T08:00:00.000Z');
-    expect(f.hasOpenAttempt).toBe(true);
-    // No format filter on the max: legacy rows count, so a pilot with only
-    // old below-par attempts waits 6h from the last of them.
-    expect(renderSql(m.selects[0]?.lastFinishedAt as SQL)).toBe(
-      'max("lesson_test_results"."completed_at")',
-    );
-    expect(renderSql(m.selects[0]?.hasOpen as SQL)).toBe(
-      'bool_or("lesson_test_results"."completed_at" is null and "lesson_test_results"."format" = $1)',
-    );
-    expect(renderSqlParams(m.selects[0]?.hasOpen as SQL)).toEqual([
-      'knowledge-chunks-v1',
-    ]);
-    const where = m.wheres[0] as SQL;
-    expect(renderSql(where)).toBe(
-      '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2)',
-    );
-    expect(renderSqlParams(where)).toEqual(['u1', 'l1']);
   });
 
-  it('passed = a row in debrief_passes for this pilot and lesson slug', async () => {
-    expect((await facts({ passed: true })).passed).toBe(true);
+  it('selects the SAME fact fragments as the progress rollup, from lessons alone', async () => {
+    await facts();
+    const sel = m.selects[1] as Record<string, SQL>;
+    const shared = debriefFactColumns('u1');
+    for (const key of Object.keys(shared) as (keyof typeof shared)[]) {
+      expect(renderSql(sel[key] as SQL)).toBe(renderSql(shared[key]));
+      expect(renderSqlParams(sel[key] as SQL)).toEqual(
+        renderSqlParams(shared[key]),
+      );
+    }
     const where = m.wheres[1] as SQL;
     expect(renderSql(where)).toBe(
-      '("debrief_passes"."user_id" = $1 and "debrief_passes"."lesson_slug" = $2)',
+      '("lessons"."id" = $1 and "lessons"."slug" = $2)',
     );
-    expect(renderSqlParams(where)).toEqual(['u1', 'l1']);
-  });
-
-  it('mastery counts cleared rows against the CURRENT chunk list only', async () => {
-    const f = await facts({
-      chunkRow: {
-        version: 2,
-        chunks: [{ id: 'v2-c1' }, { id: 'v2-c2' }, { id: 'v2-c3' }],
-      },
-      cleared: ['v2-c1', 'v1-c2'],
-    });
-    expect(f.mastery).toEqual({ cleared: 1, total: 3 });
-    expect(renderSql(m.wheres[4] as SQL)).toBe(
-      '"lesson_knowledge_chunks"."lesson_id" = $1',
-    );
-    expect(renderSqlParams(m.wheres[4] as SQL)).toEqual([41]);
-    expect(renderSql(m.wheres[5] as SQL)).toBe(
-      '("debrief_chunk_mastery"."user_id" = $1 and "debrief_chunk_mastery"."lesson_id" = $2 and "debrief_chunk_mastery"."cleared_at" is not null)',
-    );
-    expect(renderSqlParams(m.wheres[5] as SQL)).toEqual(['u1', 41]);
+    expect(renderSqlParams(where)).toEqual([41, 'l1']);
   });
 
   it('reads doneAt from lesson_completions by user and lesson id', async () => {
     await facts({ doneAt: at('2026-10-25T00:00:00.000Z') });
-    const where = m.wheres[2] as SQL;
+    const where = m.wheres[0] as SQL;
     expect(renderSql(where)).toBe(
       '("lesson_completions"."user_id" = $1 and "lesson_completions"."lesson_id" = $2)',
     );
@@ -211,15 +194,12 @@ describe('getDebriefFacts', () => {
 
   it('reads the video-watched time with the shared progress fragment, for this user and lesson id', async () => {
     await facts();
-    expect(renderSql(m.selects[3]?.videoWatchedAt as SQL)).toBe(
+    expect(renderSql(m.selects[1]?.videoWatchedAt as SQL)).toBe(
       renderSql(videoWatchedAtSql('u1', lessonsTable.id)),
     );
-    expect(renderSqlParams(m.selects[3]?.videoWatchedAt as SQL)).toEqual(
+    expect(renderSqlParams(m.selects[1]?.videoWatchedAt as SQL)).toEqual(
       renderSqlParams(videoWatchedAtSql('u1', lessonsTable.id)),
     );
-    const where = m.wheres[3] as SQL;
-    expect(renderSql(where)).toBe('"lessons"."id" = $1');
-    expect(renderSqlParams(where)).toEqual([41]);
   });
 });
 

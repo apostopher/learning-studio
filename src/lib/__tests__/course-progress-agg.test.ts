@@ -38,10 +38,12 @@ const row = (
   hasQuiz: false,
   quizPlayed: false,
   debriefPassed: false,
-  lastFailedDebriefAt: null,
+  lastFinishedDebriefAt: null,
+  hasOpenDebrief: false,
+  chunksCleared: 0,
+  chunksTotal: null,
   doneAt: null,
   videoWatchedAt: null,
-  videoRewatchedAt: null,
   visited: false,
   ...over,
 });
@@ -230,35 +232,36 @@ describe('done and debrief facts', () => {
         lessonId: 10,
         debriefBearing: true,
         debriefPassed: true,
-        lastFailedDebriefAt: '2026-10-02T00:00:00Z',
+        lastFinishedDebriefAt: '2026-10-02T00:00:00Z',
+        hasOpenDebrief: true,
+        chunksCleared: 5,
+        chunksTotal: 7,
         doneAt: '2026-10-01T00:00:00Z',
       }),
     ]);
     expect(lessons[0].debrief).toEqual({
       clockStartAt: '2026-10-01T00:00:00Z',
       passed: true,
-      lastFailedAt: '2026-10-02T00:00:00Z',
+      lastFinishedAt: '2026-10-02T00:00:00Z',
+      hasOpenAttempt: true,
+      mastery: { cleared: 5, total: 7 },
       hasVideo: false,
-      rewatchedAt: null,
       bearing: true,
     });
   });
 
-  it('passes the rewatch through, so the D can flip when the video is watched again', () => {
+  it('a lesson with no stored chunks has null mastery, whatever the cleared count', () => {
     const { lessons } = aggregateCourseProgress('c', [
-      row({
-        moduleId: 1,
-        lessonId: 10,
-        hasVideo: true,
-        videoWatchedAt: '2026-10-01T08:00:00Z',
-        lastFailedDebriefAt: '2026-10-02T00:00:00Z',
-        videoRewatchedAt: '2026-10-02T09:00:00Z',
-      }),
+      row({ moduleId: 1, lessonId: 10, chunksCleared: 3, chunksTotal: null }),
     ]);
-    expect(lessons[0].debrief).toMatchObject({
-      hasVideo: true,
-      rewatchedAt: '2026-10-02T09:00:00Z',
-    });
+    expect(lessons[0].debrief.mastery).toBeNull();
+  });
+
+  it('keeps hasVideo on the debrief, for the debrief-status copy', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({ moduleId: 1, lessonId: 10, hasVideo: true }),
+    ]);
+    expect(lessons[0].debrief.hasVideo).toBe(true);
   });
 
   it('starts the debrief clock when the video is watched, before the lesson is done', () => {
@@ -305,9 +308,14 @@ describe('done and debrief facts', () => {
 });
 
 describe('coursePercent', () => {
-  const L = (percent: number, bearing: boolean, passed = false) => ({
+  const L = (
+    percent: number,
+    bearing: boolean,
+    passed = false,
+    mastery: { cleared: number; total: number } | null = null,
+  ) => ({
     percent,
-    debrief: { bearing, passed },
+    debrief: { bearing, passed, mastery },
   });
 
   it('is a flat mean over lessons plus bearing debriefs', () => {
@@ -318,6 +326,27 @@ describe('coursePercent', () => {
   it('a non-bearing lesson adds no debrief item', () => {
     expect(coursePercent([L(100, false), L(100, false)])).toBe(100);
     expect(coursePercent([L(100, true, true), L(100, false)])).toBe(100);
+  });
+
+  it('a bearing, unpassed debrief counts its chunk mastery: 5/7 is the item 71', () => {
+    // Items handed to the mean: [100 (lesson), 71 (debrief)] -> 85.5 -> 86.
+    // The old pass/fail item (0) would give 50.
+    expect(coursePercent([L(100, true, false, { cleared: 5, total: 7 })])).toBe(
+      86,
+    );
+  });
+
+  it('a passed debrief is 100 whatever its mastery, and an unpassed one with no chunks is 0', () => {
+    expect(coursePercent([L(100, true, true, { cleared: 1, total: 7 })])).toBe(
+      100,
+    );
+    expect(coursePercent([L(100, true, false, null)])).toBe(50);
+  });
+
+  it('mastery never lifts a debrief item above 100, even if cleared exceeds total', () => {
+    expect(coursePercent([L(0, true, false, { cleared: 9, total: 7 })])).toBe(
+      50,
+    );
   });
 
   it('is 0 for no lessons', () => {

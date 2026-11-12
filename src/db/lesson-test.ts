@@ -1,19 +1,18 @@
-import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '#/db';
-import { videoWatchedAtSql } from '#/db/progress-components';
+import {
+  debriefFactColumns,
+  toDebriefFactFields,
+  videoWatchedAtSql,
+} from '#/db/progress-components';
 import {
   type ClientAttemptQuestion,
   type ClientEvaluation,
   toClientAttempt,
 } from '#/lib/client-debrief-attempt';
-import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
-import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { type DebriefFacts, debriefClockStart } from '#/lib/debrief-schedule';
 import {
-  debriefChunkMasteryTable,
-  debriefPassesTable,
   lessonCompletionsTable,
-  lessonKnowledgeChunksTable,
   lessonsTable,
   lessonTestResultsTable,
 } from './schema';
@@ -204,21 +203,6 @@ export async function getDebriefAttemptReports(
 }
 
 /**
- * Cleared rows counted against the current list only: ids are
- * version-scoped (`v2-c3`), so an older version's row never matches.
- */
-function clearedOfCurrent(
-  chunks: KnowledgeChunk[],
-  cleared: { chunkId: string }[],
-): { cleared: number; total: number } {
-  const current = new Set(chunks.map((c) => c.id));
-  return {
-    cleared: cleared.filter((r) => current.has(r.chunkId)).length,
-    total: chunks.length,
-  };
-}
-
-/**
  * The schedule facts for one pilot's debrief on one lesson — the route-side
  * twin of the progress rollup in `progress-components.ts`, with the same
  * rules. The two must agree, or the lesson list would show a debrief the
@@ -240,81 +224,42 @@ export async function getDebriefFacts(
   lessonSlug: string,
   lessonId: number,
 ): Promise<DebriefFacts> {
-  const [attempts, passes, completions, watched, chunkRows, clearedRows] =
-    await Promise.all([
-      db
-        .select({
-          lastFinishedAt: max(lessonTestResultsTable.completedAt),
-          hasOpen: sql<
-            boolean | null
-          >`bool_or(${lessonTestResultsTable.completedAt} is null and ${lessonTestResultsTable.format} = ${DEBRIEF_ATTEMPT_FORMAT})`,
-        })
-        .from(lessonTestResultsTable)
-        .where(
-          and(
-            eq(lessonTestResultsTable.userId, userId),
-            eq(lessonTestResultsTable.lessonSlug, lessonSlug),
-          ),
+  const [completions, lessonRows] = await Promise.all([
+    db
+      .select({ doneAt: lessonCompletionsTable.doneAt })
+      .from(lessonCompletionsTable)
+      .where(
+        and(
+          eq(lessonCompletionsTable.userId, userId),
+          eq(lessonCompletionsTable.lessonId, lessonId),
         ),
-      db
-        .select({ id: debriefPassesTable.id })
-        .from(debriefPassesTable)
-        .where(
-          and(
-            eq(debriefPassesTable.userId, userId),
-            eq(debriefPassesTable.lessonSlug, lessonSlug),
-          ),
-        )
-        .limit(1),
-      db
-        .select({ doneAt: lessonCompletionsTable.doneAt })
-        .from(lessonCompletionsTable)
-        .where(
-          and(
-            eq(lessonCompletionsTable.userId, userId),
-            eq(lessonCompletionsTable.lessonId, lessonId),
-          ),
-        )
-        .limit(1),
-      db
-        .select({
-          videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
-          videoProvider: lessonsTable.videoProvider,
-          videoRef: lessonsTable.videoRef,
-        })
-        .from(lessonsTable)
-        .where(eq(lessonsTable.id, lessonId))
-        .limit(1),
-      db
-        .select({
-          version: lessonKnowledgeChunksTable.version,
-          chunks: lessonKnowledgeChunksTable.chunks,
-        })
-        .from(lessonKnowledgeChunksTable)
-        .where(eq(lessonKnowledgeChunksTable.lessonId, lessonId))
-        .limit(1),
-      db
-        .select({ chunkId: debriefChunkMasteryTable.chunkId })
-        .from(debriefChunkMasteryTable)
-        .where(
-          and(
-            eq(debriefChunkMasteryTable.userId, userId),
-            eq(debriefChunkMasteryTable.lessonId, lessonId),
-            isNotNull(debriefChunkMasteryTable.clearedAt),
-          ),
-        ),
-    ]);
+      )
+      .limit(1),
+    // From `lessons` alone, with the same fact columns the progress rollup
+    // selects: the two cannot disagree about passed / finished / open /
+    // mastery, nor about when the video was watched.
+    db
+      .select({
+        ...debriefFactColumns(userId),
+        videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
+        videoProvider: lessonsTable.videoProvider,
+        videoRef: lessonsTable.videoRef,
+      })
+      .from(lessonsTable)
+      .where(
+        and(eq(lessonsTable.id, lessonId), eq(lessonsTable.slug, lessonSlug)),
+      )
+      .limit(1),
+  ]);
 
   const doneAt = completions[0]?.doneAt ?? null;
-  // Raw `sql<Date>` columns: the driver hands back offset-bearing strings.
-  const iso = (v: Date | string | null | undefined) =>
-    v == null ? null : new Date(v).toISOString();
-  const lesson = watched[0];
+  const lesson = lessonRows[0];
   // The same two columns the rollup's `hasVideo` reads.
   const hasVideo =
     (lesson?.videoProvider ?? null) !== null &&
     (lesson?.videoRef ?? null) !== null;
-  const chunkRow = chunkRows[0];
+  const iso = (v: Date | string | null | undefined) =>
+    v == null ? null : new Date(v).toISOString();
 
   return {
     clockStartAt: debriefClockStart({
@@ -322,10 +267,14 @@ export async function getDebriefFacts(
       videoWatchedAt: iso(lesson?.videoWatchedAt),
       doneAt: doneAt === null ? null : doneAt.toISOString(),
     }),
-    passed: passes.length > 0,
-    // `max` over the drizzle column keeps its mapping (UTC wall time + 0000).
-    lastFinishedAt: iso(attempts[0]?.lastFinishedAt),
-    hasOpenAttempt: attempts[0]?.hasOpen === true,
-    mastery: chunkRow ? clearedOfCurrent(chunkRow.chunks, clearedRows) : null,
+    ...toDebriefFactFields(
+      lesson ?? {
+        debriefPassed: false,
+        lastFinishedDebriefAt: null,
+        hasOpenDebrief: false,
+        chunksCleared: 0,
+        chunksTotal: null,
+      },
+    ),
   };
 }

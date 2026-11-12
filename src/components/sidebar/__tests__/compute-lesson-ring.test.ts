@@ -11,9 +11,9 @@ const base = {
 const facts = (over: Partial<Record<string, unknown>> = {}) => ({
   clockStartAt: '2026-10-26T09:00:00Z',
   passed: false,
-  lastFailedAt: null,
-  hasVideo: false,
-  rewatchedAt: null,
+  lastFinishedAt: null,
+  hasOpenAttempt: false,
+  mastery: null,
   bearing: true,
   ...over,
 });
@@ -41,41 +41,26 @@ describe('computeLessonRing', () => {
     expect(r.refreshAt).toBeNull();
   });
 
-  it('keeps D and says the video must be rewatched after a below-par attempt on a video lesson', () => {
+  it('keeps D and states when it reopens (6h) after a finished attempt', () => {
     const r = computeLessonRing({
       ...base,
-      debrief: facts({
-        hasVideo: true,
-        lastFailedAt: '2026-10-28T08:00:00Z',
-      }) as never,
+      debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
     expect(r.badge).toBe('debrief');
     expect(r.ariaLabel).toBe(
-      'Lesson X, 100% complete, rewatch the video to redo the debrief',
+      'Lesson X, 100% complete, debrief reopens Wed 28 Oct, 9:40 AM',
     );
-    expect(r.refreshAt).toBeNull();
-  });
-
-  it('keeps D and states when it reopens after a below-par attempt', () => {
-    const r = computeLessonRing({
-      ...base,
-      debrief: facts({ lastFailedAt: '2026-10-28T03:40:00Z' }) as never,
-    });
-    expect(r.badge).toBe('debrief');
-    expect(r.ariaLabel).toBe(
-      'Lesson X, 100% complete, debrief reopens Wed 28 Oct, 3:40 PM',
-    );
-    expect(r.refreshAt).toBe('2026-10-28T15:40:00.000Z');
+    expect(r.refreshAt).toBe('2026-10-28T09:40:00.000Z');
   });
 
   it('omits the time (SSR-safe) when includeTime is false', () => {
     const r = computeLessonRing({
       ...base,
       includeTime: false,
-      debrief: facts({ lastFailedAt: '2026-10-28T03:40:00Z' }) as never,
+      debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
     expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief reopens later');
-    expect(r.refreshAt).toBe('2026-10-28T15:40:00.000Z');
+    expect(r.refreshAt).toBe('2026-10-28T09:40:00.000Z');
   });
 
   it('shows no badge during the first 12h, says when the debrief opens, and schedules the refresh', () => {

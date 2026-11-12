@@ -16,12 +16,16 @@ const details = {
     { id: 2, lessons: [] },
   ],
 };
-const d = (passed: boolean, bearing = true) => ({
+const d = (
+  passed: boolean,
+  bearing = true,
+  mastery: { cleared: number; total: number } | null = null,
+) => ({
   clockStartAt: '2026-10-20T00:00:00Z',
   passed,
-  lastFailedAt: null,
-  hasVideo: false,
-  rewatchedAt: null,
+  lastFinishedAt: null,
+  hasOpenAttempt: false,
+  mastery,
   bearing,
 });
 const now = new Date('2026-10-28T09:00:00Z');
@@ -44,6 +48,25 @@ describe('computeSidebarPercents', () => {
     expect(r.coursePercent).toBe(75);
     expect(r.modulePercents).toEqual({ 1: 100, 2: 0 });
     expect(r.lessonPercents).toEqual({ a: 100, b: 100 });
+  });
+
+  it("hands each lesson's chunk mastery to the course mean: 100 and 5/7 -> (100 + 71) / 2", () => {
+    const r = computeSidebarPercents(
+      details,
+      {
+        lessons: [
+          {
+            lessonId: 10,
+            percent: 100,
+            debrief: d(false, true, { cleared: 5, total: 7 }),
+          },
+        ],
+      },
+      now,
+      { timeZone: 'UTC' },
+    );
+    // Lesson b has no progress row (0, no debrief): items 100, 71, 0.
+    expect(r.coursePercent).toBe(57);
   });
 
   it('exposes a ring per visible lesson, passed one ticked', () => {

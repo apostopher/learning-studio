@@ -20,9 +20,9 @@ type ProgressLike = {
 const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
   clockStartAt: null,
   passed: false,
-  lastFailedAt: null,
-  hasVideo: false,
-  rewatchedAt: null,
+  lastFinishedAt: null,
+  hasOpenAttempt: false,
+  mastery: null,
   bearing: false,
 };
 
@@ -59,7 +59,7 @@ export function computeSidebarPercents(
   const byId = new Map(progress.lessons.map((l) => [l.lessonId, l]));
   const visible: {
     percent: number;
-    debrief: { bearing: boolean; passed: boolean };
+    debrief: DebriefFacts & { bearing: boolean };
   }[] = [];
 
   for (const mod of details.modules) {

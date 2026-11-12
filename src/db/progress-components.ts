@@ -1,7 +1,7 @@
 import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
 import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
 import { watchedMilestones } from '#/lib/course-milestones';
-import { DEBRIEF_PAR_SCORE } from '#/lib/debrief-schedule';
+import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
   isTrackedLessonSection,
@@ -36,36 +36,12 @@ import {
  *
  * `created_at` is a timezone-less timestamp written by `now()`;
  * `at time zone 'UTC'` makes the raw string carry an offset so `toIso` cannot
- * read it as local time (as `lastFailedDebriefAt` does).
+ * read it as local time.
  */
 export const videoWatchedAtSql = (
   userId: string,
   lessonId: SQL | typeof lessonsTable.id | number,
-) => fullWatchAtSql(userId, lessonId, null);
-
-/**
- * When this learner finished watching the video AGAIN after their latest
- * below-par debrief: every watched-milestone reached afresh since that
- * attempt. Null until they have, and with no below-par attempt at all. A
- * below-par debrief on a video lesson reopens at this instant
- * (`computeDebriefState`). Shared like `videoWatchedAtSql`.
- */
-export const videoRewatchedAtSql = (
-  userId: string,
-  lessonId: SQL | typeof lessonsTable.id | number,
-  lessonSlug: SQL | typeof lessonsTable.slug | string,
-) =>
-  fullWatchAtSql(
-    userId,
-    lessonId,
-    sql`(
-      select max(t.completed_at) from lesson_test_results t
-      where t.user_id = ${userId}
-        and t.lesson_slug = ${outerRef(lessonSlug)}
-        and t.completed_at is not null
-        and t.total_score < ${DEBRIEF_PAR_SCORE}
-    )`,
-  );
+) => fullWatchAtSql(userId, lessonId);
 
 /**
  * A column from the OUTER query, always table-qualified. In a single-table
@@ -79,11 +55,117 @@ const outerRef = (value: SQL | Column | number | string) =>
     ? sql`${sql.identifier(getTableName(value.table))}.${sql.identifier(value.name)}`
     : sql`${value}`;
 
+type LessonSlugRef = SQL | typeof lessonsTable.slug | string;
+type LessonIdRef = SQL | typeof lessonsTable.id | number;
+
+/** A row in `debrief_passes` (permanent; legacy passes were backfilled). */
+export const debriefPassedSql = (userId: string, lessonSlug: LessonSlugRef) =>
+  sql<boolean>`exists (
+    select 1 from debrief_passes p
+    where p.user_id = ${userId}
+      and p.lesson_slug = ${outerRef(lessonSlug)}
+  )`;
+
+/**
+ * Latest `completed_at` over ALL this pilot's attempts on the lesson, legacy
+ * rows included, so a pilot with only old below-par attempts waits 6h from the
+ * last of them. `completed_at` is timezone-less and written as UTC;
+ * `at time zone 'UTC'` makes the raw string carry an offset so `toIso` cannot
+ * read it as local time.
+ */
+export const lastFinishedDebriefAtSql = (
+  userId: string,
+  lessonSlug: LessonSlugRef,
+) =>
+  sql<Date | null>`(
+    select max(t.completed_at) at time zone 'UTC' from lesson_test_results t
+    where t.user_id = ${userId}
+      and t.lesson_slug = ${outerRef(lessonSlug)}
+      and t.completed_at is not null
+  )`;
+
+/** An unfinished chunk-format attempt exists. */
+export const hasOpenDebriefSql = (userId: string, lessonSlug: LessonSlugRef) =>
+  sql<boolean>`exists (
+    select 1 from lesson_test_results t
+    where t.user_id = ${userId}
+      and t.lesson_slug = ${outerRef(lessonSlug)}
+      and t.completed_at is null
+      and t.format = ${DEBRIEF_ATTEMPT_FORMAT}
+  )`;
+
+/**
+ * Chunks this pilot has cleared of the lesson's CURRENT version. Chunk ids are
+ * version-scoped (`v2-c3`), so rows kept from an older version never match.
+ */
+export const chunksClearedSql = (userId: string, lessonId: LessonIdRef) =>
+  sql<number>`coalesce((
+    select count(*)::int from debrief_chunk_mastery m
+    join lesson_knowledge_chunks k on k.lesson_id = m.lesson_id
+    where m.user_id = ${userId}
+      and m.lesson_id = ${outerRef(lessonId)}
+      and m.cleared_at is not null
+      and m.chunk_id like 'v' || k.version || '-%'
+  ), 0)`;
+
+/** Length of the stored chunk list; null when the lesson has none yet. */
+export const chunksTotalSql = (lessonId: LessonIdRef) =>
+  sql<number | null>`(
+    select jsonb_array_length(k.chunks) from lesson_knowledge_chunks k
+    where k.lesson_id = ${outerRef(lessonId)}
+  )`;
+
+/** The lesson has stored chunks (so its debrief exists for every pilot). */
+const hasChunksSql = (lessonId: LessonIdRef) =>
+  sql<boolean>`exists (
+    select 1 from lesson_knowledge_chunks k
+    where k.lesson_id = ${outerRef(lessonId)}
+  )`;
+
+/**
+ * The debrief schedule facts, selected identically by the progress rollup and
+ * by `getDebriefFacts`, so the sidebar ring and the debrief routes read the
+ * same SQL and cannot disagree. Select from `lessons`.
+ */
+export const debriefFactColumns = (userId: string) => ({
+  debriefPassed: debriefPassedSql(userId, lessonsTable.slug),
+  lastFinishedDebriefAt: lastFinishedDebriefAtSql(userId, lessonsTable.slug),
+  hasOpenDebrief: hasOpenDebriefSql(userId, lessonsTable.slug),
+  chunksCleared: chunksClearedSql(userId, lessonsTable.id),
+  chunksTotal: chunksTotalSql(lessonsTable.id),
+});
+
+type DebriefFactRow = {
+  debriefPassed: boolean;
+  lastFinishedDebriefAt: Date | string | null;
+  hasOpenDebrief: boolean;
+  chunksCleared: number;
+  chunksTotal: number | null;
+};
+
+/** Raw `sql<Date>` columns come back as ISO-ish strings from the driver, Dates elsewhere. */
+function toIso(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
+/** The fact columns as `DebriefFacts` minus the clock (which needs video/done). */
+export function toDebriefFactFields(row: DebriefFactRow) {
+  return {
+    passed: row.debriefPassed,
+    lastFinishedAt: toIso(row.lastFinishedDebriefAt),
+    hasOpenAttempt: row.hasOpenDebrief,
+    mastery:
+      row.chunksTotal === null
+        ? null
+        : { cleared: row.chunksCleared, total: row.chunksTotal },
+  };
+}
+
 /** Both raw timestamps are `now()`-written and timezone-less, so they compare directly. */
 const fullWatchAtSql = (
   userId: string,
   lessonId: SQL | typeof lessonsTable.id | number,
-  after: SQL | null,
 ) => sql<Date | null>`(
   select case when count(*) = ${watchedMilestones.length}
     then max(f.first_at) at time zone 'UTC' end
@@ -92,7 +174,6 @@ const fullWatchAtSql = (
     where v.user_id = ${userId}
       and v.lesson_id = ${outerRef(lessonId)}
       and v.progress in (${sql.raw(watchedMilestones.join(', '))})
-      ${after === null ? sql`` : sql`and v.created_at > ${after}`}
     group by v.progress
   ) f
 )`;
@@ -167,7 +248,8 @@ export const progressComponentColumns = (userId: string) => ({
    * Whether the debrief counts toward the COURSE percent (call 11).
    *
    * The switch is on AND either the lesson has authored body text, or the
-   * server has already produced a debrief for this pilot (prepared or taken).
+   * server has already produced a debrief for this pilot (prepared or taken),
+   * or the lesson has stored knowledge chunks.
    * A transcript-only debrief therefore becomes bearing only once one really
    * exists, so a lesson whose captions turn out unusable never blocks
    * course-done.
@@ -175,16 +257,17 @@ export const progressComponentColumns = (userId: string) => ({
   debriefBearing: sql<boolean>`(${lessonsTable.hasDebrief} and (
     exists (
       select 1 from lesson_material m
-      where m.lesson_slug = ${lessonsTable.slug} and coalesce(m.text, '') <> ''
+      where m.lesson_slug = ${outerRef(lessonsTable.slug)} and coalesce(m.text, '') <> ''
     )
     or exists (
       select 1 from prepared_debriefs p
-      where p.user_id = ${userId} and p.lesson_slug = ${lessonsTable.slug}
+      where p.user_id = ${userId} and p.lesson_slug = ${outerRef(lessonsTable.slug)}
     )
     or exists (
       select 1 from lesson_test_results t
-      where t.user_id = ${userId} and t.lesson_slug = ${lessonsTable.slug}
+      where t.user_id = ${userId} and t.lesson_slug = ${outerRef(lessonsTable.slug)}
     )
+    or ${hasChunksSql(lessonsTable.id)}
   ))`,
 
   quizPlayed: sql<boolean>`exists (
@@ -192,30 +275,7 @@ export const progressComponentColumns = (userId: string) => ({
     where q.user_id = ${userId} and q.lesson_slug = ${lessonsTable.slug}
   )`,
 
-  /**
-   * Passed = a COMPLETED attempt at or above par. `completed_at IS NOT NULL`
-   * rather than row existence, so a partial save never counts.
-   */
-  debriefPassed: sql<boolean>`exists (
-    select 1 from lesson_test_results t
-    where t.user_id = ${userId}
-      and t.lesson_slug = ${lessonsTable.slug}
-      and t.completed_at is not null
-      and t.total_score >= ${DEBRIEF_PAR_SCORE}
-  )`,
-
-  /**
-   * Latest completed below-par attempt; starts the retake wait. `completed_at`
-   * is a timezone-less timestamp that drizzle stores as UTC; `at time zone 'UTC'`
-   * makes the raw string carry an offset so `toIso` cannot read it as local time.
-   */
-  lastFailedDebriefAt: sql<Date | null>`(
-    select max(t.completed_at) at time zone 'UTC' from lesson_test_results t
-    where t.user_id = ${userId}
-      and t.lesson_slug = ${lessonsTable.slug}
-      and t.completed_at is not null
-      and t.total_score < ${DEBRIEF_PAR_SCORE}
-  )`,
+  ...debriefFactColumns(userId),
 
   /** When the lesson first reached 100% for this learner (sticky). */
   doneAt: sql<Date | null>`(
@@ -225,13 +285,6 @@ export const progressComponentColumns = (userId: string) => ({
 
   /** When the video was finished; starts the debrief clock. See videoWatchedAtSql. */
   videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
-
-  /** When the video was rewatched after a below-par debrief. See videoRewatchedAtSql. */
-  videoRewatchedAt: videoRewatchedAtSql(
-    userId,
-    lessonsTable.id,
-    lessonsTable.slug,
-  ),
 
   visited: sql<boolean>`coalesce(bool_or(${lessonMaterialProgressTable.completed}
     and ${lessonMaterialProgressTable.sectionName} = ${LESSON_VISIT_SECTION}), false)`,
@@ -264,10 +317,12 @@ type ComponentRow = {
   quizPlayed: boolean;
   debriefBearing: boolean | null;
   debriefPassed: boolean;
-  lastFailedDebriefAt: Date | string | null;
+  lastFinishedDebriefAt: Date | string | null;
+  hasOpenDebrief: boolean;
+  chunksCleared: number;
+  chunksTotal: number | null;
   doneAt: Date | string | null;
   videoWatchedAt: Date | string | null;
-  videoRewatchedAt: Date | string | null;
   visited: boolean;
 };
 
@@ -278,12 +333,6 @@ type ComponentRow = {
 function toSectionNames(names: readonly string[]): TrackedLessonSection[] {
   const known = new Set(names.filter(isTrackedLessonSection));
   return TRACKED_LESSON_SECTIONS.filter((s) => known.has(s));
-}
-
-/** Raw `sql<Date>` columns come back as ISO-ish strings from the driver, Dates elsewhere. */
-function toIso(value: Date | string | null): string | null {
-  if (value === null) return null;
-  return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
 /**
@@ -307,10 +356,12 @@ export function toComponentFields(row: ComponentRow) {
     quizPlayed: row.quizPlayed,
     debriefBearing: row.debriefBearing ?? false,
     debriefPassed: row.debriefPassed,
-    lastFailedDebriefAt: toIso(row.lastFailedDebriefAt),
+    lastFinishedDebriefAt: toIso(row.lastFinishedDebriefAt),
+    hasOpenDebrief: row.hasOpenDebrief,
+    chunksCleared: row.chunksCleared,
+    chunksTotal: row.chunksTotal,
     doneAt: toIso(row.doneAt),
     videoWatchedAt: toIso(row.videoWatchedAt),
-    videoRewatchedAt: toIso(row.videoRewatchedAt),
     visited: row.visited,
   };
 }

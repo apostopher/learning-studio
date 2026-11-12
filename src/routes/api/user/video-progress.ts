@@ -7,7 +7,6 @@ import { auth } from '#/lib/auth';
 const ZERO_PROGRESS = {
   milestonesHit: [] as number[],
   watched: false,
-  rewatch: null,
 };
 
 /**
@@ -49,7 +48,6 @@ export async function getVideoProgressHandler(
     const progress = await getLessonProgress({
       userId: session.user.id,
       lessonId,
-      lessonSlug,
     });
     return Response.json(progress);
   } catch (error) {

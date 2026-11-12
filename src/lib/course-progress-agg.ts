@@ -1,4 +1,5 @@
 import { watchedMilestones } from './course-milestones';
+import { masteryPercent } from './debrief-mastery';
 import { type DebriefFacts, debriefClockStart } from './debrief-schedule';
 import type { TrackedLessonSection } from './lesson-visit-section';
 
@@ -46,14 +47,18 @@ export type LessonProgressRow = {
    */
   debriefBearing: boolean;
   debriefPassed: boolean;
-  /** ISO. Latest below-par attempt. */
-  lastFailedDebriefAt: string | null;
+  /** ISO. Latest finished attempt of ANY format (legacy included); gates a retake. */
+  lastFinishedDebriefAt: string | null;
+  /** An unfinished chunk-format attempt exists. */
+  hasOpenDebrief: boolean;
+  /** Chunks cleared of the lesson's current version. */
+  chunksCleared: number;
+  /** Stored chunk count; null when the lesson has no chunks yet. */
+  chunksTotal: number | null;
   /** ISO. When the lesson first reached 100% (sticky), from lesson_completions. */
   doneAt: string | null;
   /** ISO. When the video was finished (first full coverage). Starts the debrief clock. */
   videoWatchedAt: string | null;
-  /** ISO. When the video was watched again after the latest below-par debrief. */
-  videoRewatchedAt: string | null;
 
   /** The learner has opened this lesson's page at least once. */
   visited: boolean;
@@ -74,7 +79,11 @@ export type LessonProgress = {
   done: boolean;
   /** What is still missing; empty iff percent === 100. */
   outstanding: OutstandingItem[];
-  debrief: DebriefFacts & { bearing: boolean };
+  /**
+   * `hasVideo` is not a schedule fact (`DebriefFacts`), but the not-done
+   * "watch the video" copy in the debrief-status route reads it.
+   */
+  debrief: DebriefFacts & { bearing: boolean; hasVideo: boolean };
 };
 
 export type ModuleProgress = {
@@ -162,19 +171,36 @@ export function lessonOutstanding(row: LessonProgressRow): OutstandingItem[] {
 
 /**
  * Course percent: a flat mean over every lesson's percent plus one item per
- * debrief-bearing lesson (100 if passed, else 0). Non-bearing lessons add no
+ * debrief-bearing lesson: its chunk mastery (`masteryPercent`: 100 once
+ * passed, 0 with no chunks, never above 100). Non-bearing lessons add no
  * debrief item.
  */
 export function coursePercent(
   lessons: readonly {
     percent: number;
-    debrief: { bearing: boolean; passed: boolean };
+    debrief: {
+      bearing: boolean;
+      passed: boolean;
+      mastery: { cleared: number; total: number } | null;
+    };
   }[],
 ): number {
   const items: number[] = [];
   for (const l of lessons) {
     items.push(l.percent);
-    if (l.debrief.bearing) items.push(l.debrief.passed ? 100 : 0);
+    if (l.debrief.bearing) {
+      const { cleared, total } = l.debrief.mastery ?? { cleared: 0, total: 0 };
+      items.push(
+        Math.min(
+          100,
+          masteryPercent({
+            cleared: Math.min(cleared, total),
+            total,
+            passed: l.debrief.passed,
+          }),
+        ),
+      );
+    }
   }
   if (items.length === 0) return 0;
   return Math.round(items.reduce((s, p) => s + p, 0) / items.length);
@@ -248,9 +274,13 @@ export function aggregateCourseProgress(
           doneAt: row.doneAt,
         }),
         passed: row.debriefPassed,
-        lastFailedAt: row.lastFailedDebriefAt,
+        lastFinishedAt: row.lastFinishedDebriefAt,
+        hasOpenAttempt: row.hasOpenDebrief,
+        mastery:
+          row.chunksTotal === null
+            ? null
+            : { cleared: row.chunksCleared, total: row.chunksTotal },
         hasVideo: row.hasVideo,
-        rewatchedAt: row.videoRewatchedAt,
         bearing: row.debriefBearing,
       },
     });
