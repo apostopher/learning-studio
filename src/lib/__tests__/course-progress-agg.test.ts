@@ -250,6 +250,21 @@ describe('done and debrief facts', () => {
     });
   });
 
+  it('every current chunk cleared reads as passed for the ring too, so it agrees with the 100 in the course percent', () => {
+    const { lessons } = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        debriefBearing: true,
+        debriefPassed: false,
+        chunksCleared: 4,
+        chunksTotal: 4,
+        doneAt: '2026-10-01T00:00:00Z',
+      }),
+    ]);
+    expect(lessons[0].debrief.passed).toBe(true);
+  });
+
   it('a lesson with no stored chunks has null mastery, whatever the cleared count', () => {
     const { lessons } = aggregateCourseProgress('c', [
       row({ moduleId: 1, lessonId: 10, chunksCleared: 3, chunksTotal: null }),

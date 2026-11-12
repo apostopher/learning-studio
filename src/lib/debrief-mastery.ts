@@ -40,6 +40,27 @@ export function masteryFromCounts(
   return total === null ? null : { cleared, total };
 }
 
+/**
+ * Whether the debrief counts as passed: a permanent pass row, OR every
+ * current chunk cleared (total > 0). The second covers a regeneration's
+ * carry-over clearing a pilot's last holes before they press Start; it
+ * records the pass too (`carryOverMastery`), but every reader — the status
+ * route, the ring, the course percent — goes through this one rule so they
+ * can never disagree.
+ */
+export function debriefPassedOf(f: {
+  debriefPassed: boolean;
+  chunksCleared: number;
+  chunksTotal: number | null;
+}): boolean {
+  return (
+    f.debriefPassed ||
+    (f.chunksTotal !== null &&
+      f.chunksTotal > 0 &&
+      f.chunksCleared >= f.chunksTotal)
+  );
+}
+
 /** Percent of chunks cleared; 100 once passed, 0 with no chunks. */
 export function masteryPercent(m: {
   cleared: number;

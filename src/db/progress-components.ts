@@ -2,7 +2,7 @@ import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
 import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
-import { masteryFromCounts } from '#/lib/debrief-mastery';
+import { debriefPassedOf, masteryFromCounts } from '#/lib/debrief-mastery';
 import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
   isTrackedLessonSection,
@@ -153,7 +153,7 @@ export function toIso(value: Date | string | null | undefined): string | null {
 /** The fact columns as `DebriefFacts` minus the clock (which needs video/done). */
 export function toDebriefFactFields(row: DebriefFactRow) {
   return {
-    passed: row.debriefPassed,
+    passed: debriefPassedOf(row),
     lastFinishedAt: toIso(row.lastFinishedDebriefAt),
     hasOpenAttempt: row.hasOpenDebrief,
     mastery: masteryFromCounts(row.chunksCleared, row.chunksTotal),

@@ -3,6 +3,7 @@ import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { db } from '#/db';
 import {
   debriefChunkMasteryTable,
+  debriefPassesTable,
   type LessonKnowledgeChunksSelect,
   lessonKnowledgeChunksTable,
 } from './schema';
@@ -99,3 +100,9 @@ export const insertCarriedMastery = (
         clearedAt: sql`coalesce(${debriefChunkMasteryTable.clearedAt}, excluded.cleared_at)`,
       },
     });
+
+/** Permanent passes; one a pilot already has is left as it is. */
+export const insertPasses = (
+  ex: Executor,
+  rows: { userId: string; lessonSlug: string }[],
+) => ex.insert(debriefPassesTable).values(rows).onConflictDoNothing();

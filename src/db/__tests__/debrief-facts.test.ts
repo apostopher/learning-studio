@@ -49,6 +49,7 @@ import {
   videoWatchedAtSql,
 } from '#/db/progress-components';
 import { lessonsTable } from '#/db/schema';
+import { computeDebriefState } from '#/lib/debrief-schedule';
 
 const at = (iso: string) => new Date(iso);
 
@@ -166,6 +167,25 @@ describe('getDebriefFacts', () => {
       '("lessons"."id" = $1 and "lessons"."slug" = $2)',
     );
     expect(renderSqlParams(where)).toEqual([41, 'l1']);
+  });
+
+  it('every current chunk cleared counts as passed, pass row or not (carry-over before Start)', async () => {
+    const f = await facts({ passed: false, chunksCleared: 5, chunksTotal: 5 });
+    expect(f.passed).toBe(true);
+    expect(computeDebriefState(f, new Date()).kind).toBe('passed');
+  });
+
+  it('holes left, or no chunks at all, is not passed without a pass row', async () => {
+    expect(
+      (await facts({ passed: false, chunksCleared: 4, chunksTotal: 5 })).passed,
+    ).toBe(false);
+    expect(
+      (await facts({ passed: false, chunksCleared: 0, chunksTotal: 0 })).passed,
+    ).toBe(false);
+    expect(
+      (await facts({ passed: false, chunksCleared: 0, chunksTotal: null }))
+        .passed,
+    ).toBe(false);
   });
 
   it('reads doneAt from lesson_completions by user and lesson id', async () => {

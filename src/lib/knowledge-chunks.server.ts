@@ -6,6 +6,7 @@ import {
   deleteStaleMastery,
   type Executor,
   insertCarriedMastery,
+  insertPasses,
   selectLessonChunks,
   selectStaleMastery,
   upsertLessonChunks,
@@ -179,7 +180,15 @@ export async function ensureLessonChunks(
         },
         tx,
       );
-      if (mapping) await carryOverMastery(lessonId, mapping, version, tx);
+      if (mapping) {
+        await carryOverMastery(
+          lessonId,
+          mapping,
+          version,
+          { lessonSlug, newChunkIds: chunks.map((c) => c.id) },
+          tx,
+        );
+      }
     });
     return { kind: 'ready', version, chunks, context: source.context };
   } finally {
@@ -195,12 +204,17 @@ export async function ensureLessonChunks(
  * updates: a swap (c1->c2, c2->c1) would break the unique key. When the new id
  * already has a row, it is kept and just ensured cleared.
  *
+ * A pilot whose carried rows clear EVERY new chunk (`newChunkIds`) gets their
+ * permanent pass here, in the same transaction, so the pass exists the moment
+ * the mastery does — not only once they next press Start.
+ *
  * Pass `ex` to run inside the caller's transaction; otherwise opens its own.
  */
 export async function carryOverMastery(
   lessonId: number,
   mapping: Record<string, string | null>,
   newVersion: number,
+  lesson: { lessonSlug: string; newChunkIds: readonly string[] },
   ex?: Executor,
 ): Promise<void> {
   const run = async (tx: Executor) => {
@@ -230,7 +244,23 @@ export async function carryOverMastery(
         clearedAt: r.clearedAt,
       });
     }
-    if (carried.size > 0) await insertCarriedMastery(tx, [...carried.values()]);
+    if (carried.size === 0) return;
+    await insertCarriedMastery(tx, [...carried.values()]);
+
+    const clearedByUser = new Map<string, Set<string>>();
+    for (const c of carried.values()) {
+      const set = clearedByUser.get(c.userId) ?? new Set<string>();
+      set.add(c.chunkId);
+      clearedByUser.set(c.userId, set);
+    }
+    const fullyCleared = [...clearedByUser]
+      .filter(
+        ([, ids]) =>
+          lesson.newChunkIds.length > 0 &&
+          lesson.newChunkIds.every((id) => ids.has(id)),
+      )
+      .map(([userId]) => ({ userId, lessonSlug: lesson.lessonSlug }));
+    if (fullyCleared.length > 0) await insertPasses(tx, fullyCleared);
   };
   if (ex) await run(ex);
   else await db.transaction(async (tx) => run(tx));

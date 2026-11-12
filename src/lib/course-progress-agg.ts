@@ -1,5 +1,9 @@
 import { watchedMilestones } from './course-milestones';
-import { masteryFromCounts, masteryPercent } from './debrief-mastery';
+import {
+  debriefPassedOf,
+  masteryFromCounts,
+  masteryPercent,
+} from './debrief-mastery';
 import { type DebriefFacts, debriefClockStart } from './debrief-schedule';
 import type { TrackedLessonSection } from './lesson-visit-section';
 
@@ -273,7 +277,7 @@ export function aggregateCourseProgress(
           videoWatchedAt: row.videoWatchedAt,
           doneAt: row.doneAt,
         }),
-        passed: row.debriefPassed,
+        passed: debriefPassedOf(row),
         lastFinishedAt: row.lastFinishedDebriefAt,
         hasOpenAttempt: row.hasOpenDebrief,
         mastery: masteryFromCounts(row.chunksCleared, row.chunksTotal),
