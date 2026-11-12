@@ -1,11 +1,11 @@
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
-import type { AITestFreeTextQuestion } from '../schemas';
+import type { ChunkedFreeTextQuestion } from '../schemas';
 import { chunkBlock } from './chunks';
 
 export function evaluatorPrompt(vars: {
   chunks: KnowledgeChunk[];
   text: string;
-  questions: AITestFreeTextQuestion[];
+  questions: ChunkedFreeTextQuestion[];
 }): string {
   const { chunks, text, questions } = vars;
 

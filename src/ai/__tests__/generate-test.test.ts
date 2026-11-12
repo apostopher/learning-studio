@@ -10,7 +10,7 @@ vi.mock('ai', () => ({
 vi.mock('../ai-provider', () => ({ sonnet: 'sonnet', haiku: 'haiku' }));
 
 import { generateTest } from '../generate-test';
-import type { AITestFreeTextQuestion } from '../schemas';
+import type { ChunkedFreeTextQuestion } from '../schemas';
 
 const chunk = (id: string) => ({
   id,
@@ -19,7 +19,7 @@ const chunk = (id: string) => ({
 });
 const CHUNKS = ['c1', 'c6', 'c7', 'c99x'].map(chunk);
 
-const essay = (id: string, chunkIds: string[]): AITestFreeTextQuestion => ({
+const essay = (id: string, chunkIds: string[]): ChunkedFreeTextQuestion => ({
   id,
   type: 'free-text',
   question: `${id}?`,
@@ -97,9 +97,11 @@ describe('generateTest', () => {
 
     expect(test.lessonSlug).toBe('l1');
     expect(test.questions.map((q) => q.id)).toEqual(['q1', 'q2', 'q3']);
-    expect(
-      test.questions.map((q) => (q as AITestFreeTextQuestion).chunkIds[0]),
-    ).toEqual(['c6', 'c7', 'c1']);
+    expect(test.questions.map((q) => q.chunkIds[0])).toEqual([
+      'c6',
+      'c7',
+      'c1',
+    ]);
   });
 
   it('replaces a question citing an unknown chunk via the optimise path', async () => {
@@ -124,9 +126,11 @@ describe('generateTest', () => {
     expect(optimiserPrompt).toContain('### Question ID: q2');
     expect(optimiserPrompt).not.toContain('### Question ID: q1');
     expect(optimiserPrompt).toContain('c99');
-    expect(
-      test.questions.map((q) => (q as AITestFreeTextQuestion).chunkIds),
-    ).toEqual([['c6'], ['c7'], ['c1']]);
+    expect(test.questions.map((q) => q.chunkIds)).toEqual([
+      ['c6'],
+      ['c7'],
+      ['c1'],
+    ]);
   });
 
   it('forces chunkIds to [slot] when the retry is still wrong, never dropping a slot', async () => {
@@ -146,7 +150,7 @@ describe('generateTest', () => {
     const test = await generateTest(base);
 
     expect(test.questions).toHaveLength(3);
-    const b = test.questions[1] as AITestFreeTextQuestion;
+    const b = test.questions[1] as ChunkedFreeTextQuestion;
     expect(b.id).toBe('q2');
     expect(b.question).toBe('b2?');
     expect(b.chunkIds).toEqual(['c7']);
@@ -172,8 +176,73 @@ describe('generateTest', () => {
     const optimiserPrompt = m.generateText.mock.calls[2][0].prompt as string;
     expect(optimiserPrompt).toContain('### Question ID: q2');
     expect(optimiserPrompt).not.toContain('### Question ID: q1');
-    expect(
-      test.questions.map((q) => (q as AITestFreeTextQuestion).question),
-    ).toEqual(['a?', 'br?', 'c?']);
+    expect(test.questions.map((q) => q.question)).toEqual(['a?', 'br?', 'c?']);
+  });
+
+  it('threads avoidQuestions and the slot kind into the optimiser prompt', async () => {
+    m.generateText
+      .mockResolvedValueOnce({
+        output: {
+          questions: [
+            essay('a', ['c6']),
+            essay('b', ['c7']),
+            essay('c', ['c1']),
+          ],
+        },
+      })
+      .mockResolvedValueOnce(verdicts(['q1', 'q2', 'q3'], ['q3']))
+      .mockResolvedValueOnce({ output: { questions: [essay('cr', ['c1'])] } })
+      .mockResolvedValueOnce(verdicts(['q1', 'q2', 'q3']));
+
+    await generateTest({ ...base, avoidQuestions: ['Old question text?'] });
+
+    const optimiserPrompt = m.generateText.mock.calls[2][0].prompt as string;
+    expect(optimiserPrompt).toContain('Old question text?');
+    expect(optimiserPrompt).toMatch(/Never reuse or reword/);
+    expect(optimiserPrompt).toContain('spaced review');
+  });
+
+  it('regenerates a question whose focus chunk is known but not its slot', async () => {
+    m.generateText
+      .mockResolvedValueOnce({
+        output: {
+          questions: [
+            essay('a', ['c6']),
+            essay('b', ['c1']),
+            essay('c', ['c1']),
+          ],
+        },
+      })
+      .mockResolvedValueOnce(verdicts(['q1', 'q2', 'q3']))
+      .mockResolvedValueOnce({ output: { questions: [essay('b2', ['c7'])] } });
+
+    const test = await generateTest(base);
+
+    expect(m.generateText).toHaveBeenCalledTimes(3);
+    const optimiserPrompt = m.generateText.mock.calls[2][0].prompt as string;
+    expect(optimiserPrompt).toContain("this slot's focus chunk is `c7`");
+    expect(test.questions[1].question).toBe('b2?');
+    expect(test.questions[1].chunkIds).toEqual(['c7']);
+  });
+
+  it('treats a repeated chunk id as a mismatch', async () => {
+    m.generateText
+      .mockResolvedValueOnce({
+        output: {
+          questions: [
+            essay('a', ['c6', 'c6']),
+            essay('b', ['c7']),
+            essay('c', ['c1']),
+          ],
+        },
+      })
+      .mockResolvedValueOnce(verdicts(['q1', 'q2', 'q3']))
+      .mockResolvedValueOnce({ output: { questions: [essay('a2', ['c6'])] } });
+
+    const test = await generateTest(base);
+
+    expect(m.generateText).toHaveBeenCalledTimes(3);
+    expect(test.questions[0].question).toBe('a2?');
+    expect(test.questions[0].chunkIds).toEqual(['c6']);
   });
 });

@@ -1,18 +1,23 @@
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
-import type { AITestFreeTextQuestion, EvaluatorOutput } from '../schemas';
+import type { ChunkedFreeTextQuestion, EvaluatorOutput } from '../schemas';
 import { chunkBlock } from './chunks';
 
 export function optimizerPrompt(vars: {
   chunks: KnowledgeChunk[];
-  /** Slot focus chunk id for each failed question, by question id. */
-  focusByQuestionId: Record<string, string>;
+  /** Slot focus chunk and kind for each failed question, by question id. */
+  slotByQuestionId: Record<
+    string,
+    { chunkId: string; kind: 'hole' | 'review' }
+  >;
+  avoidQuestions: string[];
   text: string;
-  failedQuestions: AITestFreeTextQuestion[];
+  failedQuestions: ChunkedFreeTextQuestion[];
   evaluatorFeedback: EvaluatorOutput['results'];
 }): string {
   const {
     chunks,
-    focusByQuestionId,
+    slotByQuestionId,
+    avoidQuestions,
     text,
     failedQuestions,
     evaluatorFeedback,
@@ -47,7 +52,11 @@ export function optimizerPrompt(vars: {
   - Question text in markdown
 
 ## Knowledge Chunks
-${chunkBlock(chunks)}
+${chunkBlock(chunks)}${
+  avoidQuestions.length === 0
+    ? ''
+    : `\n\n## Questions this pilot has already been asked\nNever reuse or reword any of these. Test the chunk from a different angle or scenario.\n${avoidQuestions.map((q) => `- ${q}`).join('\n')}`
+}
 
 ## Lesson Text
 ${text}
@@ -57,7 +66,7 @@ ${text}
 ${pairedItems
   .map(
     ({ question, feedback }) => `### Question ID: ${question.id}
-**Focus chunk (first of chunkIds):** \`${focusByQuestionId[question.id] ?? question.chunkIds[0]}\`
+**Focus chunk (first of chunkIds):** \`${slotByQuestionId[question.id]?.chunkId ?? question.chunkIds[0]}\` (${slotByQuestionId[question.id]?.kind === 'review' ? 'spaced review of a chunk the pilot already cleared' : 'a chunk the pilot has not yet shown they know'})
 **Evaluator Feedback:** ${feedback.reason}
 
 **Original Question:**

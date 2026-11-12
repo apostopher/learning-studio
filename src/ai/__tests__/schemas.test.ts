@@ -6,6 +6,7 @@ import {
   AITestGenerationOutputSchema,
   AITestMCQQuestionSchema,
   AITestQuestionSchema,
+  AITestSchema,
   EvaluatorOutputSchema,
 } from '../schemas';
 
@@ -112,7 +113,7 @@ describe('AITestFreeTextQuestionSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('requires one or two chunk ids', () => {
+  it('requires one or two chunk ids when present', () => {
     for (const chunkIds of [[], ['a', 'b', 'c']]) {
       expect(
         AITestFreeTextQuestionSchema.safeParse({
@@ -379,5 +380,30 @@ describe('AIEvaluationResultSchema chunk fields', () => {
         essentialIdeas: [{ idea: 'x', conveyed: 'fully' }],
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('legacy stored attempts', () => {
+  it('parses a free-text question with keyPointIndex and no chunkIds', () => {
+    const result = AITestSchema.safeParse({
+      lessonSlug: 'l1',
+      questions: [
+        {
+          id: 'q1',
+          type: 'free-text',
+          question: 'Why?',
+          expectedAnswer: 'Because.',
+          keyPointIndex: 0,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still requires chunkIds from the model at generation', () => {
+    const { chunkIds: _omitted, ...legacy } = validFreeTextQuestion;
+    expect(
+      AITestGenerationOutputSchema.safeParse({ questions: [legacy] }).success,
+    ).toBe(false);
   });
 });

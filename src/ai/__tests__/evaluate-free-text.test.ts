@@ -158,4 +158,41 @@ describe('evaluateFreeText', () => {
       '<student_answer>\nSquawk 7600.\n</student_answer>',
     );
   });
+
+  it('leaves a cited chunk the lesson no longer has out of chunkScores', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [judgement('v2-c1', 'fully')],
+        incorrectClaims: [],
+        revisitNote: '',
+      },
+    });
+    const result = await evaluateFreeText(
+      { ...question, chunkIds: ['v2-c1', 'v1-gone'] },
+      'a',
+      chunks,
+      'body',
+    );
+    expect(result.chunkScores).toEqual({ 'v2-c1': 100 });
+    expect(result.score).toBe(100);
+  });
+
+  it('throws when none of the cited chunks are known', async () => {
+    await expect(
+      evaluateFreeText(
+        { ...question, chunkIds: ['nope'] },
+        'a',
+        chunks,
+        'body',
+      ),
+    ).rejects.toThrow(/chunks/);
+    expect(m.generateObject).not.toHaveBeenCalled();
+  });
+
+  it('throws for a legacy question with no chunkIds', async () => {
+    const { chunkIds: _omitted, ...legacy } = question;
+    await expect(evaluateFreeText(legacy, 'a', chunks, 'body')).rejects.toThrow(
+      /no chunkIds/,
+    );
+  });
 });

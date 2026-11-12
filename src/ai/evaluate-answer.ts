@@ -64,9 +64,19 @@ export async function evaluateFreeText(
   chunks: KnowledgeChunk[],
   context: string,
 ): Promise<AIEvaluationResult> {
+  if (!question.chunkIds || question.chunkIds.length === 0) {
+    throw new Error(
+      `Question ${question.id} has no chunkIds; only chunk-tagged questions can be graded`,
+    );
+  }
   const judged = question.chunkIds
     .map((id) => chunks.find((c) => c.id === id))
     .filter((c): c is KnowledgeChunk => c !== undefined);
+  if (judged.length === 0) {
+    throw new Error(
+      `None of question ${question.id}'s chunks (${question.chunkIds.join(', ')}) are in the lesson's chunks`,
+    );
+  }
 
   const { object } = await generateObject({
     model: sonnet,
@@ -80,12 +90,12 @@ export async function evaluateFreeText(
     }),
   });
 
-  // One score per chunk the question cites; a chunk the grader skipped counts
+  // One score per cited chunk the lesson still has (an unknown id is left out, not zeroed); a chunk the grader skipped counts
   // as not conveyed, and judgements of chunks it was not asked about are dropped.
   const claims = object.incorrectClaims.length;
   const chunkScores: Record<string, number> = {};
   let allFully = true;
-  for (const id of question.chunkIds) {
+  for (const { id } of judged) {
     const j = object.chunkJudgements.find((x) => x.chunkId === id);
     if (j?.conveyed !== 'fully') allFully = false;
     chunkScores[id] = scoreChunkJudgement(j ?? { conveyed: 'not' }, claims);

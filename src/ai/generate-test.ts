@@ -5,9 +5,8 @@ import { evaluatorPrompt } from './prompts/evaluator';
 import { generationPrompt, type QuestionSlot } from './prompts/generation';
 import { optimizerPrompt } from './prompts/optimizer';
 import {
-  type AITest,
-  type AITestFreeTextQuestion,
   AITestGenerationOutputSchema,
+  type ChunkedFreeTextQuestion,
   type EvaluatorOutput,
   EvaluatorOutputSchema,
 } from './schemas';
@@ -18,12 +17,10 @@ type Ctx = {
   chunks: KnowledgeChunk[];
   context: string;
   slots: QuestionSlot[];
+  avoidQuestions: string[];
 };
 
-async function generate(
-  ctx: Ctx,
-  avoidQuestions: string[],
-): Promise<AITestFreeTextQuestion[]> {
+async function generate(ctx: Ctx): Promise<ChunkedFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
     output: Output.object({ schema: AITestGenerationOutputSchema }),
@@ -31,7 +28,7 @@ async function generate(
       chunks: ctx.chunks,
       slots: ctx.slots,
       text: ctx.context,
-      avoidQuestions,
+      avoidQuestions: ctx.avoidQuestions,
     }),
   });
   return output.questions;
@@ -39,7 +36,7 @@ async function generate(
 
 async function evaluate(
   ctx: Ctx,
-  questions: AITestFreeTextQuestion[],
+  questions: ChunkedFreeTextQuestion[],
 ): Promise<EvaluatorOutput> {
   const { output } = await generateText({
     model: haiku,
@@ -55,16 +52,17 @@ async function evaluate(
 
 async function optimize(
   ctx: Ctx,
-  failedQuestions: AITestFreeTextQuestion[],
-  focusByQuestionId: Record<string, string>,
+  failedQuestions: ChunkedFreeTextQuestion[],
+  slotByQuestionId: Record<string, QuestionSlot>,
   evaluatorFeedback: EvaluatorOutput['results'],
-): Promise<AITestFreeTextQuestion[]> {
+): Promise<ChunkedFreeTextQuestion[]> {
   const { output } = await generateText({
     model: sonnet,
     output: Output.object({ schema: AITestGenerationOutputSchema }),
     prompt: optimizerPrompt({
       chunks: ctx.chunks,
-      focusByQuestionId,
+      slotByQuestionId,
+      avoidQuestions: ctx.avoidQuestions,
       text: ctx.context,
       failedQuestions,
       evaluatorFeedback,
@@ -74,7 +72,7 @@ async function optimize(
 }
 
 /** Ids are ours, not the model's: `q1..qN` by slot order. */
-const withSlotIds = (questions: AITestFreeTextQuestion[]) =>
+const withSlotIds = (questions: ChunkedFreeTextQuestion[]) =>
   questions.map((q, i) => ({ ...q, id: `q${i + 1}` }));
 
 /**
@@ -94,17 +92,20 @@ export async function generateTest(input: {
   context: string;
   focus: { holes: string[]; review: string[] };
   avoidQuestions: string[];
-}): Promise<AITest> {
+}): Promise<{
+  lessonSlug: string;
+  questions: ChunkedFreeTextQuestion[];
+}> {
   const { lessonSlug, chunks, context, focus, avoidQuestions } = input;
   const slots: QuestionSlot[] = [
     ...focus.holes.map((chunkId) => ({ chunkId, kind: 'hole' as const })),
     ...focus.review.map((chunkId) => ({ chunkId, kind: 'review' as const })),
   ];
-  const ctx: Ctx = { chunks, context, slots };
+  const ctx: Ctx = { chunks, context, slots, avoidQuestions };
   const slotCount = slots.length;
   if (slotCount === 0) return { lessonSlug, questions: [] };
 
-  const generated = await generate(ctx, avoidQuestions);
+  const generated = await generate(ctx);
   if (generated.length < slotCount) {
     // A hole without a question would be skipped silently; refuse instead.
     throw new Error(
@@ -119,15 +120,10 @@ export async function generateTest(input: {
     feedback: EvaluatorOutput['results'],
   ) => {
     const failed = indexes.map((i) => questions[i]);
-    const focusByQuestionId = Object.fromEntries(
-      indexes.map((i) => [questions[i].id, slots[i].chunkId]),
+    const slotByQuestionId = Object.fromEntries(
+      indexes.map((i) => [questions[i].id, slots[i]]),
     );
-    const regenerated = await optimize(
-      ctx,
-      failed,
-      focusByQuestionId,
-      feedback,
-    );
+    const regenerated = await optimize(ctx, failed, slotByQuestionId, feedback);
     // In order, one for one; a failure the optimiser returned nothing for
     // keeps its original rather than shrinking the debrief.
     indexes.forEach((slot, n) => {
@@ -148,10 +144,13 @@ export async function generateTest(input: {
   }
 
   const known = new Set(chunks.map((c) => c.id));
-  const problem = (q: AITestFreeTextQuestion, i: number): string | null => {
+  const problem = (q: ChunkedFreeTextQuestion, i: number): string | null => {
     const unknown = q.chunkIds.filter((id) => !known.has(id));
     if (unknown.length > 0) {
       return `Cites unknown chunk id(s) ${unknown.join(', ')}; use only ids from the Knowledge Chunks list.`;
+    }
+    if (new Set(q.chunkIds).size !== q.chunkIds.length) {
+      return `chunkIds repeats an id (${q.chunkIds.join(', ')}); list each chunk once.`;
     }
     if (q.chunkIds[0] !== slots[i].chunkId) {
       return `chunkIds[0] is \`${q.chunkIds[0]}\` but this slot's focus chunk is \`${slots[i].chunkId}\`; it must come first and the question must test it.`;

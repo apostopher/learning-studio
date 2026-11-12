@@ -23,11 +23,13 @@ export const AITestFreeTextQuestionSchema = z.object({
   question: z.string().describe('Question text in markdown'),
   expectedAnswer: z.string().describe('Reference answer for AI grading'),
   /**
-   * The knowledge chunks this question tests. `chunkIds[0]` is the focus
+   * The knowledge chunks this question tests. Optional only so attempts saved
+   * before chunk tagging still parse; generation requires it (see
+   * `AITestGenerationQuestionSchema`) and only tagged questions are graded. `chunkIds[0]` is the focus
    * chunk the question was written for; an optional second is a chunk it also
    * leans on. Opaque ids from the lesson's stored chunks.
    */
-  chunkIds: z.array(z.string()).min(1).max(2),
+  chunkIds: z.array(z.string()).min(1).max(2).optional(),
   /** Legacy: attempts saved before chunk tagging carry a key-point index. */
   keyPointIndex: z.number().int().min(0).optional(),
 });
@@ -41,8 +43,13 @@ export const AITestQuestionSchema = z.discriminatedUnion('type', [
 // Generation output (what the AI returns). Written questions only: debriefs
 // stopped asking MCQ on 2026-11-11. MCQ stays in `AITestQuestionSchema` so
 // attempts saved before then still parse and render.
+export const AITestGenerationQuestionSchema =
+  AITestFreeTextQuestionSchema.extend({
+    chunkIds: z.array(z.string()).min(1).max(2),
+  });
+
 export const AITestGenerationOutputSchema = z.object({
-  questions: z.array(AITestFreeTextQuestionSchema),
+  questions: z.array(AITestGenerationQuestionSchema),
 });
 
 // Full test with lesson slug
@@ -135,6 +142,10 @@ export type AITestOption = z.infer<typeof AITestOptionSchema>;
 export type AITestMCQQuestion = z.infer<typeof AITestMCQQuestionSchema>;
 export type AITestFreeTextQuestion = z.infer<
   typeof AITestFreeTextQuestionSchema
+>;
+/** A free-text question as generated: chunk tags guaranteed. */
+export type ChunkedFreeTextQuestion = z.infer<
+  typeof AITestGenerationQuestionSchema
 >;
 export type AITestQuestion = z.infer<typeof AITestQuestionSchema>;
 export type AITestGenerationOutput = z.infer<
