@@ -135,4 +135,44 @@ describe('resolveDebriefSource', () => {
     await resolveDebriefSource('l-1', 7);
     expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
   });
+
+  it('falls back to material text when the transcript lookup rejects for an authored lesson', async () => {
+    getLessonMaterial.mockResolvedValue({
+      text: 'lesson body',
+      keyPoints: ['authored'],
+    });
+    getLessonTranscript.mockRejectedValue(new Error('mux down'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
+      kind: 'material',
+      keyPoints: ['authored'],
+      context: 'lesson body',
+    });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('falls back to material text when the home-course lookup rejects', async () => {
+    getLessonMaterial.mockResolvedValue({
+      text: 'lesson body',
+      keyPoints: ['a'],
+    });
+    getHomeCourseIdForLesson.mockRejectedValue(new Error('db'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const source = await resolveDebriefSource('l-1', 7);
+    expect(source?.context).toBe('lesson body');
+    warn.mockRestore();
+  });
+
+  it('uses the passed courseId when the lesson slug resolves to no lesson id', async () => {
+    getLessonIdBySlug.mockResolvedValue(null);
+    getLessonMaterial.mockResolvedValue({ text: 'b', keyPoints: ['a'] });
+    getLessonTranscript.mockResolvedValue('t');
+
+    await resolveDebriefSource('l-1', 7);
+    expect(getHomeCourseIdForLesson).not.toHaveBeenCalled();
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
+  });
 });

@@ -51,14 +51,31 @@ export async function resolveDebriefSource(
 
   // Chunks are per lesson, not per course, so the transcript comes from the
   // lesson's home course (see `getHomeCourseIdForLesson`), falling back to the
-  // course being served when the lesson is unplaced.
-  const lessonId = await getLessonIdBySlug(lessonSlug);
-  const homeCourseId =
-    (lessonId === null ? null : await getHomeCourseIdForLesson(lessonId)) ??
-    courseId;
-  const transcript = await getLessonTranscript(lessonSlug, {
-    courseId: homeCourseId,
-  });
+  // course being served when the lesson is unplaced. Authored material never
+  // needed the transcript before, so for it a failed lookup degrades to the
+  // material text instead of breaking the lesson; with no material the
+  // transcript is the source and the error propagates as it always did.
+  const lookupTranscript = async (): Promise<string | null> => {
+    const lessonId = await getLessonIdBySlug(lessonSlug);
+    const homeCourseId =
+      (lessonId === null ? null : await getHomeCourseIdForLesson(lessonId)) ??
+      courseId;
+    return getLessonTranscript(lessonSlug, { courseId: homeCourseId });
+  };
+  let transcript: string | null;
+  if (material?.text) {
+    try {
+      transcript = await lookupTranscript();
+    } catch (error) {
+      console.warn(
+        `Transcript lookup failed for ${lessonSlug}; using material text:`,
+        error,
+      );
+      transcript = null;
+    }
+  } else {
+    transcript = await lookupTranscript();
+  }
 
   if (material?.text) {
     const context = transcript ?? material.text;
