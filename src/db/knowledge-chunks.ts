@@ -99,13 +99,3 @@ export const insertCarriedMastery = (
         clearedAt: sql`coalesce(${debriefChunkMasteryTable.clearedAt}, excluded.cleared_at)`,
       },
     });
-
-/** The stored list, or the given version of it (only the current one is kept). */
-export async function getLessonChunks(
-  lessonId: number,
-  version?: number,
-): Promise<LessonKnowledgeChunksSelect | null> {
-  const row = await selectLessonChunks(lessonId);
-  if (!row || (version !== undefined && row.version !== version)) return null;
-  return row;
-}

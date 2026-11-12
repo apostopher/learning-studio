@@ -41,6 +41,7 @@ function setup(
       question={question}
       index={0}
       total={2}
+      idBase=":q:"
       isEvaluating={false}
       readOnly={false}
       pasteBlockedNote={false}
@@ -155,5 +156,17 @@ describe('QuestionCard count', () => {
   it('says which question this is, of how many', () => {
     setup({ index: 1, total: 7 });
     expect(screen.getByText('Question 2 of 7')).toBeDefined();
+  });
+});
+
+describe('QuestionCard answer box name', () => {
+  it('the answer box is named by the question it answers (aria-labelledby → the question text)', () => {
+    const { box } = setup();
+    const labelledBy = box.getAttribute('aria-labelledby');
+    expect(labelledBy).toBe(':q:-question');
+    expect(document.getElementById(labelledBy as string)?.textContent).toBe(
+      question.question,
+    );
+    expect(screen.getByRole('textbox', { name: question.question })).toBe(box);
   });
 });

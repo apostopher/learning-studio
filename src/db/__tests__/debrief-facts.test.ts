@@ -41,9 +41,8 @@ vi.mock('#/db', () => ({
 
 import {
   getDebriefAttemptReports,
-  getDebriefAttempts,
   getDebriefFacts,
-  getTestResults,
+  selectLatestFinishedChunkAttempt,
 } from '#/db/lesson-test';
 import {
   debriefFactColumns,
@@ -59,10 +58,10 @@ beforeEach(() => {
   m.selects.length = 0;
 });
 
-describe('getDebriefAttempts', () => {
+describe('getDebriefAttemptReports filter', () => {
   it('reads only COMPLETED, scored attempts for this user and lesson', async () => {
     m.queue.push([]);
-    await getDebriefAttempts('u1', 'l1');
+    await getDebriefAttemptReports('u1', 'l1');
     const where = m.wheres[0] as SQL;
     expect(renderSql(where)).toBe(
       '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2 and "lesson_test_results"."completed_at" is not null and "lesson_test_results"."total_score" is not null)',
@@ -74,11 +73,16 @@ describe('getDebriefAttempts', () => {
     // drizzle maps a `timestamp` (no tz) column by appending +0000, so the
     // Date it hands back is already the UTC wall time the row was written at.
     m.queue.push([
-      { id: 2, totalScore: 60, completedAt: at('2026-10-27T09:30:00.000Z') },
+      {
+        id: 2,
+        totalScore: 60,
+        completedAt: at('2026-10-27T09:30:00.000Z'),
+        format: null,
+        finishedReason: null,
+      },
     ]);
-    expect(await getDebriefAttempts('u1', 'l1')).toEqual([
-      { id: 2, totalScore: 60, completedAt: '2026-10-27T09:30:00.000Z' },
-    ]);
+    const [report] = await getDebriefAttemptReports('u1', 'l1');
+    expect(report?.completedAt).toBe('2026-10-27T09:30:00.000Z');
   });
 });
 
@@ -285,16 +289,14 @@ const leaks = (v: unknown) =>
   ].filter((s) => JSON.stringify(v).includes(s));
 
 describe('rows the client can receive never carry the grading key', () => {
-  it('getTestResults (the results route) projects every row', async () => {
-    m.queue.push([chunkRow]);
-    const rows = await getTestResults('u1', 'l1');
-    expect(leaks(rows)).toEqual([]);
-    expect(rows[0]).toMatchObject({
-      id: 9,
-      totalScore: 50,
-      questions: [{ id: 'q1', question: 'Why?' }],
-      evaluations: [{ questionId: 'q1', score: 50, revisitNote: 'note' }],
-    });
+  it("selectLatestFinishedChunkAttempt reads only this pilot's FINISHED chunk-format rows (callers project them)", async () => {
+    m.queue.push([]);
+    await selectLatestFinishedChunkAttempt('u1', 'l1');
+    const where = m.wheres[0] as SQL;
+    expect(renderSql(where)).toBe(
+      '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2 and "lesson_test_results"."format" = $3 and "lesson_test_results"."completed_at" is not null)',
+    );
+    expect(renderSqlParams(where)).toEqual(['u1', 'l1', 'knowledge-chunks-v1']);
   });
 
   it('getDebriefAttemptReports (the passed branch of debrief-status) projects every row', async () => {

@@ -2360,6 +2360,13 @@ export const lessonTestResultsTable = pgTable(
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     /** 'knowledge-chunks-v1' for new attempts; null for legacy attempts. */
     format: text('format'),
+    /**
+     * The `lesson_knowledge_chunks.version` a chunk attempt was built on.
+     * Written for audits only — no code reads it: grading reads the chunk
+     * snapshot in `questions`, whose ids carry their version (`v2-c3`) and
+     * are mapped onto the current list by `mapToCurrentChunkIds`. Null on
+     * legacy attempts.
+     */
     chunkVersion: integer('chunk_version'),
     /** In-progress answer text, so a reload does not lose it. */
     draft: jsonb('draft').$type<{ questionId: string; text: string } | null>(),

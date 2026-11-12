@@ -362,6 +362,7 @@ export const DebriefQuizContainer = ({
         question={current.question}
         index={current.index}
         total={current.total}
+        idBase={idBase}
         isEvaluating={answer.isPending && isCurrentAnswer}
         onSubmit={handleSubmit}
         readOnly={false}

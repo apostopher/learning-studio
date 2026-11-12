@@ -19,106 +19,12 @@ import {
   lessonTestResultsTable,
 } from './schema';
 
-export type ClientTestResult = {
-  id: number;
-  lessonSlug: string;
-  totalScore: number | null;
-  completedAt: Date | null;
-  createdAt: Date;
-  format: string | null;
-  finishedReason: 'all-answered' | 'all-cleared' | null;
-  questions: ClientAttemptQuestion[];
-  evaluations: ClientEvaluation[];
-};
-
-/**
- * This pilot's FINISHED attempts on a lesson, newest first, for the results
- * route. Never an open one, and every row goes through `toClientAttempt`: a
- * chunk-format row stores its grading key (expected answers, chunk tags and
- * summaries, context), which must never reach the pilot.
- */
-export async function getTestResults(
-  userId: string,
-  lessonSlug: string,
-): Promise<ClientTestResult[]> {
-  const rows = await db
-    .select()
-    .from(lessonTestResultsTable)
-    .where(
-      and(
-        eq(lessonTestResultsTable.userId, userId),
-        eq(lessonTestResultsTable.lessonSlug, lessonSlug),
-        isNotNull(lessonTestResultsTable.completedAt),
-      ),
-    )
-    .orderBy(desc(lessonTestResultsTable.createdAt));
-  return rows.map((row) => ({
-    id: row.id,
-    lessonSlug: row.lessonSlug,
-    totalScore: row.totalScore,
-    completedAt: row.completedAt,
-    createdAt: row.createdAt,
-    format: row.format,
-    finishedReason: row.finishedReason,
-    ...toClientAttempt(row),
-  }));
-}
-
 export type DebriefAttempt = {
   id: number;
   totalScore: number;
   /** ISO instant (UTC). */
   completedAt: string;
 };
-
-/**
- * This pilot's finished debrief attempts on one lesson, newest first.
- *
- * Completed AND scored only. A row with no `completed_at` is a partial save
- * and never counts, as in the progress SQL; a completed row with no score
- * counts as neither a pass nor a failure there (`null >= 70` and `null < 70`
- * are both null), so leaving it out here changes no fact derived from it.
- *
- * `completed_at` is a timezone-less `timestamp` holding UTC wall time. Read
- * through the drizzle column (never a raw `sql` fragment), it is mapped by
- * appending `+0000`, so `toISOString()` below is the true UTC instant.
- */
-export async function getDebriefAttempts(
-  userId: string,
-  lessonSlug: string,
-): Promise<DebriefAttempt[]> {
-  const rows = await db
-    .select({
-      id: lessonTestResultsTable.id,
-      totalScore: lessonTestResultsTable.totalScore,
-      completedAt: lessonTestResultsTable.completedAt,
-    })
-    .from(lessonTestResultsTable)
-    .where(
-      and(
-        eq(lessonTestResultsTable.userId, userId),
-        eq(lessonTestResultsTable.lessonSlug, lessonSlug),
-        isNotNull(lessonTestResultsTable.completedAt),
-        isNotNull(lessonTestResultsTable.totalScore),
-      ),
-    )
-    .orderBy(
-      desc(lessonTestResultsTable.completedAt),
-      desc(lessonTestResultsTable.id),
-    );
-
-  return rows.flatMap((row) =>
-    row.completedAt !== null && row.totalScore !== null
-      ? [
-          {
-            id: row.id,
-            totalScore: row.totalScore,
-            completedAt: row.completedAt.toISOString(),
-          },
-        ]
-      : [],
-  );
-}
 
 export type DebriefAttemptReport = DebriefAttempt & {
   /** The questions asked, as saved. Empty if the stored JSON is unreadable. */
@@ -153,7 +59,14 @@ function attemptPassed(
 /**
  * Finished attempts WITH the data a score report renders — only for a pilot
  * who has passed (the status route's passed branch), since the history is
- * hidden until then. Same filter and order as `getDebriefAttempts`.
+ * hidden until then.
+ *
+ * Completed AND scored only. A row with no `completed_at` is a partial save
+ * and never counts, as in the progress SQL; a completed row with no score
+ * counts as neither a pass nor a failure there. `completed_at` is a
+ * timezone-less `timestamp` holding UTC wall time; read through the drizzle
+ * column it maps with `+0000`, so `toISOString()` is the true UTC instant.
+ * Newest first.
  *
  * `questions` holds the whole AITest (`{ lessonSlug, questions }`; a chunk
  * attempt adds its chunks and context, which are dropped here) and `answers`

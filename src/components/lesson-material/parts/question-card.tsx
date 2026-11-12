@@ -26,6 +26,8 @@ const NOTE_ID = 'debrief-question-paste-note';
 // ─── FreeTextInput ────────────────────────────────────────────────────────────
 
 type FreeTextInputProps = {
+  /** The id of the question text: the answer box's accessible name. */
+  labelledBy: string;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
   /** Completed at an earlier level — nothing here may be answered or sent. */
@@ -36,6 +38,7 @@ type FreeTextInputProps = {
 };
 
 const FreeTextInput = ({
+  labelledBy,
   isEvaluating,
   onSubmit,
   readOnly,
@@ -76,6 +79,7 @@ const FreeTextInput = ({
         onCopy={refuse}
         onCut={refuse}
         readOnly={readOnly}
+        aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         className="w-full resize-none rounded-lg border border-gray-6 bg-gray-2 px-4 py-3 text-sm text-primary placeholder:text-tertiary read-only:opacity-60 focus:border-accent-8 focus:outline-none focus:ring-2 focus:ring-accent-7"
       />
@@ -116,8 +120,8 @@ type QuestionCardProps = {
   question: DebriefQuestion;
   index: number;
   total: number;
-  /** Shown above the question — the second set's opening note, else null. */
-  notice?: string | null;
+  /** The container's `useId`: the question text's id derives from it. */
+  idBase: string;
   isEvaluating: boolean;
   onSubmit: (answer: string) => void;
   /**
@@ -136,7 +140,7 @@ export const QuestionCard = ({
   question,
   index,
   total,
-  notice = null,
+  idBase,
   isEvaluating,
   onSubmit,
   readOnly,
@@ -145,6 +149,7 @@ export const QuestionCard = ({
   onAnswerEvent,
 }: QuestionCardProps) => {
   const reduced = useReducedMotion();
+  const questionId = `${idBase}-question`;
 
   return (
     <motion.div
@@ -160,14 +165,11 @@ export const QuestionCard = ({
         </span>
       </div>
 
-      {notice && (
-        <p className="rounded-lg border border-gray-6 bg-gray-3 px-3 py-2.5 text-sm text-secondary">
-          {notice}
-        </p>
-      )}
-
-      {/* Question text */}
-      <p className="text-sm font-medium leading-relaxed text-primary">
+      {/* Question text — also the answer box's accessible name. */}
+      <p
+        id={questionId}
+        className="text-sm font-medium leading-relaxed text-primary"
+      >
         {question.question}
       </p>
 
@@ -179,6 +181,7 @@ export const QuestionCard = ({
       )}
 
       <FreeTextInput
+        labelledBy={questionId}
         isEvaluating={isEvaluating}
         onSubmit={onSubmit}
         readOnly={readOnly}
