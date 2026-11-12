@@ -9,6 +9,4 @@ export const queryKeys = {
     ['lesson-playback', courseSlug, lessonSlug, lang] as const,
   lessonMaterial: ({ courseSlug, lessonSlug }: LessonRef) =>
     ['lesson-material', courseSlug, lessonSlug] as const,
-  aiTestResults: (lessonSlug: string) =>
-    ['ai-test-results', lessonSlug] as const,
 } as const;

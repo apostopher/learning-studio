@@ -10,11 +10,10 @@ import {
  * Mid-quiz progress for the lesson's authored quiz, persisted per user per
  * lesson.
  *
- * Keyed rather than global on purpose: the AI-test atoms next door
- * (`currentQuestionIndexAtom`, `evaluationsAtom`) are module-level singletons
- * with no lesson key and nothing resetting them on navigation, so a student who
- * abandons lesson A on question 3 opens lesson B on question 3 of B. Keying
- * makes that unrepresentable.
+ * Keyed rather than global on purpose: a module-level singleton with no
+ * lesson key and nothing resetting it on navigation means a student who
+ * abandons lesson A on question 3 opens lesson B on question 3 of B (the old
+ * AI-test atoms did exactly that). Keying makes that unrepresentable.
  *
  * The key includes the user id because localStorage is per-browser, not
  * per-account — two students sharing a laptop would otherwise inherit each
