@@ -28,14 +28,31 @@ describe('debriefGaps', () => {
         }),
       ]),
     ).toEqual({
-      missed: ['Human in the loop', 'Radio command link'],
+      notes: ['Human in the loop', 'Radio command link'],
       incorrect: ['Squawk 7700 for radio failure'],
+    });
+  });
+
+  it("lists each answer's non-empty revisitNote once, and ignores empty ones", () => {
+    expect(
+      debriefGaps([
+        ev({ revisitNote: 'You skipped who commands the aircraft.' }),
+        ev({ revisitNote: '' }),
+        ev({ revisitNote: 'You skipped who commands the aircraft.' }),
+        ev({ revisitNote: 'Revisit datalink loss.', incorrectClaims: ['X'] }),
+      ]),
+    ).toEqual({
+      notes: [
+        'You skipped who commands the aircraft.',
+        'Revisit datalink loss.',
+      ],
+      incorrect: ['X'],
     });
   });
 
   it('has nothing to say for answers saved before judgements were kept', () => {
     expect(debriefGaps([ev({}), ev({ type: 'mcq', score: 0 })])).toEqual({
-      missed: [],
+      notes: [],
       incorrect: [],
     });
   });
@@ -59,8 +76,34 @@ describe('recentLessonGaps', () => {
         5,
       ),
     ).toEqual([
-      { lessonName: 'RPGEN 02', missed: ['Datalink loss'], incorrect: [] },
+      { lessonName: 'RPGEN 02', notes: ['Datalink loss'], incorrect: [] },
     ]);
+  });
+
+  it('hands over only pilot-facing notes: a chunk-format row carrying a rubric leaks none of it', () => {
+    const row = {
+      lessonName: 'RPGEN 03',
+      lessonSlug: 'c',
+      answers: [ev({ revisitNote: 'You did not mention the radio link.' })],
+      // What a stored attempt also holds; must never reach Viper.
+      questions: [
+        {
+          id: 'q',
+          expectedAnswer: 'SECRET-EXPECTED-ANSWER',
+          chunks: [{ id: 'chunk-77', summary: 'SECRET-CHUNK-SUMMARY' }],
+          context: 'SECRET-TRANSCRIPT-CONTEXT',
+        },
+      ],
+    };
+    const out = recentLessonGaps([row], 5);
+    expect(out).toEqual([
+      {
+        lessonName: 'RPGEN 03',
+        notes: ['You did not mention the radio link.'],
+        incorrect: [],
+      },
+    ]);
+    expect(JSON.stringify(out)).not.toMatch(/SECRET|chunk-77/);
   });
 
   it('stops at the limit', () => {

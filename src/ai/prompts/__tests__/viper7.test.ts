@@ -5,7 +5,7 @@ describe('viper7SystemPrompt — debrief gaps', () => {
   const GAPS = [
     {
       lessonName: 'RPGEN 02 PAST to PRESENT',
-      missed: ['A human pilot commands the aircraft over a radio link'],
+      notes: ['A human pilot commands the aircraft over a radio link'],
       incorrect: ["Tesla's boat steered itself"],
     },
   ];
@@ -18,6 +18,18 @@ describe('viper7SystemPrompt — debrief gaps', () => {
     );
     expect(s).toContain("Tesla's boat steered itself");
     expect(s).toMatch(/teach/i);
+  });
+
+  it("prints a lesson's note verbatim under the lesson name", () => {
+    const note =
+      'You described the radio link but never said a human pilot commands the aircraft.';
+    const s = viper7SystemPrompt({
+      isAssociate: false,
+      debriefGaps: [{ lessonName: 'RPGEN 09', notes: [note], incorrect: [] }],
+    });
+    const at = s.indexOf('### RPGEN 09');
+    expect(at).toBeGreaterThan(-1);
+    expect(s.slice(at)).toContain(`### RPGEN 09\n- ${note}`);
   });
 
   it('says nothing about debriefs when there are no gaps', () => {

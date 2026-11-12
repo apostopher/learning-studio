@@ -158,7 +158,7 @@ describe('tavusCompletionsHandler', () => {
   });
 
   it("gives buildChatStream the learner's debrief gaps, so a call can teach them too", async () => {
-    const GAPS = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    const GAPS = [{ lessonName: 'L', notes: ['idea'], incorrect: [] }];
     findRecentDebriefGaps.mockResolvedValueOnce(GAPS);
     await spokenText(await tavusCompletionsHandler(req()));
     expect(findRecentDebriefGaps).toHaveBeenCalledWith('u1');

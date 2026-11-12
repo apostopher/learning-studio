@@ -150,7 +150,7 @@ describe('chatHandler', () => {
 
 describe('chatHandler — debrief gaps', () => {
   it("passes the learner's debrief gaps through to buildChatStream", async () => {
-    const GAPS = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    const GAPS = [{ lessonName: 'L', notes: ['idea'], incorrect: [] }];
     findRecentDebriefGaps.mockResolvedValueOnce(GAPS);
 
     await chatHandler(

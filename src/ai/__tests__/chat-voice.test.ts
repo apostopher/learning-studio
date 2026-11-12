@@ -33,7 +33,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('buildChatStream — debrief gaps', () => {
   it("hands the learner's debrief gaps to the system prompt", async () => {
-    const debriefGaps = [{ lessonName: 'L', missed: ['idea'], incorrect: [] }];
+    const debriefGaps = [{ lessonName: 'L', notes: ['idea'], incorrect: [] }];
     await buildChatStream({ ...base, debriefGaps });
     expect(viper7SystemPrompt.mock.calls[0]?.[0].debriefGaps).toEqual(
       debriefGaps,

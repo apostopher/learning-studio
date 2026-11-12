@@ -5,30 +5,35 @@ import {
 } from '#/ai/schemas';
 
 export type DebriefGaps = {
-  /** Ideas an answer conveyed only partly, or not at all. */
-  missed: string[];
+  /**
+   * Pilot-facing revisit notes: each answer's `revisitNote`, plus (legacy
+   * rows) ideas conveyed only partly or not at all.
+   */
+  notes: string[];
   /** Statements the grader flagged as wrong or unsafe. */
   incorrect: string[];
 };
 
 /**
- * The holes one attempt's answers show, from the grader's own judgements
- * (`essentialIdeas`, `incorrectClaims`), each listed once. What the score
+ * The holes one attempt's answers show, from the grader's own output
+ * (`revisitNote`, `incorrectClaims`; legacy rows `essentialIdeas`), each
+ * listed once. What the score
  * report shows as "Worth revisiting", and what Viper is told to teach.
  * Answers saved before the judgements were kept contribute nothing.
  */
 export function debriefGaps(
   evaluations: readonly AIEvaluationResult[],
 ): DebriefGaps {
-  const missed = new Set<string>();
+  const notes = new Set<string>();
   const incorrect = new Set<string>();
   for (const e of evaluations) {
+    if (e.revisitNote) notes.add(e.revisitNote);
     for (const i of e.essentialIdeas ?? []) {
-      if (i.conveyed !== 'fully') missed.add(i.idea);
+      if (i.conveyed !== 'fully') notes.add(i.idea);
     }
     for (const c of e.incorrectClaims ?? []) incorrect.add(c);
   }
-  return { missed: [...missed], incorrect: [...incorrect] };
+  return { notes: [...notes], incorrect: [...incorrect] };
 }
 
 export type LessonGaps = DebriefGaps & { lessonName: string };
@@ -54,7 +59,7 @@ export function recentLessonGaps(
     const parsed = storedAnswers.safeParse(row.answers);
     if (!parsed.success) continue;
     const gaps = debriefGaps(parsed.data);
-    if (gaps.missed.length === 0 && gaps.incorrect.length === 0) continue;
+    if (gaps.notes.length === 0 && gaps.incorrect.length === 0) continue;
     out.push({ lessonName: row.lessonName, ...gaps });
     if (out.length >= limit) break;
   }

@@ -196,7 +196,7 @@ export const debriefGapsPrompt = (gaps?: readonly LessonGaps[]): string => {
     .map((g) =>
       [
         `### ${g.lessonName}`,
-        ...g.missed.map((idea) => `- Not yet conveyed: ${idea}`),
+        ...g.notes.map((note) => `- ${note}`),
         ...g.incorrect.map((claim) => `- Stated incorrectly: ${claim}`),
       ].join('\n'),
     )
