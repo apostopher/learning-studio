@@ -20,7 +20,11 @@ describe('useVideoProgress', () => {
   it('fetches the single-video progress and returns the parsed payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ milestonesHit: [10, 15, 20], watched: false }),
+      json: async () => ({
+        milestonesHit: [10, 15, 20],
+        watched: false,
+        resume: { seconds: 312.5, duration: 600 },
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -35,6 +39,7 @@ describe('useVideoProgress', () => {
     expect(result.current.data).toEqual({
       milestonesHit: [10, 15, 20],
       watched: false,
+      resume: { seconds: 312.5, duration: 600 },
     });
   });
 

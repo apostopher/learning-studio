@@ -7,13 +7,15 @@ export const videoProgressSchema = z.object({
   milestonesHit: z.array(z.number()),
   /** Whether the video counts as watched (every milestone except 100). */
   watched: z.boolean(),
+  /** Where the learner last left the video; null if never started. */
+  resume: z.object({ seconds: z.number(), duration: z.number() }).nullable(),
 });
 
 export type VideoProgress = z.infer<typeof videoProgressSchema>;
 
 /**
  * The logged-in user's progress for a single lesson's video: the milestones
- * they've hit and whether it counts as watched. Backed by
+ * they've hit, whether it counts as watched, and where they left off. Backed by
  * GET /api/user/video-progress. Disabled until `lessonSlug` is non-empty.
  */
 export function useVideoProgress(lessonSlug: string) {

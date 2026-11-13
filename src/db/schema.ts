@@ -9,6 +9,7 @@ import {
   numeric,
   pgTable,
   primaryKey,
+  real,
   serial,
   text,
   timestamp,
@@ -629,6 +630,32 @@ export const videoProgressTable = pgTable(
     index('videos_progress_user_lesson_idx').on(table.userId, table.lessonId),
     index('videos_progress_user_created_idx').on(table.userId, table.createdAt),
   ],
+);
+
+/**
+ * Where each learner last left each lesson's video: one row per (user,
+ * lesson), overwritten as they watch. Separate from `videos_progress` on
+ * purpose. That table is append-only coverage, which the lesson gate reads,
+ * and a playhead is neither: it moves backwards on a rewatch and gates
+ * nothing. `position_seconds` equal to `duration_seconds` means the video was
+ * finished, so the player shows a full bar and Play restarts from 0:00.
+ */
+export const videoResumePositionsTable = pgTable(
+  'video_resume_positions',
+  {
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    positionSeconds: real('position_seconds').notNull(),
+    durationSeconds: real('duration_seconds').notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.lessonId] })],
 );
 
 export const videoProgressInsertSchema = createInsertSchema(videoProgressTable);

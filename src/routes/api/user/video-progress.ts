@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getLessonIdBySlug } from '#/db/lesson-access';
+import { getResumePosition } from '#/db/video-resume-positions';
 import { getLessonProgress } from '#/db/videos-progress';
 import { auth } from '#/lib/auth';
 
@@ -7,11 +8,13 @@ import { auth } from '#/lib/auth';
 const ZERO_PROGRESS = {
   milestonesHit: [] as number[],
   watched: false,
+  resume: null,
 };
 
 /**
  * Read the logged-in user's progress for a single lesson (`?lessonSlug=`) —
- * the milestones they've reached and whether it counts as watched. Any
+ * the milestones they've reached, whether it counts as watched, and where
+ * they last left the video (`resume`, null if they never started it). Any
  * authenticated user may read their own progress — no admin role needed.
  *
  * No gate check here, deliberately: a locked lesson's progress is always
@@ -45,11 +48,12 @@ export async function getVideoProgressHandler(
       return Response.json(ZERO_PROGRESS);
     }
 
-    const progress = await getLessonProgress({
-      userId: session.user.id,
-      lessonId,
-    });
-    return Response.json(progress);
+    const who = { userId: session.user.id, lessonId };
+    const [progress, resume] = await Promise.all([
+      getLessonProgress(who),
+      getResumePosition(who),
+    ]);
+    return Response.json({ ...progress, resume });
   } catch (error) {
     console.error('Failed to read video progress:', error);
     return Response.json({ error: 'Failed to load progress' }, { status: 500 });
