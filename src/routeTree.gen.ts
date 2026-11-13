@@ -53,6 +53,7 @@ import { Route as ApiUserLessonSectionRouteImport } from './routes/api/user/less
 import { Route as ApiUserLevelAcknowledgeRouteImport } from './routes/api/user/level-acknowledge'
 import { Route as ApiUserMyLevelRouteImport } from './routes/api/user/my-level'
 import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
+import { Route as ApiUserVideoPositionRouteImport } from './routes/api/user/video-position'
 import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
 import { Route as ApiVideoCallIdRouteImport } from './routes/api/video-call.$id'
 import { Route as ApiVideoCallAllowanceRouteImport } from './routes/api/video-call.allowance'
@@ -340,6 +341,11 @@ const ApiUserReportVideoProgressRoute =
     path: '/api/user/report-video-progress',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiUserVideoPositionRoute = ApiUserVideoPositionRouteImport.update({
+  id: '/api/user/video-position',
+  path: '/api/user/video-position',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiUserVideoProgressRoute = ApiUserVideoProgressRouteImport.update({
   id: '/api/user/video-progress',
   path: '/api/user/video-progress',
@@ -753,6 +759,7 @@ export interface FileRoutesByFullPath {
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
+  '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
@@ -860,6 +867,7 @@ export interface FileRoutesByTo {
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
+  '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
@@ -971,6 +979,7 @@ export interface FileRoutesById {
   '/api/user/level-acknowledge': typeof ApiUserLevelAcknowledgeRoute
   '/api/user/my-level': typeof ApiUserMyLevelRoute
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
+  '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
@@ -1082,6 +1091,7 @@ export interface FileRouteTypes {
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
+    | '/api/user/video-position'
     | '/api/user/video-progress'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
@@ -1189,6 +1199,7 @@ export interface FileRouteTypes {
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
+    | '/api/user/video-position'
     | '/api/user/video-progress'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
@@ -1299,6 +1310,7 @@ export interface FileRouteTypes {
     | '/api/user/level-acknowledge'
     | '/api/user/my-level'
     | '/api/user/report-video-progress'
+    | '/api/user/video-position'
     | '/api/user/video-progress'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
@@ -1402,6 +1414,7 @@ export interface RootRouteChildren {
   ApiUserLevelAcknowledgeRoute: typeof ApiUserLevelAcknowledgeRoute
   ApiUserMyLevelRoute: typeof ApiUserMyLevelRoute
   ApiUserReportVideoProgressRoute: typeof ApiUserReportVideoProgressRoute
+  ApiUserVideoPositionRoute: typeof ApiUserVideoPositionRoute
   ApiUserVideoProgressRoute: typeof ApiUserVideoProgressRoute
   ApiAdminDisciplineModulesModuleIdRoute: typeof ApiAdminDisciplineModulesModuleIdRoute
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
@@ -1729,6 +1742,13 @@ declare module '@tanstack/react-router' {
       path: '/api/user/report-video-progress'
       fullPath: '/api/user/report-video-progress'
       preLoaderRoute: typeof ApiUserReportVideoProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/video-position': {
+      id: '/api/user/video-position'
+      path: '/api/user/video-position'
+      fullPath: '/api/user/video-position'
+      preLoaderRoute: typeof ApiUserVideoPositionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/user/video-progress': {
@@ -2615,6 +2635,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiUserLevelAcknowledgeRoute: ApiUserLevelAcknowledgeRoute,
   ApiUserMyLevelRoute: ApiUserMyLevelRoute,
   ApiUserReportVideoProgressRoute: ApiUserReportVideoProgressRoute,
+  ApiUserVideoPositionRoute: ApiUserVideoPositionRoute,
   ApiUserVideoProgressRoute: ApiUserVideoProgressRoute,
   ApiAdminDisciplineModulesModuleIdRoute:
     ApiAdminDisciplineModulesModuleIdRoute,

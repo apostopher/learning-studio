@@ -1,14 +1,17 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSession, getLessonProgress, getLessonIdBySlug } = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  getLessonProgress: vi.fn(),
-  getLessonIdBySlug: vi.fn(),
-}));
+const { getSession, getLessonProgress, getLessonIdBySlug, getResumePosition } =
+  vi.hoisted(() => ({
+    getSession: vi.fn(),
+    getLessonProgress: vi.fn(),
+    getLessonIdBySlug: vi.fn(),
+    getResumePosition: vi.fn(),
+  }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/db/videos-progress', () => ({ getLessonProgress }));
 vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
+vi.mock('#/db/video-resume-positions', () => ({ getResumePosition }));
 
 import { getVideoProgressHandler } from '../video-progress';
 
@@ -24,6 +27,7 @@ beforeEach(() => {
     watched: false,
   });
   getLessonIdBySlug.mockResolvedValue(10);
+  getResumePosition.mockResolvedValue(null);
 });
 
 describe('getVideoProgressHandler', () => {
@@ -52,6 +56,7 @@ describe('getVideoProgressHandler', () => {
     expect(await res.json()).toEqual({
       milestonesHit: [10, 15],
       watched: false,
+      resume: null,
     });
     expect(getLessonProgress).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -72,8 +77,25 @@ describe('getVideoProgressHandler', () => {
     expect(await res.json()).toEqual({
       milestonesHit: [],
       watched: false,
+      resume: null,
     });
     expect(getLessonProgress).not.toHaveBeenCalled();
+    expect(getResumePosition).not.toHaveBeenCalled();
+  });
+
+  it("returns where the learner last left this lesson's video", async () => {
+    getResumePosition.mockResolvedValueOnce({ seconds: 312.5, duration: 900 });
+    const res = await getVideoProgressHandler(
+      req('http://test/api/user/video-progress?lessonSlug=l1'),
+    );
+    expect((await res.json()).resume).toEqual({
+      seconds: 312.5,
+      duration: 900,
+    });
+    expect(getResumePosition).toHaveBeenCalledWith({
+      userId: 'user-1',
+      lessonId: 10,
+    });
   });
 
   it('500 when the db read fails', async () => {

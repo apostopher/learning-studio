@@ -5,6 +5,8 @@ import { videoLanguageAtom } from '#/atoms/video-language';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
+import { resumeTargetFrom } from '#/components/video-player/resume-position';
+import { ResumePositionSaverContainer } from '#/components/video-player/resume-position-saver-container';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
 import { usePrepareDebriefOnPlay } from '#/data-hooks/use-prepare-debrief';
 import { useVideoProgress } from '#/data-hooks/use-video-progress';
@@ -30,7 +32,11 @@ export const LessonPlayerContainer = ({
   lessonSlug,
   hasDebrief,
 }: LessonPlayerContainerProps) => {
-  const playerId = useId();
+  // Per lesson, not per mount: this component can be reused across a lesson
+  // switch, and the player state atom is keyed on this id. A shared id would
+  // hand the next lesson the last one's playhead until its video loads, which
+  // the resume saver would then record against the wrong lesson.
+  const playerId = `${useId()}:${lessonSlug}`;
   // The lesson as the route names it — the material query and every write
   // below are per course (see `LessonRef`).
   const lesson = { courseSlug, lessonSlug };
@@ -82,6 +88,12 @@ export const LessonPlayerContainer = ({
   const materialLocked = data?.locked === true && data.reason === 'video';
   const progress = useVideoProgress(lessonSlug);
   const hit = progress.data?.milestonesHit.filter((m) => m !== 100).length ?? 0;
+  // Held back while a fetch is in flight: cached data can be up to its
+  // staleTime old, and a stale position is worse than waiting a moment.
+  const resumeAt =
+    progress.isFetched && !progress.isFetching
+      ? resumeTargetFrom(progress.data?.resume ?? null)
+      : undefined;
 
   const onEnded = useCallback(() => {
     setReachedEnd(true);
@@ -114,37 +126,46 @@ export const LessonPlayerContainer = ({
   });
 
   return (
-    <VideoPlayerContainer
-      // Forces a genuine remount per lesson. Without this, TanStack Router
-      // reuses this component across param changes (there is no other
-      // identity change here — `playerId` is a fresh `useId()` per mount, not
-      // per lesson), so `VideoPlayerContainer`'s internal refs
-      // (`recoveryAttemptsRef`, `pendingRestoreTimeRef`) survive a lesson
-      // navigation: the automatic-recovery budget leaks across lessons (two
-      // recoveries anywhere in a session exhausts it for every lesson after),
-      // and a pending seek-restore can carry a previous lesson's playhead
-      // into a newly opened one.
-      key={lessonSlug}
-      playerId={playerId}
-      src={videoState.src}
-      kind={videoState.kind}
-      poster={videoState.poster}
-      captions={videoState.captions}
-      captionsUnavailable={videoState.captionsUnavailable}
-      onSourceExpired={videoState.onRetry}
-      onEnded={onEnded}
-      languages={languageOptions}
-      activeLanguage={videoState.lang}
-      onLanguageChange={onLanguageChange}
-      overlay={
-        <AnimatePresence>
-          {/* Not on an archive view: the coverage notice nudges toward
+    <>
+      <ResumePositionSaverContainer
+        key={lessonSlug}
+        playerId={playerId}
+        courseSlug={courseSlug}
+        lessonSlug={lessonSlug}
+      />
+      <VideoPlayerContainer
+        // Forces a genuine remount per lesson. Without this, TanStack Router
+        // reuses this component across param changes (there is no other
+        // identity change here — `playerId` is a fresh `useId()` per mount, not
+        // per lesson), so `VideoPlayerContainer`'s internal refs
+        // (`recoveryAttemptsRef`, `pendingRestoreTimeRef`) survive a lesson
+        // navigation: the automatic-recovery budget leaks across lessons (two
+        // recoveries anywhere in a session exhausts it for every lesson after),
+        // and a pending seek-restore can carry a previous lesson's playhead
+        // into a newly opened one.
+        key={lessonSlug}
+        playerId={playerId}
+        src={videoState.src}
+        kind={videoState.kind}
+        poster={videoState.poster}
+        captions={videoState.captions}
+        captionsUnavailable={videoState.captionsUnavailable}
+        onSourceExpired={videoState.onRetry}
+        onEnded={onEnded}
+        languages={languageOptions}
+        activeLanguage={videoState.lang}
+        onLanguageChange={onLanguageChange}
+        resumeAt={resumeAt}
+        overlay={
+          <AnimatePresence>
+            {/* Not on an archive view: the coverage notice nudges toward
               finishing a lesson that is already done. */}
-          {!readOnly && overlayKind === 'coverage' ? (
-            <CoverageNotice hit={hit} total={watchedMilestones.length} />
-          ) : null}
-        </AnimatePresence>
-      }
-    />
+            {!readOnly && overlayKind === 'coverage' ? (
+              <CoverageNotice hit={hit} total={watchedMilestones.length} />
+            ) : null}
+          </AnimatePresence>
+        }
+      />
+    </>
   );
 };

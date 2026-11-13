@@ -1,5 +1,5 @@
 import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 import {
   videoPlayerReattachAtomFamily,
   videoPlayerStateAtomFamily,
@@ -23,6 +23,7 @@ import {
   type RestorePoint,
   restorePointForSourceSwap,
 } from './restore-point';
+import { type ResumeTarget, resumeSeek } from './resume-position';
 import type { VideoPlayerActions, VideoPlayerProps } from './types';
 import { VideoPlayer } from './video-player';
 
@@ -80,6 +81,13 @@ type ContainerProps = Omit<
    * its own error overlay.
    */
   onPlaybackFailed?: (message: string) => void;
+  /**
+   * Where to put the playhead when the video first loads: the learner's saved
+   * position. `undefined` while it is still loading; `null` to start at 0:00.
+   * Applied once per mount, and dropped if the learner has already pressed
+   * play or moved the playhead by the time it arrives.
+   */
+  resumeAt?: ResumeTarget;
 };
 
 /**
@@ -99,6 +107,7 @@ export const VideoPlayerContainer = ({
   onSourceExpired,
   onLanguageChange,
   onPlaybackFailed,
+  resumeAt,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -180,6 +189,29 @@ export const VideoPlayerContainer = ({
   // from a fatal error should not auto-play, these should.
   const pendingSwapRestoreRef = useRef<RestorePoint | null>(null);
 
+  // The saved position arrives on its own query, so it can land before or
+  // after the video's metadata; whichever comes second applies it. The ref
+  // lets the `loadedmetadata` listener (registered once) read the latest.
+  const resumeAtRef = useRef(resumeAt);
+  const resumeSettledRef = useRef(false);
+  const tryResume = useCallback((video: HTMLVideoElement) => {
+    if (resumeSettledRef.current) return;
+    const { settle, seekTo } = resumeSeek({
+      target: resumeAtRef.current,
+      readyState: video.readyState,
+      paused: video.paused,
+      currentTime: video.currentTime,
+      duration: video.duration,
+    });
+    if (settle) resumeSettledRef.current = true;
+    if (seekTo !== null) video.currentTime = seekTo;
+  }, []);
+  useEffect(() => {
+    resumeAtRef.current = resumeAt;
+    const video = videoRef.current;
+    if (video) tryResume(video);
+  }, [resumeAt, tryResume]);
+
   // Registered once, independent of `rest.src`: the video element itself
   // never unmounts across a reattachment (only its `src`/hls.js instance
   // does), and `loadedmetadata` fires again for every new source regardless
@@ -194,6 +226,9 @@ export const VideoPlayerContainer = ({
         applyRestorePoint(video, langPoint);
         return;
       }
+      // First load only: a language switch or recovery above carries the
+      // live playhead instead, and by then the resume has settled.
+      tryResume(video);
       // Deliberately does NOT reset `recoveryAttemptsRef` here — see that
       // ref's own comment for why reaching metadata is not sufficient proof
       // that a mid-playback failure won't recur.
@@ -221,7 +256,7 @@ export const VideoPlayerContainer = ({
       video.removeEventListener('loadedmetadata', onLoadedMetadata);
       video.removeEventListener('playing', onPlaying);
     };
-  }, []);
+  }, [tryResume]);
 
   // Plain files are already handled by VideoPlayer's native `src` attribute
   // and don't need this. HLS sources (Mux is HLS-only) need hls.js — or
