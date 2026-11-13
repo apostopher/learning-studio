@@ -14,6 +14,8 @@ import { findRecentDebriefGaps } from '#/db/debrief-gaps';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
+import { matchesOpenDebriefQuestion } from '#/lib/debrief-question-guard';
+import { findOpenDebriefQuestions } from '#/lib/open-debrief-questions.server';
 import { resolveChatSkaProfile } from '#/lib/ska-profile.server';
 
 /** Longest learner message accepted, in characters. The widget sends plain
@@ -46,6 +48,13 @@ const chatRequestSchema = z.object({
     .length(1),
   courseSlug: z.string().optional(),
 });
+
+/**
+ * Viper's whole answer to one of the learner's open debrief questions, sent
+ * without asking the model: a fixed reply cannot be talked round.
+ */
+export const OPEN_DEBRIEF_QUESTION_REPLY =
+  "That's one of the questions in your debrief, which is still in progress, so I can't help with it yet. Answer it in your own words first. Once you've submitted the debrief, ask me again and we'll go through it together.";
 
 /** Extracts the plain-text content of a UI message's text parts, joined. */
 function textOf(message: UIMessage): string {
@@ -89,19 +98,22 @@ export async function chatHandler(request: Request): Promise<Response> {
 
   const { chatId: requestChatId, messages, courseSlug } = parsed.data;
 
-  const [persona, skaProfile, debriefGaps] = await Promise.all([
-    // Personas are org-level and a course may pin its own: this resolves
-    // `course_orgs.personaId` → the org default → null (prompt defaults).
-    // It reads published `content` only — a persona's unpublished
-    // `draftContent` must never reach a live system prompt.
-    resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
-    // Reviewed profiles only, and section-narrowed by whether a course is in
-    // context — see resolveChatSkaProfile. Joins the existing parallel read
-    // rather than adding a round trip of its own.
-    resolveChatSkaProfile({ userId: session.user.id, courseSlug }),
-    // What their recent debriefs showed is not yet secure, for Viper to teach.
-    findRecentDebriefGaps(session.user.id),
-  ]);
+  const [persona, skaProfile, debriefGaps, openDebriefQuestions] =
+    await Promise.all([
+      // Personas are org-level and a course may pin its own: this resolves
+      // `course_orgs.personaId` → the org default → null (prompt defaults).
+      // It reads published `content` only — a persona's unpublished
+      // `draftContent` must never reach a live system prompt.
+      resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
+      // Reviewed profiles only, and section-narrowed by whether a course is in
+      // context — see resolveChatSkaProfile. Joins the existing parallel read
+      // rather than adding a round trip of its own.
+      resolveChatSkaProfile({ userId: session.user.id, courseSlug }),
+      // What their recent debriefs showed is not yet secure, for Viper to teach.
+      findRecentDebriefGaps(session.user.id),
+      // Questions of a debrief they are still taking: never answered here.
+      findOpenDebriefQuestions(session.user.id),
+    ]);
 
   const userInfo = {
     name: session.user.name ?? 'unknown',
@@ -146,8 +158,27 @@ export async function chatHandler(request: Request): Promise<Response> {
   let firstStepInputTokens: Promise<number | undefined> =
     Promise.resolve(undefined);
 
+  // A close copy of an open debrief question gets the fixed reply and never
+  // reaches the model. Rewordings this misses go to Viper with the open
+  // questions in its prompt, which tells it not to answer them.
+  const askedOpenDebriefQuestion = matchesOpenDebriefQuestion(
+    textOf(lastUserMessage),
+    openDebriefQuestions,
+  );
+
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
+      if (askedOpenDebriefQuestion) {
+        const id = crypto.randomUUID();
+        writer.write({ type: 'text-start', id });
+        writer.write({
+          type: 'text-delta',
+          id,
+          delta: OPEN_DEBRIEF_QUESTION_REPLY,
+        });
+        writer.write({ type: 'text-end', id });
+        return;
+      }
       const result = await buildChatStream({
         messages: modelMessages,
         uiMessages: modelMessages,
@@ -161,6 +192,7 @@ export async function chatHandler(request: Request): Promise<Response> {
         userId: session.user.id,
         skaProfile,
         debriefGaps,
+        openDebriefQuestions,
         // `BuildChatStreamOptions.writer` is typed as `{ write: (p: unknown) => void }`
         // (loosened so #/ai/chat doesn't need to import ai@6's UIMessageStreamWriter
         // type directly) which is contravariantly narrower than the real ai@6

@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { AITestSchema } from '#/ai/schemas';
 import { db } from '#/db';
 import type { AnswerMetrics } from '#/lib/answer-metrics';
@@ -45,6 +46,32 @@ export async function selectOpenAttempt(
     .limit(1);
   return row ?? null;
 }
+
+/**
+ * The question text of every open attempt this pilot has, on any lesson —
+ * what Viper must not answer while that debrief is on. Rows whose JSON no
+ * longer parses are skipped.
+ */
+export async function selectOpenAttemptQuestions(
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ questions: lessonTestResultsTable.questions })
+    .from(lessonTestResultsTable)
+    .where(and(eq(lessonTestResultsTable.userId, userId), ...openAttempt()));
+  return rows.flatMap((r) => {
+    const parsed = questionTextsSchema.safeParse(r.questions);
+    return parsed.success ? parsed.data.questions.map((q) => q.question) : [];
+  });
+}
+
+/**
+ * Only the question text: the guard must not fail open because some other
+ * field of the stored attempt changed shape.
+ */
+const questionTextsSchema = z.object({
+  questions: z.array(z.object({ question: z.string() })),
+});
 
 /**
  * Insert a new open attempt. Null when the one-open-attempt index refused it:

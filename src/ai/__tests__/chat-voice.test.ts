@@ -41,6 +41,15 @@ describe('buildChatStream — debrief gaps', () => {
   });
 });
 
+describe('buildChatStream — open debrief questions', () => {
+  it("hands the learner's open debrief questions to the system prompt", async () => {
+    await buildChatStream({ ...base, openDebriefQuestions: ['Q one?'] });
+    expect(viper7SystemPrompt.mock.calls[0]?.[0].openDebriefQuestions).toEqual([
+      'Q one?',
+    ]);
+  });
+});
+
 describe('buildChatStream', () => {
   it('text chat: base prompt only, word chunking so replies stream as written', async () => {
     await buildChatStream(base);

@@ -9,6 +9,7 @@ const {
   resolvePersonaForChat,
   resolveChatSkaProfile,
   findRecentDebriefGaps,
+  findOpenDebriefQuestions,
 } = vi.hoisted(() => ({
   getCallByConversation: vi.fn(),
   loadChatContext: vi.fn(),
@@ -16,6 +17,7 @@ const {
   resolvePersonaForChat: vi.fn(),
   resolveChatSkaProfile: vi.fn(),
   findRecentDebriefGaps: vi.fn(),
+  findOpenDebriefQuestions: vi.fn(),
 }));
 vi.mock('#/env', () => ({ env: { TAVUS_LLM_SECRET: 's'.repeat(32) } }));
 vi.mock('#/db/video-calls', () => ({ getCallByConversation }));
@@ -25,6 +27,9 @@ vi.mock('#/db/course-orgs', () => ({ resolvePersonaForChat }));
 vi.mock('#/lib/active-org.server', () => ({ getActiveOrgId: () => 7 }));
 vi.mock('#/lib/ska-profile.server', () => ({ resolveChatSkaProfile }));
 vi.mock('#/db/debrief-gaps', () => ({ findRecentDebriefGaps }));
+vi.mock('#/lib/open-debrief-questions.server', () => ({
+  findOpenDebriefQuestions,
+}));
 
 import {
   VOICE_FALLBACK_REPLY,
@@ -113,6 +118,7 @@ beforeEach(() => {
   });
   resolveChatSkaProfile.mockResolvedValue(undefined);
   findRecentDebriefGaps.mockResolvedValue([]);
+  findOpenDebriefQuestions.mockResolvedValue([]);
   buildChatStream.mockImplementation(async () => ({
     textStream: gen([
       '<emotion value="content"/>',
@@ -163,6 +169,15 @@ describe('tavusCompletionsHandler', () => {
     await spokenText(await tavusCompletionsHandler(req()));
     expect(findRecentDebriefGaps).toHaveBeenCalledWith('u1');
     expect(buildChatStream.mock.calls[0]?.[0].debriefGaps).toEqual(GAPS);
+  });
+
+  it("gives buildChatStream the learner's open debrief questions, so a call won't answer them", async () => {
+    findOpenDebriefQuestions.mockResolvedValueOnce(['Q one?']);
+    await spokenText(await tavusCompletionsHandler(req()));
+    expect(findOpenDebriefQuestions).toHaveBeenCalledWith('u1');
+    expect(buildChatStream.mock.calls[0]?.[0].openDebriefQuestions).toEqual([
+      'Q one?',
+    ]);
   });
 
   it("gives buildChatStream the call's learner, course, persona and cleaned history", async () => {

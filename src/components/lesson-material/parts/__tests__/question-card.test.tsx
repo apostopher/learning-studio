@@ -20,7 +20,8 @@ vi.mock('react', async () => {
 });
 
 const question = { id: 'q2', question: 'Why does it matter?' };
-const NOTE = 'Answers have to be typed — pasting is turned off for debriefs.';
+const NOTE =
+  'Debriefs are answered in your own words — copy and paste are turned off.';
 
 function setup(
   props: Partial<Parameters<typeof QuestionCard>[0]> = {},
@@ -45,6 +46,7 @@ function setup(
       isEvaluating={false}
       readOnly={false}
       pasteBlockedNote={false}
+      clipboardAllowed={false}
       {...handlers}
       {...props}
     />,
@@ -74,10 +76,41 @@ describe('QuestionCard typed answers only', () => {
     expect(box.value).toBe('typed');
   });
 
-  it('keeps the question text copyable (no copy handler outside the field)', () => {
+  // A learner pasted a debrief question into Viper for the answer.
+  it.each([
+    'copy',
+    'cut',
+    'dragStart',
+  ] as const)('the question text refuses %s for a learner, and says why', (kind) => {
     const { onBlockedPaste } = setup();
     const el = screen.getByText(question.question);
-    const event = createEvent.copy(el);
+    const event = createEvent[kind](el);
+    act(() => {
+      el.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(onBlockedPaste).toHaveBeenCalledTimes(1);
+  });
+
+  it('the question text cannot be selected or touch-handled by a learner', () => {
+    setup();
+    const classes = screen.getByText(question.question).className.split(' ');
+    expect(classes).toContain('select-none');
+    expect(classes).toContain('touch-none');
+  });
+});
+
+describe('QuestionCard for an admin or the course author', () => {
+  it.each([
+    'copy',
+    'cut',
+    'dragStart',
+  ] as const)('the question text allows %s', (kind) => {
+    const { onBlockedPaste } = setup({ clipboardAllowed: true });
+    const el = screen.getByText(question.question);
+    expect(el.className).not.toContain('select-none');
+    expect(el.className).not.toContain('touch-none');
+    const event = createEvent[kind](el);
     act(() => {
       el.dispatchEvent(event);
     });
@@ -85,6 +118,23 @@ describe('QuestionCard typed answers only', () => {
     expect(onBlockedPaste).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'paste',
+    'drop',
+    'copy',
+    'cut',
+  ] as const)('the answer box allows %s', (kind) => {
+    const { box, onBlockedPaste } = setup({ clipboardAllowed: true });
+    const event = createEvent[kind](box);
+    act(() => {
+      box.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
+    expect(onBlockedPaste).not.toHaveBeenCalled();
+  });
+});
+
+describe('QuestionCard notes', () => {
   it('shows the note live and wires it into aria-describedby', () => {
     const { box } = setup({ pasteBlockedNote: true });
     const note = screen.getByText(NOTE);

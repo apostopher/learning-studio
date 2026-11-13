@@ -19,6 +19,7 @@ import {
   useSaveDebriefDraft,
   useStartDebrief,
 } from '#/data-hooks/use-debrief-attempt';
+import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useAnswerMetrics } from '#/hooks/use-answer-metrics';
 import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
@@ -105,6 +106,15 @@ export const DebriefQuizContainer = ({
   const [pasteBlocked, setPasteBlocked] = useAtom(debriefPasteBlockedAtom);
   const countdown = useAtomValue(debriefCountdownAtom);
   const announcement = useAtomValue(debriefCountdownAnnouncementAtom);
+  // The server decides who may use the clipboard: its `adminBypass` (an
+  // admin, or staff on this course), off the material query this lesson has
+  // already loaded. Unknown — still loading or an error — reads as a learner.
+  const { data: lessonMaterial } = useLessonMaterial({
+    courseSlug,
+    lessonSlug,
+  });
+  const clipboardAllowed =
+    lessonMaterial?.locked === false && lessonMaterial.adminBypass;
 
   const enabled = !readOnly && (resume || startRequested === lessonSlug);
   const start = useStartDebrief({ courseSlug, lessonSlug, enabled });
@@ -367,6 +377,7 @@ export const DebriefQuizContainer = ({
         onSubmit={handleSubmit}
         readOnly={false}
         pasteBlockedNote={pasteBlocked}
+        clipboardAllowed={clipboardAllowed}
         onBlockedPaste={() => {
           metrics.record({ type: 'paste-blocked' });
           setPasteBlocked(true);

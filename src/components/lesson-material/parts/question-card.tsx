@@ -2,13 +2,17 @@ import { atom, useAtom } from 'jotai';
 import { Loader2 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import type { MetricsEvent } from '#/hooks/use-answer-metrics';
+import { cn } from '#/lib/cn';
 import { READ_ONLY_CONTROL_REASON } from '#/lib/read-only-lesson-copy';
 
 export const freeTextAnswerAtom = atom('');
 
-/** What the pilot sees when a paste, drop, copy or cut is refused. */
+/**
+ * What the pilot sees when a paste, drop, copy or cut is refused — in the
+ * answer box, or a copy of the question itself.
+ */
 export const PASTE_BLOCKED_NOTE =
-  'Answers have to be typed — pasting is turned off for debriefs.';
+  'Debriefs are answered in your own words — copy and paste are turned off.';
 
 /** A question as the pilot sees it: text only, from the start route. */
 type DebriefQuestion = { id: string; question: string };
@@ -33,6 +37,8 @@ type FreeTextInputProps = {
   /** Completed at an earlier level — nothing here may be answered or sent. */
   readOnly: boolean;
   pasteBlockedNote: boolean;
+  /** An admin or the course's author: the clipboard works as normal. */
+  clipboardAllowed: boolean;
   onBlockedPaste: () => void;
   onAnswerEvent: (event: AnswerBoxEvent) => void;
 };
@@ -43,6 +49,7 @@ const FreeTextInput = ({
   onSubmit,
   readOnly,
   pasteBlockedNote,
+  clipboardAllowed,
   onBlockedPaste,
   onAnswerEvent,
 }: FreeTextInputProps) => {
@@ -53,10 +60,12 @@ const FreeTextInput = ({
       .join(' ') || undefined;
   // Typed answers only: refuse anything that moves text in or out of the box
   // other than the keyboard, and tell the pilot why nothing happened.
-  const refuse = (e: { preventDefault: () => void }) => {
-    e.preventDefault();
-    onBlockedPaste();
-  };
+  const refuse = clipboardAllowed
+    ? undefined
+    : (e: { preventDefault: () => void }) => {
+        e.preventDefault();
+        onBlockedPaste();
+      };
 
   return (
     <div className="flex flex-col gap-4">
@@ -132,6 +141,12 @@ type QuestionCardProps = {
   readOnly: boolean;
   /** A paste/drop/copy/cut was just refused: show the note. */
   pasteBlockedNote: boolean;
+  /**
+   * The server's `adminBypass`: an admin, or staff on this course. Everyone
+   * else can neither copy the question out (a learner pasted one into Viper
+   * for the answer) nor paste an answer in.
+   */
+  clipboardAllowed: boolean;
   onBlockedPaste: () => void;
   onAnswerEvent: (event: AnswerBoxEvent) => void;
 };
@@ -145,11 +160,18 @@ export const QuestionCard = ({
   onSubmit,
   readOnly,
   pasteBlockedNote,
+  clipboardAllowed,
   onBlockedPaste,
   onAnswerEvent,
 }: QuestionCardProps) => {
   const reduced = useReducedMotion();
   const questionId = `${idBase}-question`;
+  const refuseCopy = clipboardAllowed
+    ? undefined
+    : (e: { preventDefault: () => void }) => {
+        e.preventDefault();
+        onBlockedPaste();
+      };
 
   return (
     <motion.div
@@ -165,10 +187,20 @@ export const QuestionCard = ({
         </span>
       </div>
 
-      {/* Question text — also the answer box's accessible name. */}
+      {/* Question text — also the answer box's accessible name. For a
+          learner it cannot be selected (so select-all copies none of it),
+          copied, cut or dragged out, and touch gestures that start on it
+          are not handled (`touch-none`), so a long-press can't begin one. Screen readers still read it: this
+          only touches selection and the clipboard. */}
       <p
         id={questionId}
-        className="text-sm font-medium leading-relaxed text-primary"
+        onCopy={refuseCopy}
+        onCut={refuseCopy}
+        onDragStart={refuseCopy}
+        className={cn(
+          'text-sm font-medium leading-relaxed text-primary',
+          !clipboardAllowed && 'select-none touch-none',
+        )}
       >
         {question.question}
       </p>
@@ -186,6 +218,7 @@ export const QuestionCard = ({
         onSubmit={onSubmit}
         readOnly={readOnly}
         pasteBlockedNote={pasteBlockedNote}
+        clipboardAllowed={clipboardAllowed}
         onBlockedPaste={onBlockedPaste}
         onAnswerEvent={onAnswerEvent}
       />

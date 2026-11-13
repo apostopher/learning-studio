@@ -12,6 +12,7 @@ const {
   loadChatContext,
   waitUntil,
   compactChat,
+  findOpenDebriefQuestions,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   buildChatStream: vi.fn(),
@@ -23,6 +24,7 @@ const {
   loadChatContext: vi.fn(),
   waitUntil: vi.fn(),
   compactChat: vi.fn(),
+  findOpenDebriefQuestions: vi.fn(),
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil }));
 vi.mock('#/ai/compact-chat', () => ({
@@ -41,9 +43,12 @@ vi.mock('#/db/chat', () => ({ ensureChat, appendMessages, loadChatContext }));
 // which is mocked too, so nothing here depends on its internals.
 vi.mock('#/lib/ska-profile.server', () => ({ resolveChatSkaProfile }));
 vi.mock('#/db/debrief-gaps', () => ({ findRecentDebriefGaps }));
+vi.mock('#/lib/open-debrief-questions.server', () => ({
+  findOpenDebriefQuestions,
+}));
 
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
-import { chatHandler } from '../chat';
+import { chatHandler, OPEN_DEBRIEF_QUESTION_REPLY } from '../chat';
 
 function postReq(body: unknown): Request {
   return new Request('http://t/api/chat', {
@@ -61,6 +66,7 @@ beforeEach(() => {
   });
   resolveChatSkaProfile.mockResolvedValue(undefined);
   findRecentDebriefGaps.mockResolvedValue([]);
+  findOpenDebriefQuestions.mockResolvedValue([]);
   ensureChat.mockResolvedValue('chat-1');
   appendMessages.mockResolvedValue(undefined);
   loadChatContext.mockResolvedValue(null);
@@ -574,6 +580,58 @@ describe('chatHandler — request validation', () => {
     });
     expect(buildChatStream.mock.calls[0][0].messages[0]).not.toHaveProperty(
       'metadata',
+    );
+  });
+});
+
+// A learner pasted an open debrief question into Viper and got the answer.
+describe('chatHandler — open debrief questions', () => {
+  const Q =
+    "During a time-critical data capture run, your FTE radios a non-standard phrase that you've never heard before. Why is this a problem, and what should your crew do differently going forward?";
+  const ask = (text: string) =>
+    chatHandler(
+      postReq({
+        messages: [{ role: 'user', parts: [{ type: 'text', text }] }],
+      }),
+    );
+
+  it('answers a pasted open question with the fixed reply, never the model', async () => {
+    findOpenDebriefQuestions.mockResolvedValueOnce([Q]);
+    const res = await ask(Q);
+    const body = await res.text();
+    expect(res.status).toBe(200);
+    expect(buildChatStream).not.toHaveBeenCalled();
+    expect(body).toContain(
+      JSON.stringify(OPEN_DEBRIEF_QUESTION_REPLY).slice(1, 40),
+    );
+    expect(findOpenDebriefQuestions).toHaveBeenCalledWith('u1');
+  });
+
+  it('saves the exchange, so the chat history shows what was refused and why', async () => {
+    findOpenDebriefQuestions.mockResolvedValueOnce([Q]);
+    await (await ask(Q)).text();
+    const [chatId, turns] = appendMessages.mock.calls[0] ?? [];
+    expect(chatId).toBe('chat-1');
+    expect(turns[0]).toEqual({
+      role: 'user',
+      parts: [{ type: 'text', text: Q }],
+    });
+    expect(turns[1].role).toBe('assistant');
+    expect(
+      turns[1].parts.filter((p: { type: string }) => p.type === 'text'),
+    ).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        text: OPEN_DEBRIEF_QUESTION_REPLY,
+      }),
+    ]);
+  });
+
+  it('hands the open questions to Viper on an ordinary message, for rewordings', async () => {
+    findOpenDebriefQuestions.mockResolvedValueOnce([Q]);
+    await (await ask('what does FTE stand for?')).text();
+    expect(buildChatStream).toHaveBeenCalledWith(
+      expect.objectContaining({ openDebriefQuestions: [Q] }),
     );
   });
 });
