@@ -189,7 +189,8 @@ export const QuestionCard = ({
 
       {/* Question text — also the answer box's accessible name. For a
           learner it cannot be selected (so select-all copies none of it),
-          copied, cut or dragged out. Screen readers still read it: this
+          copied, cut or dragged out, and touch gestures that start on it
+          are not handled (`touch-none`), so a long-press can't begin one. Screen readers still read it: this
           only touches selection and the clipboard. */}
       <p
         id={questionId}
@@ -198,7 +199,7 @@ export const QuestionCard = ({
         onDragStart={refuseCopy}
         className={cn(
           'text-sm font-medium leading-relaxed text-primary',
-          !clipboardAllowed && 'select-none',
+          !clipboardAllowed && 'select-none touch-none',
         )}
       >
         {question.question}

@@ -92,11 +92,11 @@ describe('QuestionCard typed answers only', () => {
     expect(onBlockedPaste).toHaveBeenCalledTimes(1);
   });
 
-  it('the question text cannot be selected by a learner, so select-all copies nothing of it', () => {
+  it('the question text cannot be selected or touch-handled by a learner', () => {
     setup();
-    expect(screen.getByText(question.question).className).toContain(
-      'select-none',
-    );
+    const classes = screen.getByText(question.question).className.split(' ');
+    expect(classes).toContain('select-none');
+    expect(classes).toContain('touch-none');
   });
 });
 
@@ -109,6 +109,7 @@ describe('QuestionCard for an admin or the course author', () => {
     const { onBlockedPaste } = setup({ clipboardAllowed: true });
     const el = screen.getByText(question.question);
     expect(el.className).not.toContain('select-none');
+    expect(el.className).not.toContain('touch-none');
     const event = createEvent[kind](el);
     act(() => {
       el.dispatchEvent(event);
