@@ -10,6 +10,7 @@ import { findRecentDebriefGaps } from '#/db/debrief-gaps';
 import { getCallByConversation } from '#/db/video-calls';
 import { env } from '#/env';
 import { getActiveOrgId } from '#/lib/active-org.server';
+import { findOpenDebriefQuestions } from '#/lib/open-debrief-questions.server';
 import {
   openAISseResponse,
   toOpenAIChatCompletionStream,
@@ -87,12 +88,15 @@ export async function tavusCompletionsHandler(
       if (!history.some((m) => m.role === 'user'))
         return once(VOICE_NO_TURN_REPLY);
 
-      const [persona, skaProfile, context, debriefGaps] = await Promise.all([
-        resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
-        resolveChatSkaProfile({ userId: call.userId, courseSlug }),
-        loadChatContext(call.userId, call.chatId),
-        findRecentDebriefGaps(call.userId),
-      ]);
+      const [persona, skaProfile, context, debriefGaps, openDebriefQuestions] =
+        await Promise.all([
+          resolvePersonaForChat({ orgId: getActiveOrgId(), courseSlug }),
+          resolveChatSkaProfile({ userId: call.userId, courseSlug }),
+          loadChatContext(call.userId, call.chatId),
+          findRecentDebriefGaps(call.userId),
+          // Prompt-only on a call: Viper is told not to answer these.
+          findOpenDebriefQuestions(call.userId),
+        ]);
       // loadChatContext already keeps only user/assistant rows and caps them.
       const prior = context?.entries.map((e) => e.message) ?? [];
       const messages = [...prior, ...history];
@@ -114,6 +118,7 @@ export async function tavusCompletionsHandler(
         userId: call.userId,
         skaProfile,
         debriefGaps,
+        openDebriefQuestions,
         voice: { tavusRules },
         abortSignal: request.signal,
       });

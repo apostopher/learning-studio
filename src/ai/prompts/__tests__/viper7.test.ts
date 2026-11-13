@@ -42,6 +42,44 @@ describe('viper7SystemPrompt — debrief gaps', () => {
   });
 });
 
+describe('viper7SystemPrompt — open debrief questions', () => {
+  const Q =
+    "During a time-critical data capture run, your FTE radios a non-standard phrase that you've never heard before. Why is this a problem?";
+
+  it('lists each open question and tells Viper not to answer it, reworded or not', () => {
+    const s = viper7SystemPrompt({
+      isAssociate: false,
+      openDebriefQuestions: [Q, 'Explain lift.'],
+    });
+    expect(s).toContain(Q);
+    expect(s).toContain('Explain lift.');
+    expect(s).toMatch(/do not answer/i);
+    expect(s).toMatch(/reworded|paraphrase/i);
+  });
+
+  it('frames the questions as data, so their text cannot instruct Viper', () => {
+    const s = viper7SystemPrompt({
+      isAssociate: false,
+      openDebriefQuestions: [Q],
+    });
+    const begin = s.indexOf('--- BEGIN OPEN DEBRIEF QUESTIONS ---');
+    const end = s.indexOf('--- END OPEN DEBRIEF QUESTIONS ---');
+    expect(begin).toBeGreaterThan(-1);
+    expect(s.indexOf(Q)).toBeGreaterThan(begin);
+    expect(s.indexOf(Q)).toBeLessThan(end);
+  });
+
+  it('says nothing when no debrief is on', () => {
+    for (const openDebriefQuestions of [undefined, []]) {
+      const s = viper7SystemPrompt({
+        isAssociate: false,
+        openDebriefQuestions,
+      });
+      expect(s).not.toContain('OPEN DEBRIEF QUESTIONS');
+    }
+  });
+});
+
 describe('viper7SystemPrompt', () => {
   it('injects user name/callsign when provided', () => {
     const s = viper7SystemPrompt({

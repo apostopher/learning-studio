@@ -54,6 +54,7 @@ import {
   selectAskedQuestions,
   selectCurrentChunks,
   selectOpenAttempt,
+  selectOpenAttemptQuestions,
   updateDraft,
   upsertMastery,
 } from '#/db/debrief-attempts';
@@ -319,5 +320,37 @@ describe('selectAskedQuestions', () => {
     expect(whereSql()).toBe(
       '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2)',
     );
+  });
+});
+
+describe('selectOpenAttemptQuestions', () => {
+  it("returns the question text of every one of this pilot's OPEN attempts, any lesson", async () => {
+    m.queue.push([
+      {
+        questions: {
+          lessonSlug: 'l1',
+          questions: [
+            { id: 'a', type: 'free-text', question: 'Q one?' },
+            { id: 'b', type: 'free-text', question: 'Q two?' },
+          ],
+        },
+      },
+      {
+        questions: {
+          lessonSlug: 'l2',
+          questions: [{ id: 'c', type: 'free-text', question: 'Q three?' }],
+        },
+      },
+      { questions: 'unreadable' },
+    ]);
+    expect(await selectOpenAttemptQuestions('u1')).toEqual([
+      'Q one?',
+      'Q two?',
+      'Q three?',
+    ]);
+    expect(whereSql()).toBe(
+      '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."completed_at" is null and "lesson_test_results"."format" = $2)',
+    );
+    expect(whereParams()).toEqual(['u1', 'knowledge-chunks-v1']);
   });
 });

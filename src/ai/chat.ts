@@ -52,6 +52,11 @@ export type BuildChatStreamOptions = {
   /** The learner's recent debrief gaps, for Viper to teach (`findRecentDebriefGaps`). */
   debriefGaps?: readonly LessonGaps[];
   /**
+   * Questions of the learner's unfinished debriefs, which Viper must not
+   * answer (`selectOpenAttemptQuestions`).
+   */
+  openDebriefQuestions?: readonly string[];
+  /**
    * Tavus video call. Appends the voice prompt and Tavus's own rules
    * (emotion tags, speech punctuation) to the system prompt.
    */
@@ -109,6 +114,7 @@ export async function buildChatStream({
   userId,
   skaProfile,
   debriefGaps,
+  openDebriefQuestions,
   voice,
   abortSignal,
   conversationSummary,
@@ -150,6 +156,7 @@ export async function buildChatStream({
     userInfo,
     skaProfile,
     debriefGaps,
+    openDebriefQuestions,
     conversationSummary,
   });
 
