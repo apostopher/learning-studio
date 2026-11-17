@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { Suspense } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AdminSectionId } from '#/lib/admin-sections';
+import { type AdminSectionId, adminSearchSchema } from '#/lib/admin-sections';
 
 const m = vi.hoisted(() => ({
   editor: vi.fn(),
@@ -35,11 +35,20 @@ vi.mock('#/components/admin/users/users-page-container', () => ({
   },
 }));
 
-/** The `?section=` the screen reads, made settable. nuqs is otherwise real. */
-const url = { section: 'knowledge-library' as AdminSectionId };
+/**
+ * Two readings of `?section=`, made settable separately because they can
+ * disagree. `section` is the RENDERED match's — what `loaderDeps` resolved for
+ * the screen on show. `liveSection` is what nuqs would report: it reads
+ * `useLocation()`, which jumps to the DESTINATION the moment a navigation
+ * starts, while this screen is still mounted. nuqs is otherwise real.
+ */
+const url = {
+  section: 'knowledge-library' as AdminSectionId,
+  liveSection: undefined as AdminSectionId | undefined,
+};
 vi.mock('nuqs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('nuqs')>()),
-  useQueryState: () => [url.section, vi.fn()],
+  useQueryState: () => [url.liveSection ?? url.section, vi.fn()],
 }));
 
 import { Route } from '../admin.index';
@@ -67,6 +76,7 @@ async function mountSection(section: AdminSectionId, context: Ctx = ADMIN) {
   cleanup();
   url.section = section;
   vi.spyOn(Route, 'useRouteContext').mockReturnValue(context as never);
+  vi.spyOn(Route, 'useLoaderDeps').mockReturnValue({ section } as never);
   const Component = Route.options.component as unknown as
     | (React.ComponentType & { preload?: () => Promise<unknown> })
     | undefined;
@@ -134,6 +144,7 @@ afterEach(() => {
   m.schedule.mockClear();
   m.users.mockClear();
   url.section = 'knowledge-library';
+  url.liveSection = undefined;
 });
 
 describe('/admin — which section renders', () => {
@@ -169,6 +180,33 @@ describe('/admin — which section renders', () => {
 
     expect(await screen.findByTestId('courses')).toBeDefined();
     expect(screen.queryByTestId('org-editor')).toBeNull();
+  });
+
+  it('resolves a bare or unrecognised section to the knowledge library', () => {
+    const loaderDeps = Route.options.loaderDeps as unknown as (opts: {
+      search: { section?: AdminSectionId };
+    }) => { section: AdminSectionId };
+    expect(loaderDeps({ search: {} }).section).toBe('knowledge-library');
+    // `validateSearch` (adminSearchSchema) turns junk into `undefined` first.
+    expect(
+      loaderDeps({ search: adminSearchSchema.parse({ section: 'nonsense' }) })
+        .section,
+    ).toBe('knowledge-library');
+  });
+
+  /**
+   * Regression (2026-11-18): tapping a course tile showed the knowledge
+   * library. The tile links to `/admin/$courseId/editor`, which has no
+   * `?section=`; while that route loaded, this screen was still mounted, read
+   * the destination's missing section through nuqs, fell back to the default
+   * and swapped Courses for the library editor.
+   */
+  it('keeps the Courses screen while navigating to a course editor', async () => {
+    url.liveSection = 'knowledge-library';
+    await mountSection('courses');
+
+    expect(await screen.findByTestId('courses')).toBeDefined();
+    expect(m.editor).not.toHaveBeenCalled();
   });
 });
 
@@ -494,13 +532,18 @@ describe('/admin — entering a section by URL', () => {
     );
   });
 
-  it('admits course staff and course readers to courses, and turns a discipline-only SME back', () => {
-    expect(enter('courses', { isCourseStaffAnywhere: true })).toBe('allowed');
-    expect(enter('courses', { isStaffAnywhere: true })).toBe(
-      '/admin?section=knowledge-library',
-    );
-    // And withholds it from someone with no standing — the shell turns them
-    // away first, but this must not be the thing that would have let them in.
-    expect(enter('courses', {})).toBe('/admin?section=knowledge-library');
+  // Hidden for now (2026-11-18): a typed or bookmarked ?section=courses lands
+  // on the library rather than a screen the nav no longer offers.
+  it('sends everyone at ?section=courses to the knowledge library while it is hidden', () => {
+    for (const ctx of [
+      { isCourseStaffAnywhere: true },
+      { roles: ['admin'], permissions: ['course:read'] },
+      { isStaffAnywhere: true },
+      {},
+    ]) {
+      expect(enter('courses', ctx), JSON.stringify(ctx)).toBe(
+        '/admin?section=knowledge-library',
+      );
+    }
   });
 });
