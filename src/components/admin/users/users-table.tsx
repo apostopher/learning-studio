@@ -7,6 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, Search, UserPlus } from 'lucide-react';
+import { useMemo } from 'react';
 import { cn } from '#/lib/cn';
 import { LEVEL_LABELS } from '#/lib/level-labels';
 import { USER_LEVELS, type UserLevel } from '#/types';
@@ -256,11 +257,15 @@ export const UsersTable = ({
       ? (levelFilter as UserLevel)
       : null;
 
-  const filtered = filterUserRows(rows, {
-    search,
-    courseId: validCourseId,
-    level,
-  });
+  // `data` must keep its identity between renders. TanStack Table treats new
+  // data as a reason to reset its page index — a state update, so another
+  // render — and a fresh `filter()` array every render turned that into an
+  // endless loop the moment a search term was typed. The React Compiler does
+  // not memoize components that call `useReactTable`, so this one is manual.
+  const filtered = useMemo(
+    () => filterUserRows(rows, { search, courseId: validCourseId, level }),
+    [rows, search, validCourseId, level],
+  );
 
   const selectedCourseName = courses.find(
     (c) => String(c.id) === courseFilter,
@@ -271,6 +276,9 @@ export const UsersTable = ({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    // No pagination here, so there is no page index worth resetting — and
+    // resetting it is what fed the loop above.
+    autoResetPageIndex: false,
     initialState: {
       sorting: [{ id: 'joinedAt', desc: true }] satisfies SortingState,
     },

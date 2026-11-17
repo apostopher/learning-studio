@@ -9,6 +9,7 @@ import {
   addUserEmailAtom,
   openLevelHistoryCourseIdAtom,
   openUserRowAtom,
+  peopleSearchAtom,
   setLevelDraftAtom,
   userDisciplinePicksAtom,
 } from '#/atoms/admin';
@@ -71,9 +72,9 @@ export const UsersPageContainer = ({
   roles: string[];
   permissions: string[];
 }) => {
-  const [search, setSearch] = useQueryState('q', { defaultValue: '' });
+  const [search, setSearch] = useAtom(peopleSearchAtom);
   // The tab lives in the URL so a permissions link is shareable and survives
-  // a reload, same as the search term.
+  // a reload. The search term deliberately does not — see `peopleSearchAtom`.
   const [tab, setTab] = useQueryState('tab', { defaultValue: 'people' });
   const [courseFilter, setCourseFilter] = useQueryState('course');
   const [levelFilter, setLevelFilter] = useQueryState('level');
