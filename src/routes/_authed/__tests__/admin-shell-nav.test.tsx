@@ -114,15 +114,15 @@ describe('/admin shell nav', () => {
       isCourseStaffAnywhere: false,
     });
 
+    // Every section but Courses, which is hidden for now (2026-11-18).
     expect(props.sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      'courses',
       'schedule',
       'people',
     ]);
     // The labels travel with the ids — a section offered without one would
     // render a blank link.
-    expect(props.sections[3].label).toBe('People');
+    expect(props.sections[2].label).toBe('People');
   });
 
   it('offers course staff the schedule without offering people', async () => {
@@ -130,7 +130,6 @@ describe('/admin shell nav', () => {
 
     expect(props.sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      'courses',
       'schedule',
     ]);
   });

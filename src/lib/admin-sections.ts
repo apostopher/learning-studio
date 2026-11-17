@@ -1,4 +1,3 @@
-import { parseAsStringLiteral } from 'nuqs';
 import { z } from 'zod';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // reached by the route tests.
@@ -39,14 +38,6 @@ export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
   schedule: 'Schedule',
   people: 'People',
 };
-
-/**
- * The nuqs parser for `?section=`. An unrecognised value reads as the default
- * rather than throwing, so a mistyped or stale URL lands somewhere useful.
- */
-export const adminSectionParser = parseAsStringLiteral(
-  ADMIN_SECTION_IDS,
-).withDefault(DEFAULT_ADMIN_SECTION);
 
 /**
  * `validateSearch` for the section screen.
@@ -127,10 +118,14 @@ export function adminSectionGates(
 
   return {
     'knowledge-library': knowledgeLibrary,
-    // The Courses screen reads the same endpoint the schedule's rail does,
-    // so it has the same "the list has content for you" condition — a
-    // discipline-only SME would otherwise open it to an empty grid.
-    courses: courseCatalogue,
+    // HIDDEN FOR NOW (user's call, 2026-11-18): closed for everyone, which
+    // drops the nav tab and sends a typed `?section=courses` to the default.
+    // Course editors stay reachable from each course column's "Configure"
+    // link in the knowledge library. To bring it back, restore
+    // `courses: courseCatalogue` — it reads the same endpoint as the
+    // schedule's rail, so it shares that "the list has content for you"
+    // condition.
+    courses: false,
     schedule: courseCatalogue,
     // `hasOrgPermission`, not the bare grant: `GET /api/admin/users` goes
     // through `requirePermission`, which refuses anyone who is not admin or

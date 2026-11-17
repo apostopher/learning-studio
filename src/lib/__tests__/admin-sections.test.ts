@@ -3,7 +3,6 @@ import {
   ADMIN_SECTION_IDS,
   adminSearchSchema,
   adminSectionGates,
-  adminSectionParser,
   DEFAULT_ADMIN_SECTION,
   visibleAdminSections,
 } from '../admin-sections';
@@ -34,10 +33,6 @@ describe('admin section order and default', () => {
 
   it('defaults to the knowledge library', () => {
     expect(DEFAULT_ADMIN_SECTION).toBe('knowledge-library');
-    // What a bare `/admin` resolves to, through the parser the component uses.
-    expect(adminSectionParser.parseServerSide(undefined)).toBe(
-      'knowledge-library',
-    );
   });
 
   /**
@@ -45,10 +40,7 @@ describe('admin section order and default', () => {
    * rendering nothing — the component switches on this value, so an
    * unrecognised one falling through as-is would be a blank screen.
    */
-  it('reads an unrecognised section as the default', () => {
-    expect(adminSectionParser.parseServerSide('nonsense')).toBe(
-      'knowledge-library',
-    );
+  it('reads an unrecognised section as absent', () => {
     expect(adminSearchSchema.parse({ section: 'nonsense' }).section).toBe(
       undefined,
     );
@@ -156,26 +148,17 @@ describe('adminSectionGates', () => {
   });
 
   /**
-   * Courses reads the same endpoint the schedule's rail does, so it opens
-   * for exactly the same actors — and NOT for a discipline-only SME, who
-   * would see an empty grid. Mutant: `courses` gated on the library's
-   * condition (the retired placeholder's gate).
+   * Courses is hidden for now (2026-11-18): closed even to an owner holding
+   * every grant. When it comes back it should follow the schedule's gate.
    */
-  it('gives courses to whoever the schedule is given to, and to no one else', () => {
+  it('keeps courses closed for everyone while it is hidden', () => {
     for (const ctx of [
-      { isStaffAnywhere: true },
       { isStaffAnywhere: true, isCourseStaffAnywhere: true },
+      { roles: ['owner'], permissions: ['*', 'course:read'] },
       { roles: ['admin'], permissions: ['course:read'] },
-      { roles: ['admin'] },
-      {},
     ]) {
-      const gates = context(ctx);
-      expect(gates.courses, JSON.stringify(ctx)).toBe(gates.schedule);
+      expect(context(ctx).courses, JSON.stringify(ctx)).toBe(false);
     }
-    expect(context({ isStaffAnywhere: true }).courses).toBe(false);
-    expect(
-      context({ isStaffAnywhere: true, isCourseStaffAnywhere: true }).courses,
-    ).toBe(true);
   });
 
   /**
@@ -198,19 +181,18 @@ describe('adminSectionGates', () => {
 
 describe('visibleAdminSections', () => {
   it('keeps nav order and drops what is closed', () => {
-    // Course staff: library, courses and schedule open; people closed.
+    // Course staff: library and schedule open; people closed; courses
+    // hidden for now.
     const sections = visibleAdminSections(
       context({ isStaffAnywhere: true, isCourseStaffAnywhere: true }),
     );
 
     expect(sections.map((s) => s.id)).toEqual([
       'knowledge-library',
-      'courses',
       'schedule',
     ]);
     expect(sections.map((s) => s.label)).toEqual([
       'Knowledge library',
-      'Courses',
       'Schedule',
     ]);
   });
