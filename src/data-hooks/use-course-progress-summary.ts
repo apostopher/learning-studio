@@ -17,6 +17,7 @@ const lessonProgressSchema = z.object({
   lessonId: z.number(),
   moduleId: z.number(),
   percent: z.number(),
+  ringPercent: z.number(),
   watched: z.boolean(),
   done: z.boolean(),
   outstanding: z.array(outstandingItemSchema),

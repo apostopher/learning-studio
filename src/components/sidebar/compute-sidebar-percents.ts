@@ -12,7 +12,7 @@ type DetailsLike = {
 type ProgressLike = {
   lessons: readonly {
     lessonId: number;
-    percent: number;
+    ringPercent: number;
     debrief: DebriefFacts & { bearing: boolean };
   }[];
 };
@@ -32,11 +32,10 @@ const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
  * server's own module and course numbers would count lessons this pilot
  * cannot see.
  *
- * Module percent is the rounded mean of its lessons' percents and excludes
- * debriefs (a debrief opens 12h after the video is watched, so it is not part of
- * "finishing" the lesson). The course percent is `coursePercent`, which adds
- * one item per debrief-bearing lesson. A lesson with no progress row has done
- * nothing: 0, with no debrief.
+ * Every ring reads the lesson's staged `ringPercent` (video 50, quiz 75,
+ * passed debrief 100). Module percent is the rounded mean of its lessons'
+ * rings, and the course percent is `coursePercent` over the same rings. A
+ * lesson with no progress row has done nothing: 0, with no debrief.
  */
 export function computeSidebarPercents(
   details: DetailsLike | null | undefined,
@@ -57,16 +56,13 @@ export function computeSidebarPercents(
   }
 
   const byId = new Map(progress.lessons.map((l) => [l.lessonId, l]));
-  const visible: {
-    percent: number;
-    debrief: DebriefFacts & { bearing: boolean };
-  }[] = [];
+  const visible: { ringPercent: number }[] = [];
 
   for (const mod of details.modules) {
     let sum = 0;
     for (const lesson of mod.lessons) {
       const row = byId.get(lesson.id);
-      const percent = row?.percent ?? 0;
+      const percent = row?.ringPercent ?? 0;
       const debrief = row?.debrief ?? NO_DEBRIEF;
       lessonPercents[lesson.slug] = percent;
       lessonRings[lesson.slug] = computeLessonRing({
@@ -77,7 +73,7 @@ export function computeSidebarPercents(
         includeTime: opts.includeTime,
         timeZone: opts.timeZone,
       });
-      visible.push({ percent, debrief });
+      visible.push({ ringPercent: percent });
       sum += percent;
     }
     modulePercents[mod.id] =
