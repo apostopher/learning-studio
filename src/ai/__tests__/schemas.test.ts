@@ -336,13 +336,34 @@ describe('AIFreeTextEvalOutputSchema', () => {
     expect(AIFreeTextEvalOutputSchema.safeParse(valid).success).toBe(true);
   });
 
-  it('rejects a judgement other than fully / partly / not', () => {
+  it('accepts mostly, and rejects a judgement other than fully / mostly / partly / not', () => {
     expect(
       AIFreeTextEvalOutputSchema.safeParse({
         ...valid,
         chunkJudgements: [{ chunkId: 'a', conveyed: 'mostly', note: '' }],
       }).success,
+    ).toBe(true);
+    expect(
+      AIFreeTextEvalOutputSchema.safeParse({
+        ...valid,
+        chunkJudgements: [{ chunkId: 'a', conveyed: 'somewhat', note: '' }],
+      }).success,
     ).toBe(false);
+  });
+
+  it('requires each incorrect claim to carry the student quote', () => {
+    expect(
+      AIFreeTextEvalOutputSchema.safeParse({
+        ...valid,
+        incorrectClaims: ['bare string'],
+      }).success,
+    ).toBe(false);
+    expect(
+      AIFreeTextEvalOutputSchema.safeParse({
+        ...valid,
+        incorrectClaims: [{ quote: 'squawk 7700', problem: 'It is 7600.' }],
+      }).success,
+    ).toBe(true);
   });
 
   it('requires at least one chunk judgement', () => {
