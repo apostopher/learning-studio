@@ -24,6 +24,7 @@ describe('courseProgressSummarySchema accepts real aggregateCourseProgress outpu
       hasQuiz: false,
       quizPlayed: false,
       debriefBearing: false,
+      flagshipDiscipline: false,
       debriefPassed: false,
       lastFinishedDebriefAt: null,
       hasOpenDebrief: false,

@@ -35,6 +35,7 @@ const row = (
   tappedSectionNames: [],
   hasDebrief: false,
   debriefBearing: false,
+  flagshipDiscipline: false,
   hasQuiz: false,
   quizPlayed: false,
   debriefPassed: false,
@@ -407,6 +408,49 @@ describe('ringPercent — the staged ring the learner sees', () => {
       ),
     ).toBe(50);
     expect(ring(row({ moduleId: 1, lessonId: 10, visited: true }))).toBe(100);
+  });
+});
+
+describe('ringPercent — 3D Airmanship lessons, where the debrief is optional', () => {
+  const flagship = (over: Partial<LessonProgressRow> = {}) =>
+    row({
+      moduleId: 1,
+      lessonId: 10,
+      flagshipDiscipline: true,
+      hasVideo: true,
+      needsVideoWatch: true,
+      hasQuiz: true,
+      hasDebrief: true,
+      debriefBearing: true,
+      ...over,
+    });
+  const ring = (r: LessonProgressRow) =>
+    aggregateCourseProgress('c', [r]).lessons[0].ringPercent;
+
+  it('closes on the quiz: video 50, quiz 100, no debrief needed', () => {
+    expect(ring(flagship())).toBe(0);
+    expect(ring(flagship({ watchedHits: FULL }))).toBe(50);
+    expect(ring(flagship({ watchedHits: FULL, quizPlayed: true }))).toBe(100);
+  });
+
+  it('a passed debrief adds nothing it has not already got', () => {
+    expect(ring(flagship({ watchedHits: FULL, debriefPassed: true }))).toBe(50);
+  });
+
+  it('with no quiz, the video alone closes it', () => {
+    expect(ring(flagship({ hasQuiz: false, watchedHits: FULL }))).toBe(100);
+  });
+
+  it('other disciplines still wait for the debrief', () => {
+    expect(
+      ring(
+        flagship({
+          flagshipDiscipline: false,
+          watchedHits: FULL,
+          quizPlayed: true,
+        }),
+      ),
+    ).toBe(75);
   });
 });
 

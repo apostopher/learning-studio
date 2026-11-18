@@ -46,6 +46,11 @@ export type LessonProgressRow = {
    * unusable captions never block course-done).
    */
   debriefBearing: boolean;
+  /**
+   * A 3D Airmanship lesson. Its debrief is optional, so its ring closes on
+   * video and quiz alone (see lessonRingPercent).
+   */
+  flagshipDiscipline: boolean;
   debriefPassed: boolean;
   /** ISO. Latest finished attempt of ANY format (legacy included); gates a retake. */
   lastFinishedDebriefAt: string | null;
@@ -196,8 +201,13 @@ export function coursePercent(
  * The ring's three stages, by weight: watching the video is half the lesson,
  * the quiz and the passed debrief a quarter each — so a full lesson closes at
  * 50, 75 and 100 as each is done.
+ *
+ * A 3D Airmanship lesson's debrief is optional, so it is not a stage there:
+ * video 50, quiz 100. The pilot's 3D score is 100 once they have passed the
+ * lessons at their level — level filtering already decides which those are.
  */
 const RING_WEIGHTS = { video: 2, quiz: 1, debrief: 1 } as const;
+const FLAGSHIP_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
 
 /**
  * What the lesson's ring shows. Each stage the lesson has is credited on its
@@ -212,22 +222,23 @@ const RING_WEIGHTS = { video: 2, quiz: 1, debrief: 1 } as const;
  * three shows its `percent`.
  */
 function lessonRingPercent(row: LessonProgressRow, percent: number): number {
+  const weights = row.flagshipDiscipline ? FLAGSHIP_RING_WEIGHTS : RING_WEIGHTS;
   const stages: { weight: number; fraction: number }[] = [];
   if (row.hasVideo && row.needsVideoWatch) {
     stages.push({
-      weight: RING_WEIGHTS.video,
+      weight: weights.video,
       fraction: Math.min(row.watchedHits, WATCHED_TOTAL) / WATCHED_TOTAL,
     });
   }
   if (row.hasQuiz) {
     stages.push({
-      weight: RING_WEIGHTS.quiz,
+      weight: weights.quiz,
       fraction: row.quizPlayed ? 1 : 0,
     });
   }
-  if (row.debriefBearing) {
+  if (row.debriefBearing && weights.debrief > 0) {
     stages.push({
-      weight: RING_WEIGHTS.debrief,
+      weight: weights.debrief,
       fraction: debriefPassedOf(row) ? 1 : 0,
     });
   }
