@@ -26,9 +26,9 @@ const row = (chunkId: string, latestScore: number, cleared: boolean) => ({
 });
 
 describe('constants', () => {
-  it('clears at 70 and caps an attempt at 8 chunks', () => {
+  it('clears at 70 and caps an attempt at 12 chunks', () => {
     expect(CHUNK_CLEAR_SCORE).toBe(70);
-    expect(MAX_KNOWLEDGE_CHUNKS).toBe(8);
+    expect(MAX_KNOWLEDGE_CHUNKS).toBe(12);
   });
 });
 
@@ -101,11 +101,12 @@ describe('planAttemptFocus', () => {
   });
 
   it('orders holes lowest score first and caps them', () => {
-    const cs = chunks(10);
+    const n = MAX_KNOWLEDGE_CHUNKS + 2;
+    const cs = chunks(n);
     const mastery = cs.map((c, i) => row(c.id, 50 - i, false));
     const plan = planAttemptFocus(cs, mastery);
     expect(plan.holes).toHaveLength(MAX_KNOWLEDGE_CHUNKS);
-    expect(plan.holes[0]).toBe('c10');
+    expect(plan.holes[0]).toBe(`c${n}`);
     expect(plan.review).toEqual([]);
   });
 

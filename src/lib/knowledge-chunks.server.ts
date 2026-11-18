@@ -15,8 +15,13 @@ import { redis } from '#/integrations/upstash/redis';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 
-/** Bump with any change a stored chunk list must not outlive. */
-const CHUNKS_FORMAT = 'knowledge-chunks-v1';
+/**
+ * Bump with any change a stored chunk list must not outlive. v2: one chunk per
+ * key point, never merged, under a cap of 12 (v1 capped at 8 and merged).
+ * Bumping regenerates each lesson's chunks on next use; mastery carries over
+ * through the old -> new matching.
+ */
+const CHUNKS_FORMAT = 'knowledge-chunks-v2';
 const CLAIM_TTL_SECONDS = 60 * 5;
 
 const claimKey = (lessonId: number) => `knowledge-chunks:claim:${lessonId}`;
