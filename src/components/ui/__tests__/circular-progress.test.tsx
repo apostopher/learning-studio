@@ -49,4 +49,25 @@ describe('CircularProgress', () => {
     expect(disc?.className).toMatch(/\brounded-full\b/);
     expect(disc?.className).toMatch(/\btext-on-success\b/);
   });
+
+  it('a due debrief is a D on the ring colour at 80%, never the error red', () => {
+    const { container } = render(
+      <CircularProgress value={50} ariaLabel="Debrief ready" badge="debrief" />,
+    );
+    const disc = container.querySelector('[data-badge="debrief"]');
+    expect(disc?.textContent).toBe('D');
+    expect(disc?.className).toMatch(/\bbg-accent-9\/80\b/);
+    expect(disc?.className).toMatch(/\btext-on-accent\b/);
+    expect(disc?.className).not.toMatch(/\bbg-error\b/);
+  });
+
+  it('a failed debrief awaiting its retake is a D on the error red', () => {
+    const { container } = render(
+      <CircularProgress value={50} ariaLabel="Debrief retake" badge="retake" />,
+    );
+    const disc = container.querySelector('[data-badge="retake"]');
+    expect(disc?.textContent).toBe('D');
+    expect(disc?.className).toMatch(/\bbg-error\b/);
+    expect(disc?.className).toMatch(/\btext-on-error\b/);
+  });
 });

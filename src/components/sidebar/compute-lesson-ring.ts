@@ -7,7 +7,7 @@ import { formatDebriefTime } from '#/lib/format-debrief-time';
 
 export type LessonRing = {
   percent: number;
-  badge: 'debrief' | 'passed' | null;
+  badge: 'debrief' | 'retake' | 'passed' | null;
   ariaLabel: string;
   /** ISO instant at which this ring's state next changes, if it will. */
   refreshAt: string | null;
@@ -54,18 +54,22 @@ export function computeLessonRing(a: {
         ariaLabel: `${lead}, debrief passed`,
         refreshAt: null,
       };
+    // The red retake disc is not left to colour alone: the name says the
+    // debrief has not been passed yet.
     case 'open':
       return {
         percent,
         badge,
-        ariaLabel: `${lead}, debrief ready`,
+        ariaLabel: state.retake
+          ? `${lead}, debrief not passed yet, ready to retake`
+          : `${lead}, debrief ready`,
         refreshAt: null,
       };
     case 'retake-waiting':
       return {
         percent,
         badge,
-        ariaLabel: `${lead}, debrief reopens ${when(state.availableAt)}`,
+        ariaLabel: `${lead}, debrief not passed yet, reopens ${when(state.availableAt)}`,
         refreshAt: state.availableAt,
       };
     // No D yet, but the wait still states its reason: the debrief has not

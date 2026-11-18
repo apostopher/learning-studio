@@ -9,11 +9,12 @@ type CircularProgressProps = {
   showLabel?: boolean;
   className?: string;
   /**
-   * `debrief`: a red disc with "D" inside the ring. `passed`: the ring forced
-   * full around a solid green disc with a tick. The accessible name is `ariaLabel`; the glyphs are
-   * decorative.
+   * `debrief`: a "D" on the ring's own colour at 80% — due, not an error.
+   * `retake`: a "D" on the error red — an attempt failed, not yet passed.
+   * `passed`: the ring forced full around a solid green disc with a tick.
+   * The accessible name is `ariaLabel`; the glyphs are decorative.
    */
-  badge?: 'debrief' | 'passed';
+  badge?: 'debrief' | 'retake' | 'passed';
 };
 
 export const CircularProgress = ({
@@ -82,6 +83,21 @@ export const CircularProgress = ({
       {badge === 'debrief' ? (
         <span
           aria-hidden="true"
+          data-badge="debrief"
+          // The ring's colour (accent-9) at 80%, so a due debrief reads as the
+          // next step rather than an error. Contrast, computed (WCAG 2.1) with
+          // the disc composited over its row: text-on-accent (#25230a) is
+          // 10.6:1 on the panel and 10.2:1 on the active row in light, 8.3:1
+          // and 8.6:1 in dark.
+          className="absolute inset-[3px] flex items-center justify-center rounded-full bg-accent-9/80 text-[11px] font-bold leading-none text-on-accent"
+        >
+          D
+        </span>
+      ) : null}
+      {badge === 'retake' ? (
+        <span
+          aria-hidden="true"
+          data-badge="retake"
           // Contrast, computed (WCAG 2.1 relative luminance) from
           // theme.generated.css: text-on-error (--color-error-contrast) on
           // bg-error (--color-error-solid) is white on #cb0d39 = 5.74:1 in
