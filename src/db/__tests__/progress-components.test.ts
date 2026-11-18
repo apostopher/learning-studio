@@ -19,6 +19,7 @@ const base = {
   hasQuiz: false,
   quizPlayed: false,
   debriefBearing: true,
+  flagshipDiscipline: true,
   debriefPassed: false,
   lastFinishedDebriefAt: null as Date | string | null,
   hasOpenDebrief: false,
@@ -64,6 +65,14 @@ describe('toComponentFields', () => {
     });
     expect(out.tappedSectionNames).toEqual(['keyPoints', 'links']);
     expect(out.applicableSectionNames).toEqual(['keyPoints', 'links']);
+  });
+
+  it('carries whether the lesson is a 3D Airmanship lesson', () => {
+    expect(toComponentFields(base).flagshipDiscipline).toBe(true);
+    expect(
+      toComponentFields({ ...base, flagshipDiscipline: null })
+        .flagshipDiscipline,
+    ).toBe(false);
   });
 
   it('passes the debrief facts through', () => {

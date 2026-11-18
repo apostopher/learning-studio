@@ -268,6 +268,15 @@ export const progressComponentColumns = (userId: string) => ({
     or ${hasChunksSql(lessonsTable.id)}
   ))`,
 
+  /**
+   * A 3D Airmanship lesson, by DISCIPLINE (the same test as the closing tab
+   * above): its ring closes on the quiz, the debrief being optional there.
+   */
+  flagshipDiscipline: sql<boolean>`coalesce((
+    select d.slug = ${FLAGSHIP_DISCIPLINE_SLUG} from disciplines d
+    where d.id = ${lessonsTable.disciplineId}
+  ), false)`,
+
   quizPlayed: sql<boolean>`exists (
     select 1 from lesson_quiz_answers q
     where q.user_id = ${userId} and q.lesson_slug = ${lessonsTable.slug}
@@ -314,6 +323,7 @@ type ComponentRow = {
   hasQuiz: boolean;
   quizPlayed: boolean;
   debriefBearing: boolean | null;
+  flagshipDiscipline: boolean | null;
   debriefPassed: boolean;
   lastFinishedDebriefAt: Date | string | null;
   hasOpenDebrief: boolean;
@@ -353,6 +363,7 @@ export function toComponentFields(row: ComponentRow) {
     hasQuiz: row.hasQuiz,
     quizPlayed: row.quizPlayed,
     debriefBearing: row.debriefBearing ?? false,
+    flagshipDiscipline: row.flagshipDiscipline ?? false,
     debriefPassed: row.debriefPassed,
     lastFinishedDebriefAt: toIso(row.lastFinishedDebriefAt),
     hasOpenDebrief: row.hasOpenDebrief,
