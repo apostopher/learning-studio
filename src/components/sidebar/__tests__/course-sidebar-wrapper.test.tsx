@@ -604,6 +604,7 @@ describe('CourseSidebarWrapper', () => {
             lessonId: 11,
             moduleId: 2,
             percent: 100,
+            ringPercent: 100,
             watched: true,
             done: true,
             outstanding: [],
@@ -688,6 +689,7 @@ describe('CourseSidebarWrapper', () => {
             lessonId: 1,
             moduleId: 1,
             percent: 50,
+            ringPercent: 50,
             watched: false,
             done: false,
             outstanding: [],
@@ -738,7 +740,7 @@ describe('CourseSidebarWrapper', () => {
     ).toBeNull();
   });
 
-  it('hands the ring the debrief state and counts the debrief in the course percent', async () => {
+  it('hands the ring the debrief state and its staged ringPercent, not the completion percent', async () => {
     progressMock.mockReturnValue({
       data: {
         percent: 100,
@@ -746,7 +748,10 @@ describe('CourseSidebarWrapper', () => {
           {
             lessonId: 1,
             moduleId: 1,
+            // Done, but the debrief is not passed yet: the ring shows the
+            // staged 75, not the completion 100.
             percent: 100,
+            ringPercent: 75,
             watched: true,
             done: true,
             outstanding: [],
@@ -773,16 +778,15 @@ describe('CourseSidebarWrapper', () => {
     await waitFor(() => {
       expect(
         screen.getByRole('progressbar', {
-          name: 'Lesson Pitch, 100% complete, debrief ready',
+          name: 'Lesson Pitch, 75% complete, debrief ready',
         }).textContent,
       ).toContain('D');
     });
-    // Lesson 100 + the debrief's chunk mastery 5/7 = 71, over the one visible
-    // lesson: (100 + 71) / 2 = 85.5 -> 86.
+    // The course reads the mean of the visible rings: the one lesson, 75.
     expect(
       screen
         .getByRole('progressbar', { name: 'Course 3D Airmanship progress' })
         .getAttribute('aria-valuenow'),
-    ).toBe('86');
+    ).toBe('75');
   });
 });

@@ -31,42 +31,36 @@ const d = (
 const now = new Date('2026-10-28T09:00:00Z');
 
 describe('computeSidebarPercents', () => {
-  it('counts debriefs in the course percent but not the module percent', () => {
+  it("draws every ring from the lessons' staged ringPercent", () => {
     const r = computeSidebarPercents(
       details,
       {
         lessons: [
-          { lessonId: 10, percent: 100, debrief: d(true) },
-          { lessonId: 11, percent: 100, debrief: d(false) },
+          { lessonId: 10, ringPercent: 50, debrief: d(false) },
+          { lessonId: 11, ringPercent: 75, debrief: d(false) },
           // Hidden by level: must not count.
-          { lessonId: 99, percent: 0, debrief: d(false) },
+          { lessonId: 99, ringPercent: 0, debrief: d(false) },
         ],
       },
       now,
       { timeZone: 'UTC' },
     );
-    expect(r.coursePercent).toBe(75);
-    expect(r.modulePercents).toEqual({ 1: 100, 2: 0 });
-    expect(r.lessonPercents).toEqual({ a: 100, b: 100 });
+    expect(r.lessonPercents).toEqual({ a: 50, b: 75 });
+    expect(r.lessonRings.a?.percent).toBe(50);
+    expect(r.lessonRings.b?.percent).toBe(75);
+    expect(r.modulePercents).toEqual({ 1: 63, 2: 0 });
+    expect(r.coursePercent).toBe(63);
   });
 
-  it("hands each lesson's chunk mastery to the course mean: 100 and 5/7 -> (100 + 71) / 2", () => {
+  it('a lesson with no progress row reads 0 and still counts in the course', () => {
     const r = computeSidebarPercents(
       details,
-      {
-        lessons: [
-          {
-            lessonId: 10,
-            percent: 100,
-            debrief: d(false, true, { cleared: 5, total: 7 }),
-          },
-        ],
-      },
+      { lessons: [{ lessonId: 10, ringPercent: 100, debrief: d(true) }] },
       now,
       { timeZone: 'UTC' },
     );
-    // Lesson b has no progress row (0, no debrief): items 100, 71, 0.
-    expect(r.coursePercent).toBe(57);
+    expect(r.lessonPercents).toEqual({ a: 100, b: 0 });
+    expect(r.coursePercent).toBe(50);
   });
 
   it('exposes a ring per visible lesson, passed one ticked', () => {
@@ -74,8 +68,8 @@ describe('computeSidebarPercents', () => {
       details,
       {
         lessons: [
-          { lessonId: 10, percent: 100, debrief: d(true) },
-          { lessonId: 11, percent: 100, debrief: d(false) },
+          { lessonId: 10, ringPercent: 100, debrief: d(true) },
+          { lessonId: 11, ringPercent: 50, debrief: d(false) },
         ],
       },
       now,

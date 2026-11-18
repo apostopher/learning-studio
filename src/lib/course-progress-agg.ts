@@ -1,9 +1,5 @@
 import { watchedMilestones } from './course-milestones';
-import {
-  debriefPassedOf,
-  masteryFromCounts,
-  masteryPercent,
-} from './debrief-mastery';
+import { debriefPassedOf, masteryFromCounts } from './debrief-mastery';
 import { type DebriefFacts, debriefClockStart } from './debrief-schedule';
 import type { TrackedLessonSection } from './lesson-visit-section';
 
@@ -77,7 +73,16 @@ export type OutstandingItem =
 export type LessonProgress = {
   lessonId: number;
   moduleId: number;
+  /**
+   * Completion: the mean of every component, material tabs included. Drives
+   * `done` (via settleProgress), and so prerequisites and the debrief clock.
+   */
   percent: number;
+  /**
+   * What the learner's ring shows: video 50, quiz 75, passed debrief 100. See
+   * `lessonRingPercent`. Display only — never decides completion.
+   */
+  ringPercent: number;
   watched: boolean;
   /** `doneAt !== null` — sticky, unlike `percent === 100`. */
   done: boolean;
@@ -174,40 +179,62 @@ export function lessonOutstanding(row: LessonProgressRow): OutstandingItem[] {
 }
 
 /**
- * Course percent: a flat mean over every lesson's percent plus one item per
- * debrief-bearing lesson: its chunk mastery (`masteryPercent`: 100 once
- * passed, 0 with no chunks, never above 100). Non-bearing lessons add no
- * debrief item.
+ * Course percent: the rounded mean of the visible lessons' rings, so a course
+ * reads 100 exactly when every ring is closed. The debrief is already inside
+ * each ring, so it adds no item of its own.
  */
 export function coursePercent(
-  lessons: readonly {
-    percent: number;
-    debrief: {
-      bearing: boolean;
-      passed: boolean;
-      mastery: { cleared: number; total: number } | null;
-    };
-  }[],
+  lessons: readonly { ringPercent: number }[],
 ): number {
-  const items: number[] = [];
-  for (const l of lessons) {
-    items.push(l.percent);
-    if (l.debrief.bearing) {
-      const { cleared, total } = l.debrief.mastery ?? { cleared: 0, total: 0 };
-      items.push(
-        Math.min(
-          100,
-          masteryPercent({
-            cleared: Math.min(cleared, total),
-            total,
-            passed: l.debrief.passed,
-          }),
-        ),
-      );
-    }
+  if (lessons.length === 0) return 0;
+  return Math.round(
+    lessons.reduce((s, l) => s + l.ringPercent, 0) / lessons.length,
+  );
+}
+
+/**
+ * The ring's three stages, by weight: watching the video is half the lesson,
+ * the quiz and the passed debrief a quarter each — so a full lesson closes at
+ * 50, 75 and 100 as each is done.
+ */
+const RING_WEIGHTS = { video: 2, quiz: 1, debrief: 1 } as const;
+
+/**
+ * What the lesson's ring shows. Each stage the lesson has is credited on its
+ * own, whatever order it is done in; the video fills its share as milestones
+ * are hit, the quiz and debrief are all or nothing (a debrief counts on a
+ * PASS, not an attempt).
+ *
+ * A stage the lesson lacks — no required video, no quiz, no debrief that
+ * bears — drops out and the rest share its weight, so every lesson can still
+ * reach 100. Material tabs are not a stage: they still count toward `percent`
+ * and so toward `done`, but not toward the ring. A lesson with none of the
+ * three shows its `percent`.
+ */
+function lessonRingPercent(row: LessonProgressRow, percent: number): number {
+  const stages: { weight: number; fraction: number }[] = [];
+  if (row.hasVideo && row.needsVideoWatch) {
+    stages.push({
+      weight: RING_WEIGHTS.video,
+      fraction: Math.min(row.watchedHits, WATCHED_TOTAL) / WATCHED_TOTAL,
+    });
   }
-  if (items.length === 0) return 0;
-  return Math.round(items.reduce((s, p) => s + p, 0) / items.length);
+  if (row.hasQuiz) {
+    stages.push({
+      weight: RING_WEIGHTS.quiz,
+      fraction: row.quizPlayed ? 1 : 0,
+    });
+  }
+  if (row.debriefBearing) {
+    stages.push({
+      weight: RING_WEIGHTS.debrief,
+      fraction: debriefPassedOf(row) ? 1 : 0,
+    });
+  }
+  if (stages.length === 0) return percent;
+  const total = stages.reduce((s, x) => s + x.weight, 0);
+  const done = stages.reduce((s, x) => s + x.weight * x.fraction, 0);
+  return Math.round((done / total) * 100);
 }
 
 /**
@@ -246,8 +273,9 @@ function lessonWatched(row: LessonProgressRow): boolean {
  * so the output arrays are stable.
  *
  * - lesson%  = round(mean of the components that apply · 100); see lessonPercent.
- * - module%  = round(avg of its lessons' %); 0 for a module with no lessons.
- * - course%  = coursePercent: flat mean over lessons plus bearing debriefs.
+ * - ring%    = the staged ring the learner sees; see lessonRingPercent.
+ * - module%  = round(avg of its lessons' rings); 0 for a module with no lessons.
+ * - course%  = coursePercent: flat mean over the lessons' rings.
  */
 export function aggregateCourseProgress(
   slug: string,
@@ -264,10 +292,12 @@ export function aggregateCourseProgress(
       moduleOrder.push(row.moduleId);
     }
     if (row.lessonId === null) continue; // empty-module placeholder
+    const percent = lessonPercent(row);
     moduleLessons.push({
       lessonId: row.lessonId,
       moduleId: row.moduleId,
-      percent: lessonPercent(row),
+      percent,
+      ringPercent: lessonRingPercent(row, percent),
       watched: lessonWatched(row),
       done: row.doneAt !== null,
       outstanding: lessonOutstanding(row),
@@ -301,7 +331,7 @@ export function aggregateCourseProgress(
       totalLessons === 0
         ? 0
         : Math.round(
-            moduleLessons.reduce((s, l) => s + l.percent, 0) / totalLessons,
+            moduleLessons.reduce((s, l) => s + l.ringPercent, 0) / totalLessons,
           );
     modules.push({ moduleId, percent, watchedLessons, totalLessons });
   }
@@ -309,7 +339,7 @@ export function aggregateCourseProgress(
   const totalLessons = modules.reduce((n, m) => n + m.totalLessons, 0);
   const watchedLessons = modules.reduce((n, m) => n + m.watchedLessons, 0);
 
-  // Modules still report their own (lesson-mean) percent, empty ones at 0, but
+  // Modules still report their own (ring-mean) percent, empty ones at 0, but
   // the course percent is flat over lessons, so an empty module simply
   // contributes nothing — and a course of only empty modules reads 0, never 100.
   const percent = coursePercent(lessons);

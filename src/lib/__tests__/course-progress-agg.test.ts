@@ -322,57 +322,118 @@ describe('done and debrief facts', () => {
   });
 });
 
+describe('ringPercent — the staged ring the learner sees', () => {
+  /** Video + quiz + bearing debrief: the full lesson the stages describe. */
+  const full = (over: Partial<LessonProgressRow> = {}) =>
+    row({
+      moduleId: 1,
+      lessonId: 10,
+      hasVideo: true,
+      needsVideoWatch: true,
+      hasQuiz: true,
+      hasDebrief: true,
+      debriefBearing: true,
+      ...over,
+    });
+  const ring = (r: LessonProgressRow) =>
+    aggregateCourseProgress('c', [r]).lessons[0].ringPercent;
+
+  it('closes in stages: video 50, quiz 75, passed debrief 100', () => {
+    expect(ring(full())).toBe(0);
+    expect(ring(full({ watchedHits: FULL }))).toBe(50);
+    expect(ring(full({ watchedHits: FULL, quizPlayed: true }))).toBe(75);
+    expect(
+      ring(full({ watchedHits: FULL, quizPlayed: true, debriefPassed: true })),
+    ).toBe(100);
+  });
+
+  it('fills the video stage as the video is watched', () => {
+    expect(ring(full({ watchedHits: 9 }))).toBe(25);
+  });
+
+  it('credits each stage on its own, whatever order they are done in', () => {
+    expect(ring(full({ quizPlayed: true }))).toBe(25);
+  });
+
+  it('every current chunk cleared counts as passed', () => {
+    expect(
+      ring(
+        full({
+          watchedHits: FULL,
+          quizPlayed: true,
+          chunksCleared: 7,
+          chunksTotal: 7,
+        }),
+      ),
+    ).toBe(100);
+  });
+
+  it('ignores the material tabs, which still count toward done', () => {
+    const r = full({
+      watchedHits: FULL,
+      quizPlayed: true,
+      debriefPassed: true,
+      applicableSectionNames: secs(2),
+    });
+    const [lesson] = aggregateCourseProgress('c', [r]).lessons;
+    expect(lesson.ringPercent).toBe(100);
+    expect(lesson.percent).toBeLessThan(100);
+  });
+
+  it('spreads a missing stage over the ones the lesson has', () => {
+    // No quiz: video 2/3, debrief 1/3.
+    expect(ring(full({ hasQuiz: false, watchedHits: FULL }))).toBe(67);
+    // No bearing debrief: video and quiz finish it.
+    expect(
+      ring(
+        full({ debriefBearing: false, watchedHits: FULL, quizPlayed: true }),
+      ),
+    ).toBe(100);
+  });
+
+  it('does not ask for a video the lesson does not require', () => {
+    expect(ring(full({ needsVideoWatch: false, quizPlayed: true }))).toBe(50);
+  });
+
+  it('falls back to the lesson percent when no stage applies', () => {
+    expect(
+      ring(
+        row({
+          moduleId: 1,
+          lessonId: 10,
+          applicableSectionNames: secs(2),
+          tappedSectionNames: secs(1),
+        }),
+      ),
+    ).toBe(50);
+    expect(ring(row({ moduleId: 1, lessonId: 10, visited: true }))).toBe(100);
+  });
+});
+
 describe('coursePercent', () => {
-  const L = (
-    percent: number,
-    bearing: boolean,
-    passed = false,
-    mastery: { cleared: number; total: number } | null = null,
-  ) => ({
-    percent,
-    debrief: { bearing, passed, mastery },
-  });
-
-  it('is a flat mean over lessons plus bearing debriefs', () => {
-    expect(coursePercent([L(100, true), L(100, true)])).toBe(50);
-    expect(coursePercent([L(100, true, true), L(100, true)])).toBe(75);
-  });
-
-  it('a non-bearing lesson adds no debrief item', () => {
-    expect(coursePercent([L(100, false), L(100, false)])).toBe(100);
-    expect(coursePercent([L(100, true, true), L(100, false)])).toBe(100);
-  });
-
-  it('a bearing, unpassed debrief counts its chunk mastery: 5/7 is the item 71', () => {
-    // Items handed to the mean: [100 (lesson), 71 (debrief)] -> 85.5 -> 86.
-    // The old pass/fail item (0) would give 50.
-    expect(coursePercent([L(100, true, false, { cleared: 5, total: 7 })])).toBe(
-      86,
-    );
-  });
-
-  it('a passed debrief is 100 whatever its mastery, and an unpassed one with no chunks is 0', () => {
-    expect(coursePercent([L(100, true, true, { cleared: 1, total: 7 })])).toBe(
-      100,
-    );
-    expect(coursePercent([L(100, true, false, null)])).toBe(50);
-  });
-
-  it('mastery never lifts a debrief item above 100, even if cleared exceeds total', () => {
-    expect(coursePercent([L(0, true, false, { cleared: 9, total: 7 })])).toBe(
-      50,
-    );
+  it('is the rounded mean of the lesson rings', () => {
+    expect(coursePercent([{ ringPercent: 50 }, { ringPercent: 75 }])).toBe(63);
   });
 
   it('is 0 for no lessons', () => {
     expect(coursePercent([])).toBe(0);
   });
 
-  it('feeds CourseProgress.percent', () => {
-    const { percent } = aggregateCourseProgress('c', [
-      row({ moduleId: 1, lessonId: 10, visited: true, debriefBearing: true }),
+  it('feeds CourseProgress.percent and module percent from the rings', () => {
+    const result = aggregateCourseProgress('c', [
+      row({
+        moduleId: 1,
+        lessonId: 10,
+        hasVideo: true,
+        needsVideoWatch: true,
+        watchedHits: FULL,
+        hasQuiz: true,
+        debriefBearing: true,
+      }),
     ]);
-    expect(percent).toBe(50);
+    expect(result.lessons[0].ringPercent).toBe(50);
+    expect(result.modules[0].percent).toBe(50);
+    expect(result.percent).toBe(50);
   });
 });
 
