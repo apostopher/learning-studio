@@ -42,14 +42,25 @@ describe('computeLessonRing', () => {
     expect(r.refreshAt).toBeNull();
   });
 
-  it('keeps D and states when it reopens (6h) after a finished attempt', () => {
+  it('turns the D to retake and says so once an attempt has failed', () => {
+    const r = computeLessonRing({
+      ...base,
+      debrief: facts({ lastFinishedAt: '2026-10-27T09:00:00Z' }) as never,
+    });
+    expect(r.badge).toBe('retake');
+    expect(r.ariaLabel).toBe(
+      'Lesson X, 100% complete, debrief not passed yet, ready to retake',
+    );
+  });
+
+  it('keeps the retake D and states when it reopens (6h) after a finished attempt', () => {
     const r = computeLessonRing({
       ...base,
       debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
-    expect(r.badge).toBe('debrief');
+    expect(r.badge).toBe('retake');
     expect(r.ariaLabel).toBe(
-      'Lesson X, 100% complete, debrief reopens Wed 28 Oct, 9:40 AM',
+      'Lesson X, 100% complete, debrief not passed yet, reopens Wed 28 Oct, 9:40 AM',
     );
     expect(r.refreshAt).toBe(
       new Date(
@@ -64,7 +75,7 @@ describe('computeLessonRing', () => {
       includeTime: false,
       debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
-    expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief reopens later');
+    expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief not passed yet, reopens later');
     expect(r.refreshAt).toBe(
       new Date(
         Date.parse('2026-10-28T03:40:00Z') + DEBRIEF_RETAKE_DELAY_MS,

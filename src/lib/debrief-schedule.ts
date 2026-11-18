@@ -128,12 +128,22 @@ export function computeDebriefState(
   return { kind: 'waiting', availableAt: new Date(availableMs).toISOString() };
 }
 
-/** Ring badge: 'debrief' for open and retake-waiting, 'passed' for passed, else null. */
-export function debriefBadge(state: DebriefState): 'debrief' | 'passed' | null {
+/**
+ * Ring badge.
+ * - 'debrief': due and not yet attempted (or a first attempt in progress).
+ * - 'retake': an attempt has finished without a pass — from that first fail
+ *   until a pass, whether the retake is open or still in its 6h wait.
+ * - 'passed': passed.
+ * - null: not done yet, or still in the 12h wait.
+ */
+export function debriefBadge(
+  state: DebriefState,
+): 'debrief' | 'retake' | 'passed' | null {
   switch (state.kind) {
     case 'open':
+      return state.retake ? 'retake' : 'debrief';
     case 'retake-waiting':
-      return 'debrief';
+      return 'retake';
     case 'passed':
       return 'passed';
     case 'not-done':

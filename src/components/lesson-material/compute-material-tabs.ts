@@ -91,11 +91,10 @@ export function defaultMaterialTab(
   now: Date,
 ): MaterialTabValue {
   const offersDebrief = tabs.some((tab) => tab.value === 'debrief');
-  if (
-    offersDebrief &&
-    debrief?.bearing &&
-    debriefBadge(computeDebriefState(debrief, now)) === 'debrief'
-  ) {
+  const badge = debrief?.bearing
+    ? debriefBadge(computeDebriefState(debrief, now))
+    : null;
+  if (offersDebrief && (badge === 'debrief' || badge === 'retake')) {
     return 'debrief';
   }
   return 'keyPoints';

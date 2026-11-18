@@ -192,16 +192,25 @@ describe('debriefClockStart', () => {
 });
 
 describe('debriefBadge', () => {
-  it('shows debrief for open and retake-waiting', () => {
+  it('shows debrief for a first attempt, open or resumed', () => {
     expect(debriefBadge({ kind: 'open', retake: false, resume: false })).toBe(
       'debrief',
     );
-    expect(debriefBadge({ kind: 'open', retake: true, resume: false })).toBe(
+    expect(debriefBadge({ kind: 'open', retake: false, resume: true })).toBe(
       'debrief',
+    );
+  });
+
+  it('shows retake from the first failed attempt until a pass', () => {
+    expect(debriefBadge({ kind: 'open', retake: true, resume: false })).toBe(
+      'retake',
+    );
+    expect(debriefBadge({ kind: 'open', retake: true, resume: true })).toBe(
+      'retake',
     );
     expect(
       debriefBadge({ kind: 'retake-waiting', availableAt: hoursAgo(-1) }),
-    ).toBe('debrief');
+    ).toBe('retake');
   });
 
   it('shows passed for passed', () => {
