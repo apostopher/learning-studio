@@ -59,8 +59,8 @@ describe('generateKnowledgeChunks', () => {
     ]);
   });
 
-  it('retries once on a schema failure (9 chunks) then throws', async () => {
-    m.generateText.mockResolvedValue(nChunks(9));
+  it('retries once on a schema failure (13 chunks) then throws', async () => {
+    m.generateText.mockResolvedValue(nChunks(13));
 
     await expect(
       generateKnowledgeChunks({ keyPoints: ['k'], context: 'c' }),
@@ -68,9 +68,39 @@ describe('generateKnowledgeChunks', () => {
     expect(m.generateText).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps all 10 chunks for a 10-key-point lesson', async () => {
+    m.generateText.mockResolvedValueOnce(nChunks(10));
+    const chunks = await generateKnowledgeChunks({
+      keyPoints: Array.from({ length: 10 }, (_, i) => `kp${i + 1}`),
+      context: 'c',
+    });
+    expect(chunks.map((c) => c.id)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `c${i + 1}`),
+    );
+  });
+
+  it('retries when the model merged key points, then throws', async () => {
+    m.generateText.mockResolvedValue(nChunks(8));
+    await expect(
+      generateKnowledgeChunks({
+        keyPoints: Array.from({ length: 10 }, (_, i) => `kp${i + 1}`),
+        context: 'c',
+      }),
+    ).rejects.toThrow(/merged or dropped/);
+    expect(m.generateText).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the model never to merge key points, under the cap', async () => {
+    m.generateText.mockResolvedValueOnce(nChunks(1));
+    await generateKnowledgeChunks({ keyPoints: ['k'], context: 'c' });
+    const { prompt } = m.generateText.mock.calls[0][0];
+    expect(prompt).toMatch(/Never merge, drop or combine key points/);
+    expect(prompt).toContain('never produce more than 12 chunks');
+  });
+
   it('recovers when the retry returns a valid set', async () => {
     m.generateText
-      .mockResolvedValueOnce(nChunks(9))
+      .mockResolvedValueOnce(nChunks(13))
       .mockResolvedValueOnce(nChunks(3));
 
     const chunks = await generateKnowledgeChunks({

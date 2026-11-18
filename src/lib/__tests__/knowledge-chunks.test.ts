@@ -124,7 +124,7 @@ const gen = [
 ];
 const fp = createHash('sha256')
   .update(
-    JSON.stringify(['knowledge-chunks-v1', source.keyPoints, source.context]),
+    JSON.stringify(['knowledge-chunks-v2', source.keyPoints, source.context]),
   )
   .digest('hex');
 

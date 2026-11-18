@@ -82,9 +82,9 @@ export const EvaluatorOutputSchema = z.object({
 export const ChunkJudgementSchema = z.object({
   chunkId: z.string(),
   conveyed: z
-    .enum(['fully', 'partly', 'not'])
+    .enum(['fully', 'mostly', 'partly', 'not'])
     .describe(
-      "Whether the student's answer conveys this chunk, in any wording",
+      "Whether the student's answer shows the understanding of this chunk that the question asks for, in any wording",
     ),
   note: z.string().describe('One short sentence on what was or was not said'),
 });
@@ -98,9 +98,20 @@ const EssentialIdeaSchema = z.object({
 export const AIFreeTextEvalOutputSchema = z.object({
   chunkJudgements: z.array(ChunkJudgementSchema).min(1).max(2),
   incorrectClaims: z
-    .array(z.string())
+    .array(
+      z.object({
+        quote: z
+          .string()
+          .describe(
+            "The student's exact words making the claim, copied verbatim from their answer",
+          ),
+        problem: z
+          .string()
+          .describe('What the lesson says instead, or why it is unsafe'),
+      }),
+    )
     .describe(
-      "Statements of fact in the student's answer that the lesson contradicts, or that are unsafe. Never analogies, comparisons, opinions or off-topic reasoning. Empty if none.",
+      "Statements of fact in the student's answer that the lesson contradicts, or that are unsafe. Never analogies, comparisons, opinions, interpretations or off-topic reasoning. Empty if none.",
     ),
   revisitNote: z
     .string()

@@ -5,8 +5,8 @@ const MAX_CONTEXT_CHARS = 60_000;
 
 /**
  * Chunk-generation prompt. One chunk per key point is the anchor (so authored
- * lessons keep their shape); teaching that only the transcript covers adds
- * chunks; anything beyond the cap is merged, least important first.
+ * lessons keep their shape) and is never merged or dropped; teaching that only
+ * the transcript covers fills whatever room is left under the cap.
  */
 export function buildKnowledgeChunksPrompt(input: {
   keyPoints: string[];
@@ -23,8 +23,8 @@ ${input.context.slice(0, MAX_CONTEXT_CHARS)}
 
 Rules:
 - Produce exactly one chunk per key point above, in the same order. Each chunk is anchored on its key point.
-- If the context teaches something important that no key point covers, add a chunk for it after the anchored ones.
-- Never produce more than ${MAX_KNOWLEDGE_CHUNKS} chunks. If you would exceed that, merge the least important chunks into related ones.
+- Never merge, drop or combine key points: each one gets its own chunk, about that key point only.
+- If the context teaches something important that no key point covers, add a chunk for it after the anchored ones — but never produce more than ${MAX_KNOWLEDGE_CHUNKS} chunks in total. If there is no room, leave the least important extras out; never fold them into an anchored chunk.
 - "title" is a short noun phrase (under 8 words). "summary" is one or two self-contained sentences stating the fact or procedure, in the instructor's terminology.
 - Do not include greetings, course admin, or references to other lessons.`;
 }

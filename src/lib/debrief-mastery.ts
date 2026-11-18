@@ -14,8 +14,14 @@ export type ChunkMastery = {
 
 /** A chunk is cleared the first time it scores at least this. */
 export const CHUNK_CLEAR_SCORE = 70;
-/** The most chunks one attempt asks about. */
-export const MAX_KNOWLEDGE_CHUNKS = 8;
+/**
+ * The most chunks a lesson has, and so the most one attempt asks about. Sized
+ * so no authored key point is ever merged away: lessons carry up to 10 (101
+ * prod lessons have exactly 10 as of 2026-11-18), plus room for 2 ideas only
+ * the transcript teaches. At 8, every 10-point lesson silently lost two, and
+ * their debrief questions had no chunk to be graded against.
+ */
+export const MAX_KNOWLEDGE_CHUNKS = 12;
 /** Cleared chunks mixed back into a retake as spaced review. */
 const MAX_REVIEW_CHUNKS = 2;
 

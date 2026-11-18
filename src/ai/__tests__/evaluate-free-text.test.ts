@@ -6,7 +6,12 @@ const m = vi.hoisted(() => ({ generateObject: vi.fn() }));
 vi.mock('ai', () => ({ generateObject: m.generateObject }));
 vi.mock('../ai-provider', () => ({ sonnet: 'sonnet' }));
 
-import { evaluateFreeText, scoreChunkJudgement } from '../evaluate-answer';
+import { CHUNK_CLEAR_SCORE } from '#/lib/debrief-mastery';
+import {
+  evaluateFreeText,
+  groundedClaims,
+  scoreChunkJudgement,
+} from '../evaluate-answer';
 import type { AITestFreeTextQuestion } from '../schemas';
 
 const chunks = [
@@ -24,7 +29,10 @@ const question: AITestFreeTextQuestion = {
   chunkIds: ['v2-c1', 'v2-c2'],
 };
 
-const judgement = (chunkId: string, conveyed: 'fully' | 'partly' | 'not') => ({
+const judgement = (
+  chunkId: string,
+  conveyed: 'fully' | 'mostly' | 'partly' | 'not',
+) => ({
   chunkId,
   conveyed,
   note: `${chunkId} ${conveyed}`,
@@ -33,8 +41,9 @@ const judgement = (chunkId: string, conveyed: 'fully' | 'partly' | 'not') => ({
 beforeEach(() => vi.clearAllMocks());
 
 describe('scoreChunkJudgement', () => {
-  it('scores fully 100, partly 50, not 0', () => {
+  it('scores fully 100, mostly 80, partly 50, not 0', () => {
     expect(scoreChunkJudgement(judgement('a', 'fully'), 0)).toBe(100);
+    expect(scoreChunkJudgement(judgement('a', 'mostly'), 0)).toBe(80);
     expect(scoreChunkJudgement(judgement('a', 'partly'), 0)).toBe(50);
     expect(scoreChunkJudgement(judgement('a', 'not'), 0)).toBe(0);
   });
@@ -55,7 +64,7 @@ describe('evaluateFreeText', () => {
           judgement('v2-c1', 'fully'),
           judgement('v2-c2', 'partly'),
         ],
-        incorrectClaims: ['Squawk 7700'],
+        incorrectClaims: [{ quote: 'Squawk 7700', problem: 'It is 7600.' }],
         revisitNote: 'You missed the route.',
       },
     });
@@ -75,7 +84,7 @@ describe('evaluateFreeText', () => {
       explanation: 'You missed the route.',
       chunkScores: { 'v2-c1': 75, 'v2-c2': 25 },
       revisitNote: 'You missed the route.',
-      incorrectClaims: ['Squawk 7700'],
+      incorrectClaims: ['"Squawk 7700" — It is 7600.'],
     });
   });
 
@@ -99,8 +108,25 @@ describe('evaluateFreeText', () => {
     m.generateObject.mockResolvedValue({
       object: {
         chunkJudgements: [judgement('v2-c1', 'fully')],
-        incorrectClaims: ['wrong'],
+        incorrectClaims: [{ quote: 'wrong thing', problem: 'Not so.' }],
         revisitNote: 'One claim was wrong.',
+      },
+    });
+    const result = await evaluateFreeText(
+      { ...question, chunkIds: ['v2-c1'] },
+      'I said a wrong thing.',
+      chunks,
+      'body',
+    );
+    expect(result.revisitNote).toBe('One claim was wrong.');
+  });
+
+  it('a mostly-conveyed chunk clears, so a strong answer missing one nuance passes', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [judgement('v2-c1', 'mostly')],
+        incorrectClaims: [],
+        revisitNote: 'Also mention the route.',
       },
     });
     const result = await evaluateFreeText(
@@ -109,7 +135,32 @@ describe('evaluateFreeText', () => {
       chunks,
       'body',
     );
-    expect(result.revisitNote).toBe('One claim was wrong.');
+    expect(result.chunkScores?.['v2-c1']).toBeGreaterThanOrEqual(
+      CHUNK_CLEAR_SCORE,
+    );
+    // The gap is still logged for Viper.
+    expect(result.revisitNote).toBe('Also mention the route.');
+  });
+
+  it('charges no penalty for a claim the student never made', async () => {
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [judgement('v2-c1', 'fully')],
+        incorrectClaims: [
+          { quote: 'the Red Baron flew it', problem: 'He did not.' },
+        ],
+        revisitNote: 'Watch the Red Baron detail.',
+      },
+    });
+    const result = await evaluateFreeText(
+      { ...question, chunkIds: ['v2-c1'] },
+      'Squawk 7600 and fly the last clearance.',
+      chunks,
+      'body',
+    );
+    expect(result.score).toBe(100);
+    expect(result.incorrectClaims).toEqual([]);
+    expect(result.revisitNote).toBe('');
   });
 
   it('ignores judgements for chunks the question did not cite, and scores a missing judgement as not conveyed', async () => {
@@ -154,6 +205,11 @@ describe('evaluateFreeText', () => {
     expect(prompt).toContain(question.expectedAnswer);
     expect(prompt).toMatch(/Analogies, comparisons, opinions/);
     expect(prompt).toMatch(/never also an incorrect claim/);
+    expect(prompt).toMatch(/as far as the question asks about it/);
+    expect(prompt).toMatch(/Never mark a chunk down for an example/);
+    expect(prompt).toMatch(/more than one defensible answer/);
+    expect(prompt).toMatch(/never agreement with the reference/);
+    expect(prompt).toMatch(/copy the student's exact words into `quote`/);
     expect(prompt).toContain(
       '<student_answer>\nSquawk 7600.\n</student_answer>',
     );
@@ -194,5 +250,28 @@ describe('evaluateFreeText', () => {
     await expect(evaluateFreeText(legacy, 'a', chunks, 'body')).rejects.toThrow(
       /no chunkIds/,
     );
+  });
+});
+
+describe('groundedClaims', () => {
+  it('keeps a claim quoted from the answer, ignoring case, quotes and spacing', () => {
+    expect(
+      groundedClaims(
+        [{ quote: '“Squawk  7700”', problem: 'It is 7600.' }],
+        'First I would squawk 7700, then descend.',
+      ),
+    ).toEqual(['"“Squawk  7700”" — It is 7600.']);
+  });
+
+  it('drops a claim whose quote is not in the answer, or is empty', () => {
+    expect(
+      groundedClaims(
+        [
+          { quote: 'squawk 7500', problem: 'x' },
+          { quote: '  ', problem: 'y' },
+        ],
+        'First I would squawk 7700.',
+      ),
+    ).toEqual([]);
   });
 });

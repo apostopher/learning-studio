@@ -9,7 +9,13 @@ import {
   type ChunkJudgement,
 } from './schemas';
 
-const CONVEYED_CREDIT = { fully: 100, partly: 50, not: 0 } as const;
+/**
+ * `mostly` clears the chunk (CHUNK_CLEAR_SCORE is 70): the core understanding
+ * is there and only a secondary detail is missing, which the revisit note
+ * still logs for Viper. Without it a strong answer missing one nuance scored
+ * 50 and failed, the same as a vague one.
+ */
+const CONVEYED_CREDIT = { fully: 100, mostly: 80, partly: 50, not: 0 } as const;
 /** What each factually wrong or unsafe statement costs, in score points. */
 const INCORRECT_CLAIM_PENALTY = 25;
 /**
@@ -21,7 +27,7 @@ const MAX_PENALTY_SHARE = 0.5;
 
 /**
  * The 0–100 score for one chunk, from the grader's judgement: fully 100,
- * partly 50, not 0, less 25 per incorrect claim, the penalties together taking
+ * mostly 80, partly 50, not 0, less 25 per incorrect claim, the penalties together taking
  * at most half of what was earned. Computed here rather than asked of the
  * model so two answers meaning the same thing score the same, however worded.
  */
@@ -35,6 +41,32 @@ export function scoreChunkJudgement(
     earned * MAX_PENALTY_SHARE,
   );
   return Math.round(Math.max(0, earned - penalty));
+}
+
+const normalise = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201c\u201d"'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * The grader's incorrect claims that quote the student's own words. A claim
+ * whose quote is not in the answer is about something the student never said
+ * — the grader once docked an answer for a "Red Baron" remark it invented —
+ * so it is dropped rather than charged.
+ */
+export function groundedClaims(
+  claims: { quote: string; problem: string }[],
+  userAnswer: string,
+): string[] {
+  const answer = normalise(userAnswer);
+  return claims
+    .filter((c) => {
+      const q = normalise(c.quote);
+      return q.length > 0 && answer.includes(q);
+    })
+    .map((c) => `"${c.quote.trim()}" — ${c.problem.trim()}`);
 }
 
 // AI-powered free-text evaluation — judges ONLY the chunks the question cites
@@ -72,7 +104,8 @@ export async function evaluateFreeText(
 
   // One score per cited chunk the lesson still has (an unknown id is left out, not zeroed); a chunk the grader skipped counts
   // as not conveyed, and judgements of chunks it was not asked about are dropped.
-  const claims = object.incorrectClaims.length;
+  const incorrectClaims = groundedClaims(object.incorrectClaims, userAnswer);
+  const claims = incorrectClaims.length;
   const chunkScores: Record<string, number> = {};
   let allFully = true;
   for (const { id } of judged) {
@@ -93,6 +126,6 @@ export async function evaluateFreeText(
     explanation: revisitNote,
     chunkScores,
     revisitNote,
-    incorrectClaims: object.incorrectClaims,
+    incorrectClaims,
   };
 }

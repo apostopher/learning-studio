@@ -16,3 +16,6 @@ src/styles/theme.generated.*
 .superpowers/
 .vercel
 .env*.local
+
+# Golden-set grader eval: lesson text stays local (pnpm eval:grader --fetch)
+scripts/fixtures/debrief-grader/*.context.txt

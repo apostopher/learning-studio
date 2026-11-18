@@ -61,9 +61,9 @@ The new model: a lesson teaches a fixed set of **knowledge chunks**. A chunk is 
 
 ## Calls I made (the user hasn't confirmed these)
 
-- **Chunk count:** at most 8 per lesson. This matches the existing `KEY_POINTS_MAX`. If a lesson has more, the generator merges its least important chunks rather than dropping coverage.
+- **Chunk count:** at most 12 per lesson (was 8; raised 2026-11-18). One chunk per authored key point, never merged — 101 lessons carry 10 key points, and the 8 cap had merged two away in every one. Transcript-only extras fill whatever room is left.
 - **First attempt size:** one question per chunk, so 7 chunks means 7 questions. A question may also be tagged with a second chunk. The two-set structure (`debrief-sets.ts`, `DEBRIEF_SET_SIZE`, second set below par) is retired.
-- **Later attempt size:** one fresh question per hole, written from a new angle and never a reword of a question the pilot has already seen, plus 1–2 cleared chunks as review. If there are more holes than 8, cap at 8 by keeping the lowest-scoring ones.
+- **Later attempt size:** one fresh question per hole, written from a new angle and never a reword of a question the pilot has already seen, plus 1–2 cleared chunks as review. If there are more holes than 12, cap at 12 by keeping the lowest-scoring ones.
 - **A chunk's score** is its score from the latest question that tested it, unless it is already cleared. When a question is tagged with two chunks, the grader judges each chunk separately for that answer.
 - **Review questions** are graded and logged, and their misses can appear in "Worth revisiting". They can never reopen a cleared chunk.
 - **Mid-attempt short circuit:** questions come one at a time. As soon as the last hole is cleared, the attempt ends and the passed report is shown. The remaining questions are skipped.

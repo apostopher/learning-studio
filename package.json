@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "eval:grader": "tsx scripts/eval-debrief-grader.ts",
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",
