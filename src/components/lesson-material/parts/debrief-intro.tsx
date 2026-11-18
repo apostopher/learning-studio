@@ -6,21 +6,15 @@ type DebriefIntroProps = {
   onStart: () => void;
   /** Completed at an earlier level — Start must be disabled, not silently inert. */
   readOnly: boolean;
-  /** A later attempt: fresh questions on the chunks not yet cleared. */
+  /** A later attempt: a fresh draw, the key points missed last time first. */
   retake: boolean;
-  /**
-   * Some current chunk is cleared, so a retake mixes one or two back in as
-   * review. False for a pilot with nothing cleared (only legacy attempts, or
-   * a first chunk attempt that cleared nothing): the copy must not promise it.
-   */
-  clearedSome: boolean;
 };
 
 const REASON_ID = 'debrief-intro-readonly-reason';
 
-// No per-answer number: mastery is the only debrief number (R15).
+/** The set rules (`#/lib/debrief-sets`), in the pilot's words. */
 const HOW_IT_WORKS =
-  'Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.';
+  'Viper gives you feedback after each answer. Average 75 or more across the set and the debrief is done; if not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
 
 /**
  * The Debrief tab once the debrief is open, before it has been generated.
@@ -32,15 +26,12 @@ export const DebriefIntro = ({
   onStart,
   readOnly,
   retake,
-  clearedSome,
 }: DebriefIntroProps) => (
   <div className="flex flex-col items-start gap-3 py-2">
     <p className="text-secondary text-sm">
       {retake
-        ? clearedSome
-          ? 'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. '
-          : 'Fresh questions on the knowledge chunks you have not shown yet, answered in your own words. '
-        : 'Each question checks one knowledge chunk of this lesson, answered in your own words. '}
+        ? 'A fresh set of up to four questions, starting with the key points you missed last time, answered in your own words. '
+        : "A set of up to four questions, each on one of this lesson's key points, answered in your own words. "}
       {HOW_IT_WORKS}
     </p>
     <button

@@ -93,6 +93,42 @@ describe('DebriefAttemptHistory', () => {
     expect(within(item).queryByText('b')).toBeNull();
   });
 
+  it("expands a set attempt to each answer's score, the answer and Viper's feedback", async () => {
+    render(
+      <DebriefAttemptHistory
+        attempts={[
+          {
+            id: 4,
+            when: 'Thu 19 Nov, 8:00 AM',
+            score: 80,
+            passed: true,
+            format: 'sets',
+            questions: [{ id: 's1', question: 'Why brief the go-around?' }],
+            evaluations: [
+              {
+                questionId: 's1',
+                score: 90,
+                userAnswer: 'So nobody improvises',
+                revisitNote: 'Not this note',
+                feedback: 'You tied the brief to shared expectations.',
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    await userEvent.click(
+      within(item).getByRole('button', { name: /Thu 19 Nov/ }),
+    );
+    expect(within(item).getByText('90/100')).toBeDefined();
+    expect(within(item).getByText('So nobody improvises')).toBeDefined();
+    expect(
+      within(item).getByText('You tied the brief to shared expectations.'),
+    ).toBeDefined();
+    expect(within(item).queryByText('Not this note')).toBeNull();
+  });
+
   it('offers no retake from history', () => {
     render(<DebriefAttemptHistory attempts={attempts} />);
     expect(screen.queryByRole('button', { name: /Retake/ })).toBeNull();

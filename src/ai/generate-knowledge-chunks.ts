@@ -15,10 +15,11 @@ const ChunksOutputSchema = z.object({
 });
 
 /**
- * The lesson's knowledge chunks: one per key point plus anything the context
- * teaches beyond them, capped at MAX_KNOWLEDGE_CHUNKS. Fewer chunks than key
- * points means the model merged or dropped one, so it is treated as a failure
- * like any schema error.
+ * The lesson's knowledge chunks: exactly one per key point, in order, capped
+ * at MAX_KNOWLEDGE_CHUNKS. The debrief asks about key points only (2026-11-18),
+ * so any chunk past the key points is dropped. Fewer chunks than key points
+ * means the model merged or dropped one, so it is treated as a failure like
+ * any schema error.
  *
  * Ids are `c1..cN` assigned HERE, never by the model — the model's ordering is
  * the only thing trusted. A schema failure (e.g. 9 chunks) is retried once,
@@ -44,7 +45,7 @@ export async function generateKnowledgeChunks(input: {
           `${parsed.chunks.length} chunks for ${input.keyPoints.length} key points: a key point was merged or dropped`,
         );
       }
-      return parsed.chunks.map((c, i) => ({
+      return parsed.chunks.slice(0, anchored).map((c, i) => ({
         id: `c${i + 1}`,
         title: c.title.trim(),
         summary: c.summary.trim(),

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
+import { setsProgress } from '#/lib/debrief-sets';
 
 /** A question as the pilot may see it: never its rubric or chunk tags. */
 export type ClientAttemptQuestion = { id: string; question: string };
@@ -16,11 +17,14 @@ export type ClientEvaluation = {
   userAnswer: string;
   explanation: string;
   revisitNote?: string;
+  /** Viper's feedback (set-format answers only). */
+  feedback?: string;
   essentialIdeas?: { idea: string; conveyed: 'fully' | 'partly' | 'not' }[];
   incorrectClaims?: string[];
 };
 
 const answersSchema = z.array(AIEvaluationResultSchema);
+const setsSchema = z.object({ sets: z.array(z.array(z.string())) });
 
 /**
  * The ONE projection of a stored attempt's `questions` / `answers` JSON for
@@ -29,7 +33,11 @@ const answersSchema = z.array(AIEvaluationResultSchema);
  * lesson context); a pilot who read it after an attempt would have the
  * rubric for their remaining holes. Fields are picked one by one, never
  * spread, so a field added to the stored shape stays server-side.
- * Unreadable JSON gives empty arrays.
+ *
+ * A set-format attempt keeps only the questions of the sets the pilot
+ * reached: an unasked set 2 is never shown, and `setAverages` holds each
+ * completed set's average. Older attempts show every question and have no
+ * set averages. Unreadable JSON gives empty arrays.
  */
 export function toClientAttempt(row: {
   questions: unknown;
@@ -37,39 +45,56 @@ export function toClientAttempt(row: {
 }): {
   questions: ClientAttemptQuestion[];
   evaluations: ClientEvaluation[];
+  setAverages: number[];
 } {
   const test = AITestSchema.safeParse(row.questions);
   const answers = answersSchema.safeParse(row.answers);
+  const sets = setsSchema.safeParse(row.questions);
+  const evaluations = answers.success ? answers.data : [];
+  const progress = sets.success
+    ? setsProgress(
+        sets.data.sets,
+        new Map(evaluations.map((e) => [e.questionId, e.score])),
+      )
+    : null;
+  const shown = progress
+    ? new Set(
+        sets.success ? sets.data.sets.slice(0, progress.reached).flat() : [],
+      )
+    : null;
   return {
     questions: test.success
-      ? test.data.questions.map((q) => ({ id: q.id, question: q.question }))
+      ? test.data.questions
+          .filter((q) => shown === null || shown.has(q.id))
+          .map((q) => ({ id: q.id, question: q.question }))
       : [],
-    evaluations: answers.success
-      ? answers.data.map((e) => ({
-          questionId: e.questionId,
-          type: e.type,
-          score: e.score,
-          userAnswer: e.userAnswer,
-          explanation: e.explanation,
-          ...(e.revisitNote !== undefined && { revisitNote: e.revisitNote }),
-          ...(e.essentialIdeas !== undefined && {
-            essentialIdeas: e.essentialIdeas.map((i) => ({
-              idea: i.idea,
-              conveyed: i.conveyed,
-            })),
-          }),
-          ...(e.incorrectClaims !== undefined && {
-            incorrectClaims: e.incorrectClaims,
-          }),
-        }))
-      : [],
+    evaluations: evaluations.map((e) => ({
+      questionId: e.questionId,
+      type: e.type,
+      score: e.score,
+      userAnswer: e.userAnswer,
+      explanation: e.explanation,
+      ...(e.revisitNote !== undefined && { revisitNote: e.revisitNote }),
+      ...(e.feedback !== undefined && { feedback: e.feedback }),
+      ...(e.essentialIdeas !== undefined && {
+        essentialIdeas: e.essentialIdeas.map((i) => ({
+          idea: i.idea,
+          conveyed: i.conveyed,
+        })),
+      }),
+      ...(e.incorrectClaims !== undefined && {
+        incorrectClaims: e.incorrectClaims,
+      }),
+    })),
+    setAverages: progress ? progress.completed.map((c) => c.average) : [],
   };
 }
 
 /**
  * "Worth revisiting": the grader's note on each answer, in question order,
  * each once, empty ones dropped. An answer that cleared its chunk carries no
- * note (the grader writes none), so only holes are listed.
+ * note (the grader writes none), so only answers with something to add are
+ * listed.
  */
 export function revisitNotesOf(
   questions: readonly { id: string }[],

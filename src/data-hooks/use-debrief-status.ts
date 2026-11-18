@@ -47,16 +47,17 @@ export const debriefStatusSchema = z.object({
             // option id with its options gone.
             userAnswer: z.string(),
             revisitNote: z.string().optional(),
+            feedback: z.string().optional(),
           }),
         ),
       }),
     )
     .optional(),
-  // Between attempts only (retake-waiting, open for a retake): chunks cleared
-  // so far — null when the lesson has none stored — and the last attempt's
-  // "Worth revisiting", so a reload during the wait still shows them.
-  mastery: z
-    .object({ cleared: z.number(), total: z.number(), percent: z.number() })
+  // Between attempts only (retake-waiting, open for a retake): the latest
+  // finished attempt's set averages (or its score alone, before sets) and
+  // its "Worth revisiting", so a reload during the wait still shows them.
+  lastAttempt: z
+    .object({ score: z.number(), setAverages: z.array(z.number()) })
     .nullable()
     .optional(),
   revisitNotes: z.array(z.string()).optional(),

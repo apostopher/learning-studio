@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
+import { DEBRIEF_SET_PASS_SCORE } from '#/lib/debrief-sets';
+import type { DebriefResult } from '../compute-debrief-panel';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
   /**
-   * Knowledge-chunk mastery after the attempt. `percent` is
-   * `masteryPercent` — 100 once passed — and is what the ring shows.
+   * The attempt's outcome. The ring shows `score`: the average of the set
+   * that ended it (the passing one, or the last one missed).
    */
-  mastery: { cleared: number; total: number; percent: number; passed: boolean };
+  result: DebriefResult;
   /**
    * "Worth revisiting": the grader's note on each hole, one paragraph each
    * (`revisitNotesOf`). Not shown once passed.
@@ -24,34 +26,33 @@ type ScoreReportProps = {
 };
 
 /**
- * The report of a finished debrief attempt: mastery so far as a ring and a
- * count of chunks cleared, then what is worth revisiting, in readable prose.
+ * The report of a finished debrief attempt: its score as a ring, each set's
+ * average against the pass mark, then what is worth revisiting, in readable
+ * prose.
  *
  * Presentational and hookless.
  */
 export const ScoreReport = ({
-  mastery,
+  result,
   revisitNotes,
   headingLevel,
   idBase,
   footer,
 }: ScoreReportProps) => {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
-  const notes = mastery.passed ? [] : revisitNotes;
+  const notes = result.passed ? [] : revisitNotes;
   const revisitHeadingId = `${idBase}-revisit-heading`;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 rounded-xl border border-gray-6 bg-gray-2 px-6 py-8 text-center">
-        <ScoreRing score={mastery.percent} size={96} strokeWidth={8} />
+        <ScoreRing score={result.score} size={96} strokeWidth={8} />
 
         <div className="flex flex-col gap-1">
           <Heading className="text-xl font-semibold text-primary">
-            {mastery.passed ? 'Debrief passed' : 'Attempt finished'}
+            {result.passed ? 'Debrief passed' : 'Not passed this time'}
           </Heading>
-          <p className="text-sm text-secondary">
-            {mastery.cleared} of {mastery.total} knowledge chunks cleared
-          </p>
+          <p className="text-sm text-secondary">{setSummary(result)}</p>
         </div>
 
         {footer}
@@ -81,3 +82,17 @@ export const ScoreReport = ({
     </div>
   );
 };
+
+/**
+ * "Set 1 average 68, set 2 average 81. 75 passes." An attempt from before
+ * sets has no set averages: its score stands alone.
+ */
+export function setSummary(result: DebriefResult): string {
+  const sets =
+    result.setAverages.length === 0
+      ? `Score ${result.score}`
+      : result.setAverages
+          .map((avg, i) => `${i === 0 ? 'Set' : 'set'} ${i + 1} average ${avg}`)
+          .join(', ');
+  return `${sets}. ${DEBRIEF_SET_PASS_SCORE} passes.`;
+}

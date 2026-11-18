@@ -13,7 +13,6 @@ describe('DebriefIntro', () => {
         onStart={onStart}
         readOnly={false}
         retake={false}
-        clearedSome={false}
       />,
     );
 
@@ -30,7 +29,6 @@ describe('DebriefIntro', () => {
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
-        clearedSome={false}
       />,
     );
     const button = screen.getByRole('button', { name: /Start debrief/ });
@@ -47,7 +45,6 @@ describe('DebriefIntro', () => {
           onStart={onStart}
           readOnly={true}
           retake={false}
-          clearedSome={false}
         />,
       );
 
@@ -68,7 +65,6 @@ describe('DebriefIntro', () => {
           onStart={vi.fn()}
           readOnly={true}
           retake={false}
-          clearedSome={false}
         />,
       );
 
@@ -85,56 +81,39 @@ describe('DebriefIntro', () => {
     });
   });
 
-  it('says how the debrief is done before the pilot starts, with no per-answer number', () => {
+  const HOW =
+    'Viper gives you feedback after each answer. Average 75 or more across the set and the debrief is done; if not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
+
+  it('says how the debrief works before the pilot starts: feedback after each answer, and the 75 rule', () => {
     render(
       <DebriefIntro
         loading={false}
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
-        clearedSome={false}
       />,
     );
     expect(
       screen.getByText(
-        'Each question checks one knowledge chunk of this lesson, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
+        `A set of up to four questions, each on one of this lesson's key points, answered in your own words. ${HOW}`,
       ),
     ).toBeDefined();
   });
 
-  it('says a retake asks fresh questions on what is not yet cleared, plus review of what is', () => {
+  it('says a retake is a fresh set that starts with the key points missed last time', () => {
     render(
       <DebriefIntro
         loading={false}
         onStart={vi.fn()}
         readOnly={false}
         retake={true}
-        clearedSome={true}
       />,
     );
     expect(
       screen.getByText(
-        'Fresh questions on the knowledge chunks you have not shown yet, plus one or two you have, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
+        `A fresh set of up to four questions, starting with the key points you missed last time, answered in your own words. ${HOW}`,
       ),
     ).toBeDefined();
-  });
-
-  it('promises no review of cleared chunks when nothing is cleared yet (e.g. only legacy attempts)', () => {
-    render(
-      <DebriefIntro
-        loading={false}
-        onStart={vi.fn()}
-        readOnly={false}
-        retake={true}
-        clearedSome={false}
-      />,
-    );
-    expect(
-      screen.getByText(
-        'Fresh questions on the knowledge chunks you have not shown yet, answered in your own words. Show you have got every chunk and the debrief is done. Your answer saves as you type, so you can come back and finish later.',
-      ),
-    ).toBeDefined();
-    expect(screen.queryByText(/one or two you have/)).toBeNull();
   });
 
   it('says it is preparing while the questions are written', () => {
@@ -144,7 +123,6 @@ describe('DebriefIntro', () => {
         onStart={vi.fn()}
         readOnly={false}
         retake={false}
-        clearedSome={false}
       />,
     );
     expect(

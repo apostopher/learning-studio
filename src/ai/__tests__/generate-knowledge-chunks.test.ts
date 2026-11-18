@@ -48,7 +48,7 @@ describe('generateKnowledgeChunks', () => {
     });
 
     const chunks = await generateKnowledgeChunks({
-      keyPoints: ['k'],
+      keyPoints: ['k1', 'k2', 'k3'],
       context: 'c',
     });
 
@@ -56,6 +56,20 @@ describe('generateKnowledgeChunks', () => {
       { id: 'c1', title: 'A', summary: 'a' },
       { id: 'c2', title: 'B', summary: 'b' },
       { id: 'c3', title: 'C', summary: 'c' },
+    ]);
+  });
+
+  // 2026-11-18: the debrief asks about key points only, so a chunk the model
+  // adds past them (transcript-only teaching) never reaches the lesson.
+  it('drops any chunk past the key points', async () => {
+    m.generateText.mockResolvedValueOnce(nChunks(4));
+    const chunks = await generateKnowledgeChunks({
+      keyPoints: ['k1', 'k2'],
+      context: 'c',
+    });
+    expect(chunks).toEqual([
+      { id: 'c1', title: 'T1', summary: 'S1' },
+      { id: 'c2', title: 'T2', summary: 'S2' },
     ]);
   });
 
@@ -90,12 +104,13 @@ describe('generateKnowledgeChunks', () => {
     expect(m.generateText).toHaveBeenCalledTimes(2);
   });
 
-  it('tells the model never to merge key points, under the cap', async () => {
+  it('tells the model one chunk per key point, never merged, and no extras', async () => {
     m.generateText.mockResolvedValueOnce(nChunks(1));
     await generateKnowledgeChunks({ keyPoints: ['k'], context: 'c' });
     const { prompt } = m.generateText.mock.calls[0][0];
     expect(prompt).toMatch(/Never merge, drop or combine key points/);
-    expect(prompt).toContain('never produce more than 12 chunks');
+    expect(prompt).toMatch(/Produce no other chunks/);
+    expect(prompt).not.toContain('never produce more than');
   });
 
   it('recovers when the retry returns a valid set', async () => {
@@ -104,7 +119,7 @@ describe('generateKnowledgeChunks', () => {
       .mockResolvedValueOnce(nChunks(3));
 
     const chunks = await generateKnowledgeChunks({
-      keyPoints: ['k'],
+      keyPoints: ['k1', 'k2', 'k3'],
       context: 'c',
     });
     expect(chunks.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);

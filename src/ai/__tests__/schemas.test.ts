@@ -330,10 +330,18 @@ describe('AIFreeTextEvalOutputSchema', () => {
     ],
     incorrectClaims: [],
     revisitNote: 'You named the code but not the route.',
+    feedback: 'Good on 7600; you left out the last assigned route.',
   };
 
   it('accepts per-chunk judgements', () => {
     expect(AIFreeTextEvalOutputSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('requires the feedback the pilot reads after each answer', () => {
+    const { feedback: _feedback, ...withoutFeedback } = valid;
+    expect(AIFreeTextEvalOutputSchema.safeParse(withoutFeedback).success).toBe(
+      false,
+    );
   });
 
   it('accepts mostly, and rejects a judgement other than fully / mostly / partly / not', () => {

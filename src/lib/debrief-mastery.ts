@@ -22,8 +22,6 @@ export const CHUNK_CLEAR_SCORE = 70;
  * their debrief questions had no chunk to be graded against.
  */
 export const MAX_KNOWLEDGE_CHUNKS = 12;
-/** Cleared chunks mixed back into a retake as spaced review. */
-const MAX_REVIEW_CHUNKS = 2;
 
 /** Cleared stays cleared; `latestScore` always records the newest score. */
 export function applyChunkScore(
@@ -47,84 +45,66 @@ export function masteryFromCounts(
 }
 
 /**
- * Whether the debrief counts as passed: a permanent pass row, OR every
- * current chunk cleared (total > 0). The second covers a regeneration's
- * carry-over clearing a pilot's last holes before they press Start; it
- * records the pass too (`carryOverMastery`), but every reader — the status
- * route, the ring, the course percent — goes through this one rule so they
- * can never disagree.
+ * Whether the debrief counts as passed: a permanent pass row, and nothing
+ * else. Since 2026-11-18 a pass is earned only by a set of questions
+ * averaging `DEBRIEF_SET_PASS_SCORE` (`#/lib/debrief-sets`); clearing every
+ * chunk across attempts no longer passes on its own. Every reader (the status
+ * route, the ring, the course percent) goes through this one rule so they can
+ * never disagree.
  */
-export function debriefPassedOf(f: {
-  debriefPassed: boolean;
-  chunksCleared: number;
-  chunksTotal: number | null;
-}): boolean {
-  return (
-    f.debriefPassed ||
-    (f.chunksTotal !== null &&
-      f.chunksTotal > 0 &&
-      f.chunksCleared >= f.chunksTotal)
-  );
+export function debriefPassedOf(f: { debriefPassed: boolean }): boolean {
+  return f.debriefPassed;
 }
 
-/** Percent of chunks cleared; 100 once passed, 0 with no chunks. */
-export function masteryPercent(m: {
-  cleared: number;
-  total: number;
-  passed: boolean;
-}): number {
-  if (m.passed) return 100;
-  if (m.total <= 0) return 0;
-  return Math.round((m.cleared / m.total) * 100);
-}
+/** At most how many key points one attempt asks about: two sets of four. */
+export const MAX_ATTEMPT_KEY_POINTS = 8;
 
-export function isAllCleared(
-  chunks: KnowledgeChunk[],
-  mastery: ChunkMastery[],
-): boolean {
-  if (chunks.length === 0) return false;
-  const cleared = new Set(
-    mastery.filter((m) => m.cleared).map((m) => m.chunkId),
-  );
-  return chunks.every((c) => cleared.has(c.id));
+/**
+ * A chunk counts as missed when its latest score is under the set pass mark:
+ * an answer that scored 72 would not have carried a set on its own.
+ */
+const MISSED_BELOW = 75;
+
+/** Fisher–Yates over a copy, with an injectable `random` for tests. */
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /**
- * Which chunks the next attempt asks about. Holes are uncleared chunks
- * (lowest latest score first, a chunk with no row counts as score 0);
- * review is up to two cleared chunks, weakest first. With no mastery rows
- * at all it is a first attempt: every chunk is a hole, in order.
+ * The key points (chunk ids) the next attempt asks about, in the order they
+ * are asked: up to `MAX_ATTEMPT_KEY_POINTS`, never one twice. Set 1 is the
+ * first four, set 2 the rest (`#/lib/debrief-sets`).
+ *
+ * Random, so each attempt is a fresh draw. On a retake the pilot's misses
+ * come first (latest score under 75), then key points never asked, then the
+ * ones they answered well, each group shuffled on its own. A first attempt
+ * (no mastery) is one random draw over all of them.
  */
-export function planAttemptFocus(
+export function drawAttemptKeyPoints(
   chunks: KnowledgeChunk[],
   mastery: ChunkMastery[],
-): { holes: string[]; review: string[] } {
-  if (mastery.length === 0) {
-    return { holes: chunks.map((c) => c.id), review: [] };
-  }
+  random: () => number = Math.random,
+): string[] {
   const byId = new Map(mastery.map((m) => [m.chunkId, m]));
-  const scored = chunks.map((c, index) => ({
-    id: c.id,
-    index,
-    cleared: byId.get(c.id)?.cleared ?? false,
-    score: byId.get(c.id)?.latestScore ?? 0,
-  }));
-  const weakestFirst = (
-    a: (typeof scored)[number],
-    b: (typeof scored)[number],
-  ) => a.score - b.score || a.index - b.index;
-  return {
-    holes: scored
-      .filter((c) => !c.cleared)
-      .sort(weakestFirst)
-      .slice(0, MAX_KNOWLEDGE_CHUNKS)
-      .map((c) => c.id),
-    review: scored
-      .filter((c) => c.cleared)
-      .sort(weakestFirst)
-      .slice(0, MAX_REVIEW_CHUNKS)
-      .map((c) => c.id),
-  };
+  const missed: string[] = [];
+  const unasked: string[] = [];
+  const strong: string[] = [];
+  for (const c of chunks) {
+    const m = byId.get(c.id);
+    if (m === undefined) unasked.push(c.id);
+    else if (m.latestScore < MISSED_BELOW) missed.push(c.id);
+    else strong.push(c.id);
+  }
+  return [
+    ...shuffled(missed, random),
+    ...shuffled(unasked, random),
+    ...shuffled(strong, random),
+  ].slice(0, MAX_ATTEMPT_KEY_POINTS);
 }
 
 /** A stored mastery row, as far as the rules here care. */
@@ -151,15 +131,4 @@ export function masteryOf(
       latestScore: r.latestScore,
       cleared: r.clearedAt !== null,
     }));
-}
-
-/** Chunks cleared of the current total — the one debrief number. */
-export function masteryCounts(
-  chunks: KnowledgeChunk[],
-  rows: StoredMastery[],
-): { cleared: number; total: number } {
-  return {
-    cleared: masteryOf(chunks, rows).filter((r) => r.cleared).length,
-    total: chunks.length,
-  };
 }

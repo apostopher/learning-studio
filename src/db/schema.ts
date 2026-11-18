@@ -2405,8 +2405,13 @@ export const lessonTestResultsTable = pgTable(
     chunkVersion: integer('chunk_version'),
     /** In-progress answer text, so a reload does not lose it. */
     draft: jsonb('draft').$type<{ questionId: string; text: string } | null>(),
+    /**
+     * Why a chunk attempt ended. `set-passed` / `sets-missed` since the set
+     * rules (2026-11-18); `all-cleared` (a pass) / `all-answered` on older
+     * rows.
+     */
     finishedReason: text('finished_reason').$type<
-      'all-answered' | 'all-cleared'
+      'all-answered' | 'all-cleared' | 'set-passed' | 'sets-missed'
     >(),
   },
   (table) => [

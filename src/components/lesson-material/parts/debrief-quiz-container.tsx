@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import {
   debriefCountdownAnnouncementAtom,
   debriefCountdownAtom,
+  debriefFeedbackAtom,
+  debriefFocusAnswerAtom,
   debriefNotOpenAtom,
   debriefPasteBlockedAtom,
   debriefStartRequestedAtom,
@@ -21,6 +23,7 @@ import {
 } from '#/data-hooks/use-debrief-attempt';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useAnswerMetrics } from '#/hooks/use-answer-metrics';
+import { answerVerdict, DEBRIEF_SET_PASS_SCORE } from '#/lib/debrief-sets';
 import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
@@ -31,9 +34,12 @@ import {
   DEBRIEF_REFUSED_COPY,
   DEBRIEF_START_FAILED_COPY,
   debriefQuizView,
+  feedbackNextLabel,
   finishedDebriefReport,
+  questionPosition,
   startErrorOf,
 } from '../compute-debrief-panel';
+import { DebriefFeedback } from './debrief-feedback';
 import { DebriefIntro } from './debrief-intro';
 import { DebriefWait } from './debrief-wait';
 import {
@@ -52,10 +58,8 @@ type DebriefQuizContainerProps = {
   lessonSlug: string;
   /** The lesson was completed at an earlier level — nothing may be started or sent. */
   readOnly: boolean;
-  /** A later attempt — the intro says the questions focus on what is not cleared. */
+  /** A later attempt — the intro says the misses come first. */
   retake: boolean;
-  /** Some chunk is cleared: the retake intro may promise review of it. */
-  clearedSome: boolean;
   /** An attempt is already open: load it straight away, no Start press. */
   resume: boolean;
   headingLevel: 2 | 3;
@@ -82,16 +86,17 @@ type PendingDraft = {
  * - Typing autosaves a draft after an 800 ms pause (a ref timer, no state).
  *   A pending draft is sent at once before a submit and on unmount. An empty
  *   box is never saved, so clearing it cannot wipe a draft on the server.
- * - Each answer goes with its metrics (`useAnswerMetrics`) and the next
- *   question follows straight away. The answer that finishes the attempt
- *   records its report in `justFinishedDebriefAtom`, which the panel shows.
+ * - Each answer goes with its metrics (`useAnswerMetrics`). Viper's feedback
+ *   on it then replaces the question (`debriefFeedbackAtom`) until the pilot
+ *   presses Next; nothing advances on its own. When the answer finished the
+ *   attempt, Next records its report in `justFinishedDebriefAtom`, which the
+ *   panel shows — so the last feedback is read before the report.
  */
 export const DebriefQuizContainer = ({
   courseSlug,
   lessonSlug,
   readOnly,
   retake,
-  clearedSome,
   resume,
   headingLevel,
   refetchStatus,
@@ -124,6 +129,18 @@ export const DebriefQuizContainer = ({
 
   const metrics = useAnswerMetrics();
   const { mutate: saveDraft } = useSaveDebriefDraft();
+  const [feedbackShown, setFeedback] = useAtom(debriefFeedbackAtom);
+  const feedback =
+    feedbackShown?.lessonSlug === lessonSlug &&
+    feedbackShown.attemptId === attempt?.attemptId
+      ? feedbackShown
+      : null;
+  // Set by Next, read by the next question's card: focus goes into its
+  // answer box, never back to the top of the page.
+  const [focusAnswer, setFocusAnswer] = useAtom(debriefFocusAnswerAtom);
+  const feedbackHeading = useCallback((el: HTMLHeadingElement | null) => {
+    el?.focus();
+  }, []);
   const answer = useAnswerDebrief({
     // `attempt` is from the latest render (TanStack v5 hands the running
     // mutation each render's options). That is still the attempt WITHOUT
@@ -131,18 +148,38 @@ export const DebriefQuizContainer = ({
     // to the cache, and nothing else adds it.
     onAnswered: (result, input) => {
       if (!attempt) return;
-      const report = finishedDebriefReport({
+      const asked = currentDebriefQuestion(attempt);
+      setFeedback({
         lessonSlug,
-        attempt,
+        attemptId: attempt.attemptId,
         questionId: input.questionId,
-        result,
-        now: Date.now(),
+        position: asked ? questionPosition(asked) : '',
+        question: asked?.question.question ?? '',
+        answer: input.answer,
+        score: result.evaluation.score,
+        feedback: feedbackText(result.evaluation),
+        setResult: result.setResult,
+        nextLabel: feedbackNextLabel(result),
+        report: finishedDebriefReport({
+          lessonSlug,
+          attempt,
+          questionId: input.questionId,
+          result,
+          now: Date.now(),
+        }),
       });
-      if (report === null) return;
-      setFinished(report);
-      setStartRequested(null);
     },
   });
+  const handleNext = () => {
+    if (feedback === null) return;
+    setFeedback(null);
+    if (feedback.report) {
+      setFinished(feedback.report);
+      setStartRequested(null);
+      return;
+    }
+    setFocusAnswer(true);
+  };
 
   // ─── 409 from start: the debrief is not open after all ──────────────────
   // Recorded in an atom so it outlives the Start press being cleared:
@@ -244,6 +281,7 @@ export const DebriefQuizContainer = ({
       failureReason: start.failureReason,
     }),
     hasCurrent: current !== null,
+    hasFeedback: feedback !== null,
   });
 
   switch (view) {
@@ -257,7 +295,6 @@ export const DebriefQuizContainer = ({
           }}
           readOnly={readOnly}
           retake={retake}
-          clearedSome={clearedSome}
         />
       );
     case 'not-open-checking':
@@ -316,13 +353,30 @@ export const DebriefQuizContainer = ({
           onStart={() => {}}
           readOnly={false}
           retake={retake}
-          clearedSome={clearedSome}
         />
       );
     case 'scoring':
       // Every question answered: the finishing answer's report is on its
       // way (`justFinishedDebriefAtom`), or the status refetch is.
       return <LoadingLine label="Scoring your debrief…" />;
+    case 'feedback':
+      if (feedback === null) return null;
+      return (
+        <DebriefFeedback
+          position={feedback.position}
+          question={feedback.question}
+          answer={feedback.answer}
+          verdict={answerVerdict(feedback.score)}
+          score={feedback.score}
+          feedback={feedback.feedback}
+          setResult={feedback.setResult}
+          nextLabel={feedback.nextLabel}
+          onNext={handleNext}
+          headingLevel={headingLevel}
+          idBase={idBase}
+          headingRef={feedbackHeading}
+        />
+      );
     case 'question':
       break;
     default: {
@@ -337,6 +391,8 @@ export const DebriefQuizContainer = ({
   const handleSubmit = (text: string) => {
     if (answer.isPending || text.trim() === '') return;
     flushDraft();
+    // The card took focus when it mounted; nothing later may steal it.
+    setFocusAnswer(false);
     metrics.record({ type: 'submit', at: Date.now(), length: text.length });
     answer.mutate({
       courseSlug,
@@ -370,8 +426,8 @@ export const DebriefQuizContainer = ({
       <QuestionCard
         key={current.question.id}
         question={current.question}
-        index={current.index}
-        total={current.total}
+        position={questionPosition(current)}
+        autoFocusAnswer={focusAnswer}
         idBase={idBase}
         isEvaluating={answer.isPending && isCurrentAnswer}
         onSubmit={handleSubmit}
@@ -391,6 +447,23 @@ export const DebriefQuizContainer = ({
     </div>
   );
 };
+
+/**
+ * Viper's words on an answer. An attempt opened before feedback existed
+ * (deploy of 2026-11-18) is graded with the new grader, so this is only a
+ * guard: the revisit note, then a line that never leaves the card blank.
+ */
+function feedbackText(e: {
+  score: number;
+  feedback: string;
+  revisitNote: string;
+}): string {
+  if (e.feedback.trim()) return e.feedback;
+  if (e.revisitNote.trim()) return e.revisitNote;
+  return e.score >= DEBRIEF_SET_PASS_SCORE
+    ? 'That answer covered what the question asked.'
+    : "Look back at this lesson's key points for what the question was after.";
+}
 
 const LoadingLine = ({ label }: { label: string }) => (
   // biome-ignore lint/a11y/useSemanticElements: role=status is the live-region semantic; <output> would carry irrelevant form-control semantics

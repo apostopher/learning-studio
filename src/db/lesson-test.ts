@@ -42,9 +42,10 @@ export type DebriefAttemptReport = DebriefAttempt & {
 const LEGACY_PASS_SCORE = 75;
 
 /**
- * A chunk attempt passed when it cleared every chunk (`all-cleared`); its
- * score alone cannot say so, since an attempt that finished with a hole left
- * scores its mastery percent (6 of 7 = 86). A legacy attempt passed at 75.
+ * A chunk attempt passed when a set of its answers did (`set-passed`), or,
+ * before the set rules, when it cleared every chunk (`all-cleared`). Its
+ * score alone cannot say so on older rows, which scored a mastery percent.
+ * A legacy attempt passed at 75.
  */
 function attemptPassed(
   format: string | null,
@@ -53,7 +54,7 @@ function attemptPassed(
 ): boolean {
   return format === null
     ? totalScore >= LEGACY_PASS_SCORE
-    : finishedReason === 'all-cleared';
+    : finishedReason === 'set-passed' || finishedReason === 'all-cleared';
 }
 
 /**
@@ -126,11 +127,16 @@ export async function getDebriefAttemptReports(
 export async function selectLatestFinishedChunkAttempt(
   userId: string,
   lessonSlug: string,
-): Promise<{ questions: unknown; answers: unknown } | null> {
+): Promise<{
+  questions: unknown;
+  answers: unknown;
+  totalScore: number | null;
+} | null> {
   const [row] = await db
     .select({
       questions: lessonTestResultsTable.questions,
       answers: lessonTestResultsTable.answers,
+      totalScore: lessonTestResultsTable.totalScore,
     })
     .from(lessonTestResultsTable)
     .where(

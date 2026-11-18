@@ -6,7 +6,6 @@ import {
   deleteStaleMastery,
   type Executor,
   insertCarriedMastery,
-  insertPasses,
   selectLessonChunks,
   selectStaleMastery,
   upsertLessonChunks,
@@ -18,10 +17,11 @@ import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 /**
  * Bump with any change a stored chunk list must not outlive. v2: one chunk per
  * key point, never merged, under a cap of 12 (v1 capped at 8 and merged).
- * Bumping regenerates each lesson's chunks on next use; mastery carries over
+ * v3: key points only, no extra chunks from the transcript (the debrief asks
+ * about key points only). Bumping regenerates each lesson's chunks on next use; mastery carries over
  * through the old -> new matching.
  */
-const CHUNKS_FORMAT = 'knowledge-chunks-v2';
+const CHUNKS_FORMAT = 'knowledge-chunks-v3';
 const CLAIM_TTL_SECONDS = 60 * 5;
 
 const claimKey = (lessonId: number) => `knowledge-chunks:claim:${lessonId}`;
@@ -186,13 +186,7 @@ export async function ensureLessonChunks(
         tx,
       );
       if (mapping) {
-        await carryOverMastery(
-          lessonId,
-          mapping,
-          version,
-          { lessonSlug, newChunkIds: chunks.map((c) => c.id) },
-          tx,
-        );
+        await carryOverMastery(lessonId, mapping, version, tx);
       }
     });
     return { kind: 'ready', version, chunks, context: source.context };
@@ -209,9 +203,9 @@ export async function ensureLessonChunks(
  * updates: a swap (c1->c2, c2->c1) would break the unique key. When the new id
  * already has a row, it is kept and just ensured cleared.
  *
- * A pilot whose carried rows clear EVERY new chunk (`newChunkIds`) gets their
- * permanent pass here, in the same transaction, so the pass exists the moment
- * the mastery does — not only once they next press Start.
+ * Never records a pass: since 2026-11-18 a debrief is passed only by a set of
+ * answers (`#/lib/debrief-sets`), so carried mastery only orders the next
+ * draw (`drawAttemptKeyPoints`).
  *
  * Pass `ex` to run inside the caller's transaction; otherwise opens its own.
  */
@@ -219,7 +213,6 @@ export async function carryOverMastery(
   lessonId: number,
   mapping: Record<string, string | null>,
   newVersion: number,
-  lesson: { lessonSlug: string; newChunkIds: readonly string[] },
   ex?: Executor,
 ): Promise<void> {
   const run = async (tx: Executor) => {
@@ -251,21 +244,6 @@ export async function carryOverMastery(
     }
     if (carried.size === 0) return;
     await insertCarriedMastery(tx, [...carried.values()]);
-
-    const clearedByUser = new Map<string, Set<string>>();
-    for (const c of carried.values()) {
-      const set = clearedByUser.get(c.userId) ?? new Set<string>();
-      set.add(c.chunkId);
-      clearedByUser.set(c.userId, set);
-    }
-    const fullyCleared = [...clearedByUser]
-      .filter(
-        ([, ids]) =>
-          lesson.newChunkIds.length > 0 &&
-          lesson.newChunkIds.every((id) => ids.has(id)),
-      )
-      .map(([userId]) => ({ userId, lessonSlug: lesson.lessonSlug }));
-    if (fullyCleared.length > 0) await insertPasses(tx, fullyCleared);
   };
   if (ex) await run(ex);
   else await db.transaction(async (tx) => run(tx));

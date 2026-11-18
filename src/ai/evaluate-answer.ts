@@ -126,6 +126,7 @@ export async function evaluateFreeText(
     explanation: revisitNote,
     chunkScores,
     revisitNote,
+    feedback: object.feedback.trim(),
     incorrectClaims,
   };
 }

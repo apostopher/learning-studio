@@ -57,8 +57,10 @@ vi.mock('#/lib/prepared-debrief.server', () => ({
   prepareDebrief: m.prepareDebrief,
   preparedFingerprint: (
     version: number,
-    focus: { holes: string[]; review: string[] },
-  ) => `fp(${version}|${focus.holes.join(',')}|${focus.review.join(',')})`,
+    mastery: { chunkId: string; latestScore: number }[],
+  ) =>
+    `fp(${version}|${mastery.map((r) => `${r.chunkId}:${r.latestScore}`).join(',')})`,
+  keyPointFocus: (chunkIds: string[]) => ({ holes: chunkIds, review: [] }),
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 vi.mock('#/ai/evaluate-answer', () => ({
@@ -86,12 +88,32 @@ const q = (id: string, chunkId: string) => ({
   expectedAnswer: `SECRET-ANSWER-${id}`,
   chunkIds: [chunkId],
 });
-/** q1 asks about the hole (c2), q2 is spaced review of cleared c1. */
+/**
+ * An attempt from before sets (no `sets`): it counts as one set of every
+ * question.
+ */
 const stored = {
   lessonSlug: 'l1',
   questions: [q('q1', 'v1-c2'), q('q2', 'v1-c1')],
   chunks,
   context: 'SECRET-CONTEXT transcript',
+};
+/** A set-format attempt: set 1 is q1–q4, set 2 is q5–q6. */
+const setChunks = Array.from({ length: 6 }, (_, i) => ({
+  id: `v1-c${i + 1}`,
+  title: `Key point ${i + 1}`,
+  summary: `SECRET-SUMMARY-${i + 1}`,
+}));
+const setQuestions = setChunks.map((c, i) => q(`q${i + 1}`, c.id));
+const setStored = {
+  lessonSlug: 'l1',
+  questions: setQuestions,
+  chunks: setChunks,
+  context: 'SECRET-CONTEXT transcript',
+  sets: [
+    ['q1', 'q2', 'q3', 'q4'],
+    ['q5', 'q6'],
+  ],
 };
 const attemptRow = (over: Record<string, unknown> = {}) => ({
   id: 5,
@@ -125,9 +147,13 @@ const evaluation = (
     explanation: score >= 70 ? '' : 'You missed the load factor.',
     chunkScores,
     revisitNote: score >= 70 ? '' : 'You missed the load factor.',
+    feedback: `Viper on ${questionId}: ${score}.`,
     incorrectClaims: [],
   };
 };
+/** An answer on the set-format attempt: question qN tests chunk v1-cN. */
+const scored = (n: number, score: number) =>
+  evaluation(`q${n}`, { [`v1-c${n}`]: score });
 const metrics = {
   msOnQuestion: 60_000,
   msToFirstKey: 3_000,
@@ -206,14 +232,16 @@ describe('startOrResumeAttempt', () => {
       ok: true,
       attempt: {
         attemptId: 5,
+        // An attempt from before sets is one set of every question.
         questions: [
-          { id: 'q1', question: 'Question q1?' },
-          { id: 'q2', question: 'Question q2?' },
+          { id: 'q1', question: 'Question q1?', set: 1 },
+          { id: 'q2', question: 'Question q2?', set: 1 },
         ],
         answered: [
           {
             questionId: 'q1',
             score: 40,
+            feedback: 'Viper on q1: 40.',
             revisitNote: 'You missed the load factor.',
           },
         ],
@@ -225,7 +253,7 @@ describe('startOrResumeAttempt', () => {
     expect(m.insertAttempt).not.toHaveBeenCalled();
   });
 
-  it('starts fresh: generateTest gets the focus planAttemptFocus derives from mastery, and the snapshot is stored', async () => {
+  it('starts fresh: generateTest gets the drawn key points (misses and unasked first), and the snapshot is stored with its sets', async () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
@@ -246,20 +274,21 @@ describe('startOrResumeAttempt', () => {
     expect(m.selectMastery).toHaveBeenCalledWith('u1', 41);
     expect(m.takePreparedDebrief).toHaveBeenCalledWith(
       { userId: 'u1', courseId: 7, lessonSlug: 'l1' },
-      'fp(1|v1-c2|v1-c1)',
+      'fp(1|v1-c1:85)',
     );
+    // c2 was never asked, so it is drawn before c1 (answered well).
     expect(m.generateTest).toHaveBeenCalledWith({
       lessonSlug: 'l1',
       chunks,
       context: stored.context,
-      focus: { holes: ['v1-c2'], review: ['v1-c1'] },
+      focus: { holes: ['v1-c2', 'v1-c1'], review: [] },
       avoidQuestions: ['Asked before?'],
     });
     // Everything grading needs, so it never re-resolves the source.
     expect(m.insertAttempt).toHaveBeenCalledWith({
       userId: 'u1',
       lessonSlug: 'l1',
-      stored,
+      stored: { ...stored, sets: [['q1', 'q2']] },
       chunkVersion: 1,
     });
     expect(r.ok && r.attempt.questions.map((x) => x.id)).toEqual(['q1', 'q2']);
@@ -321,7 +350,35 @@ describe('startOrResumeAttempt', () => {
     expect(m.insertAttempt).not.toHaveBeenCalled();
   });
 
-  it('every current chunk already cleared (e.g. carried over) → records the pass instead of asking', async () => {
+  it('splits eight questions into two sets of four', async () => {
+    m.selectOpenAttempt.mockResolvedValue(null);
+    m.ensureLessonChunks.mockResolvedValue({
+      kind: 'ready',
+      version: 1,
+      chunks,
+      context: 'c',
+    });
+    const eight = Array.from({ length: 8 }, (_, i) => q(`q${i + 1}`, 'v1-c1'));
+    m.generateTest.mockResolvedValue({ lessonSlug: 'l1', questions: eight });
+    m.insertAttempt.mockImplementation(async (v: { stored: unknown }) =>
+      attemptRow({ questions: v.stored }),
+    );
+    const r = await start();
+    expect(m.insertAttempt.mock.calls[0][0].stored.sets).toEqual([
+      ['q1', 'q2', 'q3', 'q4'],
+      ['q5', 'q6', 'q7', 'q8'],
+    ]);
+    // Set 2 never leaves the server before set 1 is missed.
+    expect(r.ok && r.attempt.questions).toEqual(
+      ['q1', 'q2', 'q3', 'q4'].map((id) => ({
+        id,
+        question: `Question ${id}?`,
+        set: 1,
+      })),
+    );
+  });
+
+  it('every chunk already cleared still asks: clearing chunks is not a pass', async () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
@@ -332,16 +389,43 @@ describe('startOrResumeAttempt', () => {
     m.selectMastery.mockResolvedValue(
       chunks.map((c) => ({ chunkId: c.id, latestScore: 90, clearedAt })),
     );
-    expect(await start()).toEqual({ ok: false, reason: 'passed' });
-    expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
-      userId: 'u1',
+    m.generateTest.mockResolvedValue({
       lessonSlug: 'l1',
+      questions: stored.questions,
     });
-    expect(m.generateTest).not.toHaveBeenCalled();
+    m.insertAttempt.mockImplementation(async (v: { stored: unknown }) =>
+      attemptRow({ questions: v.stored }),
+    );
+    expect((await start()).ok).toBe(true);
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(m.generateTest.mock.calls[0][0].focus.holes).toHaveLength(2);
+  });
+
+  it('resuming after a missed set 1 shows set 2; after a passing or unfinished set 1 it does not', async () => {
+    const view = async (answers: unknown[]) => {
+      m.selectOpenAttempt.mockResolvedValue(
+        attemptRow({ questions: setStored, answers }),
+      );
+      const r = await start();
+      return r.ok ? r.attempt.questions.map((x) => `${x.id}/${x.set}`) : null;
+    };
+    const set1 = ['q1/1', 'q2/1', 'q3/1', 'q4/1'];
+    expect(await view([scored(1, 40), scored(2, 40)])).toEqual(set1);
+    expect(
+      await view([scored(1, 40), scored(2, 40), scored(3, 40), scored(4, 40)]),
+    ).toEqual([...set1, 'q5/2', 'q6/2']);
+    expect(
+      await view([scored(1, 100), scored(2, 80), scored(3, 80), scored(4, 40)]),
+    ).toEqual(set1);
   });
 
   it('what reaches the client carries no expected answers, chunk tags, chunk text or context', async () => {
-    m.selectOpenAttempt.mockResolvedValue(attemptRow());
+    m.selectOpenAttempt.mockResolvedValue(
+      attemptRow({
+        questions: setStored,
+        answers: [1, 2, 3, 4].map((n) => scored(n, 40)),
+      }),
+    );
     const body = JSON.stringify(await start());
     for (const secret of [
       'expectedAnswer',
@@ -387,20 +471,49 @@ describe('answerQuestion', () => {
     });
   });
 
-  it('a replayed answer reports the finish only if it was the answer that finished the attempt', async () => {
+  it('a replayed answer reports what it did when recorded: only the set-completing answer carries the set result and finish', async () => {
     m.row = attemptRow({
       answers: [
         evaluation('q1', { 'v1-c2': 40 }),
         evaluation('q2', { 'v1-c1': 90 }),
       ],
       completedAt: new Date('2026-11-12T01:00:00Z'),
-      totalScore: 50,
-      finishedReason: 'all-answered',
+      totalScore: 65,
+      finishedReason: 'sets-missed',
     });
-    expect(await answer('q1')).toMatchObject({ ok: true, finished: null });
-    expect(await answer('q2')).toMatchObject({
+    expect(await answer('q1')).toMatchObject({
       ok: true,
-      finished: 'all-answered',
+      setResult: null,
+      nextQuestions: [],
+      finished: null,
+    });
+    expect(await answer('q2')).toEqual({
+      ok: true,
+      evaluation: {
+        score: 90,
+        feedback: 'Viper on q2: 90.',
+        revisitNote: '',
+      },
+      setResult: { set: 1, average: 65, passed: false },
+      nextQuestions: [],
+      finished: 'sets-missed',
+    });
+    expect(m.evaluateFreeText).not.toHaveBeenCalled();
+  });
+
+  it('a replay of the answer that missed set 1 returns set 2 again', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [1, 2, 3, 4].map((n) => scored(n, 40)),
+    });
+    const r = await answer('q4');
+    expect(r).toMatchObject({
+      setResult: { set: 1, average: 40, passed: false },
+      nextQuestions: [
+        { id: 'q5', question: 'Question q5?', set: 2 },
+        { id: 'q6', question: 'Question q6?', set: 2 },
+      ],
+      finished: null,
     });
     expect(m.evaluateFreeText).not.toHaveBeenCalled();
   });
@@ -414,8 +527,8 @@ describe('answerQuestion', () => {
         evaluation('q2', { 'v1-c1': 90 }),
       ],
       completedAt: new Date('2026-11-12T01:00:00Z'),
-      totalScore: 50,
-      finishedReason: 'all-answered',
+      totalScore: 65,
+      finishedReason: 'sets-missed',
     });
     expect(await answer('q1')).toMatchObject({ ok: true, finished: null });
     expect(m.updateAttempt).not.toHaveBeenCalled();
@@ -428,7 +541,7 @@ describe('answerQuestion', () => {
     const r = await answer('q1');
     expect(r).toMatchObject({
       ok: true,
-      evaluation: { score: 90, revisitNote: '' },
+      evaluation: { score: 90, feedback: 'Viper on q1: 90.', revisitNote: '' },
     });
     expect(m.updateAttempt).not.toHaveBeenCalled();
     expect(m.upsertMastery).not.toHaveBeenCalled();
@@ -459,19 +572,29 @@ describe('answerQuestion', () => {
     });
     expect(r).toEqual({
       ok: true,
-      evaluation: { score: 40, revisitNote: 'You missed the load factor.' },
-      mastery: { cleared: 1, total: 2, percent: 50 },
+      evaluation: {
+        score: 40,
+        feedback: 'Viper on q1: 40.',
+        revisitNote: 'You missed the load factor.',
+      },
+      setResult: null,
+      nextQuestions: [],
       finished: null,
     });
   });
 
-  it('clearing the last hole ends the attempt at once: all-cleared, 100, and a permanent pass', async () => {
-    m.evaluateFreeText.mockResolvedValue(evaluation('q1', { 'v1-c2': 80 }));
-    const r = await answer('q1');
+  it('set 1 averaging 75 or more passes: set-passed at that average, a permanent pass, set 2 never asked', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [scored(1, 100), scored(2, 80), scored(3, 50)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 80));
+    const r = await answer('q4');
     expect(r).toMatchObject({
       ok: true,
-      mastery: { cleared: 2, total: 2, percent: 100 },
-      finished: 'all-cleared',
+      setResult: { set: 1, average: 78, passed: true },
+      nextQuestions: [],
+      finished: 'set-passed',
     });
     expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
       userId: 'u1',
@@ -479,11 +602,110 @@ describe('answerQuestion', () => {
     });
     const set = m.updateAttempt.mock.calls[0][2];
     expect(set.completedAt).toBeInstanceOf(Date);
-    expect(set.totalScore).toBe(100);
-    expect(set.finishedReason).toBe('all-cleared');
-    // q2 (review) is never required: the attempt is finished.
-    expect(await answer('q2')).toEqual({ ok: false, reason: 'forbidden' });
-    expect(m.evaluateFreeText).toHaveBeenCalledOnce();
+    expect(set.totalScore).toBe(78);
+    expect(set.finishedReason).toBe('set-passed');
+    expect(m.waitUntil).not.toHaveBeenCalled();
+    expect(await answer('q5')).toEqual({ ok: false, reason: 'forbidden' });
+  });
+
+  it('set 1 under 75 opens set 2: its questions come back, the attempt goes on', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [scored(1, 100), scored(2, 80), scored(3, 50)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 40));
+    const r = await answer('q4');
+    expect(r).toEqual({
+      ok: true,
+      evaluation: {
+        score: 40,
+        feedback: 'Viper on q4: 40.',
+        revisitNote: 'You missed the load factor.',
+      },
+      setResult: { set: 1, average: 68, passed: false },
+      nextQuestions: [
+        { id: 'q5', question: 'Question q5?', set: 2 },
+        { id: 'q6', question: 'Question q6?', set: 2 },
+      ],
+      finished: null,
+    });
+    const set = m.updateAttempt.mock.calls[0][2];
+    expect(set.completedAt).toBeUndefined();
+    expect(set.finishedReason).toBeUndefined();
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(JSON.stringify(r)).not.toContain('SECRET-ANSWER');
+  });
+
+  it('set 2 is judged on its own: a passing set 2 passes whatever set 1 scored', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [...[1, 2, 3, 4].map((n) => scored(n, 0)), scored(5, 80)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(6, 70));
+    const r = await answer('q6');
+    expect(r).toMatchObject({
+      setResult: { set: 2, average: 75, passed: true },
+      finished: 'set-passed',
+    });
+    expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(75);
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('the last set under 75 finishes sets-missed at its average, with no pass, and prepares the next attempt', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [...[1, 2, 3, 4].map((n) => scored(n, 40)), scored(5, 80)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(6, 60));
+    const r = await answer('q6');
+    expect(r).toMatchObject({
+      ok: true,
+      setResult: { set: 2, average: 70, passed: false },
+      nextQuestions: [],
+      finished: 'sets-missed',
+    });
+    const set = m.updateAttempt.mock.calls[0][2];
+    expect(set.totalScore).toBe(70);
+    expect(set.finishedReason).toBe('sets-missed');
+    expect(set.completedAt).toBeInstanceOf(Date);
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(m.prepareDebrief).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      lessonSlug: 'l1',
+      lessonId: 41,
+    });
+    expect(m.waitUntil).toHaveBeenCalledOnce();
+  });
+
+  it('an attempt from before sets is one set: it finishes on its last answer, passing at 75', async () => {
+    m.row = attemptRow({ answers: [evaluation('q1', { 'v1-c2': 70 })] });
+    m.evaluateFreeText.mockResolvedValue(evaluation('q2', { 'v1-c1': 80 }));
+    expect(await answer('q2')).toMatchObject({
+      setResult: { set: 1, average: 75, passed: true },
+      finished: 'set-passed',
+    });
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('a half-answered set reports nothing about the set', async () => {
+    m.row = attemptRow({ questions: setStored });
+    m.evaluateFreeText.mockResolvedValue(scored(1, 100));
+    expect(await answer('q1')).toMatchObject({
+      setResult: null,
+      nextQuestions: [],
+      finished: null,
+    });
+    expect(m.updateAttempt.mock.calls[0][2].completedAt).toBeUndefined();
+  });
+
+  it('within set 2, questions are still answered in order', async () => {
+    m.row = attemptRow({
+      questions: setStored,
+      answers: [1, 2, 3, 4].map((n) => scored(n, 40)),
+    });
+    expect(await answer('q6')).toEqual({ ok: false, reason: 'out-of-order' });
+    expect(m.evaluateFreeText).not.toHaveBeenCalled();
   });
 
   it('a weak answer on an already-cleared chunk keeps it cleared', async () => {
@@ -499,29 +721,6 @@ describe('answerQuestion', () => {
         clearedAt,
       },
     ]);
-  });
-
-  it('answering the last question with holes left finishes all-answered at mastery percent, and prepares the next attempt', async () => {
-    m.row = attemptRow({ answers: [evaluation('q1', { 'v1-c2': 40 })] });
-    m.evaluateFreeText.mockResolvedValue(evaluation('q2', { 'v1-c1': 90 }));
-    const r = await answer('q2');
-    expect(r).toMatchObject({
-      ok: true,
-      mastery: { cleared: 1, total: 2, percent: 50 },
-      finished: 'all-answered',
-    });
-    const set = m.updateAttempt.mock.calls[0][2];
-    expect(set.totalScore).toBe(50);
-    expect(set.finishedReason).toBe('all-answered');
-    expect(set.completedAt).toBeInstanceOf(Date);
-    expect(m.insertPass).not.toHaveBeenCalled();
-    expect(m.prepareDebrief).toHaveBeenCalledWith({
-      userId: 'u1',
-      courseId: 7,
-      lessonSlug: 'l1',
-      lessonId: 41,
-    });
-    expect(m.waitUntil).toHaveBeenCalledOnce();
   });
 
   it('scores from an attempt on the previous chunk version are mapped onto the current ids', async () => {

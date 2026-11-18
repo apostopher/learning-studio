@@ -32,8 +32,11 @@ import {
   DEBRIEF_REFUSED_COPY,
   debriefQuizView,
   type FinishedDebrief,
+  feedbackNextLabel,
   finishedDebriefReport,
   isStaleFinishedDebrief,
+  questionPosition,
+  setAveragesOf,
   startErrorOf,
 } from '../compute-debrief-panel';
 
@@ -71,7 +74,7 @@ const loaded = (
 const finished = (over: Partial<FinishedDebrief> = {}): FinishedDebrief => ({
   lessonSlug: LESSON,
   finishedAt: FINISHED_AT,
-  mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+  result: { passed: false, score: 62, setAverages: [58, 62] },
   revisitNotes: ['Note A'],
   ...over,
 });
@@ -178,32 +181,16 @@ describe('computeDebriefPanel', () => {
       kind: 'take',
       retake,
       resume,
-      clearedSome: false,
     });
   });
 
-  it.each([
-    [{ cleared: 2, total: 5, percent: 40 }, true],
-    [{ cleared: 0, total: 5, percent: 0 }, false],
-    [null, false],
-  ])('a retake says it mixes in cleared chunks only when some are cleared (%o)', (mastery, clearedSome) => {
-    expect(
-      panel(
-        loaded(
-          { kind: 'open', retake: true, resume: false },
-          { mastery, revisitNotes: [] },
-        ),
-      ),
-    ).toEqual({ kind: 'take', retake: true, resume: false, clearedSome });
-  });
-
-  it('retake-waiting shows the report from the status payload — mastery and notes — with the time the next attempt opens', () => {
+  it('retake-waiting shows the last attempt from the status payload — set averages and notes — with the time the next attempt opens', () => {
     expect(
       panel(
         loaded(
           { kind: 'retake-waiting', availableAt: AT },
           {
-            mastery: { cleared: 5, total: 7, percent: 71 },
+            lastAttempt: { score: 71, setAverages: [64, 71] },
             revisitNotes: ['Note A', 'Note B'],
           },
         ),
@@ -212,18 +199,18 @@ describe('computeDebriefPanel', () => {
       kind: 'retake-waiting',
       availableAt: AT,
       report: {
-        mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+        result: { passed: false, score: 71, setAverages: [64, 71] },
         revisitNotes: ['Note A', 'Note B'],
       },
     });
   });
 
-  it('retake-waiting with no chunk mastery (legacy attempts only) is the countdown alone', () => {
+  it('retake-waiting with no finished chunk attempt (legacy attempts only) is the countdown alone', () => {
     expect(
       panel(
         loaded(
           { kind: 'retake-waiting', availableAt: AT },
-          { mastery: null, revisitNotes: [] },
+          { lastAttempt: null, revisitNotes: [] },
         ),
       ),
     ).toEqual({ kind: 'retake-waiting', availableAt: AT, report: null });
@@ -270,7 +257,7 @@ describe('computeDebriefPanel', () => {
 
     it('a pass has no countdown', () => {
       const passed = finished({
-        mastery: { cleared: 7, total: 7, percent: 100, passed: true },
+        result: { passed: true, score: 82, setAverages: [82] },
         revisitNotes: [],
       });
       expect(panel(loaded({ kind: 'passed' }), { finished: passed })).toEqual({
@@ -297,7 +284,6 @@ describe('computeDebriefPanel', () => {
         kind: 'take',
         retake: true,
         resume: false,
-        clearedSome: false,
       });
     });
   });
@@ -314,7 +300,6 @@ describe('computeDebriefPanel', () => {
           kind: 'take',
           retake: false,
           resume: true,
-          clearedSome: false,
         });
       }
     });
@@ -343,34 +328,62 @@ describe('isStaleFinishedDebrief', () => {
   });
 });
 
+const answered = (questionId: string, score: number, revisitNote = '') => ({
+  questionId,
+  score,
+  feedback: '',
+  revisitNote,
+});
+
 const attemptView = (
   over: Partial<DebriefAttemptView> = {},
 ): DebriefAttemptView => ({
   attemptId: 9,
   questions: [
-    { id: 'q1', question: 'One?' },
-    { id: 'q2', question: 'Two?' },
-    { id: 'q3', question: 'Three?' },
+    { id: 'q1', question: 'One?', set: 1 },
+    { id: 'q2', question: 'Two?', set: 1 },
+    { id: 'q3', question: 'Three?', set: 1 },
   ],
   answered: [],
   draft: null,
   ...over,
 });
 
+/** Set 1 (q1–q4) answered and missed, so set 2 (q5–q6) has been revealed. */
+const twoSets = (over: Partial<DebriefAttemptView> = {}) =>
+  attemptView({
+    questions: [
+      ...['q1', 'q2', 'q3', 'q4'].map((id) => ({ id, question: id, set: 1 })),
+      ...['q5', 'q6'].map((id) => ({ id, question: id, set: 2 })),
+    ],
+    answered: ['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 60)),
+    ...over,
+  });
+
 describe('currentDebriefQuestion', () => {
   it('resumes at the first unanswered question, with its draft', () => {
     expect(
       currentDebriefQuestion(
         attemptView({
-          answered: [{ questionId: 'q1', score: 80, revisitNote: '' }],
+          answered: [answered('q1', 80)],
           draft: { questionId: 'q2', text: 'half an answer' },
         }),
       ),
     ).toEqual({
       question: { id: 'q2', question: 'Two?' },
+      set: 1,
       index: 1,
       total: 3,
       draft: 'half an answer',
+    });
+  });
+
+  it('counts its place within its own set, not across the attempt', () => {
+    expect(currentDebriefQuestion(twoSets())).toMatchObject({
+      question: { id: 'q5' },
+      set: 2,
+      index: 0,
+      total: 2,
     });
   });
 
@@ -382,18 +395,74 @@ describe('currentDebriefQuestion', () => {
     ).toBe('');
   });
 
-  it('is null once every question is answered', () => {
+  it('is null once every question shown is answered', () => {
     expect(
       currentDebriefQuestion(
         attemptView({
-          answered: ['q1', 'q2', 'q3'].map((questionId) => ({
-            questionId,
-            score: 50,
-            revisitNote: '',
-          })),
+          answered: ['q1', 'q2', 'q3'].map((id) => answered(id, 50)),
         }),
       ),
     ).toBeNull();
+  });
+});
+
+describe('questionPosition', () => {
+  it('names the set and the place in it, counted from one', () => {
+    expect(questionPosition({ set: 1, index: 1, total: 4 })).toBe(
+      'Set 1 · Question 2 of 4',
+    );
+    expect(questionPosition({ set: 2, index: 0, total: 2 })).toBe(
+      'Set 2 · Question 1 of 2',
+    );
+  });
+});
+
+describe('feedbackNextLabel', () => {
+  it('sends a finished attempt to its result, pass or not', () => {
+    for (const finished of ['set-passed', 'sets-missed'] as const) {
+      expect(
+        feedbackNextLabel({
+          finished,
+          setResult: { set: 1, average: 80, passed: finished === 'set-passed' },
+        }),
+      ).toBe('See your result');
+    }
+  });
+
+  it('opens the next set after a missed set with one left', () => {
+    expect(
+      feedbackNextLabel({
+        finished: null,
+        setResult: { set: 1, average: 60, passed: false },
+      }),
+    ).toBe('Start set 2');
+  });
+
+  it('is the next question mid-set', () => {
+    expect(feedbackNextLabel({ finished: null, setResult: null })).toBe(
+      'Next question',
+    );
+  });
+});
+
+describe('setAveragesOf', () => {
+  it('averages each fully answered set, in set order, and skips one in progress', () => {
+    expect(
+      setAveragesOf(twoSets().questions, [
+        answered('q1', 100),
+        answered('q2', 50),
+        answered('q3', 80),
+        answered('q4', 41),
+        answered('q5', 90),
+      ]),
+    ).toEqual([68]);
+    expect(
+      setAveragesOf(twoSets().questions, [
+        ...['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 60)),
+        answered('q5', 90),
+        answered('q6', 70),
+      ]),
+    ).toEqual([60, 80]);
   });
 });
 
@@ -429,54 +498,60 @@ describe('finishedDebriefReport', () => {
   const result = (
     over: Partial<DebriefAnswerResult> = {},
   ): DebriefAnswerResult => ({
-    evaluation: { score: 40, revisitNote: 'Last note' },
-    mastery: { cleared: 2, total: 3, percent: 67 },
-    finished: 'all-answered',
+    evaluation: { score: 40, feedback: 'Viper says', revisitNote: 'Last note' },
+    setResult: { set: 2, average: 65, passed: false },
+    nextQuestions: [],
+    finished: 'sets-missed',
     promotion: null,
     ...over,
   });
 
-  it('reports mastery and every note of the attempt, the last answer included', () => {
-    const attempt = attemptView({
+  it('reports each set average and every note of the attempt, the last answer included', () => {
+    const attempt = twoSets({
       answered: [
-        { questionId: 'q1', score: 90, revisitNote: '' },
-        { questionId: 'q2', score: 30, revisitNote: 'Second note' },
+        answered('q1', 90),
+        answered('q2', 30, 'Second note'),
+        answered('q3', 60),
+        answered('q4', 60),
+        answered('q5', 90),
       ],
     });
     expect(
       finishedDebriefReport({
         lessonSlug: LESSON,
         attempt,
-        questionId: 'q3',
+        questionId: 'q6',
         result: result(),
         now: FINISHED_AT,
       }),
     ).toEqual({
       lessonSlug: LESSON,
       finishedAt: FINISHED_AT,
-      mastery: { cleared: 2, total: 3, percent: 67, passed: false },
+      result: { passed: false, score: 65, setAverages: [60, 65] },
       revisitNotes: ['Second note', 'Last note'],
     });
   });
 
-  it('all-cleared is a pass at 100 with nothing to revisit', () => {
+  it('set-passed is a pass at the set average with nothing to revisit', () => {
     expect(
       finishedDebriefReport({
         lessonSlug: LESSON,
         attempt: attemptView({
-          answered: [{ questionId: 'q1', score: 30, revisitNote: 'Old' }],
+          questions: ['q1', 'q2'].map((id) => ({ id, question: id, set: 1 })),
+          answered: [answered('q1', 70, 'Old')],
         }),
         questionId: 'q2',
         result: result({
-          mastery: { cleared: 3, total: 3, percent: 100 },
-          finished: 'all-cleared',
+          evaluation: { score: 90, feedback: 'Good', revisitNote: '' },
+          setResult: { set: 1, average: 80, passed: true },
+          finished: 'set-passed',
         }),
         now: FINISHED_AT,
       }),
     ).toEqual({
       lessonSlug: LESSON,
       finishedAt: FINISHED_AT,
-      mastery: { cleared: 3, total: 3, percent: 100, passed: true },
+      result: { passed: true, score: 80, setAverages: [80] },
       revisitNotes: [],
     });
   });
@@ -487,7 +562,7 @@ describe('finishedDebriefReport', () => {
         lessonSlug: LESSON,
         attempt: attemptView(),
         questionId: 'q1',
-        result: result({ finished: null }),
+        result: result({ finished: null, setResult: null }),
         now: FINISHED_AT,
       }),
     ).toBeNull();
@@ -503,7 +578,40 @@ describe('debriefQuizView', () => {
     hasAttempt: false,
     startError: null,
     hasCurrent: false,
+    hasFeedback: false,
   } as const;
+
+  it("Viper's feedback stands in for the next question, and for scoring", () => {
+    for (const hasCurrent of [true, false]) {
+      expect(
+        debriefQuizView({
+          ...base,
+          hasAttempt: true,
+          hasCurrent,
+          hasFeedback: true,
+        }),
+      ).toBe('feedback');
+    }
+  });
+
+  it('a refusal or a 409 still wins over feedback', () => {
+    expect(
+      debriefQuizView({
+        ...base,
+        hasAttempt: true,
+        hasFeedback: true,
+        startError: 'refused',
+      }),
+    ).toBe('refused');
+    expect(
+      debriefQuizView({
+        ...base,
+        hasAttempt: true,
+        hasFeedback: true,
+        notOpen: { availableAt: AT },
+      }),
+    ).toBe('not-open-countdown');
+  });
 
   it('a 409 on a fresh Start shows the countdown, never the intro (Start pressed state cleared)', () => {
     expect(
@@ -573,6 +681,7 @@ describe('debriefQuizView refusals mid-attempt', () => {
         hasAttempt: true,
         startError: 'refused',
         hasCurrent: true,
+        hasFeedback: false,
       }),
     ).toBe('refused');
   });
@@ -699,6 +808,15 @@ describe('countdownTarget', () => {
 });
 
 describe('attemptFormat', () => {
+  it("an attempt whose answers carry Viper's feedback is a set attempt", () => {
+    expect(
+      attemptFormat([
+        { questionId: 'q1', score: 80, revisitNote: '', feedback: 'Good' },
+        { questionId: 'q2', score: 30, revisitNote: 'n', feedback: 'Missed' },
+      ]),
+    ).toBe('sets');
+  });
+
   it('an attempt whose answers carry revisit notes is a chunk attempt', () => {
     expect(
       attemptFormat([

@@ -14,11 +14,7 @@ import {
 } from '#/db/prepared-debriefs';
 import { redis } from '#/integrations/upstash/redis';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
-import {
-  isAllCleared,
-  masteryOf,
-  planAttemptFocus,
-} from '#/lib/debrief-mastery';
+import { drawAttemptKeyPoints, masteryOf } from '#/lib/debrief-mastery';
 import { ensureLessonChunks } from '#/lib/knowledge-chunks.server';
 
 export type { PreparedDebriefKey };
@@ -45,27 +41,44 @@ function claimKey({
 }
 
 /**
- * sha256 hex of the debrief format (`DEBRIEF_ATTEMPT_FORMAT` — bump it with
- * any change a prepared test or open attempt must not outlive), the lesson's chunk version and the
- * attempt focus (sorted, so order never matters). A prepared test is served
- * only when all three still match: the chunks were not regenerated since (a
- * source change bumps the version) and the pilot's holes and review are the
- * ones it was written for.
+ * Bump with any change a prepared test must not outlive. Part of every
+ * fingerprint, alongside `DEBRIEF_ATTEMPT_FORMAT` (which also names the
+ * one-open-attempt index, so it cannot move without a migration).
+ */
+const PREPARED_FORMAT = 'key-point-sets-v1';
+
+/**
+ * sha256 hex of the debrief formats, the lesson's chunk version and the
+ * pilot's mastery (chunk id and latest score, sorted). A prepared test is
+ * served only when all of them still match: the chunks were not regenerated
+ * since, and the pilot has answered nothing since it was drawn. The draw
+ * itself is random (`drawAttemptKeyPoints`), so the fingerprint names what it
+ * was drawn FROM, never the draw.
  */
 export function preparedFingerprint(
   chunkVersion: number,
-  focus: { holes: string[]; review: string[] },
+  mastery: readonly { chunkId: string; latestScore: number }[],
 ): string {
   return createHash('sha256')
     .update(
       JSON.stringify([
         DEBRIEF_ATTEMPT_FORMAT,
+        PREPARED_FORMAT,
         chunkVersion,
-        [...focus.holes].sort(),
-        [...focus.review].sort(),
+        mastery
+          .map((m) => [m.chunkId, m.latestScore] as const)
+          .sort(([a], [b]) => a.localeCompare(b)),
       ]),
     )
     .digest('hex');
+}
+
+/** The questions for a fresh draw of key points: `generateTest`'s focus. */
+export function keyPointFocus(chunkIds: string[]): {
+  holes: string[];
+  review: string[];
+} {
+  return { holes: chunkIds, review: [] };
 }
 
 export type PrepareOutcome =
@@ -83,14 +96,14 @@ export type PrepareOutcome =
  *
  * Generation is the slow part of starting a debrief. So it runs while the
  * pilot watches the video, and again right after an attempt finishes with
- * holes left, so the retake is waiting when it reopens. The focus is the one
- * the pilot's CURRENT mastery calls for (`planAttemptFocus`), and questions
- * they have already been asked on this lesson are avoided. The questions are
- * never returned from here: handing them out before the debrief opens would
- * leak it.
+ * no pass, so the retake is waiting when it reopens. The key points are a
+ * fresh random draw over the pilot's CURRENT mastery (`drawAttemptKeyPoints`),
+ * and questions they have already been asked on this lesson are avoided. The
+ * questions are never returned from here: handing them out before the debrief
+ * opens would leak it.
  *
- * Skips the model when a test for the current chunk version and focus is
- * already stored, and when every chunk is already cleared.
+ * Skips the model when a test for the current chunk version and mastery is
+ * already stored.
  */
 export async function prepareDebrief(
   k: PreparedDebriefKey & { lessonId: number },
@@ -126,18 +139,17 @@ export async function prepareDebrief(
       lesson.chunks,
       await selectMastery(k.userId, k.lessonId),
     );
-    if (isAllCleared(lesson.chunks, mastery)) return 'nothing-to-ask';
-
-    const focus = planAttemptFocus(lesson.chunks, mastery);
-    const fingerprint = preparedFingerprint(lesson.version, focus);
+    const fingerprint = preparedFingerprint(lesson.version, mastery);
     if ((await selectPreparedFingerprint(key)) === fingerprint) {
       return 'already-prepared';
     }
+    const drawn = drawAttemptKeyPoints(lesson.chunks, mastery);
+    if (drawn.length === 0) return 'nothing-to-ask';
     const test = await generateTest({
       lessonSlug: k.lessonSlug,
       chunks: lesson.chunks,
       context: lesson.context,
-      focus,
+      focus: keyPointFocus(drawn),
       avoidQuestions: await selectAskedQuestions(k.userId, k.lessonSlug),
     });
     await upsertPreparedDebrief(key, test, fingerprint);
@@ -174,7 +186,7 @@ const PreparedTestSchema = z.object({
  * The prepared debrief, removed as it is read — each one is served once, so a
  * retake gets a fresh set rather than replaying the same questions.
  *
- * Null on a miss; on a test prepared for another chunk version or focus
+ * Null on a miss; on a test prepared for another chunk version or mastery
  * (`currentFingerprint` — the row is still deleted, it can never be served);
  * and on a row that no longer parses as chunk-tagged questions (a shape
  * change across a deploy). The caller then generates on demand.

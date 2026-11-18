@@ -6,14 +6,18 @@ export type DebriefAttemptRow = {
   id: number;
   /** When it was completed, already formatted inside `ClientGate`. */
   when: ReactNode;
-  /** The attempt's score: chunk mastery for a chunk attempt, 0–100. */
+  /**
+   * The attempt's score, 0–100: the average of the set that ended it, or
+   * chunk mastery on a chunk attempt from before sets.
+   */
   score: number;
   passed: boolean;
   /**
-   * `attemptFormat`. Mastery is the only number a chunk attempt shows, so
-   * its answers carry no score; a legacy attempt keeps its per-answer scores.
+   * `attemptFormat`. A set attempt shows each answer's score and Viper's
+   * feedback; a chunk attempt from before sets showed mastery only, so its
+   * answers carry no score; a legacy attempt keeps its per-answer scores.
    */
-  format: 'chunk' | 'legacy';
+  format: 'sets' | 'chunk' | 'legacy';
   /** Question text only, as the status route projects it. */
   questions: readonly { id: string; question: string }[];
   /**
@@ -26,6 +30,7 @@ export type DebriefAttemptRow = {
     score: number;
     userAnswer?: string;
     revisitNote?: string;
+    feedback?: string;
   }[];
 };
 
@@ -97,9 +102,13 @@ export const DebriefAttemptHistory = ({
                   const evaluation = attempt.evaluations.find(
                     (e) => e.questionId === question.id,
                   );
-                  const note = evaluation?.revisitNote?.trim();
+                  const sets = attempt.format === 'sets';
+                  const note = (
+                    sets ? evaluation?.feedback : evaluation?.revisitNote
+                  )?.trim();
                   const answer = evaluation?.userAnswer?.trim();
-                  const chunk = attempt.format === 'chunk';
+                  // Both chunk-graded formats show the answer and a note.
+                  const chunk = attempt.format !== 'legacy';
                   return (
                     <li
                       key={question.id}
@@ -112,7 +121,7 @@ export const DebriefAttemptHistory = ({
                         <p className="min-w-0 flex-1 text-primary">
                           {question.question}
                         </p>
-                        {!chunk && evaluation && (
+                        {(sets || !chunk) && evaluation && (
                           <span
                             className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${scoreBadgeClass(evaluation.score)}`}
                           >

@@ -133,6 +133,7 @@ beforeEach(() => {
     explanation: '',
     chunkScores: { 'v1-c1': 80 },
     revisitNote: '',
+    feedback: 'You named the critical angle.',
   });
 });
 
@@ -182,9 +183,20 @@ describe('an open attempt whose source has disappeared (Review Focus 2)', () => 
       chunks,
       'SECRET-CONTEXT',
     );
+    // A pre-sets attempt is one set: its only answer, at 80, passes it.
     expect(await res.json()).toMatchObject({
-      evaluation: { score: 80, revisitNote: '' },
-      finished: 'all-answered',
+      evaluation: {
+        score: 80,
+        feedback: 'You named the critical angle.',
+        revisitNote: '',
+      },
+      setResult: { set: 1, average: 80, passed: true },
+      nextQuestions: [],
+      finished: 'set-passed',
+    });
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
     });
   });
 });

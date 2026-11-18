@@ -15,13 +15,20 @@ import { dataKeys } from './keys';
 // Mirrors `AttemptView` / `AnswerResult` in `#/lib/debrief-attempt.server`,
 // which client code must not import. Questions carry text only: the server
 // never sends expected answers or chunk tags.
+const questionSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  set: z.number(),
+});
+
 const attemptViewSchema = z.object({
   attemptId: z.number(),
-  questions: z.array(z.object({ id: z.string(), question: z.string() })),
+  questions: z.array(questionSchema),
   answered: z.array(
     z.object({
       questionId: z.string(),
       score: z.number(),
+      feedback: z.string(),
       revisitNote: z.string(),
     }),
   ),
@@ -30,23 +37,25 @@ const attemptViewSchema = z.object({
 export type DebriefAttemptView = z.infer<typeof attemptViewSchema>;
 
 const answerResultSchema = z.object({
-  evaluation: z.object({ score: z.number(), revisitNote: z.string() }),
-  mastery: z.object({
-    cleared: z.number(),
-    total: z.number(),
-    percent: z.number(),
+  evaluation: z.object({
+    score: z.number(),
+    feedback: z.string(),
+    revisitNote: z.string(),
   }),
-  finished: z.enum(['all-answered', 'all-cleared']).nullable(),
+  setResult: z
+    .object({ set: z.number(), average: z.number(), passed: z.boolean() })
+    .nullable(),
+  nextQuestions: z.array(questionSchema),
+  finished: z.enum(['set-passed', 'sets-missed']).nullable(),
 });
 export type DebriefAnswerResult = z.infer<typeof answerResultSchema> & {
   promotion: ReturnType<typeof extractPromotion>;
 };
 
 /**
- * The start route answered 409: the debrief is not open now (a stale tab, or
- * the carry-over just cleared every chunk). Not a failure to show the pilot:
- * the status refetch moves the panel on. `promotion` is set when that pass
- * moved the pilot up a level.
+ * The start route answered 409: the debrief is not open now (a stale tab).
+ * Not a failure to show the pilot: the status refetch moves the panel on.
+ * `promotion` is carried when the body has one.
  */
 export class DebriefNotOpenError extends Error {
   readonly availableAt: string | null;
@@ -177,14 +186,22 @@ export async function postDebriefDraft(
     throw new DebriefRequestError('Failed to save draft', res.status);
 }
 
-/** The attempt as it stands once `result` has been recorded. */
+/**
+ * The attempt as it stands once `result` has been recorded: the answer, and
+ * the next set's questions when this answer missed a set and opened it.
+ */
 export function withAnswerRecorded(
   attempt: DebriefAttemptView,
   questionId: string,
   result: DebriefAnswerResult,
 ): DebriefAttemptView {
+  const known = new Set(attempt.questions.map((q) => q.id));
   return {
     ...attempt,
+    questions: [
+      ...attempt.questions,
+      ...result.nextQuestions.filter((q) => !known.has(q.id)),
+    ],
     answered: [
       ...attempt.answered.filter((a) => a.questionId !== questionId),
       { questionId, ...result.evaluation },
@@ -228,15 +245,14 @@ export function useStartDebrief({
 }
 
 /**
- * Grade one answer. On success the attempt cache gets the answer and the new
- * mastery, the status and course progress are invalidated, and a promotion in
- * the response is queued for the interstitial.
+ * Grade one answer. On success the attempt cache gets the answer (and any set
+ * it opened), the status and course progress are invalidated, and a
+ * promotion in the response is queued for the interstitial.
  *
  * `onAnswered` runs first, synchronously, while the attempt cache still holds
- * the attempt as it was before this answer. The Debrief panel records a
- * finished attempt's report there, so it swaps to the report in the same
- * render the cache moves on, never showing a skipped question in between
- * (the short circuit ends an attempt with questions left unanswered).
+ * the attempt as it was before this answer. The quiz records Viper's feedback
+ * there, so the feedback replaces the question in the same render the cache
+ * moves on, never showing the next question first.
  */
 export function useAnswerDebrief({
   onAnswered,

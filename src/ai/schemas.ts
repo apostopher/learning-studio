@@ -118,6 +118,11 @@ export const AIFreeTextEvalOutputSchema = z.object({
     .describe(
       'Empty when every judged chunk is fully conveyed; otherwise 1–3 sentences, second person, about what this answer said.',
     ),
+  feedback: z
+    .string()
+    .describe(
+      'Always written: 1–3 sentences, second person, spoken to the pilot right after they answer. First what the answer got right, then what was missing or wrong (if anything), from the lesson.',
+    ),
 });
 
 // Evaluation result per answer
@@ -135,6 +140,12 @@ export const AIEvaluationResultSchema = z.object({
    */
   chunkScores: z.record(z.string(), z.number()).optional(),
   revisitNote: z.string().optional(),
+  /**
+   * Viper's feedback, shown the moment the answer is graded. Always written,
+   * a strong answer included (the revisit note is empty then). Absent on
+   * answers graded before 2026-11-18.
+   */
+  feedback: z.string().optional(),
   /** Legacy (pre-chunk attempts): per-idea judgements. */
   essentialIdeas: z.array(EssentialIdeaSchema).optional(),
   incorrectClaims: z.array(z.string()).optional(),

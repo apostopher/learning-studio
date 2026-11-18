@@ -1,12 +1,10 @@
-import { MAX_KNOWLEDGE_CHUNKS } from '#/lib/debrief-mastery';
-
 /** Transcripts run long; this is comfortably more than a 30-minute lesson. */
 const MAX_CONTEXT_CHARS = 60_000;
 
 /**
- * Chunk-generation prompt. One chunk per key point is the anchor (so authored
- * lessons keep their shape) and is never merged or dropped; teaching that only
- * the transcript covers fills whatever room is left under the cap.
+ * Chunk-generation prompt. Exactly one chunk per key point, never merged or
+ * dropped: the debrief asks about key points only (2026-11-18). The context
+ * informs each chunk's summary; it never adds chunks of its own.
  */
 export function buildKnowledgeChunksPrompt(input: {
   keyPoints: string[];
@@ -24,7 +22,7 @@ ${input.context.slice(0, MAX_CONTEXT_CHARS)}
 Rules:
 - Produce exactly one chunk per key point above, in the same order. Each chunk is anchored on its key point.
 - Never merge, drop or combine key points: each one gets its own chunk, about that key point only.
-- If the context teaches something important that no key point covers, add a chunk for it after the anchored ones — but never produce more than ${MAX_KNOWLEDGE_CHUNKS} chunks in total. If there is no room, leave the least important extras out; never fold them into an anchored chunk.
+- Produce no other chunks: nothing the context teaches beyond the key points gets a chunk of its own. Use the context only to make each key point's summary accurate and complete.
 - "title" is a short noun phrase (under 8 words). "summary" is one or two self-contained sentences stating the fact or procedure, in the instructor's terminology.
 - Do not include greetings, course admin, or references to other lessons.`;
 }
