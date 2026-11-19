@@ -12,22 +12,36 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import { DEBRIEF_SET1_MISSED_COPY } from '#/lib/debrief-copy';
 import { setAverage } from '#/lib/debrief-sets';
+import type { LessonScore } from '#/lib/lesson-score';
 
 /**
  * An attempt that finished while the pilot was on its lesson: what its score
- * report shows. Kept in `justFinishedDebriefAtom` only to bridge the moment
- * between the last answer and the status refetch landing: once it lands, an
- * open-for-retake status carries the same report from the server, and a pass
- * shows the pass report until the pilot leaves the lesson.
+ * report shows. Kept in `justFinishedDebriefAtom` until the pilot leaves the
+ * lesson or starts another attempt (Retake now): a failed attempt leaves the
+ * status `open` for a retake at once, so the status cannot dismiss it.
  */
 export type FinishedDebrief = {
   lessonSlug: string;
-  /** `Date.now()` when the last answer was graded. */
+  /** `Date.now()` when the last answer was graded (or the offer declined). */
   finishedAt: number;
   /** What the report shows: the attempt's sets and whether one passed. */
   result: DebriefResult;
   revisitNotes: string[];
+  /**
+   * The lesson total the attempt ended on (its better set), for the score
+   * breakdown. Null only if the finishing answer reported no set.
+   */
+  score: LessonScore | null;
+  /**
+   * What the report says under its summary:
+   * - `declined`: the pilot said No to the offer (`DEBRIEF_DECLINE_COPY`).
+   * - `retake`: both sets missed — `DEBRIEF_TWO_MISSED_COPY` with Retake now
+   *   / Later. Later sets it to null, leaving the report.
+   * - null: nothing more.
+   */
+  note: 'declined' | 'retake' | null;
 };
 
 /**
@@ -201,13 +215,21 @@ export function questionPosition(q: {
   return `Set ${q.set} · Question ${q.index + 1} of ${q.total}`;
 }
 
-/** What the feedback's one button says, from what the answer did. */
+/**
+ * What the feedback's one button says, from what the answer did: the result
+ * once the attempt is over, the offer of set 2 after a passing set 1, the
+ * other teaching points after a missed set 1.
+ */
 export function feedbackNextLabel(
-  result: Pick<DebriefAnswerResult, 'finished' | 'setResult'>,
+  result: Pick<
+    DebriefAnswerResult,
+    'finished' | 'setResult' | 'nextQuestions' | 'offer'
+  >,
 ): string {
   if (result.finished !== null) return 'See your result';
-  if (result.setResult && !result.setResult.passed) {
-    return `Start set ${result.setResult.set + 1}`;
+  if (result.offer) return 'Continue';
+  if (result.setResult && result.nextQuestions.length > 0) {
+    return DEBRIEF_SET1_MISSED_COPY;
   }
   return 'Next question';
 }
@@ -216,6 +238,10 @@ export function feedbackNextLabel(
  * The report of an attempt the answer `result` just finished, from the
  * attempt as it stood before that answer plus the answer itself. Null while
  * the attempt goes on. A pass has nothing to revisit.
+ *
+ * Pass or miss is `result.finished`, never `setResult.passed`: a pass is
+ * final, so an attempt on a lesson already passed finishes `set-passed` even
+ * when its last set was judged a miss on today's facts.
  */
 export function finishedDebriefReport({
   lessonSlug,
@@ -244,12 +270,43 @@ export function finishedDebriefReport({
       score: result.setResult?.average ?? result.evaluation.score,
       setAverages: setAveragesOf(attempt.questions, answered),
     },
+    score: result.setResult?.score ?? null,
+    note: passed ? null : 'retake',
     revisitNotes: passed
       ? []
       : revisitNotesOf(attempt.questions, [
           ...attempt.answered.filter((a) => a.questionId !== questionId),
           { questionId, revisitNote: result.evaluation.revisitNote },
         ]),
+  };
+}
+
+/**
+ * The report of an attempt the pilot finished by saying No to the offer: a
+ * pass at set 1, from the attempt as it stood on the offer.
+ */
+export function declinedDebriefReport({
+  lessonSlug,
+  attempt,
+  now,
+}: {
+  lessonSlug: string;
+  attempt: DebriefAttemptView;
+  now: number;
+}): FinishedDebrief {
+  const last = attempt.setResults.at(-1);
+  const setAverages = attempt.setResults.map((r) => r.average);
+  return {
+    lessonSlug,
+    finishedAt: now,
+    result: {
+      passed: true,
+      score: last?.average ?? 0,
+      setAverages,
+    },
+    revisitNotes: [],
+    score: last?.score ?? null,
+    note: 'declined',
   };
 }
 
@@ -332,6 +389,27 @@ export function answerErrorCopy(error: unknown): string {
   return DEBRIEF_ANSWER_FAILED_COPY;
 }
 
+/** The Yes / No did not reach the server. Pressing it again retries. */
+export const DEBRIEF_CONTINUE_FAILED_COPY =
+  "Your choice didn't send. Check your connection and choose again.";
+
+/**
+ * The server refused the Yes / No (409: no offer any more, finished or taken
+ * up in another tab; or 403/404). The attempt is reloaded to show where it
+ * stands.
+ */
+export const DEBRIEF_CONTINUE_REFUSED_COPY =
+  "That choice wasn't accepted, so your debrief has been reloaded to show where it stands.";
+
+/** What the alert under the offer says about a failed Yes / No. */
+export function continueErrorCopy(error: unknown): string {
+  return error instanceof DebriefRequestError &&
+    error.status >= 400 &&
+    error.status < 500
+    ? DEBRIEF_CONTINUE_REFUSED_COPY
+    : DEBRIEF_CONTINUE_FAILED_COPY;
+}
+
 /** 422 from the start route. Says why there is nothing to start. */
 export const DEBRIEF_NO_SOURCE_COPY =
   'There is nothing to debrief on this lesson yet: it has no key points or video transcript to ask about.';
@@ -392,6 +470,7 @@ export type DebriefQuizView =
   | 'resuming'
   | 'scoring'
   | 'feedback'
+  | 'offer'
   | 'question';
 
 /**
@@ -414,6 +493,8 @@ export function debriefQuizView(v: {
   hasCurrent: boolean;
   /** Viper's feedback on the last answer is waiting for Next. */
   hasFeedback: boolean;
+  /** Set 1 passed and set 2 waits on the pilot's Yes / No. */
+  hasOffer: boolean;
 }): DebriefQuizView {
   if (v.readOnly) return 'read-only';
   if (v.notOpen) {
@@ -431,5 +512,6 @@ export function debriefQuizView(v: {
     return v.resume ? 'resuming' : 'starting';
   }
   if (v.hasFeedback) return 'feedback';
+  if (v.hasOffer) return 'offer';
   return v.hasCurrent ? 'question' : 'scoring';
 }

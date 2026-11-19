@@ -5,7 +5,9 @@ import { useEffect, useId, useRef } from 'react';
 import {
   debriefNotOpenAtom,
   debriefOpenedAnnouncementAtom,
+  debriefRetakeLaterAtom,
   justFinishedDebriefAtom,
+  startDebriefAttemptAtom,
 } from '#/atoms/debrief';
 import { ClientGate } from '#/components/client-gate';
 import { LessonError } from '#/components/lesson-main/parts/lesson-error';
@@ -15,6 +17,8 @@ import {
   useStartDebrief,
 } from '#/data-hooks/use-debrief-attempt';
 import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
+import { useLessonQuizResult } from '#/data-hooks/use-lesson-quiz-result';
+import { DEBRIEF_DECLINE_COPY } from '#/lib/debrief-copy';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   attemptFormat,
@@ -23,6 +27,7 @@ import {
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
 import { DebriefQuizContainer } from './debrief-quiz-container';
+import { DebriefRetakePrompt } from './debrief-retake-prompt';
 import { DebriefWait } from './debrief-wait';
 import { ScoreReport } from './score-report';
 import { useDebriefCountdown } from './use-debrief-countdown';
@@ -75,6 +80,10 @@ export const DebriefPanelContainer = ({
   const finished = useAtomValue(justFinishedDebriefAtom);
   const [opened, setOpened] = useAtom(debriefOpenedAnnouncementAtom);
   const setNotOpen = useSetAtom(debriefNotOpenAtom);
+  const startAttempt = useSetAtom(startDebriefAttemptAtom);
+  const retakeLater = useSetAtom(debriefRetakeLaterAtom);
+  // Loading reads as taken, so "Quiz not taken yet" never flashes.
+  const quizTaken = useLessonQuizResult(lessonSlug).data !== null;
 
   const panel = computeDebriefPanel({
     status,
@@ -112,6 +121,17 @@ export const DebriefPanelContainer = ({
       setOpened('');
     }
   }, [panel.kind, setOpened]);
+
+  // The report's heading takes focus when the report appears (the button
+  // that led here is gone) and again after Later closes the retake prompt.
+  const reportHeading = useRef<HTMLHeadingElement>(null);
+  const reportFocusKey =
+    panel.kind === 'finished'
+      ? `${panel.report.finishedAt}:${panel.report.note}`
+      : null;
+  useEffect(() => {
+    if (reportFocusKey !== null) reportHeading.current?.focus();
+  }, [reportFocusKey]);
 
   const { refetch } = status;
   useDebriefCountdown(countdownTarget(panel), refetch);
@@ -182,15 +202,30 @@ export const DebriefPanelContainer = ({
             refetchStatus={refetch}
           />
         );
-      case 'finished':
+      case 'finished': {
+        const { note } = panel.report;
         return (
           <ScoreReport
             result={panel.report.result}
+            score={panel.report.score}
+            quizTaken={quizTaken}
             revisitNotes={panel.report.revisitNotes}
             headingLevel={headingLevel}
             idBase={idBase}
+            headingRef={reportHeading}
+            footer={
+              note === 'declined' ? (
+                <p className="text-sm text-primary">{DEBRIEF_DECLINE_COPY}</p>
+              ) : note === 'retake' && !readOnly ? (
+                <DebriefRetakePrompt
+                  onRetakeNow={() => startAttempt(lessonSlug)}
+                  onLater={() => retakeLater()}
+                />
+              ) : undefined
+            }
           />
         );
+      }
       case 'passed':
         return (
           <DebriefAttemptHistory

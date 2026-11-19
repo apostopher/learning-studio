@@ -21,6 +21,30 @@ const questionSchema = z.object({
   set: z.number(),
 });
 
+const scorePartSchema = z.object({
+  part: z.enum(['video', 'quiz', 'debrief']),
+  weight: z.number(),
+  fraction: z.number(),
+  points: z.number(),
+});
+
+/** `LessonScore` (`#/lib/lesson-score`): the lesson total a set was judged on. */
+const lessonScoreSchema = z.object({
+  total: z.number(),
+  passMark: z.number(),
+  passed: z.boolean(),
+  parts: z.array(scorePartSchema),
+});
+
+/** `ScoredSet`: a completed set, with the lesson total on the better average so far. */
+const scoredSetSchema = z.object({
+  set: z.number(),
+  average: z.number(),
+  passed: z.boolean(),
+  score: lessonScoreSchema,
+});
+export type DebriefScoredSet = z.infer<typeof scoredSetSchema>;
+
 const attemptViewSchema = z.object({
   attemptId: z.number(),
   questions: z.array(questionSchema),
@@ -33,6 +57,12 @@ const attemptViewSchema = z.object({
     }),
   ),
   draft: z.object({ questionId: z.string(), text: z.string() }).nullable(),
+  /** Set 1 passed and set 2 waits on the pilot's Yes / No (`useContinueDebrief`). */
+  offer: z.boolean(),
+  /** How many questions set 2 would ask; 0 with no offer. */
+  offerQuestionCount: z.number(),
+  /** One per completed set, in order. */
+  setResults: z.array(scoredSetSchema),
 });
 export type DebriefAttemptView = z.infer<typeof attemptViewSchema>;
 
@@ -42,13 +72,28 @@ const answerResultSchema = z.object({
     feedback: z.string(),
     revisitNote: z.string(),
   }),
-  setResult: z
-    .object({ set: z.number(), average: z.number(), passed: z.boolean() })
-    .nullable(),
+  setResult: scoredSetSchema.nullable(),
   nextQuestions: z.array(questionSchema),
+  offer: z.boolean(),
+  offerQuestionCount: z.number(),
+  /** This answer recorded the pass. */
+  passedNow: z.boolean(),
   finished: z.enum(['set-passed', 'sets-missed']).nullable(),
 });
 export type DebriefAnswerResult = z.infer<typeof answerResultSchema> & {
+  promotion: ReturnType<typeof extractPromotion>;
+};
+
+const continueResultSchema = z.discriminatedUnion('choice', [
+  z.object({ choice: z.literal('yes'), questions: z.array(questionSchema) }),
+  z.object({ choice: z.literal('no'), passedNow: z.boolean() }),
+]);
+/**
+ * The continue route's answer: set 2's questions on `yes`; on `no`, whether
+ * finishing recorded a pass not yet held. `promotion` is read off the raw
+ * body, as the answer's is.
+ */
+export type DebriefContinueResult = z.infer<typeof continueResultSchema> & {
   promotion: ReturnType<typeof extractPromotion>;
 };
 
@@ -172,6 +217,34 @@ export async function postDebriefAnswer({
   };
 }
 
+export type ContinueDebriefInput = LessonRef & {
+  attemptId: number;
+  choice: 'yes' | 'no';
+};
+
+/**
+ * The pilot's Yes / No to the offer of set 2. A 409 (no offer: finished or
+ * taken up in another tab) is a `DebriefRequestError` like any other refusal.
+ */
+export async function postContinueDebrief({
+  courseSlug,
+  attemptId,
+  choice,
+}: ContinueDebriefInput): Promise<DebriefContinueResult> {
+  const res = await postJson('/api/lesson/debrief/continue', {
+    courseSlug,
+    attemptId,
+    choice,
+  });
+  if (!res.ok)
+    throw new DebriefRequestError('Failed to answer the offer', res.status);
+  const json: unknown = await res.json();
+  return {
+    ...continueResultSchema.parse(json),
+    promotion: extractPromotion(json),
+  };
+}
+
 export type SaveDebriefDraftInput = {
   attemptId: number;
   questionId: string;
@@ -187,8 +260,9 @@ export async function postDebriefDraft(
 }
 
 /**
- * The attempt as it stands once `result` has been recorded: the answer, and
- * the next set's questions when this answer missed a set and opened it.
+ * The attempt as it stands once `result` has been recorded: the answer, the
+ * next set's questions when this answer missed a set and opened it, the set
+ * it completed, and whether set 2 is now on offer.
  */
 export function withAnswerRecorded(
   attempt: DebriefAttemptView,
@@ -207,6 +281,14 @@ export function withAnswerRecorded(
       { questionId, ...result.evaluation },
     ],
     draft: null,
+    offer: result.offer,
+    offerQuestionCount: result.offerQuestionCount,
+    setResults: result.setResult
+      ? [
+          ...attempt.setResults.filter((r) => r.set !== result.setResult?.set),
+          result.setResult,
+        ]
+      : attempt.setResults,
   };
 }
 
@@ -221,6 +303,39 @@ export function applyAnswerResult(
   );
   // A finished attempt changes the debrief's state and the course rollup.
   return invalidateLessonDoneReaders(queryClient, input);
+}
+
+/**
+ * What the pilot's choice does to the caches. `yes`: set 2 joins the attempt
+ * and the offer is gone, so the next question is set 2's first. `no`: the
+ * attempt is finished (and its pass recorded), so the debrief's state and
+ * the course rollup are re-read, whether or not the pass is new.
+ */
+export function applyContinueResult(
+  queryClient: QueryClient,
+  lesson: LessonRef,
+  result: DebriefContinueResult,
+): Promise<unknown> {
+  if (result.choice === 'yes') {
+    queryClient.setQueryData<DebriefAttemptView>(
+      dataKeys.debriefAttempt(lesson.lessonSlug),
+      (old) => {
+        if (!old) return old;
+        const known = new Set(old.questions.map((q) => q.id));
+        return {
+          ...old,
+          questions: [
+            ...old.questions,
+            ...result.questions.filter((q) => !known.has(q.id)),
+          ],
+          offer: false,
+          offerQuestionCount: 0,
+        };
+      },
+    );
+    return Promise.resolve();
+  }
+  return invalidateLessonDoneReaders(queryClient, lesson);
 }
 
 /**
@@ -278,4 +393,30 @@ export function useAnswerDebrief({
  */
 export function useSaveDebriefDraft() {
   return useMutation({ mutationFn: postDebriefDraft });
+}
+
+/**
+ * Answer the offer of set 2. `onContinued` runs first, synchronously, while
+ * the attempt cache still holds the attempt on its offer (the quiz builds
+ * the declined report from it); then the caches move on
+ * (`applyContinueResult`) and a promotion is queued for the interstitial.
+ */
+export function useContinueDebrief({
+  onContinued,
+}: {
+  onContinued?: (
+    result: DebriefContinueResult,
+    input: ContinueDebriefInput,
+  ) => void;
+} = {}) {
+  const queryClient = useQueryClient();
+  const setPromotion = useSetAtom(pendingPromotionAtom);
+  return useMutation({
+    mutationFn: postContinueDebrief,
+    onSuccess: (result, input) => {
+      onContinued?.(result, input);
+      if (result.promotion) setPromotion(result.promotion);
+      return applyContinueResult(queryClient, input, result);
+    },
+  });
 }

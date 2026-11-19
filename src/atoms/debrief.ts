@@ -1,14 +1,14 @@
 import { atom } from 'jotai';
 import type { FinishedDebrief } from '#/components/lesson-material/compute-debrief-panel';
-import type { SetOutcome } from '#/lib/debrief-sets';
+import type { DebriefScoredSet } from '#/data-hooks/use-debrief-attempt';
 
 /**
  * The debrief attempt finished while the pilot has been on its lesson: what
- * its score report shows. Set the moment the last answer is graded, it only
- * bridges the moment before the status refetch lands. It then stays: a failed
- * attempt leaves the status `open` for an immediate retake, so the status
- * never dismisses the report. Cleared when the pilot leaves the lesson
- * (LessonMaterialWrapper).
+ * its score report shows. Set when the pilot presses "See your result" (or
+ * says No to the offer). It stays: a failed attempt leaves the status `open`
+ * for an immediate retake, so the status never dismisses the report. Cleared
+ * when the pilot leaves the lesson (LessonMaterialWrapper) or starts another
+ * attempt (`startDebriefAttemptAtom`).
  */
 export const justFinishedDebriefAtom = atom<FinishedDebrief | null>(null);
 
@@ -28,7 +28,8 @@ export type DebriefFeedbackShown = {
   answer: string;
   score: number;
   feedback: string;
-  setResult: SetOutcome | null;
+  /** The set this answer completed, with the lesson total it was judged on. */
+  setResult: DebriefScoredSet | null;
   /** `feedbackNextLabel`. */
   nextLabel: string;
   report: FinishedDebrief | null;
@@ -48,6 +49,35 @@ export const debriefFocusAnswerAtom = atom(false);
  * an attempt already open resumes without one.
  */
 export const debriefStartRequestedAtom = atom<string | null>(null);
+
+/**
+ * Start a new attempt on `lessonSlug` (the intro's Start, or Retake now after
+ * two misses). The last attempt's report and feedback are taken down first:
+ * the report would otherwise hold the panel on `finished` (it outranks the
+ * status), and the new attempt would never show.
+ */
+export const startDebriefAttemptAtom = atom(
+  null,
+  (_get, set, lessonSlug: string) => {
+    set(justFinishedDebriefAtom, null);
+    set(debriefFeedbackAtom, null);
+    set(debriefStartRequestedAtom, lessonSlug);
+    // The button pressed is gone once the attempt loads: the first
+    // question's answer box takes focus instead of the page losing it.
+    set(debriefFocusAnswerAtom, true);
+  },
+);
+
+/**
+ * Later, after two misses: the retake prompt closes and the report stays.
+ * The retake is open whenever the pilot comes back to the lesson.
+ */
+export const debriefRetakeLaterAtom = atom(null, (get, set) => {
+  const report = get(justFinishedDebriefAtom);
+  if (report?.note === 'retake') {
+    set(justFinishedDebriefAtom, { ...report, note: null });
+  }
+});
 
 /**
  * The start route's last 409 for this lesson ("not open"), with the time it

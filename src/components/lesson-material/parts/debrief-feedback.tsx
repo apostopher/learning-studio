@@ -1,12 +1,14 @@
 import { ArrowRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import type { Ref } from 'react';
+import type { DebriefScoredSet } from '#/data-hooks/use-debrief-attempt';
 import { cn } from '#/lib/cn';
 import {
   type AnswerVerdict,
   DEBRIEF_SET_PASS_SCORE,
   type SetOutcome,
 } from '#/lib/debrief-sets';
+import { DebriefScoreBreakdown } from './debrief-score-breakdown';
 
 type DebriefFeedbackProps = {
   /** "Set 1 · Question 2 of 4". */
@@ -18,9 +20,11 @@ type DebriefFeedbackProps = {
   score: number;
   /** Viper's words on this answer. */
   feedback: string;
-  /** Present when this answer completed its set. */
-  setResult: SetOutcome | null;
-  /** The next step's label: "Next question", "Start set 2", "See your result". */
+  /** Present when this answer completed its set, with the total it was judged on. */
+  setResult: DebriefScoredSet | null;
+  /** The pilot has a quiz result for this lesson (`DebriefScoreBreakdown`). */
+  quizTaken: boolean;
+  /** The next step's label (`feedbackNextLabel`). */
   nextLabel: string;
   onNext: () => void;
   /** 2 under the tab strip, 3 inside the material-less "Debrief" section. */
@@ -49,6 +53,7 @@ export const DebriefFeedback = ({
   score,
   feedback,
   setResult,
+  quizTaken,
   nextLabel,
   onNext,
   headingLevel,
@@ -107,16 +112,22 @@ export const DebriefFeedback = ({
       </details>
 
       {setResult && (
-        <p
-          className={cn(
-            'rounded-lg px-3 py-2.5 text-sm',
-            setResult.passed
-              ? 'bg-success-3 text-success-text'
-              : 'bg-warning-3 text-warning-text',
-          )}
-        >
-          {setResultCopy(setResult)}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p
+            className={cn(
+              'rounded-lg px-3 py-2.5 text-sm',
+              setResult.passed
+                ? 'bg-success-3 text-success-text'
+                : 'bg-warning-3 text-warning-text',
+            )}
+          >
+            {setResultCopy(setResult)}
+          </p>
+          <DebriefScoreBreakdown
+            score={setResult.score}
+            quizTaken={quizTaken}
+          />
+        </div>
       )}
 
       <div>
@@ -133,10 +144,13 @@ export const DebriefFeedback = ({
   );
 };
 
-/** "Set 1 average: 68. 75 passes." plus what it means. */
+/**
+ * "Set 1 average: 68." plus what it means. A set is judged on the lesson
+ * total against the course's pass mark (the breakdown under it shows the sum).
+ */
 export function setResultCopy(r: SetOutcome): string {
   const head = `Set ${r.set} average: ${r.average}.`;
   return r.passed
     ? `${head} That passes the debrief.`
-    : `${head} ${DEBRIEF_SET_PASS_SCORE} passes.`;
+    : `${head} That is short of the pass mark.`;
 }

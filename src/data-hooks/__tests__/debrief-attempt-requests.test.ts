@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
 import {
   applyAnswerResult,
+  applyContinueResult,
   type DebriefAttemptView,
   DebriefNoSourceError,
   DebriefNotOpenError,
   DebriefPreparingError,
   DebriefRequestError,
   fetchStartDebrief,
+  postContinueDebrief,
   postDebriefAnswer,
   postDebriefDraft,
   preparingRetry,
@@ -46,6 +48,19 @@ const attempt: DebriefAttemptView = {
   ],
   answered: [],
   draft: { questionId: 'q1', text: 'half' },
+  offer: false,
+  offerQuestionCount: 0,
+  setResults: [],
+};
+const score = {
+  total: 87.5,
+  passMark: 85,
+  passed: true,
+  parts: [
+    { part: 'video' as const, weight: 50, fraction: 1, points: 50 },
+    { part: 'quiz' as const, weight: 25, fraction: 1, points: 25 },
+    { part: 'debrief' as const, weight: 25, fraction: 0.5, points: 12.5 },
+  ],
 };
 
 describe('debrief attempt requests', () => {
@@ -107,6 +122,9 @@ describe('debrief attempt requests', () => {
       evaluation: { score: 80, feedback: 'Good', revisitNote: '' },
       setResult: null,
       nextQuestions: [],
+      offer: false,
+      offerQuestionCount: 0,
+      passedNow: false,
       finished: null,
       promotion: { id: 1, from: 'basic', to: 'intermediate' },
     });
@@ -149,6 +167,9 @@ describe('debrief attempt requests', () => {
         evaluation: { score: 80, feedback: 'Viper says', revisitNote: 'n' },
         setResult: null,
         nextQuestions: [],
+        offer: false,
+        offerQuestionCount: 0,
+        passedNow: false,
         finished: null,
         promotion: null,
       },
@@ -169,10 +190,32 @@ describe('debrief attempt requests', () => {
 describe('withAnswerRecorded', () => {
   const result = (nextQuestions: DebriefAttemptView['questions']) => ({
     evaluation: { score: 60, feedback: 'f', revisitNote: 'r' },
-    setResult: { set: 1, average: 60, passed: false },
+    setResult: {
+      set: 1,
+      average: 60,
+      passed: false,
+      score: { ...score, passed: false },
+    },
     nextQuestions,
+    offer: false,
+    offerQuestionCount: 0,
+    passedNow: false,
     finished: null,
     promotion: null,
+  });
+
+  it('a passing set 1 with the offer leaves the attempt on the offer, with its scored set', () => {
+    const next = withAnswerRecorded(attempt, 'q2', {
+      ...result([]),
+      setResult: { set: 1, average: 50, passed: true, score },
+      offer: true,
+      offerQuestionCount: 3,
+    });
+    expect(next.offer).toBe(true);
+    expect(next.offerQuestionCount).toBe(3);
+    expect(next.setResults).toEqual([
+      { set: 1, average: 50, passed: true, score },
+    ]);
   });
 
   it('appends the set a missed set opened, after the questions already shown', () => {
@@ -193,5 +236,103 @@ describe('withAnswerRecorded', () => {
     const twice = withAnswerRecorded(once, 'q2', opened);
     expect(twice.questions.map((q) => q.id)).toEqual(['q1', 'q2', 'q3']);
     expect(twice.answered).toHaveLength(1);
+  });
+});
+
+describe('continue (the improve offer)', () => {
+  const onOffer: DebriefAttemptView = {
+    ...attempt,
+    answered: [
+      { questionId: 'q1', score: 50, feedback: 'f', revisitNote: '' },
+      { questionId: 'q2', score: 50, feedback: 'f', revisitNote: '' },
+    ],
+    draft: null,
+    offer: true,
+    offerQuestionCount: 2,
+    setResults: [{ set: 1, average: 50, passed: true, score }],
+  };
+  const set2 = [
+    { id: 'q3', question: 'C?', set: 2 },
+    { id: 'q4', question: 'D?', set: 2 },
+  ];
+
+  it('posts the course, the attempt and the choice to the continue route', async () => {
+    const f = stub(200, { choice: 'yes', questions: set2 });
+    const r = await postContinueDebrief({
+      ...lesson,
+      attemptId: 7,
+      choice: 'yes',
+    });
+    expect(f.mock.calls[0][0]).toBe('/api/lesson/debrief/continue');
+    expect(JSON.parse(f.mock.calls[0][1].body)).toEqual({
+      courseSlug: 'ppl',
+      attemptId: 7,
+      choice: 'yes',
+    });
+    expect(r).toEqual({ choice: 'yes', questions: set2, promotion: null });
+  });
+
+  it('a no carries passedNow and the promotion', async () => {
+    stub(200, {
+      choice: 'no',
+      passedNow: true,
+      promotion: { id: 1, from: 'basic', to: 'intermediate' },
+    });
+    const r = await postContinueDebrief({
+      ...lesson,
+      attemptId: 7,
+      choice: 'no',
+    });
+    expect(r.choice).toBe('no');
+    expect(r.choice === 'no' && r.passedNow).toBe(true);
+    expect(r.promotion?.to).toBe('intermediate');
+  });
+
+  it('a 409 (no offer any more) is a request error carrying its status', async () => {
+    stub(409, { error: 'no-offer' });
+    const err = await postContinueDebrief({
+      ...lesson,
+      attemptId: 7,
+      choice: 'no',
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DebriefRequestError);
+    expect((err as DebriefRequestError).status).toBe(409);
+  });
+
+  it('yes puts set 2 in the attempt cache after set 1, and takes the offer away; nothing is invalidated', async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(dataKeys.debriefAttempt('l1'), onOffer);
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    await applyContinueResult(qc, lesson, {
+      choice: 'yes',
+      questions: set2,
+      promotion: null,
+    });
+    const cached = qc.getQueryData<DebriefAttemptView>(
+      dataKeys.debriefAttempt('l1'),
+    );
+    expect(cached?.questions.map((q) => q.id)).toEqual([
+      'q1',
+      'q2',
+      'q3',
+      'q4',
+    ]);
+    expect(cached?.offer).toBe(false);
+    expect(cached?.offerQuestionCount).toBe(0);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('no finishes the attempt: the debrief status and course progress are invalidated', async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(dataKeys.debriefAttempt('l1'), onOffer);
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    await applyContinueResult(qc, lesson, {
+      choice: 'no',
+      passedNow: true,
+      promotion: null,
+    });
+    const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
+    expect(keys).toContainEqual(dataKeys.debriefStatus('ppl', 'l1'));
+    expect(keys).toContainEqual(dataKeys.courseProgressSummary('ppl'));
   });
 });

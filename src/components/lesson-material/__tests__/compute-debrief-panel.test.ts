@@ -15,19 +15,25 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import { DEBRIEF_SET1_MISSED_COPY } from '#/lib/debrief-copy';
 import type { DebriefState } from '#/lib/debrief-schedule';
+import { lessonTotalScore } from '#/lib/lesson-score';
 import {
   answerErrorCopy,
   attemptFormat,
   computeDebriefPanel,
+  continueErrorCopy,
   countdownTarget,
   currentDebriefQuestion,
   DEBRIEF_ANSWER_FAILED_COPY,
   DEBRIEF_ANSWER_FORBIDDEN_COPY,
   DEBRIEF_ANSWER_REFUSED_COPY,
+  DEBRIEF_CONTINUE_FAILED_COPY,
+  DEBRIEF_CONTINUE_REFUSED_COPY,
   DEBRIEF_FAILED_COPY,
   DEBRIEF_REFUSED_COPY,
   debriefQuizView,
+  declinedDebriefReport,
   type FinishedDebrief,
   feedbackNextLabel,
   finishedDebriefReport,
@@ -67,11 +73,17 @@ const loaded = (
   data: { state, lessonOutstanding: [], ...extra },
 });
 
+/** The lesson total a set average gives on a video + quiz + debrief lesson. */
+const totalAt = (average: number, passMark = 85) =>
+  lessonTotalScore({ video: 1, quiz: 0.8, debrief: average / 100 }, passMark);
+
 const finished = (over: Partial<FinishedDebrief> = {}): FinishedDebrief => ({
   lessonSlug: LESSON,
   finishedAt: FINISHED_AT,
   result: { passed: false, score: 62, setAverages: [58, 62] },
   revisitNotes: ['Note A'],
+  score: totalAt(62),
+  note: 'retake',
   ...over,
 });
 
@@ -286,6 +298,9 @@ const attemptView = (
   ],
   answered: [],
   draft: null,
+  offer: false,
+  offerQuestionCount: 0,
+  setResults: [],
   ...over,
 });
 
@@ -358,30 +373,58 @@ describe('questionPosition', () => {
 });
 
 describe('feedbackNextLabel', () => {
+  const set1 = (passed: boolean) => ({
+    set: 1,
+    average: passed ? 80 : 40,
+    passed,
+    score: totalAt(passed ? 80 : 40),
+  });
+  const q5 = { id: 'q5', question: 'Five?', set: 2 };
+
   it('sends a finished attempt to its result, pass or not', () => {
     for (const finished of ['set-passed', 'sets-missed'] as const) {
       expect(
         feedbackNextLabel({
           finished,
-          setResult: { set: 1, average: 80, passed: finished === 'set-passed' },
+          setResult: set1(finished === 'set-passed'),
+          nextQuestions: [],
+          offer: false,
         }),
       ).toBe('See your result');
     }
   });
 
-  it('opens the next set after a missed set with one left', () => {
+  it('a missed set with another to come tries the other teaching points', () => {
     expect(
       feedbackNextLabel({
         finished: null,
-        setResult: { set: 1, average: 60, passed: false },
+        setResult: set1(false),
+        nextQuestions: [q5],
+        offer: false,
       }),
-    ).toBe('Start set 2');
+    ).toBe(DEBRIEF_SET1_MISSED_COPY);
+  });
+
+  it('a passed set with the improve offer continues to the offer', () => {
+    expect(
+      feedbackNextLabel({
+        finished: null,
+        setResult: set1(true),
+        nextQuestions: [],
+        offer: true,
+      }),
+    ).toBe('Continue');
   });
 
   it('is the next question mid-set', () => {
-    expect(feedbackNextLabel({ finished: null, setResult: null })).toBe(
-      'Next question',
-    );
+    expect(
+      feedbackNextLabel({
+        finished: null,
+        setResult: null,
+        nextQuestions: [],
+        offer: false,
+      }),
+    ).toBe('Next question');
   });
 });
 
@@ -439,8 +482,11 @@ describe('finishedDebriefReport', () => {
     over: Partial<DebriefAnswerResult> = {},
   ): DebriefAnswerResult => ({
     evaluation: { score: 40, feedback: 'Viper says', revisitNote: 'Last note' },
-    setResult: { set: 2, average: 65, passed: false },
+    setResult: { set: 2, average: 65, passed: false, score: totalAt(65) },
     nextQuestions: [],
+    offer: false,
+    offerQuestionCount: 0,
+    passedNow: false,
     finished: 'sets-missed',
     promotion: null,
     ...over,
@@ -469,6 +515,8 @@ describe('finishedDebriefReport', () => {
       finishedAt: FINISHED_AT,
       result: { passed: false, score: 65, setAverages: [60, 65] },
       revisitNotes: ['Second note', 'Last note'],
+      score: totalAt(65),
+      note: 'retake',
     });
   });
 
@@ -483,7 +531,7 @@ describe('finishedDebriefReport', () => {
         questionId: 'q2',
         result: result({
           evaluation: { score: 90, feedback: 'Good', revisitNote: '' },
-          setResult: { set: 1, average: 80, passed: true },
+          setResult: { set: 1, average: 80, passed: true, score: totalAt(80) },
           finished: 'set-passed',
         }),
         now: FINISHED_AT,
@@ -493,7 +541,32 @@ describe('finishedDebriefReport', () => {
       finishedAt: FINISHED_AT,
       result: { passed: true, score: 80, setAverages: [80] },
       revisitNotes: [],
+      score: totalAt(80),
+      note: null,
     });
+  });
+
+  it('a pass is final: set-passed reads as a pass with no retake, even when the set itself was judged a miss', () => {
+    // The pilot already held a pass and today's facts dropped: set 2 is
+    // judged a miss, yet the attempt finishes set-passed.
+    const report = finishedDebriefReport({
+      lessonSlug: LESSON,
+      attempt: twoSets({
+        answered: [
+          ...['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 50)),
+          answered('q5', 10),
+        ],
+      }),
+      questionId: 'q6',
+      result: result({
+        setResult: { set: 2, average: 50, passed: false, score: totalAt(50) },
+        finished: 'set-passed',
+      }),
+      now: FINISHED_AT,
+    });
+    expect(report?.result.passed).toBe(true);
+    expect(report?.note).toBeNull();
+    expect(report?.revisitNotes).toEqual([]);
   });
 
   it('is null while the attempt goes on', () => {
@@ -509,6 +582,51 @@ describe('finishedDebriefReport', () => {
   });
 });
 
+describe('declinedDebriefReport', () => {
+  it('No to the offer is a pass at set 1, with its total and the decline note', () => {
+    const attempt = attemptView({
+      questions: ['q1', 'q2', 'q3', 'q4'].map((id) => ({
+        id,
+        question: id,
+        set: 1,
+      })),
+      answered: ['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 80, 'n')),
+      offer: true,
+      offerQuestionCount: 4,
+      setResults: [{ set: 1, average: 80, passed: true, score: totalAt(80) }],
+    });
+    expect(
+      declinedDebriefReport({ lessonSlug: LESSON, attempt, now: FINISHED_AT }),
+    ).toEqual({
+      lessonSlug: LESSON,
+      finishedAt: FINISHED_AT,
+      result: { passed: true, score: 80, setAverages: [80] },
+      revisitNotes: [],
+      score: totalAt(80),
+      note: 'declined',
+    });
+  });
+});
+
+describe('continueErrorCopy', () => {
+  it('a 4xx (no offer any more, or refused) says the debrief was reloaded', () => {
+    for (const status of [403, 409]) {
+      expect(continueErrorCopy(new DebriefRequestError('x', status))).toBe(
+        DEBRIEF_CONTINUE_REFUSED_COPY,
+      );
+    }
+  });
+
+  it('a 5xx or network failure blames the connection', () => {
+    expect(continueErrorCopy(new DebriefRequestError('x', 500))).toBe(
+      DEBRIEF_CONTINUE_FAILED_COPY,
+    );
+    expect(continueErrorCopy(new TypeError('fetch'))).toBe(
+      DEBRIEF_CONTINUE_FAILED_COPY,
+    );
+  });
+});
+
 describe('debriefQuizView', () => {
   const base = {
     readOnly: false,
@@ -519,6 +637,7 @@ describe('debriefQuizView', () => {
     startError: null,
     hasCurrent: false,
     hasFeedback: false,
+    hasOffer: false,
   } as const;
 
   it("Viper's feedback stands in for the next question, and for scoring", () => {
@@ -605,6 +724,9 @@ describe('debriefQuizView', () => {
     [{ resume: true }, 'resuming'],
     [{ hasAttempt: true }, 'scoring'],
     [{ hasAttempt: true, hasCurrent: true }, 'question'],
+    // A pending offer (resume, or Continue on the passing set's feedback).
+    [{ hasAttempt: true, hasOffer: true }, 'offer'],
+    [{ hasAttempt: true, hasOffer: true, hasFeedback: true }, 'feedback'],
   ] as const)('%o → %s', (over, view) => {
     expect(debriefQuizView({ ...base, ...over })).toBe(view);
   });
@@ -622,6 +744,7 @@ describe('debriefQuizView refusals mid-attempt', () => {
         startError: 'refused',
         hasCurrent: true,
         hasFeedback: false,
+        hasOffer: false,
       }),
     ).toBe('refused');
   });

@@ -100,6 +100,8 @@ export type AttemptView = {
   draft: { questionId: string; text: string } | null;
   /** Set 1 passed and set 2 waits on the pilot's choice (`continueAttempt`). */
   offer: boolean;
+  /** How many questions set 2 would ask (the offer's copy names it); 0 with no offer. */
+  offerQuestionCount: number;
   /** One per completed set, in order. */
   setResults: ScoredSet[];
 };
@@ -130,6 +132,8 @@ export type AnswerResult =
       nextQuestions: ClientQuestion[];
       /** This answer passed set 1 and set 2 may be offered (`continueAttempt`). */
       offer: boolean;
+      /** How many questions set 2 would ask; 0 with no offer. */
+      offerQuestionCount: number;
       /** This answer recorded the pass. Never on a replay. */
       passedNow: boolean;
       /**
@@ -243,6 +247,10 @@ function progressOf(
   });
 }
 
+/** How many questions the offered set 2 asks; 0 when nothing is offered. */
+const offerQuestionCountOf = (stored: StoredAttempt, offer: boolean) =>
+  offer ? (attemptSets(stored)[1]?.length ?? 0) : 0;
+
 /** Each completed set with the lesson total on the better average so far. */
 function scoredSets(completed: readonly SetOutcome[], s: Scoring): ScoredSet[] {
   let best = Number.NEGATIVE_INFINITY;
@@ -279,6 +287,7 @@ function toView(row: AttemptRow, scoring: Scoring): AttemptView {
     answered: answers.map(toAnswered),
     draft: row.draft ?? null,
     offer: p.offer,
+    offerQuestionCount: offerQuestionCountOf(stored, p.offer),
     setResults: scoredSets(p.completed, scoring),
   };
 }
@@ -572,7 +581,7 @@ const evaluationView = (e: AIEvaluationResult) => ({
 
 type StepResult = Pick<
   Extract<AnswerResult, { ok: true }>,
-  'setResult' | 'nextQuestions' | 'offer' | 'finished'
+  'setResult' | 'nextQuestions' | 'offer' | 'offerQuestionCount' | 'finished'
 >;
 
 /**
@@ -609,6 +618,7 @@ function setStep(
         setResult: null,
         nextQuestions: [],
         offer: false,
+        offerQuestionCount: 0,
         finished: null,
       },
       newlyPassed: false,
@@ -623,6 +633,7 @@ function setStep(
           ? clientQuestions(stored, now.reached, now.reached)
           : [],
       offer: now.offer,
+      offerQuestionCount: offerQuestionCountOf(stored, now.offer),
       finished: now.over ? (now.passed ? 'set-passed' : 'sets-missed') : null,
     },
     newlyPassed: now.passed && !was.passed,

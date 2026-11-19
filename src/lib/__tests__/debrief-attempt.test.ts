@@ -271,6 +271,7 @@ describe('startOrResumeAttempt', () => {
         ],
         draft: { questionId: 'q2', text: 'half' },
         offer: false,
+        offerQuestionCount: 0,
         setResults: [],
       },
     });
@@ -533,6 +534,7 @@ describe('answerQuestion', () => {
       },
       nextQuestions: [],
       offer: false,
+      offerQuestionCount: 0,
       passedNow: false,
       finished: 'sets-missed',
     });
@@ -618,6 +620,7 @@ describe('answerQuestion', () => {
       setResult: null,
       nextQuestions: [],
       offer: false,
+      offerQuestionCount: 0,
       passedNow: false,
       finished: null,
     });
@@ -635,6 +638,8 @@ describe('answerQuestion', () => {
       setResult: { set: 1, average: 78, passed: true },
       nextQuestions: [],
       offer: true,
+      // Set 2 here has two questions: the offer's copy names the count.
+      offerQuestionCount: 2,
       passedNow: true,
       finished: null,
     });
@@ -681,6 +686,7 @@ describe('answerQuestion', () => {
         { id: 'q6', question: 'Question q6?', set: 2 },
       ],
       offer: false,
+      offerQuestionCount: 0,
       passedNow: false,
       finished: null,
     });
@@ -1148,6 +1154,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(true);
+      expect(r.attempt.offerQuestionCount).toBe(4);
       expect(r.attempt.questions.map((x) => x.id)).toEqual([
         'q1',
         'q2',
@@ -1170,6 +1177,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       const r = await start();
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(false);
+      expect(r.attempt.offerQuestionCount).toBe(0);
       expect(r.attempt.questions).toHaveLength(8);
     });
 

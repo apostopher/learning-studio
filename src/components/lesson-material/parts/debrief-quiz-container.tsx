@@ -8,6 +8,7 @@ import {
   debriefPasteBlockedAtom,
   debriefStartRequestedAtom,
   justFinishedDebriefAtom,
+  startDebriefAttemptAtom,
 } from '#/atoms/debrief';
 import { pendingPromotionAtom } from '#/atoms/promotion';
 import { ClientGate } from '#/components/client-gate';
@@ -16,21 +17,26 @@ import {
   DebriefNotOpenError,
   DebriefRequestError,
   useAnswerDebrief,
+  useContinueDebrief,
   useSaveDebriefDraft,
   useStartDebrief,
 } from '#/data-hooks/use-debrief-attempt';
+import { useLessonQuizResult } from '#/data-hooks/use-lesson-quiz-result';
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useAnswerMetrics } from '#/hooks/use-answer-metrics';
+import { passOfferCopy } from '#/lib/debrief-copy';
 import { answerVerdict, DEBRIEF_SET_PASS_SCORE } from '#/lib/debrief-sets';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   answerErrorCopy,
+  continueErrorCopy,
   currentDebriefQuestion,
   DEBRIEF_NO_SOURCE_COPY,
   DEBRIEF_PREPARING_STALLED_COPY,
   DEBRIEF_REFUSED_COPY,
   DEBRIEF_START_FAILED_COPY,
   debriefQuizView,
+  declinedDebriefReport,
   feedbackNextLabel,
   finishedDebriefReport,
   questionPosition,
@@ -38,6 +44,7 @@ import {
 } from '../compute-debrief-panel';
 import { DebriefFeedback } from './debrief-feedback';
 import { DebriefIntro } from './debrief-intro';
+import { DebriefOffer } from './debrief-offer';
 import { DebriefWait } from './debrief-wait';
 import {
   type AnswerBoxEvent,
@@ -88,6 +95,10 @@ type PendingDraft = {
  *   presses Next; nothing advances on its own. When the answer finished the
  *   attempt, Next records its report in `justFinishedDebriefAtom`, which the
  *   panel shows — so the last feedback is read before the report.
+ * - A passing set 1 with a set 2 leaves the attempt on its offer (the
+ *   attempt's `offer`, so a resume lands there too): Yes adds set 2's
+ *   questions, No finishes the attempt at its pass and shows the report with
+ *   the decline note (`useContinueDebrief`).
  */
 export const DebriefQuizContainer = ({
   courseSlug,
@@ -104,6 +115,7 @@ export const DebriefQuizContainer = ({
     debriefStartRequestedAtom,
   );
   const setFinished = useSetAtom(justFinishedDebriefAtom);
+  const startAttempt = useSetAtom(startDebriefAttemptAtom);
   const setPromotion = useSetAtom(pendingPromotionAtom);
   const [pasteBlocked, setPasteBlocked] = useAtom(debriefPasteBlockedAtom);
   // The server decides who may use the clipboard: its `adminBypass` (an
@@ -115,6 +127,9 @@ export const DebriefQuizContainer = ({
   });
   const clipboardAllowed =
     lessonMaterial?.locked === false && lessonMaterial.adminBypass;
+  // "Quiz not taken yet" under a set's total: only once a result is known to
+  // be absent (null). Still loading reads as taken, so it never flashes.
+  const quizTaken = useLessonQuizResult(lessonSlug).data !== null;
 
   const enabled = !readOnly && (resume || startRequested === lessonSlug);
   const start = useStartDebrief({ courseSlug, lessonSlug, enabled });
@@ -133,7 +148,9 @@ export const DebriefQuizContainer = ({
   // Set by Next, read by the next question's card: focus goes into its
   // answer box, never back to the top of the page.
   const [focusAnswer, setFocusAnswer] = useAtom(debriefFocusAnswerAtom);
-  const feedbackHeading = useCallback((el: HTMLHeadingElement | null) => {
+  // The feedback's and the offer's headings take focus as they appear, so
+  // what replaced the question is read first.
+  const focusHeading = useCallback((el: HTMLHeadingElement | null) => {
     el?.focus();
   }, []);
   const answer = useAnswerDebrief({
@@ -165,6 +182,36 @@ export const DebriefQuizContainer = ({
       });
     },
   });
+  // ─── The offer of set 2 ─────────────────────────────────────────────────
+  const continueOffer = useContinueDebrief({
+    // Runs while the attempt cache still holds the attempt on its offer, so
+    // a No's report is built from set 1 as it passed.
+    onContinued: (result) => {
+      if (result.choice === 'yes') {
+        // Set 2's first question takes focus as it mounts.
+        setFocusAnswer(true);
+        return;
+      }
+      if (!attempt) return;
+      setFinished(
+        declinedDebriefReport({ lessonSlug, attempt, now: Date.now() }),
+      );
+      setStartRequested(null);
+    },
+  });
+  const isCurrentContinue =
+    continueOffer.variables?.attemptId === attempt?.attemptId;
+  // A refused choice (409: answered in another tab, or the attempt closed)
+  // means this page's attempt is out of date: reload it, as for an answer.
+  const continueRefused =
+    isCurrentContinue &&
+    continueOffer.error instanceof DebriefRequestError &&
+    continueOffer.error.status >= 400 &&
+    continueOffer.error.status < 500;
+  useEffect(() => {
+    if (continueRefused) void refetchStart();
+  }, [continueRefused, refetchStart]);
+
   const handleNext = () => {
     if (feedback === null) return;
     setFeedback(null);
@@ -273,6 +320,7 @@ export const DebriefQuizContainer = ({
     }),
     hasCurrent: current !== null,
     hasFeedback: feedback !== null,
+    hasOffer: attempt?.offer === true,
   });
 
   switch (view) {
@@ -282,7 +330,7 @@ export const DebriefQuizContainer = ({
         <DebriefIntro
           loading={false}
           onStart={() => {
-            if (!readOnly) setStartRequested(lessonSlug);
+            if (!readOnly) startAttempt(lessonSlug);
           }}
           readOnly={readOnly}
           retake={retake}
@@ -355,13 +403,48 @@ export const DebriefQuizContainer = ({
           score={feedback.score}
           feedback={feedback.feedback}
           setResult={feedback.setResult}
+          quizTaken={quizTaken}
           nextLabel={feedback.nextLabel}
           onNext={handleNext}
           headingLevel={headingLevel}
           idBase={idBase}
-          headingRef={feedbackHeading}
+          headingRef={focusHeading}
         />
       );
+    case 'offer': {
+      if (!attempt) return null;
+      const choose = (choice: 'yes' | 'no') => {
+        if (continueOffer.isPending) return;
+        continueOffer.mutate({
+          courseSlug,
+          lessonSlug,
+          attemptId: attempt.attemptId,
+          choice,
+        });
+      };
+      return (
+        <DebriefOffer
+          copy={passOfferCopy(attempt.offerQuestionCount)}
+          score={attempt.setResults.at(-1)?.score ?? null}
+          quizTaken={quizTaken}
+          pending={
+            continueOffer.isPending && isCurrentContinue
+              ? (continueOffer.variables?.choice ?? null)
+              : null
+          }
+          error={
+            continueOffer.isError && isCurrentContinue
+              ? continueErrorCopy(continueOffer.error)
+              : ''
+          }
+          onYes={() => choose('yes')}
+          onNo={() => choose('no')}
+          headingLevel={headingLevel}
+          idBase={idBase}
+          headingRef={focusHeading}
+        />
+      );
+    }
     case 'question':
       break;
     default: {

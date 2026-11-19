@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
-import { DEBRIEF_SET_PASS_SCORE } from '#/lib/debrief-sets';
+import type { ReactNode, Ref } from 'react';
+import type { LessonScore } from '#/lib/lesson-score';
 import type { DebriefResult } from '../compute-debrief-panel';
+import { DebriefScoreBreakdown } from './debrief-score-breakdown';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
@@ -9,6 +10,10 @@ type ScoreReportProps = {
    * that ended it (the passing one, or the last one missed).
    */
   result: DebriefResult;
+  /** The lesson total the attempt ended on, summed under the averages. */
+  score: LessonScore | null;
+  /** The pilot has a quiz result for this lesson (`DebriefScoreBreakdown`). */
+  quizTaken: boolean;
   /**
    * "Worth revisiting": the grader's note on each hole, one paragraph each
    * (`revisitNotesOf`). Not shown once passed.
@@ -19,10 +24,12 @@ type ScoreReportProps = {
   /** The container's `useId`, so the revisit heading's id is unique per report. */
   idBase: string;
   /**
-   * Under the summary: the countdown to the next attempt. There is no Retake
-   * button — the next attempt opens only when the wait is over.
+   * Under the summary: the decline note, or the two-misses prompt with
+   * Retake now / Later.
    */
   footer?: ReactNode;
+  /** Focused when the report appears (and after Later), so it is read first. */
+  headingRef?: Ref<HTMLHeadingElement>;
 };
 
 /**
@@ -34,10 +41,13 @@ type ScoreReportProps = {
  */
 export const ScoreReport = ({
   result,
+  score,
+  quizTaken,
   revisitNotes,
   headingLevel,
   idBase,
   footer,
+  headingRef,
 }: ScoreReportProps) => {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const notes = result.passed ? [] : revisitNotes;
@@ -49,10 +59,17 @@ export const ScoreReport = ({
         <ScoreRing score={result.score} size={96} strokeWidth={8} />
 
         <div className="flex flex-col gap-1">
-          <Heading className="text-xl font-semibold text-primary">
+          <Heading
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-xl font-semibold text-primary outline-none"
+          >
             {result.passed ? 'Debrief passed' : 'Not passed this time'}
           </Heading>
           <p className="text-sm text-secondary">{setSummary(result)}</p>
+          {score && (
+            <DebriefScoreBreakdown score={score} quizTaken={quizTaken} />
+          )}
         </div>
 
         {footer}
@@ -84,8 +101,9 @@ export const ScoreReport = ({
 };
 
 /**
- * "Set 1 average 68, set 2 average 81. 75 passes." An attempt from before
- * sets has no set averages: its score stands alone.
+ * "Set 1 average 68, set 2 average 81." An attempt from before sets has no
+ * set averages: its score stands alone. What passes is the lesson total
+ * against the course's pass mark (the breakdown), not a set average.
  */
 export function setSummary(result: DebriefResult): string {
   const sets =
@@ -94,5 +112,5 @@ export function setSummary(result: DebriefResult): string {
       : result.setAverages
           .map((avg, i) => `${i === 0 ? 'Set' : 'set'} ${i + 1} average ${avg}`)
           .join(', ');
-  return `${sets}. ${DEBRIEF_SET_PASS_SCORE} passes.`;
+  return `${sets}.`;
 }

@@ -21,6 +21,9 @@ const attempt: DebriefAttemptView = {
     { questionId: 'q1', score: 40, feedback: 'F1', revisitNote: 'First note' },
   ],
   draft: null,
+  offer: false,
+  offerQuestionCount: 0,
+  setResults: [],
 };
 const metrics = {
   msOnQuestion: 1,
@@ -34,8 +37,21 @@ const metrics = {
 };
 const body = {
   evaluation: { score: 50, feedback: 'F2', revisitNote: 'Second note' },
-  setResult: { set: 1, average: 45, passed: false },
+  setResult: {
+    set: 1,
+    average: 45,
+    passed: false,
+    score: {
+      total: 45,
+      passMark: 85,
+      passed: false,
+      parts: [{ part: 'debrief', weight: 100, fraction: 0.45, points: 45 }],
+    },
+  },
   nextQuestions: [],
+  offer: false,
+  offerQuestionCount: 0,
+  passedNow: false,
   finished: 'sets-missed',
 };
 
