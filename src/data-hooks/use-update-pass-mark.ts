@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { PassMarkSchema } from '@/lib/pass-mark';
+import { PassMarkSchema } from '#/lib/pass-mark';
 import { dataKeys } from './keys';
 
 const responseSchema = z.object({ passMark: PassMarkSchema });

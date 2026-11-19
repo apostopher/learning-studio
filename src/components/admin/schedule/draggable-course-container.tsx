@@ -1,5 +1,6 @@
 import { useDraggable } from '@dnd-kit/core';
 import type { AdminCourseSummary } from '#/lib/admin-schemas';
+import { CoursePassMarkContainer } from './course-pass-mark-container';
 import { ScheduleCourseCard } from './schedule-course-card';
 import { scheduleCourseDndId } from './schedule-dnd';
 
@@ -30,6 +31,7 @@ export const DraggableCourseContainer = ({
         lessonCount={course.lessonCount}
         isDragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
+        passMarkSlot={<CoursePassMarkContainer course={course} />}
       />
     </div>
   );
