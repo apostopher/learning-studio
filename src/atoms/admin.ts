@@ -593,3 +593,13 @@ export const previewLessonSlugAtom = atom<string | null>(null);
  * data and may change while this atom does not.
  */
 export const previewPersonaIdAtom = atom<number | null>(null);
+
+/**
+ * The page of learners' chats the AI Training Sessions list shows, from 0
+ * (newest activity). Kept across section switches so returning to Sessions
+ * lands where the admin left off.
+ */
+export const sessionsPageAtom = atom(0);
+
+/** The learner chat whose transcript the Sessions section shows, by id. */
+export const selectedSessionIdAtom = atom<string | null>(null);

@@ -102,6 +102,11 @@ export const dataKeys = {
   personas: () => ['admin', 'personas'] as const,
   coursePersona: (courseId: number | null) =>
     ['admin', 'course-persona', courseId] as const,
+  /** One page of learners' Viper chats (AI Training > Sessions). */
+  viperSessions: (page: number) => ['admin', 'viper-sessions', page] as const,
+  /** One learner chat's transcript. */
+  viperSession: (chatId: string | null) =>
+    ['admin', 'viper-session', chatId] as const,
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,
   myLevel: (courseSlug: string) => ['user', 'my-level', courseSlug] as const,

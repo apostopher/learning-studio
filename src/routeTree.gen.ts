@@ -72,6 +72,7 @@ import { Route as ApiAdminOfferingsOfferingIdRouteImport } from './routes/api/ad
 import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
 import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
 import { Route as ApiAdminViperPreviewRouteImport } from './routes/api/admin/viper.preview'
+import { Route as ApiAdminViperSessionsRouteImport } from './routes/api/admin/viper.sessions'
 import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
 import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
 import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
@@ -112,6 +113,7 @@ import { Route as ApiAdminPersonasPersonaIdPublishRouteImport } from './routes/a
 import { Route as ApiAdminUsersProfileIdEnrolmentsRouteImport } from './routes/api/admin/users.$profileId.enrolments'
 import { Route as ApiAdminUsersProfileIdLevelsRouteImport } from './routes/api/admin/users.$profileId.levels'
 import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/admin/users.$profileId.roles'
+import { Route as ApiAdminViperSessionsChatIdRouteImport } from './routes/api/admin/viper.sessions.$chatId'
 import { Route as ApiTavusV1ChatCompletionsRouteImport } from './routes/api/tavus/v1/chat/completions'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
@@ -447,6 +449,11 @@ const ApiAdminViperPreviewRoute = ApiAdminViperPreviewRouteImport.update({
   path: '/api/admin/viper/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminViperSessionsRoute = ApiAdminViperSessionsRouteImport.update({
+  id: '/api/admin/viper/sessions',
+  path: '/api/admin/viper/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
   id: '/mute',
   path: '/mute',
@@ -679,6 +686,12 @@ const ApiAdminUsersProfileIdRolesRoute =
     path: '/roles',
     getParentRoute: () => ApiAdminUsersProfileIdRoute,
   } as any)
+const ApiAdminViperSessionsChatIdRoute =
+  ApiAdminViperSessionsChatIdRouteImport.update({
+    id: '/$chatId',
+    path: '/$chatId',
+    getParentRoute: () => ApiAdminViperSessionsRoute,
+  } as any)
 const ApiTavusV1ChatCompletionsRoute =
   ApiTavusV1ChatCompletionsRouteImport.update({
     id: '/api/tavus/v1/chat/completions',
@@ -784,6 +797,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
+  '/api/admin/viper/sessions': typeof ApiAdminViperSessionsRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -824,6 +838,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/admin/viper/sessions/$chatId': typeof ApiAdminViperSessionsChatIdRoute
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -893,6 +908,7 @@ export interface FileRoutesByTo {
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
+  '/api/admin/viper/sessions': typeof ApiAdminViperSessionsRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -933,6 +949,7 @@ export interface FileRoutesByTo {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/admin/viper/sessions/$chatId': typeof ApiAdminViperSessionsChatIdRoute
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -1006,6 +1023,7 @@ export interface FileRoutesById {
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
   '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
+  '/api/admin/viper/sessions': typeof ApiAdminViperSessionsRouteWithChildren
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -1046,6 +1064,7 @@ export interface FileRoutesById {
   '/api/admin/users/$profileId/enrolments': typeof ApiAdminUsersProfileIdEnrolmentsRoute
   '/api/admin/users/$profileId/levels': typeof ApiAdminUsersProfileIdLevelsRoute
   '/api/admin/users/$profileId/roles': typeof ApiAdminUsersProfileIdRolesRoute
+  '/api/admin/viper/sessions/$chatId': typeof ApiAdminViperSessionsChatIdRoute
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
@@ -1119,6 +1138,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/admin/viper/preview'
+    | '/api/admin/viper/sessions'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1159,6 +1179,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/admin/viper/sessions/$chatId'
     | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -1228,6 +1249,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/admin/viper/preview'
+    | '/api/admin/viper/sessions'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1268,6 +1290,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/admin/viper/sessions/$chatId'
     | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -1340,6 +1363,7 @@ export interface FileRouteTypes {
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
     | '/api/admin/viper/preview'
+    | '/api/admin/viper/sessions'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1380,6 +1404,7 @@ export interface FileRouteTypes {
     | '/api/admin/users/$profileId/enrolments'
     | '/api/admin/users/$profileId/levels'
     | '/api/admin/users/$profileId/roles'
+    | '/api/admin/viper/sessions/$chatId'
     | '/api/tavus/v1/chat/completions'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
@@ -1433,6 +1458,7 @@ export interface RootRouteChildren {
   ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRouteWithChildren
   ApiAdminModulesModuleIdRoute: typeof ApiAdminModulesModuleIdRouteWithChildren
   ApiAdminViperPreviewRoute: typeof ApiAdminViperPreviewRoute
+  ApiAdminViperSessionsRoute: typeof ApiAdminViperSessionsRouteWithChildren
   ApiCourseOnboardingDeleteRoute: typeof ApiCourseOnboardingDeleteRoute
   ApiCourseOnboardingReplyRoute: typeof ApiCourseOnboardingReplyRoute
   ApiCourseOnboardingStartRoute: typeof ApiCourseOnboardingStartRoute
@@ -1890,6 +1916,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminViperPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/viper/sessions': {
+      id: '/api/admin/viper/sessions'
+      path: '/api/admin/viper/sessions'
+      fullPath: '/api/admin/viper/sessions'
+      preLoaderRoute: typeof ApiAdminViperSessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/course/news/mute': {
       id: '/api/course/news/mute'
       path: '/mute'
@@ -2169,6 +2202,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/users/$profileId/roles'
       preLoaderRoute: typeof ApiAdminUsersProfileIdRolesRouteImport
       parentRoute: typeof ApiAdminUsersProfileIdRoute
+    }
+    '/api/admin/viper/sessions/$chatId': {
+      id: '/api/admin/viper/sessions/$chatId'
+      path: '/$chatId'
+      fullPath: '/api/admin/viper/sessions/$chatId'
+      preLoaderRoute: typeof ApiAdminViperSessionsChatIdRouteImport
+      parentRoute: typeof ApiAdminViperSessionsRoute
     }
     '/api/tavus/v1/chat/completions': {
       id: '/api/tavus/v1/chat/completions'
@@ -2618,6 +2658,19 @@ const ApiAdminModulesModuleIdRouteWithChildren =
     ApiAdminModulesModuleIdRouteChildren,
   )
 
+interface ApiAdminViperSessionsRouteChildren {
+  ApiAdminViperSessionsChatIdRoute: typeof ApiAdminViperSessionsChatIdRoute
+}
+
+const ApiAdminViperSessionsRouteChildren: ApiAdminViperSessionsRouteChildren = {
+  ApiAdminViperSessionsChatIdRoute: ApiAdminViperSessionsChatIdRoute,
+}
+
+const ApiAdminViperSessionsRouteWithChildren =
+  ApiAdminViperSessionsRoute._addFileChildren(
+    ApiAdminViperSessionsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
@@ -2663,6 +2716,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminLessonsLessonIdRoute: ApiAdminLessonsLessonIdRouteWithChildren,
   ApiAdminModulesModuleIdRoute: ApiAdminModulesModuleIdRouteWithChildren,
   ApiAdminViperPreviewRoute: ApiAdminViperPreviewRoute,
+  ApiAdminViperSessionsRoute: ApiAdminViperSessionsRouteWithChildren,
   ApiCourseOnboardingDeleteRoute: ApiCourseOnboardingDeleteRoute,
   ApiCourseOnboardingReplyRoute: ApiCourseOnboardingReplyRoute,
   ApiCourseOnboardingStartRoute: ApiCourseOnboardingStartRoute,

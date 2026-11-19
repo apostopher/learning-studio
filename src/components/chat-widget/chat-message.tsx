@@ -14,6 +14,9 @@ export interface ChatMessageProps {
    * provided; otherwise the var (with its own fallback) is honored as-is. */
   fontSize?: number;
   className?: string;
+  /** Who a non-assistant bubble is from. Defaults to "You": the reader's own
+   * chat. An admin reading a learner's chat names the learner instead. */
+  userLabel?: string;
 }
 
 /** `code` renders as an inline chip unless remark-gfm/rehype tagged it with a
@@ -110,6 +113,7 @@ export const ChatMessage = ({
   role = 'user',
   fontSize,
   className,
+  userLabel = 'You',
 }: ChatMessageProps) => {
   const isAssistant = role === 'assistant';
   const fontSizeStyle =
@@ -129,7 +133,7 @@ export const ChatMessage = ({
           isAssistant ? 'text-secondary' : 'text-accent-text',
         )}
       >
-        {isAssistant ? brand.ai.name : 'You'}
+        {isAssistant ? brand.ai.name : userLabel}
       </p>
       <div
         className="text-[length:var(--chat-message-font-size,0.875rem)] leading-relaxed"
