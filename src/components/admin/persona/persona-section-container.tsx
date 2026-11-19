@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtom, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -8,6 +9,7 @@ import {
   personaPaneAtom,
   resetPersonaUiAtom,
 } from '#/atoms/admin';
+import { dataKeys } from '#/data-hooks/keys';
 import {
   useCoursePersona,
   useSetCoursePersona,
@@ -109,6 +111,7 @@ export const PersonaSectionContainer = ({
   );
   const [newName, setNewName] = useAtom(newPersonaNameAtom);
   const resetPersonaUi = useSetAtom(resetPersonaUiAtom);
+  const queryClient = useQueryClient();
 
   const personas = usePersonas();
   const selection = useCoursePersona(course?.id ?? null);
@@ -241,12 +244,16 @@ export const PersonaSectionContainer = ({
       // Unmounting means the modal closed: send whatever is still pending.
       flushWithBeacon();
       clearTimers();
+      // Autosave doesn't invalidate the personas query, so its Draft flags
+      // are stale. The AI Training tab's Chat section labels "Testing draft /
+      // Testing published" from that query: mark it stale so it refetches.
+      void queryClient.invalidateQueries({ queryKey: dataKeys.personas() });
       // The atoms are shared with the other surface that hosts this section
       // (course dialog / AI Training tab). Reset AFTER the flush above so the
       // beacon sends the pending draft before the editing id is cleared.
       resetPersonaUi();
     };
-  }, [clearTimers, resetPersonaUi]);
+  }, [clearTimers, resetPersonaUi, queryClient]);
 
   const openEditor = (personaId: number) => {
     setEditingId(personaId);
@@ -317,8 +324,16 @@ export const PersonaSectionContainer = ({
           isLoading={personas.isLoading}
           loadError={
             personas.error
-              ? 'Could not load personas. Close and reopen to retry.'
+              ? course
+                ? 'Could not load personas. Close and reopen to retry.'
+                : 'Could not load personas.'
               : selectionError
+          }
+          // The dialog can be closed and reopened; the tab has no such move.
+          onRetryLoad={
+            personas.error && !course
+              ? () => void personas.refetch()
+              : undefined
           }
           courseSelection={
             course

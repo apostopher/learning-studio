@@ -81,4 +81,43 @@ describe('TrainingDocUploadCard', () => {
     }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
+
+  /**
+   * The disabled button's label IS its reason, so it must stay legible:
+   * faded text drops under WCAG AA. Same for the Source radios while busy.
+   */
+  it('keeps disabled controls legible: no opacity fade', () => {
+    render(
+      <TrainingDocUploadCard
+        {...base}
+        fileName="drone-manual.pdf"
+        source={{ value: null, onChange: vi.fn() }}
+      />,
+    );
+    const submit = screen.getByRole('button', {
+      name: 'Choose a source first',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    const faded = (el: Element) =>
+      [...el.classList].filter((c) => /(^|:)opacity-/.test(c));
+    expect(faded(submit)).toEqual([]);
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(faded(radio)).toEqual([]);
+    }
+  });
+
+  it('does not fade the form while an upload is in flight', () => {
+    const { container } = render(
+      <TrainingDocUploadCard
+        {...base}
+        fileName="drone-manual.pdf"
+        status="processing"
+        source={{ value: 'itps', onChange: vi.fn() }}
+      />,
+    );
+    const faded = [...container.querySelectorAll('*')].flatMap((el) =>
+      [...el.classList].filter((c) => /(^|:)opacity-/.test(c)),
+    );
+    expect(faded).toEqual([]);
+  });
 });

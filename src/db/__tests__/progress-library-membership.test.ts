@@ -37,6 +37,7 @@ const cap = vi.hoisted(() => {
     from: [] as unknown[],
     joins: [] as unknown[],
     joinOn: [] as unknown[],
+    joinKinds: [] as Captured['joinKinds'],
     where: [] as unknown[],
     orderBy: [] as unknown[],
     groupBy: [] as unknown[],

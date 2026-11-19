@@ -1,3 +1,4 @@
+import { Button } from '@base-ui/react/button';
 import { Loader2, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { ScrollArea } from '#/components/scroll-area';
 import type { AdminPersona } from '#/lib/admin-schemas';
@@ -22,6 +23,8 @@ interface PersonaListProps {
   personas: AdminPersona[];
   isLoading: boolean;
   loadError?: string;
+  /** Reloads after a failed load; shown as Retry beside `loadError`. */
+  onRetryLoad?: () => void;
   /**
    * Present only when the list is shown for one course (the course dialog).
    * Absent in the AI Training tab, where personas are managed org-wide: no
@@ -58,6 +61,7 @@ export const PersonaList = ({
   personas,
   isLoading,
   loadError,
+  onRetryLoad,
   courseSelection,
   onOpenEditor,
   onToggleOrgDefault,
@@ -103,8 +107,19 @@ export const PersonaList = ({
         )}
 
         {loadError && (
-          <p className="rounded-lg border border-error-muted bg-error-subtle px-3 py-2 text-error-text text-sm">
+          <p
+            role="alert"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-error-muted bg-error-subtle px-3 py-2 text-error-text text-sm"
+          >
             {loadError}
+            {onRetryLoad ? (
+              <Button
+                onClick={onRetryLoad}
+                className="rounded font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+              >
+                Retry
+              </Button>
+            ) : null}
           </p>
         )}
 

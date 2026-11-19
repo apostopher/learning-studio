@@ -76,6 +76,16 @@ const PERSONAS = [
     usedByCourses: [],
     updatedAt: '2026-11-19T00:00:00Z',
   },
+  {
+    id: 4,
+    name: 'Hornet',
+    content: CONTENT,
+    draftContent: null,
+    isPublished: true,
+    isOrgDefault: false,
+    usedByCourses: [],
+    updatedAt: '2026-11-19T00:00:00Z',
+  },
 ];
 
 const fetchMock = vi.fn();
@@ -157,6 +167,20 @@ describe('PreviewChatContainer', () => {
 
     await pickLesson('Go-arounds');
     await waitFor(() => expect(chat.setMessages).toHaveBeenCalledWith([]));
+  });
+
+  it('clears the conversation when the persona changes', async () => {
+    renderSection();
+    await screen.findByText('Testing draft');
+    expect(chat.setMessages).not.toHaveBeenCalled();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: 'Persona' }));
+    await user.click(await screen.findByRole('option', { name: 'Hornet' }));
+
+    await waitFor(() => expect(chat.setMessages).toHaveBeenCalledWith([]));
+    // The new persona is the one under test now: published, not a draft.
+    await screen.findByText('Testing published');
   });
 
   it('sends the picked lesson and the default persona with each message', async () => {

@@ -130,7 +130,12 @@ const Body = ({ courseId }: { courseId: number }) => {
         error={fileError}
       />
       <TrainingDocsList
-        docs={embeddings.data ?? []}
+        // Source dropped on purpose: a course's docs all belong to it, so the
+        // training-set chip is the AI Training tab's alone.
+        docs={(embeddings.data ?? []).map(({ sourcePath, count }) => ({
+          sourcePath,
+          count,
+        }))}
         search={search}
         onSearchChange={setSearch}
         onDelete={(sourcePath) => deleteEmbedding.mutate({ sourcePath })}

@@ -185,6 +185,17 @@ embedding progress (already in `deriveUploadStatus`).
 
 ## Rollout
 
-1. User runs the `ALTER TABLE` on prod (or says go).
-2. Merge and deploy. Order matters: the new code writes `source`, so deploying
-   before the column exists would break uploads.
+1. User runs `pnpm db:migrate-doc-source` on prod (or says go).
+2. Merge and deploy.
+
+The order must be migrate → deploy. Drizzle names every column in the schema
+in its INSERTs, and the schema now has `docs.source`. So deploying first, or
+running this branch locally against prod (`.env.local` points at prod), before
+the column exists breaks three things:
+
+- **Uploads.** The `docs` INSERT fails.
+- **`GET /api/ai-rag`.** It selects `source`, so it returns 500 and the
+  document lists fail to load.
+- **The lesson re-embed after a lesson-material save.** This one is silent.
+  It runs in `waitUntil`, the error is only logged, and the lesson keeps its
+  old chunks, so Viper answers from stale material with no visible failure.

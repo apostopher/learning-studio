@@ -1,6 +1,8 @@
+import { Button } from '@base-ui/react/button';
 import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { Search } from 'lucide-react';
+import { cn } from '#/lib/cn';
 import {
   DOC_SOURCE_LABELS,
   type DocSource,
@@ -34,7 +36,16 @@ interface TrainingDocsListProps {
   onDelete: (sourcePath: string) => void;
   deletingSourcePath: string | null;
   isLoading: boolean;
+  /** The last load's failure, as a sentence. Replaces the empty state. */
+  error?: string | null;
+  /** Reloads after a failure; shown as Retry beside `error`. */
+  onRetry?: () => void;
+  /** What to say when there are no documents at all. */
+  emptyMessage?: string;
 }
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9';
 
 /** "Training Documents" card: count, search, rows, empty/loading states. */
 export const TrainingDocsList = ({
@@ -45,6 +56,9 @@ export const TrainingDocsList = ({
   onDelete,
   deletingSourcePath,
   isLoading,
+  error = null,
+  onRetry,
+  emptyMessage = 'No training documents yet.',
 }: TrainingDocsListProps) => {
   const term = search.trim().toLowerCase();
   const source = sourceFilter?.value ?? 'all';
@@ -107,12 +121,33 @@ export const TrainingDocsList = ({
       </div>
 
       <div className="mbs-4 flex flex-col gap-2">
+        {error ? (
+          <p
+            role="alert"
+            className="flex flex-wrap items-center gap-2 rounded-lg bg-error-3 px-3 py-2 text-error-text text-sm"
+          >
+            {error}
+            {onRetry ? (
+              <Button
+                onClick={onRetry}
+                className={cn(
+                  'rounded font-medium underline underline-offset-2',
+                  focusRing,
+                )}
+              >
+                Retry
+              </Button>
+            ) : null}
+          </p>
+        ) : null}
         {isLoading ? (
           <p className="py-8 text-center text-tertiary text-sm">Loading…</p>
         ) : docs.length === 0 ? (
-          <p className="py-8 text-center text-tertiary text-sm">
-            No training documents yet.
-          </p>
+          error ? null : (
+            <p className="py-8 text-center text-tertiary text-sm">
+              {emptyMessage}
+            </p>
+          )
         ) : filtered.length === 0 ? (
           <p className="py-8 text-center text-tertiary text-sm">{noMatch}</p>
         ) : (

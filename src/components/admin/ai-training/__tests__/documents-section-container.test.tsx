@@ -17,11 +17,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // the POST body.
 const blob = vi.hoisted(() => ({ upload: vi.fn() }));
 vi.mock('@vercel/blob/client', () => ({ upload: blob.upload }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 import { DocumentsSectionContainer } from '../documents-section-container';
 
 const fetchMock = vi.fn();
+
+const SHARED_DOCS = [
+  { sourcePath: 'file-wx.pdf', count: 2, source: 'itps' },
+  { sourcePath: 'file-nav.docx', count: 5, source: '3d-airmanship' },
+];
 
 function renderSection() {
   const client = new QueryClient({
@@ -65,7 +71,8 @@ beforeEach(() => {
         }),
       };
     }
-    return { ok: true, json: async () => ({ docsBySource: [] }) };
+    if (init?.method === 'DELETE') return { ok: true, json: async () => ({}) };
+    return { ok: true, json: async () => ({ docsBySource: SHARED_DOCS }) };
   });
   vi.stubGlobal('fetch', fetchMock);
   blob.upload.mockResolvedValue({
@@ -77,13 +84,90 @@ afterEach(() => {
   cleanup();
   fetchMock.mockReset();
   blob.upload.mockReset();
+  toast.success.mockReset();
+  toast.error.mockReset();
   vi.unstubAllGlobals();
 });
 
 describe('DocumentsSectionContainer', () => {
+  /** The shared docs reach the list: every row the GET returned is drawn. */
   it('lists the shared docs, not one course', async () => {
     renderSection();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/ai-rag'));
+    await screen.findByText('file-wx.pdf');
+    expect(screen.queryByText('file-nav.docx')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith('/api/ai-rag');
+  });
+
+  /**
+   * A failed load is not "no documents". Mutant this catches: the container
+   * dropping the query's error, so the list says "No training documents yet."
+   * over a failure and offers no way to retry.
+   */
+  it('shows a failed load as an error with Retry, not as empty', async () => {
+    let failing = true;
+    fetchMock.mockImplementation(async () =>
+      failing
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, json: async () => ({ docsBySource: SHARED_DOCS }) },
+    );
+    renderSection();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/couldn't load training documents/i);
+    expect(screen.queryByText(/no training documents yet/i)).toBeNull();
+
+    failing = false;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    await screen.findByText('file-wx.pdf');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  /** Says what to do when there are none (this tab's copy, not the dialog's). */
+  it('says how to add the first document when there are none', async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ docsBySource: [] }),
+    }));
+    renderSection();
+    await screen.findByText(
+      'No training documents yet. Upload a PDF or Word file above.',
+    );
+  });
+
+  /** Shared docs are deleted with no course in the body. */
+  it('deletes a shared doc with no courseId', async () => {
+    renderSection();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete file-wx.pdf' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    const deletes = () =>
+      fetchMock.mock.calls
+        .filter(
+          ([, init]) => (init as RequestInit | undefined)?.method === 'DELETE',
+        )
+        .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    expect(deletes()[0]).toEqual({ sourcePath: 'file-wx.pdf' });
+    expect('courseId' in deletes()[0]).toBe(false);
+  });
+
+  /** A failed delete is reported, not swallowed. */
+  it('toasts when a delete fails', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, json: async () => ({ docsBySource: SHARED_DOCS }) },
+    );
+    renderSection();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete file-wx.pdf' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error.mock.calls[0][0]).toMatch(/file-wx\.pdf/);
   });
 
   /**

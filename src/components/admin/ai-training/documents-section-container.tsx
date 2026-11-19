@@ -91,13 +91,24 @@ export const DocumentsSectionContainer = () => {
         search={search}
         onSearchChange={setSearch}
         sourceFilter={{ value: sourceFilter, onChange: setSourceFilter }}
-        onDelete={(sourcePath) => deleteEmbedding.mutate({ sourcePath })}
+        onDelete={(sourcePath) =>
+          deleteEmbedding.mutate(
+            { sourcePath },
+            {
+              onError: () =>
+                toast.error(`Couldn't delete ${sourcePath}. Please try again.`),
+            },
+          )
+        }
         deletingSourcePath={
           deleteEmbedding.isPending
             ? (deleteEmbedding.variables?.sourcePath ?? null)
             : null
         }
         isLoading={embeddings.isLoading}
+        error={embeddings.isError ? "Couldn't load training documents." : null}
+        onRetry={() => void embeddings.refetch()}
+        emptyMessage="No training documents yet. Upload a PDF or Word file above."
       />
     </div>
   );

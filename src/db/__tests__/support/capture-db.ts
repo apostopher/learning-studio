@@ -14,16 +14,21 @@
  *
  * `joins` holds the joined TABLE (by identity); `joinOn` holds the matching
  * ON condition at the same index, so a test can render it (`render-sql.ts`)
- * and pin the pairing, not just the table. `groupBy` holds the columns
+ * and pin the pairing, not just the table. `joinKinds` holds `'inner'` or
+ * `'left'` at that same index, so a test can pin a left join that must keep
+ * rows with no match (an `innerJoin` would silently drop them). `groupBy` holds the columns
  * handed to `.groupBy()`, flattened in call order, so a grouped query that
  * orders by a column it forgot to group by (a Postgres runtime error no
  * join/where/order assertion can see) is pinnable too.
  */
+export type JoinKind = 'inner' | 'left';
+
 export type Captured = {
   select: unknown[];
   from: unknown[];
   joins: unknown[];
   joinOn: unknown[];
+  joinKinds: JoinKind[];
   where: unknown[];
   orderBy: unknown[];
   groupBy: unknown[];
@@ -49,6 +54,7 @@ export function captureDb(initialResults: unknown[][] = []) {
     from: [],
     joins: [],
     joinOn: [],
+    joinKinds: [],
     where: [],
     orderBy: [],
     groupBy: [],
@@ -65,6 +71,7 @@ export function captureDb(initialResults: unknown[][] = []) {
       if (name === 'innerJoin' || name === 'leftJoin') {
         captured.joins.push(args[0]);
         captured.joinOn.push(args[1]);
+        captured.joinKinds.push(name === 'innerJoin' ? 'inner' : 'left');
       }
       if (name === 'where') captured.where.push(args[0]);
       if (name === 'orderBy') captured.orderBy.push(...args);

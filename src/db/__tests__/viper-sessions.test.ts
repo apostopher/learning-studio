@@ -3,7 +3,7 @@ import { asc, desc, type SQL } from 'drizzle-orm';
 import { QueryBuilder } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql } from '#/db/__tests__/render-sql';
-import type { Captured } from './support/capture-db';
+import type { Captured, JoinKind } from './support/capture-db';
 
 const cap = vi.hoisted(() => {
   const captured = {
@@ -11,6 +11,7 @@ const cap = vi.hoisted(() => {
     from: [] as unknown[],
     joins: [] as unknown[],
     joinOn: [] as unknown[],
+    joinKinds: [] as JoinKind[],
     where: [] as unknown[],
     orderBy: [] as unknown[],
     groupBy: [] as unknown[],
@@ -95,6 +96,17 @@ describe('listViperSessions', () => {
     expect(renderSql(cap.captured.joinOn[0] as SQL)).toBe(
       '"user_profiles"."user_id" = "ai_chats"."user_id"',
     );
+  });
+
+  /**
+   * A learner with no profile row still has chats. An inner join would drop
+   * those sessions from the list without a trace; the left join keeps them,
+   * shown as an unnamed learner.
+   */
+  it('keeps chats whose learner has no profile: a LEFT join', async () => {
+    await listViperSessions(0);
+    expect(cap.captured.joins[0]).toBe(userProfileTable);
+    expect(cap.captured.joinKinds[0]).toBe('left');
   });
 
   it('pages 50 at a time and reports hasMore', async () => {

@@ -74,7 +74,7 @@ export const TrainingDocUploadCard = ({
       </span>
       <label
         className={`mbs-2 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-gray-6 border-dashed px-6 py-12 text-center transition-colors hover:border-gray-8 focus-within:ring-2 focus-within:ring-apple-9 ${
-          busy ? 'pointer-events-none opacity-60' : ''
+          busy ? 'pointer-events-none bg-gray-2' : ''
         }`}
       >
         <input
@@ -109,7 +109,7 @@ export const TrainingDocUploadCard = ({
         onChange={(e) => onDocNameChange(e.target.value)}
         placeholder="Enter a name for this document"
         disabled={busy}
-        className="mbs-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+        className="mbs-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:bg-gray-2 disabled:text-secondary"
       />
       <p className="mbs-1 text-tertiary text-xs">
         Optional — defaults to the file name. Identifies the document in the
@@ -137,7 +137,7 @@ export const TrainingDocUploadCard = ({
               <Radio.Root
                 key={value}
                 value={value}
-                className="cursor-pointer rounded-lg border border-gray-6 bg-gray-1 px-4 py-2 font-medium text-primary text-sm transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 data-[checked]:border-apple-9 data-[checked]:bg-apple-9 data-[checked]:text-apple-contrast data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60"
+                className="cursor-pointer rounded-lg border border-gray-6 bg-gray-1 px-4 py-2 font-medium text-primary text-sm transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 data-[checked]:border-apple-9 data-[checked]:bg-apple-9 data-[checked]:text-apple-contrast data-[disabled]:cursor-not-allowed"
               >
                 {DOC_SOURCE_LABELS[value]}
               </Radio.Root>
@@ -156,7 +156,7 @@ export const TrainingDocUploadCard = ({
           type="button"
           onClick={onSubmit}
           disabled={!fileName || busy || needsSource}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-3 px-4 py-2 font-medium text-primary transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-3 px-4 py-2 font-medium text-primary transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:bg-gray-2 disabled:text-secondary disabled:hover:bg-gray-2"
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
           {label}
