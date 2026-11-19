@@ -35,6 +35,7 @@ const ALL = visibleAdminSections({
   courses: true,
   schedule: true,
   people: true,
+  'ai-training': true,
 });
 
 const sectionsOf = (...ids: AdminSectionId[]) =>
@@ -139,7 +140,7 @@ describe('AdminShellLayout', () => {
    * `admin-sections.test.ts` pins the order itself. This is the test that goes
    * red if the layout sorts, groups or reverses them on the way out.
    */
-  it('reads knowledge library, courses, schedule, people — in that order', async () => {
+  it('reads knowledge library, courses, schedule, people, AI training — in that order', async () => {
     await renderAdmin();
 
     expect(navLinks().map((a) => a.textContent?.trim())).toEqual([
@@ -147,6 +148,7 @@ describe('AdminShellLayout', () => {
       'Courses',
       'Schedule',
       'People',
+      'AI Training',
     ]);
   });
 
@@ -168,6 +170,7 @@ describe('AdminShellLayout', () => {
       '/admin?section=courses',
       '/admin?section=schedule',
       '/admin?section=people',
+      '/admin?section=ai-training',
     ]);
   });
 
@@ -181,7 +184,7 @@ describe('AdminShellLayout', () => {
   it('renders sections as links, not buttons', async () => {
     await renderAdmin();
 
-    expect(navLinks()).toHaveLength(4);
+    expect(navLinks()).toHaveLength(5);
     expect(screen.queryByRole('button', { name: 'Schedule' })).toBeNull();
   });
 

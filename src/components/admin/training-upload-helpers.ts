@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { UploadStatus } from './training-doc-upload-card';
 
 const PDF_MIME = 'application/pdf';
@@ -30,3 +31,21 @@ export function deriveUploadStatus(
   if (addPending) return 'processing';
   return 'idle';
 }
+
+/**
+ * The upload form: an optional display name and a PDF or Word file. Shared by
+ * the course dialog and the AI Training tab, which upload the same way.
+ */
+export const trainingUploadSchema = z.object({
+  docName: z.string().optional(),
+  file: z
+    .instanceof(File, { message: 'Choose a PDF or Word document' })
+    .refine(
+      (f) =>
+        f.type === PDF_MIME ||
+        f.type === DOCX_MIME ||
+        /\.(pdf|docx)$/i.test(f.name),
+      'Only PDF or Word (.docx) files are supported',
+    ),
+});
+export type TrainingUploadForm = z.infer<typeof trainingUploadSchema>;

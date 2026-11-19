@@ -15,6 +15,7 @@ import { cn } from '#/lib/cn';
  */
 export type ChipTone =
   | 'muted'
+  | 'neutral'
   | 'solid-warning'
   | 'solid-success'
   | 'solid-accent'
@@ -25,6 +26,11 @@ export type ChipTone =
 const TONE_CLASSES: Record<ChipTone, string> = {
   /** An unset or off state. Reads as present-but-inactive, not disabled. */
   muted: 'bg-gray-4 text-tertiary',
+  /**
+   * A plain label — a category, not a state (e.g. a document's training set).
+   * Present and fully legible, with no status colour to read into it.
+   */
+  neutral: 'bg-gray-3 text-secondary',
   /** A set state that wants to be noticed at a glance. */
   'solid-warning': 'bg-warning-9 text-warning-contrast',
   'solid-success': 'bg-success-9 text-success-contrast',

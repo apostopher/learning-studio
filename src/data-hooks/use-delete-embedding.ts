@@ -1,15 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dataKeys } from './keys';
 
-/** Delete all embeddings (and blob) for one source in a course, then refetch. */
-export function useDeleteEmbedding(courseId: number) {
+/**
+ * Delete all embeddings (and blob) for one source in a course — or, with
+ * `null`, among the shared docs (no `courseId` in the body) — then refetch.
+ */
+export function useDeleteEmbedding(courseId: number | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ sourcePath }: { sourcePath: string }) => {
       const res = await fetch('/api/ai-rag', {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ courseId, sourcePath }),
+        body: JSON.stringify(
+          courseId === null ? { sourcePath } : { courseId, sourcePath },
+        ),
       });
       if (!res.ok) throw new Error(`Failed to delete (${res.status})`);
     },

@@ -28,6 +28,9 @@ vi.mock('#/components/admin/schedule/schedule-page-container', () => ({
 vi.mock('#/components/admin/courses-section-container', () => ({
   CoursesSectionContainer: () => <div data-testid="courses" />,
 }));
+vi.mock('#/components/admin/ai-training/ai-training-page-container', () => ({
+  AiTrainingPageContainer: () => <div data-testid="ai-training" />,
+}));
 vi.mock('#/components/admin/users/users-page-container', () => ({
   UsersPageContainer: (props: Record<string, unknown>) => {
     m.users(props);
@@ -179,6 +182,13 @@ describe('/admin — which section renders', () => {
     await mountSection('courses');
 
     expect(await screen.findByTestId('courses')).toBeDefined();
+    expect(screen.queryByTestId('org-editor')).toBeNull();
+  });
+
+  it('renders AI Training at ?section=ai-training', async () => {
+    await mountSection('ai-training');
+
+    expect(await screen.findByTestId('ai-training')).toBeDefined();
     expect(screen.queryByTestId('org-editor')).toBeNull();
   });
 
@@ -490,6 +500,21 @@ describe('/admin — entering a section by URL', () => {
     expect(
       enter('people', { isStaffAnywhere: true, isCourseStaffAnywhere: true }),
     ).toBe('/admin?section=knowledge-library');
+  });
+
+  /**
+   * Every request behind the tab goes through `requireAdmin`, so course staff
+   * typing the URL would land on a screen of 403s.
+   */
+  it('sends a non-admin typing ?section=ai-training to the default', () => {
+    expect(
+      enter('ai-training', {
+        isStaffAnywhere: true,
+        isCourseStaffAnywhere: true,
+        permissions: ['course:read', 'user:read'],
+      }),
+    ).toBe('/admin?section=knowledge-library');
+    expect(enter('ai-training', { roles: ['admin'] })).toBe('allowed');
   });
 
   it('admits course staff to the schedule', () => {

@@ -19,6 +19,7 @@ export const ADMIN_SECTION_IDS = [
   'courses',
   'schedule',
   'people',
+  'ai-training',
 ] as const;
 
 export type AdminSectionId = (typeof ADMIN_SECTION_IDS)[number];
@@ -37,6 +38,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
   courses: 'Courses',
   schedule: 'Schedule',
   people: 'People',
+  'ai-training': 'AI Training',
 };
 
 /**
@@ -133,6 +135,10 @@ export function adminSectionGates(
     // could tick `user:read` for a non-admin role and hand that person a
     // screen whose every request 403s.
     people: hasOrgPermission(roles, permissions, 'user', 'read'),
+    // Every endpoint behind it (`/api/ai-rag` and the rest) guards on
+    // `requireAdmin`, so the tab is admin/owner and nothing about staffing —
+    // course staff offered it would get a screen of 403s.
+    'ai-training': hasAdminAccess(roles),
   };
 }
 

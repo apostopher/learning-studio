@@ -1,4 +1,11 @@
+import { Radio } from '@base-ui/react/radio';
+import { RadioGroup } from '@base-ui/react/radio-group';
 import { Upload } from 'lucide-react';
+import {
+  DOC_SOURCE_LABELS,
+  type DocSource,
+  DocSourceSchema,
+} from '#/lib/doc-source';
 
 export type UploadStatus = 'idle' | 'uploading' | 'processing';
 
@@ -10,6 +17,15 @@ interface TrainingDocUploadCardProps {
   onSubmit: () => void;
   status: UploadStatus;
   error: string | null;
+  /**
+   * When given, a required "Source" choice (ITPS / 3D Airmanship) with nothing
+   * picked by default: the shared training docs have no course to imply one,
+   * so the admin must say which set a document belongs to before it uploads.
+   */
+  source?: {
+    value: DocSource | null;
+    onChange: (value: DocSource) => void;
+  };
 }
 
 const STATUS_LABEL: Record<UploadStatus, string> = {
@@ -31,8 +47,12 @@ export const TrainingDocUploadCard = ({
   onSubmit,
   status,
   error,
+  source,
 }: TrainingDocUploadCardProps) => {
   const busy = status !== 'idle';
+  // A missing source blocks the upload, and the button says so in its own
+  // visible label — which is its accessible name too.
+  const needsSource = source !== undefined && source.value === null;
 
   return (
     <section className="rounded-xl border border-gray-6 bg-gray-2 p-6">
@@ -85,17 +105,52 @@ export const TrainingDocUploadCard = ({
         system.
       </p>
 
+      {source ? (
+        <div className="mt-6">
+          <span
+            id="training-doc-source-label"
+            className="block text-secondary text-sm"
+          >
+            Source
+          </span>
+          <RadioGroup
+            aria-labelledby="training-doc-source-label"
+            aria-required="true"
+            required
+            disabled={busy}
+            value={source.value}
+            onValueChange={(next) => source.onChange(next as DocSource)}
+            className="mt-2 flex flex-wrap gap-2"
+          >
+            {DocSourceSchema.options.map((value) => (
+              <Radio.Root
+                key={value}
+                value={value}
+                className="cursor-pointer rounded-lg border border-gray-6 bg-gray-1 px-4 py-2 font-medium text-primary text-sm transition-colors hover:border-gray-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 data-[checked]:border-apple-9 data-[checked]:bg-apple-9 data-[checked]:text-apple-contrast data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60"
+              >
+                {DOC_SOURCE_LABELS[value]}
+              </Radio.Root>
+            ))}
+          </RadioGroup>
+          <p className="mt-1 text-tertiary text-xs">
+            Which training set this document belongs to.
+          </p>
+        </div>
+      ) : null}
+
       {error ? <p className="mt-3 text-error-text text-sm">{error}</p> : null}
 
       <div className="mt-6 flex justify-end">
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!fileName || busy}
+          disabled={!fileName || busy || needsSource}
           className="inline-flex items-center gap-2 rounded-lg bg-gray-3 px-4 py-2 font-medium text-primary transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
-          {STATUS_LABEL[status]}
+          {needsSource && !busy
+            ? 'Choose a source first'
+            : STATUS_LABEL[status]}
         </button>
       </div>
     </section>

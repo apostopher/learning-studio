@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai-family';
 import type { ProviderId } from '#/lib/admin-schemas';
+import type { DocSource } from '#/lib/doc-source';
 import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
 import type { UserLevel } from '#/types';
 
@@ -355,6 +356,23 @@ export const trainCourseAtom = atom<{ id: number; name: string } | null>(null);
 
 /** Client-side search filter for the training-documents list. Reset on close. */
 export const embeddingsSearchAtom = atom('');
+
+/**
+ * The AI Training tab's Documents search. Its own atom, not
+ * `embeddingsSearchAtom`: the course dialog clears that one on close, and a
+ * term typed in one place should not filter the other.
+ */
+export const aiTrainingSearchAtom = atom('');
+
+/** Which training set the AI Training documents list shows. */
+export const aiTrainingSourceFilterAtom = atom<DocSource | 'all'>('all');
+
+/**
+ * The source the next AI Training upload is filed under. Starts `null` — no
+ * default — so every upload is a deliberate choice; it is kept after an upload
+ * because admins tend to add several documents to the same set.
+ */
+export const aiTrainingUploadSourceAtom = atom<DocSource | null>(null);
 
 /**
  * The staff dialog's state, keyed by course id.

@@ -119,6 +119,7 @@ describe('/admin shell nav', () => {
       'knowledge-library',
       'schedule',
       'people',
+      'ai-training',
     ]);
     // The labels travel with the ids — a section offered without one would
     // render a blank link.

@@ -19,12 +19,19 @@ export type CourseEmbeddingDoc = {
   source: DocSource;
 };
 
-/** Docs (grouped by source, with embedding counts) for one course. */
-export function useCourseEmbeddings(courseId: number) {
+/**
+ * Docs (grouped by source, with embedding counts) for one course — or, with
+ * `null`, the shared docs that belong to no course (the AI Training tab).
+ * Null sends no `courseId` param at all: the server reads an absent one as
+ * "no course".
+ */
+export function useCourseEmbeddings(courseId: number | null) {
   return useQuery({
     queryKey: dataKeys.courseEmbeddings(courseId),
     queryFn: async (): Promise<CourseEmbeddingDoc[]> => {
-      const res = await fetch(`/api/ai-rag?courseId=${courseId}`);
+      const res = await fetch(
+        courseId === null ? '/api/ai-rag' : `/api/ai-rag?courseId=${courseId}`,
+      );
       if (!res.ok) {
         throw new Error(`Failed to load training docs (${res.status})`);
       }

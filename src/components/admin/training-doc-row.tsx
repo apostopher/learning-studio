@@ -1,9 +1,13 @@
 import { Popover } from '@base-ui/react/popover';
 import { FileText, Loader2, Trash2 } from 'lucide-react';
+import { Chip } from '#/components/ui/chip';
+import { DOC_SOURCE_LABELS, type DocSource } from '#/lib/doc-source';
 
 interface TrainingDocRowProps {
   sourcePath: string;
   count: number;
+  /** Which training set the doc belongs to; drawn as a chip when given. */
+  source?: DocSource;
   onDelete: () => void;
   isDeleting: boolean;
 }
@@ -16,6 +20,7 @@ interface TrainingDocRowProps {
 export const TrainingDocRow = ({
   sourcePath,
   count,
+  source,
   onDelete,
   isDeleting,
 }: TrainingDocRowProps) => (
@@ -25,6 +30,7 @@ export const TrainingDocRow = ({
       <p className="truncate font-medium text-primary">{sourcePath}</p>
       <p className="text-tertiary text-sm">{count} embeddings</p>
     </div>
+    {source ? <Chip tone="neutral">{DOC_SOURCE_LABELS[source]}</Chip> : null}
 
     <Popover.Root>
       <Popover.Trigger

@@ -22,12 +22,13 @@ describe('admin section order and default', () => {
    * lives. Pinned as a whole rather than "schedule comes after people", so
    * inserting a section in the wrong slot is what goes red.
    */
-  it('reads knowledge library, courses, schedule, people', () => {
+  it('reads knowledge library, courses, schedule, people, AI training', () => {
     expect(ADMIN_SECTION_IDS).toEqual([
       'knowledge-library',
       'courses',
       'schedule',
       'people',
+      'ai-training',
     ]);
   });
 
@@ -175,6 +176,7 @@ describe('adminSectionGates', () => {
       false,
       false,
       false,
+      false,
     ]);
   });
 });
@@ -195,6 +197,29 @@ describe('visibleAdminSections', () => {
       'Knowledge library',
       'Schedule',
     ]);
+  });
+
+  /**
+   * AI Training talks to `/api/ai-rag`, whose `guard` is `requireAdmin` — so
+   * the tab follows `hasAdminAccess(roles)` and nothing about staffing.
+   *
+   * Mutant this catches: the gate built from `isStaffAnywhere` (the library's
+   * condition, copied), which would hand course staff a screen whose every
+   * request 403s.
+   */
+  it('offers AI Training to admins only, last in the nav', () => {
+    for (const roles of [['admin'], ['owner']]) {
+      const sections = visibleAdminSections(context({ roles }));
+      expect(sections.at(-1), roles.join()).toEqual({
+        id: 'ai-training',
+        label: 'AI Training',
+      });
+    }
+
+    const staffOnly = visibleAdminSections(
+      context({ isStaffAnywhere: true, isCourseStaffAnywhere: true }),
+    );
+    expect(staffOnly.map((s) => s.id)).not.toContain('ai-training');
   });
 
   it('offers nothing to an actor with no section', () => {

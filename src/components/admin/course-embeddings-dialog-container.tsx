@@ -2,7 +2,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom, useSetAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
 import {
   editingPersonaIdAtom,
@@ -24,24 +23,12 @@ import {
 } from './sectioned-config-modal';
 import { TrainingDocUploadCard } from './training-doc-upload-card';
 import { TrainingDocsList } from './training-docs-list';
-import { deriveUploadStatus, resolveDocName } from './training-upload-helpers';
-
-const DOCX =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-const uploadSchema = z.object({
-  docName: z.string().optional(),
-  file: z
-    .instanceof(File, { message: 'Choose a PDF or Word document' })
-    .refine(
-      (f) =>
-        f.type === 'application/pdf' ||
-        f.type === DOCX ||
-        /\.(pdf|docx)$/i.test(f.name),
-      'Only PDF or Word (.docx) files are supported',
-    ),
-});
-type UploadForm = z.infer<typeof uploadSchema>;
+import {
+  deriveUploadStatus,
+  resolveDocName,
+  type TrainingUploadForm,
+  trainingUploadSchema,
+} from './training-upload-helpers';
 
 /**
  * Container: AI-training modal for a course.
@@ -110,8 +97,8 @@ const Body = ({ courseId }: { courseId: number }) => {
   const addEmbeddings = useAddEmbeddings(courseId);
   const deleteEmbedding = useDeleteEmbedding(courseId);
 
-  const form = useForm<UploadForm>({
-    resolver: zodResolver(uploadSchema),
+  const form = useForm<TrainingUploadForm>({
+    resolver: zodResolver(trainingUploadSchema),
     mode: 'onSubmit',
     defaultValues: { docName: '' },
   });

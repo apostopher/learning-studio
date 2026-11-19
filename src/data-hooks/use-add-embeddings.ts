@@ -9,8 +9,11 @@ export interface AddEmbeddingsInput {
   source: DocSource;
 }
 
-/** Ingest an uploaded doc into course-scoped embeddings, then refetch the list. */
-export function useAddEmbeddings(courseId: number) {
+/**
+ * Ingest an uploaded doc into embeddings, then refetch the list. `null` files
+ * it as a shared doc: the body then carries no `courseId` field at all.
+ */
+export function useAddEmbeddings(courseId: number | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (
@@ -19,7 +22,11 @@ export function useAddEmbeddings(courseId: number) {
       const res = await fetch('/api/ai-rag', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode: 'file', courseId, ...input }),
+        body: JSON.stringify({
+          mode: 'file',
+          ...(courseId === null ? {} : { courseId }),
+          ...input,
+        }),
       });
       if (!res.ok) throw new Error(`Failed to add embeddings (${res.status})`);
       const data = await res.json();

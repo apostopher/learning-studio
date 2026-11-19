@@ -79,7 +79,8 @@ export const dataKeys = {
     ['admin', 'lesson-alternate-videos', lessonId] as const,
   lessonMaterial: (lessonId: number) =>
     ['admin', 'lesson-material', lessonId] as const,
-  courseEmbeddings: (courseId: number) =>
+  /** `null` is the shared (no-course) training documents. */
+  courseEmbeddings: (courseId: number | null) =>
     ['admin', 'course-embeddings', courseId] as const,
   courseOnboarding: (courseId: number) =>
     ['admin', 'course-onboarding', courseId] as const,

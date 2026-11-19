@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
+import { AiTrainingPageContainer } from '#/components/admin/ai-training/ai-training-page-container';
 import { CoursesSectionContainer } from '#/components/admin/courses-section-container';
 import { EditorContainer } from '#/components/admin/editor-container';
 import { SchedulePageContainer } from '#/components/admin/schedule/schedule-page-container';
@@ -157,6 +158,12 @@ function AdminSectionScreen() {
 
   if (section === 'people') {
     return <UsersPageContainer roles={roles} permissions={permissions} />;
+  }
+
+  if (section === 'ai-training') {
+    // Admin-only throughout (`beforeLoad` gated entry on `hasAdminAccess`),
+    // so there are no capability flags to thread.
+    return <AiTrainingPageContainer />;
   }
 
   /**
