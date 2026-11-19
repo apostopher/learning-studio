@@ -16,11 +16,15 @@
  * state of the lesson, not a property of whether a debrief exists, and each
  * surface applies it alongside.
  *
+ * The admin's debrief switch (`lessons.has_debrief`) is deliberately not part
+ * of it either: the switch decides whether the debrief is REQUIRED (counts
+ * toward the ring and the course, shows the D badge), not whether it exists.
+ * Switched off, the debrief is still offered, as an optional one (user,
+ * 2026-11-19).
+ *
  * Client-safe: no server imports.
  */
 export type DebriefOfferArgs = {
-  /** `lessons.has_debrief` — the admin's switch, authoritative as everywhere else. */
-  hasDebrief: boolean;
   /** The material row's body text; null/undefined when there is no row (or it is not loaded). */
   materialText: string | null | undefined;
   /** The video has a caption track to transcribe — see `playbackHasCaptions`. */
@@ -28,9 +32,8 @@ export type DebriefOfferArgs = {
 };
 
 export function canOfferDebrief({
-  hasDebrief,
   materialText,
   transcriptUsable,
 }: DebriefOfferArgs): boolean {
-  return hasDebrief && (Boolean(materialText) || transcriptUsable);
+  return Boolean(materialText) || transcriptUsable;
 }

@@ -11,14 +11,12 @@ describe('canOfferDebrief', () => {
   it('mirrors resolveDebriefSource: material text first, then a usable transcript', () => {
     expect(
       canOfferDebrief({
-        hasDebrief: true,
         materialText: 'body',
         transcriptUsable: false,
       }),
     ).toBe(true);
     expect(
       canOfferDebrief({
-        hasDebrief: true,
         materialText: null,
         transcriptUsable: true,
       }),
@@ -27,26 +25,14 @@ describe('canOfferDebrief', () => {
     // the generator's `if (material?.text)` does.
     expect(
       canOfferDebrief({
-        hasDebrief: true,
         materialText: '',
         transcriptUsable: true,
       }),
     ).toBe(true);
     expect(
       canOfferDebrief({
-        hasDebrief: true,
         materialText: '',
         transcriptUsable: false,
-      }),
-    ).toBe(false);
-  });
-
-  it('is always false when the admin switch is off', () => {
-    expect(
-      canOfferDebrief({
-        hasDebrief: false,
-        materialText: 'body',
-        transcriptUsable: true,
       }),
     ).toBe(false);
   });
@@ -62,7 +48,7 @@ describe('canOfferDebrief', () => {
  * Each assertion reads what the consumer itself returned from raw inputs; none
  * is handed a precomputed answer.
  */
-describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
+describe('debrief surfaces agree (not read-only)', () => {
   const combos = [
     { materialText: 'body', transcriptUsable: true, expected: true },
     { materialText: 'body', transcriptUsable: false, expected: true },
@@ -78,7 +64,6 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
     expected,
   }) => {
     const debrief = {
-      hasDebrief: true,
       materialText,
       transcriptUsable,
       readOnly: false,
@@ -111,7 +96,6 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
     if (!materialText) {
       expect(
         showsTranscriptDebriefSection({
-          hasDebrief: true,
           transcriptUsable,
           readOnly: false,
         }),
@@ -121,7 +105,6 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
 
   it('all surfaces refuse a read-only lesson (call 12)', () => {
     const debrief = {
-      hasDebrief: true,
       materialText: 'body',
       transcriptUsable: true,
       readOnly: true,
@@ -143,7 +126,6 @@ describe('debrief surfaces agree (hasDebrief on, not read-only)', () => {
     ).toBe(false);
     expect(
       showsTranscriptDebriefSection({
-        hasDebrief: true,
         transcriptUsable: true,
         readOnly: true,
       }),

@@ -13,7 +13,6 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lessonName: 'L1',
     lessonSlug: 'l-1',
     courseSlug: 'c-1',
-    hasDebrief: false,
     videoExpected: false,
   },
   locked: {
@@ -36,7 +35,6 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lessonName: 'L1',
     lessonSlug: 'l1',
     courseSlug: 'c',
-    hasDebrief: false,
     videoState: { status: 'fetching' },
   },
   'read-only': {
@@ -44,7 +42,6 @@ const states: Record<LessonMainState['kind'], LessonMainState> = {
     lessonName: 'L1',
     lessonSlug: 'l1',
     courseSlug: 'c',
-    hasDebrief: false,
     videoExpected: false,
     videoState: { status: 'fetching' },
   },

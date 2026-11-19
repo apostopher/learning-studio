@@ -34,13 +34,10 @@ describe('playbackHasCaptions', () => {
 });
 
 describe('showsTranscriptDebriefSection', () => {
-  const base = { hasDebrief: true, transcriptUsable: true, readOnly: false };
+  const base = { transcriptUsable: true, readOnly: false };
 
-  it('needs the admin switch and a caption track, and not read-only', () => {
+  it('needs a caption track, and not read-only — the admin switch does not hide it', () => {
     expect(showsTranscriptDebriefSection(base)).toBe(true);
-    expect(showsTranscriptDebriefSection({ ...base, hasDebrief: false })).toBe(
-      false,
-    );
     expect(
       showsTranscriptDebriefSection({ ...base, transcriptUsable: false }),
     ).toBe(false);

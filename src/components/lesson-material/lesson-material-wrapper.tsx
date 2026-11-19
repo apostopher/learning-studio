@@ -113,7 +113,6 @@ export const LessonMaterialWrapper = ({
     // debrief clock (call 12) — the same rule as the Debrief tab.
     case 'empty':
       return showsTranscriptDebriefSection({
-        hasDebrief: lesson?.hasDebrief ?? false,
         transcriptUsable,
         readOnly: state.readOnly,
       }) ? (
@@ -135,9 +134,6 @@ export const LessonMaterialWrapper = ({
           <LessonMaterialView
             material={state.material}
             courseSlug={courseSlug}
-            // No Debrief tab while the course payload is still in flight:
-            // failing the other way would flash one on lessons that have none.
-            hasDebrief={lesson?.hasDebrief ?? false}
             transcriptUsable={transcriptUsable}
             onTabSelected={recordSectionTap}
             readOnly={state.readOnly}

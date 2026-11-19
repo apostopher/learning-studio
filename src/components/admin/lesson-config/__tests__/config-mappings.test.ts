@@ -5,7 +5,6 @@ import {
   accessValue,
   availabilityValue,
   debriefValue,
-  debriefWarning,
   isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   videoWatchValue,
@@ -122,35 +121,6 @@ describe('config-mappings', () => {
     );
     expect(stuck).toMatch(/never be satisfied/i);
     expect(stuck).toMatch(/optional/i);
-  });
-
-  it('warns, with a count, that Debrief hides the authored quiz', () => {
-    // has_debrief suppresses the Quiz tab outright, so an admin flipping this
-    // on hides content they wrote. The number is what makes the warning worth
-    // reading — "this may hide the quiz" is barely better than silence.
-    const warning = debriefWarning(
-      lesson({ hasDebrief: true, quizQuestionCount: 8 }),
-    );
-    expect(warning).toMatch(/replaces the lesson quiz/i);
-    expect(warning).toMatch(/8 quiz questions are hidden/i);
-  });
-
-  it('says nothing when there is no quiz to hide', () => {
-    expect(
-      debriefWarning(lesson({ hasDebrief: true, quizQuestionCount: 0 })),
-    ).toBeNull();
-  });
-
-  it('says nothing when Debrief is off, since the quiz is showing', () => {
-    expect(
-      debriefWarning(lesson({ hasDebrief: false, quizQuestionCount: 8 })),
-    ).toBeNull();
-  });
-
-  it('reads naturally for a single-question quiz', () => {
-    expect(
-      debriefWarning(lesson({ hasDebrief: true, quizQuestionCount: 1 })),
-    ).toMatch(/1 quiz question is hidden/i);
   });
 
   it('inherits the module subscriptions for subscription, clears for free', () => {

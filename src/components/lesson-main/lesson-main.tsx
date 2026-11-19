@@ -20,7 +20,6 @@ const renderPlayerSlot = (
   videoState: VideoFetchState,
   courseSlug: string,
   lessonSlug: string,
-  hasDebrief: boolean,
 ) => {
   if (videoState.status === 'ready') {
     return (
@@ -28,7 +27,6 @@ const renderPlayerSlot = (
         videoState={videoState}
         courseSlug={courseSlug}
         lessonSlug={lessonSlug}
-        hasDebrief={hasDebrief}
       />
     );
   }
@@ -84,7 +82,6 @@ const renderArticleBody = (state: LessonMainState) => {
               lessonName={state.lessonName}
               courseSlug={state.courseSlug}
               lessonSlug={state.lessonSlug}
-              hasDebrief={state.hasDebrief}
               videoExpected={state.videoExpected}
               readOnly={false}
             />
@@ -108,7 +105,6 @@ const renderArticleBody = (state: LessonMainState) => {
               state.videoState,
               state.courseSlug,
               state.lessonSlug,
-              state.hasDebrief,
             )}
           </div>
           {renderLessonMaterialSlot(state.lessonSlug, state.courseSlug)}
@@ -135,14 +131,12 @@ const renderArticleBody = (state: LessonMainState) => {
                 state.videoState,
                 state.courseSlug,
                 state.lessonSlug,
-                state.hasDebrief,
               )
             ) : (
               <LessonNoVideoContainer
                 lessonName={state.lessonName}
                 courseSlug={state.courseSlug}
                 lessonSlug={state.lessonSlug}
-                hasDebrief={state.hasDebrief}
                 videoExpected={state.videoExpected}
                 readOnly
               />

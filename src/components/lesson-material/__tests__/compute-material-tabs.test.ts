@@ -5,10 +5,9 @@ import {
   resolveActiveTab,
 } from '../compute-material-tabs';
 
-/** A lesson with body text, so the Debrief tab hinges on `on` alone. */
+/** Body text offers a debrief; none (and no captions) offers none. */
 const debriefOn = (on: boolean) => ({
-  hasDebrief: on,
-  materialText: 'body',
+  materialText: on ? 'body' : null,
   transcriptUsable: false,
   readOnly: false,
 });
@@ -274,7 +273,6 @@ describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
     // debrief-bearing, but had no tab — so it could never reach 100%.
     expect(
       has({
-        hasDebrief: true,
         materialText: '',
         transcriptUsable: true,
         readOnly: false,
@@ -285,7 +283,6 @@ describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
   it('offers no tab with neither body text nor captions', () => {
     expect(
       has({
-        hasDebrief: true,
         materialText: null,
         transcriptUsable: false,
         readOnly: false,
@@ -296,7 +293,6 @@ describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
   it('offers no tab on a read-only lesson', () => {
     expect(
       has({
-        hasDebrief: true,
         materialText: 'body',
         transcriptUsable: true,
         readOnly: true,

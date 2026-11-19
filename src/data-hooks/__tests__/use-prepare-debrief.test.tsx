@@ -49,7 +49,6 @@ describe('usePrepareDebrief', () => {
 describe('shouldPrepareDebrief', () => {
   const watching: ShouldPrepareDebriefArgs = {
     playing: true,
-    hasDebrief: true,
     materialText: 'body',
     transcriptUsable: false,
     readOnly: false,
@@ -82,7 +81,6 @@ describe('shouldPrepareDebrief', () => {
 
   it.each<[string, Partial<ShouldPrepareDebriefArgs>]>([
     ['before the video plays', { playing: false }],
-    ['when the lesson has no debrief', { hasDebrief: false }],
     [
       'when there is nothing to generate from',
       { materialText: null, transcriptUsable: false },
@@ -100,7 +98,6 @@ describe('shouldPrepareDebrief', () => {
  */
 describe('shouldPrepareDebriefOnVisit', () => {
   const visiting = {
-    hasDebrief: true,
     materialText: 'body',
     transcriptUsable: false,
     readOnly: false,
@@ -112,7 +109,6 @@ describe('shouldPrepareDebriefOnVisit', () => {
   });
 
   it.each<[string, Partial<typeof visiting>]>([
-    ['when the lesson has no debrief', { hasDebrief: false }],
     [
       'until the material has loaded with something to generate from',
       { materialText: undefined },

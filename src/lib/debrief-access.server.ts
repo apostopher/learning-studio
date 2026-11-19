@@ -23,7 +23,7 @@ export type DebriefAccess =
   | { ok: false; status: 403 | 404 };
 
 /**
- * Gate + level + hasDebrief + facts → state. The single server authority on
+ * Gate + level + facts → state. The single server authority on
  * "may this pilot take/see this debrief now". The debrief `start`, `answer`
  * and `prepare` routes and `debrief-status` all ask here, so they cannot
  * disagree about it.
@@ -34,8 +34,9 @@ export type DebriefAccess =
  *   debrief clock there, so no D the pilot cannot clear). One opaque status
  *   for all of them, as in the other lesson routes, so this is not an
  *   enumeration oracle for lesson slugs.
- * - 404 for a lesson whose debrief is switched off (`has_debrief`), asked
- *   only after the gate has passed.
+ * - 404 for a lesson the course payload does not list, asked only after the
+ *   gate has passed. Not for a lesson whose debrief is switched off
+ *   (`has_debrief`): off means optional, not absent (user, 2026-11-19).
  *
  * Not refused on the material lock: preparation runs while the video plays
  * (`video-locked`), and the debrief clock cannot start on a video lesson
@@ -71,7 +72,7 @@ export async function getDebriefAccess({
   const lesson = details?.modules
     .flatMap((mod) => mod.lessons)
     .find((l) => l.slug === lessonSlug);
-  if (!lesson?.hasDebrief) return { ok: false, status: 404 };
+  if (!lesson) return { ok: false, status: 404 };
 
   const facts = await getDebriefFacts(userId, lessonSlug, lesson.id);
   return {

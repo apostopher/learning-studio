@@ -76,8 +76,17 @@ describe('getDebriefAccess refusals', () => {
     expect(await getDebriefAccess(args)).toEqual({ ok: false, status: 403 });
   });
 
-  it('404s a lesson whose debrief is switched off', async () => {
+  it('serves a lesson whose debrief is switched off — off means optional, not absent', async () => {
     m.getCourseDetailsWithCache.mockResolvedValue(detailsWith(false));
+    const res = await getDebriefAccess(args);
+    expect(res.ok).toBe(true);
+    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+  });
+
+  it('404s a lesson the course does not list', async () => {
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [{ lessons: [{ id: 99, slug: 'other', hasDebrief: true }] }],
+    });
     expect(await getDebriefAccess(args)).toEqual({ ok: false, status: 404 });
     expect(m.getDebriefFacts).not.toHaveBeenCalled();
   });

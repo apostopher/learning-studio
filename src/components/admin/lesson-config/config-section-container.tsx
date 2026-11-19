@@ -9,7 +9,6 @@ import {
   availabilityValue,
   type DebriefValue,
   debriefValue,
-  debriefWarning,
   isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   type VideoWatchValue,
@@ -112,8 +111,7 @@ export const ConfigSectionContainer = ({
 
       <ConfigSettingRow
         title="Debrief"
-        description="Show the post-lesson debrief for this lesson."
-        warning={debriefWarning(lesson) ?? undefined}
+        description="Learners always see the debrief. Required counts it toward the lesson score; optional leaves the score to the video and quiz."
       >
         <BinaryToggle<DebriefValue>
           label="Debrief"
@@ -125,8 +123,8 @@ export const ConfigSectionContainer = ({
             })
           }
           options={[
-            { value: 'on', label: 'On' },
-            { value: 'off', label: 'Off' },
+            { value: 'on', label: 'Required' },
+            { value: 'off', label: 'Optional' },
           ]}
         />
       </ConfigSettingRow>

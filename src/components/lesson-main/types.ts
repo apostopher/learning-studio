@@ -51,7 +51,7 @@ export type LessonMainState =
    */
   | { kind: 'not-found'; lessonSlug: string }
   /**
-   * Carries the slugs and `hasDebrief` because this branch now renders the
+   * Carries the slugs because this branch now renders the
    * material panel too. It used to render nothing but a card, which meant a
    * lesson without a video had no tabs, no key points and no way to reach a
    * debrief — the lesson was literally unreadable.
@@ -61,7 +61,6 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
-      hasDebrief: boolean;
       /**
        * `needsVideoWatch` — the admin's own statement that a video belongs
        * here, and so the only honest way to tell "still being built" apart
@@ -80,8 +79,6 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
-      /** Whether the player prepares a debrief on first play — see usePrepareDebriefOnPlay. */
-      hasDebrief: boolean;
       videoState: VideoFetchState;
     }
   /**
@@ -100,7 +97,6 @@ export type LessonMainState =
       lessonName: string;
       lessonSlug: string;
       courseSlug: string;
-      hasDebrief: boolean;
       videoState: VideoFetchState | null;
       /** `needsVideoWatch` — only meaningful when `videoState` is null. */
       videoExpected: boolean;

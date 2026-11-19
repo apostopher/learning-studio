@@ -71,7 +71,6 @@ describe('LessonMain', () => {
           lessonName: 'Lesson Two',
           lessonSlug: 'l-1',
           courseSlug: 'c-1',
-          hasDebrief: false,
           videoExpected: false,
         }}
       />,
@@ -123,7 +122,6 @@ describe('LessonMain', () => {
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
           courseSlug: 'course-one',
-          hasDebrief: false,
           videoState: { status: 'fetching' },
         }}
       />,
@@ -146,7 +144,6 @@ describe('LessonMain', () => {
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
           courseSlug: 'course-one',
-          hasDebrief: false,
           videoExpected: true,
           videoState: { status: 'fetching' },
         }}
@@ -172,7 +169,6 @@ describe('LessonMain', () => {
           lessonName: 'Lesson One',
           lessonSlug: 'lesson-one',
           courseSlug: 'course-one',
-          hasDebrief: false,
           videoExpected: false,
           videoState: null,
         }}

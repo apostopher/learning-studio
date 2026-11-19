@@ -68,11 +68,11 @@ describe('LessonQuickshot toggles', () => {
     expect(screen.queryByRole('group', { name: /level/i })).toBeNull();
   });
 
-  it('turns a debrief on and sends only that field', async () => {
+  it('makes a debrief required and sends only that field', async () => {
     const user = userEvent.setup();
     const onPatch = renderQuickshot();
 
-    await user.click(screen.getByRole('button', { name: /Debrief off/ }));
+    await user.click(screen.getByRole('button', { name: /Debrief optional/ }));
 
     expect(onPatch).toHaveBeenCalledWith({ hasDebrief: true });
   });
@@ -148,20 +148,12 @@ describe('LessonQuickshot watch lock', () => {
 });
 
 describe('LessonQuickshot consequences', () => {
-  it('warns, on the chip itself, that a debrief hides an authored quiz', () => {
+  it('does not claim a required debrief hides the quiz — both tabs show', () => {
     renderQuickshot({ hasDebrief: true, quizQuestionCount: 7 });
 
     expect(
-      screen.getByRole('button', {
-        name: /7 quiz questions are hidden from learners/,
-      }),
+      screen.getByRole('button', { name: /Debrief required/ }),
     ).toBeDefined();
-  });
-
-  it('says nothing about a quiz when there is none to hide', () => {
-    renderQuickshot({ hasDebrief: true, quizQuestionCount: 0 });
-
-    expect(screen.getByRole('button', { name: /Debrief on/ })).toBeDefined();
     expect(
       screen.queryByRole('button', { name: /hidden from learners/ }),
     ).toBeNull();
@@ -174,7 +166,7 @@ describe('LessonQuickshot state', () => {
 
     expect(
       screen
-        .getByRole('button', { name: /Debrief on/ })
+        .getByRole('button', { name: /Debrief required/ })
         .getAttribute('aria-pressed'),
     ).toBe('true');
     expect(

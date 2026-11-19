@@ -7,7 +7,6 @@ type LessonNoVideoContainerProps = {
   lessonName: string;
   courseSlug: string;
   lessonSlug: string;
-  hasDebrief: boolean;
   /** `needsVideoWatch` — the admin's statement that a video belongs here. */
   videoExpected: boolean;
   /** Completed at an earlier level — such a lesson has no Debrief tab. */
@@ -29,7 +28,6 @@ export const LessonNoVideoContainer = ({
   lessonName,
   courseSlug,
   lessonSlug,
-  hasDebrief,
   videoExpected,
   readOnly,
 }: LessonNoVideoContainerProps) => {
@@ -40,7 +38,6 @@ export const LessonNoVideoContainer = ({
   // transcript fallback cannot apply here: this branch exists precisely
   // because the lesson has no video.
   const offer = {
-    hasDebrief,
     materialText: material?.text,
     transcriptUsable: false,
   };

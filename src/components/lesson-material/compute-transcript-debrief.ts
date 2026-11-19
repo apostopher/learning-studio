@@ -22,8 +22,6 @@ export function playbackHasCaptions(
 }
 
 export type TranscriptDebriefSectionArgs = {
-  /** `lessons.has_debrief` — the admin's switch, authoritative as everywhere else. */
-  hasDebrief: boolean;
   /** See `playbackHasCaptions`. */
   transcriptUsable: boolean;
   /** Completed at an earlier level — no debrief clock (call 12). */
@@ -36,12 +34,8 @@ export type TranscriptDebriefSectionArgs = {
  * what "no material row" means — so it can only come from the transcript.
  */
 export function showsTranscriptDebriefSection({
-  hasDebrief,
   transcriptUsable,
   readOnly,
 }: TranscriptDebriefSectionArgs): boolean {
-  return (
-    !readOnly &&
-    canOfferDebrief({ hasDebrief, materialText: null, transcriptUsable })
-  );
+  return !readOnly && canOfferDebrief({ materialText: null, transcriptUsable });
 }

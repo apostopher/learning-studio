@@ -3,7 +3,6 @@ import { Tooltip } from '@base-ui/react/tooltip';
 import { MotionConfig, motion } from 'motion/react';
 import {
   accessSubscriptions,
-  debriefWarning,
   isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   videoWatchWarning,
@@ -132,7 +131,6 @@ export const LessonQuickshot = ({
   // one — see isVideoWatchRequiredDisabled.
   const watchLocked = disabled || isVideoWatchRequiredDisabled(lesson);
 
-  const briefNote = debriefWarning(lesson);
   const watchNote = videoWatchWarning(lesson);
 
   return (
@@ -167,10 +165,9 @@ export const LessonQuickshot = ({
         <QuickshotToggle
           label="Brief"
           tooltip={
-            briefNote ??
-            (lesson.hasDebrief
-              ? 'Debrief on — the learner answers questions after the video. Tap to turn off.'
-              : 'Debrief off. Tap to require a debrief after the video.')
+            lesson.hasDebrief
+              ? 'Debrief required — it counts toward the lesson score. Tap to make it optional.'
+              : 'Debrief optional — learners can still take it, but it does not count toward the score. Tap to require it.'
           }
           pressed={lesson.hasDebrief}
           tone={lesson.hasDebrief ? 'solid-success' : 'muted'}

@@ -7,7 +7,7 @@ type CourseLike<L> = { modules: readonly ModuleLike<L>[] };
  *
  * Generic over the lesson type, and returns it unchanged, so each caller
  * declares only the fields it actually reads: `compute-lesson-header-state`
- * wants a name, `compute-lesson-main-state` wants `hasVideo`, `hasDebrief` and
+ * wants a name, `compute-lesson-main-state` wants `hasVideo` and
  * `needsVideoWatch` as well. A fixed lesson shape would force the header — and
  * its tests — to fabricate fields it never touches, and every field added for
  * one caller would break the other.

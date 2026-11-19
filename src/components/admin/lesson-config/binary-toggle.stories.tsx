@@ -65,15 +65,15 @@ const Rows = () => {
       </ConfigSettingRow>
       <ConfigSettingRow
         title="Debrief"
-        description="Show the post-lesson debrief for this lesson."
+        description="Learners always see the debrief. Required counts it toward the lesson score; optional leaves the score to the video and quiz."
       >
         <BinaryToggle
           label="Debrief"
           value={debrief}
           onValueChange={setDebrief}
           options={[
-            { value: 'on', label: 'On' },
-            { value: 'off', label: 'Off' },
+            { value: 'on', label: 'Required' },
+            { value: 'off', label: 'Optional' },
           ]}
         />
       </ConfigSettingRow>

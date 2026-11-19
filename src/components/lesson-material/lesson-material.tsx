@@ -21,8 +21,6 @@ type LessonMaterialProps = {
   material: NonNullable<LessonMaterial>;
   /** The course the lesson is being read in — every write the quiz/debrief containers make is per course. */
   courseSlug: string;
-  /** `lessons.has_debrief` — the admin's switch for the Debrief tab. */
-  hasDebrief: boolean;
   /**
    * The video has a caption transcript (`playbackHasCaptions`). A material row
    * with no body text still gets the Debrief tab from it — the generator
@@ -44,7 +42,6 @@ type LessonMaterialProps = {
 export const LessonMaterialView = ({
   material,
   courseSlug,
-  hasDebrief,
   transcriptUsable,
   onTabSelected,
   readOnly,
@@ -58,7 +55,6 @@ export const LessonMaterialView = ({
     // video's caption transcript. Read-only lessons get no debrief clock
     // (call 12), so no tab either.
     debrief: {
-      hasDebrief,
       materialText: material.text,
       transcriptUsable,
       readOnly,

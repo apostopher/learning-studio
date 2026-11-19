@@ -14,7 +14,6 @@ type CourseLike = {
       slug: string;
       name: string;
       hasVideo: boolean;
-      hasDebrief: boolean;
       needsVideoWatch: boolean;
     }[];
   }[];
@@ -152,7 +151,6 @@ export const computeLessonMainState = ({
       lessonName: lesson.name,
       lessonSlug: lesson.slug,
       courseSlug,
-      hasDebrief: lesson.hasDebrief,
       videoExpected: lesson.needsVideoWatch,
       videoState: lesson.hasVideo
         ? resolveVideoState(video, onRetryVideo)
@@ -169,7 +167,6 @@ export const computeLessonMainState = ({
       lessonName: lesson.name,
       lessonSlug,
       courseSlug,
-      hasDebrief: lesson.hasDebrief,
       videoExpected: lesson.needsVideoWatch,
     };
   }
@@ -179,6 +176,5 @@ export const computeLessonMainState = ({
     lessonSlug: lesson.slug,
     courseSlug,
     videoState: resolveVideoState(video, onRetryVideo),
-    hasDebrief: lesson.hasDebrief,
   };
 };

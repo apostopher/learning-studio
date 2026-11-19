@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
@@ -134,7 +134,9 @@ describe('ConfigSectionContainer', () => {
       { wrapper },
     );
     expect(
-      screen.getByRole('button', { name: 'On' }).getAttribute('aria-pressed'),
+      within(screen.getByRole('group', { name: 'Debrief' }))
+        .getByRole('button', { name: 'Required' })
+        .getAttribute('aria-pressed'),
     ).toBe('true');
   });
 
@@ -184,7 +186,7 @@ describe('ConfigSectionContainer', () => {
     });
   });
 
-  it('clicking Off sends hasDebrief: false', () => {
+  it('clicking Optional on Debrief sends hasDebrief: false', () => {
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -193,14 +195,19 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Off' }));
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Debrief' })).getByRole(
+        'button',
+        { name: 'Optional' },
+      ),
+    );
     expect(mutate).toHaveBeenCalledWith({
       lessonId: lesson.id,
       patch: { hasDebrief: false },
     });
   });
 
-  it('clicking On from a debrief-off lesson sends hasDebrief: true', () => {
+  it('clicking Required from a debrief-optional lesson sends hasDebrief: true', () => {
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -209,7 +216,12 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Debrief' })).getByRole(
+        'button',
+        { name: 'Required' },
+      ),
+    );
     expect(mutate).toHaveBeenCalledWith({
       lessonId: debriefOffLesson.id,
       patch: { hasDebrief: true },
@@ -257,7 +269,12 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Optional' }));
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Video watch' })).getByRole(
+        'button',
+        { name: 'Optional' },
+      ),
+    );
     expect(mutate).toHaveBeenCalledWith({
       lessonId: videoLesson.id,
       patch: { needsVideoWatch: false },
@@ -273,7 +290,12 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Required' }));
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Video watch' })).getByRole(
+        'button',
+        { name: 'Required' },
+      ),
+    );
     expect(mutate).toHaveBeenCalledWith({
       lessonId: videoLesson.id,
       patch: { needsVideoWatch: true },
@@ -289,10 +311,12 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    expect(screen.getByRole('button', { name: 'Required' })).toHaveProperty(
-      'disabled',
-      true,
-    );
+    expect(
+      within(screen.getByRole('group', { name: 'Video watch' })).getByRole(
+        'button',
+        { name: 'Required' },
+      ),
+    ).toHaveProperty('disabled', true);
     expect(screen.getByRole('status').textContent).toMatch(/no video yet/i);
   });
 
@@ -307,14 +331,21 @@ describe('ConfigSectionContainer', () => {
       />,
       { wrapper },
     );
-    expect(screen.getByRole('button', { name: 'Required' })).toHaveProperty(
-      'disabled',
-      false,
-    );
+    expect(
+      within(screen.getByRole('group', { name: 'Video watch' })).getByRole(
+        'button',
+        { name: 'Required' },
+      ),
+    ).toHaveProperty('disabled', false);
     expect(screen.getByRole('status').textContent).toMatch(
       /never be satisfied/i,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Optional' }));
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Video watch' })).getByRole(
+        'button',
+        { name: 'Optional' },
+      ),
+    );
     expect(mutate).toHaveBeenCalledWith({
       lessonId: lesson.id,
       patch: { needsVideoWatch: false },

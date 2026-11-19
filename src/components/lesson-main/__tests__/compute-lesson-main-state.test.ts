@@ -91,7 +91,6 @@ describe('computeLessonMainState', () => {
       lessonName: 'L',
       lessonSlug: 'l-1',
       courseSlug: 'course-1',
-      hasDebrief: false,
       videoExpected: true,
     });
   });
@@ -123,7 +122,6 @@ describe('computeLessonMainState', () => {
       lessonName: 'Lesson One',
       lessonSlug: 'l-1',
       courseSlug: 'course-1',
-      hasDebrief: false,
       videoExpected: true,
     });
   });
@@ -452,7 +450,6 @@ describe('computeLessonMainState', () => {
       lessonName: 'Lesson One',
       lessonSlug: 'l-1',
       courseSlug: 'course-1',
-      hasDebrief: false,
       videoExpected: true,
       videoState: null,
     });

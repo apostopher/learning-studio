@@ -26,7 +26,6 @@ const props = {
   lessonName: 'Radio Calls',
   courseSlug: 'ppl',
   lessonSlug: 'radio-calls',
-  hasDebrief: true,
   videoExpected: false,
 };
 
@@ -90,7 +89,6 @@ describe('LessonNoVideoContainer', () => {
     expect(h.usePrepareDebriefOnVisit).toHaveBeenCalledWith({
       courseSlug: 'ppl',
       lessonSlug: 'radio-calls',
-      hasDebrief: true,
       materialText: '<p>Body</p>',
       // No video on this branch, so never a transcript to fall back to.
       transcriptUsable: false,

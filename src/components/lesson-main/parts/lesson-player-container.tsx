@@ -22,15 +22,12 @@ type LessonPlayerContainerProps = {
   videoState: Extract<VideoFetchState, { status: 'ready' }>;
   courseSlug: string;
   lessonSlug: string;
-  /** `lessons.has_debrief` — decides whether the debrief is prepared on first play. */
-  hasDebrief: boolean;
 };
 
 export const LessonPlayerContainer = ({
   videoState,
   courseSlug,
   lessonSlug,
-  hasDebrief,
 }: LessonPlayerContainerProps) => {
   // Per lesson, not per mount: this component can be reused across a lesson
   // switch, and the player state atom is keyed on this id. A shared id would
@@ -109,7 +106,6 @@ export const LessonPlayerContainer = ({
     // The shared `canOfferDebrief` inputs: the material's body text, else
     // this video's caption transcript (`captions === null` resolved into the
     // props — the same answer `playbackHasCaptions` gives the material panel).
-    hasDebrief,
     materialText: material?.text,
     transcriptUsable: !videoState.captionsUnavailable,
     readOnly,

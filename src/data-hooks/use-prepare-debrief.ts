@@ -26,7 +26,7 @@ export function usePrepareDebrief() {
 }
 
 /**
- * `hasDebrief`, `materialText` and `transcriptUsable` feed the shared
+ * `materialText` and `transcriptUsable` feed the shared
  * `canOfferDebrief` rule — the same one the Debrief tab and the
  * transcript-only section ask — so a debrief is never prepared that the
  * panel will not offer.
@@ -51,7 +51,6 @@ export type ShouldPrepareDebriefArgs = DebriefOfferArgs & {
  */
 export function shouldPrepareDebrief({
   playing,
-  hasDebrief,
   materialText,
   transcriptUsable,
   readOnly,
@@ -59,7 +58,7 @@ export function shouldPrepareDebrief({
 }: ShouldPrepareDebriefArgs): boolean {
   return (
     playing &&
-    canOfferDebrief({ hasDebrief, materialText, transcriptUsable }) &&
+    canOfferDebrief({ materialText, transcriptUsable }) &&
     !readOnly &&
     !alreadyRequested
   );
@@ -72,7 +71,6 @@ export function usePrepareDebriefOnPlay({
   courseSlug,
   lessonSlug,
   playing,
-  hasDebrief,
   materialText,
   transcriptUsable,
   readOnly,
@@ -85,7 +83,6 @@ export function usePrepareDebriefOnPlay({
     const requestKey = `${courseSlug}/${lessonSlug}`;
     const fire = shouldPrepareDebrief({
       playing,
-      hasDebrief,
       materialText,
       transcriptUsable,
       readOnly,
@@ -98,7 +95,6 @@ export function usePrepareDebriefOnPlay({
     courseSlug,
     lessonSlug,
     playing,
-    hasDebrief,
     materialText,
     transcriptUsable,
     readOnly,
@@ -132,7 +128,6 @@ export function shouldPrepareDebriefOnVisit(
 export function usePrepareDebriefOnVisit({
   courseSlug,
   lessonSlug,
-  hasDebrief,
   materialText,
   transcriptUsable,
   readOnly,
@@ -144,7 +139,6 @@ export function usePrepareDebriefOnVisit({
   useEffect(() => {
     const requestKey = `${courseSlug}/${lessonSlug}`;
     const fire = shouldPrepareDebriefOnVisit({
-      hasDebrief,
       materialText,
       transcriptUsable,
       readOnly,
@@ -156,7 +150,6 @@ export function usePrepareDebriefOnVisit({
   }, [
     courseSlug,
     lessonSlug,
-    hasDebrief,
     materialText,
     transcriptUsable,
     readOnly,
