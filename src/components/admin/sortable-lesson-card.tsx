@@ -7,6 +7,7 @@ import {
   playLessonAtom,
 } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
+import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
@@ -59,6 +60,9 @@ export const SortableLessonCard = ({
    * control rather than guessing — see `findLibraryCourseCount`.
    */
   const { data: library } = useOrgLibrary();
+  // The same save the quickshot chips use, so the eye and the chips share
+  // one optimistic cache write and one rollback path.
+  const updateConfig = useUpdateLessonConfig(courseId);
   const courseCount = findLibraryCourseCount(library, lesson.id);
 
   return (
@@ -77,6 +81,14 @@ export const SortableLessonCard = ({
         lesson={lesson}
         posterUrl={posterUrl}
         dragHandleProps={{ ...attributes, ...listeners }}
+        visibility={{
+          onToggle: () =>
+            updateConfig.mutate({
+              lessonId: lesson.id,
+              patch: { isAvailable: !lesson.isAvailable },
+            }),
+          isPending: updateConfig.isPending,
+        }}
         onEdit={() => setConfigureLessonId(lesson.id)}
         onDelete={
           courseCount == null

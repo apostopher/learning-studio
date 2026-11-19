@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -135,7 +135,7 @@ const LIBRARY: OrgLibrary = {
 
 const fetchMock = vi.fn();
 
-function renderCard() {
+function renderCard(over: Partial<BoardLesson> = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -145,7 +145,7 @@ function renderCard() {
     <QueryClientProvider client={client}>
       <Provider store={store}>
         <EditorLessonCardContainer
-          lesson={lesson}
+          lesson={{ ...lesson, ...over }}
           module={MODULE}
           courseId={7}
         />
@@ -274,5 +274,65 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
     expect(
       document.querySelector('[aria-label="Remove Stalls from Fundamentals"]'),
     ).not.toBeNull();
+  });
+});
+
+/**
+ * The eye publishes or drafts the lesson. Asserted on the PATCH the server
+ * receives, not on the card: an eye wired to nothing still renders and
+ * still flips its icon optimistically if a cache write is all that happens.
+ */
+describe('EditorLessonCardContainer — visibility', () => {
+  const patchBodies = () =>
+    fetchMock.mock.calls
+      .filter(([url]) => String(url) === `/api/admin/lessons/${LESSON_ID}`)
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+
+  it('hides a visible lesson through the config mutation', async () => {
+    renderCard({ isAvailable: true });
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '[aria-label="Visible to students. Hide it"]',
+        ) as HTMLButtonElement,
+      );
+    });
+    expect(patchBodies()).toEqual([{ isAvailable: false }]);
+  });
+
+  it('shows a draft lesson through the config mutation', async () => {
+    renderCard({ isAvailable: false });
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '[aria-label="Hidden from students. Show it"]',
+        ) as HTMLButtonElement,
+      );
+    });
+    expect(patchBodies()).toEqual([{ isAvailable: true }]);
+  });
+
+  it('passes the in-flight state to the eye', async () => {
+    renderCard({ isAvailable: true });
+    // Hold the PATCH open so the mutation stays pending.
+    fetchMock.mockImplementation((url: string) =>
+      String(url) === `/api/admin/lessons/${LESSON_ID}`
+        ? new Promise(() => {})
+        : Promise.resolve({ ok: true, status: 200, json: async () => LIBRARY }),
+    );
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '[aria-label="Visible to students. Hide it"]',
+        ) as HTMLButtonElement,
+      );
+    });
+    // TanStack Query batches observer updates onto a later tick, so the
+    // pending label lands after the click's act() has already resolved.
+    await waitFor(() =>
+      expect(
+        document.querySelector('[aria-label="Updating visibility of Stalls…"]'),
+      ).not.toBeNull(),
+    );
   });
 });

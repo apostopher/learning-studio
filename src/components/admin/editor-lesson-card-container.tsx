@@ -9,6 +9,7 @@ import {
 } from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
+import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
@@ -96,6 +97,9 @@ export const EditorLessonCardContainer = ({
    * here and there would otherwise carry a prop neither of them uses.
    */
   const { data: library } = useOrgLibrary();
+  // The same save the quickshot chips use, so the eye and the chips share
+  // one optimistic cache write and one rollback path.
+  const updateConfig = useUpdateEditorLessonConfig();
   const courseCount = findLibraryCourseCount(library, lesson.id);
 
   return (
@@ -115,6 +119,14 @@ export const EditorLessonCardContainer = ({
         posterUrl={posterUrl}
         alsoIn={alsoIn}
         dragHandleProps={{ ...attributes, ...listeners }}
+        visibility={{
+          onToggle: () =>
+            updateConfig.mutate({
+              lessonId: lesson.id,
+              patch: { isAvailable: !lesson.isAvailable },
+            }),
+          isPending: updateConfig.isPending,
+        }}
         // RBAC rule 6 — the SME edits their lesson from the RIGHT pane too.
         // It opens the lesson-LEVEL modal, the same one the library card
         // opens, not the per-course configure surface: what a lesson is has

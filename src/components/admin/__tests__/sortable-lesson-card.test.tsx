@@ -237,3 +237,44 @@ describe('SortableLessonCard', () => {
     expect(store.get(deleteLessonAtom)?.removeControlLabel).toBeNull();
   });
 });
+
+/**
+ * The eye on this board publishes or drafts the lesson through the board's
+ * own config mutation. Asserted on the PATCH that leaves the browser: a
+ * `visibility` prop wired to a no-op would type-check and render the same.
+ */
+describe('SortableLessonCard — visibility', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('hides a visible lesson through the config mutation', async () => {
+    renderCard(LIBRARY);
+    const visibility = cardProps.mock.calls[0][0].visibility as {
+      onToggle: () => void;
+    };
+    await act(async () => {
+      visibility.onToggle();
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`/api/admin/lessons/${lesson.id}`);
+    expect((init as RequestInit).method).toBe('PATCH');
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      isAvailable: false,
+    });
+  });
+
+  it('starts with the eye idle', () => {
+    renderCard(LIBRARY);
+    expect(cardProps.mock.calls[0][0].visibility).toMatchObject({
+      isPending: false,
+    });
+  });
+});
