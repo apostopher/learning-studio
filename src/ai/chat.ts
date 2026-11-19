@@ -1,4 +1,4 @@
-import type { ModelMessage, TextPart, UIMessage } from 'ai';
+import type { ModelMessage, TextPart, Tool, UIMessage } from 'ai';
 import {
   convertToModelMessages,
   pruneMessages,
@@ -41,6 +41,11 @@ export type BuildChatStreamOptions = {
    * subscription-derived fallback is used when this is absent. */
   courseSlug?: string;
   userId: string;
+  /**
+   * Replaces the course-scoped `searchKB` tool. The admin preview chat
+   * injects a lesson-scoped one; the student chat omits it.
+   */
+  searchKBTool?: Tool;
   /**
    * The learner's reviewed SKA profile, already narrowed to the sections that
    * apply in this context by the caller (all three with a course in context,
@@ -112,6 +117,7 @@ export async function buildChatStream({
   writer,
   courseSlug,
   userId,
+  searchKBTool,
   skaProfile,
   debriefGaps,
   openDebriefQuestions,
@@ -173,7 +179,8 @@ export async function buildChatStream({
     messages: modelMessages,
     abortSignal,
     tools: {
-      searchKB: makeSearchKBTool({ writer, courseSlug, userId }),
+      searchKB:
+        searchKBTool ?? makeSearchKBTool({ writer, courseSlug, userId }),
       checkFlyability: makeCheckFlyabilityTool({
         messages: modelMessages,
         uiMessages,

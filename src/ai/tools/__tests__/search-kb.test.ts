@@ -24,6 +24,7 @@ vi.mock('#/db/knowledge-base-scope', () => ({ resolveKBCourseId }));
 
 import {
   buildKBContext,
+  makePreviewSearchKBTool,
   makeSearchKBTool,
   SearchKBParamsSchema,
 } from '#/ai/tools/search-kb';
@@ -201,5 +202,62 @@ describe('makeSearchKBTool', () => {
       courseId: null,
       lessonSlugs: [],
     });
+  });
+});
+
+describe('makePreviewSearchKBTool', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getAllHelpTopics.mockResolvedValue([]);
+    searchKB.mockResolvedValue([]);
+  });
+
+  it('searches only the picked lesson and the shared docs', async () => {
+    const kbTool = makePreviewSearchKBTool({
+      lessonSlug: 'crosswind-landings',
+    });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'crosswind limits' }, toolCallOptions);
+    expect(searchKB).toHaveBeenCalledWith('crosswind limits', {
+      courseId: null,
+      lessonSlugs: ['crosswind-landings'],
+    });
+    expect(getGatedCourseForAgent).not.toHaveBeenCalled();
+  });
+
+  it('hands the model the chunks with no outline', async () => {
+    searchKB.mockResolvedValue([
+      { chunk: 'chunk-a', heading: 'H', similarity: 0.9 },
+    ]);
+    const kbTool = makePreviewSearchKBTool({ lessonSlug: 'l' });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    const out = await kbTool.execute!({ query: 'crosswind' }, toolCallOptions);
+    expect(out).toContain('chunk-a');
+  });
+
+  it('refuses a short query without searching, and announces a real one', async () => {
+    const write = vi.fn();
+    const kbTool = makePreviewSearchKBTool({
+      lessonSlug: 'l',
+      writer: { write },
+    });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'hi' }, toolCallOptions);
+    expect(searchKB).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'crosswind' }, toolCallOptions);
+    expect(write).toHaveBeenCalledWith({
+      type: 'data-notification',
+      data: { text: 'Thinking...' },
+      transient: true,
+    });
+  });
+
+  it('shares the course tool description and input schema', () => {
+    const a = makePreviewSearchKBTool({ lessonSlug: 'l' });
+    const b = makeSearchKBTool({ userId: 'u' });
+    expect(a.description).toBe(b.description);
+    expect(a.inputSchema).toBe(b.inputSchema);
   });
 });

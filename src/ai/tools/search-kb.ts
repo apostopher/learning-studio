@@ -13,6 +13,22 @@ export const SearchKBParamsSchema = z.object({
   query: z.string().describe("the user's question"),
 });
 
+const SEARCH_KB_DESCRIPTION =
+  'Search the comprehensive knowledge base about the course, drones, aircraft & airmanship. Always call this FIRST for any course/airmanship question, then supplement with general aviation knowledge if needed.';
+
+const QUERY_TOO_SHORT =
+  "The user's query is too short to search the knowledge base. Decide how to respond.";
+
+type Writer = { write: (p: unknown) => void };
+
+function announceThinking(writer?: Writer) {
+  writer?.write({
+    type: 'data-notification',
+    data: { text: 'Thinking...' },
+    transient: true,
+  });
+}
+
 export function buildKBContext(input: {
   kbResults: KBResult[];
   outline: string;
@@ -38,18 +54,13 @@ export function makeSearchKBTool(opts: {
   userId: string;
 }) {
   return tool({
-    description:
-      'Search the comprehensive knowledge base about the course, drones, aircraft & airmanship. Always call this FIRST for any course/airmanship question, then supplement with general aviation knowledge if needed.',
+    description: SEARCH_KB_DESCRIPTION,
     inputSchema: SearchKBParamsSchema,
     execute: async ({ query }) => {
       if (query.trim().length < 3) {
-        return "The user's query is too short to search the knowledge base. Decide how to respond.";
+        return QUERY_TOO_SHORT;
       }
-      opts.writer?.write({
-        type: 'data-notification',
-        data: { text: 'Thinking...' },
-        transient: true,
-      });
+      announceThinking(opts.writer);
       // No course in context (e.g. the widget on `/app`, with no course
       // route matched) means no course content — never substitute a default
       // slug, guess from subscriptions, or fall back to every subscribed
@@ -73,6 +84,31 @@ export function makeSearchKBTool(opts: {
         outline: gated ? courseOutline(gated) : '',
         helpTopics,
       });
+    },
+  });
+}
+
+/**
+ * Admin preview: Viper scoped to one lesson plus the shared (org-wide)
+ * documents, with no learner, course or gating involved.
+ */
+export function makePreviewSearchKBTool(opts: {
+  lessonSlug: string;
+  writer?: Writer;
+}) {
+  return tool({
+    description: SEARCH_KB_DESCRIPTION,
+    inputSchema: SearchKBParamsSchema,
+    execute: async ({ query }) => {
+      if (query.trim().length < 3) {
+        return QUERY_TOO_SHORT;
+      }
+      announceThinking(opts.writer);
+      const [kbResults, helpTopics] = await Promise.all([
+        searchKB(query, { courseId: null, lessonSlugs: [opts.lessonSlug] }),
+        getAllHelpTopics(),
+      ]);
+      return buildKBContext({ kbResults, outline: '', helpTopics });
     },
   });
 }
