@@ -1,3 +1,4 @@
+import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
 /**
@@ -15,3 +16,43 @@ export const previewChatRequestSchema = z.object({
   messages: z.array(z.unknown()).min(1).max(PREVIEW_MAX_MESSAGES),
 });
 export type PreviewChatRequest = z.infer<typeof previewChatRequestSchema>;
+
+/**
+ * Longest single user text part a preview request may carry, in characters —
+ * the same bound the student chat puts on a learner turn.
+ */
+export const PREVIEW_MAX_USER_TEXT = 8000;
+
+/**
+ * Most characters of text, across every part of every message, one preview
+ * request may carry. The client sends the whole conversation each turn and
+ * all of it goes into the prompt, so the message count alone does not bound
+ * the cost.
+ */
+export const PREVIEW_MAX_TOTAL_TEXT = 100_000;
+
+/** The 400 the preview sends for a conversation it will not pass on. */
+export const PREVIEW_TOO_LONG_ERROR =
+  'This preview conversation is too long or contains unsupported content. Start a new chat.';
+
+/**
+ * Whether a validated conversation is small enough, and plain enough, to send
+ * to the model. Refuses any `file` part (`convertToModelMessages` may
+ * download its URL), a user text part over `PREVIEW_MAX_USER_TEXT`, and text
+ * over `PREVIEW_MAX_TOTAL_TEXT` in all.
+ */
+export function previewMessagesWithinLimits(messages: UIMessage[]): boolean {
+  let total = 0;
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type === 'file') return false;
+      if (part.type !== 'text') continue;
+      if (message.role === 'user' && part.text.length > PREVIEW_MAX_USER_TEXT) {
+        return false;
+      }
+      total += part.text.length;
+      if (total > PREVIEW_MAX_TOTAL_TEXT) return false;
+    }
+  }
+  return true;
+}

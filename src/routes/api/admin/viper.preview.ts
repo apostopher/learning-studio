@@ -10,7 +10,11 @@ import { lessonExistsBySlug } from '#/db/lesson';
 import { getPersonaById } from '#/db/persona';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError, requireAdmin } from '#/lib/admin-functions.server';
-import { previewChatRequestSchema } from '#/lib/viper-preview-schemas';
+import {
+  PREVIEW_TOO_LONG_ERROR,
+  previewChatRequestSchema,
+  previewMessagesWithinLimits,
+} from '#/lib/viper-preview-schemas';
 
 /** Returns the userId of an admin, or the 403 to send instead. */
 async function guard(
@@ -68,6 +72,11 @@ export async function previewChatHandler(request: Request): Promise<Response> {
     return Response.json({ error: validated.error.message }, { status: 400 });
   }
   const messages = validated.data;
+  // The count cap alone does not bound the prompt: every turn resends the
+  // whole conversation, so its size is checked before any model call.
+  if (!previewMessagesWithinLimits(messages)) {
+    return Response.json({ error: PREVIEW_TOO_LONG_ERROR }, { status: 400 });
+  }
 
   // Org-scoped read: a persona id from another org comes back null.
   const persona = await getPersonaById(getActiveOrgId(), personaId);
@@ -97,6 +106,8 @@ export async function previewChatHandler(request: Request): Promise<Response> {
           writer: looseWriter,
         }),
         writer: looseWriter,
+        // A closed tab or a Stop cancels generation instead of paying for it.
+        abortSignal: request.signal,
       });
       writer.merge(result.toUIMessageStream());
     },

@@ -39,6 +39,10 @@ vi.mock('#/db/chat', () => ({
 }));
 vi.mock('#/lib/active-org.server', () => ({ getActiveOrgId: () => 1 }));
 
+import {
+  PREVIEW_MAX_TOTAL_TEXT,
+  PREVIEW_MAX_USER_TEXT,
+} from '#/lib/viper-preview-schemas';
 import { previewChatHandler } from '../viper.preview';
 
 const CONTENT = {
@@ -169,6 +173,96 @@ describe('previewChatHandler', () => {
     expect(m.buildChatStream).not.toHaveBeenCalled();
   });
 
+  describe('message size', () => {
+    const TOO_LONG = {
+      error:
+        'This preview conversation is too long or contains unsupported content. Start a new chat.',
+    };
+    const user = (id: string, text: string) => ({
+      id,
+      role: 'user',
+      parts: [{ type: 'text', text }],
+    });
+    const assistant = (id: string, text: string) => ({
+      id,
+      role: 'assistant',
+      parts: [{ type: 'text', text }],
+    });
+
+    it('400s one oversized user text part', async () => {
+      const res = await previewChatHandler(
+        post({
+          ...valid,
+          messages: [user('u1', 'x'.repeat(PREVIEW_MAX_USER_TEXT + 1))],
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual(TOO_LONG);
+      expect(m.buildChatStream).not.toHaveBeenCalled();
+    });
+
+    it('400s a conversation over the total text cap', async () => {
+      // Every part is under the per-part cap; only the total is over.
+      const perPart = PREVIEW_MAX_USER_TEXT;
+      const count = Math.floor(PREVIEW_MAX_TOTAL_TEXT / perPart) + 1;
+      const res = await previewChatHandler(
+        post({
+          ...valid,
+          messages: Array.from({ length: count }, (_, i) =>
+            i % 2 === 0
+              ? user(`m${i}`, 'x'.repeat(perPart))
+              : assistant(`m${i}`, 'x'.repeat(perPart)),
+          ),
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual(TOO_LONG);
+      expect(m.buildChatStream).not.toHaveBeenCalled();
+    });
+
+    it('400s a message with a file part', async () => {
+      const res = await previewChatHandler(
+        post({
+          ...valid,
+          messages: [
+            {
+              id: 'u1',
+              role: 'user',
+              parts: [
+                { type: 'text', text: 'look' },
+                {
+                  type: 'file',
+                  mediaType: 'application/pdf',
+                  url: 'https://example.com/big.pdf',
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual(TOO_LONG);
+      expect(m.buildChatStream).not.toHaveBeenCalled();
+    });
+
+    it('still reaches the model just under the caps', async () => {
+      // A long assistant answer is fine past the per-USER-part cap; the
+      // total lands exactly on the limit.
+      const messages = [
+        user('u1', 'x'.repeat(PREVIEW_MAX_USER_TEXT)),
+        assistant(
+          'a1',
+          'x'.repeat(PREVIEW_MAX_TOTAL_TEXT - PREVIEW_MAX_USER_TEXT - 1),
+        ),
+        user('u2', 'x'),
+      ];
+      const res = await run({ ...valid, messages });
+      expect(res.status).toBe(200);
+      expect(m.buildChatStream).toHaveBeenCalledTimes(1);
+      expect(firstCall().messages).toEqual(messages);
+    });
+  });
+
   it('tests the draft when there is one', async () => {
     await run();
     expect(firstCall().persona).toEqual(DRAFT);
@@ -191,6 +285,8 @@ describe('previewChatHandler', () => {
     });
     expect(call.subscriptions).toEqual([]);
     expect(call.userId).toBe('admin-1');
+    // A closed tab cancels generation rather than running it to the end.
+    expect(call.abortSignal).toBeInstanceOf(AbortSignal);
   });
 
   it('never personalises or persists', async () => {
