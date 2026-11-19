@@ -1,4 +1,4 @@
-# Viper admin tab — design
+# AI Training admin tab — design
 
 Date: 2026-11-19. Status: draft for review.
 
@@ -15,8 +15,9 @@ what this repo already has.
 
 ## Goals
 
-- A **Viper** tab in the admin nav, after People: `/admin?section=viper`.
-- Four sections, as in the old page: **Chat**, **Persona**, **Training**,
+- An **AI Training** tab in the admin nav, after People:
+  `/admin?section=ai-training` (name: user, 2026-11-19).
+- Four sections, as in the old page: **Chat**, **Persona**, **Documents**,
   **Sessions**.
 - Every training document records where it came from: **ITPS** or
   **3D Airmanship**. Shown on each document, chosen on upload, filterable.
@@ -87,16 +88,19 @@ what this repo already has.
 
 ### Tab
 
-- `ADMIN_SECTION_IDS` gains `'viper'`, label **Viper**, last in nav order.
+- `ADMIN_SECTION_IDS` gains `'ai-training'`, label **AI Training**, last in nav order.
 - Gate: `hasAdminAccess(roles)`, mirroring `requireAdmin` on `/api/ai-rag`
   and the persona endpoints.
-- Inner sections are a second query param, `viperSection`, with values
-  `chat | persona | training | sessions`, default `training` (the reason the
+- Inner sections are a second query param, `trainingSection`, with values
+  `chat | persona | documents | sessions`, default `documents` (the reason the
   tab exists). Shown as a vertical list at the start of the page on wide
   screens, as tabs above the content on narrow ones, same pattern as the
   course dialog's `SectionedConfigModal` sidebar.
 
-### Training
+### Documents
+
+The old page called this "Training"; renamed so it does not repeat the tab's
+name (my call).
 
 - Reuses `TrainingDocUploadCard` and `TrainingDocsList`. Their data hooks
   (`useCourseEmbeddings`, `useAddEmbeddings`, `useDeleteEmbedding`) are typed
