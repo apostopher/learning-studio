@@ -21,7 +21,7 @@ describe('useCourseEmbeddings', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        docsBySource: [{ sourcePath: 'file-a.pdf', count: 12 }],
+        docsBySource: [{ sourcePath: 'file-a.pdf', count: 12, source: 'itps' }],
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -33,7 +33,7 @@ describe('useCourseEmbeddings', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/ai-rag?courseId=7');
     expect(result.current.data).toEqual([
-      { sourcePath: 'file-a.pdf', count: 12 },
+      { sourcePath: 'file-a.pdf', count: 12, source: 'itps' },
     ]);
   });
 });

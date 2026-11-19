@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DocSourceSchema } from '#/lib/doc-source';
 
 const courseId = z.number().int().positive().optional();
 
@@ -17,6 +18,7 @@ const textMode = z.object({
   courseId,
   sourcePath: documentSourcePath,
   html: z.string().min(1),
+  source: DocSourceSchema,
 });
 
 const fileMode = z.object({
@@ -34,6 +36,7 @@ const fileMode = z.object({
     }, 'File url must be hosted on Vercel Blob (*.vercel-storage.com)'),
   fileName: z.string().min(1),
   mimeType: z.string().min(1),
+  source: DocSourceSchema,
 });
 
 export const aiRagPostSchema = z.discriminatedUnion('mode', [

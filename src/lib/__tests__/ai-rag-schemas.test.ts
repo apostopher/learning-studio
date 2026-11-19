@@ -7,7 +7,7 @@ import {
 
 describe('reserved lesson: sourcePath', () => {
   it('rejects a text-mode sourcePath starting with lesson: and accepts a normal one', () => {
-    const base = { mode: 'text', html: '<p>hello</p>' };
+    const base = { mode: 'text', html: '<p>hello</p>', source: 'itps' };
     expect(
       aiRagPostSchema.safeParse({ ...base, sourcePath: 'lesson:x' }).success,
     ).toBe(false);
@@ -28,6 +28,7 @@ describe('aiRagPostSchema', () => {
       mode: 'text',
       sourcePath: 'doc-1',
       html: '<p>hello world this is long enough</p>',
+      source: 'itps',
     });
     expect(r.success).toBe(true);
   });
@@ -38,6 +39,7 @@ describe('aiRagPostSchema', () => {
       url: 'https://blob.vercel-storage.com/x.pdf',
       fileName: 'x.pdf',
       mimeType: 'application/pdf',
+      source: '3d-airmanship',
     });
     expect(r.success).toBe(true);
   });
@@ -64,6 +66,7 @@ describe('aiRagPostSchema', () => {
       url: 'https://blob.vercel-storage.com/x.pdf',
       fileName: 'x.pdf',
       mimeType: 'application/pdf',
+      source: '3d-airmanship',
     });
     expect(r.success).toBe(true);
   });

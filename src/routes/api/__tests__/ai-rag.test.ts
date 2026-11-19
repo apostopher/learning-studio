@@ -73,10 +73,42 @@ describe('addEmbeddingsHandler (POST)', () => {
   it('403 when not admin', async () => {
     mocks.requireAdmin.mockRejectedValueOnce(new mocks.ForbiddenError());
     const res = await addEmbeddingsHandler(
-      post({ mode: 'text', sourcePath: 'd', html: LONG }),
+      post({ mode: 'text', sourcePath: 'd', html: LONG, source: 'itps' }),
     );
     expect(res.status).toBe(403);
     expect(mocks.generateHTMLEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it('rejects an upload with no source', async () => {
+    const res = await addEmbeddingsHandler(
+      post({
+        mode: 'file',
+        url: 'https://blob.vercel-storage.com/x.pdf',
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.generateHTMLEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it('passes the chosen source to the embedder', async () => {
+    mocks.fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
+    mocks.convertPdfToHtml.mockResolvedValue(LONG);
+    const res = await addEmbeddingsHandler(
+      post({
+        mode: 'file',
+        url: 'https://blob.vercel-storage.com/x.pdf',
+        fileName: 'x.pdf',
+        mimeType: 'application/pdf',
+        source: 'itps',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.generateHTMLEmbeddings.mock.calls[0][0].source).toBe('itps');
   });
 
   it('400 on invalid JSON', async () => {
@@ -97,7 +129,7 @@ describe('addEmbeddingsHandler (POST)', () => {
   it('400 when courseId does not exist', async () => {
     mocks.courseExists.mockResolvedValueOnce(false);
     const res = await addEmbeddingsHandler(
-      post({ mode: 'text', courseId: 99, sourcePath: 'd', html: LONG }),
+      post({ mode: 'text', courseId: 99, sourcePath: 'd', html: LONG, source: 'itps' }),
     );
     expect(res.status).toBe(400);
     expect(mocks.generateHTMLEmbeddings).not.toHaveBeenCalled();
@@ -105,7 +137,7 @@ describe('addEmbeddingsHandler (POST)', () => {
 
   it('text mode → embeds and returns chunks', async () => {
     const res = await addEmbeddingsHandler(
-      post({ mode: 'text', courseId: 2, sourcePath: 'doc-1', html: LONG }),
+      post({ mode: 'text', courseId: 2, sourcePath: 'doc-1', html: LONG, source: 'itps' }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -117,6 +149,7 @@ describe('addEmbeddingsHandler (POST)', () => {
       courseId: 2,
       sourcePath: 'doc-1',
       html: LONG,
+      source: 'itps',
     });
   });
 
@@ -134,6 +167,7 @@ describe('addEmbeddingsHandler (POST)', () => {
         fileName: 'x.docx',
         mimeType:
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        source: '3d-airmanship',
       }),
     );
     expect(res.status).toBe(200);
@@ -142,6 +176,7 @@ describe('addEmbeddingsHandler (POST)', () => {
       courseId: 2,
       sourcePath: 'file-x.docx',
       html: LONG,
+      source: '3d-airmanship',
     });
     expect(mocks.upsertDocUrl).toHaveBeenCalledWith(
       2,
@@ -162,6 +197,7 @@ describe('addEmbeddingsHandler (POST)', () => {
         url: 'https://blob.vercel-storage.com/y.txt',
         fileName: 'y.txt',
         mimeType: 'text/plain',
+        source: 'itps',
       }),
     );
     expect(res.status).toBe(400);
@@ -170,7 +206,7 @@ describe('addEmbeddingsHandler (POST)', () => {
   it('empty extracted text → 400', async () => {
     mocks.generateHTMLEmbeddings.mockResolvedValueOnce({ chunks: 0 });
     const res = await addEmbeddingsHandler(
-      post({ mode: 'text', sourcePath: 'd', html: LONG }),
+      post({ mode: 'text', sourcePath: 'd', html: LONG, source: 'itps' }),
     );
     expect(res.status).toBe(400);
   });
@@ -189,6 +225,7 @@ describe('addEmbeddingsHandler (POST)', () => {
         url: 'https://blob.vercel-storage.com/x.pdf',
         fileName: 'x.pdf',
         mimeType: 'application/pdf',
+        source: 'itps',
       }),
     );
     expect(res.status).toBe(400);
@@ -212,6 +249,7 @@ describe('addEmbeddingsHandler (POST)', () => {
         url: 'https://blob.vercel-storage.com/x.pdf',
         fileName: 'x.pdf',
         mimeType: 'application/pdf',
+        source: 'itps',
       }),
     );
     expect(res.status).toBe(500);
@@ -229,6 +267,7 @@ describe('addEmbeddingsHandler (POST)', () => {
         url: 'https://blob.vercel-storage.com/x.pdf',
         fileName: 'x.pdf',
         mimeType: 'application/pdf',
+        source: 'itps',
       }),
     );
     expect(res.status).toBe(400);
@@ -238,7 +277,7 @@ describe('addEmbeddingsHandler (POST)', () => {
   it('500 when generateHTMLEmbeddings rejects', async () => {
     mocks.generateHTMLEmbeddings.mockRejectedValueOnce(new Error('boom'));
     const res = await addEmbeddingsHandler(
-      post({ mode: 'text', sourcePath: 'd', html: LONG }),
+      post({ mode: 'text', sourcePath: 'd', html: LONG, source: 'itps' }),
     );
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({
@@ -261,6 +300,17 @@ describe('listEmbeddingsHandler (GET)', () => {
       new Request('http://test/api/ai-rag?courseId=abc'),
     );
     expect(res.status).toBe(400);
+  });
+
+  it('lists each document with its source', async () => {
+    mocks.listDocsBySource.mockResolvedValue([
+      { sourcePath: 'd', count: 5, source: 'itps' },
+    ]);
+    const res = await listEmbeddingsHandler(
+      new Request('http://test/api/ai-rag'),
+    );
+    const body = await res.json();
+    expect(body.docsBySource[0].source).toBe('itps');
   });
 
   it('returns docs grouped by source (org-wide when omitted)', async () => {

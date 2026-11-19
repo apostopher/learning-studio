@@ -35,6 +35,7 @@ describe('useAddEmbeddings', () => {
       url: 'https://blob.vercel-storage.com/training-docs/x.pdf',
       fileName: 'x.pdf',
       mimeType: 'application/pdf',
+      source: 'itps',
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -46,6 +47,7 @@ describe('useAddEmbeddings', () => {
       url: 'https://blob.vercel-storage.com/training-docs/x.pdf',
       fileName: 'x.pdf',
       mimeType: 'application/pdf',
+      source: 'itps',
     });
     expect(result.current.data).toEqual({
       sourcePath: 'file-x.pdf',

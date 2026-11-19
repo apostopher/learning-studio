@@ -1,6 +1,7 @@
-import { and, type Column, count, eq, isNull } from 'drizzle-orm';
+import { and, type Column, count, eq, isNull, max } from 'drizzle-orm';
 import { db } from '#/db';
 import { coursesTable, docs, docURLs } from '#/db/schema';
+import type { DocSource } from '#/lib/doc-source';
 
 function courseFilter(col: Column, courseId: number | null) {
   return courseId === null ? isNull(col) : eq(col, courseId);
@@ -23,13 +24,20 @@ export async function courseExists(courseId: number): Promise<boolean> {
 
 export async function listDocsBySource(
   courseId: number | null,
-): Promise<{ sourcePath: string; count: number }[]> {
-  return db
-    .select({ sourcePath: docs.sourcePath, count: count() })
+): Promise<{ sourcePath: string; count: number; source: DocSource }[]> {
+  // One row per document: every chunk of a document carries the same source,
+  // so max() collapses them (the column is NOT NULL, so it is never null).
+  const rows = await db
+    .select({
+      sourcePath: docs.sourcePath,
+      count: count(),
+      source: max(docs.source),
+    })
     .from(docs)
     .where(adminDocFilter(courseId))
     .groupBy(docs.sourcePath)
     .orderBy(docs.sourcePath);
+  return rows.map((r) => ({ ...r, source: r.source as DocSource }));
 }
 
 export async function deleteDocsBySource(

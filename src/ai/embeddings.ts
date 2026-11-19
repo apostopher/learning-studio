@@ -3,12 +3,14 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { embeddingModel } from '#/ai/gemini';
 import { db } from '#/db';
 import { docs } from '#/db/schema';
+import type { DocSource } from '#/lib/doc-source';
 import { htmlToSections, chunkSectionTokens } from '#/ai/embeddings-helper';
 
 export type GenerateEmbeddingsArgs = {
   courseId: number | null;
   sourcePath: string;
   html: string;
+  source: DocSource;
 };
 
 const BATCH_SIZE = 100;
@@ -34,6 +36,7 @@ export async function generateHTMLEmbeddings({
   courseId,
   sourcePath,
   html,
+  source,
 }: GenerateEmbeddingsArgs): Promise<{ chunks: number }> {
   const sections = htmlToSections(html, sourcePath);
   const toEmbed = sections.flatMap(chunkSectionTokens);
@@ -67,6 +70,7 @@ export async function generateHTMLEmbeddings({
             heading: c.heading,
             chunk: c.text,
             embedding: allEmbeddings[i],
+            source,
           })
           .onConflictDoNothing(),
       ),

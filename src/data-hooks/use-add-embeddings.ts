@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { DocSource } from '#/lib/doc-source';
 import { dataKeys } from './keys';
 
 export interface AddEmbeddingsInput {
   url: string;
   fileName: string;
   mimeType: string;
+  source: DocSource;
 }
 
 /** Ingest an uploaded doc into course-scoped embeddings, then refetch the list. */

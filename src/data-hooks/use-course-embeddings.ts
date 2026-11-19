@@ -1,14 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
+import { type DocSource, DocSourceSchema } from '#/lib/doc-source';
 import { dataKeys } from './keys';
 
 const responseSchema = z.object({
   docsBySource: z.array(
-    z.object({ sourcePath: z.string(), count: z.number() }),
+    z.object({
+      sourcePath: z.string(),
+      count: z.number(),
+      source: DocSourceSchema,
+    }),
   ),
 });
 
-export type CourseEmbeddingDoc = { sourcePath: string; count: number };
+export type CourseEmbeddingDoc = {
+  sourcePath: string;
+  count: number;
+  source: DocSource;
+};
 
 /** Docs (grouped by source, with embedding counts) for one course. */
 export function useCourseEmbeddings(courseId: number) {

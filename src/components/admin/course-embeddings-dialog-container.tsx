@@ -16,6 +16,7 @@ import { useAddEmbeddings } from '#/data-hooks/use-add-embeddings';
 import { useCourseEmbeddings } from '#/data-hooks/use-course-embeddings';
 import { useDeleteEmbedding } from '#/data-hooks/use-delete-embedding';
 import { useUploadTrainingDoc } from '#/data-hooks/use-upload-training-doc';
+import { DEFAULT_DOC_SOURCE } from '#/lib/doc-source';
 import { PersonaSectionContainer } from './persona/persona-section-container';
 import {
   type ConfigModalSection,
@@ -127,6 +128,7 @@ const Body = ({ courseId }: { courseId: number }) => {
         url: uploaded.url,
         fileName: resolveDocName(values.docName, uploaded.fileName),
         mimeType: uploaded.mimeType,
+        source: DEFAULT_DOC_SOURCE,
       });
       toast.success('Training document added');
       form.reset({ docName: '' });

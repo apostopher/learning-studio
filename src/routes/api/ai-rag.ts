@@ -103,6 +103,7 @@ export async function addEmbeddingsHandler(
       courseId,
       sourcePath,
       html,
+      source: input.source,
     });
 
     if (chunks === 0) {

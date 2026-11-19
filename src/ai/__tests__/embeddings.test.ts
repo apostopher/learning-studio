@@ -61,6 +61,7 @@ describe('generateHTMLEmbeddings', () => {
       courseId: 1,
       sourcePath: 'file-x',
       html: '<p>x</p>',
+      source: 'itps',
     });
     expect(result).toEqual({ chunks: 0 });
     expect(embedMany).not.toHaveBeenCalled();
@@ -79,6 +80,7 @@ describe('generateHTMLEmbeddings', () => {
       courseId: null,
       sourcePath: 'file-x',
       html: '<p>x</p>',
+      source: 'itps',
     });
     expect(result).toEqual({ chunks: 150 });
     expect(embedMany).toHaveBeenCalledTimes(2); // 100 + 50
@@ -94,6 +96,7 @@ describe('generateHTMLEmbeddings', () => {
       courseId: 2,
       sourcePath: 'file-x',
       html: '<p>x</p>',
+      source: 'itps',
     });
     expect(deleteWhereArg()).toEqual({
       and: [
@@ -111,6 +114,7 @@ describe('generateHTMLEmbeddings', () => {
       courseId: null,
       sourcePath: 'file-x',
       html: '<p>x</p>',
+      source: 'itps',
     });
     expect(deleteWhereArg()).toEqual({
       and: [
@@ -126,6 +130,29 @@ describe('generateHTMLEmbeddings', () => {
 function insertedRows(callIndex = 0) {
   return txMock.insert.mock.results[callIndex]?.value.values.mock.calls[0][0];
 }
+
+describe('generateHTMLEmbeddings source', () => {
+  it('writes the source on every chunk', async () => {
+    chunkSectionTokens.mockReturnValue([chunk(0), chunk(1), chunk(2)]);
+    embedMany.mockResolvedValue({
+      embeddings: [
+        [0.1, 0.2, 0.3],
+        [0.1, 0.2, 0.3],
+        [0.1, 0.2, 0.3],
+      ],
+    });
+    await generateHTMLEmbeddings({
+      courseId: 2,
+      sourcePath: 'file-x',
+      html: '<p>x</p>',
+      source: 'itps',
+    });
+    expect(txMock.insert).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      expect(insertedRows(i).source).toBe('itps');
+    }
+  });
+});
 
 describe('generateLessonEmbeddings', () => {
   it("replaces that lesson's chunks with course_id null, its lesson_slug and a lesson-unique sourcePath", async () => {
