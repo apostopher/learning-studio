@@ -12,9 +12,9 @@ type DebriefIntroProps = {
 
 const REASON_ID = 'debrief-intro-readonly-reason';
 
-/** The set rules (`#/lib/debrief-sets`), in the pilot's words. */
+/** The set rules (a set is judged on the lesson total), in the pilot's words. */
 const HOW_IT_WORKS =
-  'Viper gives you feedback after each answer. Average 75 or more across the set and the debrief is done; if not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
+  'Viper gives you feedback after each answer. Each set is scored together with your video and quiz, and reaching the course pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
 
 /**
  * The Debrief tab once the debrief is open, before it has been generated.

@@ -18,7 +18,6 @@ import {
 } from '#/data-hooks/use-debrief-attempt';
 import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
 import { useLessonQuizResult } from '#/data-hooks/use-lesson-quiz-result';
-import { DEBRIEF_DECLINE_COPY } from '#/lib/debrief-copy';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   attemptFormat,
@@ -27,7 +26,7 @@ import {
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
 import { DebriefQuizContainer } from './debrief-quiz-container';
-import { DebriefRetakePrompt } from './debrief-retake-prompt';
+import { DebriefReportFooter } from './debrief-report-footer';
 import { DebriefWait } from './debrief-wait';
 import { ScoreReport } from './score-report';
 import { useDebriefCountdown } from './use-debrief-countdown';
@@ -203,7 +202,6 @@ export const DebriefPanelContainer = ({
           />
         );
       case 'finished': {
-        const { note } = panel.report;
         return (
           <ScoreReport
             result={panel.report.result}
@@ -214,14 +212,15 @@ export const DebriefPanelContainer = ({
             idBase={idBase}
             headingRef={reportHeading}
             footer={
-              note === 'declined' ? (
-                <p className="text-sm text-primary">{DEBRIEF_DECLINE_COPY}</p>
-              ) : note === 'retake' && !readOnly ? (
-                <DebriefRetakePrompt
+              // A read-only lesson never starts an attempt.
+              readOnly ? undefined : (
+                <DebriefReportFooter
+                  passed={panel.report.result.passed}
+                  note={panel.report.note}
                   onRetakeNow={() => startAttempt(lessonSlug)}
                   onLater={() => retakeLater()}
                 />
-              ) : undefined
+              )
             }
           />
         );

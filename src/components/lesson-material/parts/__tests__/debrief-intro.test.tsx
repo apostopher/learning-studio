@@ -82,9 +82,9 @@ describe('DebriefIntro', () => {
   });
 
   const HOW =
-    'Viper gives you feedback after each answer. Average 75 or more across the set and the debrief is done; if not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
+    'Viper gives you feedback after each answer. Each set is scored together with your video and quiz, and reaching the course pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
 
-  it('says how the debrief works before the pilot starts: feedback after each answer, and the 75 rule', () => {
+  it('says how the debrief works before the pilot starts: feedback after each answer, and that the lesson total against the pass mark decides it', () => {
     render(
       <DebriefIntro
         loading={false}
