@@ -26,7 +26,16 @@ vi.mock('@upstash/redis', () => ({
 vi.mock('@/integrations/upstash/redis', () =>
   vi.importActual('#/integrations/upstash/redis'),
 );
-vi.mock('#/db', () => ({ db: {} }));
+// `select` throws a sentinel so a test can prove the DATABASE was asked —
+// the dev bypass below — without building a real drizzle query chain.
+const DB_READ = new Error('db.select reached');
+vi.mock('#/db', () => ({
+  db: {
+    select: () => {
+      throw DB_READ;
+    },
+  },
+}));
 vi.mock('@/db/schema', () => ({
   coursesTable: {},
   courseModulesTable: {},
@@ -90,5 +99,22 @@ describe('getCourseDetailsWithCache cache key', () => {
     expect(redisClient.get).not.toHaveBeenCalledWith(
       'course-details-v4:"flight-basics"',
     );
+  });
+
+  // Local dev shares the production database but not its Redis, so an admin
+  // save on prod (which evicts only prod's Redis) left localhost serving the
+  // old lock rules for up to 6h. Dev must read the database, never Redis.
+  it('reads the database, not Redis, in local dev', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    try {
+      redisClient.get.mockResolvedValue({ id: 1, modules: [] });
+
+      await expect(getCourseDetailsWithCache('flight-basics')).rejects.toBe(
+        DB_READ,
+      );
+      expect(redisClient.get).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

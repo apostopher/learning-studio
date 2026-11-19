@@ -266,7 +266,7 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
  */
 export const COURSE_DETAILS_CACHE_KEY = 'course-details-v5';
 
-export const getCourseDetailsWithCache = cacheWithRedis<
+const redisCourseDetails = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getCourseDetails>>
   // v2 -> v3: `modules.sequential_lessons` added. Entries written before the
@@ -282,6 +282,29 @@ export const getCourseDetailsWithCache = cacheWithRedis<
   // up to the 6h TTL. Bumping the prefix orphans the old entries instead of
   // reading them back as this shape.
 >(COURSE_DETAILS_CACHE_KEY, getCourseDetails);
+
+/**
+ * Course details, read through Redis everywhere except local dev.
+ *
+ * Admin saves evict the entry (`invalidateCourseDetailsCache`), but only in
+ * the Redis the SAVING server talks to. Local dev uses its own Redis while
+ * sharing the production database, so a save made on prod left localhost
+ * serving the pre-save lock rules for the rest of the 6h TTL (2026-11-19:
+ * a module switched to "Any order" still showed every lesson locked). Local
+ * dev has no traffic worth caching for, so it reads straight from the
+ * database and can never be stale.
+ *
+ * `process.env`, not `import.meta.env`: this runs in the SSR runner, which
+ * throws on the latter.
+ */
+export const getCourseDetailsWithCache: typeof redisCourseDetails =
+  Object.assign(
+    (slug: string) =>
+      process.env.NODE_ENV === 'development'
+        ? getCourseDetails(slug)
+        : redisCourseDetails(slug),
+    { invalidate: redisCourseDetails.invalidate },
+  );
 
 export type MyCourseSummary = {
   id: number;

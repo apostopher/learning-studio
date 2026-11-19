@@ -26,7 +26,10 @@ export const courseDetailsAtomFamily = atomFamily((slug: string) =>
       return data as LearnerCourseDetails;
     },
     enabled: !!slug,
-    staleTime: 1000 * 60 * 60 * 48,
+    // Carries the lock rules (lesson order, prerequisites), which admins
+    // change. At 48h an already-open tab kept enforcing the old rules for two
+    // days; 5 minutes lets a focus refetch pick up an admin save promptly.
+    staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 60 * 48,
   })),
 );
