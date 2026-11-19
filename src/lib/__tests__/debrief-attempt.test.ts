@@ -1167,8 +1167,30 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         finishedReason: 'set-passed',
         totalScore: 50,
       });
-      expect(r).toEqual({ ok: true, choice: 'no' });
+      expect(r).toMatchObject({ ok: true, choice: 'no' });
       expect(m.waitUntil).not.toHaveBeenCalled();
+    });
+
+    it('no: records the pass in the same transaction, and says whether it is new', async () => {
+      // The offer is judged on today's facts; set 1 may not have recorded a
+      // pass when it completed (a quiz retaken since, a lower pass mark).
+      m.insertPass.mockResolvedValue(true);
+      expect(await go('no')).toEqual({
+        ok: true,
+        choice: 'no',
+        passedNow: true,
+      });
+      expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
+        userId: 'u1',
+        lessonSlug: 'l1',
+      });
+      m.insertPass.mockResolvedValue(false);
+      m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
+      expect(await go('no')).toEqual({
+        ok: true,
+        choice: 'no',
+        passedNow: false,
+      });
     });
 
     it.each([

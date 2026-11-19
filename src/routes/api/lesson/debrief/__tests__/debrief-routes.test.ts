@@ -78,7 +78,11 @@ beforeEach(() => {
     passedNow: false,
     finished: null,
   });
-  m.continueAttempt.mockResolvedValue({ ok: true, choice: 'no' });
+  m.continueAttempt.mockResolvedValue({
+    ok: true,
+    choice: 'no',
+    passedNow: false,
+  });
   m.saveDraft.mockResolvedValue('saved');
   m.settleProgress.mockResolvedValue({ level: 'advanced' });
 });
@@ -334,10 +338,34 @@ describe('continue', () => {
     expect(await res.json()).toEqual({ choice: 'yes', questions });
   });
 
-  it('a no returns the choice', async () => {
+  it('a no that recorded an already-held pass returns the choice, without settling', async () => {
+    m.continueAttempt.mockResolvedValue({
+      ok: true,
+      choice: 'no',
+      passedNow: false,
+    });
     const res = await go({ ...body, choice: 'no' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ choice: 'no' });
+    expect(await res.json()).toEqual({
+      choice: 'no',
+      passedNow: false,
+      promotion: null,
+    });
+    expect(m.settleProgress).not.toHaveBeenCalled();
+  });
+
+  it('a no that recorded a NEW pass settles progress and returns the promotion', async () => {
+    m.continueAttempt.mockResolvedValue({
+      ok: true,
+      choice: 'no',
+      passedNow: true,
+    });
+    const res = await go({ ...body, choice: 'no' });
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    expect((await res.json()).promotion).toEqual({ level: 'advanced' });
   });
 
   it('409s when there is no offer to answer', async () => {

@@ -103,7 +103,8 @@ export type AttemptView = {
 
 export type ContinueResult =
   | { ok: true; choice: 'yes'; questions: ClientQuestion[] }
-  | { ok: true; choice: 'no' }
+  /** `passedNow`: finishing recorded a pass that was not yet held. */
+  | { ok: true; choice: 'no'; passedNow: boolean }
   /** Not this pilot's attempt, or not a chunk-format one. */
   | { ok: false; reason: 'forbidden' }
   /** Finished, or no set-2 offer is open on it. */
@@ -641,7 +642,8 @@ function storedResult(
  * - `yes`: the choice is stored on the snapshot (`improveAccepted`) and set
  *   2's questions come back. The finished attempt is then judged on the
  *   better of the two averages, so set 2 can only raise its score.
- * - `no`: the attempt finishes `set-passed` at set 1's average.
+ * - `no`: the attempt finishes `set-passed` at set 1's average, and the pass
+ *   is recorded (idempotent; `passedNow` when it was not yet held).
  *
  * Decided on the LOCKED row: `no-offer` when it is finished or has no open
  * offer (already taken up, set 1 missed or unfinished, or one set only).
@@ -688,7 +690,15 @@ export async function continueAttempt(a: {
       finishedReason: 'set-passed',
       totalScore: p.best ?? 0,
     });
-    return { ok: true, choice: 'no' };
+    // The offer is judged on today's facts and this course's pass mark, so
+    // set 1 may not have recorded a pass when it completed (a quiz retaken
+    // since, or a course with a lower pass mark). A `set-passed` row always
+    // has its `debrief_passes` row.
+    const passedNow = await insertPass(tx, {
+      userId: a.userId,
+      lessonSlug: locked.lessonSlug,
+    });
+    return { ok: true, choice: 'no', passedNow };
   });
 }
 

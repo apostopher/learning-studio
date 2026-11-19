@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { auth } from '#/lib/auth';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
 import { continueAttempt, getAttemptOwner } from '#/lib/debrief-attempt.server';
+import { settleProgress } from '#/lib/settle-progress.server';
 
 const ContinueInputSchema = z.object({
   // The course the pilot is in, for the gate and its pass mark.
@@ -19,7 +20,8 @@ const ContinueInputSchema = z.object({
  * Gated as `answer` is: 403 for an unknown attempt or another pilot's, and
  * `getDebriefAccess` on the attempt's lesson in the named course (not the
  * schedule). 409 when there is no offer to answer (finished, already taken
- * up, or none was made).
+ * up, or none was made). A `no` that records a new pass settles progress and
+ * returns the promotion, as `answer` does.
  */
 export async function continueDebriefHandler(
   request: Request,
@@ -73,7 +75,12 @@ export async function continueDebriefHandler(
         : forbidden();
     }
     const { ok: _ok, ...response } = result;
-    return Response.json(response);
+    if (response.choice === 'yes') return Response.json(response);
+    // A "no" that recorded a new pass settles progress, as an answer does.
+    const promotion = response.passedNow
+      ? await settleProgress({ userId, courseSlug })
+      : null;
+    return Response.json({ ...response, promotion });
   } catch (error) {
     console.error('Failed to continue debrief:', error);
     return Response.json(

@@ -257,12 +257,20 @@ export async function insertAnswerLog(
   await tx.insert(debriefAnswerLogsTable).values(v).onConflictDoNothing();
 }
 
-/** A permanent pass; inserting it twice is a no-op. */
+/**
+ * A permanent pass; inserting it twice is a no-op. True when this call
+ * recorded it (a new pass), false when it was already there.
+ */
 export async function insertPass(
   tx: Tx,
   v: { userId: string; lessonSlug: string },
-): Promise<void> {
-  await tx.insert(debriefPassesTable).values(v).onConflictDoNothing();
+): Promise<boolean> {
+  const rows = await tx
+    .insert(debriefPassesTable)
+    .values(v)
+    .onConflictDoNothing()
+    .returning({ userId: debriefPassesTable.userId });
+  return rows.length > 0;
 }
 
 /**
