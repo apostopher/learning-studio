@@ -17,6 +17,7 @@ export type ChipTone =
   | 'muted'
   | 'solid-warning'
   | 'solid-success'
+  | 'solid-accent'
   | 'soft-warning'
   | 'soft-success'
   | 'soft-apple';
@@ -27,6 +28,8 @@ const TONE_CLASSES: Record<ChipTone, string> = {
   /** A set state that wants to be noticed at a glance. */
   'solid-warning': 'bg-warning-9 text-warning-contrast',
   'solid-success': 'bg-success-9 text-success-contrast',
+  /** Brand gold. A flag about the lesson's version (placeholder for now). */
+  'solid-accent': 'bg-accent-9 text-accent-contrast',
   /** A set state that should sit quieter than its solid sibling. */
   'soft-warning': 'bg-warning-3 text-warning-text',
   'soft-success': 'bg-success-3 text-success-text',

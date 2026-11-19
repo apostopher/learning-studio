@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { BoardLesson } from '#/lib/admin-schemas';
 
@@ -9,6 +10,34 @@ import type { BoardLesson } from '#/lib/admin-schemas';
 // all these tests read from it.
 vi.mock('../../clamped-text', () => ({
   ClampedText: ({ text }: { text: string }) => <span>{text}</span>,
+}));
+
+// Base UI's Tooltip.Trigger swallows `disabled`; a plain button carrying the
+// same accessible name is all these tests click. Same stub as
+// editor-lesson-card-actions.test.tsx.
+vi.mock('../../ui/tooltip-icon-button', () => ({
+  TooltipIconButton: ({
+    label,
+    onClick,
+    disabled,
+    children,
+  }: {
+    label: string;
+    onClick?: () => void;
+    disabled?: boolean;
+    children: ReactNode;
+  }) => (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  ),
+  IconButtonTooltip: ({ label }: { label: string }) => <span>{label}</span>,
+  iconButtonClass: () => '',
 }));
 
 import { LessonCard } from '../lesson-card';
@@ -165,5 +194,88 @@ describe('LessonCard', () => {
     expect(cls).toContain('outline-transparent');
     expect(cls).toContain('transition-[outline-color,background-color]');
     expect(cls).not.toMatch(/hover:(scale|-?translate)/);
+  });
+
+  it('keeps the Draft label on read-only cards', () => {
+    // Drag overlays and borrowed lists pass no `visibility`; without the word
+    // a draft would look published there. Mutant: the label is dropped
+    // whenever the eye exists in the codebase rather than on this card.
+    render(<LessonCard lesson={lesson({ isAvailable: false })} />);
+    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /students/ })).toBeNull();
+  });
+
+  it('offers to show a draft lesson', () => {
+    const onToggle = vi.fn();
+    render(
+      <LessonCard
+        lesson={lesson({ isAvailable: false })}
+        visibility={{ onToggle }}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hidden from students. Show it' }),
+    );
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Draft')).toBeNull();
+  });
+
+  it('offers to hide a visible lesson', () => {
+    render(
+      <LessonCard
+        lesson={lesson({ isAvailable: true })}
+        visibility={{ onToggle: vi.fn() }}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Visible to students. Hide it' }),
+    ).toBeTruthy();
+  });
+
+  it('goes inert while the visibility change is saving', () => {
+    const onToggle = vi.fn();
+    render(
+      <LessonCard
+        lesson={lesson()}
+        visibility={{ onToggle, isPending: true }}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Updating visibility of Crosswind landings…',
+      }),
+    );
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('shows an inert Ver chip beside the quickshot chips', () => {
+    const onEdit = vi.fn();
+    const onPlay = vi.fn();
+    const onToggle = vi.fn();
+    render(
+      <LessonCard
+        lesson={lesson()}
+        onEdit={onEdit}
+        onPlay={onPlay}
+        visibility={{ onToggle }}
+        quickshotSlot={<span>chips</span>}
+      />,
+    );
+    const ver = screen.getByRole('button', {
+      name: 'Lesson versions are coming soon',
+    });
+    expect(ver.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(ver);
+    fireEvent.keyDown(ver, { key: 'Enter' });
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('draws no Ver chip on a card without chips', () => {
+    render(<LessonCard lesson={lesson()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Lesson versions are coming soon' }),
+    ).toBeNull();
   });
 });

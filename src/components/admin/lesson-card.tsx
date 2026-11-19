@@ -1,9 +1,20 @@
-import { CircleMinus, GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { Tooltip } from '@base-ui/react/tooltip';
+import {
+  CircleMinus,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
-import { Chip } from '../ui/chip';
-import { TooltipIconButton } from '../ui/tooltip-icon-button';
+import { Chip, chipClassName } from '../ui/chip';
+import {
+  IconButtonTooltip,
+  TooltipIconButton,
+} from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
 
 /**
@@ -31,6 +42,7 @@ export const LessonCard = ({
   onPlay,
   quickshotSlot,
   alsoIn,
+  visibility,
 }: {
   lesson: LessonCardLesson;
   /** Poster frame for this lesson's video, when its provider exposes one. */
@@ -83,6 +95,16 @@ export const LessonCard = ({
    * says to surface that, not block it. Omitted or empty draws nothing.
    */
   alsoIn?: string[];
+  /**
+   * Publish or draft the lesson from the card. Replaces the Draft label with
+   * an eye button that says what a click will do. Omitted on read-only cards
+   * (drag overlay, borrowed lists), which keep the Draft label in words.
+   */
+  visibility?: {
+    onToggle: () => void;
+    /** Save in flight: the eye goes inert and says so. */
+    isPending?: boolean;
+  };
 }) => {
   return (
     // Hover and keyboard-focus treatment: an outline in ITPS's orange
@@ -104,18 +126,46 @@ export const LessonCard = ({
       />
       {/* The tile spans both rows; everything else stacks beside it. */}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <ClampedText text={lesson.name} className="min-w-0 flex-1" />
-          {/*
-            Replaces the status dot the tile took over from. The dot was
-            `aria-hidden`, so published/draft was invisible to a screen reader and
-            the board had no other cue; a word is legible to everyone and, since
-            most lessons end up published, is absent most of the time.
-          */}
-          {!lesson.isAvailable && (
-            <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
-              Draft
-            </span>
+        {/* The name gets the whole line; it used to share it with the
+            label and four icons and clamped long before it needed to. */}
+        <ClampedText text={lesson.name} className="min-w-0" />
+        <div className="flex items-center justify-end gap-2">
+          {visibility ? (
+            <TooltipIconButton
+              label={
+                visibility.isPending
+                  ? `Updating visibility of ${lesson.name}…`
+                  : lesson.isAvailable
+                    ? 'Visible to students. Hide it'
+                    : 'Hidden from students. Show it'
+              }
+              onClick={visibility.onToggle}
+              disabled={visibility.isPending}
+            >
+              {lesson.isAvailable ? (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                // Tinted: a crossed eye says less than the word "Draft"
+                // did, so the draft state carries colour to stay noticed.
+                <EyeOff
+                  className="h-4 w-4 text-warning-text"
+                  aria-hidden="true"
+                />
+              )}
+            </TooltipIconButton>
+          ) : (
+            /*
+              Replaces the status dot the tile took over from. The dot was
+              `aria-hidden`, so published/draft was invisible to a screen
+              reader and the board had no other cue; a word is legible to
+              everyone and, since most lessons end up published, is absent
+              most of the time. Kept for read-only cards with no eye.
+            */
+            !lesson.isAvailable && (
+              <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
+                Draft
+              </span>
+            )
           )}
           {onEdit && (
             <TooltipIconButton label="Edit lesson" onClick={onEdit}>
@@ -168,8 +218,38 @@ export const LessonCard = ({
         {alsoIn && alsoIn.length > 0 && (
           <Chip tone="soft-apple">Also in {alsoIn.join(', ')}</Chip>
         )}
-        {quickshotSlot}
+        {quickshotSlot && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {quickshotSlot}
+            <VersionChip />
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
+/**
+ * Placeholder for the lesson-version flag (design 2026-11-19): gold once
+ * versioning exists will mean "a newer version is in Disciplines". Until
+ * then it is inert and says so — `aria-disabled` rather than `disabled`
+ * because Base UI's Tooltip.Trigger swallows the native attribute, and no
+ * handler at all, so neither a click nor Enter does anything.
+ */
+const VersionChip = () => (
+  // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
+  <Tooltip.Root disableHoverablePopup>
+    <Tooltip.Trigger
+      render={<button type="button" />}
+      aria-disabled="true"
+      aria-label="Lesson versions are coming soon"
+      className={chipClassName(
+        'solid-accent',
+        'cursor-not-allowed focus-visible:outline-2 focus-visible:outline-apple-9 focus-visible:outline-offset-2',
+      )}
+    >
+      Ver
+    </Tooltip.Trigger>
+    <IconButtonTooltip label="Lesson versions are coming soon" />
+  </Tooltip.Root>
+);
