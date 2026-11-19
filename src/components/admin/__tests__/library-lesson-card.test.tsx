@@ -69,19 +69,25 @@ describe('LibraryLessonCard', () => {
     }
   });
 
-  it('gives the name the width the badge used to take', () => {
-    // Asserted on the name element's OWN class list. An earlier version used
-    // `closest('.flex-1')`, which walked up to the card's wrapper — that
-    // ancestor carries `flex-1` in every case, so the assertion passed even
-    // against a mutant that stripped `flex-1` from the name and parked a
-    // spacer in its place. It could not fail, which is worse than not
-    // existing.
+  it('gives the name a line of its own', () => {
+    // The name used to share a row with Draft, delete, and the grip, and
+    // clamped long before it had to (design 2026-11-19). Asserted on the
+    // name's own placement: it is a direct child of the card's stacked
+    // column, and no control sits beside it there. Mutant: the name moved
+    // back into the controls row — its parent becomes that row, and the
+    // row holds the delete and drag buttons.
     render(
-      <LibraryLessonCard lesson={lesson({ name: 'Crosswind landings' })} />,
+      <LibraryLessonCard
+        lesson={lesson({ name: 'Crosswind landings' })}
+        onDelete={vi.fn()}
+      />,
     );
-    expect(screen.getByText('Crosswind landings').className).toContain(
-      'flex-1',
+    const name = screen.getByText('Crosswind landings');
+    expect(name.parentElement?.className).toContain('flex-col');
+    const siblings = [...(name.parentElement?.children ?? [])].filter(
+      (el) => el !== name,
     );
+    expect(siblings.some((el) => el.tagName === 'BUTTON')).toBe(false);
   });
 
   it('never dims or disables a card that is used in courses', () => {
@@ -171,5 +177,15 @@ describe('LibraryLessonCard', () => {
     expect(cls).toContain('outline-transparent');
     expect(cls).toContain('transition-[outline-color,background-color]');
     expect(cls).not.toMatch(/hover:(scale|-?translate)/);
+  });
+
+  it('reserves an invisible, unannounced spot for the version', () => {
+    // Placeholder until lesson versioning exists (user's call, 2026-11-19):
+    // present for layout, never seen, read out, or selected.
+    render(<LibraryLessonCard lesson={lesson()} />);
+    const ver = screen.getByText('Vers 3.4');
+    expect(ver.className).toContain('opacity-0');
+    expect(ver.className).toContain('select-none');
+    expect(ver.closest('[aria-hidden="true"]')).not.toBeNull();
   });
 });

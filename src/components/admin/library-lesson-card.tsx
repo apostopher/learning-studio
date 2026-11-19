@@ -57,8 +57,22 @@ export const LibraryLessonCard = ({
         onEdit={onEdit}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {/* The name gets the whole line, matching the course card. */}
+        <ClampedText text={lesson.name} className="min-w-0" />
         <div className="flex items-center gap-2">
-          <ClampedText text={lesson.name} className="min-w-0 flex-1" />
+          {/*
+            Placeholder for the lesson's version. Invisible on purpose (user's
+            call, 2026-11-19) until lesson versioning exists: it holds the
+            spot in the layout but is never seen, read out, or selected.
+            Replace with the real version number then.
+          */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none select-none text-tertiary text-xs opacity-0"
+          >
+            Vers 3.4
+          </span>
+          <span className="flex-1" />
           {!lesson.isAvailable && (
             <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
               Draft
