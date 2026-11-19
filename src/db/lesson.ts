@@ -122,3 +122,17 @@ export async function upsertLessonMaterial(
     return inserted;
   });
 }
+
+/**
+ * Whether any lesson holds `slug`. Not org-scoped: `lessons.slug` is unique
+ * across the whole table. Used by the admin Viper preview to refuse a lesson
+ * that does not exist before any model call is made.
+ */
+export async function lessonExistsBySlug(slug: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: lessonsTable.id })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.slug, slug))
+    .limit(1);
+  return row !== undefined;
+}

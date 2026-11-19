@@ -71,6 +71,7 @@ import { Route as ApiAdminModulesModuleIdRouteImport } from './routes/api/admin/
 import { Route as ApiAdminOfferingsOfferingIdRouteImport } from './routes/api/admin/offerings.$offeringId'
 import { Route as ApiAdminPersonasPersonaIdRouteImport } from './routes/api/admin/personas.$personaId'
 import { Route as ApiAdminUsersProfileIdRouteImport } from './routes/api/admin/users.$profileId'
+import { Route as ApiAdminViperPreviewRouteImport } from './routes/api/admin/viper.preview'
 import { Route as ApiCourseNewsMuteRouteImport } from './routes/api/course/news.mute'
 import { Route as ApiCourseOnboardingDeleteRouteImport } from './routes/api/course/onboarding/delete'
 import { Route as ApiCourseOnboardingReplyRouteImport } from './routes/api/course/onboarding/reply'
@@ -441,6 +442,11 @@ const ApiAdminUsersProfileIdRoute = ApiAdminUsersProfileIdRouteImport.update({
   path: '/$profileId',
   getParentRoute: () => ApiAdminUsersRoute,
 } as any)
+const ApiAdminViperPreviewRoute = ApiAdminViperPreviewRouteImport.update({
+  id: '/api/admin/viper/preview',
+  path: '/api/admin/viper/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCourseNewsMuteRoute = ApiCourseNewsMuteRouteImport.update({
   id: '/mute',
   path: '/mute',
@@ -777,6 +783,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
+  '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -885,6 +892,7 @@ export interface FileRoutesByTo {
   '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
+  '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -997,6 +1005,7 @@ export interface FileRoutesById {
   '/api/admin/offerings/$offeringId': typeof ApiAdminOfferingsOfferingIdRoute
   '/api/admin/personas/$personaId': typeof ApiAdminPersonasPersonaIdRouteWithChildren
   '/api/admin/users/$profileId': typeof ApiAdminUsersProfileIdRouteWithChildren
+  '/api/admin/viper/preview': typeof ApiAdminViperPreviewRoute
   '/api/course/news/mute': typeof ApiCourseNewsMuteRoute
   '/api/course/onboarding/delete': typeof ApiCourseOnboardingDeleteRoute
   '/api/course/onboarding/reply': typeof ApiCourseOnboardingReplyRoute
@@ -1109,6 +1118,7 @@ export interface FileRouteTypes {
     | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
+    | '/api/admin/viper/preview'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1217,6 +1227,7 @@ export interface FileRouteTypes {
     | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
+    | '/api/admin/viper/preview'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1328,6 +1339,7 @@ export interface FileRouteTypes {
     | '/api/admin/offerings/$offeringId'
     | '/api/admin/personas/$personaId'
     | '/api/admin/users/$profileId'
+    | '/api/admin/viper/preview'
     | '/api/course/news/mute'
     | '/api/course/onboarding/delete'
     | '/api/course/onboarding/reply'
@@ -1420,6 +1432,7 @@ export interface RootRouteChildren {
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
   ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRouteWithChildren
   ApiAdminModulesModuleIdRoute: typeof ApiAdminModulesModuleIdRouteWithChildren
+  ApiAdminViperPreviewRoute: typeof ApiAdminViperPreviewRoute
   ApiCourseOnboardingDeleteRoute: typeof ApiCourseOnboardingDeleteRoute
   ApiCourseOnboardingReplyRoute: typeof ApiCourseOnboardingReplyRoute
   ApiCourseOnboardingStartRoute: typeof ApiCourseOnboardingStartRoute
@@ -1869,6 +1882,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/admin/users/$profileId'
       preLoaderRoute: typeof ApiAdminUsersProfileIdRouteImport
       parentRoute: typeof ApiAdminUsersRoute
+    }
+    '/api/admin/viper/preview': {
+      id: '/api/admin/viper/preview'
+      path: '/api/admin/viper/preview'
+      fullPath: '/api/admin/viper/preview'
+      preLoaderRoute: typeof ApiAdminViperPreviewRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/course/news/mute': {
       id: '/api/course/news/mute'
@@ -2642,6 +2662,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminLessonMaterialParseRoute: ApiAdminLessonMaterialParseRoute,
   ApiAdminLessonsLessonIdRoute: ApiAdminLessonsLessonIdRouteWithChildren,
   ApiAdminModulesModuleIdRoute: ApiAdminModulesModuleIdRouteWithChildren,
+  ApiAdminViperPreviewRoute: ApiAdminViperPreviewRoute,
   ApiCourseOnboardingDeleteRoute: ApiCourseOnboardingDeleteRoute,
   ApiCourseOnboardingReplyRoute: ApiCourseOnboardingReplyRoute,
   ApiCourseOnboardingStartRoute: ApiCourseOnboardingStartRoute,

@@ -580,3 +580,16 @@ export const editorSplitPercentAtom = atom(40);
 export const lessonMaterialDirtyAtomFamily = atomFamily((_lessonId: number) =>
   atom(false),
 );
+
+/**
+ * The lesson the AI Training Chat preview is scoped to, by slug. `null` until
+ * the admin picks one; the composer stays disabled (and says so) until then.
+ */
+export const previewLessonSlugAtom = atom<string | null>(null);
+
+/**
+ * The persona the Chat preview tests, by id. `null` means "the org default"
+ * — resolved against `usePersonas()` at render, since the default is server
+ * data and may change while this atom does not.
+ */
+export const previewPersonaIdAtom = atom<number | null>(null);

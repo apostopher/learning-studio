@@ -91,6 +91,9 @@ export function makeSearchKBTool(opts: {
 /**
  * Admin preview: Viper scoped to one lesson plus the shared (org-wide)
  * documents, with no learner, course or gating involved.
+ *
+ * Admin-only: it bypasses lesson gating, so only a caller that has already
+ * passed `requireAdmin` (POST /api/admin/viper/preview) may build it.
  */
 export function makePreviewSearchKBTool(opts: {
   lessonSlug: string;
