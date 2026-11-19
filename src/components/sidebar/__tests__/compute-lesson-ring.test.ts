@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
 import { computeLessonRing } from '../compute-lesson-ring';
 
 const now = new Date('2026-10-28T09:00:00Z');
@@ -53,34 +52,25 @@ describe('computeLessonRing', () => {
     );
   });
 
-  it('keeps the retake D and states when it reopens (6h) after a finished attempt', () => {
+  it('keeps the retake D and says it is ready to retake right after a finished attempt, with no refresh', () => {
     const r = computeLessonRing({
       ...base,
       debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
     });
     expect(r.badge).toBe('retake');
     expect(r.ariaLabel).toBe(
-      'Lesson X, 100% complete, debrief not passed yet, reopens Wed 28 Oct, 9:40 AM',
+      'Lesson X, 100% complete, debrief not passed yet, ready to retake',
     );
-    expect(r.refreshAt).toBe(
-      new Date(
-        Date.parse('2026-10-28T03:40:00Z') + DEBRIEF_RETAKE_DELAY_MS,
-      ).toISOString(),
-    );
+    expect(r.refreshAt).toBeNull();
   });
 
-  it('omits the time (SSR-safe) when includeTime is false', () => {
+  it('shows passed for an open attempt after a pass (a pending offer)', () => {
     const r = computeLessonRing({
       ...base,
-      includeTime: false,
-      debrief: facts({ lastFinishedAt: '2026-10-28T03:40:00Z' }) as never,
+      debrief: facts({ passed: true, hasOpenAttempt: true }) as never,
     });
-    expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief not passed yet, reopens later');
-    expect(r.refreshAt).toBe(
-      new Date(
-        Date.parse('2026-10-28T03:40:00Z') + DEBRIEF_RETAKE_DELAY_MS,
-      ).toISOString(),
-    );
+    expect(r.badge).toBe('passed');
+    expect(r.ariaLabel).toBe('Lesson X, 100% complete, debrief passed');
   });
 
   it('shows no badge during the first 12h, says when the debrief opens, and schedules the refresh', () => {

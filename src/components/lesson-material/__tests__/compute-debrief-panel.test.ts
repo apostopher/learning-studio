@@ -15,10 +15,7 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import {
-  DEBRIEF_RETAKE_DELAY_MS,
-  type DebriefState,
-} from '#/lib/debrief-schedule';
+import type { DebriefState } from '#/lib/debrief-schedule';
 import {
   answerErrorCopy,
   attemptFormat,
@@ -177,43 +174,19 @@ describe('computeDebriefPanel', () => {
     [true, false],
     [true, true],
   ])('opens to take (retake=%s, resume=%s)', (retake, resume) => {
-    expect(panel(loaded({ kind: 'open', retake, resume }))).toEqual({
+    expect(
+      panel(loaded({ kind: 'open', retake, resume, passed: false })),
+    ).toEqual({
       kind: 'take',
       retake,
       resume,
     });
   });
 
-  it('retake-waiting shows the last attempt from the status payload — set averages and notes — with the time the next attempt opens', () => {
+  it('an open attempt after a pass (a pending offer) is taken, resumed, not the pass history', () => {
     expect(
-      panel(
-        loaded(
-          { kind: 'retake-waiting', availableAt: AT },
-          {
-            lastAttempt: { score: 71, setAverages: [64, 71] },
-            revisitNotes: ['Note A', 'Note B'],
-          },
-        ),
-      ),
-    ).toEqual({
-      kind: 'retake-waiting',
-      availableAt: AT,
-      report: {
-        result: { passed: false, score: 71, setAverages: [64, 71] },
-        revisitNotes: ['Note A', 'Note B'],
-      },
-    });
-  });
-
-  it('retake-waiting with no finished chunk attempt (legacy attempts only) is the countdown alone', () => {
-    expect(
-      panel(
-        loaded(
-          { kind: 'retake-waiting', availableAt: AT },
-          { lastAttempt: null, revisitNotes: [] },
-        ),
-      ),
-    ).toEqual({ kind: 'retake-waiting', availableAt: AT, report: null });
+      panel(loaded({ kind: 'open', retake: true, resume: true, passed: true })),
+    ).toEqual({ kind: 'take', retake: true, resume: true });
   });
 
   it('hands passed the attempts history, passing first as the server sent it', () => {
@@ -232,27 +205,18 @@ describe('computeDebriefPanel', () => {
   });
 
   describe('an attempt just finished on this lesson', () => {
-    it('shows its report with the countdown to the time the server gives', () => {
+    it('shows its report with no countdown: a failed attempt has no retake wait', () => {
+      // Before the refetch lands the cached status still says open (resume)...
       expect(
-        panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
-          finished: finished(),
-        }),
-      ).toEqual({ kind: 'finished', report: finished(), availableAt: AT });
-    });
-
-    it('counts down from its own finish while the status still says open', () => {
-      // The refetch that follows the last answer has not landed yet.
-      expect(
-        panel(loaded({ kind: 'open', retake: false, resume: true }, {}, 1), {
-          finished: finished(),
-        }),
-      ).toEqual({
-        kind: 'finished',
-        report: finished(),
-        availableAt: new Date(
-          FINISHED_AT + DEBRIEF_RETAKE_DELAY_MS,
-        ).toISOString(),
-      });
+        panel(
+          loaded(
+            { kind: 'open', retake: false, resume: true, passed: false },
+            {},
+            1,
+          ),
+          { finished: finished() },
+        ),
+      ).toEqual({ kind: 'finished', report: finished(), availableAt: null });
     });
 
     it('a pass has no countdown', () => {
@@ -269,17 +233,21 @@ describe('computeDebriefPanel', () => {
 
     it("another lesson's report is not shown here", () => {
       expect(
-        panel(loaded({ kind: 'retake-waiting', availableAt: AT }), {
-          finished: finished({ lessonSlug: 'another-lesson' }),
-        }),
-      ).toEqual({ kind: 'retake-waiting', availableAt: AT, report: null });
+        panel(
+          loaded({ kind: 'open', retake: true, resume: false, passed: false }),
+          { finished: finished({ lessonSlug: 'another-lesson' }) },
+        ),
+      ).toEqual({ kind: 'take', retake: true, resume: false });
     });
 
     it('gives way to the fresh debrief once a status fetched after it says open', () => {
       expect(
-        panel(loaded({ kind: 'open', retake: true, resume: false }), {
-          finished: finished(),
-        }),
+        panel(
+          loaded({ kind: 'open', retake: true, resume: false, passed: false }),
+          {
+            finished: finished(),
+          },
+        ),
       ).toEqual({
         kind: 'take',
         retake: true,
@@ -291,7 +259,6 @@ describe('computeDebriefPanel', () => {
   describe('an attempt in progress', () => {
     it('stays take when a refetch says the debrief is no longer open', () => {
       for (const state of [
-        { kind: 'retake-waiting', availableAt: AT },
         { kind: 'waiting', availableAt: AT },
         { kind: 'passed' },
         { kind: 'not-done' },
@@ -308,7 +275,12 @@ describe('computeDebriefPanel', () => {
 
 describe('isStaleFinishedDebrief', () => {
   it('is stale only for this lesson, with an open status fetched after the finish', () => {
-    const open = loaded({ kind: 'open', retake: true, resume: false });
+    const open = loaded({
+      kind: 'open',
+      retake: true,
+      resume: false,
+      passed: false,
+    });
     expect(isStaleFinishedDebrief(finished(), LESSON, open)).toBe(true);
     expect(
       isStaleFinishedDebrief(finished(), LESSON, {
@@ -322,7 +294,7 @@ describe('isStaleFinishedDebrief', () => {
       isStaleFinishedDebrief(
         finished(),
         LESSON,
-        loaded({ kind: 'retake-waiting', availableAt: AT }),
+        loaded({ kind: 'waiting', availableAt: AT }),
       ),
     ).toBe(false);
   });
@@ -764,21 +736,6 @@ describe('answerErrorCopy', () => {
 });
 
 describe('countdownTarget', () => {
-  it('a finished report keeps one announcement key while its time is corrected by the server', () => {
-    const before = countdownTarget({
-      kind: 'finished',
-      report: finished(),
-      availableAt: '2026-10-28T15:40:00.000Z',
-    });
-    const after = countdownTarget({
-      kind: 'finished',
-      report: finished(),
-      availableAt: '2026-10-28T15:40:01.234Z',
-    });
-    expect(before.announceKey).toBe(after.announceKey);
-    expect(after.availableAt).toBe('2026-10-28T15:40:01.234Z');
-  });
-
   it('the 12 h wait refetches when it opens but announces no retake countdown', () => {
     expect(countdownTarget({ kind: 'waiting', availableAt: AT })).toEqual({
       availableAt: AT,
@@ -786,17 +743,7 @@ describe('countdownTarget', () => {
     });
   });
 
-  it('retake-waiting counts down and announces', () => {
-    expect(
-      countdownTarget({
-        kind: 'retake-waiting',
-        availableAt: AT,
-        report: null,
-      }),
-    ).toEqual({ availableAt: AT, announceKey: `retake:${AT}` });
-  });
-
-  it('a pass has nothing to count down to', () => {
+  it('a finished report has nothing to count down to', () => {
     expect(
       countdownTarget({
         kind: 'finished',

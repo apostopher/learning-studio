@@ -40,13 +40,14 @@ describe('fetchDebriefStatus', () => {
 describe('fetchDebriefStatus — what the route sends now', () => {
   it('parses an open state that says whether it resumes', async () => {
     respond(200, {
-      state: { kind: 'open', retake: true, resume: true },
+      state: { kind: 'open', retake: true, resume: true, passed: false },
       lessonOutstanding: [],
     });
     expect((await fetchDebriefStatus(lesson)).state).toEqual({
       kind: 'open',
       retake: true,
       resume: true,
+      passed: false,
     });
   });
 

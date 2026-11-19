@@ -137,6 +137,7 @@ describe('getDebriefAccess state', () => {
       kind: 'open',
       retake: false,
       resume: false,
+      passed: false,
     });
   });
 
@@ -153,6 +154,7 @@ describe('getDebriefAccess state', () => {
       kind: 'open',
       retake: true,
       resume: true,
+      passed: false,
     });
   });
 
@@ -166,8 +168,10 @@ describe('getDebriefAccess state', () => {
     });
     const access = await getDebriefAccess(args);
     expect(access.ok && access.state).toEqual({
-      kind: 'retake-waiting',
-      availableAt: '2026-10-27T16:00:00.000Z',
+      kind: 'open',
+      retake: true,
+      resume: false,
+      passed: false,
     });
     // Mastery is no longer handed out: the status route shows set scores.
     expect(access.ok && 'mastery' in access).toBe(false);

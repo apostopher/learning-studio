@@ -12,14 +12,13 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
 import { setAverage } from '#/lib/debrief-sets';
 
 /**
  * An attempt that finished while the pilot was on its lesson: what its score
  * report shows. Kept in `justFinishedDebriefAtom` only to bridge the moment
- * between the last answer and the status refetch landing: once it lands, a
- * retake-waiting status carries the same report from the server, and a pass
+ * between the last answer and the status refetch landing: once it lands, an
+ * open-for-retake status carries the same report from the server, and a pass
  * shows the pass report until the pilot leaves the lesson.
  */
 export type FinishedDebrief = {
@@ -56,21 +55,10 @@ export type DebriefPanel =
    */
   | { kind: 'take'; retake: boolean; resume: boolean }
   /**
-   * The attempt just finished on this lesson: its report, and the countdown
-   * to the next attempt (null once passed).
+   * The attempt just finished on this lesson: its report. There is no retake
+   * wait, so `availableAt` is always null (no countdown).
    */
-  | { kind: 'finished'; report: FinishedDebrief; availableAt: string | null }
-  /**
-   * The wait for a retake, on any later visit: the report the server keeps
-   * (the last attempt's set scores and revisit notes) with the countdown
-   * beneath it. `report` is null when there is no finished chunk attempt
-   * (legacy attempts only): then the countdown stands alone.
-   */
-  | {
-      kind: 'retake-waiting';
-      availableAt: string;
-      report: Pick<FinishedDebrief, 'result' | 'revisitNotes'> | null;
-    }
+  | { kind: 'finished'; report: FinishedDebrief; availableAt: null }
   | { kind: 'passed'; attempts: NonNullable<DebriefStatus['attempts']> };
 
 type StatusView = {
@@ -110,8 +98,7 @@ function isRefusal(error: unknown): boolean {
 
 /**
  * Whether the just-finished report has been overtaken: a status fetched
- * after the finish says the debrief is open again (the 6 h ran out while the
- * page stayed open). Fetched AFTER matters: until the refetch that follows
+ * after the finish says the debrief is open again. Fetched AFTER matters: until the refetch that follows
  * the last answer lands, the cached status still says open, and that is the
  * attempt just finished, not a reopening.
  */
@@ -148,11 +135,7 @@ export function computeDebriefPanel({
     return {
       kind: 'finished',
       report: own,
-      availableAt: own.result.passed
-        ? null
-        : state?.kind === 'retake-waiting'
-          ? state.availableAt
-          : new Date(own.finishedAt + DEBRIEF_RETAKE_DELAY_MS).toISOString(),
+      availableAt: null,
     };
   }
 
@@ -190,17 +173,6 @@ export function computeDebriefPanel({
         kind: 'take',
         retake: data.state.retake,
         resume: data.state.resume,
-      };
-    case 'retake-waiting':
-      return {
-        kind: 'retake-waiting',
-        availableAt: data.state.availableAt,
-        report: data.lastAttempt
-          ? {
-              result: { ...data.lastAttempt, passed: false },
-              revisitNotes: data.revisitNotes ?? [],
-            }
-          : null,
       };
     case 'passed':
       return { kind: 'passed', attempts: data.attempts ?? [] };
@@ -321,11 +293,8 @@ export function setAveragesOf(
  * What the countdown runs to, and the key its once-only announcement is
  * tied to (null: no announcement).
  *
- * - A finished report keys on the finish, not the instant. Its time is first
- *   estimated from the finish, then corrected by the server's, and one
- *   attempt must be announced once.
- * - The 12 h wait still refetches when it opens, but it is not a retake: it
- *   announces nothing.
+ * Only the 12 h first-debrief wait counts down. It refetches when it opens,
+ * and announces nothing.
  */
 export function countdownTarget(panel: DebriefPanel): {
   availableAt: string | null;
@@ -334,18 +303,6 @@ export function countdownTarget(panel: DebriefPanel): {
   switch (panel.kind) {
     case 'waiting':
       return { availableAt: panel.availableAt, announceKey: null };
-    case 'retake-waiting':
-      return {
-        availableAt: panel.availableAt,
-        announceKey: `retake:${panel.availableAt}`,
-      };
-    case 'finished':
-      return panel.availableAt === null
-        ? { availableAt: null, announceKey: null }
-        : {
-            availableAt: panel.availableAt,
-            announceKey: `finished:${panel.report.finishedAt}`,
-          };
     default:
       return { availableAt: null, announceKey: null };
   }

@@ -50,8 +50,6 @@ function readDelayEnv(): unknown {
   return import.meta.env.VITE_DEBRIEF_DELAY_MINUTES;
 }
 export const DEBRIEF_DELAY_MS = DEBRIEF_DELAY_MINUTES * 60_000;
-/** Wait after a finished attempt before the next one. Fixed, not env-overridable. */
-export const DEBRIEF_RETAKE_DELAY_MS = 6 * 3_600_000;
 /** The delay as the pilot reads it: "12 hours". */
 export const DEBRIEF_DELAY_LABEL = formatDebriefDelay(DEBRIEF_DELAY_MINUTES);
 
@@ -74,8 +72,7 @@ export type DebriefFacts = {
 export type DebriefState =
   | { kind: 'not-done' }
   | { kind: 'waiting'; availableAt: string } // the delay after the clock starts
-  | { kind: 'open'; retake: boolean; resume: boolean }
-  | { kind: 'retake-waiting'; availableAt: string } // the 6h after a finished attempt
+  | { kind: 'open'; retake: boolean; resume: boolean; passed: boolean }
   | { kind: 'passed' };
 
 /**
@@ -103,27 +100,26 @@ export function computeDebriefState(
   facts: DebriefFacts,
   now: Date,
 ): DebriefState {
-  if (facts.passed) return { kind: 'passed' };
-
-  const retake = facts.lastFinishedAt !== null;
-  if (facts.hasOpenAttempt) return { kind: 'open', retake, resume: true };
-
-  if (facts.lastFinishedAt !== null) {
-    const availableMs =
-      Date.parse(facts.lastFinishedAt) + DEBRIEF_RETAKE_DELAY_MS;
-    if (now.getTime() >= availableMs) {
-      return { kind: 'open', retake: true, resume: false };
-    }
+  // An open attempt wins over a pass: a learner who passed set 1 may have an
+  // optional set 2 pending, and must be able to resume it.
+  if (facts.hasOpenAttempt) {
     return {
-      kind: 'retake-waiting',
-      availableAt: new Date(availableMs).toISOString(),
+      kind: 'open',
+      retake: facts.lastFinishedAt !== null,
+      resume: true,
+      passed: facts.passed,
     };
+  }
+  if (facts.passed) return { kind: 'passed' };
+  // A finished, unpassed attempt reopens at once: there is no retake wait.
+  if (facts.lastFinishedAt !== null) {
+    return { kind: 'open', retake: true, resume: false, passed: false };
   }
 
   if (facts.clockStartAt === null) return { kind: 'not-done' };
   const availableMs = Date.parse(facts.clockStartAt) + DEBRIEF_DELAY_MS;
   if (now.getTime() >= availableMs) {
-    return { kind: 'open', retake: false, resume: false };
+    return { kind: 'open', retake: false, resume: false, passed: false };
   }
   return { kind: 'waiting', availableAt: new Date(availableMs).toISOString() };
 }
@@ -132,8 +128,8 @@ export function computeDebriefState(
  * Ring badge.
  * - 'debrief': due and not yet attempted (or a first attempt in progress).
  * - 'retake': an attempt has finished without a pass — from that first fail
- *   until a pass, whether the retake is open or still in its 6h wait.
- * - 'passed': passed.
+ *   until a pass.
+ * - 'passed': passed, including an open attempt (a pending offer) after a pass.
  * - null: not done yet, or still in the 12h wait.
  */
 export function debriefBadge(
@@ -141,9 +137,8 @@ export function debriefBadge(
 ): 'debrief' | 'retake' | 'passed' | null {
   switch (state.kind) {
     case 'open':
+      if (state.passed) return 'passed';
       return state.retake ? 'retake' : 'debrief';
-    case 'retake-waiting':
-      return 'retake';
     case 'passed':
       return 'passed';
     case 'not-done':

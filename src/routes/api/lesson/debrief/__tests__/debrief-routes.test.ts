@@ -101,11 +101,6 @@ describe('start', () => {
 
   it.each([
     [
-      'retake-waiting',
-      { kind: 'retake-waiting', availableAt: '2026-11-12T18:00:00.000Z' },
-      { error: 'not-open', availableAt: '2026-11-12T18:00:00.000Z' },
-    ],
-    [
       'waiting',
       { kind: 'waiting', availableAt: '2026-11-12T12:00:00.000Z' },
       { error: 'not-open', availableAt: '2026-11-12T12:00:00.000Z' },
@@ -122,7 +117,7 @@ describe('start', () => {
 
   it('resumes when the state says an attempt is open', async () => {
     m.getDebriefAccess.mockResolvedValue(
-      access({ kind: 'open', retake: true, resume: true }),
+      access({ kind: 'open', retake: true, resume: true, passed: false }),
     );
     expect((await start()).status).toBe(200);
     expect(m.startOrResumeAttempt).toHaveBeenCalledOnce();

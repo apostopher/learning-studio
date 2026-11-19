@@ -3,7 +3,6 @@ import {
   computeDebriefState,
   DEBRIEF_DELAY_LABEL,
   DEBRIEF_DELAY_MS,
-  DEBRIEF_RETAKE_DELAY_MS,
   type DebriefFacts,
   debriefBadge,
   debriefClockStart,
@@ -56,32 +55,16 @@ describe('computeDebriefState', () => {
   it('is open exactly 12h after the clock starts (boundary inclusive)', () => {
     expect(
       computeDebriefState(facts({ clockStartAt: hoursAgo(12) }), now),
-    ).toEqual({ kind: 'open', retake: false, resume: false });
+    ).toEqual({ kind: 'open', retake: false, resume: false, passed: false });
   });
 
-  it('is retake-waiting for 6h after the last finished attempt', () => {
+  it('a finished unpassed attempt is open for retake at once, with no wait', () => {
     expect(
       computeDebriefState(
-        facts({ clockStartAt: hoursAgo(48), lastFinishedAt: hoursAgo(2) }),
+        facts({ clockStartAt: hoursAgo(48), lastFinishedAt: hoursAgo(1 / 60) }),
         now,
       ),
-    ).toEqual({
-      kind: 'retake-waiting',
-      availableAt: '2026-10-27T16:00:00.000Z',
-    });
-  });
-
-  it('is open for retake exactly 6h after the last finished attempt', () => {
-    expect(
-      computeDebriefState(
-        facts({ clockStartAt: hoursAgo(48), lastFinishedAt: hoursAgo(6) }),
-        now,
-      ),
-    ).toEqual({ kind: 'open', retake: true, resume: false });
-  });
-
-  it('retake delay is a fixed 6 hours', () => {
-    expect(DEBRIEF_RETAKE_DELAY_MS).toBe(6 * 3_600_000);
+    ).toEqual({ kind: 'open', retake: true, resume: false, passed: false });
   });
 
   it('gates a retake on lastFinishedAt even when the clock start is later', () => {
@@ -90,7 +73,7 @@ describe('computeDebriefState', () => {
         facts({ clockStartAt: hoursAgo(1), lastFinishedAt: hoursAgo(100) }),
         now,
       ),
-    ).toEqual({ kind: 'open', retake: true, resume: false });
+    ).toEqual({ kind: 'open', retake: true, resume: false, passed: false });
   });
 
   it('an open attempt resumes regardless of the clock', () => {
@@ -103,17 +86,27 @@ describe('computeDebriefState', () => {
         }),
         now,
       ),
-    ).toEqual({ kind: 'open', retake: true, resume: true });
+    ).toEqual({ kind: 'open', retake: true, resume: true, passed: false });
     expect(computeDebriefState(facts({ hasOpenAttempt: true }), now)).toEqual({
       kind: 'open',
       retake: false,
       resume: true,
+      passed: false,
     });
   });
 
-  it('passed beats an open attempt', () => {
+  it('an open attempt beats a pass, so a pending offer can be resumed', () => {
     expect(
       computeDebriefState(facts({ passed: true, hasOpenAttempt: true }), now),
+    ).toEqual({ kind: 'open', retake: false, resume: true, passed: true });
+  });
+
+  it('passed with no open attempt is passed', () => {
+    expect(
+      computeDebriefState(
+        facts({ passed: true, lastFinishedAt: hoursAgo(1) }),
+        now,
+      ),
     ).toEqual({ kind: 'passed' });
   });
 });
@@ -193,24 +186,42 @@ describe('debriefClockStart', () => {
 
 describe('debriefBadge', () => {
   it('shows debrief for a first attempt, open or resumed', () => {
-    expect(debriefBadge({ kind: 'open', retake: false, resume: false })).toBe(
-      'debrief',
-    );
-    expect(debriefBadge({ kind: 'open', retake: false, resume: true })).toBe(
-      'debrief',
-    );
+    expect(
+      debriefBadge({
+        kind: 'open',
+        retake: false,
+        resume: false,
+        passed: false,
+      }),
+    ).toBe('debrief');
+    expect(
+      debriefBadge({
+        kind: 'open',
+        retake: false,
+        resume: true,
+        passed: false,
+      }),
+    ).toBe('debrief');
   });
 
   it('shows retake from the first failed attempt until a pass', () => {
-    expect(debriefBadge({ kind: 'open', retake: true, resume: false })).toBe(
-      'retake',
-    );
-    expect(debriefBadge({ kind: 'open', retake: true, resume: true })).toBe(
-      'retake',
-    );
     expect(
-      debriefBadge({ kind: 'retake-waiting', availableAt: hoursAgo(-1) }),
+      debriefBadge({
+        kind: 'open',
+        retake: true,
+        resume: false,
+        passed: false,
+      }),
     ).toBe('retake');
+    expect(
+      debriefBadge({ kind: 'open', retake: true, resume: true, passed: false }),
+    ).toBe('retake');
+  });
+
+  it('shows passed for an open attempt after a pass', () => {
+    expect(
+      debriefBadge({ kind: 'open', retake: true, resume: true, passed: true }),
+    ).toBe('passed');
   });
 
   it('shows passed for passed', () => {

@@ -108,32 +108,6 @@ describe('DebriefWait', () => {
     ).toBeDefined();
   });
 
-  it('retake-waiting: heads with the live countdown, and says why it is closed', () => {
-    render(
-      <DebriefWait
-        {...common}
-        kind="retake-waiting"
-        countdown="5 h 40 min"
-        time={TIME}
-        announcement=""
-      />,
-    );
-    const heading = screen.getByRole('heading', { level: 2 });
-    expect(heading.textContent?.startsWith('Your next debrief opens in')).toBe(
-      true,
-    );
-    expect(heading.textContent).toBe('Your next debrief opens in 5 h 40 min');
-    // The panel's accessible name is the reason it is closed; its
-    // description says what opens it.
-    const panel = screen.getByRole('region', {
-      name: 'Your next debrief opens in 5 h 40 min',
-    });
-    expect(panel.textContent).toContain('Opens Tue 28 Oct, 3:40 PM.');
-    expect(panel.textContent).toMatch(/6 hours after your last attempt/);
-    expect(panel.textContent).not.toMatch(/\d+\/100|correct|below 75/);
-    expect(screen.queryByRole('button')).toBeNull();
-  });
-
   it('takes the heading level of its context', () => {
     render(
       <DebriefWait idBase="dw" headingLevel={3} kind="waiting" time={TIME} />,

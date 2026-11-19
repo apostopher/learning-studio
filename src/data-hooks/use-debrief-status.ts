@@ -20,8 +20,8 @@ const debriefStateSchema = z.discriminatedUnion('kind', [
     kind: z.literal('open'),
     retake: z.boolean(),
     resume: z.boolean(),
+    passed: z.boolean(),
   }),
-  z.object({ kind: z.literal('retake-waiting'), availableAt: z.string() }),
   z.object({ kind: z.literal('passed') }),
 ]);
 
@@ -53,9 +53,9 @@ export const debriefStatusSchema = z.object({
       }),
     )
     .optional(),
-  // Between attempts only (retake-waiting, open for a retake): the latest
+  // Between attempts only (open for a retake): the latest
   // finished attempt's set averages (or its score alone, before sets) and
-  // its "Worth revisiting", so a reload during the wait still shows them.
+  // its "Worth revisiting", so a reload still shows them.
   lastAttempt: z
     .object({ score: z.number(), setAverages: z.array(z.number()) })
     .nullable()

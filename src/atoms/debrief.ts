@@ -5,7 +5,7 @@ import type { SetOutcome } from '#/lib/debrief-sets';
 /**
  * The debrief attempt finished while the pilot has been on its lesson: what
  * its score report shows. Set the moment the last answer is graded, it only
- * bridges the moment before the status refetch lands — a retake-waiting
+ * bridges the moment before the status refetch lands — an open-for-retake
  * status then carries the same report from the server (mastery and revisit
  * notes), which is what a reload or a later visit shows. Cleared when the
  * pilot leaves the lesson (LessonMaterialWrapper), and when the debrief

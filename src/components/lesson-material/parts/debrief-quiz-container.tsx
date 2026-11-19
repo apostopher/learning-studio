@@ -1,9 +1,7 @@
-import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
+import { useAtom, useSetAtom, useStore } from 'jotai';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import {
-  debriefCountdownAnnouncementAtom,
-  debriefCountdownAtom,
   debriefFeedbackAtom,
   debriefFocusAnswerAtom,
   debriefNotOpenAtom,
@@ -24,7 +22,6 @@ import {
 import { useLessonMaterial } from '#/hooks/data/use-lesson-material';
 import { useAnswerMetrics } from '#/hooks/use-answer-metrics';
 import { answerVerdict, DEBRIEF_SET_PASS_SCORE } from '#/lib/debrief-sets';
-import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   answerErrorCopy,
@@ -109,8 +106,6 @@ export const DebriefQuizContainer = ({
   const setFinished = useSetAtom(justFinishedDebriefAtom);
   const setPromotion = useSetAtom(pendingPromotionAtom);
   const [pasteBlocked, setPasteBlocked] = useAtom(debriefPasteBlockedAtom);
-  const countdown = useAtomValue(debriefCountdownAtom);
-  const announcement = useAtomValue(debriefCountdownAnnouncementAtom);
   // The server decides who may use the clipboard: its `adminBypass` (an
   // admin, or staff on this course), off the material query this lesson has
   // already loaded. Unknown — still loading or an error — reads as a learner.
@@ -195,7 +190,7 @@ export const DebriefQuizContainer = ({
     setNotOpen({ lessonSlug, availableAt: startNotOpen.availableAt });
     if (startNotOpen.promotion) setPromotion(startNotOpen.promotion);
     setStartRequested(null);
-    // The status moves the panel on (retake-waiting, passed).
+    // The status moves the panel on (waiting, passed).
     void refetchStatus();
   }, [
     startNotOpen,
@@ -305,14 +300,8 @@ export const DebriefQuizContainer = ({
         <DebriefWait
           idBase={idBase}
           headingLevel={headingLevel}
-          kind="retake-waiting"
-          countdown={formatCountdown(
-            countdown?.availableAt === at
-              ? countdown.msLeft
-              : Date.parse(at) - Date.now(),
-          )}
+          kind="waiting"
           time={<DebriefTime iso={at} />}
-          announcement={announcement}
         />
       );
     }

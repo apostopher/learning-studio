@@ -54,11 +54,7 @@ describe('prepare', () => {
   it.each([
     ['not-done (video still playing)', { kind: 'not-done' }],
     ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
-    ['open', { kind: 'open', retake: false, resume: false }],
-    [
-      'retake-waiting',
-      { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
-    ],
+    ['open', { kind: 'open', retake: false, resume: false, passed: false }],
   ])('prepares for this pilot when the state is %s', async (_why, state) => {
     m.getDebriefAccess.mockResolvedValue(access(state));
     const res = await prepareTestHandler(post(body));

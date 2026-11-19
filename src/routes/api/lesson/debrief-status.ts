@@ -45,7 +45,7 @@ export type DebriefStatusResponse = {
    */
   attempts?: DebriefStatusAttempt[];
   /**
-   * Present ONLY between attempts — `retake-waiting`, and `open` for a retake:
+   * Present ONLY between attempts — `open` for a retake:
    * the latest finished attempt's set averages, in order (one per set it
    * completed), or its score alone when it predates sets. Null when there is
    * no finished chunk attempt.
@@ -116,13 +116,9 @@ export async function debriefStatusHandler(
     }
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };
-    if (
-      state.kind === 'retake-waiting' ||
-      (state.kind === 'open' && state.retake)
-    ) {
-      // The report survives the wait: a reload, a later visit or another
-      // device shows the set scores and what to revisit, not just the
-      // countdown.
+    if (state.kind === 'open' && state.retake) {
+      // The report survives between attempts: a reload, a later visit or
+      // another device shows the set scores and what to revisit.
       const latest = await selectLatestFinishedChunkAttempt(userId, lessonSlug);
       const projected = latest ? toClientAttempt(latest) : null;
       body.lastAttempt =

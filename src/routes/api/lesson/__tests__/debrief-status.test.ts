@@ -98,7 +98,9 @@ const report = (id: number, totalScore: number, completedAt: string) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   m.getSession.mockResolvedValue({ user: { id: 'u1' } });
-  m.getDebriefAccess.mockResolvedValue(access({ kind: 'open', retake: false }));
+  m.getDebriefAccess.mockResolvedValue(
+    access({ kind: 'open', retake: false, resume: false, passed: false }),
+  );
   m.getDebriefAttemptReports.mockResolvedValue([]);
   m.selectLatestFinishedChunkAttempt.mockResolvedValue(null);
   m.getCourseProgress.mockResolvedValue({ lessons: [] });
@@ -137,7 +139,10 @@ describe('debrief-status', () => {
   });
 
   it.each([
-    ['open (first attempt)', { kind: 'open', retake: false }],
+    [
+      'open (first attempt)',
+      { kind: 'open', retake: false, resume: false, passed: false },
+    ],
     ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
   ])('hides the attempt history and the report while %s', async (_n, state) => {
     m.getDebriefAccess.mockResolvedValue(access(state));
@@ -149,10 +154,9 @@ describe('debrief-status', () => {
 
   it.each([
     [
-      'retake-waiting',
-      { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
+      'open for a retake',
+      { kind: 'open', retake: true, resume: false, passed: false },
     ],
-    ['open for a retake', { kind: 'open', retake: true, resume: false }],
   ])("while %s, carries the last attempt's score and revisit notes — never its grading key", async (_n, state) => {
     m.getDebriefAccess.mockResolvedValue(access(state));
     m.selectLatestFinishedChunkAttempt.mockResolvedValue(storedChunkAttempt);
@@ -184,10 +188,7 @@ describe('debrief-status', () => {
 
   it('a set-format attempt reports each completed set average', async () => {
     m.getDebriefAccess.mockResolvedValue(
-      access({
-        kind: 'retake-waiting',
-        availableAt: '2026-10-28T00:00:00.000Z',
-      }),
+      access({ kind: 'open', retake: true, resume: false, passed: false }),
     );
     m.selectLatestFinishedChunkAttempt.mockResolvedValue({
       ...storedChunkAttempt,
@@ -199,10 +200,7 @@ describe('debrief-status', () => {
 
   it('with no finished chunk attempt (legacy only), lastAttempt is null and there are no notes', async () => {
     m.getDebriefAccess.mockResolvedValue(
-      access({
-        kind: 'retake-waiting',
-        availableAt: '2026-10-28T00:00:00.000Z',
-      }),
+      access({ kind: 'open', retake: true, resume: false, passed: false }),
     );
     const body = await (await debriefStatusHandler(get(QS))).json();
     expect(body.lastAttempt).toBeNull();
@@ -211,9 +209,8 @@ describe('debrief-status', () => {
 
   it('reads course progress only for a lesson that is not done', async () => {
     for (const state of [
-      { kind: 'open', retake: false },
+      { kind: 'open', retake: false, resume: false, passed: false },
       { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' },
-      { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
       { kind: 'passed' },
     ]) {
       m.getDebriefAccess.mockResolvedValue(access(state));

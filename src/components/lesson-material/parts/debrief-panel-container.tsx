@@ -1,10 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import {
-  debriefCountdownAnnouncementAtom,
-  debriefCountdownAtom,
   debriefNotOpenAtom,
   debriefOpenedAnnouncementAtom,
   justFinishedDebriefAtom,
@@ -17,7 +15,6 @@ import {
   useStartDebrief,
 } from '#/data-hooks/use-debrief-attempt';
 import { useDebriefStatus } from '#/data-hooks/use-debrief-status';
-import { formatCountdown } from '#/lib/format-countdown';
 import { formatDebriefTime } from '#/lib/format-debrief-time';
 import {
   attemptFormat,
@@ -26,9 +23,8 @@ import {
   isStaleFinishedDebrief,
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
-import { DebriefCountdown } from './debrief-countdown';
 import { DebriefQuizContainer } from './debrief-quiz-container';
-import { DebriefWait, RETAKE_WAIT_REASON } from './debrief-wait';
+import { DebriefWait } from './debrief-wait';
 import { ScoreReport } from './score-report';
 import { useDebriefCountdown } from './use-debrief-countdown';
 
@@ -78,8 +74,6 @@ export const DebriefPanelContainer = ({
     enabled: false,
   });
   const [finished, setFinished] = useAtom(justFinishedDebriefAtom);
-  const countdown = useAtomValue(debriefCountdownAtom);
-  const announcement = useAtomValue(debriefCountdownAnnouncementAtom);
   const [opened, setOpened] = useAtom(debriefOpenedAnnouncementAtom);
   const setNotOpen = useSetAtom(debriefNotOpenAtom);
 
@@ -120,10 +114,7 @@ export const DebriefPanelContainer = ({
   useEffect(() => {
     const was = previousKind.current;
     previousKind.current = panel.kind;
-    if (
-      panel.kind === 'take' &&
-      (was === 'retake-waiting' || was === 'finished' || was === 'waiting')
-    ) {
+    if (panel.kind === 'take' && (was === 'finished' || was === 'waiting')) {
       setOpened(DEBRIEF_OPENED_COPY);
     } else if (panel.kind !== 'take') {
       setOpened('');
@@ -133,15 +124,6 @@ export const DebriefPanelContainer = ({
   const { availableAt, announceKey } = countdownTarget(panel);
   const { refetch } = status;
   useDebriefCountdown(availableAt, refetch, announceKey);
-  const countdownText = (iso: string) =>
-    formatCountdown(
-      countdown?.availableAt === iso
-        ? countdown.msLeft
-        : // First render, before the tick's effect writes the atom. The
-          // panel is client-only past `loading` (the status is never
-          // fetched on the server), so reading the clock here is safe.
-          Date.parse(iso) - Date.now(),
-    );
 
   return (
     <>
@@ -152,21 +134,6 @@ export const DebriefPanelContainer = ({
       {renderPanel()}
     </>
   );
-
-  /** Under a report: the countdown to the next attempt and why it waits. */
-  function retakeFooter(at: string) {
-    return (
-      <div className="flex flex-col gap-2 border-t border-gray-6 pt-4">
-        <DebriefCountdown
-          countdown={countdownText(at)}
-          clockTime={<DebriefTime iso={at} />}
-          announcement={announcement}
-          headingLevel={headingLevel}
-        />
-        <p className="text-sm text-secondary">{RETAKE_WAIT_REASON}</p>
-      </div>
-    );
-  }
 
   function renderPanel() {
     switch (panel.kind) {
@@ -212,28 +179,6 @@ export const DebriefPanelContainer = ({
             time={<DebriefTime iso={panel.availableAt} />}
           />
         );
-      case 'retake-waiting':
-        // The report the server keeps, so a reload or another device during
-        // the wait still shows the set scores and what to revisit; the
-        // countdown alone only when there is no chunk attempt (legacy only).
-        return panel.report === null ? (
-          <DebriefWait
-            idBase={idBase}
-            headingLevel={headingLevel}
-            kind="retake-waiting"
-            countdown={countdownText(panel.availableAt)}
-            time={<DebriefTime iso={panel.availableAt} />}
-            announcement={announcement}
-          />
-        ) : (
-          <ScoreReport
-            result={panel.report.result}
-            revisitNotes={panel.report.revisitNotes}
-            headingLevel={headingLevel}
-            idBase={idBase}
-            footer={retakeFooter(panel.availableAt)}
-          />
-        );
       case 'take':
         return (
           <DebriefQuizContainer
@@ -253,11 +198,6 @@ export const DebriefPanelContainer = ({
             revisitNotes={panel.report.revisitNotes}
             headingLevel={headingLevel}
             idBase={idBase}
-            footer={
-              panel.availableAt === null
-                ? null
-                : retakeFooter(panel.availableAt)
-            }
           />
         );
       case 'passed':

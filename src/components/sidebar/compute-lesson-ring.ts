@@ -60,17 +60,12 @@ export function computeLessonRing(a: {
       return {
         percent,
         badge,
-        ariaLabel: state.retake
-          ? `${lead}, debrief not passed yet, ready to retake`
-          : `${lead}, debrief ready`,
+        ariaLabel: state.passed
+          ? `${lead}, debrief passed`
+          : state.retake
+            ? `${lead}, debrief not passed yet, ready to retake`
+            : `${lead}, debrief ready`,
         refreshAt: null,
-      };
-    case 'retake-waiting':
-      return {
-        percent,
-        badge,
-        ariaLabel: `${lead}, debrief not passed yet, reopens ${when(state.availableAt)}`,
-        refreshAt: state.availableAt,
       };
     // No D yet, but the wait still states its reason: the debrief has not
     // opened, and when it will.
