@@ -93,6 +93,7 @@ import { Route as ApiAdminCoursesCourseIdLessonPostersRouteImport } from './rout
 import { Route as ApiAdminCoursesCourseIdModulesRouteImport } from './routes/api/admin/courses.$courseId.modules'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesRouteImport } from './routes/api/admin/courses.$courseId.news-sources'
 import { Route as ApiAdminCoursesCourseIdOnboardingRouteImport } from './routes/api/admin/courses.$courseId.onboarding'
+import { Route as ApiAdminCoursesCourseIdPassMarkRouteImport } from './routes/api/admin/courses.$courseId.pass-mark'
 import { Route as ApiAdminCoursesCourseIdPersonaRouteImport } from './routes/api/admin/courses.$courseId.persona'
 import { Route as ApiAdminCoursesCourseIdRemixesRouteImport } from './routes/api/admin/courses.$courseId.remixes'
 import { Route as ApiAdminCoursesCourseIdStaffRouteImport } from './routes/api/admin/courses.$courseId.staff'
@@ -566,6 +567,12 @@ const ApiAdminCoursesCourseIdOnboardingRoute =
     path: '/onboarding',
     getParentRoute: () => ApiAdminCoursesCourseIdRoute,
   } as any)
+const ApiAdminCoursesCourseIdPassMarkRoute =
+  ApiAdminCoursesCourseIdPassMarkRouteImport.update({
+    id: '/pass-mark',
+    path: '/pass-mark',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdPersonaRoute =
   ApiAdminCoursesCourseIdPersonaRouteImport.update({
     id: '/persona',
@@ -818,6 +825,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
+  '/api/admin/courses/$courseId/pass-mark': typeof ApiAdminCoursesCourseIdPassMarkRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
@@ -929,6 +937,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
+  '/api/admin/courses/$courseId/pass-mark': typeof ApiAdminCoursesCourseIdPassMarkRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
@@ -1044,6 +1053,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/modules': typeof ApiAdminCoursesCourseIdModulesRoute
   '/api/admin/courses/$courseId/news-sources': typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   '/api/admin/courses/$courseId/onboarding': typeof ApiAdminCoursesCourseIdOnboardingRoute
+  '/api/admin/courses/$courseId/pass-mark': typeof ApiAdminCoursesCourseIdPassMarkRoute
   '/api/admin/courses/$courseId/persona': typeof ApiAdminCoursesCourseIdPersonaRoute
   '/api/admin/courses/$courseId/remixes': typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   '/api/admin/courses/$courseId/staff': typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
@@ -1159,6 +1169,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
+    | '/api/admin/courses/$courseId/pass-mark'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
@@ -1270,6 +1281,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
+    | '/api/admin/courses/$courseId/pass-mark'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
@@ -1384,6 +1396,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/modules'
     | '/api/admin/courses/$courseId/news-sources'
     | '/api/admin/courses/$courseId/onboarding'
+    | '/api/admin/courses/$courseId/pass-mark'
     | '/api/admin/courses/$courseId/persona'
     | '/api/admin/courses/$courseId/remixes'
     | '/api/admin/courses/$courseId/staff'
@@ -2063,6 +2076,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdOnboardingRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdRoute
     }
+    '/api/admin/courses/$courseId/pass-mark': {
+      id: '/api/admin/courses/$courseId/pass-mark'
+      path: '/pass-mark'
+      fullPath: '/api/admin/courses/$courseId/pass-mark'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdPassMarkRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
     '/api/admin/courses/$courseId/persona': {
       id: '/api/admin/courses/$courseId/persona'
       path: '/persona'
@@ -2439,6 +2459,7 @@ interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdModulesRoute: typeof ApiAdminCoursesCourseIdModulesRoute
   ApiAdminCoursesCourseIdNewsSourcesRoute: typeof ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren
   ApiAdminCoursesCourseIdOnboardingRoute: typeof ApiAdminCoursesCourseIdOnboardingRoute
+  ApiAdminCoursesCourseIdPassMarkRoute: typeof ApiAdminCoursesCourseIdPassMarkRoute
   ApiAdminCoursesCourseIdPersonaRoute: typeof ApiAdminCoursesCourseIdPersonaRoute
   ApiAdminCoursesCourseIdRemixesRoute: typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   ApiAdminCoursesCourseIdStaffRoute: typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
@@ -2456,6 +2477,7 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
       ApiAdminCoursesCourseIdNewsSourcesRouteWithChildren,
     ApiAdminCoursesCourseIdOnboardingRoute:
       ApiAdminCoursesCourseIdOnboardingRoute,
+    ApiAdminCoursesCourseIdPassMarkRoute: ApiAdminCoursesCourseIdPassMarkRoute,
     ApiAdminCoursesCourseIdPersonaRoute: ApiAdminCoursesCourseIdPersonaRoute,
     ApiAdminCoursesCourseIdRemixesRoute:
       ApiAdminCoursesCourseIdRemixesRouteWithChildren,

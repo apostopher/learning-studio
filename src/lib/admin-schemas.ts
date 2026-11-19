@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PassMarkSchema } from '#/lib/pass-mark';
 import { alternateLangSchema, videoLangSchema } from '#/lib/video-languages';
 import { PROVIDER_IDS } from '#/lib/video-providers';
 import { PLAYBACK_FAILURE_CODES } from '#/lib/video-providers/errors';
@@ -26,8 +27,12 @@ export const adminCourseSummarySchema = z.object({
   updatedAt: z.coerce.date(),
   moduleCount: z.number(),
   lessonCount: z.number(),
+  passMark: z.number(),
 });
 export type AdminCourseSummary = z.infer<typeof adminCourseSummarySchema>;
+
+export const updatePassMarkInputSchema = z.object({ passMark: PassMarkSchema });
+export type UpdatePassMarkInput = z.infer<typeof updatePassMarkInputSchema>;
 
 /** A full course row as delivered over JSON (dates coerced back to Date). */
 export const courseSchema = z.object({

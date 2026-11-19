@@ -621,3 +621,28 @@ export async function getCourseIdentityBySlug(
     .where(eq(coursesTable.slug, slug));
   return row ?? null;
 }
+
+/**
+ * Set a course's debrief pass mark. Returns false when no such course.
+ *
+ * Evicts the learner-facing course-details entry inline rather than through
+ * `invalidateCourseDetailsCache`: that module imports this one. Best-effort,
+ * same as there: a Redis outage must not fail a successful write.
+ */
+export async function updateCoursePassMark(
+  courseId: number,
+  passMark: number,
+): Promise<boolean> {
+  const [updated] = await db
+    .update(coursesTable)
+    .set({ passMark, updatedAt: new Date() })
+    .where(eq(coursesTable.id, courseId))
+    .returning({ slug: coursesTable.slug });
+  if (!updated) return false;
+  try {
+    await getCourseDetailsWithCache.invalidate(updated.slug);
+  } catch (error) {
+    console.error('Failed to invalidate course-details cache:', error);
+  }
+  return true;
+}

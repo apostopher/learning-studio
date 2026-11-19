@@ -49,20 +49,27 @@ import {
 
 export * from './auth-schema';
 
-export const coursesTable = pgTable('courses', {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  description: text('description'),
-  imageUrlAvif: text('image_url_avif'),
-  imageUrlWebp: text('image_url_webp'),
-  onboardingQuestions: jsonb('onboarding_questions')
-    .$type<z.infer<typeof OnboardingQuestionsSchema>>()
-    .notNull()
-    .default([]),
-  createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-});
+export const coursesTable = pgTable(
+  'courses',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull().unique(),
+    description: text('description'),
+    imageUrlAvif: text('image_url_avif'),
+    imageUrlWebp: text('image_url_webp'),
+    onboardingQuestions: jsonb('onboarding_questions')
+      .$type<z.infer<typeof OnboardingQuestionsSchema>>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+    passMark: integer('pass_mark').notNull().default(85),
+  },
+  (t) => [
+    check('courses_pass_mark_check', sql`${t.passMark} between 0 and 100`),
+  ],
+);
 
 export const dbCourseSchema = createSelectSchema(coursesTable);
 export type DBCourse = z.infer<typeof dbCourseSchema>;

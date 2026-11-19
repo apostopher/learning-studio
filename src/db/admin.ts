@@ -210,6 +210,7 @@ export async function listAdminCourses(
       imageUrlAvif: coursesTable.imageUrlAvif,
       imageUrlWebp: coursesTable.imageUrlWebp,
       updatedAt: coursesTable.updatedAt,
+      passMark: coursesTable.passMark,
       moduleCount: sql<number>`count(distinct ${modulesTable.id})`,
       lessonCount: sql<number>`count(distinct ${lessonsTable.id})`,
     })
@@ -248,6 +249,7 @@ export async function listAdminCourses(
     updatedAt: r.updatedAt,
     moduleCount: Number(r.moduleCount),
     lessonCount: Number(r.lessonCount),
+    passMark: r.passMark,
   }));
 }
 
