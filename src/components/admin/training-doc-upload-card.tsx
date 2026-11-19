@@ -50,9 +50,18 @@ export const TrainingDocUploadCard = ({
   source,
 }: TrainingDocUploadCardProps) => {
   const busy = status !== 'idle';
-  // A missing source blocks the upload, and the button says so in its own
-  // visible label — which is its accessible name too.
+  // A missing source or file blocks the upload, and the button says which in
+  // its own visible label — which is its accessible name too. Source first:
+  // it is the choice with no default, and the first thing a reader scanning
+  // the card for "why can't I upload?" should be pointed at.
   const needsSource = source !== undefined && source.value === null;
+  const label = busy
+    ? STATUS_LABEL[status]
+    : needsSource
+      ? 'Choose a source first'
+      : !fileName
+        ? 'Choose a file first'
+        : STATUS_LABEL.idle;
 
   return (
     <section className="rounded-xl border border-gray-6 bg-gray-2 p-6">
@@ -60,9 +69,11 @@ export const TrainingDocUploadCard = ({
         Upload Training Document
       </h2>
 
-      <span className="mt-4 block text-secondary text-sm">Select Document</span>
+      <span className="mbs-4 block text-secondary text-sm">
+        Select Document
+      </span>
       <label
-        className={`mt-2 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-gray-6 border-dashed px-6 py-12 text-center transition-colors hover:border-gray-8 focus-within:ring-2 focus-within:ring-apple-9 ${
+        className={`mbs-2 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-gray-6 border-dashed px-6 py-12 text-center transition-colors hover:border-gray-8 focus-within:ring-2 focus-within:ring-apple-9 ${
           busy ? 'pointer-events-none opacity-60' : ''
         }`}
       >
@@ -88,7 +99,7 @@ export const TrainingDocUploadCard = ({
 
       <label
         htmlFor="training-doc-name"
-        className="mt-6 block text-secondary text-sm"
+        className="mbs-6 block text-secondary text-sm"
       >
         Document Name
       </label>
@@ -98,15 +109,15 @@ export const TrainingDocUploadCard = ({
         onChange={(e) => onDocNameChange(e.target.value)}
         placeholder="Enter a name for this document"
         disabled={busy}
-        className="mt-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
+        className="mbs-2 w-full rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-primary placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60"
       />
-      <p className="mt-1 text-tertiary text-xs">
+      <p className="mbs-1 text-tertiary text-xs">
         Optional — defaults to the file name. Identifies the document in the
         system.
       </p>
 
       {source ? (
-        <div className="mt-6">
+        <div className="mbs-6">
           <span
             id="training-doc-source-label"
             className="block text-secondary text-sm"
@@ -120,7 +131,7 @@ export const TrainingDocUploadCard = ({
             disabled={busy}
             value={source.value}
             onValueChange={(next) => source.onChange(next as DocSource)}
-            className="mt-2 flex flex-wrap gap-2"
+            className="mbs-2 flex flex-wrap gap-2"
           >
             {DocSourceSchema.options.map((value) => (
               <Radio.Root
@@ -132,15 +143,15 @@ export const TrainingDocUploadCard = ({
               </Radio.Root>
             ))}
           </RadioGroup>
-          <p className="mt-1 text-tertiary text-xs">
+          <p className="mbs-1 text-tertiary text-xs">
             Which training set this document belongs to.
           </p>
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-error-text text-sm">{error}</p> : null}
+      {error ? <p className="mbs-3 text-error-text text-sm">{error}</p> : null}
 
-      <div className="mt-6 flex justify-end">
+      <div className="mbs-6 flex justify-end">
         <button
           type="button"
           onClick={onSubmit}
@@ -148,9 +159,7 @@ export const TrainingDocUploadCard = ({
           className="inline-flex items-center gap-2 rounded-lg bg-gray-3 px-4 py-2 font-medium text-primary transition-colors hover:bg-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
-          {needsSource && !busy
-            ? 'Choose a source first'
-            : STATUS_LABEL[status]}
+          {label}
         </button>
       </div>
     </section>

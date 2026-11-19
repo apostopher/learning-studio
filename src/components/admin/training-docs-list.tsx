@@ -61,7 +61,7 @@ export const TrainingDocsList = ({
         : `No ${DOC_SOURCE_LABELS[source]} documents yet.`;
 
   return (
-    <section className="mt-6 rounded-xl border border-gray-6 bg-gray-2 p-6">
+    <section className="rounded-xl border border-gray-6 bg-gray-2 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="font-semibold text-primary text-lg">
           Training Documents{' '}
@@ -92,7 +92,7 @@ export const TrainingDocsList = ({
           ) : null}
           <div className="relative">
             <Search
-              className="-translate-y-1/2 absolute start-3 top-1/2 h-4 w-4 text-tertiary"
+              className="-translate-y-1/2 absolute start-3 inset-bs-1/2 h-4 w-4 text-tertiary"
               aria-hidden="true"
             />
             <input
@@ -106,7 +106,7 @@ export const TrainingDocsList = ({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2">
+      <div className="mbs-4 flex flex-col gap-2">
         {isLoading ? (
           <p className="py-8 text-center text-tertiary text-sm">Loading…</p>
         ) : docs.length === 0 ? (

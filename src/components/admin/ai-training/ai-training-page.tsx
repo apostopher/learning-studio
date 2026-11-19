@@ -25,7 +25,7 @@ export const AiTrainingPage = ({
   onSelect,
   children,
 }: AiTrainingPageProps) => (
-  <div className="content-grid py-10">
+  <div className="content-grid pbs-10 pbe-10">
     <div className="content flex flex-col gap-6">
       <h1 className="font-semibold text-2xl text-primary">AI Training</h1>
 
@@ -36,13 +36,13 @@ export const AiTrainingPage = ({
       >
         <Tabs.List
           aria-label="AI Training sections"
-          className="flex shrink-0 gap-1 overflow-x-auto border-gray-6 border-b md:w-48 md:flex-col md:overflow-visible md:border-e md:border-b-0 md:pe-4"
+          className="flex shrink-0 gap-1 overflow-x-auto border-gray-6 border-be md:w-48 md:flex-col md:overflow-visible md:border-e md:border-be-0 md:pe-4"
         >
           {sections.map((section) => (
             <Tabs.Tab
               key={section.id}
               value={section.id}
-              className="whitespace-nowrap rounded-md px-3 py-2 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
+              className="whitespace-nowrap rounded-md px-3 pbs-2 pbe-2 text-start font-medium text-secondary text-sm transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 aria-selected:bg-gray-3 aria-selected:text-primary"
             >
               {section.label}
             </Tabs.Tab>

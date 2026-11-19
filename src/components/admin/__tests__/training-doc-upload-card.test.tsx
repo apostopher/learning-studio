@@ -14,10 +14,10 @@ const base = {
 };
 
 describe('TrainingDocUploadCard', () => {
-  it('disables submit when no file is selected', () => {
+  it('disables submit when no file is selected, and says why', () => {
     render(<TrainingDocUploadCard {...base} />);
     const submit = screen.getByRole('button', {
-      name: /upload document/i,
+      name: 'Choose a file first',
     }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
@@ -49,5 +49,36 @@ describe('TrainingDocUploadCard', () => {
   it('renders an error message', () => {
     render(<TrainingDocUploadCard {...base} error="Only PDF or Word files" />);
     expect(screen.queryByText('Only PDF or Word files')).not.toBeNull();
+  });
+
+  /**
+   * A disabled submit must say why. With a source picked but no file, the
+   * label (and so the accessible name) asks for the file. Mutant this
+   * catches: the old "Upload Document" label on a button that cannot upload.
+   */
+  it('names the missing file when a source is picked but no file is', () => {
+    render(
+      <TrainingDocUploadCard
+        {...base}
+        source={{ value: 'itps', onChange: vi.fn() }}
+      />,
+    );
+    const submit = screen.getByRole('button', {
+      name: 'Choose a file first',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+  });
+
+  it('asks for the source first when both are missing', () => {
+    render(
+      <TrainingDocUploadCard
+        {...base}
+        source={{ value: null, onChange: vi.fn() }}
+      />,
+    );
+    const submit = screen.getByRole('button', {
+      name: 'Choose a source first',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
   });
 });
