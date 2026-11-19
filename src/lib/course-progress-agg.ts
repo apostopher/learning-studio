@@ -202,12 +202,16 @@ export function coursePercent(
  * the quiz and the passed debrief a quarter each — so a full lesson closes at
  * 50, 75 and 100 as each is done.
  *
- * A 3D Airmanship lesson's debrief is optional, so it is not a stage there:
- * video 50, quiz 100. The pilot's 3D score is 100 once they have passed the
- * lessons at their level — level filtering already decides which those are.
+ * Without a debrief stage, the video and quiz split it evenly: video 50,
+ * quiz 100. That covers two cases:
+ * - a 3D Airmanship lesson, where the debrief is optional. The pilot's 3D
+ *   score is 100 once they have passed the lessons at their level, and level
+ *   filtering already decides which those are;
+ * - a lesson with its debrief switched off, or one with no usable debrief
+ *   (`debriefBearing` false). User, 2026-11-19.
  */
 const RING_WEIGHTS = { video: 2, quiz: 1, debrief: 1 } as const;
-const FLAGSHIP_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
+const NO_DEBRIEF_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
 
 /**
  * What the lesson's ring shows. Each stage the lesson has is credited on its
@@ -222,7 +226,10 @@ const FLAGSHIP_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
  * three shows its `percent`.
  */
 function lessonRingPercent(row: LessonProgressRow, percent: number): number {
-  const weights = row.flagshipDiscipline ? FLAGSHIP_RING_WEIGHTS : RING_WEIGHTS;
+  const weights =
+    row.flagshipDiscipline || !row.debriefBearing
+      ? NO_DEBRIEF_RING_WEIGHTS
+      : RING_WEIGHTS;
   const stages: { weight: number; fraction: number }[] = [];
   if (row.hasVideo && row.needsVideoWatch) {
     stages.push({

@@ -392,6 +392,15 @@ describe('ringPercent — the staged ring the learner sees', () => {
     ).toBe(100);
   });
 
+  it('debrief switched off: video 50, quiz 100', () => {
+    const off = { hasDebrief: false, debriefBearing: false };
+    expect(ring(full({ ...off, watchedHits: FULL }))).toBe(50);
+    expect(ring(full({ ...off, watchedHits: FULL, quizPlayed: true }))).toBe(
+      100,
+    );
+    expect(ring(full({ ...off, quizPlayed: true }))).toBe(50);
+  });
+
   it('does not ask for a video the lesson does not require', () => {
     expect(ring(full({ needsVideoWatch: false, quizPlayed: true }))).toBe(50);
   });
