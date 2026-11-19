@@ -1,6 +1,7 @@
 import { desc, relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -23,6 +24,7 @@ import { z } from 'zod';
 import type { AnswerMetrics } from '#/lib/answer-metrics';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
+import type { DocSource } from '#/lib/doc-source';
 import {
   AddressSchema,
   type CourseLessonDependenciesSchema,
@@ -1990,6 +1992,11 @@ export const docs = pgTable(
     sourcePath: text('source_path').notNull(),
     heading: text('heading'),
     chunk: text('chunk').notNull(),
+    // Which training set this belongs to; lesson chunks take the default.
+    source: text('source')
+      .$type<DocSource>()
+      .notNull()
+      .default('3d-airmanship'),
     // 1536 for gemini-embedding-001, 3072 for -large
     embedding: vector('embedding', { dimensions: 3072 }).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -2005,6 +2012,7 @@ export const docs = pgTable(
     // Filter embeddings by course before similarity search.
     index('docs_course_id_idx').on(t.courseId),
     index('docs_lesson_slug_idx').on(t.lessonSlug),
+    check('docs_source_check', sql`${t.source} in ('itps', '3d-airmanship')`),
   ],
 );
 
