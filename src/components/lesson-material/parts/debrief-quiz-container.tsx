@@ -210,11 +210,7 @@ export const DebriefQuizContainer = ({
   }, [loaded, lessonSlug, setNotOpen]);
   // If the status has not caught up, count down to the time start gave.
   // `refetch` runs even with the query disabled (Start press cleared).
-  useDebriefCountdown(
-    notOpen?.availableAt ?? null,
-    refetchStart,
-    notOpen?.availableAt ? `not-open:${notOpen.availableAt}` : null,
-  );
+  useDebriefCountdown(notOpen?.availableAt ?? null, refetchStart);
 
   // A refused answer means this page's attempt is out of date (or no longer
   // the pilot's): reload it. A 403 there shows the refusal (`refused`).

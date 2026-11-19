@@ -97,25 +97,6 @@ function isRefusal(error: unknown): boolean {
 }
 
 /**
- * Whether the just-finished report has been overtaken: a status fetched
- * after the finish says the debrief is open again. Fetched AFTER matters: until the refetch that follows
- * the last answer lands, the cached status still says open, and that is the
- * attempt just finished, not a reopening.
- */
-export function isStaleFinishedDebrief(
-  finished: FinishedDebrief | null,
-  lessonSlug: string,
-  status: Pick<StatusView, 'data' | 'dataUpdatedAt'>,
-): boolean {
-  return (
-    finished !== null &&
-    finished.lessonSlug === lessonSlug &&
-    status.data?.state.kind === 'open' &&
-    status.dataUpdatedAt > finished.finishedAt
-  );
-}
-
-/**
  * What the Debrief tab shows, from the server's state for this pilot.
  *
  * Pure because `DebriefPanelContainer` cannot be rendered under Vitest (the
@@ -131,7 +112,10 @@ export function computeDebriefPanel({
   const state = status.data?.state;
 
   const own = finished?.lessonSlug === lessonSlug ? finished : null;
-  if (own && !isStaleFinishedDebrief(own, lessonSlug, status)) {
+  // The report stays until the pilot leaves the lesson (the atom is cleared
+  // then): a failed attempt leaves the status `open` for a retake at once, so
+  // the status cannot be what dismisses it.
+  if (own) {
     return {
       kind: 'finished',
       report: own,
@@ -290,22 +274,11 @@ export function setAveragesOf(
 }
 
 /**
- * What the countdown runs to, and the key its once-only announcement is
- * tied to (null: no announcement).
- *
- * Only the 12 h first-debrief wait counts down. It refetches when it opens,
- * and announces nothing.
+ * What the status is re-checked at: only the 12 h first-debrief wait ends at
+ * a known time. There is no retake wait.
  */
-export function countdownTarget(panel: DebriefPanel): {
-  availableAt: string | null;
-  announceKey: string | null;
-} {
-  switch (panel.kind) {
-    case 'waiting':
-      return { availableAt: panel.availableAt, announceKey: null };
-    default:
-      return { availableAt: null, announceKey: null };
-  }
+export function countdownTarget(panel: DebriefPanel): string | null {
+  return panel.kind === 'waiting' ? panel.availableAt : null;
 }
 
 /**

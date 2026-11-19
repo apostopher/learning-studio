@@ -5,11 +5,10 @@ import type { SetOutcome } from '#/lib/debrief-sets';
 /**
  * The debrief attempt finished while the pilot has been on its lesson: what
  * its score report shows. Set the moment the last answer is graded, it only
- * bridges the moment before the status refetch lands — an open-for-retake
- * status then carries the same report from the server (mastery and revisit
- * notes), which is what a reload or a later visit shows. Cleared when the
- * pilot leaves the lesson (LessonMaterialWrapper), and when the debrief
- * reopens while the page stays open (`isStaleFinishedDebrief`).
+ * bridges the moment before the status refetch lands. It then stays: a failed
+ * attempt leaves the status `open` for an immediate retake, so the status
+ * never dismisses the report. Cleared when the pilot leaves the lesson
+ * (LessonMaterialWrapper).
  */
 export const justFinishedDebriefAtom = atom<FinishedDebrief | null>(null);
 
@@ -66,24 +65,8 @@ export const debriefNotOpenAtom = atom<{
 export const debriefPasteBlockedAtom = atom(false);
 
 /**
- * The live countdown: ms left until `availableAt`, written by the
- * container's ref timer on each tick. Keyed by the instant it counts to, so a
- * value left over from another countdown is never shown.
- */
-export const debriefCountdownAtom = atom<{
-  availableAt: string;
-  msLeft: number;
-} | null>(null);
-
-/**
- * What the countdown's visually hidden status says: set once when the
- * countdown starts, not on every tick, so screen readers hear it once.
- */
-export const debriefCountdownAnnouncementAtom = atom('');
-
-/**
- * The panel-wide status sentence, set once when a countdown runs out and the
+ * The panel-wide status sentence, set once when the 12 h wait ends and the
  * debrief opens. It lives in a region the panel always renders, because the
- * countdown that would have said it is gone by then.
+ * wait panel that would have said it is gone by then.
  */
 export const debriefOpenedAnnouncementAtom = atom('');

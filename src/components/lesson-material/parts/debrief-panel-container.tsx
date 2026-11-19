@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import {
@@ -20,7 +20,6 @@ import {
   attemptFormat,
   computeDebriefPanel,
   countdownTarget,
-  isStaleFinishedDebrief,
 } from '../compute-debrief-panel';
 import { DebriefAttemptHistory } from './debrief-attempt-history';
 import { DebriefQuizContainer } from './debrief-quiz-container';
@@ -73,7 +72,7 @@ export const DebriefPanelContainer = ({
     lessonSlug,
     enabled: false,
   });
-  const [finished, setFinished] = useAtom(justFinishedDebriefAtom);
+  const finished = useAtomValue(justFinishedDebriefAtom);
   const [opened, setOpened] = useAtom(debriefOpenedAnnouncementAtom);
   const setNotOpen = useSetAtom(debriefNotOpenAtom);
 
@@ -85,13 +84,6 @@ export const DebriefPanelContainer = ({
       attemptCache.data !== undefined &&
       !(attemptCache.error instanceof DebriefNotOpenError),
   });
-
-  // The debrief reopened while this page held the last report: drop it so
-  // the tab offers the fresh attempt instead.
-  const stale = isStaleFinishedDebrief(finished, lessonSlug, status);
-  useEffect(() => {
-    if (stale) setFinished(null);
-  }, [stale, setFinished]);
 
   // Outside `take` this lesson has no attempt on screen: drop the cached one,
   // so a later take starts from what the server holds, never from an old
@@ -108,22 +100,21 @@ export const DebriefPanelContainer = ({
     );
   }, [panel.kind, queryClient, lessonSlug, setNotOpen]);
 
-  // Screen readers hear the countdown once when it starts (its own status)
-  // and once when it opens — here, in a region that outlives the countdown.
+  // Screen readers hear when the 12 h wait ends and the debrief opens — here,
+  // in a region the panel always renders.
   const previousKind = useRef(panel.kind);
   useEffect(() => {
     const was = previousKind.current;
     previousKind.current = panel.kind;
-    if (panel.kind === 'take' && (was === 'finished' || was === 'waiting')) {
+    if (panel.kind === 'take' && was === 'waiting') {
       setOpened(DEBRIEF_OPENED_COPY);
     } else if (panel.kind !== 'take') {
       setOpened('');
     }
   }, [panel.kind, setOpened]);
 
-  const { availableAt, announceKey } = countdownTarget(panel);
   const { refetch } = status;
-  useDebriefCountdown(availableAt, refetch, announceKey);
+  useDebriefCountdown(countdownTarget(panel), refetch);
 
   return (
     <>

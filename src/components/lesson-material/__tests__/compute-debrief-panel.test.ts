@@ -31,7 +31,6 @@ import {
   type FinishedDebrief,
   feedbackNextLabel,
   finishedDebriefReport,
-  isStaleFinishedDebrief,
   questionPosition,
   setAveragesOf,
   startErrorOf,
@@ -240,19 +239,15 @@ describe('computeDebriefPanel', () => {
       ).toEqual({ kind: 'take', retake: true, resume: false });
     });
 
-    it('gives way to the fresh debrief once a status fetched after it says open', () => {
+    it('keeps the report when a status fetched after it says open for a retake', () => {
+      // A failed attempt leaves the debrief open at once; that must not
+      // dismiss the report the pilot has not yet read.
       expect(
         panel(
           loaded({ kind: 'open', retake: true, resume: false, passed: false }),
-          {
-            finished: finished(),
-          },
+          { finished: finished() },
         ),
-      ).toEqual({
-        kind: 'take',
-        retake: true,
-        resume: false,
-      });
+      ).toEqual({ kind: 'finished', report: finished(), availableAt: null });
     });
   });
 
@@ -270,33 +265,6 @@ describe('computeDebriefPanel', () => {
         });
       }
     });
-  });
-});
-
-describe('isStaleFinishedDebrief', () => {
-  it('is stale only for this lesson, with an open status fetched after the finish', () => {
-    const open = loaded({
-      kind: 'open',
-      retake: true,
-      resume: false,
-      passed: false,
-    });
-    expect(isStaleFinishedDebrief(finished(), LESSON, open)).toBe(true);
-    expect(
-      isStaleFinishedDebrief(finished(), LESSON, {
-        ...open,
-        dataUpdatedAt: FINISHED_AT - 1,
-      }),
-    ).toBe(false);
-    expect(isStaleFinishedDebrief(finished(), 'other', open)).toBe(false);
-    expect(isStaleFinishedDebrief(null, LESSON, open)).toBe(false);
-    expect(
-      isStaleFinishedDebrief(
-        finished(),
-        LESSON,
-        loaded({ kind: 'waiting', availableAt: AT }),
-      ),
-    ).toBe(false);
   });
 });
 
@@ -736,11 +704,8 @@ describe('answerErrorCopy', () => {
 });
 
 describe('countdownTarget', () => {
-  it('the 12 h wait refetches when it opens but announces no retake countdown', () => {
-    expect(countdownTarget({ kind: 'waiting', availableAt: AT })).toEqual({
-      availableAt: AT,
-      announceKey: null,
-    });
+  it('the 12 h wait is re-checked when it opens', () => {
+    expect(countdownTarget({ kind: 'waiting', availableAt: AT })).toBe(AT);
   });
 
   it('a finished report has nothing to count down to', () => {
@@ -750,7 +715,7 @@ describe('countdownTarget', () => {
         report: finished(),
         availableAt: null,
       }),
-    ).toEqual({ availableAt: null, announceKey: null });
+    ).toBeNull();
   });
 });
 
