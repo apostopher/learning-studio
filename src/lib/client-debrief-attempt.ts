@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AIEvaluationResultSchema, AITestSchema } from '#/ai/schemas';
-import { setsProgress } from '#/lib/debrief-sets';
+import { completedSetAverages } from '#/lib/debrief-sets';
 
 /** A question as the pilot may see it: never its rubric or chunk tags. */
 export type ClientAttemptQuestion = { id: string; question: string };
@@ -34,8 +34,8 @@ const setsSchema = z.object({ sets: z.array(z.array(z.string())) });
  * rubric for their remaining holes. Fields are picked one by one, never
  * spread, so a field added to the stored shape stays server-side.
  *
- * A set-format attempt keeps only the questions of the sets the pilot
- * reached: an unasked set 2 is never shown, and `setAverages` holds each
+ * A set-format attempt keeps only the questions of sets the pilot has
+ * started (set 1 always): an unasked set 2 is never shown, and `setAverages` holds each
  * completed set's average. Older attempts show every question and have no
  * set averages. Unreadable JSON gives empty arrays.
  */
@@ -51,15 +51,13 @@ export function toClientAttempt(row: {
   const answers = answersSchema.safeParse(row.answers);
   const sets = setsSchema.safeParse(row.questions);
   const evaluations = answers.success ? answers.data : [];
-  const progress = sets.success
-    ? setsProgress(
-        sets.data.sets,
-        new Map(evaluations.map((e) => [e.questionId, e.score])),
-      )
-    : null;
-  const shown = progress
+  const scoreOf = new Map(evaluations.map((e) => [e.questionId, e.score]));
+  // A set is shown once it has an answer; set 1 is always shown.
+  const shown = sets.success
     ? new Set(
-        sets.success ? sets.data.sets.slice(0, progress.reached).flat() : [],
+        sets.data.sets
+          .filter((ids, i) => i === 0 || ids.some((id) => scoreOf.has(id)))
+          .flat(),
       )
     : null;
   return {
@@ -86,7 +84,9 @@ export function toClientAttempt(row: {
         incorrectClaims: e.incorrectClaims,
       }),
     })),
-    setAverages: progress ? progress.completed.map((c) => c.average) : [],
+    setAverages: sets.success
+      ? completedSetAverages(sets.data.sets, scoreOf)
+      : [],
   };
 }
 

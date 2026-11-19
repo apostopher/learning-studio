@@ -4,9 +4,9 @@
  *
  * An attempt asks up to eight key points, drawn without repeats, in sets of
  * four. Viper gives feedback on every answer as it lands. A set whose answers
- * average `DEBRIEF_SET_PASS_SCORE` or more passes the debrief and ends the
- * attempt; a set below it opens the next set, if there is one; the last set
- * below it ends the attempt unpassed. Each set is judged on its own.
+ * is judged by a `SetJudge` (the course's pass mark) on the better average so
+ * far. A miss opens the next set; a pass on set 1 offers set 2 to improve on.
+ * `DEBRIEF_SET_PASS_SCORE` now only sets the per-answer verdict and tone.
  */
 
 export const DEBRIEF_SET_SIZE = 4;
@@ -27,10 +27,30 @@ export function setAverage(scores: readonly number[]): number {
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
+/** Judges a set's (best-so-far) average against the course's pass mark. */
+export type SetJudge = (average: number) => boolean;
+
+/**
+ * The averages of fully answered sets, in order, stopping at the first set
+ * not yet complete. Judge-free: it says nothing about passing.
+ */
+export function completedSetAverages(
+  sets: readonly (readonly string[])[],
+  scoreOf: ReadonlyMap<string, number>,
+): number[] {
+  const averages: number[] = [];
+  for (const ids of sets) {
+    if (ids.length === 0 || !ids.every((id) => scoreOf.has(id))) break;
+    averages.push(setAverage(ids.map((id) => scoreOf.get(id) ?? 0)));
+  }
+  return averages;
+}
+
 export type SetOutcome = {
   /** 1-based. */
   set: number;
   average: number;
+  /** The judge on the better average so far, not this set's own. */
   passed: boolean;
 };
 
@@ -38,41 +58,59 @@ export type SetsProgress = {
   /** One per set whose every question is answered, in order. */
   completed: SetOutcome[];
   /**
-   * How many sets the pilot may see: the first, plus one more after each
-   * completed set that missed — never past the last.
+   * How many sets the pilot may see: set 1; set 2 after a miss, or after a
+   * pass the pilot chose to improve on; never past the last.
    */
   reached: number;
-  /** A completed set passed: the debrief is passed and the attempt is over. */
+  /** Some completed set passed. */
   passed: boolean;
-  /** Passed, or the last set is done: nothing more to ask. */
+  /** The highest completed average. */
+  best: number | null;
+  /** Set 1 passed, a set 2 exists, and the pilot has not taken it up. */
+  offer: boolean;
+  /**
+   * Nothing more to ask: every set is done. Declining an offer is recorded
+   * by the caller finishing the row.
+   */
   over: boolean;
 };
 
 /**
- * Where an attempt stands, from its sets and the scores recorded so far.
- * Sets are answered in order, so the walk stops at the first one not yet
- * complete, and at the first that passed.
+ * Where an attempt stands. A set passes when `judge` accepts the better
+ * average of it and every earlier completed set. A passed set 1 does not
+ * open set 2 until `improveAccepted`.
  */
 export function setsProgress(
   sets: readonly (readonly string[])[],
   scoreOf: ReadonlyMap<string, number>,
+  judge: SetJudge,
+  opts: { improveAccepted: boolean },
 ): SetsProgress {
-  const completed: SetOutcome[] = [];
-  for (const [i, ids] of sets.entries()) {
-    if (ids.length === 0 || !ids.every((id) => scoreOf.has(id))) break;
-    const average = setAverage(ids.map((id) => scoreOf.get(id) ?? 0));
-    const passed = average >= DEBRIEF_SET_PASS_SCORE;
-    completed.push({ set: i + 1, average, passed });
-    if (passed) break;
+  let averages = completedSetAverages(sets, scoreOf);
+  const firstPassed = averages.length > 0 && judge(averages[0] ?? 0);
+  const hasSet2 = sets.length > 1;
+  // A passed set 1 not taken up: later answers, if any, are not part of it.
+  if (firstPassed && hasSet2 && !opts.improveAccepted) {
+    averages = averages.slice(0, 1);
   }
-  const passed = completed.at(-1)?.passed ?? false;
-  const over = passed || (sets.length > 0 && completed.length === sets.length);
+  let best = Number.NEGATIVE_INFINITY;
+  const completed: SetOutcome[] = averages.map((average, i) => {
+    best = Math.max(best, average);
+    return { set: i + 1, average, passed: judge(best) };
+  });
+  const offer =
+    firstPassed && hasSet2 && !opts.improveAccepted && completed.length === 1;
+  const over = sets.length > 0 && completed.length === sets.length;
   return {
     completed,
-    reached: over
-      ? completed.length
-      : Math.min(completed.length + 1, sets.length),
-    passed,
+    reached: offer
+      ? 1
+      : over
+        ? completed.length
+        : Math.min(completed.length + 1, sets.length),
+    passed: completed.some((c) => c.passed),
+    best: completed.length > 0 ? best : null,
+    offer,
     over,
   };
 }

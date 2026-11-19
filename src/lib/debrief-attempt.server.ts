@@ -178,7 +178,13 @@ async function currentChunksOr(
 function toView(row: AttemptRow): AttemptView {
   const stored = parseStored(row);
   const answers = parseAnswers(row);
-  const { reached } = setsProgress(attemptSets(stored), scoresOf(answers));
+  // Task 4: replace with the course-pass-mark judge
+  const { reached } = setsProgress(
+    attemptSets(stored),
+    scoresOf(answers),
+    (a) => a >= 75,
+    { improveAccepted: stored.improveAccepted ?? false },
+  );
   return {
     attemptId: row.id,
     questions: clientQuestions(stored, 1, reached),
@@ -445,8 +451,11 @@ function setStep(
   'setResult' | 'nextQuestions' | 'finished'
 > {
   const sets = attemptSets(stored);
-  const was = setsProgress(sets, scoresOf(before));
-  const now = setsProgress(sets, scoresOf(after));
+  // Task 4: replace with the course-pass-mark judge
+  const judge = (a: number) => a >= 75;
+  const opts = { improveAccepted: stored.improveAccepted ?? false };
+  const was = setsProgress(sets, scoresOf(before), judge, opts);
+  const now = setsProgress(sets, scoresOf(after), judge, opts);
   const completedHere = now.completed.length > was.completed.length;
   const setResult = completedHere ? (now.completed.at(-1) ?? null) : null;
   // Only the answer that completed a set can report what it did; any other

@@ -39,6 +39,8 @@ export const StoredAttemptSchema = z.object({
    * every question (`attemptSets`).
    */
   sets: z.array(z.array(z.string())).optional(),
+  /** The pilot took up the offer of set 2 after passing set 1. */
+  improveAccepted: z.boolean().optional(),
 });
 export type StoredAttempt = z.infer<typeof StoredAttemptSchema>;
 
