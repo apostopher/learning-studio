@@ -220,6 +220,90 @@ describe('previewChatHandler', () => {
       expect(m.buildChatStream).not.toHaveBeenCalled();
     });
 
+    /** What `useChat` sends back for one of Viper's searched answers. */
+    const searchedAnswer = (id: string, text: string, output: string) => ({
+      id,
+      role: 'assistant',
+      parts: [
+        { type: 'step-start' },
+        {
+          type: 'tool-searchKB',
+          toolCallId: `call-${id}`,
+          state: 'output-available',
+          input: { query: 'crab angle' },
+          output,
+        },
+        { type: 'step-start' },
+        { type: 'text', text, state: 'done' },
+      ],
+    });
+
+    const partTypes = () =>
+      (firstCall().messages as { parts: { type: string }[] }[]).flatMap((msg) =>
+        msg.parts.map((part) => part.type),
+      );
+
+    it('sends only text to the model, whatever else the history carries', async () => {
+      // The tool output alone is far over the total cap; the text is just
+      // under it. Only text counts, because only text reaches the model.
+      const messages = [
+        user('u1', 'x'.repeat(PREVIEW_MAX_USER_TEXT)),
+        searchedAnswer(
+          'a1',
+          'x'.repeat(PREVIEW_MAX_TOTAL_TEXT - PREVIEW_MAX_USER_TEXT - 1),
+          'y'.repeat(PREVIEW_MAX_TOTAL_TEXT * 2),
+        ),
+        user('u2', 'x'),
+      ];
+      const res = await run({ ...valid, messages });
+      expect(res.status).toBe(200);
+      expect(m.buildChatStream).toHaveBeenCalledTimes(1);
+      expect(partTypes()).toEqual(['text', 'text', 'text']);
+      expect(firstCall().uiMessages).toEqual(firstCall().messages);
+    });
+
+    it('takes a second turn shaped like real useChat history', async () => {
+      const res = await run({
+        ...valid,
+        messages: [
+          user('u1', 'What is a crab angle?'),
+          searchedAnswer('a1', 'It is the heading offset…', 'chunk text'),
+          user('u2', 'And in a gusty crosswind?'),
+        ],
+      });
+      expect(res.status).toBe(200);
+      const sent = firstCall().messages as {
+        id: string;
+        role: string;
+        parts: unknown[];
+      }[];
+      expect(sent).toEqual([
+        user('u1', 'What is a crab angle?'),
+        {
+          id: 'a1',
+          role: 'assistant',
+          parts: [
+            { type: 'text', text: 'It is the heading offset…', state: 'done' },
+          ],
+        },
+        user('u2', 'And in a gusty crosswind?'),
+      ]);
+    });
+
+    it('drops a message left with no text', async () => {
+      await run({
+        ...valid,
+        messages: [
+          user('u1', 'hi'),
+          { id: 'a1', role: 'assistant', parts: [{ type: 'step-start' }] },
+          user('u2', 'still there?'),
+        ],
+      });
+      expect(
+        (firstCall().messages as { id: string }[]).map((msg) => msg.id),
+      ).toEqual(['u1', 'u2']);
+    });
+
     it('400s a message with a file part', async () => {
       const res = await previewChatHandler(
         post({
@@ -274,7 +358,8 @@ describe('previewChatHandler', () => {
   });
 
   it('passes the messages, a placeholder learner and the admin id', async () => {
-    await run();
+    const request = post(valid);
+    await (await previewChatHandler(request)).text();
     const call = firstCall();
     expect(call.messages).toEqual(MESSAGES);
     expect(call.uiMessages).toEqual(MESSAGES);
@@ -286,7 +371,7 @@ describe('previewChatHandler', () => {
     expect(call.subscriptions).toEqual([]);
     expect(call.userId).toBe('admin-1');
     // A closed tab cancels generation rather than running it to the end.
-    expect(call.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(call.abortSignal).toBe(request.signal);
   });
 
   it('never personalises or persists', async () => {

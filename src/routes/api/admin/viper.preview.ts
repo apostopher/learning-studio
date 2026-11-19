@@ -14,6 +14,7 @@ import {
   PREVIEW_TOO_LONG_ERROR,
   previewChatRequestSchema,
   previewMessagesWithinLimits,
+  previewTextOnly,
 } from '#/lib/viper-preview-schemas';
 
 /** Returns the userId of an admin, or the 403 to send instead. */
@@ -71,12 +72,13 @@ export async function previewChatHandler(request: Request): Promise<Response> {
   if (!validated.success) {
     return Response.json({ error: validated.error.message }, { status: 400 });
   }
-  const messages = validated.data;
   // The count cap alone does not bound the prompt: every turn resends the
   // whole conversation, so its size is checked before any model call.
-  if (!previewMessagesWithinLimits(messages)) {
+  if (!previewMessagesWithinLimits(validated.data)) {
     return Response.json({ error: PREVIEW_TOO_LONG_ERROR }, { status: 400 });
   }
+  // Only the text the caps just measured goes on to the model.
+  const messages = previewTextOnly(validated.data);
 
   // Org-scoped read: a persona id from another org comes back null.
   const persona = await getPersonaById(getActiveOrgId(), personaId);

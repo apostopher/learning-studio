@@ -56,3 +56,23 @@ export function previewMessagesWithinLimits(messages: UIMessage[]): boolean {
   }
   return true;
 }
+
+/**
+ * The conversation as the model will see it: each message's `text` parts
+ * only, and no message left empty.
+ *
+ * Viper's own turns come back from `useChat` with `step-start`,
+ * `tool-searchKB` (input and output), reasoning and data parts. Those are
+ * client-supplied JSON that `convertToModelMessages` would carry into the
+ * prompt, and the size caps count text only — so they are dropped rather than
+ * refused (refusing them would fail every second turn). `buildChatStream`
+ * prunes earlier turns' tool calls anyway, so the model loses nothing it used.
+ */
+export function previewTextOnly(messages: UIMessage[]): UIMessage[] {
+  return messages.flatMap((message) => {
+    const parts = message.parts.filter((part) => part.type === 'text');
+    return parts.length === 0
+      ? []
+      : [{ id: message.id, role: message.role, parts }];
+  });
+}
