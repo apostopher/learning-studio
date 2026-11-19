@@ -435,6 +435,18 @@ export const pendingDeletePersonaIdAtom = atom<number | null>(null);
 export const newPersonaNameAtom = atom('');
 
 /**
+ * Put the persona section's UI back to a fresh list view. These atoms are
+ * shared by the course dialog and the AI Training tab, so whichever surface is
+ * left must reset them or the next one opens on a stale editor.
+ */
+export const resetPersonaUiAtom = atom(null, (_get, set) => {
+  set(personaPaneAtom, 'list');
+  set(editingPersonaIdAtom, null);
+  set(pendingDeletePersonaIdAtom, null);
+  set(newPersonaNameAtom, '');
+});
+
+/**
  * The People table's search text. Held here rather than in `?q=`: writing
  * the URL on every keystroke runs a full router navigation per character
  * (the root `beforeLoad`'s auth server call included) for a value nobody

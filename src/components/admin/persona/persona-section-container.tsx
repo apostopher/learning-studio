@@ -1,4 +1,4 @@
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -6,6 +6,7 @@ import {
   newPersonaNameAtom,
   pendingDeletePersonaIdAtom,
   personaPaneAtom,
+  resetPersonaUiAtom,
 } from '#/atoms/admin';
 import {
   useCoursePersona,
@@ -107,6 +108,7 @@ export const PersonaSectionContainer = ({
     pendingDeletePersonaIdAtom,
   );
   const [newName, setNewName] = useAtom(newPersonaNameAtom);
+  const resetPersonaUi = useSetAtom(resetPersonaUiAtom);
 
   const personas = usePersonas();
   const selection = useCoursePersona(course?.id ?? null);
@@ -239,8 +241,12 @@ export const PersonaSectionContainer = ({
       // Unmounting means the modal closed: send whatever is still pending.
       flushWithBeacon();
       clearTimers();
+      // The atoms are shared with the other surface that hosts this section
+      // (course dialog / AI Training tab). Reset AFTER the flush above so the
+      // beacon sends the pending draft before the editing id is cleared.
+      resetPersonaUi();
     };
-  }, [clearTimers]);
+  }, [clearTimers, resetPersonaUi]);
 
   const openEditor = (personaId: number) => {
     setEditingId(personaId);

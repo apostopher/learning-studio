@@ -4,11 +4,8 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
-  editingPersonaIdAtom,
   embeddingsSearchAtom,
-  newPersonaNameAtom,
-  pendingDeletePersonaIdAtom,
-  personaPaneAtom,
+  resetPersonaUiAtom,
   trainCourseAtom,
 } from '#/atoms/admin';
 import { useAddEmbeddings } from '#/data-hooks/use-add-embeddings';
@@ -41,10 +38,7 @@ import {
 export const CourseEmbeddingsDialogContainer = () => {
   const [course, setCourse] = useAtom(trainCourseAtom);
   const setSearch = useSetAtom(embeddingsSearchAtom);
-  const setPane = useSetAtom(personaPaneAtom);
-  const setEditingPersonaId = useSetAtom(editingPersonaIdAtom);
-  const setPendingDelete = useSetAtom(pendingDeletePersonaIdAtom);
-  const setNewPersonaName = useSetAtom(newPersonaNameAtom);
+  const resetPersonaUi = useSetAtom(resetPersonaUiAtom);
 
   const sections: ConfigModalSection[] = course
     ? [
@@ -71,10 +65,7 @@ export const CourseEmbeddingsDialogContainer = () => {
           setSearch('');
           // Reset the persona section so reopening starts on the list rather
           // than mid-edit on a persona from the previous course's visit.
-          setPane('list');
-          setEditingPersonaId(null);
-          setPendingDelete(null);
-          setNewPersonaName('');
+          resetPersonaUi();
         }
       }}
       title="AI training"
