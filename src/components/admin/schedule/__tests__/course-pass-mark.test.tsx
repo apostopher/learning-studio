@@ -5,6 +5,7 @@ import { CoursePassMark } from '#/components/admin/schedule/course-pass-mark';
 import { ScheduleCourseCard } from '#/components/admin/schedule/schedule-course-card';
 
 const baseProps = {
+  courseId: 7,
   courseName: 'ITPS UAS',
   passMark: 85,
   open: false,
@@ -22,6 +23,16 @@ describe('CoursePassMark', () => {
       name: 'Pass mark for ITPS UAS, currently 85',
     });
     expect(button.textContent).toBe('Pass mark 85');
+  });
+});
+
+describe('CoursePassMark open', () => {
+  it('points aria-describedby at the hint element id', () => {
+    render(<CoursePassMark {...baseProps} open />);
+    const input = screen.getByLabelText('Pass mark');
+    const hintId = input.getAttribute('aria-describedby') ?? '';
+    expect(hintId).toBe('pass-mark-hint-7');
+    expect(document.getElementById(hintId)?.textContent).toContain('0–100');
   });
 });
 

@@ -9,6 +9,7 @@ import type { FormEventHandler, InputHTMLAttributes, Ref } from 'react';
  * container. The only state here is Base UI's own popover plumbing.
  */
 export const CoursePassMark = ({
+  courseId,
   courseName,
   passMark,
   open,
@@ -21,6 +22,7 @@ export const CoursePassMark = ({
   serverError,
   isPending,
 }: {
+  courseId: number;
   courseName: string;
   passMark: number;
   open: boolean;
@@ -46,26 +48,26 @@ export const CoursePassMark = ({
         <Popover.Popup className="w-64 rounded-lg border border-gray-6 bg-gray-2 p-3 shadow-lg">
           <form onSubmit={onSubmit} noValidate className="flex flex-col gap-2">
             <label
-              htmlFor={`pass-mark-${courseName}`}
+              htmlFor={`pass-mark-input-${courseId}`}
               className="font-medium text-primary text-sm"
             >
               Pass mark
             </label>
             <input
-              id={`pass-mark-${courseName}`}
+              id={`pass-mark-input-${courseId}`}
               type="number"
               inputMode="numeric"
               min={0}
               max={100}
               step={1}
               aria-invalid={fieldError ? true : undefined}
-              aria-describedby={`pass-mark-hint-${courseName}`}
+              aria-describedby={`pass-mark-hint-${courseId}`}
               {...inputProps}
               ref={inputRef}
               className="rounded-md border border-gray-7 bg-gray-1 px-2 py-1.5 text-base text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9"
             />
             <p
-              id={`pass-mark-hint-${courseName}`}
+              id={`pass-mark-hint-${courseId}`}
               className="text-secondary text-xs"
             >
               0–100: lessons pass at this total score

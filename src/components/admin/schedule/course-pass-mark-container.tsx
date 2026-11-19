@@ -33,22 +33,30 @@ export const CoursePassMarkContainer = ({
 
   const onOpenChange = (next: boolean) => {
     setOpen(next);
-    // Reopen on the saved value, not a half-typed or rejected one.
-    if (!next) {
-      form.reset({ passMark: course.passMark });
-      update.reset();
-    }
+    // Always start from the saved value as of this render, never a half-typed
+    // or rejected one. Runs on open too, so a refetch that landed while closed
+    // is what the editor shows.
+    form.reset({ passMark: course.passMark });
+    update.reset();
   };
 
   const onSubmit = form.handleSubmit(({ passMark }) => {
     update.mutate(
       { courseId: course.id, passMark },
-      { onSuccess: () => onOpenChange(false) },
+      {
+        // Not onOpenChange(false): this callback closes over the pre-save
+        // `course.passMark` and would reset the form back to the old value.
+        onSuccess: () => {
+          form.reset({ passMark });
+          setOpen(false);
+        },
+      },
     );
   });
 
   return (
     <CoursePassMark
+      courseId={course.id}
       courseName={course.name}
       passMark={course.passMark}
       open={open}
