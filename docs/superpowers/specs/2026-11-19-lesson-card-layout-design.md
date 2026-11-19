@@ -19,7 +19,7 @@ versioning system that will come later.
   ("Hidden from students. Show it" / "Visible to students. Hide it").
   The draft state carries a tint so it stays as noticeable as the word was.
 - Course board card: an inert yellow "Ver" chip at the end of the chip row.
-  Tooltip and accessible name: "Lesson versions are coming soon".
+  Tooltip and accessible name: "Ver: lesson versions are coming soon".
 - Discipline library card: a "Vers 3.4" placeholder under the name at
   `opacity: 0` and `aria-hidden` (user's call), reserving its space until
   versioning exists.

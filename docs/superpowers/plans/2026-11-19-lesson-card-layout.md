@@ -20,7 +20,7 @@
   - visible lesson: `Visible to students. Hide it`
   - draft lesson: `Hidden from students. Show it`
   - in flight: `Updating visibility of {lesson name}…`
-  - Ver chip: `Lesson versions are coming soon`
+  - Ver chip: `Ver: lesson versions are coming soon`
   - library placeholder text: `Vers 3.4`
 - Vitest imports use `#/`, not `@/`. Tests stub `ClampedText` and `TooltipIconButton` as the existing card tests do (copy their `vi.mock` blocks).
 - Assert on what the consumer received (the mutation's call arguments), not on cache state.
@@ -59,12 +59,12 @@ Layout (one column beside the video tile):
   - `it('offers to show a draft lesson')`: `isAvailable: false`, `visibility={{ onToggle }}` → button named `Hidden from students. Show it`; click → `onToggle` called once; `queryByText('Draft')` null.
   - `it('offers to hide a visible lesson')`: `isAvailable: true` → button named `Visible to students. Hide it`.
   - `it('goes inert while the visibility change is saving')`: `isPending: true` → button named `Updating visibility of Crosswind landings…`; click → `onToggle` not called.
-  - `it('shows an inert Ver chip beside the quickshot chips')`: with `quickshotSlot={<span>chips</span>}` → element named `Lesson versions are coming soon` present; clicking it throws nothing and no other prop callback (`onEdit`, `onPlay`, `onToggle`) is called.
-  - `it('draws no Ver chip on a card without chips')`: no `quickshotSlot` → no element named `Lesson versions are coming soon`.
+  - `it('shows an inert Ver chip beside the quickshot chips')`: with `quickshotSlot={<span>chips</span>}` → element named `Ver: lesson versions are coming soon` present; clicking it throws nothing and no other prop callback (`onEdit`, `onPlay`, `onToggle`) is called.
+  - `it('draws no Ver chip on a card without chips')`: no `quickshotSlot` → no element named `Ver: lesson versions are coming soon`.
 - [ ] **Step 2: Run, confirm the new tests fail**
   Run: `npx vitest run src/components/admin/__tests__/lesson-card.test.tsx`
   Expected: the six new tests FAIL; existing ones pass.
-- [ ] **Step 3: Implement.** Eye: `EyeOff` when draft, `Eye` when visible, `h-4 w-4`, `aria-hidden` on the icon. `TooltipIconButton` `label` per the copy above, `disabled={visibility.isPending}`. The draft-state eye carries a tint class so it stays noticeable (`text-warning-text`; the button's own hover classes still apply). Ver chip: `TooltipIconButton`-style trigger is NOT used (it's an icon button); render `<Tooltip>` from Base UI around a `<button type="button" aria-disabled="true" aria-label="Lesson versions are coming soon">` with `chipClassName` shape and `bg-accent-9 text-accent-contrast`, no `onClick`, reading `Ver`. Reuse `IconButtonTooltip` from `#/components/ui/tooltip-icon-button` for the popup, as `lesson-quickshot.tsx` does for its chips. Add a doc comment on the chip: placeholder until lesson versioning exists (see spec).
+- [ ] **Step 3: Implement.** Eye: `EyeOff` when draft, `Eye` when visible, `h-4 w-4`, `aria-hidden` on the icon. `TooltipIconButton` `label` per the copy above, `disabled={visibility.isPending}`. The draft-state eye carries a tint class so it stays noticeable (`text-warning-text`; the button's own hover classes still apply). Ver chip: `TooltipIconButton`-style trigger is NOT used (it's an icon button); render `<Tooltip>` from Base UI around a `<button type="button" aria-disabled="true" aria-label="Ver: lesson versions are coming soon">` with `chipClassName` shape and `bg-accent-9 text-accent-contrast`, no `onClick`, reading `Ver`. Reuse `IconButtonTooltip` from `#/components/ui/tooltip-icon-button` for the popup, as `lesson-quickshot.tsx` does for its chips. Add a doc comment on the chip: placeholder until lesson versioning exists (see spec).
 - [ ] **Step 4: Run tests, confirm pass**
   Run: `npx vitest run src/components/admin/__tests__/lesson-card.test.tsx`
   Expected: all PASS.

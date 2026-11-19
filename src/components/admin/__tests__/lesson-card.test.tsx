@@ -262,7 +262,7 @@ describe('LessonCard', () => {
       />,
     );
     const ver = screen.getByRole('button', {
-      name: 'Lesson versions are coming soon',
+      name: 'Ver: lesson versions are coming soon',
     });
     expect(ver.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(ver);
@@ -275,7 +275,7 @@ describe('LessonCard', () => {
   it('draws no Ver chip on a card without chips', () => {
     render(<LessonCard lesson={lesson()} />);
     expect(
-      screen.queryByRole('button', { name: 'Lesson versions are coming soon' }),
+      screen.queryByRole('button', { name: 'Ver: lesson versions are coming soon' }),
     ).toBeNull();
   });
 });

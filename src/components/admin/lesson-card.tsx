@@ -242,7 +242,7 @@ const VersionChip = () => (
     <Tooltip.Trigger
       render={<button type="button" />}
       aria-disabled="true"
-      aria-label="Lesson versions are coming soon"
+      aria-label="Ver: lesson versions are coming soon"
       className={chipClassName(
         'solid-accent',
         'cursor-not-allowed focus-visible:outline-2 focus-visible:outline-apple-9 focus-visible:outline-offset-2',
@@ -250,6 +250,6 @@ const VersionChip = () => (
     >
       Ver
     </Tooltip.Trigger>
-    <IconButtonTooltip label="Lesson versions are coming soon" />
+    <IconButtonTooltip label="Ver: lesson versions are coming soon" />
   </Tooltip.Root>
 );
