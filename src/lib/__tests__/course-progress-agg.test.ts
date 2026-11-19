@@ -382,8 +382,9 @@ describe('ringPercent — the staged ring the learner sees', () => {
   });
 
   it('spreads a missing stage over the ones the lesson has', () => {
-    // No quiz: video 2/3, debrief 1/3.
-    expect(ring(full({ hasQuiz: false, watchedHits: FULL }))).toBe(67);
+    // No quiz: video 50, passed debrief 100.
+    expect(ring(full({ hasQuiz: false, watchedHits: FULL }))).toBe(50);
+    expect(ring(full({ hasQuiz: false, debriefPassed: true }))).toBe(50);
     // No bearing debrief: video and quiz finish it.
     expect(
       ring(

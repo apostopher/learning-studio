@@ -198,20 +198,17 @@ export function coursePercent(
 }
 
 /**
- * The ring's three stages, by weight: watching the video is half the lesson,
- * the quiz and the passed debrief a quarter each — so a full lesson closes at
- * 50, 75 and 100 as each is done.
+ * The ring's stages: watching the video is always half the lesson, and the
+ * stages after it share the other half equally. So:
+ * - video + quiz + debrief: 50, 75, 100;
+ * - video + quiz, or video + debrief: 50, 100 (user, 2026-11-19).
  *
- * Without a debrief stage, the video and quiz split it evenly: video 50,
- * quiz 100. That covers two cases:
- * - a 3D Airmanship lesson, where the debrief is optional. The pilot's 3D
- *   score is 100 once they have passed the lessons at their level, and level
- *   filtering already decides which those are;
- * - a lesson with its debrief switched off, or one with no usable debrief
- *   (`debriefBearing` false). User, 2026-11-19.
+ * The debrief is a stage only when it counts: switched on (`debriefBearing`)
+ * and not a 3D Airmanship lesson, where it is optional. The pilot's 3D score
+ * is 100 once they have passed the lessons at their level, and level
+ * filtering already decides which those are. An optional debrief is still
+ * offered; it just adds nothing to the ring.
  */
-const RING_WEIGHTS = { video: 2, quiz: 1, debrief: 1 } as const;
-const NO_DEBRIEF_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
 
 /**
  * What the lesson's ring shows. Each stage the lesson has is credited on its
@@ -219,34 +216,25 @@ const NO_DEBRIEF_RING_WEIGHTS = { video: 1, quiz: 1, debrief: 0 } as const;
  * are hit, the quiz and debrief are all or nothing (a debrief counts on a
  * PASS, not an attempt).
  *
- * A stage the lesson lacks — no required video, no quiz, no debrief that
- * bears — drops out and the rest share its weight, so every lesson can still
- * reach 100. Material tabs are not a stage: they still count toward `percent`
- * and so toward `done`, but not toward the ring. A lesson with none of the
- * three shows its `percent`.
+ * A stage the lesson lacks (no required video, no quiz, no debrief that
+ * counts) drops out, so every lesson can still reach 100. Material tabs are
+ * not a stage: they still count toward `percent` and so toward `done`, but
+ * not toward the ring. A lesson with none of the three shows its `percent`.
  */
 function lessonRingPercent(row: LessonProgressRow, percent: number): number {
-  const weights =
-    row.flagshipDiscipline || !row.debriefBearing
-      ? NO_DEBRIEF_RING_WEIGHTS
-      : RING_WEIGHTS;
-  const stages: { weight: number; fraction: number }[] = [];
+  const later: { weight: number; fraction: number }[] = [];
+  if (row.hasQuiz) {
+    later.push({ weight: 1, fraction: row.quizPlayed ? 1 : 0 });
+  }
+  if (row.debriefBearing && !row.flagshipDiscipline) {
+    later.push({ weight: 1, fraction: debriefPassedOf(row) ? 1 : 0 });
+  }
+  const stages = [...later];
   if (row.hasVideo && row.needsVideoWatch) {
     stages.push({
-      weight: weights.video,
+      // Half the ring: as heavy as everything after it put together.
+      weight: Math.max(1, later.length),
       fraction: Math.min(row.watchedHits, WATCHED_TOTAL) / WATCHED_TOTAL,
-    });
-  }
-  if (row.hasQuiz) {
-    stages.push({
-      weight: weights.quiz,
-      fraction: row.quizPlayed ? 1 : 0,
-    });
-  }
-  if (row.debriefBearing && weights.debrief > 0) {
-    stages.push({
-      weight: weights.debrief,
-      fraction: debriefPassedOf(row) ? 1 : 0,
     });
   }
   if (stages.length === 0) return percent;
