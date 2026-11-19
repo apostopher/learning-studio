@@ -125,6 +125,10 @@ export async function lockAttempt(
   return row ?? null;
 }
 
+/**
+ * `questions` replaces the stored snapshot: only to record the pilot's
+ * choice on it (`improveAccepted`), never to change what was asked.
+ */
 export async function updateAttempt(
   tx: Tx,
   attemptId: number,
@@ -132,7 +136,7 @@ export async function updateAttempt(
     Pick<
       AttemptRow,
       'answers' | 'draft' | 'completedAt' | 'totalScore' | 'finishedReason'
-    >
+    > & { questions: StoredAttempt }
   >,
 ): Promise<void> {
   await tx

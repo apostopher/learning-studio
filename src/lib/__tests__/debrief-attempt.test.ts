@@ -27,6 +27,8 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   resolveDebriefSource: vi.fn(),
   waitUntil: vi.fn(),
+  getScoreFacts: vi.fn(),
+  getCoursePassMark: vi.fn(),
 }));
 
 vi.mock('#/db', () => ({
@@ -70,9 +72,14 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
+vi.mock('#/lib/lesson-score.server', () => ({
+  getScoreFacts: m.getScoreFacts,
+  getCoursePassMark: m.getCoursePassMark,
+}));
 
 import {
   answerQuestion,
+  continueAttempt,
   saveDraft,
   startOrResumeAttempt,
 } from '../debrief-attempt.server';
@@ -154,6 +161,13 @@ const evaluation = (
 /** An answer on the set-format attempt: question qN tests chunk v1-cN. */
 const scored = (n: number, score: number) =>
   evaluation(`q${n}`, { [`v1-c${n}`]: score });
+/** The only part of a lesson with no video and no quiz. */
+const debriefPart = (average: number) => ({
+  part: 'debrief',
+  weight: 100,
+  fraction: average / 100,
+  points: expect.closeTo(average),
+});
 const metrics = {
   msOnQuestion: 60_000,
   msToFirstKey: 3_000,
@@ -208,6 +222,11 @@ beforeEach(() => {
   m.prepareDebrief.mockResolvedValue('prepared');
   m.selectAskedQuestions.mockResolvedValue(['Asked before?']);
   m.takePreparedDebrief.mockResolvedValue(null);
+  // No video, no quiz, pass mark 75: the debrief is the whole score, so a set
+  // passes at an average of 75 (the cases below that predate the lesson
+  // total). The lesson-total cases set their own facts.
+  m.getScoreFacts.mockResolvedValue({ video: null, quiz: null });
+  m.getCoursePassMark.mockResolvedValue(75);
 });
 
 describe('startOrResumeAttempt', () => {
@@ -246,6 +265,8 @@ describe('startOrResumeAttempt', () => {
           },
         ],
         draft: { questionId: 'q2', text: 'half' },
+        offer: false,
+        setResults: [],
       },
     });
     expect(m.generateTest).not.toHaveBeenCalled();
@@ -494,8 +515,20 @@ describe('answerQuestion', () => {
         feedback: 'Viper on q2: 90.',
         revisitNote: '',
       },
-      setResult: { set: 1, average: 65, passed: false },
+      setResult: {
+        set: 1,
+        average: 65,
+        passed: false,
+        score: {
+          total: expect.closeTo(65),
+          passMark: 75,
+          passed: false,
+          parts: [debriefPart(65)],
+        },
+      },
       nextQuestions: [],
+      offer: false,
+      passedNow: false,
       finished: 'sets-missed',
     });
     expect(m.evaluateFreeText).not.toHaveBeenCalled();
@@ -579,11 +612,13 @@ describe('answerQuestion', () => {
       },
       setResult: null,
       nextQuestions: [],
+      offer: false,
+      passedNow: false,
       finished: null,
     });
   });
 
-  it('set 1 averaging 75 or more passes: set-passed at that average, a permanent pass, set 2 never asked', async () => {
+  it('a passing set 1 with a set 2 records the pass and offers set 2: the attempt stays open, set 2 unasked', async () => {
     m.row = attemptRow({
       questions: setStored,
       answers: [scored(1, 100), scored(2, 80), scored(3, 50)],
@@ -594,18 +629,21 @@ describe('answerQuestion', () => {
       ok: true,
       setResult: { set: 1, average: 78, passed: true },
       nextQuestions: [],
-      finished: 'set-passed',
+      offer: true,
+      passedNow: true,
+      finished: null,
     });
     expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
       userId: 'u1',
       lessonSlug: 'l1',
     });
     const set = m.updateAttempt.mock.calls[0][2];
-    expect(set.completedAt).toBeInstanceOf(Date);
-    expect(set.totalScore).toBe(78);
-    expect(set.finishedReason).toBe('set-passed');
+    expect(set.completedAt).toBeUndefined();
+    expect(set.finishedReason).toBeUndefined();
     expect(m.waitUntil).not.toHaveBeenCalled();
-    expect(await answer('q5')).toEqual({ ok: false, reason: 'forbidden' });
+    // Set 2 is not reached until the pilot takes up the offer.
+    expect(await answer('q5')).toEqual({ ok: false, reason: 'out-of-order' });
+    expect(m.evaluateFreeText).toHaveBeenCalledOnce();
   });
 
   it('set 1 under 75 opens set 2: its questions come back, the attempt goes on', async () => {
@@ -622,11 +660,23 @@ describe('answerQuestion', () => {
         feedback: 'Viper on q4: 40.',
         revisitNote: 'You missed the load factor.',
       },
-      setResult: { set: 1, average: 68, passed: false },
+      setResult: {
+        set: 1,
+        average: 68,
+        passed: false,
+        score: {
+          total: expect.closeTo(68),
+          passMark: 75,
+          passed: false,
+          parts: [debriefPart(68)],
+        },
+      },
       nextQuestions: [
         { id: 'q5', question: 'Question q5?', set: 2 },
         { id: 'q6', question: 'Question q6?', set: 2 },
       ],
+      offer: false,
+      passedNow: false,
       finished: null,
     });
     const set = m.updateAttempt.mock.calls[0][2];
@@ -636,7 +686,7 @@ describe('answerQuestion', () => {
     expect(JSON.stringify(r)).not.toContain('SECRET-ANSWER');
   });
 
-  it('set 2 is judged on its own: a passing set 2 passes whatever set 1 scored', async () => {
+  it('a passing set 2 passes whatever set 1 scored, and records the pass', async () => {
     m.row = attemptRow({
       questions: setStored,
       answers: [...[1, 2, 3, 4].map((n) => scored(n, 0)), scored(5, 80)],
@@ -645,6 +695,7 @@ describe('answerQuestion', () => {
     const r = await answer('q6');
     expect(r).toMatchObject({
       setResult: { set: 2, average: 75, passed: true },
+      passedNow: true,
       finished: 'set-passed',
     });
     expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(75);
@@ -771,6 +822,401 @@ describe('answerQuestion', () => {
   it('refuses an attempt that does not exist', async () => {
     m.row = null;
     expect(await answer('q1')).toEqual({ ok: false, reason: 'forbidden' });
+  });
+});
+
+/**
+ * Judged on the lesson total: video and quiz full, pass mark 85, so the
+ * debrief's quarter must bring 35 — a set passes at an average of 40.
+ */
+describe('sets judged on the lesson total against the course pass mark', () => {
+  const eightChunks = Array.from({ length: 8 }, (_, i) => ({
+    id: `v1-c${i + 1}`,
+    title: `Key point ${i + 1}`,
+    summary: `SECRET-SUMMARY-${i + 1}`,
+  }));
+  const eightStored = {
+    lessonSlug: 'l1',
+    questions: eightChunks.map((c, i) => q(`q${i + 1}`, c.id)),
+    chunks: eightChunks,
+    context: 'SECRET-CONTEXT transcript',
+    sets: [
+      ['q1', 'q2', 'q3', 'q4'],
+      ['q5', 'q6', 'q7', 'q8'],
+    ],
+  };
+  const fourStored = {
+    ...eightStored,
+    questions: eightStored.questions.slice(0, 4),
+    sets: [['q1', 'q2', 'q3', 'q4']],
+  };
+  const all = (from: number, to: number, score: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => scored(from + i, score));
+  const set2 = ['q5', 'q6', 'q7', 'q8'].map((id) => ({
+    id,
+    question: `Question ${id}?`,
+    set: 2,
+  }));
+
+  beforeEach(() => {
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
+    m.getCoursePassMark.mockResolvedValue(85);
+  });
+
+  it('reads the facts for this pilot and lesson, and the pass mark of the route’s course', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 50));
+    await answer('q4');
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
+  });
+
+  it('set 1 passing at 50 with a set 2: the pass is recorded, the attempt stays open, set 2 is offered', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 50));
+    const r = await answer('q4');
+    expect(m.insertPass).toHaveBeenCalledOnce();
+    expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
+      userId: 'u1',
+      lessonSlug: 'l1',
+    });
+    expect(m.updateAttempt).toHaveBeenCalledOnce();
+    expect(m.updateAttempt.mock.calls[0][2]).not.toHaveProperty('completedAt');
+    expect(r).toMatchObject({
+      ok: true,
+      offer: true,
+      passedNow: true,
+      finished: null,
+      nextQuestions: [],
+      setResult: { set: 1, average: 50, passed: true },
+    });
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
+    expect(r.ok && r.setResult?.score.passMark).toBe(85);
+    expect(m.waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('set 1 passing at 50 with no set 2 finishes set-passed at 50, no offer', async () => {
+    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 50) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 50));
+    const r = await answer('q4');
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      completedAt: expect.any(Date),
+      finishedReason: 'set-passed',
+      totalScore: 50,
+    });
+    expect(r).toMatchObject({
+      offer: false,
+      passedNow: true,
+      finished: 'set-passed',
+    });
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('set 1 at 30 misses: no pass, set 2 comes back, no offer', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 30) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 30));
+    const r = await answer('q4');
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(r).toMatchObject({
+      offer: false,
+      passedNow: false,
+      finished: null,
+      nextQuestions: set2,
+      setResult: { set: 1, average: 30, passed: false },
+    });
+  });
+
+  it('set 2 at 35 after set 1 at 30 finishes sets-missed at the better, 35, and prepares the next attempt', async () => {
+    m.row = attemptRow({
+      questions: eightStored,
+      answers: [...all(1, 4, 30), ...all(5, 7, 35)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 35));
+    const r = await answer('q8');
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      completedAt: expect.any(Date),
+      finishedReason: 'sets-missed',
+      totalScore: 35,
+    });
+    expect(r).toMatchObject({ finished: 'sets-missed', passedNow: false });
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(m.prepareDebrief).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      lessonSlug: 'l1',
+      lessonId: 41,
+    });
+    expect(m.waitUntil).toHaveBeenCalledOnce();
+  });
+
+  it('set 2 is judged on the better average: 30 then 45 passes on 45', async () => {
+    m.row = attemptRow({
+      questions: eightStored,
+      answers: [...all(1, 4, 30), ...all(5, 7, 45)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 45));
+    const r = await answer('q8');
+    expect(r).toMatchObject({
+      finished: 'set-passed',
+      passedNow: true,
+      setResult: { set: 2, average: 45, passed: true },
+    });
+    expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(45);
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('a quiz not taken (quiz 0) and 60 on the debrief totals 65: not passed', async () => {
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 60) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 60));
+    const r = await answer('q4');
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(65);
+    expect(r).toMatchObject({
+      setResult: { set: 1, average: 60, passed: false },
+      passedNow: false,
+      finished: 'sets-missed',
+    });
+    expect(m.insertPass).not.toHaveBeenCalled();
+  });
+
+  it('the judge counts the debrief even when the lesson’s debrief switch is off', async () => {
+    // getScoreFacts carries no debrief switch: the judge always adds the part.
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: null });
+    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 69) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 69));
+    const r = await answer('q4');
+    // 50 + 50 × 0.69 = 84.5 < 85.
+    expect(r).toMatchObject({ finished: 'sets-missed' });
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(84.5);
+  });
+
+  it('a replay of the passing answer reports the offer again, with no second pass', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
+    const r = await answer('q4');
+    expect(r).toMatchObject({
+      ok: true,
+      offer: true,
+      passedNow: false,
+      finished: null,
+      setResult: { set: 1, average: 50, passed: true },
+    });
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(m.evaluateFreeText).not.toHaveBeenCalled();
+  });
+
+  it('the replay reads the same after the offer was taken up', async () => {
+    m.row = attemptRow({
+      questions: { ...eightStored, improveAccepted: true },
+      answers: all(1, 4, 50),
+    });
+    expect(await answer('q4')).toMatchObject({
+      offer: true,
+      passedNow: false,
+      nextQuestions: [],
+    });
+  });
+
+  it('a lost race on the passing answer returns the winner’s offer, passedNow false, and writes nothing', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
+    m.lockedRow = attemptRow({
+      questions: eightStored,
+      answers: all(1, 4, 50),
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 50));
+    const r = await answer('q4');
+    expect(r).toMatchObject({ offer: true, passedNow: false, finished: null });
+    expect(m.insertPass).not.toHaveBeenCalled();
+    expect(m.updateAttempt).not.toHaveBeenCalled();
+  });
+
+  it('with the offer pending, set 2 cannot be answered', async () => {
+    m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
+    expect(await answer('q5')).toEqual({ ok: false, reason: 'out-of-order' });
+    expect(m.evaluateFreeText).not.toHaveBeenCalled();
+  });
+
+  it('after the offer is taken up, set 2 is answered; finishing it on the better average re-records the pass but is not a new one', async () => {
+    m.row = attemptRow({
+      questions: { ...eightStored, improveAccepted: true },
+      answers: [...all(1, 4, 50), ...all(5, 7, 90)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 90));
+    const r = await answer('q8');
+    expect(r).toMatchObject({
+      offer: false,
+      passedNow: false,
+      finished: 'set-passed',
+      setResult: { set: 2, average: 90, passed: true },
+    });
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(97.5);
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      completedAt: expect.any(Date),
+      finishedReason: 'set-passed',
+      totalScore: 90,
+    });
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('a worse set 2 after a taken-up offer still finishes passed, at set 1’s average', async () => {
+    m.row = attemptRow({
+      questions: { ...eightStored, improveAccepted: true },
+      answers: [...all(1, 4, 50), ...all(5, 7, 10)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 10));
+    const r = await answer('q8');
+    expect(r).toMatchObject({
+      finished: 'set-passed',
+      setResult: { set: 2, average: 10, passed: true },
+    });
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
+    expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(50);
+    expect(m.waitUntil).not.toHaveBeenCalled();
+  });
+
+  describe('resume (toView)', () => {
+    const start = () =>
+      startOrResumeAttempt({
+        userId: 'u1',
+        courseId: 7,
+        lessonId: 41,
+        lessonSlug: 'l1',
+      });
+
+    it('an open attempt whose set 1 passed shows the offer again, set 1 only, and its scored result', async () => {
+      m.selectOpenAttempt.mockResolvedValue(
+        attemptRow({ questions: eightStored, answers: all(1, 4, 50) }),
+      );
+      const r = await start();
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+      expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.offer).toBe(true);
+      expect(r.attempt.questions.map((x) => x.id)).toEqual([
+        'q1',
+        'q2',
+        'q3',
+        'q4',
+      ]);
+      expect(r.attempt.setResults).toMatchObject([
+        { set: 1, average: 50, passed: true },
+      ]);
+      expect(r.attempt.setResults[0]?.score.total).toBeCloseTo(87.5);
+    });
+
+    it('after taking the offer up: set 2 is shown, no offer', async () => {
+      m.selectOpenAttempt.mockResolvedValue(
+        attemptRow({
+          questions: { ...eightStored, improveAccepted: true },
+          answers: all(1, 4, 50),
+        }),
+      );
+      const r = await start();
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.offer).toBe(false);
+      expect(r.attempt.questions).toHaveLength(8);
+    });
+
+    it('each completed set is scored on the better average so far', async () => {
+      m.selectOpenAttempt.mockResolvedValue(
+        attemptRow({
+          questions: { ...eightStored, improveAccepted: true },
+          answers: [...all(1, 4, 50), ...all(5, 8, 10)],
+        }),
+      );
+      const r = await start();
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.setResults.map((x) => x.score.total)).toEqual([
+        expect.closeTo(87.5),
+        expect.closeTo(87.5),
+      ]);
+    });
+  });
+
+  describe('continueAttempt', () => {
+    const go = (choice: 'yes' | 'no', over: Record<string, unknown> = {}) =>
+      continueAttempt({
+        userId: 'u1',
+        attemptId: 5,
+        choice,
+        lessonId: 41,
+        courseId: 7,
+        ...over,
+      });
+
+    beforeEach(() => {
+      m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
+    });
+
+    it('yes: records the choice on the locked row and returns set 2’s questions', async () => {
+      const r = await go('yes');
+      expect(m.lockAttempt).toHaveBeenCalledWith(m.tx, 5);
+      expect(m.updateAttempt).toHaveBeenCalledWith(m.tx, 5, {
+        questions: { ...eightStored, improveAccepted: true },
+      });
+      expect(r).toEqual({ ok: true, choice: 'yes', questions: set2 });
+      expect(JSON.stringify(r)).not.toContain('SECRET');
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+      expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
+    });
+
+    it('no: finishes the attempt set-passed at the best average', async () => {
+      const r = await go('no');
+      expect(m.updateAttempt).toHaveBeenCalledWith(m.tx, 5, {
+        completedAt: expect.any(Date),
+        finishedReason: 'set-passed',
+        totalScore: 50,
+      });
+      expect(r).toEqual({ ok: true, choice: 'no' });
+      expect(m.waitUntil).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['set 1 not finished', { answers: all(1, 3, 50) }],
+      ['set 1 missed', { answers: all(1, 4, 30) }],
+      [
+        'the offer already taken up',
+        { questions: { ...eightStored, improveAccepted: true } },
+      ],
+      ['a finished attempt', { completedAt: new Date() }],
+      ['a one-set attempt', { questions: fourStored }],
+    ])('no-offer when %s, writing nothing', async (_why, over) => {
+      m.row = attemptRow({
+        questions: eightStored,
+        answers: all(1, 4, 50),
+        ...over,
+      });
+      expect(await go('yes')).toEqual({ ok: false, reason: 'no-offer' });
+      expect(await go('no')).toEqual({ ok: false, reason: 'no-offer' });
+      expect(m.updateAttempt).not.toHaveBeenCalled();
+    });
+
+    it('judges the offer on the LOCKED row (another tab took it up meanwhile)', async () => {
+      m.lockedRow = attemptRow({
+        questions: { ...eightStored, improveAccepted: true },
+        answers: all(1, 4, 50),
+      });
+      expect(await go('no')).toEqual({ ok: false, reason: 'no-offer' });
+      expect(m.updateAttempt).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['another pilot’s attempt', { userId: 'u2' }],
+      ['a legacy attempt', { format: null }],
+    ])('forbids %s', async (_why, over) => {
+      m.row = attemptRow({
+        questions: eightStored,
+        answers: all(1, 4, 50),
+        ...over,
+      });
+      expect(await go('yes')).toEqual({ ok: false, reason: 'forbidden' });
+      expect(m.updateAttempt).not.toHaveBeenCalled();
+    });
+
+    it('forbids an attempt that does not exist', async () => {
+      m.row = null;
+      expect(await go('no')).toEqual({ ok: false, reason: 'forbidden' });
+    });
   });
 });
 

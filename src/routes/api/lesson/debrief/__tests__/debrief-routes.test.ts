@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   getDebriefAccess: vi.fn(),
   startOrResumeAttempt: vi.fn(),
   answerQuestion: vi.fn(),
+  continueAttempt: vi.fn(),
   saveDraft: vi.fn(),
   getAttemptOwner: vi.fn(),
   settleProgress: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('#/lib/debrief-access.server', () => ({
 vi.mock('#/lib/debrief-attempt.server', () => ({
   startOrResumeAttempt: m.startOrResumeAttempt,
   answerQuestion: m.answerQuestion,
+  continueAttempt: m.continueAttempt,
   saveDraft: m.saveDraft,
   getAttemptOwner: m.getAttemptOwner,
 }));
@@ -26,6 +28,7 @@ vi.mock('#/lib/settle-progress.server', () => ({
 }));
 
 import { answerDebriefHandler } from '../answer';
+import { continueDebriefHandler } from '../continue';
 import { saveDraftHandler } from '../draft';
 import { startDebriefHandler } from '../start';
 
@@ -71,8 +74,11 @@ beforeEach(() => {
     evaluation: { score: 40, feedback: 'Viper says.', revisitNote: 'note' },
     setResult: null,
     nextQuestions: [],
+    offer: false,
+    passedNow: false,
     finished: null,
   });
+  m.continueAttempt.mockResolvedValue({ ok: true, choice: 'no' });
   m.saveDraft.mockResolvedValue('saved');
   m.settleProgress.mockResolvedValue({ level: 'advanced' });
 });
@@ -194,6 +200,8 @@ describe('answer', () => {
       evaluation: { score: 40, feedback: 'Viper says.', revisitNote: 'note' },
       setResult: null,
       nextQuestions: [],
+      offer: false,
+      passedNow: false,
       finished: null,
       promotion: null,
     });
@@ -232,6 +240,26 @@ describe('answer', () => {
       courseSlug: 'c1',
     });
     expect((await res.json()).promotion).toEqual({ level: 'advanced' });
+  });
+
+  it('settles progress when the answer recorded the pass but left the attempt open (offer)', async () => {
+    m.answerQuestion.mockResolvedValue({
+      ok: true,
+      evaluation: { score: 50, feedback: 'Good.', revisitNote: '' },
+      setResult: { set: 1, average: 50, passed: true },
+      nextQuestions: [],
+      offer: true,
+      passedNow: true,
+      finished: null,
+    });
+    const res = await send();
+    expect(m.settleProgress).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseSlug: 'c1',
+    });
+    const json = await res.json();
+    expect(json.offer).toBe(true);
+    expect(json.promotion).toEqual({ level: 'advanced' });
   });
 
   it('403s another pilot’s attempt without gating or grading', async () => {
@@ -277,6 +305,81 @@ describe('answer', () => {
   it('401s without a session', async () => {
     m.getSession.mockResolvedValue(null);
     expect((await send()).status).toBe(401);
+  });
+});
+
+describe('continue', () => {
+  const body = { courseSlug: 'c1', attemptId: 5, choice: 'yes' };
+  const go = (b: unknown = body) => continueDebriefHandler(post('continue', b));
+
+  it('gates on the attempt’s lesson in the named course, then continues for the session pilot', async () => {
+    const questions = [{ id: 'q5', question: 'Next?', set: 2 }];
+    m.continueAttempt.mockResolvedValue({ ok: true, choice: 'yes', questions });
+    const res = await go();
+    expect(m.getAttemptOwner).toHaveBeenCalledWith(5);
+    expect(m.getDebriefAccess).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      courseSlug: 'c1',
+      now: expect.any(Date),
+    });
+    expect(m.continueAttempt).toHaveBeenCalledWith({
+      userId: 'u1',
+      attemptId: 5,
+      choice: 'yes',
+      lessonId: 41,
+      courseId: 7,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ choice: 'yes', questions });
+  });
+
+  it('a no returns the choice', async () => {
+    const res = await go({ ...body, choice: 'no' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ choice: 'no' });
+  });
+
+  it('409s when there is no offer to answer', async () => {
+    m.continueAttempt.mockResolvedValue({ ok: false, reason: 'no-offer' });
+    expect((await go()).status).toBe(409);
+  });
+
+  it('403s when the service forbids it', async () => {
+    m.continueAttempt.mockResolvedValue({ ok: false, reason: 'forbidden' });
+    expect((await go()).status).toBe(403);
+  });
+
+  it('403s another pilot’s or an unknown attempt without calling the service', async () => {
+    m.getAttemptOwner.mockResolvedValueOnce({ userId: 'u2', lessonSlug: 'l1' });
+    expect((await go()).status).toBe(403);
+    m.getAttemptOwner.mockResolvedValueOnce(null);
+    expect((await go()).status).toBe(403);
+    expect(m.continueAttempt).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    403, 404,
+  ])('passes an access refusal (%s) through', async (status) => {
+    m.getDebriefAccess.mockResolvedValue({ ok: false, status });
+    expect((await go()).status).toBe(status);
+    expect(m.continueAttempt).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a bad choice', { ...body, choice: 'maybe' }],
+    ['no courseSlug', { ...body, courseSlug: undefined }],
+    ['no attemptId', { ...body, attemptId: undefined }],
+  ])('400s %s', async (_why, b) => {
+    expect((await go(b)).status).toBe(400);
+    expect(m.continueAttempt).not.toHaveBeenCalled();
+  });
+
+  it('401s without a session, 500s on a failure', async () => {
+    m.getSession.mockResolvedValueOnce(null);
+    expect((await go()).status).toBe(401);
+    m.continueAttempt.mockRejectedValue(new Error('db down'));
+    expect((await go()).status).toBe(500);
   });
 });
 

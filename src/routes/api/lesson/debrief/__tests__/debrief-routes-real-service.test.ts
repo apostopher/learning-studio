@@ -2,8 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The routes over the REAL attempt service, with only the db layer, the AI
- * and the source resolver stubbed — so what is asserted is what an HTTP
+ * The routes over the REAL attempt service and the REAL lesson-score loaders,
+ * with only the db layer, the AI and the source resolver stubbed — so what is asserted is what an HTTP
  * client actually receives and what the grader actually got.
  */
 const m = vi.hoisted(() => ({
@@ -19,6 +19,9 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   resolveDebriefSource: vi.fn(),
   ensureLessonChunks: vi.fn(),
+  selectLessonScoreRow: vi.fn(),
+  selectCoursePassMark: vi.fn(),
+  getLatestLessonQuizAnswers: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -62,6 +65,13 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }));
+vi.mock('#/db/lesson-score-facts', () => ({
+  selectLessonScoreRow: m.selectLessonScoreRow,
+  selectCoursePassMark: m.selectCoursePassMark,
+}));
+vi.mock('#/db/lesson-quiz', () => ({
+  getLatestLessonQuizAnswers: m.getLatestLessonQuizAnswers,
+}));
 
 import { answerDebriefHandler } from '../answer';
 import { startDebriefHandler } from '../start';
@@ -135,7 +145,34 @@ beforeEach(() => {
     revisitNote: '',
     feedback: 'You named the critical angle.',
   });
+  // A watched video, no quiz, the course's pass mark 85.
+  m.selectLessonScoreRow.mockResolvedValue({
+    videoProvider: 'mux',
+    videoRef: 'v',
+    needsVideoWatch: true,
+    hasQuiz: false,
+    watchedHits: 18,
+  });
+  m.selectCoursePassMark.mockResolvedValue(85);
+  m.getLatestLessonQuizAnswers.mockResolvedValue(null);
 });
+
+const answerBody = {
+  courseSlug: 'c1',
+  attemptId: 5,
+  questionId: 'q1',
+  answer: 'typed',
+  metrics: {
+    msOnQuestion: 1,
+    msToFirstKey: 1,
+    deletions: 0,
+    charsDeleted: 0,
+    rewrites: 0,
+    pasteBlocked: 0,
+    msHidden: 0,
+    finalLength: 5,
+  },
+};
 
 it('the start response body never carries expected answers, chunk tags, chunk text or context', async () => {
   const res = await startDebriefHandler(
@@ -158,24 +195,7 @@ it('the start response body never carries expected answers, chunk tags, chunk te
 
 describe('an open attempt whose source has disappeared (Review Focus 2)', () => {
   it('is still answered, graded from the stored question, chunks and context', async () => {
-    const res = await answerDebriefHandler(
-      post('answer', {
-        courseSlug: 'c1',
-        attemptId: 5,
-        questionId: 'q1',
-        answer: 'typed',
-        metrics: {
-          msOnQuestion: 1,
-          msToFirstKey: 1,
-          deletions: 0,
-          charsDeleted: 0,
-          rewrites: 0,
-          pasteBlocked: 0,
-          msHidden: 0,
-          finalLength: 5,
-        },
-      }),
-    );
+    const res = await answerDebriefHandler(post('answer', answerBody));
     expect(res.status).toBe(200);
     expect(m.evaluateFreeText).toHaveBeenCalledWith(
       question,
@@ -183,8 +203,10 @@ describe('an open attempt whose source has disappeared (Review Focus 2)', () => 
       chunks,
       'SECRET-CONTEXT',
     );
-    // A pre-sets attempt is one set: its only answer, at 80, passes it.
-    expect(await res.json()).toMatchObject({
+    // A pre-sets attempt is one set: its only answer, at 80, with the video
+    // watched, totals 50 + 40 = 90 against the course's 85.
+    const json = await res.json();
+    expect(json).toMatchObject({
       evaluation: {
         score: 80,
         feedback: 'You named the critical angle.',
@@ -192,11 +214,42 @@ describe('an open attempt whose source has disappeared (Review Focus 2)', () => 
       },
       setResult: { set: 1, average: 80, passed: true },
       nextQuestions: [],
+      offer: false,
+      passedNow: true,
       finished: 'set-passed',
     });
+    expect(json.setResult.score).toMatchObject({ passMark: 85, passed: true });
+    expect(json.setResult.score.total).toBeCloseTo(90);
+    expect(m.selectLessonScoreRow).toHaveBeenCalledWith('u1', 41);
+    expect(m.selectCoursePassMark).toHaveBeenCalledWith(7);
     expect(m.settleProgress).toHaveBeenCalledWith({
       userId: 'u1',
       courseSlug: 'c1',
+    });
+  });
+});
+
+describe('the lesson total judges the set, from the db facts through to the response', () => {
+  it('a quiz never taken costs its share: 80 on the debrief totals 70, missed', async () => {
+    m.selectLessonScoreRow.mockResolvedValue({
+      videoProvider: 'mux',
+      videoRef: 'v',
+      needsVideoWatch: true,
+      hasQuiz: true,
+      watchedHits: 18,
+    });
+    const res = await answerDebriefHandler(post('answer', answerBody));
+    expect(m.getLatestLessonQuizAnswers).toHaveBeenCalledWith('u1', 'l1');
+    const json = await res.json();
+    expect(json).toMatchObject({
+      setResult: { set: 1, average: 80, passed: false },
+      passedNow: false,
+      finished: 'sets-missed',
+    });
+    expect(json.setResult.score.total).toBeCloseTo(70);
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      finishedReason: 'sets-missed',
+      totalScore: 80,
     });
   });
 });

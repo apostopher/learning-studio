@@ -116,6 +116,18 @@ export const chunksTotalSql = (lessonId: LessonIdRef) =>
     where k.lesson_id = ${outerRef(lessonId)}
   )`;
 
+/**
+ * The lesson's authored quiz has at least one question. Shared by the progress
+ * rollup (the ring) and `getScoreFacts` (the debrief judge), so the two agree
+ * on whether a lesson has a quiz.
+ */
+export const hasQuizSql = (lessonSlug: LessonSlugRef) =>
+  sql<boolean>`exists (
+    select 1 from lesson_material m
+    where m.lesson_slug = ${outerRef(lessonSlug)}
+      and json_array_length(m.quiz) > 0
+  )`;
+
 /** The lesson has stored chunks (so its debrief exists for every pilot). */
 const hasChunksSql = (lessonId: LessonIdRef) =>
   sql<boolean>`exists (
@@ -236,11 +248,7 @@ export const progressComponentColumns = (userId: string) => ({
     '{}')`,
 
   /** The authored quiz has at least one question. Approximate — see the ledger. */
-  hasQuiz: sql<boolean>`exists (
-    select 1 from lesson_material m
-    where m.lesson_slug = ${lessonsTable.slug}
-      and json_array_length(m.quiz) > 0
-  )`,
+  hasQuiz: hasQuizSql(lessonsTable.slug),
 
   /**
    * Whether the debrief counts toward the COURSE percent (call 11).

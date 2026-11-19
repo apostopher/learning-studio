@@ -40,7 +40,9 @@ import {
   masteryOf,
 } from '#/lib/debrief-mastery';
 import {
+  type SetJudge,
   type SetOutcome,
+  type SetsProgress,
   setsProgress,
   splitIntoSets,
 } from '#/lib/debrief-sets';
@@ -48,6 +50,13 @@ import {
   ensureLessonChunks,
   mapToCurrentChunkIds,
 } from '#/lib/knowledge-chunks.server';
+import {
+  debriefJudge,
+  type LessonScore,
+  type ScoreFacts,
+  setScore,
+} from '#/lib/lesson-score';
+import { getCoursePassMark, getScoreFacts } from '#/lib/lesson-score.server';
 import {
   keyPointFocus,
   prepareDebrief,
@@ -69,17 +78,36 @@ export type AnsweredQuestion = {
   revisitNote: string;
 };
 
+/**
+ * A completed set as the pilot sees it: `score` is the lesson total with the
+ * BETTER set average so far as its debrief part, the score it was judged on.
+ */
+export type ScoredSet = SetOutcome & { score: LessonScore };
+
 /** Everything the debrief tab needs to show (or resume) an attempt. */
 export type AttemptView = {
   attemptId: number;
   /**
    * Only the sets the pilot has reached: set 2 stays on the server until set
-   * 1 is answered and missed, so it can never be read ahead of time.
+   * 1 is missed or the pilot takes up the offer to improve on a pass, so it
+   * can never be read ahead of time.
    */
   questions: ClientQuestion[];
   answered: AnsweredQuestion[];
   draft: { questionId: string; text: string } | null;
+  /** Set 1 passed and set 2 waits on the pilot's choice (`continueAttempt`). */
+  offer: boolean;
+  /** One per completed set, in order. */
+  setResults: ScoredSet[];
 };
+
+export type ContinueResult =
+  | { ok: true; choice: 'yes'; questions: ClientQuestion[] }
+  | { ok: true; choice: 'no' }
+  /** Not this pilot's attempt, or not a chunk-format one. */
+  | { ok: false; reason: 'forbidden' }
+  /** Finished, or no set-2 offer is open on it. */
+  | { ok: false; reason: 'no-offer' };
 
 export type StartResult =
   | { ok: true; attempt: AttemptView }
@@ -93,11 +121,16 @@ export type AnswerResult =
       ok: true;
       evaluation: { score: number; feedback: string; revisitNote: string };
       /** Set when this answer completed its set. */
-      setResult: SetOutcome | null;
+      setResult: ScoredSet | null;
       /** The next set's questions, when this answer missed a set and opened it. */
       nextQuestions: ClientQuestion[];
+      /** This answer passed set 1 and set 2 may be offered (`continueAttempt`). */
+      offer: boolean;
+      /** This answer recorded the pass. Never on a replay. */
+      passedNow: boolean;
       /**
-       * `set-passed`: a set averaged 75 or more — a permanent pass.
+       * Set only when nothing is left to ask:
+       * `set-passed`: some set passed — the pass was recorded when it did.
        * `sets-missed`: the last set is done without one.
        */
       finished: null | 'set-passed' | 'sets-missed';
@@ -175,21 +208,74 @@ async function currentChunksOr(
   };
 }
 
-function toView(row: AttemptRow): AttemptView {
+/** How a lesson's sets are judged for this pilot: the facts, the course's pass mark, the judge. */
+type Scoring = { facts: ScoreFacts; passMark: number; judge: SetJudge };
+
+/**
+ * The judge always counts the debrief part, even on a lesson whose debrief
+ * switch is off: it judges a debrief being taken.
+ */
+async function loadScoring(k: {
+  userId: string;
+  lessonSlug: string;
+  lessonId: number;
+  courseId: number;
+}): Promise<Scoring> {
+  const [facts, passMark] = await Promise.all([
+    getScoreFacts(k.userId, k.lessonSlug, k.lessonId),
+    getCoursePassMark(k.courseId),
+  ]);
+  return { facts, passMark, judge: debriefJudge(facts, passMark) };
+}
+
+function progressOf(
+  stored: StoredAttempt,
+  answers: readonly AIEvaluationResult[],
+  judge: SetJudge,
+  improveAccepted = stored.improveAccepted ?? false,
+): SetsProgress {
+  return setsProgress(attemptSets(stored), scoresOf(answers), judge, {
+    improveAccepted,
+  });
+}
+
+/** Each completed set with the lesson total on the better average so far. */
+function scoredSets(completed: readonly SetOutcome[], s: Scoring): ScoredSet[] {
+  let best = Number.NEGATIVE_INFINITY;
+  return completed.map((c) => {
+    best = Math.max(best, c.average);
+    return { ...c, score: setScore(s.facts, s.passMark, best) };
+  });
+}
+
+/**
+ * The question the pilot may answer next: the first unanswered one, if it is
+ * in a set reached. Null when there is none (all answered, or set 2 waits on
+ * the offer).
+ */
+function nextAnswerable(
+  stored: StoredAttempt,
+  answers: readonly AIEvaluationResult[],
+  judge: SetJudge,
+) {
+  const { reached } = progressOf(stored, answers, judge);
+  const reachable = new Set(attemptSets(stored).slice(0, reached).flat());
+  const answeredIds = new Set(answers.map((e) => e.questionId));
+  const next = stored.questions.find((q) => !answeredIds.has(q.id));
+  return next && reachable.has(next.id) ? next : null;
+}
+
+function toView(row: AttemptRow, scoring: Scoring): AttemptView {
   const stored = parseStored(row);
   const answers = parseAnswers(row);
-  // Task 4: replace with the course-pass-mark judge
-  const { reached } = setsProgress(
-    attemptSets(stored),
-    scoresOf(answers),
-    (a) => a >= 75,
-    { improveAccepted: stored.improveAccepted ?? false },
-  );
+  const p = progressOf(stored, answers, scoring.judge);
   return {
     attemptId: row.id,
-    questions: clientQuestions(stored, 1, reached),
+    questions: clientQuestions(stored, 1, p.reached),
     answered: answers.map(toAnswered),
     draft: row.draft ?? null,
+    offer: p.offer,
+    setResults: scoredSets(p.completed, scoring),
   };
 }
 
@@ -214,7 +300,7 @@ export async function startOrResumeAttempt(k: {
 }): Promise<StartResult> {
   const open = await selectOpenAttempt(k.userId, k.lessonSlug);
   if (open) {
-    return { ok: true, attempt: toView(open) };
+    return { ok: true, attempt: toView(open, await loadScoring(k)) };
   }
 
   const lesson = await ensureLessonChunks(k.lessonId, k.lessonSlug, k.courseId);
@@ -260,7 +346,7 @@ export async function startOrResumeAttempt(k: {
   // Null: a concurrent start (another tab) inserted first — resume theirs.
   const row = inserted ?? (await selectOpenAttempt(k.userId, k.lessonSlug));
   if (!row) throw new Error('Debrief attempt vanished after a start conflict');
-  return { ok: true, attempt: toView(row) };
+  return { ok: true, attempt: toView(row, await loadScoring(k)) };
 }
 
 /** Owner and lesson of an attempt, for the routes' gate. */
@@ -290,17 +376,25 @@ const isChunkAttempt = (row: AttemptRow | null, userId: string) =>
  * write locks the attempt row and re-checks, so of two concurrent graders
  * only the first commits and the second returns the first's evaluation.
  *
- * Questions are answered in order, and only within the sets reached (set 2
- * opens when set 1 is missed). Each chunk score is applied to the pilot's
- * mastery of the lesson's CURRENT chunk list (mapped across one
- * regeneration), which only orders the next draw. When the answer completes
- * a set (`setsProgress`):
- * - average 75 or more: `set-passed` — a permanent pass, score = that
- *   average, any later set never asked;
- * - below 75 with a set left: the attempt goes on, and the next set's
- *   questions come back in `nextQuestions`;
- * - below 75 on the last set: `sets-missed`, score = that average, and the
- *   next attempt is prepared in the background.
+ * Questions are answered in order, and only within the sets reached. Each
+ * chunk score is applied to the pilot's mastery of the lesson's CURRENT chunk
+ * list (mapped across one regeneration), which only orders the next draw.
+ *
+ * A completed set is judged on the LESSON TOTAL (`setScore`): the pilot's
+ * video and quiz parts (`getScoreFacts`) plus the better set average so far
+ * as the debrief part, against the course's pass mark (`getCoursePassMark`).
+ * When the answer completes a set:
+ * - set 1 passes and there is a set 2: the pass is recorded now
+ *   (`passedNow`) and the attempt stays open with `offer` — the pilot either
+ *   takes set 2 to improve or stops (`continueAttempt`);
+ * - set 1 passes and it is the only set: the pass is recorded and the
+ *   attempt finishes `set-passed`;
+ * - set 1 misses: set 2's questions come back in `nextQuestions`;
+ * - set 2 is done: the attempt finishes, `set-passed` if the better average
+ *   passes (a pass recorded here is `passedNow` only if set 1 had not
+ *   already passed), else `sets-missed`, and the next attempt is prepared in
+ *   the background.
+ * A finished attempt's `totalScore` is the better set average.
  */
 export async function answerQuestion(a: {
   userId: string;
@@ -317,13 +411,18 @@ export async function answerQuestion(a: {
   }
   const stored = parseStored(row);
   const answers = parseAnswers(row);
+  const scoring = await loadScoring({
+    userId: a.userId,
+    lessonSlug: row.lessonSlug,
+    lessonId: a.lessonId,
+    courseId: a.courseId,
+  });
 
   const already = answers.find((e) => e.questionId === a.questionId);
-  if (already) return storedResult(row, already);
+  if (already) return storedResult(row, already, scoring);
   if (row.completedAt !== null) return { ok: false, reason: 'forbidden' };
 
-  const answeredIds = new Set(answers.map((e) => e.questionId));
-  const next = stored.questions.find((q) => !answeredIds.has(q.id));
+  const next = nextAnswerable(stored, answers, scoring.judge);
   if (!next || next.id !== a.questionId) {
     return { ok: false, reason: 'out-of-order' };
   }
@@ -347,6 +446,14 @@ export async function answerQuestion(a: {
     if (winner) return { lost: true, row: locked, winner };
     if (locked.completedAt !== null) {
       return { ok: false, reason: 'forbidden' };
+    }
+    // The snapshot as it is now: another tab may have taken up the offer.
+    const lockedStored = parseStored(locked);
+    if (
+      nextAnswerable(lockedStored, lockedAnswers, scoring.judge)?.id !==
+      a.questionId
+    ) {
+      return { ok: false, reason: 'out-of-order' };
     }
 
     const current = await currentChunksOr(a.lessonId, stored.chunks, tx);
@@ -384,15 +491,21 @@ export async function answerQuestion(a: {
     if (writes.length > 0) await upsertMastery(tx, writes);
 
     const newAnswers = [...lockedAnswers, evaluation];
-    const step = setStep(stored, lockedAnswers, newAnswers, a.questionId);
+    const step = setStep(
+      lockedStored,
+      lockedAnswers,
+      newAnswers,
+      a.questionId,
+      scoring,
+    );
 
     await updateAttempt(tx, a.attemptId, {
       answers: newAnswers,
       draft: null,
-      ...(step.finished && {
+      ...(step.result.finished && {
         completedAt: now,
-        totalScore: step.setResult?.average ?? 0,
-        finishedReason: step.finished,
+        totalScore: step.best ?? 0,
+        finishedReason: step.result.finished,
       }),
     });
     await insertAnswerLog(tx, {
@@ -400,18 +513,20 @@ export async function answerQuestion(a: {
       questionId: a.questionId,
       metrics: a.metrics,
     });
-    if (step.finished === 'set-passed') {
+    // Every passing set records it; a second insert is a no-op.
+    if (step.result.setResult?.passed) {
       await insertPass(tx, { userId: a.userId, lessonSlug: row.lessonSlug });
     }
     return {
       ok: true,
       evaluation: evaluationView(evaluation),
-      ...step,
+      ...step.result,
+      passedNow: step.newlyPassed,
     };
   });
 
   if ('lost' in outcome) {
-    return storedResult(outcome.row, outcome.winner);
+    return storedResult(outcome.row, outcome.winner, scoring);
   }
   if (outcome.ok && outcome.finished === 'sets-missed') {
     // No pass: the retake opens later with a fresh draw, misses first.
@@ -436,63 +551,145 @@ const evaluationView = (e: AIEvaluationResult) => ({
   revisitNote: e.revisitNote ?? '',
 });
 
+type StepResult = Pick<
+  Extract<AnswerResult, { ok: true }>,
+  'setResult' | 'nextQuestions' | 'offer' | 'finished'
+>;
+
 /**
  * What answering `questionId` did to the attempt's sets: the set it
- * completed (if any), the set it opened, and whether the attempt is over.
- * `before` / `after` are the recorded answers without and with it.
+ * completed (if any), the set it opened, the offer, and whether the attempt
+ * is over. `before` / `after` are the recorded answers without and with it.
+ *
+ * The offer's choice only ever applies to set 2's answers: an answer in set
+ * 1 is judged as it was when recorded (no choice made yet), so a replay of
+ * the answer that passed set 1 reports the offer even after it was taken up.
  */
 function setStep(
   stored: StoredAttempt,
   before: readonly AIEvaluationResult[],
   after: readonly AIEvaluationResult[],
   questionId: string,
-): Pick<
-  Extract<AnswerResult, { ok: true }>,
-  'setResult' | 'nextQuestions' | 'finished'
-> {
+  scoring: Scoring,
+): { result: StepResult; newlyPassed: boolean; best: number | null } {
   const sets = attemptSets(stored);
-  // Task 4: replace with the course-pass-mark judge
-  const judge = (a: number) => a >= 75;
-  const opts = { improveAccepted: stored.improveAccepted ?? false };
-  const was = setsProgress(sets, scoresOf(before), judge, opts);
-  const now = setsProgress(sets, scoresOf(after), judge, opts);
+  const setOf = sets.findIndex((ids) => ids.includes(questionId)) + 1;
+  const accepted = setOf > 1 && (stored.improveAccepted ?? false);
+  const was = progressOf(stored, before, scoring.judge, accepted);
+  const now = progressOf(stored, after, scoring.judge, accepted);
   const completedHere = now.completed.length > was.completed.length;
-  const setResult = completedHere ? (now.completed.at(-1) ?? null) : null;
+  const setResult = completedHere
+    ? (scoredSets(now.completed, scoring).at(-1) ?? null)
+    : null;
   // Only the answer that completed a set can report what it did; any other
   // answer (or a replay of one) changes nothing about the sets.
-  const isCompleting =
-    setResult !== null && sets[setResult.set - 1]?.includes(questionId);
+  const isCompleting = setResult !== null && setResult.set === setOf;
   if (!isCompleting) {
-    return { setResult: null, nextQuestions: [], finished: null };
+    return {
+      result: {
+        setResult: null,
+        nextQuestions: [],
+        offer: false,
+        finished: null,
+      },
+      newlyPassed: false,
+      best: now.best,
+    };
   }
   return {
-    setResult,
-    nextQuestions:
-      now.reached > was.reached
-        ? clientQuestions(stored, now.reached, now.reached)
-        : [],
-    finished: now.passed ? 'set-passed' : now.over ? 'sets-missed' : null,
+    result: {
+      setResult,
+      nextQuestions:
+        now.reached > was.reached
+          ? clientQuestions(stored, now.reached, now.reached)
+          : [],
+      offer: now.offer,
+      finished: now.over ? (now.passed ? 'set-passed' : 'sets-missed') : null,
+    },
+    newlyPassed: now.passed && !was.passed,
+    best: now.best,
   };
 }
 
-/** The result of an answer recorded earlier, as it reads now. */
-async function storedResult(
+/** The result of an answer recorded earlier, as it read then. Never `passedNow`. */
+function storedResult(
   row: AttemptRow,
   evaluation: AIEvaluationResult,
-): Promise<AnswerResult> {
+  scoring: Scoring,
+): AnswerResult {
   const stored = parseStored(row);
   const answers = parseAnswers(row);
   const at = answers.findIndex((e) => e.questionId === evaluation.questionId);
+  const step = setStep(
+    stored,
+    answers.slice(0, at),
+    answers.slice(0, at + 1),
+    evaluation.questionId,
+    scoring,
+  );
   return {
     ok: true,
     evaluation: evaluationView(evaluation),
-    ...setStep(
-      stored,
-      answers.slice(0, at),
-      answers.slice(0, at + 1),
-      evaluation.questionId,
-    ),
+    ...step.result,
+    passedNow: false,
   };
+}
+
+/**
+ * The pilot's answer to the offer of set 2 after passing set 1. The pass is
+ * already recorded; this only decides whether the attempt goes on.
+ * - `yes`: the choice is stored on the snapshot (`improveAccepted`) and set
+ *   2's questions come back. The finished attempt is then judged on the
+ *   better of the two averages, so set 2 can only raise its score.
+ * - `no`: the attempt finishes `set-passed` at set 1's average.
+ *
+ * Decided on the LOCKED row: `no-offer` when it is finished or has no open
+ * offer (already taken up, set 1 missed or unfinished, or one set only).
+ */
+export async function continueAttempt(a: {
+  userId: string;
+  attemptId: number;
+  choice: 'yes' | 'no';
+  lessonId: number;
+  courseId: number;
+}): Promise<ContinueResult> {
+  const row = await selectAttempt(a.attemptId);
+  if (!row || !isChunkAttempt(row, a.userId)) {
+    return { ok: false, reason: 'forbidden' };
+  }
+  const scoring = await loadScoring({
+    userId: a.userId,
+    lessonSlug: row.lessonSlug,
+    lessonId: a.lessonId,
+    courseId: a.courseId,
+  });
+
+  return db.transaction(async (tx): Promise<ContinueResult> => {
+    const locked = await lockAttempt(tx, a.attemptId);
+    if (!locked || !isChunkAttempt(locked, a.userId)) {
+      return { ok: false, reason: 'forbidden' };
+    }
+    if (locked.completedAt !== null) return { ok: false, reason: 'no-offer' };
+    const stored = parseStored(locked);
+    const p = progressOf(stored, parseAnswers(locked), scoring.judge);
+    if (!p.offer) return { ok: false, reason: 'no-offer' };
+
+    if (a.choice === 'yes') {
+      const accepted: StoredAttempt = { ...stored, improveAccepted: true };
+      await updateAttempt(tx, a.attemptId, { questions: accepted });
+      return {
+        ok: true,
+        choice: 'yes',
+        questions: clientQuestions(accepted, 2, 2),
+      };
+    }
+    await updateAttempt(tx, a.attemptId, {
+      completedAt: new Date(),
+      finishedReason: 'set-passed',
+      totalScore: p.best ?? 0,
+    });
+    return { ok: true, choice: 'no' };
+  });
 }
 
 export type DraftOutcome = 'saved' | 'forbidden' | 'wrong-question';

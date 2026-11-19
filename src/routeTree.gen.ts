@@ -80,6 +80,7 @@ import { Route as ApiCourseOnboardingStartRouteImport } from './routes/api/cours
 import { Route as ApiCourseOnboardingStatusRouteImport } from './routes/api/course/onboarding/status'
 import { Route as ApiLessonAiTestPrepareRouteImport } from './routes/api/lesson/ai-test/prepare'
 import { Route as ApiLessonDebriefAnswerRouteImport } from './routes/api/lesson/debrief/answer'
+import { Route as ApiLessonDebriefContinueRouteImport } from './routes/api/lesson/debrief/continue'
 import { Route as ApiLessonDebriefDraftRouteImport } from './routes/api/lesson/debrief/draft'
 import { Route as ApiLessonDebriefStartRouteImport } from './routes/api/lesson/debrief/start'
 import { Route as ApiLessonQuizAnswersRouteImport } from './routes/api/lesson/quiz/answers'
@@ -494,6 +495,12 @@ const ApiLessonDebriefAnswerRoute = ApiLessonDebriefAnswerRouteImport.update({
   path: '/api/lesson/debrief/answer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLessonDebriefContinueRoute =
+  ApiLessonDebriefContinueRouteImport.update({
+    id: '/api/lesson/debrief/continue',
+    path: '/api/lesson/debrief/continue',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiLessonDebriefDraftRoute = ApiLessonDebriefDraftRouteImport.update({
   id: '/api/lesson/debrief/draft',
   path: '/api/lesson/debrief/draft',
@@ -812,6 +819,7 @@ export interface FileRoutesByFullPath {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/continue': typeof ApiLessonDebriefContinueRoute
   '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
   '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -924,6 +932,7 @@ export interface FileRoutesByTo {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/continue': typeof ApiLessonDebriefContinueRoute
   '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
   '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -1040,6 +1049,7 @@ export interface FileRoutesById {
   '/api/course/onboarding/status': typeof ApiCourseOnboardingStatusRoute
   '/api/lesson/ai-test/prepare': typeof ApiLessonAiTestPrepareRoute
   '/api/lesson/debrief/answer': typeof ApiLessonDebriefAnswerRoute
+  '/api/lesson/debrief/continue': typeof ApiLessonDebriefContinueRoute
   '/api/lesson/debrief/draft': typeof ApiLessonDebriefDraftRoute
   '/api/lesson/debrief/start': typeof ApiLessonDebriefStartRoute
   '/api/lesson/quiz/answers': typeof ApiLessonQuizAnswersRoute
@@ -1156,6 +1166,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/continue'
     | '/api/lesson/debrief/draft'
     | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
@@ -1268,6 +1279,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/continue'
     | '/api/lesson/debrief/draft'
     | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
@@ -1383,6 +1395,7 @@ export interface FileRouteTypes {
     | '/api/course/onboarding/status'
     | '/api/lesson/ai-test/prepare'
     | '/api/lesson/debrief/answer'
+    | '/api/lesson/debrief/continue'
     | '/api/lesson/debrief/draft'
     | '/api/lesson/debrief/start'
     | '/api/lesson/quiz/answers'
@@ -1478,6 +1491,7 @@ export interface RootRouteChildren {
   ApiCourseOnboardingStatusRoute: typeof ApiCourseOnboardingStatusRoute
   ApiLessonAiTestPrepareRoute: typeof ApiLessonAiTestPrepareRoute
   ApiLessonDebriefAnswerRoute: typeof ApiLessonDebriefAnswerRoute
+  ApiLessonDebriefContinueRoute: typeof ApiLessonDebriefContinueRoute
   ApiLessonDebriefDraftRoute: typeof ApiLessonDebriefDraftRoute
   ApiLessonDebriefStartRoute: typeof ApiLessonDebriefStartRoute
   ApiLessonQuizAnswersRoute: typeof ApiLessonQuizAnswersRoute
@@ -1983,6 +1997,13 @@ declare module '@tanstack/react-router' {
       path: '/api/lesson/debrief/answer'
       fullPath: '/api/lesson/debrief/answer'
       preLoaderRoute: typeof ApiLessonDebriefAnswerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lesson/debrief/continue': {
+      id: '/api/lesson/debrief/continue'
+      path: '/api/lesson/debrief/continue'
+      fullPath: '/api/lesson/debrief/continue'
+      preLoaderRoute: typeof ApiLessonDebriefContinueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/lesson/debrief/draft': {
@@ -2745,6 +2766,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCourseOnboardingStatusRoute: ApiCourseOnboardingStatusRoute,
   ApiLessonAiTestPrepareRoute: ApiLessonAiTestPrepareRoute,
   ApiLessonDebriefAnswerRoute: ApiLessonDebriefAnswerRoute,
+  ApiLessonDebriefContinueRoute: ApiLessonDebriefContinueRoute,
   ApiLessonDebriefDraftRoute: ApiLessonDebriefDraftRoute,
   ApiLessonDebriefStartRoute: ApiLessonDebriefStartRoute,
   ApiLessonQuizAnswersRoute: ApiLessonQuizAnswersRoute,

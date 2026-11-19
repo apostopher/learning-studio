@@ -31,9 +31,10 @@ const AnswerInputSchema = z.object({
  * of order. The lesson gate (`getDebriefAccess`) applies too, but not the
  * schedule: an attempt that is open stays answerable.
  *
- * When the answer finishes the attempt, progress is settled (lesson
- * completions, then the promotion check) as `save-results` used to, and the
- * promotion is returned.
+ * When the answer finishes the attempt or records the pass (a passed set 1
+ * that leaves the attempt open on the offer of set 2), progress is settled
+ * (lesson completions, then the promotion check) as `save-results` used to,
+ * and the promotion is returned.
  */
 export async function answerDebriefHandler(
   request: Request,
@@ -94,9 +95,10 @@ export async function answerDebriefHandler(
 
     // Best-effort: `settleProgress` never throws, so a settle failure cannot
     // fail the answer the pilot just gave.
-    const promotion = result.finished
-      ? await settleProgress({ userId, courseSlug })
-      : null;
+    const promotion =
+      result.finished || result.passedNow
+        ? await settleProgress({ userId, courseSlug })
+        : null;
     const { ok: _ok, ...response } = result;
     return Response.json({ ...response, promotion });
   } catch (error) {

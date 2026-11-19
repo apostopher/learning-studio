@@ -1,3 +1,5 @@
+import type { SetJudge } from '#/lib/debrief-sets';
+
 /**
  * A lesson's total score, 0..100, from how much of each part the pilot
  * earned. Pure and client-safe.
@@ -59,4 +61,25 @@ export function lessonTotalScore(
 export function formatScore(n: number): string {
   const r = Math.round(n * 10) / 10;
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+/** The parts a debrief set does not change: the lesson's video and quiz. */
+export type ScoreFacts = Pick<ScoreFractions, 'video' | 'quiz'>;
+
+/**
+ * The lesson total with `average` (0..100) as the debrief part. The debrief
+ * always counts here, whether or not the lesson's debrief switch is on: this
+ * is the score a set is judged on.
+ */
+export function setScore(
+  facts: ScoreFacts,
+  passMark: number,
+  average: number,
+): LessonScore {
+  return lessonTotalScore({ ...facts, debrief: average / 100 }, passMark);
+}
+
+/** A set passes when its (best-so-far) average lifts the lesson total to the pass mark. */
+export function debriefJudge(facts: ScoreFacts, passMark: number): SetJudge {
+  return (average) => setScore(facts, passMark, average).passed;
 }
