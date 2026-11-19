@@ -17,6 +17,7 @@ const m = vi.hoisted(() => ({
   upsertMastery: vi.fn(),
   insertAnswerLog: vi.fn(),
   insertPass: vi.fn(),
+  selectHasPass: vi.fn(),
   updateDraft: vi.fn(),
   selectAskedQuestions: vi.fn(),
   ensureLessonChunks: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock('#/db/debrief-attempts', () => ({
   upsertMastery: m.upsertMastery,
   insertAnswerLog: m.insertAnswerLog,
   insertPass: m.insertPass,
+  selectHasPass: m.selectHasPass,
   updateDraft: m.updateDraft,
   selectAskedQuestions: m.selectAskedQuestions,
 }));
@@ -1072,6 +1074,57 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
     expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(50);
     expect(m.waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('a pass is final: set 1 passed, offer taken up, facts then drop and set 2 misses — still set-passed at 50, no retake', async () => {
+    m.row = attemptRow({
+      questions: { ...eightStored, improveAccepted: true },
+      answers: [...all(1, 4, 50), ...all(5, 7, 30)],
+    });
+    // A worse quiz retake since set 1 passed: 50 + 0 + 25 × 0.5 = 62.5 < 85.
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 30));
+    const r = await answer('q8');
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      completedAt: expect.any(Date),
+      finishedReason: 'set-passed',
+      totalScore: 50,
+    });
+    expect(r).toMatchObject({ finished: 'set-passed', passedNow: false });
+    expect(m.prepareDebrief).not.toHaveBeenCalled();
+    expect(m.waitUntil).not.toHaveBeenCalled();
+  });
+
+  it('a pass already held for the lesson makes a two-set miss finish set-passed, with no retake', async () => {
+    m.selectHasPass.mockResolvedValue(true);
+    m.row = attemptRow({
+      questions: eightStored,
+      answers: [...all(1, 4, 30), ...all(5, 7, 30)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 30));
+    const r = await answer('q8');
+    expect(m.selectHasPass).toHaveBeenCalledWith(m.tx, {
+      userId: 'u1',
+      lessonSlug: 'l1',
+    });
+    expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
+      finishedReason: 'set-passed',
+      totalScore: 30,
+    });
+    expect(r).toMatchObject({ finished: 'set-passed', passedNow: false });
+    expect(m.prepareDebrief).not.toHaveBeenCalled();
+  });
+
+  it('a replay of the finishing answer reports the row’s recorded finish', async () => {
+    m.row = attemptRow({
+      questions: { ...eightStored, improveAccepted: true },
+      answers: [...all(1, 4, 50), ...all(5, 8, 30)],
+      completedAt: new Date(),
+      finishedReason: 'set-passed',
+      totalScore: 50,
+    });
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+    expect(await answer('q8')).toMatchObject({ finished: 'set-passed' });
   });
 
   describe('resume (toView)', () => {

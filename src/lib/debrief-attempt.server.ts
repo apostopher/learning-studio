@@ -16,6 +16,7 @@ import {
   selectAskedQuestions,
   selectAttempt,
   selectCurrentChunks,
+  selectHasPass,
   selectMastery,
   selectOpenAttempt,
   type Tx,
@@ -394,7 +395,9 @@ const isChunkAttempt = (row: AttemptRow | null, userId: string) =>
  * - set 2 is done: the attempt finishes, `set-passed` if the better average
  *   passes (a pass recorded here is `passedNow` only if set 1 had not
  *   already passed), else `sets-missed`, and the next attempt is prepared in
- *   the background.
+ *   the background. A pass is final: when the pilot took up the offer after
+ *   a passed set 1, or already holds the lesson's pass, the attempt finishes
+ *   `set-passed` (at the best average) even if today's facts no longer pass.
  * A finished attempt's `totalScore` is the better set average.
  */
 export async function answerQuestion(a: {
@@ -499,6 +502,19 @@ export async function answerQuestion(a: {
       a.questionId,
       scoring,
     );
+    // A pass is final. Facts can drop after one was recorded (a worse quiz
+    // retake), so a set 2 taken up after a passed set 1 — or any attempt on a
+    // lesson already passed — never ends as two misses or prepares a retake.
+    if (
+      step.result.finished === 'sets-missed' &&
+      (lockedStored.improveAccepted === true ||
+        (await selectHasPass(tx, {
+          userId: a.userId,
+          lessonSlug: row.lessonSlug,
+        })))
+    ) {
+      step.result.finished = 'set-passed';
+    }
 
     await updateAttempt(tx, a.attemptId, {
       answers: newAnswers,
@@ -632,6 +648,14 @@ function storedResult(
     ok: true,
     evaluation: evaluationView(evaluation),
     ...step.result,
+    // The row's recorded finish wins: a held pass can turn a recomputed
+    // `sets-missed` into `set-passed` (see `answerQuestion`).
+    finished:
+      step.result.finished &&
+      (row.finishedReason === 'set-passed' ||
+        row.finishedReason === 'sets-missed')
+        ? row.finishedReason
+        : step.result.finished,
     passedNow: false,
   };
 }

@@ -45,6 +45,7 @@ vi.mock('#/db/debrief-attempts', () => ({
   upsertMastery: vi.fn(),
   insertAnswerLog: vi.fn(),
   insertPass: vi.fn(),
+  selectHasPass: vi.fn(async () => false),
   updateDraft: vi.fn(),
   selectAskedQuestions: vi.fn(),
 }));

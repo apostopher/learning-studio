@@ -273,6 +273,24 @@ export async function insertPass(
   return rows.length > 0;
 }
 
+/** This pilot already holds the lesson's permanent pass. */
+export async function selectHasPass(
+  tx: Tx,
+  v: { userId: string; lessonSlug: string },
+): Promise<boolean> {
+  const rows = await tx
+    .select({ userId: debriefPassesTable.userId })
+    .from(debriefPassesTable)
+    .where(
+      and(
+        eq(debriefPassesTable.userId, v.userId),
+        eq(debriefPassesTable.lessonSlug, v.lessonSlug),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
 /**
  * The text of every question this pilot has been asked on the lesson, in any
  * attempt and either format, so a new attempt never repeats one. Rows that no
