@@ -100,7 +100,7 @@ export const dataKeys = {
   // Personas are org-level, so the list is not keyed by course — every course
   // in the active org sees the same set.
   personas: () => ['admin', 'personas'] as const,
-  coursePersona: (courseId: number) =>
+  coursePersona: (courseId: number | null) =>
     ['admin', 'course-persona', courseId] as const,
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,

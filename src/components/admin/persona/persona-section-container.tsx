@@ -96,11 +96,10 @@ function sameContent(a: PersonaContentInput, b: PersonaContentInput): boolean {
  * everything typed is already a saved draft.
  */
 export const PersonaSectionContainer = ({
-  courseId,
-  courseName,
+  course,
 }: {
-  courseId: number;
-  courseName: string;
+  /** Absent in the AI Training tab: personas are managed org-wide there. */
+  course?: { id: number; name: string };
 }) => {
   const [pane, setPane] = useAtom(personaPaneAtom);
   const [editingId, setEditingId] = useAtom(editingPersonaIdAtom);
@@ -110,8 +109,8 @@ export const PersonaSectionContainer = ({
   const [newName, setNewName] = useAtom(newPersonaNameAtom);
 
   const personas = usePersonas();
-  const selection = useCoursePersona(courseId);
-  const setCoursePersona = useSetCoursePersona(courseId);
+  const selection = useCoursePersona(course?.id ?? null);
+  const setCoursePersona = useSetCoursePersona(course?.id ?? null);
   const createPersona = useCreatePersona();
   const renamePersona = useRenamePersona();
   const deletePersona = useDeletePersona();
@@ -315,25 +314,31 @@ export const PersonaSectionContainer = ({
               ? 'Could not load personas. Close and reopen to retry.'
               : selectionError
           }
-          courseName={courseName}
-          // What the course is *actually* using: its own pin, else the org
-          // default. There is no separate "use the org default" row — the
-          // default is already marked in the list, and a second way to say the
-          // same thing read as two competing selections.
-          selectedPersonaId={
-            selection.data?.personaId ??
-            personas.data?.find((persona) => persona.isOrgDefault)?.id ??
-            null
+          courseSelection={
+            course
+              ? {
+                  courseName: course.name,
+                  // What the course is *actually* using: its own pin, else the
+                  // org default. There is no separate "use the org default"
+                  // row — the default is already marked in the list, and a
+                  // second way to say the same thing read as two competing
+                  // selections.
+                  selectedPersonaId:
+                    selection.data?.personaId ??
+                    personas.data?.find((persona) => persona.isOrgDefault)
+                      ?.id ??
+                    null,
+                  courseLinked: selection.data?.linked ?? false,
+                  onSelectForCourse: (personaId) =>
+                    setCoursePersona.mutate(personaId, {
+                      onError: () => {
+                        /* surfaced via selectionError */
+                      },
+                    }),
+                }
+              : undefined
           }
-          courseLinked={selection.data?.linked ?? false}
           onOpenEditor={openEditor}
-          onSelectForCourse={(personaId) =>
-            setCoursePersona.mutate(personaId, {
-              onError: () => {
-                /* surfaced via selectionError */
-              },
-            })
-          }
           onToggleOrgDefault={(persona) =>
             setOrgDefault.mutate({
               personaId: persona.id,

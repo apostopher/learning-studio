@@ -24,7 +24,7 @@ async function readError(res: Response, fallback: string): Promise<never> {
  * applies — a legitimate state, not a missing value. `linked: false` means the
  * course isn't a member of the active org at all.
  */
-export function useCoursePersona(courseId: number) {
+export function useCoursePersona(courseId: number | null) {
   return useQuery({
     queryKey: dataKeys.coursePersona(courseId),
     queryFn: async (): Promise<CoursePersonaSelection> => {
@@ -38,6 +38,8 @@ export function useCoursePersona(courseId: number) {
       return coursePersonaSelectionSchema.parse(await res.json());
     },
     staleTime: 30_000,
+    // No course (the AI Training tab) means nothing to look up.
+    enabled: courseId !== null,
   });
 }
 
@@ -50,12 +52,15 @@ export function useCoursePersona(courseId: number) {
  * slow one. The write is a single boolean-ish field with no server-side
  * derivation, so the predicted state is exactly what comes back.
  */
-export function useSetCoursePersona(courseId: number) {
+export function useSetCoursePersona(courseId: number | null) {
   const queryClient = useQueryClient();
   const key = dataKeys.coursePersona(courseId);
 
   return useMutation({
     mutationFn: async (personaId: number | null) => {
+      if (courseId === null) {
+        throw new PersonaRequestError('No course to select a persona for', 0);
+      }
       const res = await fetch(`/api/admin/courses/${courseId}/persona`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

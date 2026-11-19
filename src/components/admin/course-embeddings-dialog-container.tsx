@@ -57,12 +57,7 @@ export const CourseEmbeddingsDialogContainer = () => {
           value: 'persona',
           title: 'Persona',
           fill: true,
-          content: (
-            <PersonaSectionContainer
-              courseId={course.id}
-              courseName={course.name}
-            />
-          ),
+          content: <PersonaSectionContainer course={course} />,
         },
       ]
     : [];

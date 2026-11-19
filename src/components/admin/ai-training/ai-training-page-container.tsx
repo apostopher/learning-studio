@@ -6,6 +6,7 @@ import {
   aiTrainingSearchSchema,
   DEFAULT_AI_TRAINING_SECTION,
 } from '#/lib/ai-training-sections';
+import { PersonaSectionContainer } from '../persona/persona-section-container';
 import { AiTrainingPage } from './ai-training-page';
 import { DocumentsSectionContainer } from './documents-section-container';
 
@@ -28,13 +29,13 @@ export const AiTrainingPageContainer = () => {
     aiTrainingSearchSchema.parse(search).trainingSection ??
     DEFAULT_AI_TRAINING_SECTION;
 
-  // What each inner section renders. Persona, Chat and Sessions are added by
-  // later work (`PersonaSectionContainer`, `PreviewChatContainer`,
+  // What each inner section renders. Chat and Sessions are added by
+  // later work (`PreviewChatContainer`,
   // `SessionsSectionContainer`); until then they render nothing. Elements,
   // not mounted components: only the active one reaches the tree.
   const content: Record<AiTrainingSectionId, ReactNode> = {
     documents: <DocumentsSectionContainer />,
-    persona: null,
+    persona: <PersonaSectionContainer />,
     chat: null,
     sessions: null,
   };
