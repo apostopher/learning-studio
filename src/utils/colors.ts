@@ -1,6 +1,6 @@
-import * as RadixColors from "@radix-ui/colors";
-import Color from "colorjs.io";
-import BezierEasing from "bezier-easing";
+import * as RadixColors from '@radix-ui/colors';
+import BezierEasing from 'bezier-easing';
+import Color from 'colorjs.io';
 
 type ArrayOf12<T> = [T, T, T, T, T, T, T, T, T, T, T, T];
 const arrayOf12 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
@@ -11,18 +11,48 @@ function getCoords(color: Color): [number, number, number] {
 }
 
 // prettier-ignore
-const grayScaleNames = ['gray', 'mauve', 'slate', 'sage', 'olive', 'sand'] as const;
+const grayScaleNames = [
+  'gray',
+  'mauve',
+  'slate',
+  'sage',
+  'olive',
+  'sand',
+] as const;
 
 // prettier-ignore
-const scaleNames = [...grayScaleNames, 'tomato', 'red', 'ruby', 'crimson', 'pink',
-'plum', 'purple', 'violet', 'iris', 'indigo', 'blue', 'cyan', 'teal', 'jade', 'green',
-'grass', 'brown', 'orange', 'sky', 'mint', 'lime', 'yellow', 'amber'] as const;
+const scaleNames = [
+  ...grayScaleNames,
+  'tomato',
+  'red',
+  'ruby',
+  'crimson',
+  'pink',
+  'plum',
+  'purple',
+  'violet',
+  'iris',
+  'indigo',
+  'blue',
+  'cyan',
+  'teal',
+  'jade',
+  'green',
+  'grass',
+  'brown',
+  'orange',
+  'sky',
+  'mint',
+  'lime',
+  'yellow',
+  'amber',
+] as const;
 
 const lightColors = Object.fromEntries(
   scaleNames.map((scaleName) => [
     scaleName,
     Object.values(RadixColors[`${scaleName}P3`]).map((str) =>
-      new Color(str).to("oklch"),
+      new Color(str).to('oklch'),
     ),
   ]),
 ) as Record<(typeof scaleNames)[number], ArrayOf12<Color>>;
@@ -31,7 +61,7 @@ const darkColors = Object.fromEntries(
   scaleNames.map((scaleName) => [
     scaleName,
     Object.values(RadixColors[`${scaleName}DarkP3`]).map((str) =>
-      new Color(str).to("oklch"),
+      new Color(str).to('oklch'),
     ),
   ]),
 ) as Record<(typeof scaleNames)[number], ArrayOf12<Color>>;
@@ -40,7 +70,7 @@ const lightGrayColors = Object.fromEntries(
   grayScaleNames.map((scaleName) => [
     scaleName,
     Object.values(RadixColors[`${scaleName}P3`]).map((str) =>
-      new Color(str).to("oklch"),
+      new Color(str).to('oklch'),
     ),
   ]),
 ) as Record<(typeof grayScaleNames)[number], ArrayOf12<Color>>;
@@ -49,7 +79,7 @@ const darkGrayColors = Object.fromEntries(
   grayScaleNames.map((scaleName) => [
     scaleName,
     Object.values(RadixColors[`${scaleName}DarkP3`]).map((str) =>
-      new Color(str).to("oklch"),
+      new Color(str).to('oklch'),
     ),
   ]),
 ) as Record<(typeof grayScaleNames)[number], ArrayOf12<Color>>;
@@ -58,23 +88,23 @@ export const generateRadixColors = ({
   appearance,
   ...args
 }: {
-  appearance: "light" | "dark";
+  appearance: 'light' | 'dark';
   accent: string;
   gray: string;
   background: string;
 }) => {
-  const allScales = appearance === "light" ? lightColors : darkColors;
-  const grayScales = appearance === "light" ? lightGrayColors : darkGrayColors;
-  const backgroundColor = new Color(args.background).to("oklch");
+  const allScales = appearance === 'light' ? lightColors : darkColors;
+  const grayScales = appearance === 'light' ? lightGrayColors : darkGrayColors;
+  const backgroundColor = new Color(args.background).to('oklch');
 
-  const grayBaseColor = new Color(args.gray).to("oklch");
+  const grayBaseColor = new Color(args.gray).to('oklch');
   const grayScaleColors = getScaleFromColor(
     grayBaseColor,
     grayScales,
     backgroundColor,
   );
 
-  const accentBaseColor = new Color(args.accent).to("oklch");
+  const accentBaseColor = new Color(args.accent).to('oklch');
 
   let accentScaleColors = getScaleFromColor(
     accentBaseColor,
@@ -83,11 +113,11 @@ export const generateRadixColors = ({
   );
 
   // Enforce srgb for the background color
-  const backgroundHex = backgroundColor.to("srgb").toString({ format: "hex" });
+  const backgroundHex = backgroundColor.to('srgb').toString({ format: 'hex' });
 
   // Make sure we use the tint from the gray scale for when base is pure white or black
-  const accentBaseHex = accentBaseColor.to("srgb").toString({ format: "hex" });
-  if (accentBaseHex === "#000" || accentBaseHex === "#fff") {
+  const accentBaseHex = accentBaseColor.to('srgb').toString({ format: 'hex' });
+  if (accentBaseHex === '#000' || accentBaseHex === '#fff') {
     accentScaleColors = grayScaleColors.map((color) =>
       color.clone(),
     ) as ArrayOf12<Color>;
@@ -118,7 +148,7 @@ export const generateRadixColors = ({
   );
 
   const accentScaleHex = accentScaleColors.map((color) =>
-    color.to("srgb").toString({ format: "hex" }),
+    color.to('srgb').toString({ format: 'hex' }),
   ) as ArrayOf12<string>;
 
   const accentScaleWideGamut = accentScaleColors.map(
@@ -134,11 +164,11 @@ export const generateRadixColors = ({
   ) as ArrayOf12<string>;
 
   const accentContrastColorHex = accentContrastColor
-    .to("srgb")
-    .toString({ format: "hex" });
+    .to('srgb')
+    .toString({ format: 'hex' });
 
   const grayScaleHex = grayScaleColors.map((color) =>
-    color.to("srgb").toString({ format: "hex" }),
+    color.to('srgb').toString({ format: 'hex' }),
   ) as ArrayOf12<string>;
 
   const grayScaleWideGamut = grayScaleColors.map(
@@ -154,12 +184,12 @@ export const generateRadixColors = ({
   ) as ArrayOf12<string>;
 
   const accentSurfaceHex =
-    appearance === "light"
+    appearance === 'light'
       ? getAlphaColorSrgb(accentScaleHex[1], backgroundHex, 0.8)
       : getAlphaColorSrgb(accentScaleHex[1], backgroundHex, 0.5);
 
   const accentSurfaceWideGamutString =
-    appearance === "light"
+    appearance === 'light'
       ? getAlphaColorP3(accentScaleWideGamut[1], backgroundHex, 0.8)
       : getAlphaColorP3(accentScaleWideGamut[1], backgroundHex, 0.5);
 
@@ -175,11 +205,11 @@ export const generateRadixColors = ({
     grayScaleWideGamut: grayScaleWideGamut,
     grayScaleAlphaWideGamut: grayScaleAlphaWideGamutString,
 
-    graySurface: appearance === "light" ? "#ffffffcc" : "rgba(0, 0, 0, 0.05)",
+    graySurface: appearance === 'light' ? '#ffffffcc' : 'rgba(0, 0, 0, 0.05)',
     graySurfaceWideGamut:
-      appearance === "light"
-        ? "color(display-p3 1 1 1 / 80%)"
-        : "color(display-p3 0 0 0 / 5%)",
+      appearance === 'light'
+        ? 'color(display-p3 1 1 1 / 80%)'
+        : 'color(display-p3 0 0 0 / 5%)',
 
     accentSurface: accentSurfaceHex,
     accentSurfaceWideGamut: accentSurfaceWideGamutString,
@@ -208,7 +238,7 @@ function getButtonHoverColor(source: Color, scales: ArrayOf12<Color>[]) {
   const [L, C, H] = getCoords(source);
   const newL = L > 0.4 ? L - 0.03 / (L + 0.1) : L + 0.03 / (L + 0.1);
   const newC = L > 0.4 && !isNaN(H) ? C * 0.93 + 0 : C;
-  const buttonHoverColor = new Color("oklch", [newL, newC, H]);
+  const buttonHoverColor = new Color('oklch', [newL, newC, H]);
 
   // Find closest in-scale color to donate the chroma and hue.
   // Especially useful when the source color is pure white or black,
@@ -339,7 +369,7 @@ function getScaleFromColor(
   const scaleA = scales[colorA.scale];
   const scaleB = scales[colorB.scale];
   const scale = arrayOf12.map((i) =>
-    new Color(Color.mix(scaleA[i], scaleB[i], ratio)).to("oklch"),
+    new Color(Color.mix(scaleA[i], scaleB[i], ratio)).to('oklch'),
   ) as ArrayOf12<Color>;
 
   // Get the closest color from the pre-mixed scale we created
@@ -416,11 +446,11 @@ function getScaleFromColor(
 }
 
 function getTextColor(background: Color) {
-  const white = new Color("oklch", [1, 0, 0]);
+  const white = new Color('oklch', [1, 0, 0]);
 
   if (Math.abs(white.contrastAPCA(background)) < 40) {
     const [, C, H] = getCoords(background);
-    return new Color("oklch", [0.25, Math.max(0.08 * C, 0.04), H]);
+    return new Color('oklch', [0.25, Math.max(0.08 * C, 0.04), H]);
   }
 
   return white;
@@ -447,7 +477,7 @@ function getAlphaColor(
     bg === undefined ||
     bb === undefined
   ) {
-    throw Error("Color is undefined");
+    throw Error('Color is undefined');
   }
 
   // Is the background color lighter, RGB-wise, than target color?
@@ -559,14 +589,14 @@ function getAlphaColorSrgb(
   targetAlpha?: number,
 ) {
   const [r, g, b, a] = getAlphaColor(
-    getCoords(new Color(targetColor).to("srgb")),
-    getCoords(new Color(backgroundColor).to("srgb")),
+    getCoords(new Color(targetColor).to('srgb')),
+    getCoords(new Color(backgroundColor).to('srgb')),
     255,
     255,
     targetAlpha,
   );
 
-  return formatHex(new Color("srgb", [r, g, b], a).toString({ format: "hex" }));
+  return formatHex(new Color('srgb', [r, g, b], a).toString({ format: 'hex' }));
 }
 
 function getAlphaColorP3(
@@ -575,8 +605,8 @@ function getAlphaColorP3(
   targetAlpha?: number,
 ) {
   const [r, g, b, a] = getAlphaColor(
-    getCoords(new Color(targetColor).to("p3")),
-    getCoords(new Color(backgroundColor).to("p3")),
+    getCoords(new Color(targetColor).to('p3')),
+    getCoords(new Color(backgroundColor).to('p3')),
     // Not sure why, but the resulting P3 alpha colors are blended in the browser most precisely when
     // rounded to 255 integers too. Is the browser using 0-255 rather than 0-1 under the hood for P3 too?
     255,
@@ -585,16 +615,16 @@ function getAlphaColorP3(
   );
 
   return (
-    new Color("p3", [r, g, b], a)
+    new Color('p3', [r, g, b], a)
       .toString({ precision: 4 })
       // Important: in non-browser environments colorjs.io outputs a different format for some reason
-      .replace("color(p3 ", "color(display-p3 ")
+      .replace('color(p3 ', 'color(display-p3 ')
   );
 }
 
 // Format shortform hex to longform
 function formatHex(str: string) {
-  if (!str.startsWith("#")) {
+  if (!str.startsWith('#')) {
     return str;
   }
 
@@ -652,16 +682,16 @@ export function transposeProgressionEnd(
 function toOklchString(color: Color) {
   const L = +(getCoords(color)[0] * 100).toFixed(1);
   return color
-    .to("oklch")
+    .to('oklch')
     .toString({ precision: 4 })
     .replace(/(\S+)(.+)/, `oklch(${L}%$2`);
 }
 
 export const checkContrast = (foreground: string, background: string) => {
-  const ratio = new Color(foreground).contrastWCAG21(new Color(background))
+  const ratio = new Color(foreground).contrastWCAG21(new Color(background));
   return {
     wcagAA: ratio >= 4.5,
     wcagAALarge: ratio >= 3.0,
-    ratio
-  }
-}
+    ratio,
+  };
+};

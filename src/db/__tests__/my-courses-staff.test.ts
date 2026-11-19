@@ -38,6 +38,7 @@ vi.mock('@/db/schema', () => ({
   courseSubscriptionsTable: {},
   courseModulesTable: {},
   coursesTable: {},
+  disciplinesTable: {},
   lessonDependenciesTable: {},
   lessonMaterialProgressTable: {},
   lessonsTable: {},
@@ -104,6 +105,8 @@ const row = (courseId: number, slug: string, name: string) => ({
   moduleId: 1,
   lessonId: courseId * 10,
   levels: ['basic'],
+  // A 3D Airmanship lesson: the only kind a pilot's level gates.
+  disciplineSlug: '3d-airmanship',
   watchedHits: 0,
 });
 

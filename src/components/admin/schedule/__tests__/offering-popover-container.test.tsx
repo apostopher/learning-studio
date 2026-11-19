@@ -347,11 +347,13 @@ describe('OfferingPopoverContainer roster levels', () => {
   });
 
   const adaChip = () =>
-    screen.getByRole('button', { name: /^Level for Ada Lovelace/ });
+    screen.getByRole('button', { name: /^3D cert for Ada Lovelace/ });
   const press = () => fireEvent.click(adaChip());
   const settleDebounce = () => act(() => vi.advanceTimersByTime(700));
   const message = (label: string) =>
     `Your training team set your level in Instrument Ground School to ${label}.`;
+  const cleared =
+    'Your training team cleared your 3D cert in Instrument Ground School.';
 
   it('a press advances the chip at once, and writes nothing yet', () => {
     const { pinA } = renderPopover([withAda], true);
@@ -359,10 +361,17 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(adaChip().textContent).toBe('INTER');
 
     press();
-    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().textContent).toBe('ADV');
     expect(adaChip().getAttribute('aria-label')).toBe(
-      'Level for Ada Lovelace: Advanced. Press to change.',
+      '3D cert for Ada Lovelace: Advanced. Press to change.',
     );
+    // Advanced wraps round to None, so a cert can be cleared…
+    press();
+    expect(adaChip().textContent).toBe('NONE');
+    expect(adaChip().getAttribute('aria-label')).toBe(
+      '3D cert for Ada Lovelace: None. Press to change.',
+    );
+    // …and None starts again at Basic.
     press();
     expect(adaChip().textContent).toBe('BASIC');
 
@@ -376,18 +385,19 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     act(() => vi.advanceTimersByTime(500));
-    press(); // basic — restarts the wait
+    press(); // none — restarts the wait
     act(() => vi.advanceTimersByTime(699));
     expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));
 
+    // None is a real write: it clears the cert, with its own message.
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
     expect(levelWrite.mutateAsync.mock.calls[0][0]).toEqual({
       profileId: 42,
       courseId: 3,
-      level: 'basic',
-      message: message('Basic'),
+      level: 'none',
+      message: cleared,
     });
   });
 
@@ -399,7 +409,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
 
     press();
-    expect(adaChip().textContent).toBe('BASIC');
+    expect(adaChip().textContent).toBe('NONE');
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
   });
 
@@ -408,7 +418,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
-    press(); // basic
+    press(); // none
     settleDebounce();
     // Not a second, racing PUT: it waits for the first to settle…
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
@@ -419,16 +429,16 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(levelWrite.mutateAsync.mock.calls[1][0]).toEqual({
       profileId: 42,
       courseId: 3,
-      level: 'basic',
-      message: message('Basic'),
+      level: 'none',
+      message: cleared,
     });
     // The first save landing does not throw away the newer choice.
-    expect(adaChip().textContent).toBe('BASIC');
+    expect(adaChip().textContent).toBe('NONE');
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
 
     await act(async () => writes[1].resolve());
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
-    expect(adaChip().textContent).toBe('BASIC');
+    expect(adaChip().textContent).toBe('NONE');
   });
 
   it('presses during a flight make exactly one follow-up save, at the final level', async () => {
@@ -436,9 +446,9 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
-    press(); // basic
+    press(); // none
     settleDebounce();
-    press(); // intermediate
+    press(); // basic
     settleDebounce();
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
 
@@ -447,8 +457,8 @@ describe('OfferingPopoverContainer roster levels', () => {
 
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(2);
     expect(levelWrite.mutateAsync.mock.calls[1][0]).toMatchObject({
-      level: 'intermediate',
-      message: message('Intermediate'),
+      level: 'basic',
+      message: message('Basic'),
     });
     expect(toast.success).toHaveBeenCalledTimes(2);
   });
@@ -458,6 +468,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
+    press(); // none
     press(); // basic
     press(); // intermediate
     press(); // advanced
@@ -466,7 +477,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     await act(async () => writes[0].resolve());
 
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
-    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().textContent).toBe('ADV');
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
   });
 
@@ -475,7 +486,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
-    press(); // basic
+    press(); // none
     settleDebounce();
     await act(async () => writes[0].resolve());
     await act(async () =>
@@ -485,7 +496,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'That person or course no longer exists.',
     );
-    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().textContent).toBe('ADV');
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
   });
 
@@ -510,6 +521,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     // Round from the row's own level, before the debounce.
     press(); // advanced
+    press(); // none
     press(); // basic
     press(); // intermediate
     settleDebounce();
@@ -520,13 +532,14 @@ describe('OfferingPopoverContainer roster levels', () => {
     press(); // advanced
     settleDebounce();
     await act(async () => writes[0].resolve());
+    press(); // none
     press(); // basic
     press(); // intermediate
     press(); // advanced
     settleDebounce();
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledTimes(1);
-    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().textContent).toBe('ADV');
   });
 
   it('leaving the page with a save still waiting writes it at once', () => {
@@ -572,15 +585,15 @@ describe('OfferingPopoverContainer roster levels', () => {
       target: { offeringId: offeringB.id },
     });
     // B shows the same course's pending level, and steps on from it.
-    expect(adaChip().textContent).toBe('EXPERT');
-    press(); // basic
+    expect(adaChip().textContent).toBe('ADV');
+    press(); // none
     settleDebounce();
 
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
     expect(levelWrite.mutateAsync.mock.calls[0][0]).toMatchObject({
       profileId: 42,
       courseId: 3,
-      level: 'basic',
+      level: 'none',
     });
   });
 
@@ -594,7 +607,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(toast.success).toHaveBeenCalledWith(
       'Ada Lovelace is now Advanced in Instrument Ground School',
     );
-    expect(adaChip().textContent).toBe('EXPERT');
+    expect(adaChip().textContent).toBe('ADV');
     expect(adaChip().getAttribute('aria-busy')).toBeNull();
     // A level already saved is not an unsaved edit: Esc closes cleanly.
     pressEscape();
@@ -699,7 +712,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     const { pinA } = renderPopover([withAda], false);
     pinA();
     expect(
-      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
+      screen.queryByRole('button', { name: /^3D cert for Ada Lovelace/ }),
     ).toBeNull();
     expect(screen.getByText(/Levels are view only/)).toBeTruthy();
   });
@@ -709,7 +722,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     const { pinA } = renderPopover([withAda], true);
     pinA();
     expect(
-      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
+      screen.queryByRole('button', { name: /^3D cert for Ada Lovelace/ }),
     ).toBeNull();
     expect(screen.getByText('Not in directory')).toBeTruthy();
   });
@@ -719,7 +732,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     const { pinA } = renderPopover([withAda], true, false);
     pinA();
     expect(
-      screen.queryByRole('button', { name: /^Level for Ada Lovelace/ }),
+      screen.queryByRole('button', { name: /^3D cert for Ada Lovelace/ }),
     ).toBeNull();
     expect(screen.getByText('Owner only')).toBeTruthy();
   });

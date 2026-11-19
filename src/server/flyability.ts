@@ -226,7 +226,9 @@ export function getAirports(countryCode: string) {
             value: resp.data.airports,
           };
         }
-        console.error(`Error fetching airports from ${countryCode} by page ${pageId}`);
+        console.error(
+          `Error fetching airports from ${countryCode} by page ${pageId}`,
+        );
         return {
           done: true,
           value: [],
@@ -261,7 +263,9 @@ export function flyDataToHtml(flyData: FlyData): string {
         <div class="station-info">
           <p><strong>Station:</strong> ${metar.icao} - ${metar.stationName || 'Unknown'}</p>
           <p><strong>Observed:</strong> ${
-            metar.observedISO ? new Date(metar.observedISO).toLocaleString() : 'Unknown'
+            metar.observedISO
+              ? new Date(metar.observedISO).toLocaleString()
+              : 'Unknown'
           }</p>
           <p><strong>Date/Time:</strong> ${
             metar.observedISO
@@ -290,7 +294,9 @@ export function flyDataToHtml(flyData: FlyData): string {
           <div class="ceiling-info">
             <h4>Cloud Ceiling</h4>
             <p><strong>Ceiling:</strong> ${
-              metar.ceiling_ft_agl ? `${metar.ceiling_ft_agl} feet AGL` : 'Unknown'
+              metar.ceiling_ft_agl
+                ? `${metar.ceiling_ft_agl} feet AGL`
+                : 'Unknown'
             }</p>
           </div>
         </div>

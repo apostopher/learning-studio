@@ -16,6 +16,7 @@ import { useDisciplineLessonPosters } from '#/data-hooks/use-discipline-lesson-p
 import { disciplineLessons, type LibraryDiscipline } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { disciplineDndId, libraryModuleDndId } from '#/lib/dnd-ids';
+import { isLevelGatedDisciplineSlug } from '#/lib/flagship-course';
 import { DisciplineColumn } from './discipline-column';
 import { DisciplineColumnActions } from './discipline-column-actions';
 import { LibraryModuleContainer } from './library-module-container';
@@ -43,7 +44,7 @@ export const DisciplineColumnContainer = ({
 }: {
   disciplineId: number;
   name: string;
-  discipline: Pick<LibraryDiscipline, 'modules' | 'untitled'>;
+  discipline: Pick<LibraryDiscipline, 'slug' | 'modules' | 'untitled'>;
   /**
    * Whether this actor may rename or delete a discipline — both `requireAdmin`
    * on the server. Add-lesson is not gated here: authority over a lesson
@@ -91,7 +92,11 @@ export const DisciplineColumnContainer = ({
           <DisciplineColumnActions
             disciplineName={name}
             canManage={canManageDisciplines}
-            onUpdateLevels={() => openLevels({ id: disciplineId, name })}
+            onUpdateLevels={
+              isLevelGatedDisciplineSlug(discipline.slug)
+                ? () => openLevels({ id: disciplineId, name })
+                : undefined
+            }
             onAddLesson={() =>
               openAddLesson({ id: disciplineId, name, module: null })
             }

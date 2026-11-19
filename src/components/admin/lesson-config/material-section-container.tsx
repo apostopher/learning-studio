@@ -21,6 +21,7 @@ const EMPTY: LessonMaterialGeneration = {
   links: [],
   assignments: '',
   jobOfTheDay: '',
+  testThis: [],
   attachments: [],
 };
 
@@ -68,7 +69,7 @@ export const MaterialSectionContainer = ({
     // `?? undefined`, not the raw value: the query resolves to `null` for a
     // lesson with no material yet, and RHF reads only `undefined` as "no
     // values supplied". Passing null would try to reseed the form with it.
-    values: existing.data ?? undefined,
+    values: existing.data?.values ?? undefined,
     resetOptions: { keepDirtyValues: true },
   });
 
@@ -113,6 +114,7 @@ export const MaterialSectionContainer = ({
       <AttachmentsList attachments={attachments} />
       <MaterialForm
         formId={lessonMaterialFormId(lesson.id)}
+        extraTab={existing.data?.extraTab}
         register={form.register}
         control={form.control}
         errors={form.formState.errors}

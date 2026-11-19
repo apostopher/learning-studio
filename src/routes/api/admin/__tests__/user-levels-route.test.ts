@@ -119,6 +119,28 @@ describe('PUT /api/admin/users/:id/levels', () => {
     );
   });
 
+  // The roster's chip cycles round to None: clearing a 3D cert is a change
+  // like any other, appended as a `'none'` row.
+  it('accepts None, writing it as a cleared cert', async () => {
+    const res = await putUserLevelHandler(
+      req({ courseId: 3, level: 'none', message: 'Cleared.' }),
+      '5',
+    );
+    expect(res.status).toBe(204);
+    expect(m.insertLevelRow).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'none' }),
+    );
+  });
+
+  it('still refuses a level that is not one', async () => {
+    const res = await putUserLevelHandler(
+      req({ courseId: 3, level: 'expert', message: 'Nope.' }),
+      '5',
+    );
+    expect(res.status).toBe(400);
+    expect(m.insertLevelRow).not.toHaveBeenCalled();
+  });
+
   it('403s when denied', async () => {
     m.requirePermission.mockRejectedValue(new m.ForbiddenError());
     const res = await putUserLevelHandler(

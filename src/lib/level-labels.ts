@@ -1,4 +1,9 @@
-import { type LessonLevel, USER_LEVELS, type UserLevel } from '#/types';
+import {
+  type LessonLevel,
+  type SettableUserLevel,
+  USER_LEVELS,
+  type UserLevel,
+} from '#/types';
 
 /**
  * Pilot-facing names, kept apart from the stored values.
@@ -24,6 +29,16 @@ export const LESSON_LEVEL_LABELS: Record<LessonLevel, string> = {
   none: 'None',
 };
 
+/**
+ * Admin-facing names for what a pilot's level can be SET to — the tiers, plus
+ * `'none'` (no 3D cert). Kept apart from `LEVEL_LABELS` for the same reason
+ * as `LESSON_LEVEL_LABELS`: pilot-facing copy never names `'none'`.
+ */
+export const SETTABLE_LEVEL_LABELS: Record<SettableUserLevel, string> = {
+  ...LEVEL_LABELS,
+  none: 'None',
+};
+
 export function levelLabel(level: UserLevel): string {
   return LEVEL_LABELS[level];
 }
@@ -35,9 +50,9 @@ export function levelLabel(level: UserLevel): string {
  * Deliberately whole words rather than truncations: `BASIC` is a complete word,
  * so pairing it with `INT` and `ADV` reads as a mix of two conventions. `INTER`
  * is a prefix people resolve instantly, where `INT` could be integer or
- * internal; `EXPERT` stands beside `BASIC` as an equal rather than a clipped
- * "advanced". The one extra character is invisible once a chip has a
- * `min-inline-size`.
+ * internal. `ADV` (it was `EXPERT`) and `NONE` are what the training team
+ * asked for, so the four chips read BASIC, INTER, ADV, NONE. Lengths differ;
+ * a chip's `min-inline-size` evens them out.
  *
  * Separate from LEVEL_LABELS on purpose: these are not abbreviations *of* those
  * labels and must not be derived from them.
@@ -45,8 +60,11 @@ export function levelLabel(level: UserLevel): string {
 export const LEVEL_ACRONYMS: Record<UserLevel, string> = {
   basic: 'BASIC',
   intermediate: 'INTER',
-  advanced: 'EXPERT',
+  advanced: 'ADV',
 };
+
+/** The chip for a pilot with no 3D cert — no level row, or a `'none'` one. */
+export const NO_LEVEL_ACRONYM = 'NONE';
 
 export function levelAcronym(level: UserLevel): string {
   return LEVEL_ACRONYMS[level];

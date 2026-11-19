@@ -43,7 +43,7 @@ describe('OfferingRosterTable level cell', () => {
   };
   const adaChip = () =>
     screen.getByRole('button', {
-      name: 'Level for Ada Lovelace: Intermediate. Press to change.',
+      name: '3D cert for Ada Lovelace: Intermediate. Press to change.',
     });
 
   it('is a chip button named for the person and their level when editable', () => {
@@ -61,9 +61,9 @@ describe('OfferingRosterTable level cell', () => {
     expect(adaChip().className).toContain('bg-apple-3');
     // No level yet: a muted chip that says so, not a blank or "NONE".
     const bobChip = screen.getByRole('button', {
-      name: 'Level for Bob Hoover: No level. Press to change.',
+      name: '3D cert for Bob Hoover: None. Press to change.',
     });
-    expect(bobChip.textContent).toBe('No level');
+    expect(bobChip.textContent).toBe('NONE');
     expect(bobChip.className).toContain('bg-gray-4');
     expect(screen.queryByRole('combobox')).toBeNull();
   });
@@ -95,9 +95,9 @@ describe('OfferingRosterTable level cell', () => {
       />,
     );
     const chip = screen.getByRole('button', {
-      name: 'Level for Ada Lovelace: Advanced. Press to change.',
+      name: '3D cert for Ada Lovelace: Advanced. Press to change.',
     });
-    expect(chip.textContent).toBe('EXPERT');
+    expect(chip.textContent).toBe('ADV');
     expect(chip.className).toContain('bg-success-3');
   });
 
@@ -120,7 +120,7 @@ describe('OfferingRosterTable level cell', () => {
     fireEvent.click(adaChip());
     expect(onCycleLevel).toHaveBeenCalledWith('u1');
     const bobChip = screen.getByRole('button', {
-      name: /Level for Bob Hoover/,
+      name: /3D cert for Bob Hoover/,
     });
     expect(bobChip.getAttribute('aria-busy')).toBeNull();
     expect(bobChip.closest('td')?.querySelector('.animate-spin')).toBeNull();
@@ -138,7 +138,7 @@ describe('OfferingRosterTable level cell', () => {
     );
     expect(screen.queryByRole('button', { name: /Level for/ })).toBeNull();
     expect(screen.getByText('INTER')).toBeTruthy();
-    expect(screen.getByText('No level')).toBeTruthy();
+    expect(screen.getByText('NONE')).toBeTruthy();
     expect(screen.getByText(/Levels are view only/)).toBeTruthy();
   });
 
@@ -157,14 +157,14 @@ describe('OfferingRosterTable level cell', () => {
       />,
     );
     expect(
-      screen.queryByRole('button', { name: /Level for Ada Lovelace/ }),
+      screen.queryByRole('button', { name: /3D cert for Ada Lovelace/ }),
     ).toBeNull();
     expect(screen.getByText('INTER').tagName).toBe('SPAN');
     // Visible, and complete for assistive tech.
     expect(screen.getByText('Not in directory')).toBeTruthy();
     expect(screen.getByText('Not in the user directory')).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: /Level for Bob Hoover/ }),
+      screen.getByRole('button', { name: /3D cert for Bob Hoover/ }),
     ).toBeTruthy();
   });
 
@@ -198,7 +198,7 @@ describe('OfferingRosterTable level cell', () => {
     );
     // A locked state says why, in its name (and its tooltip).
     const locked = screen.getByRole('button', {
-      name: 'Level for Ada Lovelace: Intermediate. Locked while the offering saves.',
+      name: '3D cert for Ada Lovelace: Intermediate. Locked while the offering saves.',
     });
     expect(locked.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(locked);

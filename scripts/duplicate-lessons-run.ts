@@ -132,8 +132,8 @@ async function main() {
       );
       copied += 1;
       const mat = await client.query(
-        `insert into lesson_material (lesson_slug, text, key_points, quiz, pro_tips, links, assignments, job_of_the_day)
-         select $2, text, key_points, quiz, pro_tips, links, assignments, job_of_the_day
+        `insert into lesson_material (lesson_slug, text, key_points, quiz, pro_tips, links, assignments, job_of_the_day, test_this)
+         select $2, text, key_points, quiz, pro_tips, links, assignments, job_of_the_day, test_this
            from lesson_material where lesson_slug = $1`,
         [l.slug, to],
       );

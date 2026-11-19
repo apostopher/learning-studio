@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  htmlToSections,
   chunkSectionTokens,
+  htmlToSections,
   splitIntoSentences,
   trySnapToSentenceBoundary,
 } from '#/ai/embeddings-helper';
@@ -50,7 +50,9 @@ describe('splitIntoSentences', () => {
     ]);
   });
   it('returns the whole text when there is no boundary', () => {
-    expect(splitIntoSentences('no boundary here')).toEqual(['no boundary here']);
+    expect(splitIntoSentences('no boundary here')).toEqual([
+      'no boundary here',
+    ]);
   });
 });
 
@@ -59,6 +61,8 @@ describe('trySnapToSentenceBoundary', () => {
     expect(trySnapToSentenceBoundary('Hello world. tail')).toBe('Hello world.');
   });
   it('returns null when no terminator is near the end', () => {
-    expect(trySnapToSentenceBoundary(`no terminator ${'x'.repeat(60)}`)).toBeNull();
+    expect(
+      trySnapToSentenceBoundary(`no terminator ${'x'.repeat(60)}`),
+    ).toBeNull();
   });
 });

@@ -37,7 +37,9 @@ async function main() {
     const { rows } = await db.execute<{ n: number }>(
       sql`select count(*)::int as n from course_modules`,
     );
-    console.log(`course_modules already exists with ${rows[0]?.n} rows — nothing to do.`);
+    console.log(
+      `course_modules already exists with ${rows[0]?.n} rows — nothing to do.`,
+    );
     process.exit(0);
   }
 
@@ -66,12 +68,17 @@ async function main() {
       select "course_id", "id", "rank" from "modules"`);
   });
 
-  const { rows } = await db.execute<{ modules: number; placements: number }>(sql`
+  const { rows } = await db.execute<{
+    modules: number;
+    placements: number;
+  }>(sql`
     select (select count(*) from modules)::int as modules,
            (select count(*) from course_modules)::int as placements`);
   const { modules, placements } = rows[0] ?? { modules: -1, placements: -2 };
   if (modules !== placements) {
-    throw new Error(`backfill mismatch: ${modules} modules, ${placements} course_modules rows`);
+    throw new Error(
+      `backfill mismatch: ${modules} modules, ${placements} course_modules rows`,
+    );
   }
   console.log(`course_modules created; backfilled ${placements} rows.`);
   process.exit(0);

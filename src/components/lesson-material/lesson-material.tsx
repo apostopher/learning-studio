@@ -39,7 +39,11 @@ export const LessonMaterialView = ({
   // them from that text (see resolveDebriefSource), so a lesson with prose and
   // no bullet list no longer loses its Debrief tab.
   const canDebrief = Boolean(material.text);
-  const tabs = computeMaterialTabs({ hasDebrief, canDebrief });
+  const tabs = computeMaterialTabs({
+    hasDebrief,
+    canDebrief,
+    extraTab: material.extraTab,
+  });
   const selected = resolveActiveTab(tabs, activeTab);
 
   return (
@@ -112,9 +116,18 @@ export const LessonMaterialView = ({
         <Assignments assignments={material.assignments} />
       </Tabs.Panel>
 
-      <Tabs.Panel value="jobOfTheDay" className="outline-hidden">
-        <JobOfTheDay jobOfTheDay={material.jobOfTheDay} />
-      </Tabs.Panel>
+      {material.extraTab === 'jobOfTheDay' ? (
+        <Tabs.Panel value="jobOfTheDay" className="outline-hidden">
+          <JobOfTheDay jobOfTheDay={material.jobOfTheDay} />
+        </Tabs.Panel>
+      ) : (
+        <Tabs.Panel value="testThis" className="outline-hidden">
+          <Links
+            links={material.testThis}
+            emptyText="Nothing to test for this lesson yet."
+          />
+        </Tabs.Panel>
+      )}
     </Tabs.Root>
   );
 };

@@ -13,6 +13,7 @@ export type DetailsLesson = {
   hasVideo: boolean;
   needsVideoWatch: boolean;
   levels: readonly string[];
+  levelGated: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };
 export type DetailsModule = {

@@ -1,5 +1,5 @@
-import { Logo } from "../logo";
-import { appTitle } from "../../styles/theme.generated";
+import { appTitle } from '../../styles/theme.generated';
+import { Logo } from '../logo';
 
 export const AuthBrandPanel = () => (
   <aside
@@ -13,7 +13,9 @@ export const AuthBrandPanel = () => (
 
     <div className="space-y-4">
       <p className="text-4xl font-bold leading-tight tracking-tight">
-        Train smarter.<br />Fly better.
+        Train smarter.
+        <br />
+        Fly better.
       </p>
       <p className="text-sm text-apple-contrast/60 max-w-xs leading-relaxed">
         Aviation ground school, quizzes, and mission briefs — all in one place.

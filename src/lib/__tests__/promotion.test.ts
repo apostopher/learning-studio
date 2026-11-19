@@ -33,8 +33,13 @@ const DETAILS = {
   modules: [
     {
       lessons: [
-        { id: 1, isAvailable: true, levels: ['basic'] },
-        { id: 2, isAvailable: true, levels: ['intermediate'] },
+        { id: 1, isAvailable: true, levels: ['basic'], levelGated: true },
+        {
+          id: 2,
+          isAvailable: true,
+          levels: ['intermediate'],
+          levelGated: true,
+        },
       ],
     },
   ],
@@ -129,8 +134,8 @@ describe('maybePromote', () => {
       modules: [
         {
           lessons: [
-            { id: 1, isAvailable: true, levels: [] },
-            { id: 2, isAvailable: true, levels: [] },
+            { id: 1, isAvailable: true, levels: [], levelGated: true },
+            { id: 2, isAvailable: true, levels: [], levelGated: true },
           ],
         },
       ],
@@ -153,7 +158,11 @@ describe('maybePromote', () => {
     // would find `isTierComplete('intermediate')` true for exactly the same
     // reason and send a second email.
     m.getCourseDetailsWithCache.mockResolvedValue({
-      modules: [{ lessons: [{ id: 1, isAvailable: true, levels: [] }] }],
+      modules: [
+        {
+          lessons: [{ id: 1, isAvailable: true, levels: [], levelGated: true }],
+        },
+      ],
     });
     m.getCurrentLevel.mockResolvedValue('intermediate');
     m.getCourseProgress.mockResolvedValue({
@@ -173,8 +182,8 @@ describe('maybePromote', () => {
       modules: [
         {
           lessons: [
-            { id: 1, isAvailable: true, levels: [] },
-            { id: 2, isAvailable: true, levels: ['none'] },
+            { id: 1, isAvailable: true, levels: [], levelGated: true },
+            { id: 2, isAvailable: true, levels: ['none'], levelGated: true },
           ],
         },
       ],
@@ -201,9 +210,14 @@ describe('maybePromote', () => {
       modules: [
         {
           lessons: [
-            { id: 1, isAvailable: true, levels: [] },
-            { id: 2, isAvailable: true, levels: ['basic'] },
-            { id: 3, isAvailable: true, levels: ['intermediate'] },
+            { id: 1, isAvailable: true, levels: [], levelGated: true },
+            { id: 2, isAvailable: true, levels: ['basic'], levelGated: true },
+            {
+              id: 3,
+              isAvailable: true,
+              levels: ['intermediate'],
+              levelGated: true,
+            },
           ],
         },
       ],
@@ -231,8 +245,13 @@ describe('maybePromote', () => {
       modules: [
         {
           lessons: [
-            { id: 1, isAvailable: true, levels: [] },
-            { id: 2, isAvailable: true, levels: ['intermediate'] },
+            { id: 1, isAvailable: true, levels: [], levelGated: true },
+            {
+              id: 2,
+              isAvailable: true,
+              levels: ['intermediate'],
+              levelGated: true,
+            },
           ],
         },
       ],
@@ -257,9 +276,14 @@ describe('maybePromote', () => {
       modules: [
         {
           lessons: [
-            { id: 1, isAvailable: true, levels: ['basic'] },
-            { id: 2, isAvailable: true, levels: [] },
-            { id: 3, isAvailable: false, levels: ['intermediate'] },
+            { id: 1, isAvailable: true, levels: ['basic'], levelGated: true },
+            { id: 2, isAvailable: true, levels: [], levelGated: true },
+            {
+              id: 3,
+              isAvailable: false,
+              levels: ['intermediate'],
+              levelGated: true,
+            },
           ],
         },
       ],

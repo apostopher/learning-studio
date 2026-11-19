@@ -56,6 +56,7 @@ const details = {
           hasVideo: false,
           needsVideoWatch: true,
           levels: ['basic'],
+          levelGated: true,
           dependsOn: [],
         },
         {
@@ -66,6 +67,7 @@ const details = {
           hasVideo: false,
           needsVideoWatch: true,
           levels: ['intermediate'],
+          levelGated: true,
           dependsOn: [],
         },
       ],
@@ -172,7 +174,9 @@ describe('getLibraryForUser level visibility', () => {
       modules: [
         {
           ...details.modules[0],
-          lessons: [{ ...details.modules[0].lessons[0], levels: [] }],
+          lessons: [
+            { ...details.modules[0].lessons[0], levels: [], levelGated: true },
+          ],
         },
       ],
     });
@@ -203,8 +207,12 @@ describe('getLibraryForUser level visibility', () => {
         {
           ...details.modules[0],
           lessons: [
-            { ...details.modules[0].lessons[0], levels: [] },
-            { ...details.modules[0].lessons[1], levels: ['none'] },
+            { ...details.modules[0].lessons[0], levels: [], levelGated: true },
+            {
+              ...details.modules[0].lessons[1],
+              levels: ['none'],
+              levelGated: true,
+            },
           ],
         },
       ],

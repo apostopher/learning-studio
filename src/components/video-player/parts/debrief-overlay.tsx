@@ -1,5 +1,5 @@
-import { Loader2, NotebookPen } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Loader2, NotebookPen } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 
 type DebriefOverlayProps = {
   loading: boolean;
@@ -15,7 +15,7 @@ export const DebriefOverlay = ({ loading, onDebrief }: DebriefOverlayProps) => {
         type="button"
         onClick={onDebrief}
         disabled={loading}
-        aria-label={loading ? "Preparing debrief" : "Start debrief"}
+        aria-label={loading ? 'Preparing debrief' : 'Start debrief'}
         className="vp-debrief-button"
         initial={reduced ? false : { scale: 0.92, opacity: 0 }}
         animate={reduced ? undefined : { scale: 1, opacity: 1 }}
@@ -24,7 +24,7 @@ export const DebriefOverlay = ({ loading, onDebrief }: DebriefOverlayProps) => {
         transition={
           reduced
             ? { duration: 0 }
-            : { type: "spring", bounce: 0.3, visualDuration: 0.3 }
+            : { type: 'spring', bounce: 0.3, visualDuration: 0.3 }
         }
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -36,7 +36,7 @@ export const DebriefOverlay = ({ loading, onDebrief }: DebriefOverlayProps) => {
               animate={{ rotate: 360 }}
               transition={{
                 repeat: Number.POSITIVE_INFINITY,
-                ease: "linear",
+                ease: 'linear',
                 duration: 0.8,
               }}
             >
@@ -54,7 +54,7 @@ export const DebriefOverlay = ({ loading, onDebrief }: DebriefOverlayProps) => {
             </motion.span>
           )}
         </AnimatePresence>
-        {loading ? "Preparing…" : "Debrief"}
+        {loading ? 'Preparing…' : 'Debrief'}
       </motion.button>
     </div>
   );

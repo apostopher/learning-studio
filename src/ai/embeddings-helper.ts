@@ -1,4 +1,4 @@
-import { encode, decode } from 'gpt-tokenizer';
+import { decode, encode } from 'gpt-tokenizer';
 
 // -------- precision knobs --------
 const CHUNK_TOKENS = 300;
@@ -70,7 +70,11 @@ export function splitIntoSentences(text: string): string[] {
 }
 
 export function trySnapToSentenceBoundary(s: string): string | null {
-  const idx = Math.max(s.lastIndexOf('.'), s.lastIndexOf('!'), s.lastIndexOf('?'));
+  const idx = Math.max(
+    s.lastIndexOf('.'),
+    s.lastIndexOf('!'),
+    s.lastIndexOf('?'),
+  );
   if (idx > -1 && s.length - idx <= 40) return s.slice(0, idx + 1).trim();
   return null;
 }

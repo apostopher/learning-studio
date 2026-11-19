@@ -66,7 +66,7 @@ describe('DisciplineColumnContainer', () => {
         <DisciplineColumnContainer
           disciplineId={4}
           name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          discipline={{ slug: 'weather', modules: [], untitled: [] }}
         />
       </Provider>,
     );
@@ -87,18 +87,38 @@ describe('DisciplineColumnContainer', () => {
       <Provider store={store}>
         <DisciplineColumnContainer
           disciplineId={4}
-          name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          name="3D Airmanship"
+          discipline={{ slug: '3d-airmanship', modules: [], untitled: [] }}
         />
       </Provider>,
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Update levels in Weather' }),
+      screen.getByRole('button', { name: 'Update levels in 3D Airmanship' }),
     );
     expect(store.get(disciplineLevelsTargetAtom)).toEqual({
       id: 4,
-      name: 'Weather',
+      name: '3D Airmanship',
     });
+  });
+
+  // Levels gate only 3D Airmanship lessons, so tagging any other
+  // discipline's would change nothing a pilot sees.
+  it('offers no levels board on any other discipline', () => {
+    render(
+      <Provider store={createStore()}>
+        <DisciplineColumnContainer
+          disciplineId={7}
+          name="UAS"
+          discipline={{ slug: 'uas', modules: [], untitled: [] }}
+        />
+      </Provider>,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Update levels in UAS' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Add a lesson to UAS' }),
+    ).toBeTruthy();
   });
 
   it("starts loading this shelf's posters as soon as the column renders", () => {
@@ -107,7 +127,7 @@ describe('DisciplineColumnContainer', () => {
         <DisciplineColumnContainer
           disciplineId={4}
           name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          discipline={{ slug: 'weather', modules: [], untitled: [] }}
         />
       </Provider>,
     );

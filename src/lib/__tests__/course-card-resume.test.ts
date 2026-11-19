@@ -14,6 +14,7 @@ const lesson = (
   hasVideo: true,
   needsVideoWatch: true,
   levels: ['basic'],
+  levelGated: true,
   dependsOn,
 });
 

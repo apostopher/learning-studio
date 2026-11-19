@@ -49,8 +49,13 @@ const courseModulesTable = pgTable('course_modules', {
   rank: numeric('rank'),
   createdAt: timestamp('created_at'),
 });
+const disciplinesTable = pgTable('disciplines', {
+  id: integer('id').primaryKey(),
+  slug: text('slug'),
+});
 const lessonsTable = pgTable('lessons', {
   id: integer('id').primaryKey(),
+  disciplineId: integer('discipline_id'),
   moduleId: integer('module_id'),
   name: text('name'),
   slug: text('slug'),
@@ -107,6 +112,7 @@ vi.mock('@/db/schema', () => ({
   courseModulesTable,
   modulesTable,
   lessonsTable,
+  disciplinesTable,
   moduleLessonsTable,
   moduleDependenciesTable,
   orgLessonsTable,

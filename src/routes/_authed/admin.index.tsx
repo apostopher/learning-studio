@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { useQueryState } from 'nuqs';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { CoursesSectionContainer } from '#/components/admin/courses-section-container';
@@ -15,7 +14,6 @@ import {
 import {
   adminSearchSchema,
   adminSectionGates,
-  adminSectionParser,
   DEFAULT_ADMIN_SECTION,
 } from '#/lib/admin-sections';
 
@@ -36,10 +34,11 @@ import {
 export const Route = createFileRoute('/_authed/admin/')({
   validateSearch: adminSearchSchema,
   /**
-   * The section a bare `/admin` resolves to, matching what `adminSectionParser`
-   * gives the component for the same URL. The two parsers exist because the
-   * router and nuqs each need their own: nuqs owns the value in the component,
-   * this owns it in `beforeLoad`, `loaderDeps` and in every typed `<Link>`.
+   * The section on show, defaulted — the single reading of `?section=`. The
+   * component takes it from here (`Route.useLoaderDeps`), so the screen it
+   * renders and the one the loader primed are the same by construction. An
+   * unrecognised value is already `undefined` by now (`adminSearchSchema`
+   * catches it), so it lands on the default rather than a blank screen.
    */
   loaderDeps: ({ search }) => ({
     section: search.section ?? DEFAULT_ADMIN_SECTION,
@@ -114,10 +113,15 @@ export const Route = createFileRoute('/_authed/admin/')({
 function AdminSectionScreen() {
   const { roles, permissions, isStaffAnywhere, isCourseManagerAnywhere } =
     Route.useRouteContext();
-  // nuqs owns the value in the component — same URL, same parser fallback as
-  // `beforeLoad`'s, so the screen that renders is always the one that was
-  // admitted.
-  const [section] = useQueryState('section', adminSectionParser);
+  // The RENDERED match's section — the very value `beforeLoad` gated and
+  // `loaderDeps` defaulted, so the screen on show is always the one admitted.
+  //
+  // Not nuqs: its TanStack adapter reads `useLocation()`, which moves to the
+  // destination the instant a navigation starts. Tapping a course tile
+  // (`/admin/$courseId/editor`, no `?section=`) left this screen mounted
+  // while the editor loaded, reading a missing section, falling back to the
+  // default and swapping Courses for the knowledge library (2026-11-18).
+  const { section } = Route.useLoaderDeps();
 
   if (section === 'courses') {
     return (

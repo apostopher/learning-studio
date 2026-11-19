@@ -9,7 +9,7 @@ import { adminSearchSchema } from '#/lib/admin-sections';
  * land where they meant to.
  *
  * The rest of the query string is carried across, which is the reason this
- * one validates its search at all: People keeps its search term, its open tab
+ * one validates its search at all: People keeps its open tab
  * and its two filters in the URL precisely so a link to, say, the permissions
  * tab is shareable. Dropping them here would break exactly the links this
  * redirect exists to honour.

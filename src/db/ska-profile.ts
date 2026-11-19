@@ -1,8 +1,8 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
-import { normaliseSkaProfile } from '#/lib/ska-profile';
-import type { SkaProfile } from '#/types';
 import { db } from '#/db';
 import { type UserSkaProfileSelect, userSkaProfileTable } from '#/db/schema';
+import { normaliseSkaProfile } from '#/lib/ska-profile';
+import type { SkaProfile } from '#/types';
 
 /**
  * Writes a freshly generated profile, unreviewed.

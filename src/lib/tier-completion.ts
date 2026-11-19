@@ -1,11 +1,12 @@
 import { levelIndex } from '#/lib/level-labels';
-import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
+import { isLessonAtTier } from '#/lib/level-visibility';
 import { USER_LEVELS, type UserLevel } from '#/types';
 
 export type TierCompletionInput = {
   lessons: readonly {
     lessonId: number;
     levels: readonly string[];
+    levelGated: boolean;
     isAvailable: boolean;
   }[];
   /** From `getCourseProgress`. `percent === 100` is the definition of done. */
@@ -26,9 +27,10 @@ export function nextLevel(level: UserLevel): UserLevel | null {
  * notion. Note this is deliberately NOT `watched`, which is weaker and is what
  * the prerequisite gate uses.
  *
- * Strict: only lessons tagged with exactly this tier count — the same
- * `isLessonVisibleAtLevel` the pilot's view uses, so an untagged `[]` or
- * withdrawn `['none']` lesson neither blocks the tier nor completes it.
+ * Strict: only gated lessons tagged with exactly this tier count
+ * (`isLessonAtTier`), so an untagged `[]` or withdrawn `['none']` lesson
+ * neither blocks the tier nor completes it — and nor does a lesson outside
+ * 3D Airmanship, which every pilot sees but which is no tier's work.
  *
  * An empty tier returns false. Otherwise "every lesson at this tier is done"
  * would be vacuously true for a tier with no lessons, and promote the pilot
@@ -40,8 +42,7 @@ export function isTierComplete(input: TierCompletionInput): boolean {
   );
 
   const reachable = input.lessons.filter(
-    (lesson) =>
-      lesson.isAvailable && isLessonVisibleAtLevel(lesson.levels, input.level),
+    (lesson) => lesson.isAvailable && isLessonAtTier(lesson, input.level),
   );
 
   if (reachable.length === 0) return false;

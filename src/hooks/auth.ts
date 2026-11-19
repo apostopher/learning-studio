@@ -1,12 +1,12 @@
-import { useMutation } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
+import { useMutation } from '@tanstack/react-query';
+import { authClient } from '@/lib/auth-client';
 
 export function useRequestOtp() {
   return useMutation({
     mutationFn: async (email: string) => {
       const { error } = await authClient.emailOtp.sendVerificationOtp({
         email,
-        type: "sign-in",
+        type: 'sign-in',
       });
       if (error) throw error;
     },

@@ -1,5 +1,5 @@
-import mammoth from 'mammoth';
 import { generateText } from 'ai';
+import mammoth from 'mammoth';
 
 /** Convert a .docx buffer to HTML. Fails soft to ''. */
 export async function convertWordToHtml(buffer: Buffer): Promise<string> {

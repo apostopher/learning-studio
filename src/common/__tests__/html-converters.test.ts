@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { convertToHtml, generateText } = vi.hoisted(() => ({
   convertToHtml: vi.fn(),
@@ -9,7 +9,7 @@ const { convertToHtml, generateText } = vi.hoisted(() => ({
 vi.mock('mammoth', () => ({ default: { convertToHtml } }));
 vi.mock('ai', () => ({ generateText }));
 
-import { convertWordToHtml, convertPdfToHtml } from '#/common/html-converters';
+import { convertPdfToHtml, convertWordToHtml } from '#/common/html-converters';
 
 beforeEach(() => vi.clearAllMocks());
 

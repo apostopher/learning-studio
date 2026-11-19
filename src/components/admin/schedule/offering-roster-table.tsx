@@ -9,10 +9,15 @@ import { Loader2 } from 'lucide-react';
 import { MotionConfig, motion } from 'motion/react';
 import { type ChipTone, chipClassName } from '#/components/ui/chip';
 import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
-import { LEVEL_ACRONYMS, LEVEL_LABELS } from '#/lib/level-labels';
+import {
+  LEVEL_ACRONYMS,
+  LEVEL_LABELS,
+  NO_LEVEL_ACRONYM,
+  SETTABLE_LEVEL_LABELS,
+} from '#/lib/level-labels';
 import type { OfferingUser } from '#/lib/offering-schemas';
 import type { UserLevel } from '#/types';
-import { nextRosterLevel } from './roster-level';
+import { nextRosterLevel, toRosterLevel } from './roster-level';
 
 /**
  * Rows the table shows before it scrolls. The popover's maximum size is
@@ -53,9 +58,9 @@ const PRESS_SPRING = { type: 'spring', duration: 0.25, bounce: 0.35 } as const;
 const levelTone = (level: UserLevel | null): ChipTone =>
   level ? LEVEL_TONES[level] : 'muted';
 const levelText = (level: UserLevel | null) =>
-  level ? LEVEL_ACRONYMS[level] : 'No level';
+  level ? LEVEL_ACRONYMS[level] : NO_LEVEL_ACRONYM;
 const levelName = (level: UserLevel | null) =>
-  level ? LEVEL_LABELS[level] : 'No level';
+  level ? LEVEL_LABELS[level] : 'None';
 
 /**
  * The editable level: one chip that steps to the next level on each press,
@@ -84,7 +89,7 @@ const LevelCycleChip = ({
         // is what makes it inert to Enter and Space as well as the pointer.
         aria-disabled={disabled || undefined}
         aria-busy={saving || undefined}
-        aria-label={`Level for ${name}: ${levelName(level)}. ${
+        aria-label={`3D cert for ${name}: ${levelName(level)}. ${
           disabled ? LOCKED_NOTE : 'Press to change.'
         }`}
         render={
@@ -108,7 +113,7 @@ const LevelCycleChip = ({
         label={
           disabled
             ? `${levelName(level)}. ${LOCKED_NOTE}`
-            : `${levelName(level)}. Press to make it ${LEVEL_LABELS[nextRosterLevel(level)]} — it saves when you stop pressing. Basic, Intermediate, Advanced, then back to Basic.`
+            : `${levelName(level)}. Press to make it ${SETTABLE_LEVEL_LABELS[nextRosterLevel(toRosterLevel(level))]} — it saves when you stop pressing. None, Basic, Intermediate, Advanced, then back to None.`
         }
       />
     </Tooltip.Root>
@@ -191,7 +196,9 @@ export const OfferingRosterTable = ({
     },
     {
       accessorKey: 'level',
-      header: 'Level',
+      // The level IS the pilot's 3D Airmanship cert: levels gate only those
+      // lessons. Upper-cased by the header style, so it reads "3D CERT".
+      header: '3D cert',
       cell: ({ row }) => {
         const { userId, name } = row.original;
         const level = displayLevel ? displayLevel(userId) : row.original.level;
@@ -214,7 +221,7 @@ export const OfferingRosterTable = ({
           <span
             className={chipClassName(levelTone(level))}
             title={
-              level ? LEVEL_LABELS[level] : 'No level set for this course yet'
+              level ? LEVEL_LABELS[level] : 'No 3D cert set for this course yet'
             }
           >
             {levelText(level)}
@@ -363,5 +370,5 @@ export function levelSummary(users: OfferingUser[]): string {
   if (users.length === 0) return 'Nobody yet';
   const people = `${users.length} ${users.length === 1 ? 'person' : 'people'}`;
   if (counted === users.length) return people;
-  return `${people} · ${users.length - counted} without a level for this course`;
+  return `${people} · ${users.length - counted} without a 3D cert for this course`;
 }

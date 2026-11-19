@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 import type { LevelHistoryRow } from '#/data-hooks/use-user-levels';
-import { LEVEL_LABELS } from '#/lib/level-labels';
+import { LEVEL_LABELS, SETTABLE_LEVEL_LABELS } from '#/lib/level-labels';
 import type { UserLevel } from '#/types';
 import { LevelSelect } from '../level-select';
 
@@ -123,7 +123,7 @@ export const UserCourseLevelHistory = ({
               >
                 <div className="flex flex-wrap items-center gap-x-1.5 text-secondary">
                   <span className="font-medium text-primary">
-                    {LEVEL_LABELS[row.level]}
+                    {SETTABLE_LEVEL_LABELS[row.level]}
                   </span>
                   <span aria-hidden="true">·</span>
                   <span>{format(row.createdAt, 'd MMM yyyy')}</span>

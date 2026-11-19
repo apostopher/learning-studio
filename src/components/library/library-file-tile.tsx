@@ -1,8 +1,8 @@
-import { Link } from "@tanstack/react-router";
-import { Download, Lock } from "lucide-react";
-import { fileTypeIconKind, formatFileSize } from "#/lib/library-file-display";
-import type { LibraryFile } from "#/lib/library-gating";
-import { FileTypeIcon } from "./file-type-icon";
+import { Link } from '@tanstack/react-router';
+import { Download, Lock } from 'lucide-react';
+import { fileTypeIconKind, formatFileSize } from '#/lib/library-file-display';
+import type { LibraryFile } from '#/lib/library-gating';
+import { FileTypeIcon } from './file-type-icon';
 
 type LibraryFileTileProps = {
   file: LibraryFile;
@@ -25,14 +25,14 @@ export const LibraryFileTile = ({
   courseSlug,
   index,
 }: LibraryFileTileProps) => {
-  const isOpen = file.lock.kind === "open";
+  const isOpen = file.lock.kind === 'open';
 
   return (
     <li
       className="library-tile flex flex-col justify-between gap-2 rounded-element border border-border bg-card p-3 transition-colors hover:border-border-emphasized"
       // The stagger index. A custom property rather than an inline
       // animation-delay so the cap and the timing live in one place in CSS.
-      style={{ "--i": index } as React.CSSProperties}
+      style={{ '--i': index } as React.CSSProperties}
     >
       <div className="flex items-start gap-3">
         <FileTypeIcon kind={fileTypeIconKind(file.type, file.name)} />
@@ -64,7 +64,7 @@ export const LibraryFileTile = ({
         )}
       </div>
 
-      {file.lock.kind === "lesson-locked" && (
+      {file.lock.kind === 'lesson-locked' && (
         <p className="text-xs text-secondary">
           <Link
             to="/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug"
@@ -80,7 +80,7 @@ export const LibraryFileTile = ({
         </p>
       )}
 
-      {file.lock.kind === "module-locked" && (
+      {file.lock.kind === 'module-locked' && (
         // No link: a module has no page of its own to send anyone to.
         <p className="text-xs text-secondary">
           {`Finish every lesson in ${file.lock.moduleName} to unlock`}

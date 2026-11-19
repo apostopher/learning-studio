@@ -175,9 +175,7 @@ export const TAFApiResponseSchema = z.union([
 ]);
 
 export type TAFApiResponse = z.infer<typeof TAFApiResponseSchema>;
-export type TAFApiSuccessResponse = z.infer<
-  typeof TAFApiResponseSuccessSchema
->;
+export type TAFApiSuccessResponse = z.infer<typeof TAFApiResponseSuccessSchema>;
 
 const AirportDetailsSchema = z.object({
   id: z.string(),

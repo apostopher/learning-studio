@@ -1,5 +1,10 @@
-import { useScroll, useTransform, motion, useReducedMotion } from "motion/react";
-import { Link } from "@tanstack/react-router";
+import { Link } from '@tanstack/react-router';
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from 'motion/react';
 
 export const HeroSection = () => {
   const shouldReduce = useReducedMotion();
@@ -37,15 +42,18 @@ export const HeroSection = () => {
       <div className="content-grid w-full relative z-10 pb-32">
         <div className="content py-24">
           <h1 className="font-display text-[clamp(4.5rem,11vw,10rem)] leading-[0.9] tracking-tight uppercase text-primary">
-            Train.<br />
-            Evaluate.<br />
+            Train.
+            <br />
+            Evaluate.
+            <br />
             Fly.
           </h1>
           {/* `apple-text`, not a raw scale step: the generator picks step 11 or
               12 per theme so body copy stays AA-safe on the tinted step-3
               surface. Step 11 alone is not AA on step 3. */}
           <p className="mt-6 max-w-sm text-lg leading-relaxed text-apple-text">
-            Aviation ground school meets science-based AI evaluation. Built for serious aviators.
+            Aviation ground school meets science-based AI evaluation. Built for
+            serious aviators.
           </p>
           <div className="mt-10">
             <Link

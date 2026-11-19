@@ -2,33 +2,83 @@ import { describe, expect, it } from 'vitest';
 import {
   courseHasAvailableLessons,
   filterCourseToLevel,
+  isLessonArchivable,
+  isLessonAtTier,
   isLessonVisibleAtLevel,
 } from '#/lib/level-visibility';
 
+/** A 3D Airmanship lesson: the only kind levels apply to. */
+const gated = (levels: string[]) => ({ levels, levelGated: true });
+/** A lesson from any other discipline. */
+const ungated = (levels: string[]) => ({ levels, levelGated: false });
+
 describe('isLessonVisibleAtLevel', () => {
   it('hides an untagged lesson from every tier', () => {
-    expect(isLessonVisibleAtLevel([], 'basic')).toBe(false);
-    expect(isLessonVisibleAtLevel([], 'intermediate')).toBe(false);
-    expect(isLessonVisibleAtLevel([], 'advanced')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated([]), 'basic')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated([]), 'intermediate')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated([]), 'advanced')).toBe(false);
   });
 
   it('shows a pilot with no level nothing at all', () => {
-    expect(isLessonVisibleAtLevel(['basic'], null)).toBe(false);
-    expect(isLessonVisibleAtLevel(['basic', 'advanced'], null)).toBe(false);
-    expect(isLessonVisibleAtLevel([], null)).toBe(false);
-    expect(isLessonVisibleAtLevel(['none'], null)).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['basic']), null)).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['basic', 'advanced']), null)).toBe(
+      false,
+    );
+    expect(isLessonVisibleAtLevel(gated([]), null)).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['none']), null)).toBe(false);
   });
 
   it('matches exactly — advanced does not inherit basic', () => {
-    expect(isLessonVisibleAtLevel(['basic'], 'advanced')).toBe(false);
-    expect(isLessonVisibleAtLevel(['basic'], 'basic')).toBe(true);
+    expect(isLessonVisibleAtLevel(gated(['basic']), 'advanced')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['basic']), 'basic')).toBe(true);
   });
 
   it('honours a multi-tier tag', () => {
     const tag = ['intermediate', 'advanced'];
-    expect(isLessonVisibleAtLevel(tag, 'basic')).toBe(false);
-    expect(isLessonVisibleAtLevel(tag, 'intermediate')).toBe(true);
-    expect(isLessonVisibleAtLevel(tag, 'advanced')).toBe(true);
+    expect(isLessonVisibleAtLevel(gated(tag), 'basic')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(tag), 'intermediate')).toBe(true);
+    expect(isLessonVisibleAtLevel(gated(tag), 'advanced')).toBe(true);
+  });
+});
+
+describe('a lesson outside 3D Airmanship', () => {
+  it('is visible at every level, and to a pilot with no level', () => {
+    for (const level of ['basic', 'intermediate', 'advanced', null] as const) {
+      expect(isLessonVisibleAtLevel(ungated([]), level)).toBe(true);
+    }
+  });
+
+  it('ignores whatever tags it carries, None included', () => {
+    expect(isLessonVisibleAtLevel(ungated(['basic']), 'advanced')).toBe(true);
+    expect(isLessonVisibleAtLevel(ungated(['none']), 'basic')).toBe(true);
+  });
+
+  it('belongs to no tier and is never archived', () => {
+    expect(isLessonAtTier(ungated(['basic']), 'basic')).toBe(false);
+    expect(isLessonArchivable(ungated(['basic']))).toBe(false);
+    expect(isLessonAtTier(gated(['basic']), 'basic')).toBe(true);
+    expect(isLessonArchivable(gated(['basic']))).toBe(true);
+  });
+
+  it('survives filterCourseToLevel for a pilot with no level, alone', () => {
+    const course = {
+      modules: [
+        {
+          slug: 'uas',
+          lessons: [
+            { slug: 'uas-1', levels: [], levelGated: false },
+            { slug: '3da-1', levels: ['basic'], levelGated: true },
+          ],
+        },
+        {
+          slug: '3da',
+          lessons: [{ slug: '3da-2', levels: ['basic'], levelGated: true }],
+        },
+      ],
+    };
+    const filtered = filterCourseToLevel(course, null);
+    expect(filtered.modules.map((m) => m.slug)).toEqual(['uas']);
+    expect(filtered.modules[0].lessons.map((l) => l.slug)).toEqual(['uas-1']);
   });
 });
 
@@ -38,14 +88,14 @@ describe('filterCourseToLevel', () => {
       {
         slug: 'm1',
         lessons: [
-          { slug: 'a', levels: ['basic'] },
-          { slug: 'b', levels: [] },
-          { slug: 'c', levels: ['intermediate'] },
+          { slug: 'a', levels: ['basic'], levelGated: true },
+          { slug: 'b', levels: [], levelGated: true },
+          { slug: 'c', levels: ['intermediate'], levelGated: true },
         ],
       },
       {
         slug: 'm2',
-        lessons: [{ slug: 'd', levels: ['basic'] }],
+        lessons: [{ slug: 'd', levels: ['basic'], levelGated: true }],
       },
     ],
   };
@@ -55,7 +105,7 @@ describe('filterCourseToLevel', () => {
     expect(filtered.modules[0].lessons.map((l) => l.slug)).toEqual(['c']);
   });
 
-  it('leaves a pilot with no level an empty course', () => {
+  it('leaves a pilot with no level no 3D Airmanship lessons', () => {
     expect(filterCourseToLevel(course, null).modules).toEqual([]);
   });
 
@@ -73,9 +123,9 @@ describe('filterCourseToLevel', () => {
 
 describe("the 'none' tag", () => {
   it('hides the lesson at every learner level', () => {
-    expect(isLessonVisibleAtLevel(['none'], 'basic')).toBe(false);
-    expect(isLessonVisibleAtLevel(['none'], 'intermediate')).toBe(false);
-    expect(isLessonVisibleAtLevel(['none'], 'advanced')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['none']), 'basic')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['none']), 'intermediate')).toBe(false);
+    expect(isLessonVisibleAtLevel(gated(['none']), 'advanced')).toBe(false);
   });
 
   it('is dropped by filterCourseToLevel at every level, as is []', () => {
@@ -84,12 +134,19 @@ describe("the 'none' tag", () => {
         {
           slug: 'm1',
           lessons: [
-            { slug: 'hidden', levels: ['none'] },
-            { slug: 'untagged', levels: [] },
-            { slug: 'everyone', levels: ['basic', 'intermediate', 'advanced'] },
+            { slug: 'hidden', levels: ['none'], levelGated: true },
+            { slug: 'untagged', levels: [], levelGated: true },
+            {
+              slug: 'everyone',
+              levels: ['basic', 'intermediate', 'advanced'],
+              levelGated: true,
+            },
           ],
         },
-        { slug: 'm2', lessons: [{ slug: 'only-none', levels: ['none'] }] },
+        {
+          slug: 'm2',
+          lessons: [{ slug: 'only-none', levels: ['none'], levelGated: true }],
+        },
       ],
     };
     for (const level of ['basic', 'intermediate', 'advanced'] as const) {

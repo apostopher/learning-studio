@@ -1,7 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
-import { createOffering, listOfferings } from '#/db/offerings';
+import {
+  createOffering,
+  isFlagshipCourse,
+  listOfferings,
+} from '#/db/offerings';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { auth } from '#/lib/auth';
 import {
@@ -126,6 +130,17 @@ export async function createOfferingHandler(
   const parsed = createOfferingInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+  // The calendar never draws a flagship offering, so creating one would
+  // report success for a run nobody can see.
+  if (await isFlagshipCourse(parsed.data.courseId)) {
+    return Response.json(
+      {
+        error:
+          'This course is included in every other course, so it is not scheduled on its own.',
+      },
+      { status: 422 },
+    );
   }
 
   const actorId = await actingUserId(request.headers);

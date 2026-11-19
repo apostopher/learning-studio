@@ -30,6 +30,7 @@ const { mutation, state } = vi.hoisted(() => ({
   }),
   state: {
     offerings: [] as unknown[],
+    courses: [] as unknown[],
     /** Overrides for the offerings query's status flags, per test. */
     query: {} as Record<string, unknown>,
   },
@@ -49,7 +50,11 @@ vi.mock('#/data-hooks/use-offerings', () => ({
   useDeleteOffering: mutation,
 }));
 vi.mock('#/data-hooks/use-admin-courses', () => ({
-  useAdminCourses: () => ({ data: [], isLoading: false, error: null }),
+  useAdminCourses: () => ({
+    data: state.courses,
+    isLoading: false,
+    error: null,
+  }),
 }));
 vi.mock('#/data-hooks/use-admin-users', () => ({
   useAdminUsers: () => ({ data: { users: [] }, isLoading: false }),
@@ -96,8 +101,43 @@ const renderPage = (store = createStore()) => {
 
 afterEach(() => {
   state.query = {};
+  state.courses = [];
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+const course = (id: number, name: string, slug: string) => ({
+  id,
+  name,
+  slug,
+  description: null,
+  imageUrlAvif: null,
+  imageUrlWebp: null,
+  updatedAt: new Date(0),
+  moduleCount: 1,
+  lessonCount: 1,
+});
+
+describe('SchedulePageContainer rail', () => {
+  // The flagship is the library every course includes, not a run anyone is
+  // enrolled on — a card for it would invite scheduling one.
+  it('draws every course except the flagship', () => {
+    state.courses = [
+      course(2, 'ITPS 2 Week', 'itps-uas-remote'),
+      course(6, '3D Airmanship', '3d-airmanship'),
+    ];
+    renderPage();
+
+    expect(screen.getByText('ITPS 2 Week')).toBeTruthy();
+    expect(screen.queryByText('3D Airmanship')).toBeNull();
+  });
+
+  it('says there is nothing to schedule when the flagship is the only course', () => {
+    state.courses = [course(6, '3D Airmanship', '3d-airmanship')];
+    renderPage();
+
+    expect(screen.getByText(/No courses yet/)).toBeTruthy();
+  });
 });
 
 describe('SchedulePageContainer wiring', () => {

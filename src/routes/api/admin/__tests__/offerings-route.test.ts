@@ -15,6 +15,7 @@ const m = vi.hoisted(() => {
     getStaffScopedCourseIds: vi.fn(),
     listOfferings: vi.fn(),
     createOffering: vi.fn(),
+    isFlagshipCourse: vi.fn(),
     updateOffering: vi.fn(),
     deleteOffering: vi.fn(),
     getSession: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/offerings', () => ({
   listOfferings: m.listOfferings,
   createOffering: m.createOffering,
+  isFlagshipCourse: m.isFlagshipCourse,
   updateOffering: m.updateOffering,
   deleteOffering: m.deleteOffering,
 }));
@@ -83,6 +85,7 @@ beforeEach(() => {
   m.createOffering.mockResolvedValue(OFFERING);
   m.updateOffering.mockResolvedValue(OFFERING);
   m.deleteOffering.mockResolvedValue(true);
+  m.isFlagshipCourse.mockResolvedValue(false);
   m.getSession.mockResolvedValue({ user: { id: 'actor-1' } });
 });
 
@@ -181,6 +184,19 @@ describe('POST /api/admin/offerings', () => {
     const res = await createOfferingHandler(postReq(VALID_CREATE));
 
     expect(res.status).toBe(403);
+    expect(m.createOffering).not.toHaveBeenCalled();
+  });
+
+  // The rail no longer offers the flagship, but a stale tab or a hand-built
+  // request still could — and the calendar would never draw what it made.
+  it('refuses to schedule the flagship, and writes nothing', async () => {
+    m.requireCourseCreation.mockResolvedValue(undefined);
+    m.isFlagshipCourse.mockResolvedValue(true);
+
+    const res = await createOfferingHandler(postReq(VALID_CREATE));
+
+    expect(res.status).toBe(422);
+    expect(m.isFlagshipCourse).toHaveBeenCalledWith(10);
     expect(m.createOffering).not.toHaveBeenCalled();
   });
 

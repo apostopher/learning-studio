@@ -48,6 +48,7 @@ const DETAILS = {
           needsVideoWatch: true,
           dependsOn: [],
           levels: ['basic'],
+          levelGated: true,
         },
         {
           id: 11,
@@ -58,6 +59,7 @@ const DETAILS = {
           needsVideoWatch: true,
           dependsOn: [],
           levels: ['intermediate'],
+          levelGated: true,
         },
       ],
     },

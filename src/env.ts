@@ -108,10 +108,16 @@ export const env = createEnv({
     TAVUS_API_KEY: z.string().min(1),
     TAVUS_REPLICA_ID: z
       .string()
-      .regex(/^r[0-9a-z]+$/, 'TAVUS_REPLICA_ID must be a replica id (r…), not a persona id (p…)'),
+      .regex(
+        /^r[0-9a-z]+$/,
+        'TAVUS_REPLICA_ID must be a replica id (r…), not a persona id (p…)',
+      ),
     // Optional so the dev server boots before `pnpm tavus:sync-persona` has
     // created the persona; unset → the video button says calls aren't set up.
-    TAVUS_PERSONA_ID: z.string().regex(/^p[0-9a-z]+$/).optional(),
+    TAVUS_PERSONA_ID: z
+      .string()
+      .regex(/^p[0-9a-z]+$/)
+      .optional(),
     // Bearer secret Tavus sends to our completions endpoint, and the webhook token.
     TAVUS_LLM_SECRET: z.string().min(32),
     // Public origin Tavus can reach (ngrok in dev).

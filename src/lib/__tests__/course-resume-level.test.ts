@@ -6,6 +6,8 @@ const lesson = (
   slug: string,
   levels: string[],
   dependsOn: { lessonSlug: string }[] = [],
+  // A 3D Airmanship lesson unless said otherwise: the only kind levels gate.
+  levelGated = true,
 ) => ({
   id,
   slug,
@@ -14,6 +16,7 @@ const lesson = (
   hasVideo: true,
   needsVideoWatch: true,
   levels,
+  levelGated,
   dependsOn,
 });
 
@@ -215,6 +218,32 @@ describe('resolveResumeTargetForLevel', () => {
     });
 
     expect(result).toEqual({ kind: 'none', reason: 'no-level' });
+  });
+
+  it('resumes a pilot with no level into a lesson outside 3D Airmanship', () => {
+    const result = resolveResumeTargetForLevel({
+      details: {
+        modules: [
+          {
+            ...details.modules[0],
+            lessons: [
+              ...details.modules[0].lessons,
+              lesson(3, 'uas-briefing', [], [], false),
+            ],
+          },
+        ],
+      },
+      watched: new Set<string>(),
+      pointerLessonId: 1,
+      level: null,
+      bypassLocks: false,
+    });
+
+    expect(result).toEqual({
+      kind: 'lesson',
+      moduleSlug: 'm1',
+      lessonSlug: 'uas-briefing',
+    });
   });
 
   it('still reports no-lessons for a course with nothing published', () => {

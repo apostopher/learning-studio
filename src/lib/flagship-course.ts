@@ -16,6 +16,41 @@
  */
 export const FLAGSHIP_COURSE_SLUG = '3d-airmanship';
 
+/**
+ * The discipline the flagship's lessons are filed under. Levels — the 3D
+ * Airmanship cert — apply to its lessons alone: they are the only ones the
+ * Update levels board offers, and the only ones a pilot's level gates. Every
+ * other lesson is visible to every pilot in its course.
+ */
+export const FLAGSHIP_DISCIPLINE_SLUG = '3d-airmanship';
+
+/** Whether levels apply to a lesson filed under this discipline. */
+export function isLevelGatedDisciplineSlug(
+  disciplineSlug: string | null | undefined,
+): boolean {
+  return disciplineSlug === FLAGSHIP_DISCIPLINE_SLUG;
+}
+
+/**
+ * The material tab that closes a lesson's tab strip. "Job of the Day" (one
+ * URL) is a 3D Airmanship feature, so only its discipline's lessons carry it;
+ * every other lesson — no discipline included — gets "TEST THIS!", a list of
+ * links shaped exactly like `links`.
+ *
+ * Decided by discipline alone, never by which column happens to hold data:
+ * the save path writes only the fitting column, and progress counts only the
+ * fitting one, so a lesson can never ask for a tab its learner cannot see.
+ */
+export type MaterialExtraTab = 'jobOfTheDay' | 'testThis';
+
+export function materialExtraTabFor(
+  disciplineSlug: string | null | undefined,
+): MaterialExtraTab {
+  return disciplineSlug === FLAGSHIP_DISCIPLINE_SLUG
+    ? 'jobOfTheDay'
+    : 'testThis';
+}
+
 export function findFlagshipCourse<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C['course'] | null {
@@ -43,6 +78,20 @@ export function courseRailBoards<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C[] {
   return boards.filter((b) => b.course.slug !== FLAGSHIP_COURSE_SLUG);
+}
+
+/**
+ * The courses the schedule can run: every course EXCEPT the flagship.
+ *
+ * Same reason as `courseRailBoards`: the flagship is the library every course
+ * includes, not a course anyone is enrolled on, so a run of it means nothing.
+ * The calendar hides its offerings to match (`listOfferings`) and the create
+ * route refuses one, so a card here would only lead to a refusal.
+ */
+export function scheduleCourses<C extends { slug: string }>(
+  courses: readonly C[],
+): C[] {
+  return courses.filter((c) => c.slug !== FLAGSHIP_COURSE_SLUG);
 }
 
 /**

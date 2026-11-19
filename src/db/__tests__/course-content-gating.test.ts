@@ -99,6 +99,7 @@ const course = {
           hasVideo: true,
           needsVideoWatch: true,
           levels: [],
+          levelGated: true,
           dependsOn: [],
         },
         {
@@ -108,6 +109,7 @@ const course = {
           hasVideo: true,
           needsVideoWatch: true,
           levels: [],
+          levelGated: true,
           dependsOn: [],
         },
       ],
@@ -151,6 +153,7 @@ const detailsFor = (
      * so the fixtures above keep describing the subscription and material
      * gates and nothing else. */
     levels?: readonly string[];
+    levelGated?: boolean;
   }[],
 ) => ({
   // Chain off: these fixtures state their prerequisites explicitly and are
@@ -163,7 +166,11 @@ const detailsFor = (
       name: 'M',
       dependsOn: [],
       sequentialLessons: false,
-      lessons: lessons.map((lesson) => ({ levels: ['basic'], ...lesson })),
+      lessons: lessons.map((lesson) => ({
+        levels: ['basic'],
+        levelGated: true,
+        ...lesson,
+      })),
     },
   ],
 });
@@ -453,6 +460,7 @@ describe('getCourseContentForAgent level visibility', () => {
         needsVideoWatch: false,
         dependsOn: [],
         levels: ['basic'],
+        levelGated: true,
       },
       {
         id: 11,
@@ -463,6 +471,7 @@ describe('getCourseContentForAgent level visibility', () => {
         needsVideoWatch: false,
         dependsOn: [],
         levels: ['intermediate'],
+        levelGated: true,
       },
     ]);
 
@@ -504,6 +513,7 @@ describe('getCourseContentForAgent level visibility', () => {
           needsVideoWatch: false,
           dependsOn: [],
           levels: [],
+          levelGated: true,
         },
       ]),
     );
@@ -553,6 +563,7 @@ describe('getCourseContentForAgent level visibility', () => {
           needsVideoWatch: false,
           dependsOn: [],
           levels: [],
+          levelGated: true,
         },
         {
           id: 11,
@@ -563,6 +574,7 @@ describe('getCourseContentForAgent level visibility', () => {
           needsVideoWatch: false,
           dependsOn: [],
           levels: ['none'],
+          levelGated: true,
         },
       ]),
     );

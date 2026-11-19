@@ -174,7 +174,7 @@ export async function evaluateLessonGate({
     );
   }
 
-  if (!isLessonVisibleAtLevel(target.levels, level)) {
+  if (!isLessonVisibleAtLevel(target, level)) {
     // Out-of-tier work you already finished stays readable; out-of-tier work
     // you never did is not yours. `percent` is the aggregate across every
     // component of the lesson, so 100 is the only honest reading of "done".
@@ -185,7 +185,7 @@ export async function evaluateLessonGate({
     // pilot with no level — they see nothing, archive included.
     const completed =
       level !== null &&
-      isLessonArchivable(target.levels) &&
+      isLessonArchivable(target) &&
       progress.lessons.some(
         (row) => row.lessonId === target.id && row.percent === 100,
       );

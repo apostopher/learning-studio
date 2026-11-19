@@ -9,6 +9,7 @@ import {
   addUserEmailAtom,
   openLevelHistoryCourseIdAtom,
   openUserRowAtom,
+  peopleSearchAtom,
   setLevelDraftAtom,
   userDisciplinePicksAtom,
 } from '#/atoms/admin';
@@ -34,9 +35,14 @@ import {
   OWNER_ROLE,
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
-import type { UserLevel } from '#/types';
+import { type UserLevel, UserLevelSchema } from '#/types';
 import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
+import {
+  buildRoleSections,
+  buildRoleSummaries,
+  resolveSelectedRole,
+} from './role-permissions-view';
 import { SetLevelDialog } from './set-level-dialog';
 import { UserDetailModal } from './user-detail-modal';
 import { UserDisciplinesContainer } from './user-disciplines-container';
@@ -51,7 +57,11 @@ type ProfileForm = {
 };
 
 /** Message required, note optional — `courseId` comes from the draft atom, not the form. */
-const levelFormSchema = setUserLevelInputSchema.omit({ courseId: true });
+// Tiers only: this dialog has no "None" — clearing a cert is the roster's
+// chip cycle.
+const levelFormSchema = setUserLevelInputSchema
+  .omit({ courseId: true })
+  .extend({ level: UserLevelSchema });
 type LevelForm = {
   level: UserLevel;
   message: string;
@@ -71,12 +81,15 @@ export const UsersPageContainer = ({
   roles: string[];
   permissions: string[];
 }) => {
-  const [search, setSearch] = useQueryState('q', { defaultValue: '' });
+  const [search, setSearch] = useAtom(peopleSearchAtom);
   // The tab lives in the URL so a permissions link is shareable and survives
-  // a reload, same as the search term.
+  // a reload. The search term deliberately does not — see `peopleSearchAtom`.
   const [tab, setTab] = useQueryState('tab', { defaultValue: 'people' });
   const [courseFilter, setCourseFilter] = useQueryState('course');
   const [levelFilter, setLevelFilter] = useQueryState('level');
+  // Which role the Permissions tab shows — in the URL like the tab itself, so
+  // a link to one role's permissions is shareable.
+  const [roleParam, setRoleParam] = useQueryState('role');
   const [openRow, setOpenRow] = useAtom(openUserRowAtom);
   const [addOpen, setAddOpen] = useAtom(addPersonOpenAtom);
   const [newEmail, setNewEmail] = useAtom(addUserEmailAtom);
@@ -101,6 +114,13 @@ export const UsersPageContainer = ({
   const rolePermissions = useRolePermissions(isOwner);
   const addPending = useAddPendingEnrolment();
   const setRolePermission = useSetRolePermission();
+  // Owner bypasses permission checks, so it is never listed — configuring it
+  // would be a control that changes nothing.
+  const configurableRoles = (rolePermissions.data?.roles ?? [])
+    .map((r) => r.name)
+    .filter((name) => name !== OWNER_ROLE);
+  const grantedByRole = rolePermissions.data?.permissions ?? {};
+  const selectedRole = resolveSelectedRole(configurableRoles, roleParam);
 
   const openProfileId = openRow?.profileId ?? 0;
   const updateProfile = useUpdateUserProfile(openProfileId);
@@ -266,12 +286,14 @@ export const UsersPageContainer = ({
           {isOwner && (
             <Tabs.Panel value="permissions" className="pt-6">
               <RolePermissionsPanel
-                // Owner bypasses permission checks, so it is never listed —
-                // configuring it would be a control that changes nothing.
-                roles={(rolePermissions.data?.roles ?? [])
-                  .map((r) => r.name)
-                  .filter((name) => name !== OWNER_ROLE)}
-                granted={rolePermissions.data?.permissions ?? {}}
+                roles={buildRoleSummaries(configurableRoles, grantedByRole)}
+                selectedRole={selectedRole}
+                sections={
+                  selectedRole
+                    ? buildRoleSections(selectedRole, grantedByRole)
+                    : []
+                }
+                onSelectRole={setRoleParam}
                 onToggle={(role, entity, action, granted) =>
                   setRolePermission.mutate({ role, entity, action, granted })
                 }

@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
 import {
   LESSON_VISIT_SECTION,
   TRACKED_SECTIONS_SQL_LIST,
@@ -39,6 +40,13 @@ export const progressComponentColumns = (userId: string) => ({
    * Tabs with content behind them. `json_array_length(NULL)` is NULL and
    * `NULL > 0` is NULL, so a missing material row or an unset column falls
    * through every CASE to 0 — a lesson with no material asks for no sections.
+   *
+   * The closing tab counts by DISCIPLINE, mirroring `materialExtraTabFor`:
+   * Job of the Day on 3D Airmanship lessons, TEST THIS! on every other (a
+   * lesson with no discipline included — its slug subquery is NULL, which
+   * fails the `=` and takes the ELSE). Counting whichever column is filled
+   * would let a stray value demand a tab the learner is never shown, and the
+   * lesson could then never complete.
    */
   applicableSections: sql<number>`coalesce((
     select
@@ -46,7 +54,11 @@ export const progressComponentColumns = (userId: string) => ({
       + (case when coalesce(m.pro_tips, '') <> '' then 1 else 0 end)
       + (case when json_array_length(m.links) > 0 then 1 else 0 end)
       + (case when coalesce(m.assignments, '') <> '' then 1 else 0 end)
-      + (case when coalesce(m.job_of_the_day, '') <> '' then 1 else 0 end)
+      + (case
+          when (select d.slug from disciplines d where d.id = ${lessonsTable.disciplineId}) = ${FLAGSHIP_DISCIPLINE_SLUG}
+            then (case when coalesce(m.job_of_the_day, '') <> '' then 1 else 0 end)
+          else (case when json_array_length(m.test_this) > 0 then 1 else 0 end)
+        end)
     from lesson_material m
     where m.lesson_slug = ${lessonsTable.slug}
     limit 1

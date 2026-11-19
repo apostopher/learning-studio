@@ -6,10 +6,7 @@ export const LessonMaterialSkeleton = () => (
     aria-busy="true"
     aria-label="Loading lesson material"
   >
-    <div
-      className="flex gap-1 border-b border-gray-6 px-1"
-      aria-hidden="true"
-    >
+    <div className="flex gap-1 border-b border-gray-6 px-1" aria-hidden="true">
       {Array.from({ length: TAB_COUNT }, (_, index) => (
         <div
           key={index}

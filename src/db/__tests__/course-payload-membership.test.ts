@@ -250,5 +250,5 @@ describe('getCourseContentForAgent', () => {
  * silently partial for six hours.
  */
 it('bumps the cached payload key', () => {
-  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v5');
+  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v6');
 });

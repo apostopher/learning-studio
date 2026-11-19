@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   coursesTable,
@@ -6,6 +6,8 @@ import {
   offeringUsersTable,
   userProfileTable,
 } from '#/db/schema';
+import { currentLevelOf } from '#/db/user-levels';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 import type {
   CreateOfferingInput,
   Offering,
@@ -58,7 +60,7 @@ async function loadUsersByOffering(
     // `user_levels` is append-only history, so the current level is the NEWEST
     // row per (user, course) — a ranking rather than a filter, which is why
     // this is DISTINCT ON in raw SQL. Same shape as `listAdminUsers`.
-    db.execute<{ user_id: string; course_id: number; level: UserLevel }>(sql`
+    db.execute<{ user_id: string; course_id: number; level: string }>(sql`
       SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
       FROM user_levels
       ORDER BY user_id, course_id, created_at DESC, id DESC
@@ -67,7 +69,9 @@ async function loadUsersByOffering(
 
   const levelByUserCourse = new Map<string, UserLevel>();
   for (const row of levelRows.rows) {
-    levelByUserCourse.set(`${row.user_id}:${row.course_id}`, row.level);
+    // A newest row of `'none'` is no level, so it is simply not set here.
+    const level = currentLevelOf(row.level);
+    if (level) levelByUserCourse.set(`${row.user_id}:${row.course_id}`, level);
   }
 
   for (const row of rows) {
@@ -114,6 +118,10 @@ function personName(person: {
  * `courseIds` narrows to an actor's staffed courses. Undefined means no
  * narrowing (the caller holds `course:read`); an EMPTY array is a caller with
  * no courses at all, and returns nothing rather than everything.
+ *
+ * The flagship's offerings are never listed: it is the library every course
+ * includes, not a course to run (see `scheduleCourses`). Any made before that
+ * rule stay in the table, roster and all — hidden, not deleted.
  */
 export async function listOfferings({
   windowStart,
@@ -140,6 +148,7 @@ export async function listOfferings({
       and(
         lte(offeringsTable.startsOn, windowEnd),
         gte(offeringsTable.endsOn, windowStart),
+        ne(coursesTable.slug, FLAGSHIP_COURSE_SLUG),
         courseIds ? inArray(offeringsTable.courseId, courseIds) : undefined,
       ),
     )
@@ -201,6 +210,16 @@ async function replaceRoster(
       assignedBy: actorId,
     })),
   );
+}
+
+/** Whether this course is the flagship, which the schedule never runs. */
+export async function isFlagshipCourse(courseId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ slug: coursesTable.slug })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, courseId))
+    .limit(1);
+  return row?.slug === FLAGSHIP_COURSE_SLUG;
 }
 
 /** Schedule a course. Returns the created offering, roster included. */

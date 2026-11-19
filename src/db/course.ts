@@ -15,12 +15,14 @@ import { watchedMilestones } from '#/lib/course-milestones';
 import { aggregatePercentByCourse } from '#/lib/course-progress-agg';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { shapeModuleLessons } from '#/lib/course-shaping';
+import { isLevelGatedDisciplineSlug } from '#/lib/flagship-course';
 import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
   courseModulesTable,
   courseSubscriptionsTable,
   coursesTable,
+  disciplinesTable,
   lessonMaterialProgressTable,
   lessonsTable,
   moduleDependenciesTable,
@@ -48,6 +50,11 @@ import { db } from '.';
 // string`) is satisfied.
 type LessonDetails = DBLesson & {
   rank: string;
+  /**
+   * Whether the pilot's level gates this lesson: only a lesson filed under
+   * the flagship's discipline is. See `isLessonVisibleAtLevel`.
+   */
+  levelGated: boolean;
   dependsOn: CourseLessonDependencies;
   /**
    * Whether the lesson has a video assigned, derived from the same two
@@ -151,8 +158,13 @@ export async function getCourseDetails(slug: string) {
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,
       org: orgsTable,
+      disciplineSlug: disciplinesTable.slug,
     })
     .from(lessonsTable)
+    .leftJoin(
+      disciplinesTable,
+      eq(disciplinesTable.id, lessonsTable.disciplineId),
+    )
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
@@ -169,7 +181,14 @@ export async function getCourseDetails(slug: string) {
 
   const lessonMap = new Map<number, LessonDetails>();
 
-  for (const { lesson, placement, moduleDep, orgLesson, org } of lessonData) {
+  for (const {
+    lesson,
+    placement,
+    moduleDep,
+    orgLesson,
+    org,
+    disciplineSlug,
+  } of lessonData) {
     // group lessons
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
@@ -184,6 +203,7 @@ export async function getCourseDetails(slug: string) {
         requiredSubscriptions:
           lesson.requiredSubscriptions as SubscriptionType[],
         levels: lesson.levels as LessonLevel[],
+        levelGated: isLevelGatedDisciplineSlug(disciplineSlug),
         hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
         otherVideoIds: lesson.otherVideoIds || [],
         dependsOn: [],
@@ -263,8 +283,12 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
  * v4 -> v5: a course's modules now come from `course_modules` rather than
  * `modules.course_id`. A v4 entry answers a different question and must be
  * orphaned rather than served for the rest of its 6h TTL.
+ *
+ * v5 -> v6: lessons carry `levelGated`. A v5 entry has none, and every
+ * predicate would read `undefined` as "not gated" — showing every 3D
+ * Airmanship lesson to every pilot until the TTL ran out.
  */
-export const COURSE_DETAILS_CACHE_KEY = 'course-details-v5';
+export const COURSE_DETAILS_CACHE_KEY = 'course-details-v6';
 
 const redisCourseDetails = cacheWithRedis<
   string,
@@ -341,6 +365,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       // GROUP BY because `lessons.id` is, and Postgres treats every other
       // column of that table as functionally dependent on its primary key.
       levels: lessonsTable.levels,
+      disciplineSlug: disciplinesTable.slug,
       watchedHits: countDistinct(videoProgressTable.progress),
       ...progressComponentColumns(userId),
     })
@@ -376,6 +401,11 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         eq(lessonsTable.isAvailable, true),
       ),
     )
+    // LEFT: an unfiled lesson has no discipline, and is simply not gated.
+    .leftJoin(
+      disciplinesTable,
+      eq(disciplinesTable.id, lessonsTable.disciplineId),
+    )
     .leftJoin(
       videoProgressTable,
       and(
@@ -405,6 +435,9 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       moduleLessonsTable.id,
       moduleLessonsTable.rank,
       lessonsTable.id,
+      // Its primary key, so `disciplines.slug` is functionally dependent on
+      // the group the way the lesson columns are on `lessons.id`.
+      disciplinesTable.id,
       ...progressComponentGroupBy,
     )
     // courseId as an explicit tiebreak keeps each course's rows contiguous
@@ -452,7 +485,13 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         // rather than vanishing from it.
         if (r.lessonId === null) return true;
         if (viewsAsAuthor(r.courseId)) return true;
-        return isLessonVisibleAtLevel(r.levels ?? [], levelFor(r.courseId));
+        return isLessonVisibleAtLevel(
+          {
+            levels: r.levels ?? [],
+            levelGated: isLevelGatedDisciplineSlug(r.disciplineSlug),
+          },
+          levelFor(r.courseId),
+        );
       })
       .map((r) => ({
         courseId: r.courseId,

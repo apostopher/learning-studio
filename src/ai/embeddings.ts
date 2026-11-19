@@ -1,9 +1,9 @@
 import { embedMany } from 'ai';
 import { and, eq, isNull } from 'drizzle-orm';
+import { chunkSectionTokens, htmlToSections } from '#/ai/embeddings-helper';
 import { embeddingModel } from '#/ai/gemini';
 import { db } from '#/db';
 import { docs } from '#/db/schema';
-import { htmlToSections, chunkSectionTokens } from '#/ai/embeddings-helper';
 
 export type GenerateEmbeddingsArgs = {
   courseId: number | null;

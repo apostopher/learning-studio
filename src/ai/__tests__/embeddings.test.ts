@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { embedMany, htmlToSections, chunkSectionTokens, dbMock, txMock } =
   vi.hoisted(() => {
@@ -13,7 +13,10 @@ const { embedMany, htmlToSections, chunkSectionTokens, dbMock, txMock } =
     function makeDelete() {
       return vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
     }
-    type Tx = { insert: ReturnType<typeof makeInsert>; delete: ReturnType<typeof makeDelete> };
+    type Tx = {
+      insert: ReturnType<typeof makeInsert>;
+      delete: ReturnType<typeof makeDelete>;
+    };
     const tx: Tx = { insert: makeInsert(), delete: makeDelete() };
     const transaction = vi.fn(async (cb: (tx: Tx) => Promise<void>) => {
       await cb(tx);
@@ -28,17 +31,32 @@ const { embedMany, htmlToSections, chunkSectionTokens, dbMock, txMock } =
   });
 
 vi.mock('ai', () => ({ embedMany }));
-vi.mock('#/ai/gemini', () => ({ embeddingModel: { id: 'gemini-embedding-001' } }));
-vi.mock('#/ai/embeddings-helper', () => ({ htmlToSections, chunkSectionTokens }));
+vi.mock('#/ai/gemini', () => ({
+  embeddingModel: { id: 'gemini-embedding-001' },
+}));
+vi.mock('#/ai/embeddings-helper', () => ({
+  htmlToSections,
+  chunkSectionTokens,
+}));
 vi.mock('#/db', () => ({ db: dbMock }));
-vi.mock('#/db/schema', () => ({ docs: { sourcePath: 'source_path', courseId: 'course_id', lessonSlug: 'lesson_slug' } }));
+vi.mock('#/db/schema', () => ({
+  docs: {
+    sourcePath: 'source_path',
+    courseId: 'course_id',
+    lessonSlug: 'lesson_slug',
+  },
+}));
 vi.mock('drizzle-orm', () => ({
   and: (...a: unknown[]) => ({ and: a }),
   eq: (c: unknown, v: unknown) => ({ eq: [c, v] }),
   isNull: (c: unknown) => ({ isNull: c }),
 }));
 
-import { generateHTMLEmbeddings, generateLessonEmbeddings, lessonMaterialHtml } from '#/ai/embeddings';
+import {
+  generateHTMLEmbeddings,
+  generateLessonEmbeddings,
+  lessonMaterialHtml,
+} from '#/ai/embeddings';
 
 function chunk(i: number) {
   return { heading: 'Section 1', text: `chunk-${i}`, name: 'file-x' };
@@ -51,7 +69,9 @@ function deleteWhereArg(callIndex = 0) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  htmlToSections.mockReturnValue([{ heading: 'Section 1', text: 't', name: 'file-x' }]);
+  htmlToSections.mockReturnValue([
+    { heading: 'Section 1', text: 't', name: 'file-x' },
+  ]);
 });
 
 describe('generateHTMLEmbeddings', () => {
@@ -160,7 +180,10 @@ describe('generateLessonEmbeddings', () => {
     htmlToSections.mockReturnValue([]);
     chunkSectionTokens.mockImplementation((s: unknown) => [s]);
 
-    const result = await generateLessonEmbeddings({ lessonSlug: 'wx-1', html: '' });
+    const result = await generateLessonEmbeddings({
+      lessonSlug: 'wx-1',
+      html: '',
+    });
 
     expect(result).toEqual({ chunks: 0 });
     expect(deleteWhereArg()).toEqual({ eq: ['lesson_slug', 'wx-1'] });
@@ -171,7 +194,9 @@ describe('generateLessonEmbeddings', () => {
 
 describe('lessonMaterialHtml', () => {
   it('appends pro tips when present and omits them when null', () => {
-    expect(lessonMaterialHtml({ text: 'T', proTips: 'P' })).toBe('T\n\nPro tips: P');
+    expect(lessonMaterialHtml({ text: 'T', proTips: 'P' })).toBe(
+      'T\n\nPro tips: P',
+    );
     expect(lessonMaterialHtml({ text: 'T', proTips: null })).toBe('T');
   });
 });

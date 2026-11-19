@@ -1,7 +1,7 @@
-import { db } from ".";
-import { userOrgTable, orgLessonsTable, lessonsTable } from "./schema";
-import { eq } from "drizzle-orm";
-import { cacheWithRedis } from "@/integrations/upstash/redis";
+import { eq } from 'drizzle-orm';
+import { cacheWithRedis } from '@/integrations/upstash/redis';
+import { db } from '.';
+import { lessonsTable, orgLessonsTable, userOrgTable } from './schema';
 
 export async function getContentAvailableForUser(userId: string) {
   try {
@@ -29,4 +29,4 @@ export type ContentAvailableForUser = Awaited<
 export const getContentAvailableForUserWithCache = cacheWithRedis<
   string,
   Awaited<ReturnType<typeof getContentAvailableForUser>>
->("content-available-for-user", getContentAvailableForUser);
+>('content-available-for-user', getContentAvailableForUser);

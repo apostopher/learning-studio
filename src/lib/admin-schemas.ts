@@ -7,6 +7,7 @@ import {
   CourseLessonDependencySchema,
   LessonLevelsSchema,
   OtherVideoIdSchema,
+  SettableUserLevelSchema,
   SubscriptionsSchema,
   UserLevelSchema,
 } from '#/types';
@@ -915,7 +916,8 @@ export type UpdateUserProfileInput = z.infer<
 export const setUserLevelInputSchema = z
   .object({
     courseId: z.number().int().positive(),
-    level: UserLevelSchema,
+    // `'none'` clears the pilot's cert — see `SETTABLE_USER_LEVELS`.
+    level: SettableUserLevelSchema,
     message: z.string().trim().min(1, 'A message for the pilot is required'),
     note: z.string().trim().optional(),
   })

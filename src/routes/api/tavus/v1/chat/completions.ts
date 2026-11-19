@@ -114,6 +114,38 @@ export async function tavusCompletionsHandler(
         voice: { tavusRules },
         abortSignal: request.signal,
       });
+      // TEMP DEBUG (dev only, do not commit): record exactly what Tavus receives.
+      if (process.env.NODE_ENV !== 'production') {
+        const fs = await import('node:fs');
+        const log = (line: string) =>
+          fs.appendFileSync(
+            '/private/tmp/claude-501/tavus-debug.log',
+            `${new Date().toISOString()} ${line}\n`,
+          );
+        const t0 = Date.now();
+        const reqId = Math.random().toString(36).slice(2, 7);
+        const lastUser = [...history].reverse().find((m) => m.role === 'user');
+        log(
+          `[${reqId}] REQUEST conv=${conversationId} msgs=${parsed.data.messages.length} lastUser=${JSON.stringify(lastUser?.parts)}`,
+        );
+        log(`[${reqId}] RULES-TAIL ${JSON.stringify(tavusRules.slice(-600))}`);
+        request.signal.addEventListener('abort', () =>
+          log(`[${reqId}] ABORTED by Tavus at +${Date.now() - t0}ms`),
+        );
+        return (async function* () {
+          let full = '';
+          for await (const chunk of result.textStream) {
+            log(
+              `[${reqId}] +${Date.now() - t0}ms CHUNK ${JSON.stringify(chunk)}`,
+            );
+            full += chunk;
+            yield chunk;
+          }
+          log(
+            `[${reqId}] DONE +${Date.now() - t0}ms FULL ${JSON.stringify(full)}`,
+          );
+        })();
+      }
       return result.textStream;
     },
     {

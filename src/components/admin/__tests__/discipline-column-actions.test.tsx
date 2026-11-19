@@ -73,6 +73,27 @@ describe('DisciplineColumnActions', () => {
     ]);
   });
 
+  // Levels are the 3D Airmanship cert: the container passes no handler for
+  // any other discipline, and then there is no button to press.
+  it('offers no levels action when given no handler for it', () => {
+    render(
+      <DisciplineColumnActions
+        disciplineName="UAS"
+        canManage
+        onAddLesson={vi.fn()}
+        onAddModule={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Update levels in UAS' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Add a lesson to UAS' }),
+    ).toBeTruthy();
+  });
+
   it('calls each handler from its own button', () => {
     // Mutant: `onRename` and `onDelete` wired to the wrong buttons — every
     // button still renders and still fires something, so a test that only

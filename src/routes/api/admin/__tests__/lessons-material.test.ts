@@ -163,11 +163,20 @@ describe('lessons material route', () => {
     expect(getDisciplineIdForLessonId).not.toHaveBeenCalled();
   });
 
-  it('GET returns the material row (or null)', async () => {
-    getLessonMaterialByLessonId.mockResolvedValueOnce(null);
+  it('GET returns the closing tab with the material row (or null material)', async () => {
+    getLessonMaterialByLessonId.mockResolvedValueOnce({
+      extraTab: 'testThis',
+      material: null,
+    });
     const res = await getMaterialHandler(getReq(), '1');
     expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    expect(await res.json()).toEqual({ extraTab: 'testThis', material: null });
+  });
+
+  it('GET answers 404 when the lesson vanished after the guard', async () => {
+    getLessonMaterialByLessonId.mockResolvedValueOnce(null);
+    const res = await getMaterialHandler(getReq(), '1');
+    expect(res.status).toBe(404);
   });
 
   it('POST resolves the discipline and forwards it with an update action', async () => {

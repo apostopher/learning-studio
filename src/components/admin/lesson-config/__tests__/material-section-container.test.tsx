@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { describe, expect, it, vi } from 'vitest';
 import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
@@ -21,6 +27,7 @@ vi.mock('react', async () => {
 
 const hooks = vi.hoisted(() => ({
   material: vi.fn(),
+  save: vi.fn(),
 }));
 vi.mock('#/data-hooks/use-lesson-material', () => ({
   useLessonMaterial: hooks.material,
@@ -29,7 +36,7 @@ vi.mock('#/data-hooks/use-parse-lesson-material', () => ({
   useParseLessonMaterial: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('#/data-hooks/use-save-lesson-material', () => ({
-  useSaveLessonMaterial: () => ({ mutate: vi.fn(), error: null }),
+  useSaveLessonMaterial: () => ({ mutate: hooks.save, error: null }),
 }));
 // The upload control owns a file-input ref; the react-compiler + vitest pair
 // cannot render that (see component-render-test constraints), and the docx
@@ -77,7 +84,10 @@ const renderFor = (lessonId: number) => {
  */
 describe('MaterialSectionContainer dirty flag', () => {
   it('publishes dirty for its lesson once a field is edited', () => {
-    hooks.material.mockReturnValue({ data: null, isLoading: false });
+    hooks.material.mockReturnValue({
+      data: { extraTab: 'jobOfTheDay', values: null },
+      isLoading: false,
+    });
     const { store } = renderFor(10);
     const dirty = lessonMaterialDirtyAtomFamily(10);
     expect(store.get(dirty)).toBe(false);
@@ -90,7 +100,10 @@ describe('MaterialSectionContainer dirty flag', () => {
   });
 
   it('is clean again when the field is put back as it was', () => {
-    hooks.material.mockReturnValue({ data: null, isLoading: false });
+    hooks.material.mockReturnValue({
+      data: { extraTab: 'jobOfTheDay', values: null },
+      isLoading: false,
+    });
     const { store } = renderFor(10);
     const field = screen.getByLabelText('Job of the day (URL)');
     fireEvent.input(field, { target: { value: 'x' } });
@@ -99,7 +112,10 @@ describe('MaterialSectionContainer dirty flag', () => {
   });
 
   it('withdraws the flag when the panel unmounts, so a closed modal cannot leave a Save button lit', () => {
-    hooks.material.mockReturnValue({ data: null, isLoading: false });
+    hooks.material.mockReturnValue({
+      data: { extraTab: 'jobOfTheDay', values: null },
+      isLoading: false,
+    });
     const { store, unmount } = renderFor(10);
     fireEvent.input(screen.getByLabelText('Job of the day (URL)'), {
       target: { value: 'x' },
@@ -107,5 +123,43 @@ describe('MaterialSectionContainer dirty flag', () => {
     expect(store.get(lessonMaterialDirtyAtomFamily(10))).toBe(true);
     unmount();
     expect(store.get(lessonMaterialDirtyAtomFamily(10))).toBe(false);
+  });
+});
+
+/**
+ * The closing field follows the lesson's discipline, as the server reports it.
+ * Asserted on what `save.mutate` receives — the only consumer that matters.
+ */
+describe('MaterialSectionContainer closing field', () => {
+  it('offers TEST THIS! links, not the Job of the Day URL, on a non-3D lesson — and saves them', async () => {
+    hooks.save.mockClear();
+    hooks.material.mockReturnValue({
+      data: { extraTab: 'testThis', values: null },
+      isLoading: false,
+    });
+    const { container } = renderFor(11);
+    expect(screen.queryByLabelText('Job of the day (URL)')).toBeNull();
+    const group = within(screen.getByRole('group', { name: 'TEST THIS!' }));
+
+    fireEvent.click(group.getByRole('button', { name: 'Add link' }));
+    fireEvent.input(group.getByLabelText('Link 1 name'), {
+      target: { value: 'Try it' },
+    });
+    fireEvent.input(group.getByLabelText('Link 1 URL'), {
+      target: { value: 'https://example.com/try' },
+    });
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+
+    await waitFor(() => expect(hooks.save).toHaveBeenCalled());
+    expect(hooks.save.mock.calls[0][0].testThis).toEqual([
+      { name: 'Try it', url: 'https://example.com/try' },
+    ]);
+  });
+
+  it('draws neither closing field until the lesson has loaded', () => {
+    hooks.material.mockReturnValue({ data: undefined, isLoading: true });
+    renderFor(12);
+    expect(screen.queryByLabelText('Job of the day (URL)')).toBeNull();
+    expect(screen.queryByText('TEST THIS!')).toBeNull();
   });
 });

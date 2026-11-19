@@ -1,6 +1,6 @@
-import { eq, and, desc } from "drizzle-orm";
-import { db } from "#/db";
-import { lessonTestResultsTable } from "./schema";
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '#/db';
+import { lessonTestResultsTable } from './schema';
 
 export async function saveTestResult(data: {
   userId: string;

@@ -32,6 +32,7 @@ import {
 } from '#/components/calendar';
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import { useOfferings } from '#/data-hooks/use-offerings';
+import { scheduleCourses } from '#/lib/flagship-course';
 import type { Offering } from '#/lib/offering-schemas';
 import { CourseScheduleRail } from './course-schedule-rail';
 import { DraggableCourseContainer } from './draggable-course-container';
@@ -254,6 +255,9 @@ export const SchedulePageContainer = ({
   const to = format(addDays(weekStart, SCHEDULE_WEEKS * 7 - 1), 'yyyy-MM-dd');
 
   const courses = useAdminCourses();
+  // Everything below reads this, not `courses.data`: the flagship is never
+  // drawn, picked up or dropped (see `scheduleCourses`).
+  const railCourses = courses.data && scheduleCourses(courses.data);
   const offerings = useOfferings(from, to);
 
   const sensors = useSensors(
@@ -265,7 +269,7 @@ export const SchedulePageContainer = ({
 
   const onDragStart = (event: DragStartEvent) => {
     const courseId = parseScheduleCourseDndId(event.active.id);
-    const course = courses.data?.find((row) => row.id === courseId);
+    const course = railCourses?.find((row) => row.id === courseId);
     setDraggingCourse(
       course
         ? {
@@ -289,7 +293,7 @@ export const SchedulePageContainer = ({
     const dayKey = parseScheduleDayDndId(event.over.id);
     if (courseId === null || dayKey === null) return;
 
-    const course = courses.data?.find((row) => row.id === courseId);
+    const course = railCourses?.find((row) => row.id === courseId);
     if (!course) return;
 
     // The day dropped on, captured once: a fixed rect is enough — the popover
@@ -327,7 +331,7 @@ export const SchedulePageContainer = ({
       accessibility={{
         announcements: {
           onDragStart: ({ active }) =>
-            `Picked up ${nameOf(active.id, courses.data)}. Move over a day to schedule it.`,
+            `Picked up ${nameOf(active.id, railCourses)}. Move over a day to schedule it.`,
           onDragOver: ({ over }) =>
             over
               ? `Over ${parseScheduleDayDndId(over.id) ?? 'no day'}.`
@@ -359,13 +363,13 @@ export const SchedulePageContainer = ({
                 {courses.error.message}
               </p>
             )}
-            {courses.data?.length === 0 && (
+            {railCourses?.length === 0 && (
               <p className="px-1 text-secondary text-sm">
                 No courses yet. Create one from the Courses screen, then come
                 back to schedule it.
               </p>
             )}
-            {courses.data?.map((course) =>
+            {railCourses?.map((course) =>
               canSchedule ? (
                 <DraggableCourseContainer key={course.id} course={course} />
               ) : (

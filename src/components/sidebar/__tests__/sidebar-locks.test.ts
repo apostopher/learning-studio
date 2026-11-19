@@ -18,6 +18,7 @@ const details = {
           hasVideo: true,
           needsVideoWatch: true,
           levels: [],
+          levelGated: true,
           dependsOn: [],
         },
         {
@@ -28,6 +29,7 @@ const details = {
           hasVideo: true,
           needsVideoWatch: true,
           levels: [],
+          levelGated: true,
           dependsOn: [{ lessonSlug: 'a', moduleSlug: 'm1' }],
         },
       ],

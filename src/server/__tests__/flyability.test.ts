@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { flyDataToHtml } from '#/server/flyability';
 import type {
   MetarTafNearest,
   TAFApiSuccessResponse,
 } from '#/server/flyability-types';
-import { flyDataToHtml } from '#/server/flyability';
 
 const metarFixture: MetarTafNearest = {
   icao: 'KJFK',

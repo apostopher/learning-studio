@@ -36,9 +36,9 @@ import {
   PersonaSchema,
   PilotLicensesSchema,
   ProfileVisibilitySchema,
+  type SettableUserLevel,
+  SettableUserLevelSchema,
   SubscriptionsSchema,
-  type UserLevel,
-  UserLevelSchema,
 } from '#/types';
 
 export * from './auth-schema';
@@ -715,7 +715,10 @@ export const lessonMaterialTable = pgTable(
     proTips: text('pro_tips'),
     links: json('links').$type<MaterialLink[]>(),
     assignments: text('assignments'),
+    /** 3D Airmanship lessons only — see `materialExtraTabFor`. */
     jobOfTheDay: text('job_of_the_day'),
+    /** Every other lesson's "TEST THIS!" links — see `materialExtraTabFor`. */
+    testThis: json('test_this').$type<MaterialLink[]>(),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
@@ -1646,7 +1649,8 @@ export const userLevelsTable = pgTable(
     courseId: integer('course_id')
       .notNull()
       .references(() => coursesTable.id, { onDelete: 'cascade' }),
-    level: text('level').$type<UserLevel>().notNull(),
+    // `'none'` is a cleared cert; read it through `currentLevelOf`.
+    level: text('level').$type<SettableUserLevel>().notNull(),
     source: text('source').$type<LevelSource>().notNull(),
     /** Pilot-facing. Required when `source` is 'admin', null otherwise. */
     message: text('message'),
@@ -1682,7 +1686,7 @@ export const userLevelsTable = pgTable(
 );
 
 export const dbUserLevelSchema = createSelectSchema(userLevelsTable, {
-  level: UserLevelSchema,
+  level: SettableUserLevelSchema,
   source: LevelSourceSchema,
 });
 export type DBUserLevel = z.infer<typeof dbUserLevelSchema>;

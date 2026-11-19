@@ -225,7 +225,7 @@ export async function getGatedCourseForAgent(
     : new Set(
         details.modules.flatMap((mod) =>
           mod.lessons
-            .filter((lesson) => isLessonVisibleAtLevel(lesson.levels, level))
+            .filter((lesson) => isLessonVisibleAtLevel(lesson, level))
             .map((lesson) => lesson.slug),
         ),
       );

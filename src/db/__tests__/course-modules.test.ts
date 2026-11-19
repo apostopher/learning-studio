@@ -21,7 +21,9 @@ vi.mock('#/db', () => ({
   },
 }));
 
-const { courseModuleIds, getCourseModuleIds } = await import('../course-modules');
+const { courseModuleIds, getCourseModuleIds } = await import(
+  '../course-modules'
+);
 const { courseModulesTable } = await import('../schema');
 
 describe('courseModuleIds', () => {

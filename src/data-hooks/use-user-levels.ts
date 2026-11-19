@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { dataKeys } from '#/data-hooks/keys';
 import { useInvalidateUsers } from '#/data-hooks/use-admin-users';
-import { LevelSourceSchema, UserLevelSchema } from '#/types';
+import { LevelSourceSchema, SettableUserLevelSchema } from '#/types';
 
 const historyRowSchema = z.object({
   id: z.number(),
-  level: UserLevelSchema,
+  // A cleared cert is history too, so `'none'` rows come back here.
+  level: SettableUserLevelSchema,
   source: LevelSourceSchema,
   message: z.string().nullable(),
   note: z.string().nullable(),

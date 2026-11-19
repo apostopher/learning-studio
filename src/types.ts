@@ -19,6 +19,17 @@ export const UserLevelSchema = z.enum(USER_LEVELS);
 export const UserLevelsSchema = z.array(UserLevelSchema);
 export type UserLevel = (typeof USER_LEVELS)[number];
 
+/**
+ * What an admin may set a pilot's level to: a tier, or `'none'` — no 3D cert.
+ *
+ * `'none'` is written as a history row like any other change, because levels
+ * are append-only; every reader then answers "no level" (`null`) for it, the
+ * same as a pilot who never had a row. It is never a `UserLevel`.
+ */
+export const SETTABLE_USER_LEVELS = [...USER_LEVELS, 'none'] as const;
+export const SettableUserLevelSchema = z.enum(SETTABLE_USER_LEVELS);
+export type SettableUserLevel = (typeof SETTABLE_USER_LEVELS)[number];
+
 export function isUserLevel(value: string): value is UserLevel {
   return (USER_LEVELS as readonly string[]).includes(value);
 }
@@ -30,8 +41,8 @@ export function isUserLevel(value: string): value is UserLevel {
  * `'none'`, so `isLessonVisibleAtLevel`'s exact match never shows it. It is
  * exclusive: a lesson is either hidden from everyone or tagged with real
  * tiers, never both. `[]` (untagged) is ALSO visible to no one under strict
- * levels; `'none'` differs in being an explicit withdrawal, which
- * `isLessonWithdrawn` reads.
+ * levels; `'none'` differs in being an explicit withdrawal. Either way it
+ * only matters on a level-gated lesson (see `isLessonVisibleAtLevel`).
  *
  * Lesson fields only — a USER's level is always a `UserLevel`.
  */
@@ -332,6 +343,7 @@ export const CourseLessonMaterialSchema = z.object({
   links: z.array(MaterialLinkSchema).optional(),
   assignments: z.string().optional(),
   jobOfTheDay: z.string().optional(),
+  testThis: z.array(MaterialLinkSchema).optional(),
   attachments: z.array(z.string()).optional(),
 });
 export type CourseLessonMaterial = z.infer<typeof CourseLessonMaterialSchema>;

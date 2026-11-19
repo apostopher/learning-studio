@@ -1,5 +1,5 @@
-"use client";
-import { useSyncExternalStore } from "react";
+'use client';
+import { useSyncExternalStore } from 'react';
 
 const emptySubscribe = () => () => {};
 

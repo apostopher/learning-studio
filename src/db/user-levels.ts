@@ -1,12 +1,17 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { type DBUserLevel, userLevelsTable } from '#/db/schema';
-import type { LevelSource, UserLevel } from '#/types';
+import {
+  isUserLevel,
+  type LevelSource,
+  type SettableUserLevel,
+  type UserLevel,
+} from '#/types';
 
 export type InsertLevelRow = {
   userId: string;
   courseId: number;
-  level: UserLevel;
+  level: SettableUserLevel;
   source: LevelSource;
   message?: string | null;
   note?: string | null;
@@ -14,8 +19,19 @@ export type InsertLevelRow = {
 };
 
 /**
+ * A stored row's level as the pilot's current level: a `'none'` row (an admin
+ * cleared it) reads as no level, exactly like having no row. Every reader of
+ * `user_levels.level` goes through this, so `'none'` never escapes as a tier.
+ */
+export function currentLevelOf(
+  stored: string | null | undefined,
+): UserLevel | null {
+  return stored != null && isUserLevel(stored) ? stored : null;
+}
+
+/**
  * The pilot's level in one course — the newest row — or null when they have
- * no row at all.
+ * no row at all, or the newest row is `'none'`.
  *
  * Null, not a 'basic' fallback: under strict levels a pilot with no level sees
  * nothing in the course, and the roster shows them as "no level" from the same
@@ -37,7 +53,7 @@ export async function getCurrentLevel(
     )
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
     .limit(1);
-  return row?.level ?? null;
+  return currentLevelOf(row?.level);
 }
 
 /**
@@ -55,13 +71,19 @@ export async function getCurrentLevel(
 export async function getCurrentLevelsByCourse(
   userId: string,
 ): Promise<Map<number, UserLevel>> {
-  const rows = await db.execute<{ course_id: number; level: UserLevel }>(sql`
+  const rows = await db.execute<{ course_id: number; level: string }>(sql`
     SELECT DISTINCT ON (course_id) course_id, level
     FROM user_levels
     WHERE user_id = ${userId}
     ORDER BY course_id, created_at DESC, id DESC
   `);
-  return new Map(rows.rows.map((row) => [row.course_id, row.level]));
+  // A course whose newest row is `'none'` is left out: absent means no level.
+  return new Map(
+    rows.rows.flatMap((row) => {
+      const level = currentLevelOf(row.level);
+      return level ? [[row.course_id, level] as const] : [];
+    }),
+  );
 }
 
 /** Full history for one (user, course), newest first. */
@@ -180,6 +202,9 @@ export async function getUnacknowledgedLevelChange(
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
     .limit(1);
   if (!row) return null;
+  // Clearing a pilot's cert is not announced: there is no new tier to name,
+  // and the banner and interstitial copy only speak in tiers.
+  if (!isUserLevel(row.level)) return null;
   if (row.source !== 'admin' && row.source !== 'earned') return null;
   if (row.acknowledgedAt !== null) return null;
   return row;

@@ -416,6 +416,14 @@ export const pendingDeletePersonaIdAtom = atom<number | null>(null);
 /** Draft name in the "New persona" inline field. Reset after a create. */
 export const newPersonaNameAtom = atom('');
 
+/**
+ * The People table's search text. Held here rather than in `?q=`: writing
+ * the URL on every keystroke runs a full router navigation per character
+ * (the root `beforeLoad`'s auth server call included) for a value nobody
+ * needs to share or survive a reload.
+ */
+export const peopleSearchAtom = atom('');
+
 /** Person whose detail modal is open on /admin/users. */
 export const openUserRowAtom = atom<{
   kind: 'user' | 'pending';
