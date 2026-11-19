@@ -1,21 +1,20 @@
-import { Loader2 } from 'lucide-react';
+import { Tabs } from '@base-ui/react/tabs';
+import { Check, Loader2, Lock } from 'lucide-react';
+import type { PermissionAction, PermissionEntity } from '#/lib/admin-schemas';
 import {
-  GRANTABLE_PERMISSIONS,
-  hasAdminAccess,
-  isAdminBypassEntity,
-  isCourseScopedEntity,
-  isCourseScopedRole,
-  type PermissionAction,
-  type PermissionEntity,
-  permissionKey,
-} from '#/lib/admin-schemas';
-import { roleDisplayName } from '#/lib/role-labels';
+  COLUMN_LABELS,
+  PERMISSION_COLUMNS,
+  type PermissionSection,
+  type RoleSummary,
+} from './role-permissions-view';
 
 interface RolePermissionsPanelProps {
-  /** Roles the grid configures — `owner` is excluded by the container. */
-  roles: string[];
-  /** `entity:action` strings currently granted, keyed by role name. */
-  granted: Record<string, string[]>;
+  /** Roles the owner configures — `owner` is excluded by the container. */
+  roles: RoleSummary[];
+  selectedRole: string | null;
+  /** The selected role's grid, from `buildRoleSections`. */
+  sections: PermissionSection[];
+  onSelectRole: (role: string) => void;
   onToggle: (
     role: string,
     entity: PermissionEntity,
@@ -27,95 +26,40 @@ interface RolePermissionsPanelProps {
   error?: string;
 }
 
-const ENTITY_LABELS: Record<PermissionEntity, string> = {
-  user: 'People',
-  enrolment: 'Course access',
-  level: 'Pilot levels',
-  course: 'Courses',
-  structure: 'Course structure',
-  content: 'Course content',
-  staff: 'Course staff',
-};
-
-const ACTION_LABELS: Record<PermissionAction, string> = {
-  read: 'View',
-  create: 'Add',
-  update: 'Edit',
-  delete: 'Remove',
-};
+const COLUMN_HEADER =
+  'px-2 py-2 font-semibold text-secondary text-xs uppercase tracking-wider';
 
 /**
- * Whether this ROLE may be granted this ENTITY here — a per-pair lock, not a
- * per-entity one.
+ * Permissions, one role at a time: pick a role on the left, see what it may
+ * do as area × See/Add/Edit/Remove on the right.
  *
- * `structure`, `content` and `staff` really are configured in this table:
- * `requireCoursePermission` unions an actor's global and `course_staff` roles
- * and hands the names to `getUserPermissions`, which reads `role_permissions`
- * keyed on role NAME. `course_staff` supplies only which role someone holds on
- * which course — never what that role may do. So a subject expert's
- * `structure:*` and `content:*` live in exactly the rows this grid edits, and
- * ticking them for `subject-expert` or `course-manager` is legitimate
- * configuration.
- *
- * What must stay locked is the same entity on an ORG-LEVEL role. `admin` is
- * global, so `structure:update` on `admin` is authoring authority over every
- * course at once — which spec §3 forbids ("admin is a jack of all trades…and
- * cannot author"; to edit a course an admin assigns themselves as an SME,
- * which is a visible act recorded in `course_staff.assigned_by`).
- *
- * The lock is UI-only. `role-permissions.ts` still accepts
- * `{ role: 'admin', entity: 'structure' }` over HTTP — owner-only, so not an
- * escalation, and deliberately the escape hatch for a deployment that decides
- * otherwise.
- */
-function courseGrantLockedFor(role: string, entity: PermissionEntity): boolean {
-  return isCourseScopedEntity(entity) && !isCourseScopedRole(role);
-}
-
-/**
- * Why the checkbox is locked — and it must say the TRUE reason, which now
- * differs by role.
- *
- * For an admin on `structure` or `content` the old sentence ("assign someone
- * to the course instead") became false the day the admin bypass landed: an
- * admin already holds both on every course and every discipline without any
- * grant. A security-configuration screen telling its owner the opposite of
- * what the system does is worse than one that says nothing, so this branches.
- *
- * The lock itself is right in both cases — ticking the box would change
- * nothing either way — but only one of the two reasons is now true.
- */
-const lockReason = (role: string, entity: PermissionEntity) => {
-  if (hasAdminAccess([role]) && isAdminBypassEntity(entity)) {
-    return `${roleDisplayName(role)} already holds this on every course and discipline — granting it here would change nothing.`;
-  }
-  return `${roleDisplayName(role)} is an org-level role — granting this here would apply to every course. Assign someone to the course instead.`;
-};
-
-/**
- * What a role may do, as entity × action.
- *
- * Only combinations with an endpoint behind them are offered — a checkbox that
+ * Only combinations with an endpoint behind them get a checkbox — a box that
  * enforces nothing would be a dead control. `owner` never appears: it bypasses
  * permission checks, so configuring it would change nothing.
  */
 export const RolePermissionsPanel = ({
   roles,
-  granted,
+  selectedRole,
+  sections,
+  onSelectRole,
   onToggle,
   isSaving,
   isLoading,
   error,
 }: RolePermissionsPanelProps) => (
-  <section className="flex flex-col gap-4 rounded-xl border border-gray-6 bg-gray-2 p-6">
-    <header className="flex flex-col gap-1">
-      <h2 className="font-semibold text-lg text-primary">
-        Roles &amp; permissions
+  <section
+    aria-labelledby="role-permissions-title"
+    className="flex flex-col gap-6"
+  >
+    <header className="flex max-w-2xl flex-col gap-1">
+      <h2
+        id="role-permissions-title"
+        className="font-semibold text-lg text-primary"
+      >
+        Roles
       </h2>
       <p className="text-secondary text-sm">
-        What each role may do once you give it to someone. The course entities
-        are per course — a subject expert holds them only where they are
-        assigned. Owners bypass these checks entirely, so they aren't listed.
+        Pick a role to see and change what everyone with it can do.
       </p>
     </header>
 
@@ -131,75 +75,220 @@ export const RolePermissionsPanel = ({
         Loading permissions…
       </p>
     ) : (
-      roles.map((role) => (
-        <div key={role} className="flex flex-col gap-3">
-          <h3 className="font-medium text-primary text-sm capitalize">
-            {role}
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(Object.keys(GRANTABLE_PERMISSIONS) as PermissionEntity[]).map(
-              (entity) => {
-                const locked = courseGrantLockedFor(role, entity);
-                const reasonId = `course-scoped-reason-${role}-${entity}`;
-                return (
-                  <fieldset
-                    key={entity}
-                    className="rounded-lg border border-gray-6 bg-gray-1 p-3"
-                  >
-                    <legend className="px-1 font-medium text-primary text-sm">
-                      {ENTITY_LABELS[entity]}
-                    </legend>
-                    <div className="flex flex-col gap-2 pt-1">
-                      {GRANTABLE_PERMISSIONS[entity].map((action) => {
-                        const key = permissionKey(entity, action);
-                        const isOn = (granted[role] ?? []).includes(key);
-                        return (
-                          <label
+      selectedRole && (
+        <Tabs.Root
+          value={selectedRole}
+          onValueChange={(next) => onSelectRole(String(next))}
+          orientation="vertical"
+          className="flex flex-wrap items-start gap-6"
+        >
+          <div className="flex max-w-xs flex-[1_1_16rem] flex-col gap-2">
+            <Tabs.List aria-label="Roles" className="flex flex-col gap-2">
+              {roles.map((role) => (
+                <Tabs.Tab
+                  key={role.role}
+                  value={role.role}
+                  className="flex w-full flex-col gap-1 rounded-xl border border-gray-6 bg-surface px-4 py-3.5 text-start text-primary transition-colors hover:bg-gray-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2 aria-selected:border-apple-9 aria-selected:bg-apple-9 aria-selected:text-apple-contrast"
+                >
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-[15px]">
+                      {role.name}
+                    </span>
+                    <span className="whitespace-nowrap font-semibold text-xs tabular-nums">
+                      {role.heldCount} of {role.totalCount}
+                    </span>
+                  </span>
+                  {role.description && (
+                    <span className="text-[13px] leading-snug">
+                      {role.description}
+                    </span>
+                  )}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+            <p className="mt-2 rounded-xl border border-gray-6 border-dashed px-4 py-3.5 text-secondary text-[13px] leading-snug">
+              <strong className="block font-semibold text-primary">
+                Org Owner
+              </strong>
+              Can always do everything. Not configurable.
+            </p>
+          </div>
+
+          <Tabs.Panel
+            value={selectedRole}
+            className="min-w-0 flex-[999_1_35rem] overflow-hidden rounded-xl border border-gray-6 bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9"
+          >
+            <header className="flex flex-wrap items-start justify-between gap-3 border-gray-6 border-b px-6 py-5">
+              <div className="flex flex-col gap-1">
+                <h3 className="font-semibold text-primary text-xl">
+                  {roles.find((r) => r.role === selectedRole)?.name}
+                </h3>
+                <p className="text-secondary text-sm">
+                  {roles.find((r) => r.role === selectedRole)?.description}
+                </p>
+              </div>
+              <p
+                aria-live="polite"
+                className="flex items-center gap-2 text-secondary text-sm"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Saving…
+                  </>
+                ) : (
+                  'Changes save as you tick.'
+                )}
+              </p>
+            </header>
+
+            {sections.map((section) => (
+              <div key={section.id} className="px-6 pt-6 pb-2 last:pb-6">
+                <h4 className="font-semibold text-[15px] text-primary">
+                  {section.title}
+                </h4>
+                <p className="mt-1 mb-3 text-[13px] text-secondary leading-normal">
+                  {section.description}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[32rem] border-collapse text-sm">
+                    <caption className="sr-only">{section.title}</caption>
+                    <thead>
+                      <tr className="border-gray-6 border-b">
+                        <th
+                          scope="col"
+                          className={`${COLUMN_HEADER} w-1/3 ps-0 text-start`}
+                        >
+                          Area
+                        </th>
+                        {PERMISSION_COLUMNS.map((action) => (
+                          <th
                             key={action}
-                            className={
-                              locked
-                                ? 'flex items-center gap-2.5'
-                                : 'flex cursor-pointer items-center gap-2.5'
-                            }
+                            scope="col"
+                            className={COLUMN_HEADER}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isOn}
-                              disabled={isSaving || locked}
-                              aria-describedby={locked ? reasonId : undefined}
-                              onChange={(event) =>
-                                onToggle(
-                                  role,
-                                  entity,
-                                  action,
-                                  event.target.checked,
-                                )
-                              }
-                              className="h-4 w-4 accent-apple-9 disabled:cursor-not-allowed disabled:opacity-60"
-                            />
-                            <span className="text-primary text-sm">
-                              {ACTION_LABELS[action]}
-                            </span>
-                          </label>
+                            {COLUMN_LABELS[action]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.rows.map((row) => {
+                        const reasonId = `permission-reason-${selectedRole}-${row.entity}`;
+                        return (
+                          <tr
+                            key={row.entity}
+                            className="border-gray-3 border-b last:border-b-0"
+                          >
+                            <th
+                              scope="row"
+                              className="py-2.5 pe-2 text-start align-top font-medium text-primary"
+                            >
+                              {row.label}
+                            </th>
+                            {row.kind === 'always' ? (
+                              <td
+                                colSpan={PERMISSION_COLUMNS.length}
+                                className="px-2 py-2.5"
+                              >
+                                <span
+                                  id={reasonId}
+                                  className="inline-flex items-center gap-2 rounded-lg bg-accent-muted px-3 py-1.5 text-[13px] text-primary"
+                                >
+                                  <Check
+                                    className="h-4 w-4 shrink-0 text-accent-11"
+                                    strokeWidth={2.5}
+                                    aria-hidden="true"
+                                  />
+                                  {row.reason}
+                                </span>
+                              </td>
+                            ) : (
+                              row.cells.map((cell, i) => (
+                                <td
+                                  key={PERMISSION_COLUMNS[i]}
+                                  className="px-2 py-0.5 text-center align-top"
+                                >
+                                  {cell ? (
+                                    <label
+                                      className={
+                                        row.kind === 'locked'
+                                          ? 'inline-flex size-11 items-center justify-center'
+                                          : 'inline-flex size-11 cursor-pointer items-center justify-center rounded-lg hover:bg-gray-3'
+                                      }
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={cell.granted}
+                                        disabled={
+                                          isSaving || row.kind === 'locked'
+                                        }
+                                        aria-describedby={
+                                          row.kind === 'locked'
+                                            ? reasonId
+                                            : undefined
+                                        }
+                                        onChange={(event) =>
+                                          onToggle(
+                                            selectedRole,
+                                            row.entity,
+                                            cell.action,
+                                            event.target.checked,
+                                          )
+                                        }
+                                        className="h-5 w-5 accent-apple-9 disabled:cursor-not-allowed disabled:opacity-60"
+                                      />
+                                      <span className="sr-only">
+                                        {cell.label}
+                                      </span>
+                                    </label>
+                                  ) : (
+                                    <span className="inline-flex size-11 items-center justify-center text-secondary">
+                                      <span aria-hidden="true">—</span>
+                                      <span className="sr-only">
+                                        Not applicable
+                                      </span>
+                                    </span>
+                                  )}
+                                </td>
+                              ))
+                            )}
+                          </tr>
                         );
                       })}
-                    </div>
-                    {locked && (
-                      // Visible, not just an aria-describedby: a disabled
-                      // control must say why it's unavailable in a way
-                      // sighted and assistive-tech users both get, not one
-                      // conveyed by styling (greyed-out) alone.
-                      <p id={reasonId} className="pt-2 text-tertiary text-xs">
-                        {lockReason(role, entity)}
-                      </p>
-                    )}
-                  </fieldset>
-                );
-              },
-            )}
-          </div>
-        </div>
-      ))
+                    </tbody>
+                  </table>
+                </div>
+                {section.rows
+                  .filter((row) => row.kind === 'locked')
+                  .map((row) => (
+                    // Visible, not only aria-describedby: a locked control
+                    // must say why in a way sighted and AT users both get.
+                    <p
+                      key={row.entity}
+                      id={`permission-reason-${selectedRole}-${row.entity}`}
+                      className="mt-3 flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-[13px] text-secondary"
+                    >
+                      <Lock
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        <strong className="font-semibold text-primary">
+                          {row.label}:
+                        </strong>{' '}
+                        {row.reason}
+                      </span>
+                    </p>
+                  ))}
+              </div>
+            ))}
+          </Tabs.Panel>
+        </Tabs.Root>
+      )
     )}
   </section>
 );
