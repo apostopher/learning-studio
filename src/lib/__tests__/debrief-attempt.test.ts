@@ -18,6 +18,7 @@ const m = vi.hoisted(() => ({
   insertAnswerLog: vi.fn(),
   insertPass: vi.fn(),
   selectHasPass: vi.fn(),
+  selectChunkAttempts: vi.fn(),
   updateDraft: vi.fn(),
   selectAskedQuestions: vi.fn(),
   ensureLessonChunks: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('#/db/debrief-attempts', () => ({
   insertAnswerLog: m.insertAnswerLog,
   insertPass: m.insertPass,
   selectHasPass: m.selectHasPass,
+  selectChunkAttempts: m.selectChunkAttempts,
   updateDraft: m.updateDraft,
   selectAskedQuestions: m.selectAskedQuestions,
 }));
@@ -82,6 +84,7 @@ vi.mock('#/lib/lesson-score.server', () => ({
 import {
   answerQuestion,
   continueAttempt,
+  recheckDebriefPass,
   saveDraft,
   startOrResumeAttempt,
 } from '../debrief-attempt.server';
@@ -1341,5 +1344,92 @@ describe('saveDraft', () => {
   it('forbidden when the guarded write matched nothing (finished meanwhile)', async () => {
     m.updateDraft.mockResolvedValue(false);
     expect(await draft('q1')).toBe('forbidden');
+  });
+});
+
+/**
+ * A quiz save can lift the lesson total: the best completed set, plus the
+ * video and quiz as they now stand, may reach the course pass mark.
+ */
+describe('recheckDebriefPass', () => {
+  const recheck = () =>
+    recheckDebriefPass({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      lessonId: 41,
+      courseId: 7,
+    });
+  /** A finished attempt whose set 1 (q1-q4) averaged `avg`. */
+  const withSet1 = (avg: number, over: Record<string, unknown> = {}) =>
+    attemptRow({
+      questions: setStored,
+      answers: [1, 2, 3, 4].map((n) => scored(n, avg)),
+      completedAt: new Date(),
+      ...over,
+    });
+
+  beforeEach(() => {
+    m.selectHasPass.mockResolvedValue(false);
+    m.insertPass.mockResolvedValue(true);
+    m.getCoursePassMark.mockResolvedValue(85);
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
+    m.selectChunkAttempts.mockResolvedValue([withSet1(50)]);
+  });
+
+  it('records the pass when the best set plus video and quiz reaches the pass mark', async () => {
+    expect(await recheck()).toBe(true);
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
+    expect(m.insertPass).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'u1',
+      lessonSlug: 'l1',
+    });
+  });
+
+  it('does not record it when the total falls short (quiz 0.6 -> 77.5)', async () => {
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0.6 });
+    expect(await recheck()).toBe(false);
+    expect(m.insertPass).not.toHaveBeenCalled();
+  });
+
+  it('judges the best completed set over every attempt, open ones included', async () => {
+    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0.6 });
+    m.selectChunkAttempts.mockResolvedValue([
+      withSet1(50),
+      withSet1(100, { completedAt: null }),
+    ]);
+    expect(await recheck()).toBe(true);
+  });
+
+  it('records nothing without a completed set, even with video and quiz at 1', async () => {
+    m.selectChunkAttempts.mockResolvedValue([
+      attemptRow({
+        questions: setStored,
+        answers: [scored(1, 100), scored(2, 100)],
+      }),
+    ]);
+    expect(await recheck()).toBe(false);
+    expect(m.getScoreFacts).not.toHaveBeenCalled();
+    expect(m.insertPass).not.toHaveBeenCalled();
+  });
+
+  it('skips rows that do not parse', async () => {
+    m.selectChunkAttempts.mockResolvedValue([
+      attemptRow({ questions: 'garbage' }),
+      withSet1(50),
+    ]);
+    expect(await recheck()).toBe(true);
+  });
+
+  it('does nothing when the pilot already holds the pass', async () => {
+    m.selectHasPass.mockResolvedValue(true);
+    expect(await recheck()).toBe(false);
+    expect(m.selectChunkAttempts).not.toHaveBeenCalled();
+    expect(m.insertPass).not.toHaveBeenCalled();
+  });
+
+  it('returns false when the insert found the pass already there', async () => {
+    m.insertPass.mockResolvedValue(false);
+    expect(await recheck()).toBe(false);
   });
 });

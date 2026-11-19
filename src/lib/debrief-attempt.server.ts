@@ -15,6 +15,7 @@ import {
   lockAttempt,
   selectAskedQuestions,
   selectAttempt,
+  selectChunkAttempts,
   selectCurrentChunks,
   selectHasPass,
   selectMastery,
@@ -41,6 +42,7 @@ import {
   masteryOf,
 } from '#/lib/debrief-mastery';
 import {
+  completedSetAverages,
   type SetJudge,
   type SetOutcome,
   type SetsProgress,
@@ -754,4 +756,41 @@ export async function saveDraft(d: {
     text: d.text.slice(0, DEBRIEF_ANSWER_MAX_CHARS),
   });
   return saved ? 'saved' : 'forbidden';
+}
+
+/**
+ * After a quiz save: record the pass if the best completed set so far, plus
+ * the current video and quiz, reaches the course pass mark. True when it
+ * recorded one. Sets of every chunk-format attempt count, finished or open;
+ * rows that no longer parse are skipped. No completed set means no pass.
+ */
+export async function recheckDebriefPass(a: {
+  userId: string;
+  lessonSlug: string;
+  lessonId: number;
+  courseId: number;
+}): Promise<boolean> {
+  if (await selectHasPass(db, a)) return false;
+
+  const averages = (await selectChunkAttempts(a.userId, a.lessonSlug)).flatMap(
+    (row) => {
+      try {
+        return completedSetAverages(
+          attemptSets(parseStored(row)),
+          scoresOf(parseAnswers(row)),
+        );
+      } catch {
+        return [];
+      }
+    },
+  );
+  if (averages.length === 0) return false;
+  const best = Math.max(...averages);
+
+  const [facts, passMark] = await Promise.all([
+    getScoreFacts(a.userId, a.lessonSlug, a.lessonId),
+    getCoursePassMark(a.courseId),
+  ]);
+  if (!debriefJudge(facts, passMark)(best)) return false;
+  return insertPass(db, { userId: a.userId, lessonSlug: a.lessonSlug });
 }

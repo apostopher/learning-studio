@@ -6,6 +6,8 @@ const m = vi.hoisted(() => ({
   evaluateLessonGate: vi.fn(),
   saveLessonQuizAnswers: vi.fn(),
   settleProgress: vi.fn(),
+  recheckDebriefPass: vi.fn(),
+  getCourseDetailsWithCache: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
@@ -19,6 +21,13 @@ vi.mock('#/db/lesson-quiz', () => ({
 // file never reaches the real db/email modules it pulls in transitively.
 vi.mock('#/lib/settle-progress.server', () => ({
   settleProgress: m.settleProgress,
+}));
+
+vi.mock('#/lib/debrief-attempt.server', () => ({
+  recheckDebriefPass: m.recheckDebriefPass,
+}));
+vi.mock('#/db/course', () => ({
+  getCourseDetailsWithCache: m.getCourseDetailsWithCache,
 }));
 
 import { submitLessonQuizHandler } from '../answers';
@@ -57,6 +66,10 @@ beforeEach(() => {
   m.evaluateLessonGate.mockResolvedValue(inTier);
   m.saveLessonQuizAnswers.mockResolvedValue({ id: 1 });
   m.settleProgress.mockResolvedValue(null);
+  m.recheckDebriefPass.mockResolvedValue(false);
+  m.getCourseDetailsWithCache.mockResolvedValue({
+    modules: [{ lessons: [{ id: 41, slug: 'l1' }] }],
+  });
 });
 
 /**
@@ -186,5 +199,39 @@ describe('settling progress after a quiz attempt', () => {
       courseSlug: 'c1',
     });
     expect((await res.json()).promotion).toEqual(promotion);
+  });
+});
+
+describe('re-checking the debrief after a quiz save', () => {
+  const run = () =>
+    submitLessonQuizHandler(
+      post({ lessonSlug: 'l1', courseSlug: 'c1', answers }),
+    );
+
+  it('rechecks with the lesson id and the gate course, after the save and before settling', async () => {
+    await run();
+    expect(m.recheckDebriefPass).toHaveBeenCalledWith({
+      userId: 'u1',
+      lessonSlug: 'l1',
+      lessonId: 41,
+      courseId: 7,
+    });
+    const recheckAt = m.recheckDebriefPass.mock.invocationCallOrder[0];
+    expect(recheckAt).toBeGreaterThan(
+      m.saveLessonQuizAnswers.mock.invocationCallOrder[0],
+    );
+    expect(recheckAt).toBeLessThan(
+      m.settleProgress.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('still saves and settles, returning 200, when the recheck throws', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    m.recheckDebriefPass.mockRejectedValue(new Error('db down'));
+    const res = await run();
+    expect(res.status).toBe(200);
+    expect(m.settleProgress).toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

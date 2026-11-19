@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
+import { getCourseDetailsWithCache } from '#/db/course';
 import { saveLessonQuizAnswers } from '#/db/lesson-quiz';
 import { auth } from '#/lib/auth';
+import { recheckDebriefPass } from '#/lib/debrief-attempt.server';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 import { settleProgress } from '#/lib/settle-progress.server';
 import { CourseLessonQuizAnswersSchema } from '#/types';
@@ -93,6 +95,26 @@ export async function submitLessonQuizHandler(
       lessonSlug: parsed.data.lessonSlug,
       answers: parsed.data.answers,
     });
+
+    // A corrected quiz can lift the lesson total enough for an earlier set to
+    // pass the debrief. Before settling, so a debrief it completes counts in
+    // the progress settled next. Best-effort: the quiz is already saved.
+    try {
+      const details = await getCourseDetailsWithCache(gate.courseSlug);
+      const lesson = details?.modules
+        .flatMap((mod) => mod.lessons)
+        .find((l) => l.slug === parsed.data.lessonSlug);
+      if (lesson) {
+        await recheckDebriefPass({
+          userId: session.user.id,
+          lessonSlug: parsed.data.lessonSlug,
+          lessonId: lesson.id,
+          courseId: gate.courseId,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to re-check the debrief after a quiz save:', error);
+    }
 
     // Best-effort: `settleProgress` never throws, so a settle failure cannot
     // fail the quiz attempt the pilot just recorded.

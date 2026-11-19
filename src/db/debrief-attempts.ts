@@ -292,6 +292,26 @@ export async function selectHasPass(
 }
 
 /**
+ * Every chunk-format attempt this pilot has on the lesson, finished or open.
+ * Rows are returned raw: the caller skips the ones that no longer parse.
+ */
+export async function selectChunkAttempts(
+  userId: string,
+  lessonSlug: string,
+): Promise<AttemptRow[]> {
+  return db
+    .select()
+    .from(lessonTestResultsTable)
+    .where(
+      and(
+        eq(lessonTestResultsTable.userId, userId),
+        eq(lessonTestResultsTable.lessonSlug, lessonSlug),
+        eq(lessonTestResultsTable.format, DEBRIEF_ATTEMPT_FORMAT),
+      ),
+    );
+}
+
+/**
  * The text of every question this pilot has been asked on the lesson, in any
  * attempt and either format, so a new attempt never repeats one. Rows that no
  * longer parse are skipped.
