@@ -87,8 +87,18 @@ const masteryRows = [
   { chunkId: 'v2-c1', latestScore: 90, clearedAt: new Date() },
   { chunkId: 'v2-c2', latestScore: 40, clearedAt: null },
 ];
-/** What `planAttemptFocus` makes of `masteryRows`. */
-const focus = { holes: ['v2-c3', 'v2-c2'], review: ['v2-c1'] };
+/** What the fingerprint is drawn over: `masteryOf(masteryRows)`. */
+const mastery = masteryRows.map((r) => ({
+  chunkId: r.chunkId,
+  latestScore: r.latestScore,
+  cleared: r.clearedAt !== null,
+}));
+/**
+ * What `drawAttemptKeyPoints` makes of `masteryRows`: the miss (c2, 40)
+ * first, then the never-asked c3, then c1 (answered well). One chunk per
+ * group, so the shuffle cannot reorder it.
+ */
+const focus = { holes: ['v2-c2', 'v2-c3', 'v2-c1'], review: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -115,33 +125,44 @@ describe('preparedFingerprint', () => {
     expect(DEBRIEF_ATTEMPT_FORMAT).toBe('knowledge-chunks-v1');
   });
 
-  it('is sha256 of the format, the chunk version and the SORTED focus ids', () => {
-    expect(preparedFingerprint(2, focus)).toBe(
+  it('is sha256 of both formats, the chunk version and the mastery SORTED by chunk id', () => {
+    expect(preparedFingerprint(2, mastery)).toBe(
       sha256(
         JSON.stringify([
           DEBRIEF_ATTEMPT_FORMAT,
+          'key-point-sets-v1',
           2,
-          ['v2-c2', 'v2-c3'],
-          ['v2-c1'],
+          [
+            ['v2-c1', 90],
+            ['v2-c2', 40],
+          ],
         ]),
       ),
     );
   });
 
-  it('ignores focus order but not version, holes or review', () => {
-    const fp = preparedFingerprint(2, focus);
+  it('ignores row order and the cleared flag, but not version or any score', () => {
+    const fp = preparedFingerprint(2, mastery);
+    expect(preparedFingerprint(2, [...mastery].reverse())).toBe(fp);
     expect(
-      preparedFingerprint(2, { holes: ['v2-c2', 'v2-c3'], review: ['v2-c1'] }),
+      preparedFingerprint(
+        2,
+        mastery.map((r) => ({
+          chunkId: r.chunkId,
+          latestScore: r.latestScore,
+        })),
+      ),
     ).toBe(fp);
-    expect(preparedFingerprint(3, focus)).not.toBe(fp);
+    expect(preparedFingerprint(3, mastery)).not.toBe(fp);
     expect(
-      preparedFingerprint(2, { holes: ['v2-c3'], review: ['v2-c1', 'v2-c2'] }),
+      preparedFingerprint(2, [mastery[0], { ...mastery[1], latestScore: 41 }]),
     ).not.toBe(fp);
+    expect(preparedFingerprint(2, [mastery[0]])).not.toBe(fp);
   });
 });
 
 describe('prepareDebrief', () => {
-  it('generates for the focus current mastery calls for, avoiding questions already asked', async () => {
+  it('generates for a draw over current mastery (misses first), avoiding questions already asked', async () => {
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.ensureLessonChunks).toHaveBeenCalledWith(41, 'l1', 7);
     expect(m.selectMastery).toHaveBeenCalledWith('u1', 41);
@@ -156,14 +177,14 @@ describe('prepareDebrief', () => {
     expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
       key,
       test,
-      preparedFingerprint(2, focus),
+      preparedFingerprint(2, mastery),
     );
   });
 
-  it('skips the model when a test for the CURRENT version and focus is stored', async () => {
+  it('skips the model when a test for the CURRENT version and mastery is stored', async () => {
     m.rows.set(rowKey(key), {
       test,
-      sourceFingerprint: preparedFingerprint(2, focus),
+      sourceFingerprint: preparedFingerprint(2, mastery),
     });
     expect(await prepareDebrief(k)).toBe('already-prepared');
     expect(m.generateTest).not.toHaveBeenCalled();
@@ -172,16 +193,14 @@ describe('prepareDebrief', () => {
   it('regenerates when mastery moved on since the stored test', async () => {
     m.rows.set(rowKey(key), {
       test,
-      sourceFingerprint: preparedFingerprint(2, {
-        holes: ['v2-c1', 'v2-c2', 'v2-c3'],
-        review: [],
-      }),
+      // Drawn before c2 was answered.
+      sourceFingerprint: preparedFingerprint(2, [mastery[0]]),
     });
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.generateTest).toHaveBeenCalledOnce();
   });
 
-  it('asks nothing once every current chunk is cleared', async () => {
+  it('still asks once every current chunk is cleared: only a passing set passes', async () => {
     m.selectMastery.mockResolvedValue(
       chunks.map((c) => ({
         chunkId: c.id,
@@ -189,6 +208,17 @@ describe('prepareDebrief', () => {
         clearedAt: new Date(),
       })),
     );
+    expect(await prepareDebrief(k)).toBe('prepared');
+    expect(m.generateTest.mock.calls[0][0].focus.holes).toHaveLength(3);
+  });
+
+  it('asks nothing only when there is nothing to draw', async () => {
+    m.ensureLessonChunks.mockResolvedValue({
+      kind: 'ready',
+      version: 2,
+      chunks: [],
+      context: 'ctx',
+    });
     expect(await prepareDebrief(k)).toBe('nothing-to-ask');
     expect(m.generateTest).not.toHaveBeenCalled();
   });
@@ -232,7 +262,7 @@ describe('discardPreparedDebrief', () => {
 });
 
 describe('takePreparedDebrief', () => {
-  const fp = () => preparedFingerprint(2, focus);
+  const fp = () => preparedFingerprint(2, mastery);
 
   it('returns the test once, so a retake gets fresh questions', async () => {
     await prepareDebrief(k);
@@ -250,7 +280,7 @@ describe('takePreparedDebrief', () => {
   it('returns null on a fingerprint mismatch, and the stale row is gone', async () => {
     await prepareDebrief(k);
     expect(
-      await takePreparedDebrief(key, preparedFingerprint(3, focus)),
+      await takePreparedDebrief(key, preparedFingerprint(3, mastery)),
     ).toBeNull();
     expect(m.rows.has(rowKey(key))).toBe(false);
   });

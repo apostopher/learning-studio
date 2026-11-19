@@ -3,13 +3,12 @@ import {
   applyChunkScore,
   CHUNK_CLEAR_SCORE,
   type ChunkMastery,
-  isAllCleared,
+  debriefPassedOf,
+  drawAttemptKeyPoints,
   type KnowledgeChunk,
+  MAX_ATTEMPT_KEY_POINTS,
   MAX_KNOWLEDGE_CHUNKS,
-  masteryCounts,
   masteryOf,
-  masteryPercent,
-  planAttemptFocus,
 } from '#/lib/debrief-mastery';
 
 const chunks = (n: number): KnowledgeChunk[] =>
@@ -49,71 +48,98 @@ describe('applyChunkScore', () => {
   });
 });
 
-describe('masteryPercent', () => {
-  it('is the rounded share of cleared chunks', () => {
-    expect(masteryPercent({ cleared: 5, total: 7, passed: false })).toBe(71);
-  });
-  it('is 100 once passed', () => {
-    expect(masteryPercent({ cleared: 4, total: 8, passed: true })).toBe(100);
-  });
-  it('is 0 with no chunks', () => {
-    expect(masteryPercent({ cleared: 0, total: 0, passed: false })).toBe(0);
+/**
+ * `random` for the shuffle: just under 1 makes Fisher–Yates swap every item
+ * with itself, so each group keeps its input order and the test can read the
+ * grouping alone.
+ */
+const inOrder = () => 0.999_999;
+
+describe('debriefPassedOf', () => {
+  // 2026-11-18: a pass comes only from a set of answers (the pass row). A
+  // pilot who has cleared every chunk across attempts has not passed.
+  it('is the pass row, and nothing else', () => {
+    expect(debriefPassedOf({ debriefPassed: true })).toBe(true);
+    expect(debriefPassedOf({ debriefPassed: false })).toBe(false);
+    expect(
+      debriefPassedOf({
+        debriefPassed: false,
+        chunksCleared: 7,
+        chunksTotal: 7,
+      } as { debriefPassed: boolean }),
+    ).toBe(false);
   });
 });
 
-describe('isAllCleared', () => {
-  it('requires every chunk to be cleared', () => {
-    const cs = chunks(2);
-    expect(isAllCleared(cs, [row('c1', 80, true), row('c2', 80, true)])).toBe(
-      true,
-    );
-    expect(isAllCleared(cs, [row('c1', 80, true), row('c2', 50, false)])).toBe(
-      false,
-    );
-    expect(isAllCleared(cs, [row('c1', 80, true)])).toBe(false);
-  });
-  it('is false with no chunks', () => {
-    expect(isAllCleared([], [])).toBe(false);
-  });
-});
-
-describe('planAttemptFocus', () => {
-  it('first attempt: every chunk is a hole, in order, no review', () => {
-    expect(planAttemptFocus(chunks(7), [])).toEqual({
-      holes: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
-      review: [],
-    });
+describe('drawAttemptKeyPoints', () => {
+  it('asks at most eight key points', () => {
+    expect(MAX_ATTEMPT_KEY_POINTS).toBe(8);
+    expect(drawAttemptKeyPoints(chunks(10), [], inOrder)).toEqual([
+      'c1',
+      'c2',
+      'c3',
+      'c4',
+      'c5',
+      'c6',
+      'c7',
+      'c8',
+    ]);
   });
 
-  it('holes are the uncleared chunks; review is two cleared ones', () => {
+  it('asks every key point of a short lesson, each once', () => {
+    expect(drawAttemptKeyPoints(chunks(5), [], inOrder)).toEqual([
+      'c1',
+      'c2',
+      'c3',
+      'c4',
+      'c5',
+    ]);
+  });
+
+  it('puts misses (latest score under 75) first, then unasked, then strong', () => {
     const mastery: ChunkMastery[] = [
       row('c1', 90, true),
-      row('c2', 80, true),
+      row('c2', 74, true), // cleared at 70 but still a miss against 75
       row('c3', 75, true),
-      row('c4', 95, true),
-      row('c5', 71, true),
-      row('c6', 40, false),
-      row('c7', 55, false),
+      row('c4', 20, false),
     ];
-    const plan = planAttemptFocus(chunks(7), mastery);
-    expect(plan.holes).toEqual(['c6', 'c7']);
-    expect(plan.review).toEqual(['c5', 'c3']);
+    expect(drawAttemptKeyPoints(chunks(6), mastery, inOrder)).toEqual([
+      'c2',
+      'c4',
+      'c5',
+      'c6',
+      'c1',
+      'c3',
+    ]);
   });
 
-  it('orders holes lowest score first and caps them', () => {
-    const n = MAX_KNOWLEDGE_CHUNKS + 2;
-    const cs = chunks(n);
-    const mastery = cs.map((c, i) => row(c.id, 50 - i, false));
-    const plan = planAttemptFocus(cs, mastery);
-    expect(plan.holes).toHaveLength(MAX_KNOWLEDGE_CHUNKS);
-    expect(plan.holes[0]).toBe(`c${n}`);
-    expect(plan.review).toEqual([]);
+  it('is a random draw within each group', () => {
+    // 0 makes Fisher–Yates swap each item with the first: a visible reorder.
+    const first = drawAttemptKeyPoints(chunks(4), [], () => 0);
+    expect(first).not.toEqual(['c1', 'c2', 'c3', 'c4']);
+    expect([...first].sort()).toEqual(['c1', 'c2', 'c3', 'c4']);
   });
 
-  it('treats a chunk with no row as an uncleared hole once mastery exists', () => {
-    const plan = planAttemptFocus(chunks(3), [row('c1', 90, true)]);
-    expect(plan.holes).toEqual(['c2', 'c3']);
-    expect(plan.review).toEqual(['c1']);
+  it('never repeats a key point and draws only from the current chunks', () => {
+    const cs = chunks(10);
+    // A row for a chunk the lesson no longer has is ignored.
+    const mastery = [row('c3', 10, false), row('gone', 10, false)];
+    for (let seed = 0; seed < 20; seed++) {
+      let x = seed / 20;
+      const random = () => {
+        x = (x * 9301 + 0.49297) % 1;
+        return x;
+      };
+      const drawn = drawAttemptKeyPoints(cs, mastery, random);
+      expect(drawn).toHaveLength(8);
+      expect(new Set(drawn).size).toBe(8);
+      expect(drawn[0]).toBe('c3');
+      for (const id of drawn) expect(cs.map((c) => c.id)).toContain(id);
+    }
+  });
+
+  it('draws nothing from a lesson with no chunks', () => {
+    expect(drawAttemptKeyPoints([], [], inOrder)).toEqual([]);
   });
 });
 
@@ -135,10 +161,5 @@ describe('masteryOf (stored rows → mastery against the CURRENT chunk list)', (
       { chunkId: 'v2-c1', latestScore: 80, cleared: true },
       { chunkId: 'v2-c2', latestScore: 40, cleared: false },
     ]);
-  });
-
-  it('counts cleared of total against the current list', () => {
-    expect(masteryCounts(current, stored)).toEqual({ cleared: 1, total: 3 });
-    expect(masteryCounts([], stored)).toEqual({ cleared: 0, total: 0 });
   });
 });

@@ -4,7 +4,6 @@ import { auth } from '#/lib/auth';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
 import { startOrResumeAttempt } from '#/lib/debrief-attempt.server';
 import { debriefNotOpen } from '#/lib/debrief-not-open';
-import { settleProgress } from '#/lib/settle-progress.server';
 
 /**
  * `courseSlug` because a lesson can be placed in several courses, each with
@@ -18,7 +17,7 @@ const StartInputSchema = z.object({
 /**
  * Start this pilot's debrief attempt, or resume the open one. Returns the
  * questions (text only — never expected answers or chunk tags), the answers
- * given so far, the saved draft and mastery so far. See
+ * given so far and the saved draft. See
  * `startOrResumeAttempt`.
  *
  * `getDebriefAccess` decides first, before any source lookup or model call:
@@ -66,12 +65,6 @@ export async function startDebriefHandler(request: Request): Promise<Response> {
       lessonSlug,
     });
     if (!result.ok) {
-      if (result.reason === 'passed') {
-        // The pass was just recorded (carry-over had cleared every chunk), so
-        // course progress and promotion move now, as on any other pass.
-        const promotion = await settleProgress({ userId, courseSlug });
-        return Response.json({ error: 'not-open', promotion }, { status: 409 });
-      }
       if (result.reason === 'busy') {
         // Another request is writing this lesson's first chunk list. Not
         // "nothing to debrief": the client shows "Preparing" and retries.

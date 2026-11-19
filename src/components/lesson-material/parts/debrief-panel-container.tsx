@@ -214,8 +214,8 @@ export const DebriefPanelContainer = ({
         );
       case 'retake-waiting':
         // The report the server keeps, so a reload or another device during
-        // the wait still shows mastery and what to revisit; the countdown
-        // alone only when there is no chunk mastery (legacy attempts only).
+        // the wait still shows the set scores and what to revisit; the
+        // countdown alone only when there is no chunk attempt (legacy only).
         return panel.report === null ? (
           <DebriefWait
             idBase={idBase}
@@ -227,7 +227,7 @@ export const DebriefPanelContainer = ({
           />
         ) : (
           <ScoreReport
-            mastery={panel.report.mastery}
+            result={panel.report.result}
             revisitNotes={panel.report.revisitNotes}
             headingLevel={headingLevel}
             idBase={idBase}
@@ -241,7 +241,6 @@ export const DebriefPanelContainer = ({
             lessonSlug={lessonSlug}
             readOnly={readOnly}
             retake={panel.retake}
-            clearedSome={panel.clearedSome}
             resume={panel.resume}
             headingLevel={headingLevel}
             refetchStatus={refetch}
@@ -250,7 +249,7 @@ export const DebriefPanelContainer = ({
       case 'finished':
         return (
           <ScoreReport
-            mastery={panel.report.mastery}
+            result={panel.report.result}
             revisitNotes={panel.report.revisitNotes}
             headingLevel={headingLevel}
             idBase={idBase}

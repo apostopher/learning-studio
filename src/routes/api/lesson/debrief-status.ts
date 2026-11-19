@@ -14,7 +14,6 @@ import {
 } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { getDebriefAccess } from '#/lib/debrief-access.server';
-import { masteryPercent } from '#/lib/debrief-mastery';
 import type { DebriefState } from '#/lib/debrief-schedule';
 
 const QuerySchema = z.object({
@@ -46,15 +45,16 @@ export type DebriefStatusResponse = {
    */
   attempts?: DebriefStatusAttempt[];
   /**
-   * Present ONLY between attempts — `retake-waiting`, and `open` for a retake.
-   * Chunks cleared of the lesson's current list; null when none are stored
-   * (a pilot with only legacy attempts on a lesson not yet chunked).
+   * Present ONLY between attempts — `retake-waiting`, and `open` for a retake:
+   * the latest finished attempt's set averages, in order (one per set it
+   * completed), or its score alone when it predates sets. Null when there is
+   * no finished chunk attempt.
    */
-  mastery?: { cleared: number; total: number; percent: number } | null;
+  lastAttempt?: { score: number; setAverages: number[] } | null;
   /**
-   * With `mastery`: "Worth revisiting" from the latest finished chunk
-   * attempt, through `toClientAttempt` (never the stored snapshot, which
-   * holds the grading key). Empty when there is no such attempt.
+   * With `lastAttempt`: its "Worth revisiting", through `toClientAttempt`
+   * (never the stored snapshot, which holds the grading key). Empty when
+   * there is no such attempt.
    */
   revisitNotes?: string[];
 };
@@ -121,17 +121,17 @@ export async function debriefStatusHandler(
       (state.kind === 'open' && state.retake)
     ) {
       // The report survives the wait: a reload, a later visit or another
-      // device shows mastery and what to revisit, not just the countdown.
-      const { mastery } = access;
+      // device shows the set scores and what to revisit, not just the
+      // countdown.
       const latest = await selectLatestFinishedChunkAttempt(userId, lessonSlug);
       const projected = latest ? toClientAttempt(latest) : null;
-      body.mastery =
-        mastery === null
-          ? null
-          : {
-              ...mastery,
-              percent: masteryPercent({ ...mastery, passed: false }),
-            };
+      body.lastAttempt =
+        latest && projected
+          ? {
+              score: latest.totalScore ?? 0,
+              setAverages: projected.setAverages,
+            }
+          : null;
       body.revisitNotes = projected
         ? revisitNotesOf(projected.questions, projected.evaluations)
         : [];

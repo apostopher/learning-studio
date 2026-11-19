@@ -68,8 +68,9 @@ beforeEach(() => {
   m.getAttemptOwner.mockResolvedValue({ userId: 'u1', lessonSlug: 'l1' });
   m.answerQuestion.mockResolvedValue({
     ok: true,
-    evaluation: { score: 40, revisitNote: 'note' },
-    mastery: { cleared: 1, total: 2, percent: 50 },
+    evaluation: { score: 40, feedback: 'Viper says.', revisitNote: 'note' },
+    setResult: null,
+    nextQuestions: [],
     finished: null,
   });
   m.saveDraft.mockResolvedValue('saved');
@@ -151,20 +152,6 @@ describe('start', () => {
     expect(await res.json()).toEqual({ error: 'preparing', retryable: true });
   });
 
-  it('a pass recorded at start (every chunk already cleared) settles progress and returns the promotion', async () => {
-    m.startOrResumeAttempt.mockResolvedValue({ ok: false, reason: 'passed' });
-    const res = await start();
-    expect(m.settleProgress).toHaveBeenCalledWith({
-      userId: 'u1',
-      courseSlug: 'c1',
-    });
-    expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({
-      error: 'not-open',
-      promotion: { level: 'advanced' },
-    });
-  });
-
   it('does not settle on an ordinary start', async () => {
     await start();
     expect(m.settleProgress).not.toHaveBeenCalled();
@@ -209,22 +196,39 @@ describe('answer', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      evaluation: { score: 40, revisitNote: 'note' },
-      mastery: { cleared: 1, total: 2, percent: 50 },
+      evaluation: { score: 40, feedback: 'Viper says.', revisitNote: 'note' },
+      setResult: null,
+      nextQuestions: [],
       finished: null,
       promotion: null,
     });
     expect(m.settleProgress).not.toHaveBeenCalled();
   });
 
+  it('a missed set 1 passes set 2’s questions through, without settling', async () => {
+    const nextQuestions = [{ id: 'q5', question: 'Next?', set: 2 }];
+    m.answerQuestion.mockResolvedValue({
+      ok: true,
+      evaluation: { score: 40, feedback: 'Viper says.', revisitNote: 'note' },
+      setResult: { set: 1, average: 60, passed: false },
+      nextQuestions,
+      finished: null,
+    });
+    const json = await (await send()).json();
+    expect(json.setResult).toEqual({ set: 1, average: 60, passed: false });
+    expect(json.nextQuestions).toEqual(nextQuestions);
+    expect(m.settleProgress).not.toHaveBeenCalled();
+  });
+
   it.each([
-    'all-answered',
-    'all-cleared',
+    'set-passed',
+    'sets-missed',
   ])('settles progress on finish (%s) and returns the promotion', async (finished) => {
     m.answerQuestion.mockResolvedValue({
       ok: true,
-      evaluation: { score: 80, revisitNote: '' },
-      mastery: { cleared: 2, total: 2, percent: 100 },
+      evaluation: { score: 80, feedback: 'Good.', revisitNote: '' },
+      setResult: { set: 1, average: 80, passed: finished === 'set-passed' },
+      nextQuestions: [],
       finished,
     });
     const res = await send();

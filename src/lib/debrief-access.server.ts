@@ -1,10 +1,6 @@
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getDebriefFacts } from '#/db/lesson-test';
-import {
-  computeDebriefState,
-  type DebriefFacts,
-  type DebriefState,
-} from '#/lib/debrief-schedule';
+import { computeDebriefState, type DebriefState } from '#/lib/debrief-schedule';
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 
 export type DebriefAccess =
@@ -13,12 +9,6 @@ export type DebriefAccess =
       courseId: number;
       lessonId: number;
       state: DebriefState;
-      /**
-       * Chunks cleared of the lesson's current list (`DebriefFacts.mastery`),
-       * null when none are stored. The status route shows it between
-       * attempts.
-       */
-      mastery: DebriefFacts['mastery'];
     }
   | { ok: false; status: 403 | 404 };
 
@@ -80,6 +70,5 @@ export async function getDebriefAccess({
     courseId: gate.courseId,
     lessonId: lesson.id,
     state: computeDebriefState(facts, now),
-    mastery: facts.mastery,
   };
 }

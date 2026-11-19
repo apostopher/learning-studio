@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import type { SQL } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
-import { debriefPassesTable } from '#/db/schema';
 
 type Stored = {
   lessonId: number;
@@ -124,7 +123,7 @@ const gen = [
 ];
 const fp = createHash('sha256')
   .update(
-    JSON.stringify(['knowledge-chunks-v2', source.keyPoints, source.context]),
+    JSON.stringify(['knowledge-chunks-v3', source.keyPoints, source.context]),
   )
   .digest('hex');
 
@@ -236,7 +235,9 @@ describe('ensureLessonChunks', () => {
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
   });
 
-  it("a regeneration whose carry-over fully clears a pilot records their pass for THIS lesson's new chunk list", async () => {
+  // 2026-11-18: a pass is earned only by a set of answers, so a regeneration
+  // that carries every chunk over as cleared still records no pass.
+  it('a regeneration whose carry-over clears every new chunk records no pass', async () => {
     m.stored = {
       lessonId: 1,
       version: 1,
@@ -257,10 +258,7 @@ describe('ensureLessonChunks', () => {
       { userId: 'u1', chunkId: 'v1-c2', latestScore: 80, clearedAt: t },
     ];
     await ensureLessonChunks(1, 'the-lesson', 2);
-    const pass = m.txCalls.find((c) => c.op === 'insert-pass');
-    expect((pass?.arg as { rows: unknown }).rows).toEqual([
-      { userId: 'u1', lessonSlug: 'the-lesson' },
-    ]);
+    expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
     expect(m.commits).toBe(1);
   });
 
@@ -371,32 +369,17 @@ describe('ensureLessonChunks', () => {
   });
 });
 
-/** New chunk ids no carried row covers: nobody is fully cleared. */
-const NOT_FULL = { lessonSlug: 'l5', newChunkIds: ['v9-never'] };
-
 describe('carryOverMastery', () => {
-  it('records a permanent pass, in the same transaction, for a pilot it fully clears — and only for them', async () => {
+  it('never records a pass, even for a pilot whose carried rows clear every new chunk', async () => {
     const t = new Date('2026-01-01T00:00:00Z');
     m.clearedRows = [
-      // u1: both old chunks cleared, mapping onto both new ones.
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'v1-c2', latestScore: 90, clearedAt: t },
-      // u2: one of two.
-      { userId: 'u2', chunkId: 'v1-c1', latestScore: 75, clearedAt: t },
     ];
-    await carryOverMastery(5, { 'v1-c1': 'v2-c2', 'v1-c2': 'v2-c1' }, 2, {
-      lessonSlug: 'l5',
-      newChunkIds: ['v2-c1', 'v2-c2'],
-    });
+    await carryOverMastery(5, { 'v1-c1': 'v2-c2', 'v1-c2': 'v2-c1' }, 2);
     expect(m.commits).toBe(1);
-    const passes = m.txCalls.filter((c) => c.op === 'insert-pass');
-    expect(passes).toHaveLength(1);
-    const { table, rows } = passes[0]?.arg as {
-      table: unknown;
-      rows: unknown;
-    };
-    expect(table).toBe(debriefPassesTable);
-    expect(rows).toEqual([{ userId: 'u1', lessonSlug: 'l5' }]);
+    expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
+    expect(m.txCalls.some((c) => c.op === 'insert-pass')).toBe(false);
   });
 
   it('replaces non-passed users rows with mapped cleared rows in one transaction', async () => {
@@ -405,7 +388,7 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: null }, 2, NOT_FULL);
+    await carryOverMastery(5, { c1: 'c2', c2: null }, 2);
     const [sel, del, ins] = m.txCalls;
     expect([sel.op, del.op, ins.op]).toEqual(['select', 'delete', 'insert']);
 
@@ -433,7 +416,7 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 71, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 72, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: 'c1' }, 2, NOT_FULL);
+    await carryOverMastery(5, { c1: 'c2', c2: 'c1' }, 2);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
     expect(
       (m.txCalls[2].arg as { chunkId: string }[]).map((r) => r.chunkId),
@@ -444,14 +427,14 @@ describe('carryOverMastery', () => {
     m.clearedRows = [
       { userId: 'u1', chunkId: 'c1', latestScore: 20, clearedAt: null },
     ];
-    await carryOverMastery(5, { c1: 'c1' }, 2, NOT_FULL);
+    await carryOverMastery(5, { c1: 'c1' }, 2);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete']);
   });
 });
 
 describe('carryOverMastery safety', () => {
   it('only selects and deletes rows NOT at the new version; current rows survive', async () => {
-    await carryOverMastery(5, { c1: 'c2' }, 3, NOT_FULL);
+    await carryOverMastery(5, { c1: 'c2' }, 3);
     for (const c of m.txCalls.filter((x) => x.op !== 'insert')) {
       expect(renderSql(c.arg as SQL)).toContain(
         '"debrief_chunk_mastery"."chunk_id" not like $3',
@@ -465,7 +448,7 @@ describe('carryOverMastery safety', () => {
     m.clearedRows = [
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
     ];
-    await carryOverMastery(5, { 'v1-c1': 'v2-c1' }, 2, NOT_FULL);
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1' }, 2);
     const cfg = m.conflictCfg as { target: unknown[]; set: { clearedAt: SQL } };
     expect(cfg.target).toHaveLength(3);
     expect(renderSql(cfg.set.clearedAt)).toBe(
@@ -479,12 +462,7 @@ describe('carryOverMastery safety', () => {
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'v1-c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(
-      5,
-      { 'v1-c1': 'v2-c1', 'v1-c2': 'v2-c1' },
-      2,
-      NOT_FULL,
-    );
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1', 'v1-c2': 'v2-c1' }, 2);
     expect(m.txCalls.at(-1)?.arg).toHaveLength(1);
   });
 

@@ -251,7 +251,9 @@ describe('done and debrief facts', () => {
     });
   });
 
-  it('every current chunk cleared reads as passed for the ring too, so it agrees with the 100 in the course percent', () => {
+  // 2026-11-18: only a passing set passes (a pass row); every chunk cleared
+  // across attempts is not a pass on its own.
+  it('every current chunk cleared without a pass row is not passed', () => {
     const { lessons } = aggregateCourseProgress('c', [
       row({
         moduleId: 1,
@@ -263,7 +265,7 @@ describe('done and debrief facts', () => {
         doneAt: '2026-10-01T00:00:00Z',
       }),
     ]);
-    expect(lessons[0].debrief.passed).toBe(true);
+    expect(lessons[0].debrief.passed).toBe(false);
   });
 
   it('a lesson with no stored chunks has null mastery, whatever the cleared count', () => {
@@ -356,7 +358,7 @@ describe('ringPercent — the staged ring the learner sees', () => {
     expect(ring(full({ quizPlayed: true }))).toBe(25);
   });
 
-  it('every current chunk cleared counts as passed', () => {
+  it('every current chunk cleared without a pass row does not fill the debrief stage', () => {
     expect(
       ring(
         full({
@@ -366,7 +368,7 @@ describe('ringPercent — the staged ring the learner sees', () => {
           chunksTotal: 7,
         }),
       ),
-    ).toBe(100);
+    ).toBe(75);
   });
 
   it('ignores the material tabs, which still count toward done', () => {

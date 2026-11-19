@@ -12,8 +12,8 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import { masteryPercent } from '#/lib/debrief-mastery';
 import { DEBRIEF_RETAKE_DELAY_MS } from '#/lib/debrief-schedule';
+import { setAverage } from '#/lib/debrief-sets';
 
 /**
  * An attempt that finished while the pilot was on its lesson: what its score
@@ -26,8 +26,20 @@ export type FinishedDebrief = {
   lessonSlug: string;
   /** `Date.now()` when the last answer was graded. */
   finishedAt: number;
-  mastery: { cleared: number; total: number; percent: number; passed: boolean };
+  /** What the report shows: the attempt's sets and whether one passed. */
+  result: DebriefResult;
   revisitNotes: string[];
+};
+
+/**
+ * An attempt's outcome as the report shows it. `setAverages` has one entry
+ * per set completed, in order; empty on an attempt from before sets, which
+ * shows `score` alone.
+ */
+export type DebriefResult = {
+  passed: boolean;
+  score: number;
+  setAverages: number[];
 };
 
 export type DebriefPanel =
@@ -41,25 +53,23 @@ export type DebriefPanel =
   | { kind: 'waiting'; availableAt: string }
   /**
    * Renders DebriefQuizContainer. `resume`: an attempt is already open.
-   * `clearedSome`: the pilot has cleared at least one current chunk, so a
-   * retake mixes one or two of them back in as review.
    */
-  | { kind: 'take'; retake: boolean; resume: boolean; clearedSome: boolean }
+  | { kind: 'take'; retake: boolean; resume: boolean }
   /**
    * The attempt just finished on this lesson: its report, and the countdown
    * to the next attempt (null once passed).
    */
   | { kind: 'finished'; report: FinishedDebrief; availableAt: string | null }
   /**
-   * The 6 h wait, on any later visit: the report the server keeps (mastery
-   * and the last attempt's revisit notes) with the countdown beneath it.
-   * `report` is null when there is no chunk mastery to show (legacy
-   * attempts only): then the countdown stands alone.
+   * The wait for a retake, on any later visit: the report the server keeps
+   * (the last attempt's set scores and revisit notes) with the countdown
+   * beneath it. `report` is null when there is no finished chunk attempt
+   * (legacy attempts only): then the countdown stands alone.
    */
   | {
       kind: 'retake-waiting';
       availableAt: string;
-      report: Pick<FinishedDebrief, 'mastery' | 'revisitNotes'> | null;
+      report: Pick<FinishedDebrief, 'result' | 'revisitNotes'> | null;
     }
   | { kind: 'passed'; attempts: NonNullable<DebriefStatus['attempts']> };
 
@@ -132,14 +142,13 @@ export function computeDebriefPanel({
   attemptInProgress,
 }: ComputeDebriefPanelArgs): DebriefPanel {
   const state = status.data?.state;
-  const clearedSome = (status.data?.mastery?.cleared ?? 0) > 0;
 
   const own = finished?.lessonSlug === lessonSlug ? finished : null;
   if (own && !isStaleFinishedDebrief(own, lessonSlug, status)) {
     return {
       kind: 'finished',
       report: own,
-      availableAt: own.mastery.passed
+      availableAt: own.result.passed
         ? null
         : state?.kind === 'retake-waiting'
           ? state.availableAt
@@ -155,7 +164,6 @@ export function computeDebriefPanel({
       kind: 'take',
       retake: state?.kind === 'open' ? state.retake : false,
       resume: true,
-      clearedSome,
     };
   }
 
@@ -182,15 +190,14 @@ export function computeDebriefPanel({
         kind: 'take',
         retake: data.state.retake,
         resume: data.state.resume,
-        clearedSome,
       };
     case 'retake-waiting':
       return {
         kind: 'retake-waiting',
         availableAt: data.state.availableAt,
-        report: data.mastery
+        report: data.lastAttempt
           ? {
-              mastery: { ...data.mastery, passed: false },
+              result: { ...data.lastAttempt, passed: false },
               revisitNotes: data.revisitNotes ?? [],
             }
           : null,
@@ -206,32 +213,53 @@ export function computeDebriefPanel({
 
 /**
  * The question the pilot is on: the first one not yet answered, with the
- * draft saved for it ('' when the draft is for another question). Null once
- * every question is answered.
+ * draft saved for it ('' when the draft is for another question), its set,
+ * and its place within that set. Null once every question shown is answered.
  */
 export function currentDebriefQuestion(attempt: DebriefAttemptView): {
   question: { id: string; question: string };
+  set: number;
   index: number;
   total: number;
   draft: string;
 } | null {
   const answered = new Set(attempt.answered.map((a) => a.questionId));
-  const index = attempt.questions.findIndex((q) => !answered.has(q.id));
-  const question = attempt.questions[index];
-  if (index < 0 || question === undefined) return null;
+  const question = attempt.questions.find((q) => !answered.has(q.id));
+  if (question === undefined) return null;
+  const inSet = attempt.questions.filter((q) => q.set === question.set);
   return {
-    question,
-    index,
-    total: attempt.questions.length,
+    question: { id: question.id, question: question.question },
+    set: question.set,
+    index: inSet.findIndex((q) => q.id === question.id),
+    total: inSet.length,
     draft: attempt.draft?.questionId === question.id ? attempt.draft.text : '',
   };
+}
+
+/** "Set 1 · Question 2 of 4": where a question sits, as the pilot reads it. */
+export function questionPosition(q: {
+  set: number;
+  index: number;
+  total: number;
+}): string {
+  return `Set ${q.set} · Question ${q.index + 1} of ${q.total}`;
+}
+
+/** What the feedback's one button says, from what the answer did. */
+export function feedbackNextLabel(
+  result: Pick<DebriefAnswerResult, 'finished' | 'setResult'>,
+): string {
+  if (result.finished !== null) return 'See your result';
+  if (result.setResult && !result.setResult.passed) {
+    return `Start set ${result.setResult.set + 1}`;
+  }
+  return 'Next question';
 }
 
 /**
  * The report of an attempt the answer `result` just finished, from the
  * attempt as it stood before that answer plus the answer itself. Null while
- * the attempt goes on. A pass (every chunk cleared) is 100 with nothing to
- * revisit.
+ * the attempt goes on. A pass has nothing to revisit.
  */
 export function finishedDebriefReport({
   lessonSlug,
@@ -247,16 +275,18 @@ export function finishedDebriefReport({
   now: number;
 }): FinishedDebrief | null {
   if (result.finished === null) return null;
-  const passed = result.finished === 'all-cleared';
-  const { cleared, total } = result.mastery;
+  const passed = result.finished === 'set-passed';
+  const answered = [
+    ...attempt.answered.filter((a) => a.questionId !== questionId),
+    { questionId, score: result.evaluation.score },
+  ];
   return {
     lessonSlug,
     finishedAt: now,
-    mastery: {
-      cleared,
-      total,
-      percent: masteryPercent({ cleared, total, passed }),
+    result: {
       passed,
+      score: result.setResult?.average ?? result.evaluation.score,
+      setAverages: setAveragesOf(attempt.questions, answered),
     },
     revisitNotes: passed
       ? []
@@ -265,6 +295,26 @@ export function finishedDebriefReport({
           { questionId, revisitNote: result.evaluation.revisitNote },
         ]),
   };
+}
+
+/** Each fully answered set's average, in set order. */
+export function setAveragesOf(
+  questions: readonly { id: string; set: number }[],
+  answered: readonly { questionId: string; score: number }[],
+): number[] {
+  const scoreOf = new Map(answered.map((a) => [a.questionId, a.score]));
+  const bySet = new Map<number, string[]>();
+  for (const q of questions) {
+    bySet.set(q.set, [...(bySet.get(q.set) ?? []), q.id]);
+  }
+  return [...bySet.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((set) => {
+      const ids = bySet.get(set) ?? [];
+      return ids.every((id) => scoreOf.has(id))
+        ? [setAverage(ids.map((id) => scoreOf.get(id) ?? 0))]
+        : [];
+    });
 }
 
 /**
@@ -302,18 +352,19 @@ export function countdownTarget(panel: DebriefPanel): {
 }
 
 /**
- * A passed-history attempt's format. A chunk attempt's answers carry a
- * revisit note (empty when the chunk was shown), a legacy one's never do.
- * Mastery is the only number a chunk attempt shows; a legacy attempt keeps
- * its per-answer scores.
+ * A passed-history attempt's format. A set attempt's answers carry Viper's
+ * feedback; a chunk attempt's carry a revisit note (empty when the chunk was
+ * shown); a legacy one's carry neither.
  */
 export function attemptFormat(
   evaluations: readonly {
     questionId: string;
     score: number;
     revisitNote?: string;
+    feedback?: string;
   }[],
-): 'chunk' | 'legacy' {
+): 'sets' | 'chunk' | 'legacy' {
+  if (evaluations.some((e) => e.feedback !== undefined)) return 'sets';
   return evaluations.some((e) => e.revisitNote !== undefined)
     ? 'chunk'
     : 'legacy';
@@ -410,6 +461,7 @@ export type DebriefQuizView =
   | 'starting'
   | 'resuming'
   | 'scoring'
+  | 'feedback'
   | 'question';
 
 /**
@@ -430,6 +482,8 @@ export function debriefQuizView(v: {
   startError: DebriefStartError | null;
   /** An unanswered question is left. */
   hasCurrent: boolean;
+  /** Viper's feedback on the last answer is waiting for Next. */
+  hasFeedback: boolean;
 }): DebriefQuizView {
   if (v.readOnly) return 'read-only';
   if (v.notOpen) {
@@ -446,5 +500,6 @@ export function debriefQuizView(v: {
     if (v.startError === 'failed') return 'start-failed';
     return v.resume ? 'resuming' : 'starting';
   }
+  if (v.hasFeedback) return 'feedback';
   return v.hasCurrent ? 'question' : 'scoring';
 }

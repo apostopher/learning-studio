@@ -16,7 +16,7 @@ export function generationPrompt(vars: {
       (s, i) =>
         `${i + 1}. focus chunk \`${s.chunkId}\` (${
           s.kind === 'hole'
-            ? 'the pilot has not yet shown they know this'
+            ? 'a key point of the lesson'
             : 'spaced review of something the pilot already cleared'
         })`,
     )

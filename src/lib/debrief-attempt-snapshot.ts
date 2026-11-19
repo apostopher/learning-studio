@@ -33,5 +33,19 @@ export const StoredAttemptSchema = z.object({
   questions: z.array(AITestGenerationQuestionSchema),
   chunks: z.array(KnowledgeChunkSchema),
   context: z.string(),
+  /**
+   * Question ids by set, in the order asked (`splitIntoSets`). Absent on
+   * attempts started before sets (2026-11-18): those count as one set of
+   * every question (`attemptSets`).
+   */
+  sets: z.array(z.array(z.string())).optional(),
 });
 export type StoredAttempt = z.infer<typeof StoredAttemptSchema>;
+
+/** The attempt's sets; one set of every question on a pre-sets attempt. */
+export function attemptSets(stored: {
+  questions: readonly { id: string }[];
+  sets?: string[][];
+}): string[][] {
+  return stored.sets ?? [stored.questions.map((q) => q.id)];
+}

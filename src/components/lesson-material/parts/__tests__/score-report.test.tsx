@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ScoreReport } from '../score-report';
+import { ScoreReport, setSummary } from '../score-report';
 
 // Capture what the ring was handed: the report's number IS the ring's prop.
 const ringProps = vi.hoisted(() => [] as { score: number }[]);
@@ -13,7 +13,7 @@ vi.mock('../score-ring', () => ({
 }));
 
 const holes = {
-  mastery: { cleared: 5, total: 7, percent: 71, passed: false },
+  result: { passed: false, score: 71, setAverages: [68, 71] },
   revisitNotes: [
     'Lift depends on airspeed squared, so halving speed quarters lift — your answer said it halves.',
     'A stall is about angle of attack, not speed; you tied it to a minimum speed.',
@@ -21,11 +21,16 @@ const holes = {
 };
 
 describe('ScoreReport', () => {
-  it('rings the mastery percent and states the cleared count', () => {
+  it('rings the score of the set that ended it and states every set average against the pass mark', () => {
     ringProps.length = 0;
     render(<ScoreReport {...holes} headingLevel={2} idBase=":r1:" />);
     expect(ringProps.at(-1)?.score).toBe(71);
-    expect(screen.getByText('5 of 7 knowledge chunks cleared')).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: 'Not passed this time' }),
+    ).toBeDefined();
+    expect(
+      screen.getByText('Set 1 average 68, set 2 average 71. 75 passes.'),
+    ).toBeDefined();
   });
 
   it('renders each revisit note as its own paragraph, word for word', () => {
@@ -38,18 +43,21 @@ describe('ScoreReport', () => {
     expect(section.querySelector('ul, li')).toBeNull();
   });
 
-  it('a pass rings 100 and lists nothing to revisit', () => {
+  it('a pass rings its passing set average and lists nothing to revisit', () => {
     ringProps.length = 0;
     render(
       <ScoreReport
-        mastery={{ cleared: 7, total: 7, percent: 100, passed: true }}
+        result={{ passed: true, score: 82, setAverages: [82] }}
         revisitNotes={['should not show']}
         headingLevel={2}
         idBase=":r1:"
       />,
     );
-    expect(ringProps.at(-1)?.score).toBe(100);
-    expect(screen.getByText('7 of 7 knowledge chunks cleared')).toBeDefined();
+    expect(ringProps.at(-1)?.score).toBe(82);
+    expect(
+      screen.getByRole('heading', { name: 'Debrief passed' }),
+    ).toBeDefined();
+    expect(screen.getByText('Set 1 average 82. 75 passes.')).toBeDefined();
     expect(
       screen.queryByRole('region', { name: 'Worth revisiting' }),
     ).toBeNull();
@@ -99,5 +107,13 @@ describe('ScoreReport', () => {
       const id = section.getAttribute('aria-labelledby') as string;
       expect(document.getElementById(id)?.textContent).toBe('Worth revisiting');
     }
+  });
+});
+
+describe('setSummary', () => {
+  it('shows the score alone for an attempt from before sets', () => {
+    expect(setSummary({ passed: false, score: 80, setAverages: [] })).toBe(
+      'Score 80. 75 passes.',
+    );
   });
 });

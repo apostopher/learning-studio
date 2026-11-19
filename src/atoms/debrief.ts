@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import type { FinishedDebrief } from '#/components/lesson-material/compute-debrief-panel';
+import type { SetOutcome } from '#/lib/debrief-sets';
 
 /**
  * The debrief attempt finished while the pilot has been on its lesson: what
@@ -11,6 +12,36 @@ import type { FinishedDebrief } from '#/components/lesson-material/compute-debri
  * reopens while the page stays open (`isStaleFinishedDebrief`).
  */
 export const justFinishedDebriefAtom = atom<FinishedDebrief | null>(null);
+
+/**
+ * Viper's feedback on the answer just graded, on screen until the pilot
+ * presses Next. Keyed on the lesson and attempt, so it never shows anywhere
+ * else. `report` is set when this answer finished the attempt: Next then
+ * hands it to `justFinishedDebriefAtom`, so the report waits until the
+ * feedback has been read.
+ */
+export type DebriefFeedbackShown = {
+  lessonSlug: string;
+  attemptId: number;
+  questionId: string;
+  position: string;
+  question: string;
+  answer: string;
+  score: number;
+  feedback: string;
+  setResult: SetOutcome | null;
+  /** `feedbackNextLabel`. */
+  nextLabel: string;
+  report: FinishedDebrief | null;
+};
+export const debriefFeedbackAtom = atom<DebriefFeedbackShown | null>(null);
+
+/**
+ * Next was pressed on the feedback: the next question's answer box takes
+ * focus as it mounts (React's `autoFocus`, mount only, so a refetch never
+ * moves it). Reset on the next submit.
+ */
+export const debriefFocusAnswerAtom = atom(false);
 
 /**
  * The lesson whose debrief the pilot pressed Start on. Starting asks the

@@ -1,0 +1,94 @@
+// @vitest-environment jsdom
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import { DebriefFeedback, setResultCopy } from '../debrief-feedback';
+
+// motion's useReducedMotion needs one React: the CJS shim, as in
+// question-card.test.tsx.
+vi.mock('react', async () => {
+  const { createRequire } = await import('node:module');
+  const cjs = createRequire(import.meta.url)('react');
+  return { ...cjs, default: cjs };
+});
+
+function setup(props: Partial<Parameters<typeof DebriefFeedback>[0]> = {}) {
+  const onNext = vi.fn();
+  render(
+    <DebriefFeedback
+      position="Set 1 · Question 2 of 4"
+      question="Why brief the go-around?"
+      answer="So nobody improvises"
+      verdict="Mostly there"
+      score={80}
+      feedback="You tied the brief to shared expectations; add who calls it."
+      setResult={null}
+      nextLabel="Next question"
+      onNext={onNext}
+      headingLevel={2}
+      idBase=":f:"
+      {...props}
+    />,
+  );
+  return { onNext };
+}
+
+describe('DebriefFeedback', () => {
+  it("names itself by its heading and shows the position, verdict, score and Viper's words", () => {
+    setup();
+    const region = screen.getByRole('region', { name: 'Viper’s feedback' });
+    expect(region.textContent).toContain('Set 1 · Question 2 of 4');
+    expect(screen.getByText('Mostly there · 80')).toBeDefined();
+    expect(
+      screen.getByText(
+        'You tied the brief to shared expectations; add who calls it.',
+      ),
+    ).toBeDefined();
+  });
+
+  it('keeps the question and the answer given, to read the feedback against', () => {
+    setup();
+    expect(screen.getByText('Why brief the go-around?')).toBeDefined();
+    expect(screen.getByText('So nobody improvises')).toBeDefined();
+  });
+
+  it('moves on only when the pilot presses its one button, labelled as given', async () => {
+    const { onNext } = setup({ nextLabel: 'Start set 2' });
+    expect(onNext).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Start set 2' }));
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it('hands the heading to the ref it is given, focusable so the feedback is read first', () => {
+    let heading: HTMLHeadingElement | null = null;
+    setup({
+      headingRef: (el) => {
+        heading = el;
+      },
+    });
+    expect(heading).not.toBeNull();
+    expect((heading as unknown as HTMLElement).tabIndex).toBe(-1);
+    expect((heading as unknown as HTMLElement).tagName).toBe('H2');
+  });
+
+  it('shows the set result only when the answer completed a set', () => {
+    setup();
+    expect(screen.queryByText(/average/)).toBeNull();
+  });
+
+  it('shows the set result copy when the answer completed a set', () => {
+    setup({ setResult: { set: 1, average: 68, passed: false } });
+    expect(screen.getByText('Set 1 average: 68. 75 passes.')).toBeDefined();
+  });
+});
+
+describe('setResultCopy', () => {
+  it('says a passing set passes the debrief, and a missed one what passes', () => {
+    expect(setResultCopy({ set: 2, average: 81, passed: true })).toBe(
+      'Set 2 average: 81. That passes the debrief.',
+    );
+    expect(setResultCopy({ set: 1, average: 68, passed: false })).toBe(
+      'Set 1 average: 68. 75 passes.',
+    );
+  });
+});

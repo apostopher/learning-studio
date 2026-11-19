@@ -40,8 +40,7 @@ function setup(
   render(
     <QuestionCard
       question={question}
-      index={0}
-      total={2}
+      position="Set 1 · Question 1 of 2"
       idBase=":q:"
       isEvaluating={false}
       readOnly={false}
@@ -202,10 +201,22 @@ describe('QuestionCard read-only', () => {
   });
 });
 
-describe('QuestionCard count', () => {
-  it('says which question this is, of how many', () => {
-    setup({ index: 1, total: 7 });
-    expect(screen.getByText('Question 2 of 7')).toBeDefined();
+describe('QuestionCard position', () => {
+  it('shows the set and question position it is given', () => {
+    setup({ position: 'Set 2 · Question 3 of 4' });
+    expect(screen.getByText('Set 2 · Question 3 of 4')).toBeDefined();
+  });
+});
+
+describe('QuestionCard focus after Next', () => {
+  it('puts focus in the answer box when asked to', () => {
+    const { box } = setup({ autoFocusAnswer: true });
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('leaves focus alone otherwise (a resume or a first question)', () => {
+    const { box } = setup();
+    expect(document.activeElement).not.toBe(box);
   });
 });
 

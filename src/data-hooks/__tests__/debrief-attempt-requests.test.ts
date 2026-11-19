@@ -13,6 +13,7 @@ import {
   postDebriefDraft,
   preparingRetry,
   preparingRetryDelay,
+  withAnswerRecorded,
 } from '#/data-hooks/use-debrief-attempt';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -40,8 +41,8 @@ const stub = (status: number, body: unknown = {}) => {
 const attempt: DebriefAttemptView = {
   attemptId: 7,
   questions: [
-    { id: 'q1', question: 'A?' },
-    { id: 'q2', question: 'B?' },
+    { id: 'q1', question: 'A?', set: 1 },
+    { id: 'q2', question: 'B?', set: 1 },
   ],
   answered: [],
   draft: { questionId: 'q1', text: 'half' },
@@ -103,8 +104,9 @@ describe('debrief attempt requests', () => {
 
   it('answer posts the exact body the route validates, and returns the promotion', async () => {
     const f = stub(200, {
-      evaluation: { score: 80, revisitNote: '' },
-      mastery: { cleared: 2, total: 4, percent: 50 },
+      evaluation: { score: 80, feedback: 'Good', revisitNote: '' },
+      setResult: null,
+      nextQuestions: [],
       finished: null,
       promotion: { id: 1, from: 'basic', to: 'intermediate' },
     });
@@ -136,7 +138,7 @@ describe('debrief attempt requests', () => {
     });
   });
 
-  it('a recorded answer reaches the attempt cache; status and progress are invalidated', async () => {
+  it('a recorded answer reaches the attempt cache with its feedback; status and progress are invalidated', async () => {
     const qc = new QueryClient();
     qc.setQueryData(dataKeys.debriefAttempt('l1'), attempt);
     const spy = vi.spyOn(qc, 'invalidateQueries');
@@ -144,8 +146,9 @@ describe('debrief attempt requests', () => {
       qc,
       { ...lesson, attemptId: 7, questionId: 'q1', answer: 'abc', metrics },
       {
-        evaluation: { score: 80, revisitNote: 'n' },
-        mastery: { cleared: 2, total: 4, percent: 50 },
+        evaluation: { score: 80, feedback: 'Viper says', revisitNote: 'n' },
+        setResult: null,
+        nextQuestions: [],
         finished: null,
         promotion: null,
       },
@@ -154,11 +157,41 @@ describe('debrief attempt requests', () => {
       dataKeys.debriefAttempt('l1'),
     );
     expect(cached?.answered).toEqual([
-      { questionId: 'q1', score: 80, revisitNote: 'n' },
+      { questionId: 'q1', score: 80, feedback: 'Viper says', revisitNote: 'n' },
     ]);
     expect(cached?.draft).toBeNull();
     const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(dataKeys.debriefStatus('ppl', 'l1'));
     expect(keys).toContainEqual(dataKeys.courseProgressSummary('ppl'));
+  });
+});
+
+describe('withAnswerRecorded', () => {
+  const result = (nextQuestions: DebriefAttemptView['questions']) => ({
+    evaluation: { score: 60, feedback: 'f', revisitNote: 'r' },
+    setResult: { set: 1, average: 60, passed: false },
+    nextQuestions,
+    finished: null,
+    promotion: null,
+  });
+
+  it('appends the set a missed set opened, after the questions already shown', () => {
+    const next = withAnswerRecorded(
+      attempt,
+      'q2',
+      result([
+        { id: 'q3', question: 'C?', set: 2 },
+        { id: 'q4', question: 'D?', set: 2 },
+      ]),
+    );
+    expect(next.questions.map((q) => q.id)).toEqual(['q1', 'q2', 'q3', 'q4']);
+  });
+
+  it('never adds a question twice when the same result is applied again', () => {
+    const opened = result([{ id: 'q3', question: 'C?', set: 2 }]);
+    const once = withAnswerRecorded(attempt, 'q2', opened);
+    const twice = withAnswerRecorded(once, 'q2', opened);
+    expect(twice.questions.map((q) => q.id)).toEqual(['q1', 'q2', 'q3']);
+    expect(twice.answered).toHaveLength(1);
   });
 });

@@ -66,7 +66,7 @@ ${text}
 ${pairedItems
   .map(
     ({ question, feedback }) => `### Question ID: ${question.id}
-**Focus chunk (first of chunkIds):** \`${slotByQuestionId[question.id]?.chunkId ?? question.chunkIds[0]}\` (${slotByQuestionId[question.id]?.kind === 'review' ? 'spaced review of a chunk the pilot already cleared' : 'a chunk the pilot has not yet shown they know'})
+**Focus chunk (first of chunkIds):** \`${slotByQuestionId[question.id]?.chunkId ?? question.chunkIds[0]}\` (${slotByQuestionId[question.id]?.kind === 'review' ? 'spaced review of a chunk the pilot already cleared' : 'a key point of the lesson'})
 **Evaluator Feedback:** ${feedback.reason}
 
 **Original Question:**

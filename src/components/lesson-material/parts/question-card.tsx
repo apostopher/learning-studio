@@ -41,6 +41,7 @@ type FreeTextInputProps = {
   clipboardAllowed: boolean;
   onBlockedPaste: () => void;
   onAnswerEvent: (event: AnswerBoxEvent) => void;
+  autoFocus: boolean;
 };
 
 const FreeTextInput = ({
@@ -52,6 +53,7 @@ const FreeTextInput = ({
   clipboardAllowed,
   onBlockedPaste,
   onAnswerEvent,
+  autoFocus,
 }: FreeTextInputProps) => {
   const [text, setText] = useAtom(freeTextAnswerAtom);
   const describedBy =
@@ -70,6 +72,8 @@ const FreeTextInput = ({
   return (
     <div className="flex flex-col gap-4">
       <textarea
+        // biome-ignore lint/a11y/noAutofocus: only after the pilot pressed Next on the feedback; without it focus drops to the page top
+        autoFocus={autoFocus}
         rows={4}
         placeholder="Type your answer..."
         value={text}
@@ -127,8 +131,13 @@ const FreeTextInput = ({
 
 type QuestionCardProps = {
   question: DebriefQuestion;
-  index: number;
-  total: number;
+  /** "Set 1 · Question 2 of 4" (`questionPosition`). */
+  position: string;
+  /**
+   * The pilot pressed Next on Viper's feedback: the answer box takes focus
+   * as it mounts, so focus is never dropped to the top of the page.
+   */
+  autoFocusAnswer?: boolean;
   /** The container's `useId`: the question text's id derives from it. */
   idBase: string;
   isEvaluating: boolean;
@@ -153,8 +162,8 @@ type QuestionCardProps = {
 
 export const QuestionCard = ({
   question,
-  index,
-  total,
+  position,
+  autoFocusAnswer = false,
   idBase,
   isEvaluating,
   onSubmit,
@@ -183,7 +192,7 @@ export const QuestionCard = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-tertiary tabular-nums">
-          Question {index + 1} of {total}
+          {position}
         </span>
       </div>
 
@@ -221,6 +230,7 @@ export const QuestionCard = ({
         clipboardAllowed={clipboardAllowed}
         onBlockedPaste={onBlockedPaste}
         onAnswerEvent={onAnswerEvent}
+        autoFocus={autoFocusAnswer}
       />
     </motion.div>
   );

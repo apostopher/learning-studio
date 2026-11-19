@@ -14,10 +14,12 @@ afterEach(() => vi.unstubAllGlobals());
 const attempt: DebriefAttemptView = {
   attemptId: 7,
   questions: [
-    { id: 'q1', question: 'A?' },
-    { id: 'q2', question: 'B?' },
+    { id: 'q1', question: 'A?', set: 1 },
+    { id: 'q2', question: 'B?', set: 1 },
   ],
-  answered: [{ questionId: 'q1', score: 40, revisitNote: 'First note' }],
+  answered: [
+    { questionId: 'q1', score: 40, feedback: 'F1', revisitNote: 'First note' },
+  ],
   draft: null,
 };
 const metrics = {
@@ -31,9 +33,10 @@ const metrics = {
   finalLength: 3,
 };
 const body = {
-  evaluation: { score: 50, revisitNote: 'Second note' },
-  mastery: { cleared: 1, total: 2, percent: 50 },
-  finished: 'all-answered',
+  evaluation: { score: 50, feedback: 'F2', revisitNote: 'Second note' },
+  setResult: { set: 1, average: 45, passed: false },
+  nextQuestions: [],
+  finished: 'sets-missed',
 };
 
 describe('useAnswerDebrief', () => {
@@ -50,8 +53,8 @@ describe('useAnswerDebrief', () => {
     client.setQueryData(dataKeys.debriefAttempt('l1'), attempt);
     const seen: unknown[] = [];
     const onAnswered = vi.fn(() => {
-      // The panel builds the finished report from here, and must swap to it
-      // in the same render the attempt cache moves on — never after.
+      // The quiz records Viper's feedback from here, and must show it in the
+      // same render the attempt cache moves on — never the next question.
       seen.push(client.getQueryData(dataKeys.debriefAttempt('l1')));
     });
     const wrapper = ({ children }: { children: ReactNode }) => (

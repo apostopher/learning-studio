@@ -28,41 +28,54 @@ import {
   DEBRIEF_ANSWER_MAX_CHARS,
 } from '#/lib/answer-metrics';
 import {
+  attemptSets,
   DEBRIEF_ATTEMPT_FORMAT,
   type StoredAttempt,
   StoredAttemptSchema,
 } from '#/lib/debrief-attempt-snapshot';
 import {
   applyChunkScore,
-  isAllCleared,
+  drawAttemptKeyPoints,
   type KnowledgeChunk,
-  masteryCounts,
   masteryOf,
-  masteryPercent,
-  planAttemptFocus,
 } from '#/lib/debrief-mastery';
+import {
+  type SetOutcome,
+  setsProgress,
+  splitIntoSets,
+} from '#/lib/debrief-sets';
 import {
   ensureLessonChunks,
   mapToCurrentChunkIds,
 } from '#/lib/knowledge-chunks.server';
 import {
+  keyPointFocus,
   prepareDebrief,
   preparedFingerprint,
   takePreparedDebrief,
 } from '#/lib/prepared-debrief.server';
 
-/** A question as the pilot sees it. Never its expected answer or chunk tags. */
-export type ClientQuestion = { id: string; question: string };
+/**
+ * A question as the pilot sees it: never its expected answer or chunk tags.
+ * `set` is 1-based (`#/lib/debrief-sets`).
+ */
+export type ClientQuestion = { id: string; question: string; set: number };
 
 export type AnsweredQuestion = {
   questionId: string;
   score: number;
+  /** Viper's feedback on the answer; '' on answers graded before it existed. */
+  feedback: string;
   revisitNote: string;
 };
 
 /** Everything the debrief tab needs to show (or resume) an attempt. */
 export type AttemptView = {
   attemptId: number;
+  /**
+   * Only the sets the pilot has reached: set 2 stays on the server until set
+   * 1 is answered and missed, so it can never be read ahead of time.
+   */
   questions: ClientQuestion[];
   answered: AnsweredQuestion[];
   draft: { questionId: string; text: string } | null;
@@ -73,16 +86,21 @@ export type StartResult =
   /** No chunks could be built: nothing to debrief from. */
   | { ok: false; reason: 'no-source' }
   /** Another request is still generating the lesson's first chunks: retry. */
-  | { ok: false; reason: 'busy' }
-  /** Every current chunk was already cleared: the pass is now recorded. */
-  | { ok: false; reason: 'passed' };
+  | { ok: false; reason: 'busy' };
 
 export type AnswerResult =
   | {
       ok: true;
-      evaluation: { score: number; revisitNote: string };
-      mastery: { cleared: number; total: number; percent: number };
-      finished: null | 'all-answered' | 'all-cleared';
+      evaluation: { score: number; feedback: string; revisitNote: string };
+      /** Set when this answer completed its set. */
+      setResult: SetOutcome | null;
+      /** The next set's questions, when this answer missed a set and opened it. */
+      nextQuestions: ClientQuestion[];
+      /**
+       * `set-passed`: a set averaged 75 or more — a permanent pass.
+       * `sets-missed`: the last set is done without one.
+       */
+      finished: null | 'set-passed' | 'sets-missed';
     }
   /** Not this pilot's, not a chunk-format attempt, or finished. */
   | { ok: false; reason: 'forbidden' }
@@ -110,8 +128,31 @@ function parseAnswers(row: AttemptRow): AIEvaluationResult[] {
 const toAnswered = (e: AIEvaluationResult): AnsweredQuestion => ({
   questionId: e.questionId,
   score: e.score,
+  feedback: e.feedback ?? '',
   revisitNote: e.revisitNote ?? '',
 });
+
+const scoresOf = (answers: readonly AIEvaluationResult[]) =>
+  new Map(answers.map((e) => [e.questionId, e.score]));
+
+/** The questions of sets `from`..`to` (1-based, inclusive), as the client sees them. */
+function clientQuestions(
+  stored: StoredAttempt,
+  from: number,
+  to: number,
+): ClientQuestion[] {
+  const byId = new Map(stored.questions.map((q) => [q.id, q]));
+  return attemptSets(stored)
+    .slice(from - 1, to)
+    .flatMap((ids, i) =>
+      ids.flatMap((id) => {
+        const q = byId.get(id);
+        // Picked field by field: the stored question carries
+        // `expectedAnswer` and `chunkIds`, which must never reach the client.
+        return q ? [{ id: q.id, question: q.question, set: from + i }] : [];
+      }),
+    );
+}
 
 /**
  * The lesson's current chunk list, for counting mastery. Falls back to the
@@ -136,15 +177,12 @@ async function currentChunksOr(
 
 function toView(row: AttemptRow): AttemptView {
   const stored = parseStored(row);
+  const answers = parseAnswers(row);
+  const { reached } = setsProgress(attemptSets(stored), scoresOf(answers));
   return {
     attemptId: row.id,
-    // Picked field by field: the stored question carries `expectedAnswer`
-    // and `chunkIds`, which must never reach the client.
-    questions: stored.questions.map((q) => ({
-      id: q.id,
-      question: q.question,
-    })),
-    answered: parseAnswers(row).map(toAnswered),
+    questions: clientQuestions(stored, 1, reached),
+    answered: answers.map(toAnswered),
     draft: row.draft ?? null,
   };
 }
@@ -153,11 +191,12 @@ function toView(row: AttemptRow): AttemptView {
  * The pilot's debrief attempt on this lesson: the open one if there is one
  * (resume — same questions, answers so far and draft), else a new one.
  *
- * A new attempt asks about the pilot's holes plus a little review
- * (`planAttemptFocus` over current mastery), served from the prepared test
- * when it was built for exactly this chunk version and focus, else generated
- * now. It stores a snapshot of the questions, chunks and context, which is
- * all grading ever reads.
+ * A new attempt asks up to eight of the lesson's key points, a fresh random
+ * draw with the pilot's misses first (`drawAttemptKeyPoints`), in sets of
+ * four. It is served from the prepared test when that was drawn for exactly
+ * this chunk version and mastery, else generated now. It stores a snapshot of
+ * the questions, their sets, the chunks and the context, which is all
+ * grading ever reads.
  *
  * The caller has already checked the debrief is open (`getDebriefAccess`).
  */
@@ -179,15 +218,6 @@ export async function startOrResumeAttempt(k: {
     lesson.chunks,
     await selectMastery(k.userId, k.lessonId),
   );
-  if (isAllCleared(lesson.chunks, mastery)) {
-    // Reachable only when a regeneration carried every hole over as cleared.
-    await db.transaction(async (tx) =>
-      insertPass(tx, { userId: k.userId, lessonSlug: k.lessonSlug }),
-    );
-    return { ok: false, reason: 'passed' };
-  }
-
-  const focus = planAttemptFocus(lesson.chunks, mastery);
   const key = {
     userId: k.userId,
     courseId: k.courseId,
@@ -196,13 +226,13 @@ export async function startOrResumeAttempt(k: {
   const test =
     (await takePreparedDebrief(
       key,
-      preparedFingerprint(lesson.version, focus),
+      preparedFingerprint(lesson.version, mastery),
     )) ??
     (await generateTest({
       lessonSlug: k.lessonSlug,
       chunks: lesson.chunks,
       context: lesson.context,
-      focus,
+      focus: keyPointFocus(drawAttemptKeyPoints(lesson.chunks, mastery)),
       avoidQuestions: await selectAskedQuestions(k.userId, k.lessonSlug),
     }));
   if (test.questions.length === 0) {
@@ -217,6 +247,7 @@ export async function startOrResumeAttempt(k: {
       questions: test.questions,
       chunks: lesson.chunks,
       context: lesson.context,
+      sets: splitIntoSets(test.questions.map((q) => q.id)),
     },
     chunkVersion: lesson.version,
   });
@@ -253,15 +284,17 @@ const isChunkAttempt = (row: AttemptRow | null, userId: string) =>
  * write locks the attempt row and re-checks, so of two concurrent graders
  * only the first commits and the second returns the first's evaluation.
  *
- * Questions are answered in order. Each chunk score is applied to the
- * pilot's mastery of the lesson's CURRENT chunk list (mapped across one
- * regeneration; an id that maps to nothing updates no mastery but stays on
- * the attempt). The attempt finishes:
- * - `all-cleared` the moment every current chunk is cleared — score 100 and
- *   a permanent pass, remaining questions skipped;
- * - `all-answered` when the last question is answered with holes left —
- *   score = mastery percent, and the next attempt is prepared in the
- *   background.
+ * Questions are answered in order, and only within the sets reached (set 2
+ * opens when set 1 is missed). Each chunk score is applied to the pilot's
+ * mastery of the lesson's CURRENT chunk list (mapped across one
+ * regeneration), which only orders the next draw. When the answer completes
+ * a set (`setsProgress`):
+ * - average 75 or more: `set-passed` — a permanent pass, score = that
+ *   average, any later set never asked;
+ * - below 75 with a set left: the attempt goes on, and the next set's
+ *   questions come back in `nextQuestions`;
+ * - below 75 on the last set: `sets-missed`, score = that average, and the
+ *   next attempt is prepared in the background.
  */
 export async function answerQuestion(a: {
   userId: string;
@@ -280,7 +313,7 @@ export async function answerQuestion(a: {
   const answers = parseAnswers(row);
 
   const already = answers.find((e) => e.questionId === a.questionId);
-  if (already) return storedResult(row, already, a.userId, a.lessonId);
+  if (already) return storedResult(row, already);
   if (row.completedAt !== null) return { ok: false, reason: 'forbidden' };
 
   const answeredIds = new Set(answers.map((e) => e.questionId));
@@ -344,43 +377,16 @@ export async function answerQuestion(a: {
     });
     if (writes.length > 0) await upsertMastery(tx, writes);
 
-    // Mastery after this answer, against the current list.
-    const after = new Map(
-      [...rows, ...writes].map((r) => [
-        r.chunkId,
-        {
-          chunkId: r.chunkId,
-          latestScore: r.latestScore,
-          clearedAt: r.clearedAt,
-        },
-      ]),
-    );
-    const afterRows = [...after.values()];
-    const allCleared = isAllCleared(
-      current.chunks,
-      masteryOf(current.chunks, afterRows),
-    );
     const newAnswers = [...lockedAnswers, evaluation];
-    const answered = new Set(newAnswers.map((e) => e.questionId));
-    const allAnswered = stored.questions.every((q) => answered.has(q.id));
-    const finished = allCleared
-      ? ('all-cleared' as const)
-      : allAnswered
-        ? ('all-answered' as const)
-        : null;
-    const counts = masteryCounts(current.chunks, afterRows);
-    const percent = masteryPercent({
-      ...counts,
-      passed: finished === 'all-cleared',
-    });
+    const step = setStep(stored, lockedAnswers, newAnswers, a.questionId);
 
     await updateAttempt(tx, a.attemptId, {
       answers: newAnswers,
       draft: null,
-      ...(finished && {
+      ...(step.finished && {
         completedAt: now,
-        totalScore: finished === 'all-cleared' ? 100 : percent,
-        finishedReason: finished,
+        totalScore: step.setResult?.average ?? 0,
+        finishedReason: step.finished,
       }),
     });
     await insertAnswerLog(tx, {
@@ -388,25 +394,21 @@ export async function answerQuestion(a: {
       questionId: a.questionId,
       metrics: a.metrics,
     });
-    if (finished === 'all-cleared') {
+    if (step.finished === 'set-passed') {
       await insertPass(tx, { userId: a.userId, lessonSlug: row.lessonSlug });
     }
     return {
       ok: true,
-      evaluation: {
-        score: evaluation.score,
-        revisitNote: evaluation.revisitNote ?? '',
-      },
-      mastery: { ...counts, percent },
-      finished,
+      evaluation: evaluationView(evaluation),
+      ...step,
     };
   });
 
   if ('lost' in outcome) {
-    return storedResult(outcome.row, outcome.winner, a.userId, a.lessonId);
+    return storedResult(outcome.row, outcome.winner);
   }
-  if (outcome.ok && outcome.finished === 'all-answered') {
-    // Holes left: the retake opens in 6h with a fresh, holes-focused set.
+  if (outcome.ok && outcome.finished === 'sets-missed') {
+    // No pass: the retake opens later with a fresh draw, misses first.
     // Not awaited — the pilot is waiting on this response, not the model.
     waitUntil(
       prepareDebrief({
@@ -422,39 +424,65 @@ export async function answerQuestion(a: {
   return outcome;
 }
 
+const evaluationView = (e: AIEvaluationResult) => ({
+  score: e.score,
+  feedback: e.feedback ?? '',
+  revisitNote: e.revisitNote ?? '',
+});
+
+/**
+ * What answering `questionId` did to the attempt's sets: the set it
+ * completed (if any), the set it opened, and whether the attempt is over.
+ * `before` / `after` are the recorded answers without and with it.
+ */
+function setStep(
+  stored: StoredAttempt,
+  before: readonly AIEvaluationResult[],
+  after: readonly AIEvaluationResult[],
+  questionId: string,
+): Pick<
+  Extract<AnswerResult, { ok: true }>,
+  'setResult' | 'nextQuestions' | 'finished'
+> {
+  const sets = attemptSets(stored);
+  const was = setsProgress(sets, scoresOf(before));
+  const now = setsProgress(sets, scoresOf(after));
+  const completedHere = now.completed.length > was.completed.length;
+  const setResult = completedHere ? (now.completed.at(-1) ?? null) : null;
+  // Only the answer that completed a set can report what it did; any other
+  // answer (or a replay of one) changes nothing about the sets.
+  const isCompleting =
+    setResult !== null && sets[setResult.set - 1]?.includes(questionId);
+  if (!isCompleting) {
+    return { setResult: null, nextQuestions: [], finished: null };
+  }
+  return {
+    setResult,
+    nextQuestions:
+      now.reached > was.reached
+        ? clientQuestions(stored, now.reached, now.reached)
+        : [],
+    finished: now.passed ? 'set-passed' : now.over ? 'sets-missed' : null,
+  };
+}
+
 /** The result of an answer recorded earlier, as it reads now. */
 async function storedResult(
   row: AttemptRow,
   evaluation: AIEvaluationResult,
-  userId: string,
-  lessonId: number,
 ): Promise<AnswerResult> {
   const stored = parseStored(row);
-  const [current, rows] = await Promise.all([
-    currentChunksOr(lessonId, stored.chunks),
-    selectMastery(userId, lessonId),
-  ]);
-  const counts = masteryCounts(current.chunks, rows);
-  // Answers are recorded in order and none follow the finish, so the last
-  // one is the answer that finished the attempt. Only it reports the finish:
-  // a replay (or a lost race) of an earlier answer did not end anything.
-  const finishedBy = parseAnswers(row).at(-1)?.questionId;
-  const finished =
-    finishedBy === evaluation.questionId ? (row.finishedReason ?? null) : null;
+  const answers = parseAnswers(row);
+  const at = answers.findIndex((e) => e.questionId === evaluation.questionId);
   return {
     ok: true,
-    evaluation: {
-      score: evaluation.score,
-      revisitNote: evaluation.revisitNote ?? '',
-    },
-    mastery: {
-      ...counts,
-      percent: masteryPercent({
-        ...counts,
-        passed: finished === 'all-cleared',
-      }),
-    },
-    finished,
+    evaluation: evaluationView(evaluation),
+    ...setStep(
+      stored,
+      answers.slice(0, at),
+      answers.slice(0, at + 1),
+      evaluation.questionId,
+    ),
   };
 }
 

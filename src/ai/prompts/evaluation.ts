@@ -26,6 +26,7 @@ export function evaluationPrompt(vars: {
    - Analogies, comparisons, opinions, interpretations (of a quotation, a term or someone's intent) and off-topic reasoning are not incorrect claims, even when they miss the point. Missing the point already costs the student the chunk they failed to convey; it is never also an incorrect claim.
    - Statements about matters the lesson does not cover — the present day, other programs, the student's own experience — are not contradicted by the lesson. Flag them only if they are plainly false or unsafe.
 3. **Write the revisit note.** If every chunk is \`fully\` conveyed and there are no incorrect claims, return an empty string. Otherwise write 1–3 sentences in the second person ("You..."), about what THIS answer said: what it got right, and what was missing or wrong. Encouraging but accurate.
+4. **Write the feedback.** Always, whatever the score: the pilot reads it the moment they submit, before the next question. 1–3 sentences in the second person, as their instructor talking to them directly. Say first what the answer got right, then what was missing or wrong, if anything, drawing on the lesson. For a strong answer, say briefly why it was strong. Encouraging but accurate; never inflate a weak answer.
 
 ## The reference answer is ONE correct phrasing, not a template
 

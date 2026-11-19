@@ -169,10 +169,12 @@ describe('getDebriefFacts', () => {
     expect(renderSqlParams(where)).toEqual([41, 'l1']);
   });
 
-  it('every current chunk cleared counts as passed, pass row or not (carry-over before Start)', async () => {
+  // 2026-11-18: only a passing set passes. Every chunk cleared across
+  // attempts (or carried over a regeneration) is NOT a pass on its own.
+  it('every current chunk cleared is not passed without a pass row', async () => {
     const f = await facts({ passed: false, chunksCleared: 5, chunksTotal: 5 });
-    expect(f.passed).toBe(true);
-    expect(computeDebriefState(f, new Date()).kind).toBe('passed');
+    expect(f.passed).toBe(false);
+    expect(computeDebriefState(f, new Date()).kind).not.toBe('passed');
   });
 
   it('holes left, or no chunks at all, is not passed without a pass row', async () => {
@@ -186,6 +188,12 @@ describe('getDebriefFacts', () => {
       (await facts({ passed: false, chunksCleared: 0, chunksTotal: null }))
         .passed,
     ).toBe(false);
+  });
+
+  it('a pass row passes, whatever the chunks', async () => {
+    expect(
+      (await facts({ passed: true, chunksCleared: 0, chunksTotal: 5 })).passed,
+    ).toBe(true);
   });
 
   it('reads doneAt from lesson_completions by user and lesson id', async () => {

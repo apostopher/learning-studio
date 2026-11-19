@@ -27,15 +27,11 @@ const get = (qs: string) =>
   new Request(`http://t/api/lesson/debrief-status${qs}`);
 const QS = '?lessonSlug=l1&courseSlug=c1';
 
-const access = (
-  state: unknown,
-  mastery: { cleared: number; total: number } | null = null,
-) => ({
+const access = (state: unknown) => ({
   ok: true,
   courseId: 7,
   lessonId: 41,
   state,
-  mastery,
 });
 
 /**
@@ -88,6 +84,7 @@ const storedChunkAttempt = {
       chunkScores: { 'v1-c1': 90 },
     },
   ],
+  totalScore: 65,
 };
 
 const report = (id: number, totalScore: number, completedAt: string) => ({
@@ -143,9 +140,7 @@ describe('debrief-status', () => {
     ['open (first attempt)', { kind: 'open', retake: false }],
     ['waiting', { kind: 'waiting', availableAt: '2026-10-28T00:00:00.000Z' }],
   ])('hides the attempt history and the report while %s', async (_n, state) => {
-    m.getDebriefAccess.mockResolvedValue(
-      access(state, { cleared: 0, total: 4 }),
-    );
+    m.getDebriefAccess.mockResolvedValue(access(state));
     const body = await (await debriefStatusHandler(get(QS))).json();
     expect(body).toEqual({ state, lessonOutstanding: [] });
     expect(m.getDebriefAttemptReports).not.toHaveBeenCalled();
@@ -158,10 +153,8 @@ describe('debrief-status', () => {
       { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
     ],
     ['open for a retake', { kind: 'open', retake: true, resume: false }],
-  ])("while %s, carries mastery and the last attempt's revisit notes — never its grading key", async (_n, state) => {
-    m.getDebriefAccess.mockResolvedValue(
-      access(state, { cleared: 5, total: 7 }),
-    );
+  ])("while %s, carries the last attempt's score and revisit notes — never its grading key", async (_n, state) => {
+    m.getDebriefAccess.mockResolvedValue(access(state));
     m.selectLatestFinishedChunkAttempt.mockResolvedValue(storedChunkAttempt);
     const res = await debriefStatusHandler(get(QS));
     const text = await res.text();
@@ -169,7 +162,9 @@ describe('debrief-status', () => {
 
     expect(m.selectLatestFinishedChunkAttempt).toHaveBeenCalledWith('u1', 'l1');
     expect(body.state).toEqual(state);
-    expect(body.mastery).toEqual({ cleared: 5, total: 7, percent: 71 });
+    // An attempt from before sets: its score alone, no set averages.
+    expect(body.lastAttempt).toEqual({ score: 65, setAverages: [] });
+    expect('mastery' in body).toBe(false);
     // Question order, not answer order; the cleared answer's empty note dropped.
     expect(body.revisitNotes).toEqual([
       'A stall is about angle of attack, not speed.',
@@ -187,15 +182,30 @@ describe('debrief-status', () => {
     }
   });
 
-  it('with no chunks stored and no chunk attempt (legacy only), mastery is null and there are no notes', async () => {
+  it('a set-format attempt reports each completed set average', async () => {
     m.getDebriefAccess.mockResolvedValue(
-      access(
-        { kind: 'retake-waiting', availableAt: '2026-10-28T00:00:00.000Z' },
-        null,
-      ),
+      access({
+        kind: 'retake-waiting',
+        availableAt: '2026-10-28T00:00:00.000Z',
+      }),
+    );
+    m.selectLatestFinishedChunkAttempt.mockResolvedValue({
+      ...storedChunkAttempt,
+      questions: { ...storedChunkAttempt.questions, sets: [['q1', 'q2']] },
+    });
+    const body = await (await debriefStatusHandler(get(QS))).json();
+    expect(body.lastAttempt).toEqual({ score: 65, setAverages: [65] });
+  });
+
+  it('with no finished chunk attempt (legacy only), lastAttempt is null and there are no notes', async () => {
+    m.getDebriefAccess.mockResolvedValue(
+      access({
+        kind: 'retake-waiting',
+        availableAt: '2026-10-28T00:00:00.000Z',
+      }),
     );
     const body = await (await debriefStatusHandler(get(QS))).json();
-    expect(body.mastery).toBeNull();
+    expect(body.lastAttempt).toBeNull();
     expect(body.revisitNotes).toEqual([]);
   });
 

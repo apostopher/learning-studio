@@ -66,6 +66,7 @@ describe('evaluateFreeText', () => {
         ],
         incorrectClaims: [{ quote: 'Squawk 7700', problem: 'It is 7600.' }],
         revisitNote: 'You missed the route.',
+        feedback: 'Viper says this.',
       },
     });
 
@@ -84,8 +85,28 @@ describe('evaluateFreeText', () => {
       explanation: 'You missed the route.',
       chunkScores: { 'v2-c1': 75, 'v2-c2': 25 },
       revisitNote: 'You missed the route.',
+      feedback: 'Viper says this.',
       incorrectClaims: ['"Squawk 7700" — It is 7600.'],
     });
+  });
+
+  it('always carries the feedback, trimmed, even when the revisit note is forced empty', async () => {
+    // The pilot reads `feedback` the moment they submit, a perfect answer
+    // included: it must reach the result whatever the revisit note does.
+    m.generateObject.mockResolvedValue({
+      object: {
+        chunkJudgements: [
+          judgement('v2-c1', 'fully'),
+          judgement('v2-c2', 'fully'),
+        ],
+        incorrectClaims: [],
+        revisitNote: 'Nothing to add.',
+        feedback: '  Spot on: 7600 and the last route.  ',
+      },
+    });
+    const result = await evaluateFreeText(question, 'a', chunks, 'body');
+    expect(result.revisitNote).toBe('');
+    expect(result.feedback).toBe('Spot on: 7600 and the last route.');
   });
 
   it('forces an empty revisitNote when everything is fully conveyed with no incorrect claims', async () => {
@@ -97,6 +118,7 @@ describe('evaluateFreeText', () => {
         ],
         incorrectClaims: [],
         revisitNote: 'Nice, but maybe revisit something.',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(question, 'a', chunks, 'body');
@@ -110,6 +132,7 @@ describe('evaluateFreeText', () => {
         chunkJudgements: [judgement('v2-c1', 'fully')],
         incorrectClaims: [{ quote: 'wrong thing', problem: 'Not so.' }],
         revisitNote: 'One claim was wrong.',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(
@@ -127,6 +150,7 @@ describe('evaluateFreeText', () => {
         chunkJudgements: [judgement('v2-c1', 'mostly')],
         incorrectClaims: [],
         revisitNote: 'Also mention the route.',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(
@@ -150,6 +174,7 @@ describe('evaluateFreeText', () => {
           { quote: 'the Red Baron flew it', problem: 'He did not.' },
         ],
         revisitNote: 'Watch the Red Baron detail.',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(
@@ -172,6 +197,7 @@ describe('evaluateFreeText', () => {
         ],
         incorrectClaims: [],
         revisitNote: 'Route missing.',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(question, 'a', chunks, 'body');
@@ -185,6 +211,7 @@ describe('evaluateFreeText', () => {
         chunkJudgements: [judgement('v2-c1', 'fully')],
         incorrectClaims: [],
         revisitNote: '',
+        feedback: 'Viper says this.',
       },
     });
 
@@ -221,6 +248,7 @@ describe('evaluateFreeText', () => {
         chunkJudgements: [judgement('v2-c1', 'fully')],
         incorrectClaims: [],
         revisitNote: '',
+        feedback: 'Viper says this.',
       },
     });
     const result = await evaluateFreeText(
