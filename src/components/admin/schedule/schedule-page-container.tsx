@@ -33,6 +33,7 @@ import {
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import { useOfferings } from '#/data-hooks/use-offerings';
 import type { Offering } from '#/lib/offering-schemas';
+import { coursePassMarkSlot } from './course-pass-mark-slot';
 import { CourseScheduleRail } from './course-schedule-rail';
 import { DraggableCourseContainer } from './draggable-course-container';
 import { createHoverIntent, type HoverIntent } from './hover-intent';
@@ -79,6 +80,7 @@ const draggingCourseAtom = atom<{
 export const SchedulePageContainer = ({
   canSchedule,
   canEditLevels,
+  canEditPassMark,
   actorIsOwner,
 }: {
   /**
@@ -92,6 +94,11 @@ export const SchedulePageContainer = ({
   canSchedule: boolean;
   /** `level:update` with the admin floor — the roster's level select. */
   canEditLevels: boolean;
+  /**
+   * `course:update` with the admin floor — each course's pass mark, the
+   * pass-mark endpoint's guard. Course managers schedule, admins set marks.
+   */
+  canEditPassMark: boolean;
   /** Owner — may change the level of someone holding a staff role. */
   actorIsOwner: boolean;
 }) => {
@@ -367,7 +374,11 @@ export const SchedulePageContainer = ({
             )}
             {courses.data?.map((course) =>
               canSchedule ? (
-                <DraggableCourseContainer key={course.id} course={course} />
+                <DraggableCourseContainer
+                  key={course.id}
+                  course={course}
+                  canEditPassMark={canEditPassMark}
+                />
               ) : (
                 <ScheduleCourseCard
                   key={course.id}
@@ -375,6 +386,7 @@ export const SchedulePageContainer = ({
                   moduleCount={course.moduleCount}
                   lessonCount={course.lessonCount}
                   className="cursor-default"
+                  passMarkSlot={coursePassMarkSlot(course, canEditPassMark)}
                 />
               ),
             )}

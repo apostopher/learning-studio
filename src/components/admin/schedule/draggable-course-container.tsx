@@ -1,6 +1,6 @@
 import { useDraggable } from '@dnd-kit/core';
 import type { AdminCourseSummary } from '#/lib/admin-schemas';
-import { CoursePassMarkContainer } from './course-pass-mark-container';
+import { coursePassMarkSlot } from './course-pass-mark-slot';
 import { ScheduleCourseCard } from './schedule-course-card';
 import { scheduleCourseDndId } from './schedule-dnd';
 
@@ -15,8 +15,11 @@ import { scheduleCourseDndId } from './schedule-dnd';
  */
 export const DraggableCourseContainer = ({
   course,
+  canEditPassMark,
 }: {
   course: AdminCourseSummary;
+  /** `course:update` with the admin floor: see `coursePassMarkSlot`. */
+  canEditPassMark: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: scheduleCourseDndId(course.id),
@@ -31,7 +34,7 @@ export const DraggableCourseContainer = ({
         lessonCount={course.lessonCount}
         isDragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
-        passMarkSlot={<CoursePassMarkContainer course={course} />}
+        passMarkSlot={coursePassMarkSlot(course, canEditPassMark)}
       />
     </div>
   );

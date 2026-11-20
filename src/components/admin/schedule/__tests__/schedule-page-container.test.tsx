@@ -83,6 +83,7 @@ const renderPage = (store = createStore()) => {
         <SchedulePageContainer
           canSchedule
           canEditLevels={false}
+          canEditPassMark={false}
           actorIsOwner={false}
         />
       </Provider>

@@ -149,6 +149,15 @@ function AdminSectionScreen() {
         // The roster's level select: `level:update` behind
         // `requirePermission`, so the admin floor applies too.
         canEditLevels={hasOrgPermission(roles, permissions, 'level', 'update')}
+        // Each course's pass mark: `course:update` behind `requirePermission`,
+        // the pass-mark endpoint's guard, so a course manager who is not an
+        // admin is never offered a control that can only answer 403.
+        canEditPassMark={hasOrgPermission(
+          roles,
+          permissions,
+          'course',
+          'update',
+        )}
         // The level endpoint's second guard: only an owner may change the
         // level of someone holding a staff role.
         actorIsOwner={roles.includes(OWNER_ROLE)}

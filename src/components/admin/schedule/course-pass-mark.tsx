@@ -39,7 +39,7 @@ export const CoursePassMark = ({
   <Popover.Root open={open} onOpenChange={onOpenChange}>
     <Popover.Trigger
       aria-label={`Pass mark for ${courseName}, currently ${passMark}`}
-      className="rounded-md px-1.5 py-0.5 text-secondary text-xs underline decoration-gray-7 underline-offset-2 transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9"
+      className="inline-flex min-h-6 min-w-6 items-center rounded-md px-1.5 py-1 text-secondary text-xs underline decoration-gray-7 underline-offset-2 transition-colors hover:bg-gray-3 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9"
     >
       Pass mark {passMark}
     </Popover.Trigger>

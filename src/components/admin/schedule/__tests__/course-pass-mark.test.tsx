@@ -24,6 +24,18 @@ describe('CoursePassMark', () => {
     });
     expect(button.textContent).toBe('Pass mark 85');
   });
+
+  it('keeps a hit area of at least 24×24px (WCAG 2.2 AA 2.5.8)', () => {
+    render(<CoursePassMark {...baseProps} />);
+    const button = screen.getByRole('button', {
+      name: 'Pass mark for ITPS UAS, currently 85',
+    });
+    // jsdom has no layout: assert the minimum block size and inline padding
+    // that give the 24px target.
+    expect(button.className.split(' ')).toEqual(
+      expect.arrayContaining(['min-h-6', 'min-w-6']),
+    );
+  });
 });
 
 describe('CoursePassMark open', () => {
