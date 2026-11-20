@@ -21,11 +21,18 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
   TooltipIconButton: ({
     label,
     onClick,
+    disabled,
   }: {
     label: string;
     onClick?: () => void;
+    disabled?: boolean;
   }) => (
-    <button type="button" aria-label={label} onClick={onClick}>
+    <button
+      type="button"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? undefined : onClick}
+    >
       {label}
     </button>
   ),
@@ -203,5 +210,28 @@ describe('ModuleAccordionItem', () => {
     const list = screen.getByText('lessons').parentElement as HTMLElement;
     expect(list.className).toMatch(/\bpt-1\b/);
     expect(list.parentElement?.className).toContain('overflow-hidden');
+  });
+
+  it('offers to remove the module from its course, by name', () => {
+    const onClick = vi.fn();
+    renderOpen(module_(), {
+      remove: { label: 'Remove Preflight Basics from Two-Week', onClick },
+    });
+    const button = screen.getByRole('button', {
+      name: 'Remove Preflight Basics from Two-Week',
+    });
+    button.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an unavailable remove control in place, inert, wearing its reason', () => {
+    renderOpen(module_(), {
+      remove: { label: 'Borrowed from Owner. Remove it there' },
+    });
+    expect(
+      screen
+        .getByRole('button', { name: 'Borrowed from Owner. Remove it there' })
+        .getAttribute('aria-disabled'),
+    ).toBe('true');
   });
 });

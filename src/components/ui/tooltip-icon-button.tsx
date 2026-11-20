@@ -17,10 +17,15 @@ export const iconButtonClass = (variant: IconButtonVariant = 'default') =>
     'inline-flex h-7 w-7 items-center justify-center rounded-md text-tertiary transition-colors',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9',
     'disabled:pointer-events-none disabled:opacity-50',
-    'aria-disabled:pointer-events-none aria-disabled:opacity-50',
+    // NOT pointer-events-none for `aria-disabled`: that is the Tooltip
+    // trigger's inert state, and its tooltip is where the reason lives — a
+    // pointer that cannot reach it cannot read why. The missing handler is
+    // what keeps it inert; hover feedback is neutralised below instead.
+    'aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
     variant === 'danger'
       ? 'hover:bg-error-9/15 hover:text-error-text'
       : 'hover:bg-gray-4 hover:text-primary',
+    'aria-disabled:hover:bg-transparent aria-disabled:hover:text-tertiary',
   );
 
 /** Tooltip popup shared across admin icon buttons. Requires a `Tooltip.Provider` ancestor. */

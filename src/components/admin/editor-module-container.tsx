@@ -5,7 +5,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useSetAtom } from 'jotai';
 import { useCallback } from 'react';
+import { removeCourseModuleAtom } from '#/atoms/admin';
 import type { EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { containerDndId, lessonDndId, moduleDndId } from '#/lib/dnd-ids';
@@ -30,11 +32,14 @@ import { moduleProvenance } from './module-provenance';
 export const EditorModuleContainer = ({
   module: mod,
   courseId,
+  courseName,
   posters,
   alsoIn,
 }: {
   module: EditorBoardModule;
   courseId: number;
+  /** Named by the remove control and its confirmation. */
+  courseName: string;
   /** Poster frames by lesson id, fetched once per course by the column. */
   posters?: Record<number, string | null>;
   /**
@@ -62,6 +67,7 @@ export const EditorModuleContainer = ({
     data: { type: 'container', moduleId: mod.id, courseId },
   });
 
+  const setRemoveModule = useSetAtom(removeCourseModuleAtom);
   const lessonIds = mod.lessons.map((l) => lessonDndId(courseId, l.id));
   const provenance = moduleProvenance(mod, courseId);
   // Filtered here, once, rather than by each card: a card should never list
@@ -92,6 +98,25 @@ export const EditorModuleContainer = ({
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
         provenance={provenance}
+        // A borrowed module is the OWNER's to remove: here the control stays,
+        // inert, and says where it is removed instead of vanishing.
+        remove={
+          provenance
+            ? {
+                label: `"${mod.name}" is borrowed from ${provenance.ownerName}. Remove it there, or stop remixing ${provenance.ownerName}`,
+              }
+            : {
+                label: `Remove ${mod.name} from ${courseName}`,
+                onClick: () =>
+                  setRemoveModule({
+                    id: mod.id,
+                    name: mod.name,
+                    courseId,
+                    courseName,
+                    otherCourseCount: mod.otherCourseCount,
+                  }),
+              }
+        }
         lessonsSlot={
           provenance ? (
             mod.lessons.length === 0 ? (

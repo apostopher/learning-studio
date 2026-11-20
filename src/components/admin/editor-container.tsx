@@ -29,6 +29,7 @@ import {
   activeDragLibraryLessonIdAtom,
   activeDragLibraryModuleIdAtom,
   activeDragModuleIdAtom,
+  editorDragHintAtom,
   editorDragRefusalAtom,
   editorPaneRowWidthAtom,
   editorSplitPercentAtom,
@@ -36,6 +37,7 @@ import {
   expandedLibraryModuleIdsAtom,
 } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
+import { useCopyLibraryModule } from '#/data-hooks/use-copy-library-module';
 import {
   usePlaceLibraryLesson,
   useReorderDisciplineModule,
@@ -55,6 +57,7 @@ import {
   type LibraryPreview,
   libraryDropFromPreview,
 } from './commit-library-drop';
+import { copiedModuleMessage, copyModuleHint } from './copied-module-message';
 import { CourseRail } from './course-rail';
 import { CreateCourseDialogContainer } from './create-course-dialog-container';
 import { CreateDisciplineDialogContainer } from './create-discipline-dialog-container';
@@ -96,6 +99,7 @@ import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { LibraryLessonCard } from './library-lesson-card';
 import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dialog-container';
 import { ModuleAccordionItem } from './module-accordion-item';
+import { RemoveCourseModuleDialogContainer } from './remove-course-module-dialog-container';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { RenameDisciplineModuleDialogContainer } from './rename-discipline-module-dialog-container';
 import { type DragOrigin, resolveDrop } from './resolve-drop';
@@ -164,6 +168,18 @@ export interface EditorCapabilities {
   canDeleteCourse: boolean;
 }
 
+/** A discipline module's name by id, for the copy hint; generic when unknown. */
+function findLibraryModuleName(
+  library: OrgLibrary | null | undefined,
+  moduleId: number,
+): string {
+  for (const discipline of library?.disciplines ?? []) {
+    const found = discipline.modules.find((m) => m.id === moduleId);
+    if (found) return found.name;
+  }
+  return 'this module';
+}
+
 export const EditorContainer = ({
   capabilities,
 }: {
@@ -185,6 +201,7 @@ export const EditorContainer = ({
     activeDragLibraryModuleIdAtom,
   );
   const [refusal, setRefusal] = useAtom(editorDragRefusalAtom);
+  const [dropHint, setDropHint] = useAtom(editorDragHintAtom);
   const [expandedModuleIds, setExpandedModuleIds] = useAtom(
     expandedEditorModuleIdsAtom,
   );
@@ -194,6 +211,7 @@ export const EditorContainer = ({
   const [splitPercent, setSplitPercent] = useAtom(editorSplitPercentAtom);
 
   const linkLesson = useLinkLesson();
+  const copyLibraryModule = useCopyLibraryModule();
   const movePlacement = useMovePlacement();
   const reorderModule = useReorderEditorModule();
   const placeLibraryLesson = usePlaceLibraryLesson();
@@ -587,6 +605,7 @@ export const EditorContainer = ({
     setActiveLibraryLessonId(null);
     setActiveLibraryModuleId(null);
     setRefusal(null);
+    setDropHint(null);
     cancelAutoExpand();
     cancelLibraryAutoExpand();
   };
@@ -595,6 +614,7 @@ export const EditorContainer = ({
     const parsed = parseDndId(event.active.id);
     if (!parsed) return;
     setRefusal(null);
+    setDropHint(null);
     transferAppliedRef.current = false;
     libraryPreviewRef.current = null;
     // Snapshot for every kind of drag, module reorders included: they all
@@ -621,6 +641,7 @@ export const EditorContainer = ({
     const { active, over } = event;
     if (!over) {
       setRefusal(null);
+      setDropHint(null);
       cancelAutoExpand();
       cancelLibraryAutoExpand();
       return;
@@ -638,6 +659,18 @@ export const EditorContainer = ({
       currentLibrary ?? undefined,
     );
     setRefusal(resolution?.kind === 'forbidden' ? resolution.reason : null);
+    setDropHint(
+      resolution?.kind === 'copy-module'
+        ? copyModuleHint(
+            current,
+            resolution,
+            findLibraryModuleName(
+              currentLibrary,
+              resolution.disciplineModuleId,
+            ),
+          )
+        : null,
+    );
 
     if (resolution?.kind === 'link' || resolution?.kind === 'move') {
       // Only a drop the editor would actually accept is worth opening a
@@ -1035,6 +1068,29 @@ export const EditorContainer = ({
       return;
     }
 
+    if (resolution.kind === 'copy-module') {
+      // No optimistic write: the server decides which lessons come along
+      // (any the course already teaches stay where they are), so the board
+      // shows the module once the refetch lands rather than guessing.
+      const courseName =
+        current.find((cb) => cb.course.id === resolution.courseId)?.course
+          .name ?? 'the course';
+      copyLibraryModule.mutate(
+        {
+          courseId: resolution.courseId,
+          disciplineModuleId: resolution.disciplineModuleId,
+          afterModuleId: resolution.afterModuleId,
+          onlyLessonId: resolution.onlyLessonId,
+        },
+        {
+          onSuccess: (copied) =>
+            toast.success(copiedModuleMessage(copied, courseName)),
+          onError: (error) => toast.error(error.message),
+        },
+      );
+      return;
+    }
+
     const card = findLibraryLesson(library, resolution.lessonId);
     if (card) {
       queryClient.setQueryData(
@@ -1107,6 +1163,13 @@ export const EditorContainer = ({
       );
       if (resolution?.kind === 'forbidden') return resolution.reason;
       if (!resolution) return 'Not a drop target.';
+      if (resolution.kind === 'copy-module') {
+        return copyModuleHint(
+          current,
+          resolution,
+          findLibraryModuleName(currentLibrary, resolution.disciplineModuleId),
+        );
+      }
       if (resolution.kind === 'library-move') {
         return `Will file in ${describeDndTarget(over.id, current, currentLibrary ?? undefined)}.`;
       }
@@ -1357,6 +1420,9 @@ export const EditorContainer = ({
           <LibraryLessonCard lesson={activeLibraryLesson} />
         ) : null}
         {refusal && <DragRefusalNote reason={refusal} />}
+        {!refusal && dropHint && (
+          <DragRefusalNote reason={dropHint} tone="hint" />
+        )}
       </DragOverlay>
 
       {/*
@@ -1365,6 +1431,7 @@ export const EditorContainer = ({
         lesson it is about — and how many courses lose it — arrives on
         `deleteLessonAtom` from whichever card was clicked.
       */}
+      <RemoveCourseModuleDialogContainer />
       <DeleteLessonDialogContainer />
 
       {/*

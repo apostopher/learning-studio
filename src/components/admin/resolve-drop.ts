@@ -36,6 +36,8 @@ import { removeLessonLabel } from './lesson-card-labels';
  *   library lesson  → a module            = `link`   (place it in that course)
  *   placed lesson   → a module, same course = `move` (re-place or reorder)
  *   module          → a module, same course = `reorder-module`
+ *   library module  → a course's module/column = `copy-module` (new module, its lessons placed)
+ *   library lesson  → a course with no modules of its own = `copy-module` (its library module, just this lesson)
  *
  * Everything else that lands on a REAL target is `forbidden`, never a silent
  * spring-back: `reason` is the sentence the admin reads. Dropping on nothing
@@ -82,6 +84,19 @@ export type DropResolution =
       disciplineModuleId: number | null;
       /** The raw over id, so the caller can read the exact slot to insert at. */
       overId: string | number;
+    }
+  | {
+      /**
+       * A library (discipline) module dropped on a course: copy it in as a
+       * new course module holding its lessons. `afterModuleId` is the
+       * course module it was dropped on; null (an empty course) appends.
+       */
+      kind: 'copy-module';
+      courseId: number;
+      disciplineModuleId: number;
+      afterModuleId: number | null;
+      /** Set when a single library LESSON creates its module around itself. */
+      onlyLessonId?: number;
     }
   | {
       kind: 'reorder-library-module';
@@ -653,6 +668,28 @@ export function resolveDrop(
     if (over.type === 'course') {
       const courseBoard = findCourse(board, over.id);
       if (!courseBoard) return null;
+      // Checked first: a course whose only modules are borrowed (hidden from
+      // the rail) may already teach this lesson through one of them.
+      if (courseTeaches(courseBoard, active.id)) {
+        return {
+          kind: 'forbidden',
+          reason: `${courseBoard.course.name} already teaches this lesson.`,
+        };
+      }
+      // A course with nowhere to put the lesson gets the lesson's own
+      // library module created around it — named after it, holding just
+      // this lesson. A lesson in no library module has no name to lend, so
+      // the course still has to make one first.
+      const from = library ? findLibraryLesson(library, active.id) : null;
+      if (from && from.boxId !== null) {
+        return {
+          kind: 'copy-module',
+          courseId: courseBoard.course.id,
+          disciplineModuleId: from.boxId,
+          afterModuleId: null,
+          onlyLessonId: from.lesson.id,
+        };
+      }
       return {
         kind: 'forbidden',
         reason: courseDropRefusal(board, courseBoard),
@@ -715,13 +752,26 @@ export function resolveDrop(
     if (over.type === 'library-untitled' || over.type === 'discipline')
       return null;
 
-    // Every remaining target is a course rail one (a course's module/lesson/
-    // container/course itself): a discipline module organises the library
-    // only, and is never a course concept.
+    // Every remaining target is a course rail one: the module is COPIED into
+    // that course, after the module it was dropped on. An empty course's
+    // column (`course`, only drawn while it has no modules) appends.
+    if (over.type === 'course') {
+      const courseBoard = findCourse(board, over.id);
+      if (!courseBoard) return null;
+      return {
+        kind: 'copy-module',
+        courseId: courseBoard.course.id,
+        disciplineModuleId: from.module.id,
+        afterModuleId: null,
+      };
+    }
+    const to = resolveOverModule(board, overId);
+    if (!to) return null;
     return {
-      kind: 'forbidden',
-      reason:
-        'A discipline module organises the library; it cannot be added to a course. Drag its lessons into the course instead.',
+      kind: 'copy-module',
+      courseId: to.courseBoard.course.id,
+      disciplineModuleId: from.module.id,
+      afterModuleId: to.module.id,
     };
   }
 

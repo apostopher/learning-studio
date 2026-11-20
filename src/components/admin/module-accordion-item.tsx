@@ -1,5 +1,12 @@
 import { Accordion } from '@base-ui/react/accordion';
-import { ChevronDown, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  CircleMinus,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardModule } from '#/lib/admin-schemas';
 import { ClampedText } from '../clamped-text';
@@ -22,6 +29,13 @@ interface ModuleAccordionItemProps {
   onAddLesson?: () => void;
   onEditModule?: () => void;
   onDeleteModule?: () => void;
+  /**
+   * Take the module out of the course it is shown in — the editor rail's
+   * twin of a lesson card's remove control, same icon. `label` is the whole
+   * accessible name and must name the course; with no `onClick` the control
+   * is drawn inert and `label` is its reason (a borrowed module, say).
+   */
+  remove?: { label: string; onClick?: () => void };
   /**
    * The module's lessons, rendered inside the accordion panel — a DnD-enabled
    * sortable list from a container, or a static list for a drag overlay.
@@ -54,6 +68,7 @@ export const ModuleAccordionItem = ({
   onAddLesson,
   onEditModule,
   onDeleteModule,
+  remove,
   lessonsSlot,
   provenance,
 }: ModuleAccordionItemProps) => {
@@ -103,6 +118,16 @@ export const ModuleAccordionItem = ({
             variant="danger"
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </TooltipIconButton>
+        )}
+
+        {remove && (
+          <TooltipIconButton
+            label={remove.label}
+            onClick={remove.onClick}
+            disabled={!remove.onClick}
+          >
+            <CircleMinus className="h-4 w-4" aria-hidden="true" />
           </TooltipIconButton>
         )}
 

@@ -279,13 +279,7 @@ const AccessToggle = ({
             render={<button type="button" />}
           />
         }
-        // The shared class drops pointer events when aria-disabled, which
-        // would hide the tooltip carrying the lock's reason from a mouse.
-        // Put them back: the missing handler is what keeps it inert.
-        className={cn(
-          iconButtonClass(),
-          'aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent aria-disabled:hover:text-tertiary',
-        )}
+        className={iconButtonClass()}
       >
         {access.isPaid ? (
           <Lock className="h-4 w-4 text-warning-text" aria-hidden="true" />

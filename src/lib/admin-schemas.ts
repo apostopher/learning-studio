@@ -74,6 +74,25 @@ export const createModuleInputSchema = z.object({
 });
 export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 
+/**
+ * Copy a discipline (library) module into a course — the editor's drag of a
+ * library module onto a course column. `afterModuleId` is the course module
+ * it was dropped on; null (an empty course) appends.
+ */
+export const copyDisciplineModuleInputSchema = z.object({
+  disciplineModuleId: z.number().int().positive(),
+  afterModuleId: z.number().int().positive().nullable(),
+  /**
+   * Bring only this one lesson along — a single library lesson dropped on a
+   * course with no modules of its own creates its library module around it.
+   * Must be a lesson of `disciplineModuleId`; omitted brings every lesson.
+   */
+  onlyLessonId: z.number().int().positive().optional(),
+});
+export type CopyDisciplineModuleInput = z.infer<
+  typeof copyDisciplineModuleInputSchema
+>;
+
 /** Input accepted by POST /api/admin/disciplines/:id/modules. */
 export const createDisciplineModuleInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -276,6 +295,15 @@ export const boardModuleSchema = z.object({
   lessons: z.array(boardLessonSchema),
 });
 export type BoardModule = z.infer<typeof boardModuleSchema>;
+
+/** What copying a discipline module into a course created, and what it left out. */
+export const copiedModuleSchema = z.object({
+  module: boardModuleSchema,
+  placedLessonIds: z.array(z.number()),
+  /** Lessons the course already taught, left where they were. */
+  skipped: z.array(z.object({ id: z.number(), name: z.string() })),
+});
+export type CopiedModule = z.infer<typeof copiedModuleSchema>;
 
 /** The course header delivered with the editor board. */
 export const boardCourseSchema = z.object({

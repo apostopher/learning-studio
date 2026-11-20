@@ -1,3 +1,5 @@
+import { cn } from '#/lib/cn';
+
 /**
  * Why this component exists:
  * - Checked: no Base UI component renders a static, non-interactive notice.
@@ -28,8 +30,27 @@
  * fill and a legible fill are competing for the same surface, and the border
  * carries the meaning at no cost to the text.
  */
-export const DragRefusalNote = ({ reason }: { reason: string }) => (
-  <p className="mt-2 max-w-80 rounded-md border border-error-9/50 bg-gray-1/90 px-2.5 py-1.5 text-error-text text-xs leading-snug shadow-lg backdrop-blur-2xl">
+export const DragRefusalNote = ({
+  reason,
+  tone = 'refusal',
+}: {
+  reason: string;
+  /**
+   * `hint` says where an ACCEPTED drag will land, for drops that do not
+   * preview themselves on the board (copying a library module into a
+   * course). Same surface and legibility tuning; a neutral border and
+   * primary text instead of the error identity.
+   */
+  tone?: 'refusal' | 'hint';
+}) => (
+  <p
+    className={cn(
+      'mt-2 max-w-80 rounded-md border bg-gray-1/90 px-2.5 py-1.5 text-xs leading-snug shadow-lg backdrop-blur-2xl',
+      tone === 'refusal'
+        ? 'border-error-9/50 text-error-text'
+        : 'border-gray-7 text-primary',
+    )}
+  >
     {reason}
   </p>
 );

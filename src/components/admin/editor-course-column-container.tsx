@@ -153,6 +153,7 @@ export const EditorCourseColumnContainer = ({
             key={mod.id}
             module={mod}
             courseId={course.id}
+            courseName={course.name}
             posters={posters}
             alsoIn={alsoIn}
           />

@@ -242,6 +242,19 @@ export const deleteModuleAtom = atom<{
   otherCourseCount: number;
 } | null>(null);
 
+/**
+ * The course module whose "Remove from <course>" control was pressed on the
+ * editor rail, or null. Carries what the confirmation must say: which course
+ * loses it, and how many OTHER courses (remixers) lose it with it.
+ */
+export const removeCourseModuleAtom = atom<{
+  id: number;
+  name: string;
+  courseId: number;
+  courseName: string;
+  otherCourseCount: number;
+} | null>(null);
+
 /** The course being edited (current field values), or null when closed. */
 export const editCourseAtom = atom<{
   id: number;
@@ -561,6 +574,14 @@ export const expandedEditorModuleIdsAtom = atom<number[]>([]);
  * accessibility announcements and, on an actual drop, raised as a toast.
  */
 export const editorDragRefusalAtom = atom<string | null>(null);
+
+/**
+ * The positive twin of `editorDragRefusalAtom`: where an accepted drag will
+ * land, for drops whose effect is not visible until they commit. Today only
+ * a library module over a course ("Copies into … after …") — every other
+ * accepted drag previews itself live on the board.
+ */
+export const editorDragHintAtom = atom<string | null>(null);
 
 /**
  * The library pane's inline size as a percentage of the editor, moved by the

@@ -490,6 +490,63 @@ describe('resolveDrop — no target at all', () => {
  * module, and `resolveDrop` does not invent one.
  */
 describe('resolveDrop — dropping on a course column itself', () => {
+  it('creates a library lesson’s own module around it in a course with none', () => {
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        courseDndId(3),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'copy-module',
+      courseId: 3,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: null,
+      onlyLessonId: L1,
+    });
+  });
+
+  it('still asks for a module first when the lesson sits in no library module', () => {
+    // L3 is in Weather's Untitled group: there is no module name to lend.
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L3),
+        courseDndId(3),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toMatchObject({
+      kind: 'forbidden',
+      reason: expect.stringContaining('Create one first'),
+    });
+  });
+
+  it('refuses a lesson the course already teaches through a hidden module', () => {
+    const teaching: OrgEditorBoard = [
+      courseBoard(3, 'Weekend Refresher', [
+        mod(70, 'Upset Recovery', [lesson(L1, 'L1')], {
+          id: 6,
+          name: '3D Airmanship',
+        }),
+      ]),
+    ];
+    expect(
+      resolveDrop(
+        teaching,
+        libraryLessonDndId(L1),
+        courseDndId(3),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'forbidden',
+      reason: 'Weekend Refresher already teaches this lesson.',
+    });
+  });
+
   it('refuses a library lesson on an empty course, naming the remedy', () => {
     const result = resolveDrop(
       board,
@@ -1015,8 +1072,7 @@ describe('resolveDrop — library-side drops', () => {
     });
   });
 
-  it('refuses a discipline module dragged onto a course module', () => {
-    // Spec row: library module 7 over a course module.
+  it('copies a discipline module into a course, after the module it lands on', () => {
     const result = resolveDrop(
       board,
       libraryModuleDndId(BASICS_MODULE),
@@ -1026,9 +1082,53 @@ describe('resolveDrop — library-side drops', () => {
     );
 
     expect(result).toEqual({
-      kind: 'forbidden',
-      reason:
-        'A discipline module organises the library; it cannot be added to a course. Drag its lessons into the course instead.',
+      kind: 'copy-module',
+      courseId: 1,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: CIRCUITS,
+    });
+  });
+
+  it('resolves a lesson card or container to the module that holds it', () => {
+    // The pointer over a course module's lessons, not its header.
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        lessonDndId(1, STALLS),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toMatchObject({ kind: 'copy-module', afterModuleId: FUNDAMENTALS });
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        containerDndId(2, BASICS),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toMatchObject({
+      kind: 'copy-module',
+      courseId: 2,
+      afterModuleId: BASICS,
+    });
+  });
+
+  it('appends to an empty course dropped on its column', () => {
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        courseDndId(3),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'copy-module',
+      courseId: 3,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: null,
     });
   });
 
