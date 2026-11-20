@@ -8,6 +8,7 @@ import {
   DEBRIEF_SET_PASS_SCORE,
   type SetOutcome,
 } from '#/lib/debrief-sets';
+import { formatScore } from '#/lib/lesson-score';
 import { DebriefScoreBreakdown } from './debrief-score-breakdown';
 
 type DebriefFeedbackProps = {
@@ -149,7 +150,7 @@ export const DebriefFeedback = ({
  * total against the course's pass mark (the breakdown under it shows the sum).
  */
 export function setResultCopy(r: SetOutcome): string {
-  const head = `Set ${r.set} average: ${r.average}.`;
+  const head = `Set ${r.set} average: ${formatScore(r.average)}.`;
   return r.passed
     ? `${head} That passes the debrief.`
     : `${head} That is short of the pass mark.`;

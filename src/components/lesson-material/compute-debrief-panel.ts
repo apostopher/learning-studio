@@ -71,8 +71,17 @@ export type DebriefPanel =
   /**
    * The attempt just finished on this lesson: its report. There is no retake
    * wait, so `availableAt` is always null (no countdown).
+   *
+   * `restored`: the report of the last failed attempt, rebuilt from the
+   * status (`lastAttempt`) on a later visit or a reload, with Retake now.
+   * Nothing was just pressed, so it takes no focus.
    */
-  | { kind: 'finished'; report: FinishedDebrief; availableAt: null }
+  | {
+      kind: 'finished';
+      report: FinishedDebrief;
+      availableAt: null;
+      restored?: true;
+    }
   | { kind: 'passed'; attempts: NonNullable<DebriefStatus['attempts']> };
 
 type StatusView = {
@@ -92,6 +101,12 @@ export type ComputeDebriefPanelArgs = {
   lessonSlug: string;
   /** This lesson's attempt is loaded on the page (the attempt cache holds it). */
   attemptInProgress: boolean;
+  /**
+   * Start (or Retake now) was pressed for this lesson
+   * (`debriefStartRequestedAtom`): the new attempt is loading, so the last
+   * attempt's report gives way to it.
+   */
+  startRequested: boolean;
 };
 
 /** The route refused this pilot this lesson's debrief (403 or 404). */
@@ -122,6 +137,7 @@ export function computeDebriefPanel({
   finished,
   lessonSlug,
   attemptInProgress,
+  startRequested,
 }: ComputeDebriefPanelArgs): DebriefPanel {
   const state = status.data?.state;
 
@@ -166,12 +182,25 @@ export function computeDebriefPanel({
       return { kind: 'not-done', outstanding: data.lessonOutstanding };
     case 'waiting':
       return { kind: 'waiting', availableAt: data.state.availableAt };
-    case 'open':
+    case 'open': {
+      // Between attempts after a miss: the last attempt's report (its set
+      // scores and what to revisit) survives a reload or a later visit, with
+      // Retake now under it, until the pilot presses it.
+      const last = data.lastAttempt;
+      if (data.state.retake && !data.state.resume && !startRequested && last) {
+        return {
+          kind: 'finished',
+          report: restoredReport(lessonSlug, last, data.revisitNotes ?? []),
+          availableAt: null,
+          restored: true,
+        };
+      }
       return {
         kind: 'take',
         retake: data.state.retake,
         resume: data.state.resume,
       };
+    }
     case 'passed':
       return { kind: 'passed', attempts: data.attempts ?? [] };
     default: {
@@ -179,6 +208,37 @@ export function computeDebriefPanel({
       return _exhaustive;
     }
   }
+}
+
+/**
+ * The last finished attempt's report, from the status. It finished without a
+ * pass (the status is open for a retake), so Retake now stands alone under
+ * it (`note: null`) and there is no breakdown (`score: null`): the status
+ * carries the set averages, not the lesson total. The ring shows the better
+ * set, as the report did when the attempt finished.
+ */
+function restoredReport(
+  lessonSlug: string,
+  last: NonNullable<DebriefStatus['lastAttempt']>,
+  revisitNotes: string[],
+): FinishedDebrief {
+  return {
+    lessonSlug,
+    // No grading moment on this page; a constant, so a refetch never
+    // re-keys the report.
+    finishedAt: 0,
+    result: {
+      passed: false,
+      score:
+        last.setAverages.length > 0
+          ? Math.max(...last.setAverages)
+          : last.score,
+      setAverages: last.setAverages,
+    },
+    revisitNotes,
+    score: null,
+    note: null,
+  };
 }
 
 /**
@@ -262,13 +322,19 @@ export function finishedDebriefReport({
     ...attempt.answered.filter((a) => a.questionId !== questionId),
     { questionId, score: result.evaluation.score },
   ];
+  const setAverages = setAveragesOf(attempt.questions, answered);
   return {
     lessonSlug,
     finishedAt: now,
     result: {
       passed,
-      score: result.setResult?.average ?? result.evaluation.score,
-      setAverages: setAveragesOf(attempt.questions, answered),
+      // The better set counts (the server's `totalScore`, and the breakdown
+      // under the ring), never the last set's own average.
+      score:
+        setAverages.length > 0
+          ? Math.max(...setAverages)
+          : (result.setResult?.average ?? result.evaluation.score),
+      setAverages,
     },
     score: result.setResult?.score ?? null,
     note: passed ? null : 'retake',

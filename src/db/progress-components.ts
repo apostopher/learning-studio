@@ -69,8 +69,8 @@ export const debriefPassedSql = (userId: string, lessonSlug: LessonSlugRef) =>
 
 /**
  * Latest `completed_at` over ALL this pilot's attempts on the lesson, legacy
- * rows included, so a pilot with only old below-par attempts waits 6h from the
- * last of them. `completed_at` is timezone-less and written as UTC;
+ * rows included, so a pilot with only old below-par attempts is offered a
+ * retake (at once: there is no retake wait). `completed_at` is timezone-less and written as UTC;
  * `at time zone 'UTC'` makes the raw string carry an offset so `toIso` cannot
  * read it as local time.
  */

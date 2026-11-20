@@ -158,7 +158,7 @@ describe('getDebriefAccess state', () => {
     });
   });
 
-  it('waits 6h after a finished attempt', async () => {
+  it('opens a retake at once after a finished attempt: there is no wait', async () => {
     m.getDebriefFacts.mockResolvedValue({
       clockStartAt: '2026-10-25T00:00:00.000Z',
       passed: false,

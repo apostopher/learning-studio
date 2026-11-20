@@ -21,10 +21,14 @@ export function splitIntoSets(questionIds: readonly string[]): string[][] {
   return sets;
 }
 
-/** The rounded mean of a set's scores. */
+/**
+ * The mean of a set's scores, UNROUNDED: sets are judged on it (the spec's
+ * "compare unrounded"). Round only to show it (`formatScore`) or to store it
+ * in an integer column.
+ */
 export function setAverage(scores: readonly number[]): number {
   if (scores.length === 0) return 0;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
 
 /** Judges a set's (best-so-far) average against the course's pass mark. */
@@ -77,17 +81,28 @@ export type SetsProgress = {
 
 /**
  * Where an attempt stands. A set passes when `judge` accepts the better
- * average of it and every earlier completed set. A passed set 1 does not
- * open set 2 until `improveAccepted`.
+ * average of it and every earlier completed set, unless its verdict was
+ * frozen (`opts.verdicts`). A passed set 1 does not open set 2 until
+ * `improveAccepted`.
  */
 export function setsProgress(
   sets: readonly (readonly string[])[],
   scoreOf: ReadonlyMap<string, number>,
   judge: SetJudge,
-  opts: { improveAccepted: boolean },
+  opts: {
+    improveAccepted: boolean;
+    /**
+     * Verdicts frozen when each set completed (index 0 = set 1). A set with
+     * one is never re-judged; `judge` decides only the rest (a set
+     * completing now, or an attempt stored before verdicts were).
+     */
+    verdicts?: readonly boolean[];
+  },
 ): SetsProgress {
+  const verdictOf = (i: number, bestSoFar: number) =>
+    opts.verdicts?.[i] ?? judge(bestSoFar);
   let averages = completedSetAverages(sets, scoreOf);
-  const firstPassed = averages.length > 0 && judge(averages[0] ?? 0);
+  const firstPassed = averages.length > 0 && verdictOf(0, averages[0] ?? 0);
   const hasSet2 = sets.length > 1;
   // A passed set 1 not taken up: later answers, if any, are not part of it.
   if (firstPassed && hasSet2 && !opts.improveAccepted) {
@@ -96,7 +111,7 @@ export function setsProgress(
   let best = Number.NEGATIVE_INFINITY;
   const completed: SetOutcome[] = averages.map((average, i) => {
     best = Math.max(best, average);
-    return { set: i + 1, average, passed: judge(best) };
+    return { set: i + 1, average, passed: verdictOf(i, best) };
   });
   const offer =
     firstPassed && hasSet2 && !opts.improveAccepted && completed.length === 1;

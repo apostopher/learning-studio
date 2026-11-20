@@ -48,6 +48,7 @@ function tab(store: ReturnType<typeof createStore>) {
     finished: store.get(justFinishedDebriefAtom),
     lessonSlug: LESSON,
     attemptInProgress: false,
+    startRequested: store.get(debriefStartRequestedAtom) === LESSON,
   });
   const view =
     panel.kind === 'take'

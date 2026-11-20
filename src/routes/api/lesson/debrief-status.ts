@@ -117,8 +117,11 @@ export async function debriefStatusHandler(
 
     const body: DebriefStatusResponse = { state, lessonOutstanding };
     if (state.kind === 'open' && state.retake) {
-      // The report survives between attempts: a reload, a later visit or
-      // another device shows the set scores and what to revisit.
+      // The report survives between attempts: on a reload, a later visit or
+      // another device, `computeDebriefPanel` renders the last finished
+      // attempt's set scores and what to revisit, with Retake now, until the
+      // pilot starts the retake. While an attempt is open (`resume`) the
+      // panel resumes it instead.
       const latest = await selectLatestFinishedChunkAttempt(userId, lessonSlug);
       const projected = latest ? toClientAttempt(latest) : null;
       body.lastAttempt =

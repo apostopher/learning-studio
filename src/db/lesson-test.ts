@@ -164,7 +164,7 @@ export async function selectLatestFinishedChunkAttempt(
  * - passed: a row in `debrief_passes` (permanent; legacy passes backfilled);
  * - lastFinishedAt: the latest `completed_at` over ALL this pilot's attempts
  *   on the lesson, legacy ones included, so a pilot with only old below-par
- *   attempts waits 6h from the last of them;
+ *   attempts is offered a retake (at once: there is no retake wait);
  * - hasOpenAttempt: an unfinished chunk-format attempt exists;
  * - mastery: cleared of total against the lesson's CURRENT chunk list, or
  *   null when the lesson has no chunks stored yet;

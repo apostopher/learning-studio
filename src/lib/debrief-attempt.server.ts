@@ -244,6 +244,7 @@ function progressOf(
 ): SetsProgress {
   return setsProgress(attemptSets(stored), scoresOf(answers), judge, {
     improveAccepted,
+    verdicts: stored.setVerdicts,
   });
 }
 
@@ -530,9 +531,15 @@ export async function answerQuestion(a: {
     await updateAttempt(tx, a.attemptId, {
       answers: newAnswers,
       draft: null,
+      // A set completed here: freeze its verdict, so the offer and the sets
+      // reached never move with later video or quiz facts.
+      ...(step.verdicts && {
+        questions: { ...lockedStored, setVerdicts: step.verdicts },
+      }),
       ...(step.result.finished && {
         completedAt: now,
-        totalScore: step.best ?? 0,
+        // The integer column: the unrounded best, rounded to store.
+        totalScore: Math.round(step.best ?? 0),
         finishedReason: step.result.finished,
       }),
     });
@@ -599,7 +606,13 @@ function setStep(
   after: readonly AIEvaluationResult[],
   questionId: string,
   scoring: Scoring,
-): { result: StepResult; newlyPassed: boolean; best: number | null } {
+): {
+  result: StepResult;
+  newlyPassed: boolean;
+  best: number | null;
+  /** Every completed set's verdict, when this answer completed a set. */
+  verdicts: boolean[] | null;
+} {
   const sets = attemptSets(stored);
   const setOf = sets.findIndex((ids) => ids.includes(questionId)) + 1;
   const accepted = setOf > 1 && (stored.improveAccepted ?? false);
@@ -623,6 +636,7 @@ function setStep(
       },
       newlyPassed: false,
       best: now.best,
+      verdicts: null,
     };
   }
   return {
@@ -638,6 +652,7 @@ function setStep(
     },
     newlyPassed: now.passed && !was.passed,
     best: now.best,
+    verdicts: now.completed.map((c) => c.passed),
   };
 }
 
@@ -725,7 +740,7 @@ export async function continueAttempt(a: {
     await updateAttempt(tx, a.attemptId, {
       completedAt: new Date(),
       finishedReason: 'set-passed',
-      totalScore: p.best ?? 0,
+      totalScore: Math.round(p.best ?? 0),
     });
     // The offer is judged on today's facts and this course's pass mark, so
     // set 1 may not have recorded a pass when it completed (a quiz retaken

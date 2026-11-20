@@ -1,13 +1,13 @@
 import type { ReactNode, Ref } from 'react';
-import type { LessonScore } from '#/lib/lesson-score';
+import { formatScore, type LessonScore } from '#/lib/lesson-score';
 import type { DebriefResult } from '../compute-debrief-panel';
 import { DebriefScoreBreakdown } from './debrief-score-breakdown';
 import { ScoreRing } from './score-ring';
 
 type ScoreReportProps = {
   /**
-   * The attempt's outcome. The ring shows `score`: the average of the set
-   * that ended it (the passing one, or the last one missed).
+   * The attempt's outcome. The ring shows `score`: the better set's
+   * average, the one the attempt is scored on.
    */
   result: DebriefResult;
   /** The lesson total the attempt ended on, summed under the averages. */
@@ -108,9 +108,12 @@ export const ScoreReport = ({
 export function setSummary(result: DebriefResult): string {
   const sets =
     result.setAverages.length === 0
-      ? `Score ${result.score}`
+      ? `Score ${formatScore(result.score)}`
       : result.setAverages
-          .map((avg, i) => `${i === 0 ? 'Set' : 'set'} ${i + 1} average ${avg}`)
+          .map(
+            (avg, i) =>
+              `${i === 0 ? 'Set' : 'set'} ${i + 1} average ${formatScore(avg)}`,
+          )
           .join(', ');
   return `${sets}.`;
 }

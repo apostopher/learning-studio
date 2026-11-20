@@ -98,6 +98,7 @@ const panel = (
     finished: null,
     lessonSlug: LESSON,
     attemptInProgress: false,
+    startRequested: false,
     ...over,
   });
 
@@ -260,6 +261,79 @@ describe('computeDebriefPanel', () => {
           { finished: finished() },
         ),
       ).toEqual({ kind: 'finished', report: finished(), availableAt: null });
+    });
+  });
+
+  describe('coming back after a failed attempt', () => {
+    const retakeOpen = {
+      kind: 'open',
+      retake: true,
+      resume: false,
+      passed: false,
+    } as const;
+    const lastAttempt = { score: 62, setAverages: [58, 62.5] };
+
+    it('shows the last attempt’s report (set scores and Worth revisiting) with Retake now, not the bare intro', () => {
+      expect(
+        panel(
+          loaded(retakeOpen, {
+            lastAttempt,
+            revisitNotes: ['Note A', 'Note B'],
+          }),
+        ),
+      ).toEqual({
+        kind: 'finished',
+        report: {
+          lessonSlug: LESSON,
+          finishedAt: 0,
+          result: { passed: false, score: 62.5, setAverages: [58, 62.5] },
+          revisitNotes: ['Note A', 'Note B'],
+          score: null,
+          // No two-misses prompt: Retake now alone (`DebriefReportFooter`).
+          note: null,
+        },
+        availableAt: null,
+        restored: true,
+      });
+    });
+
+    it('an attempt from before sets shows its score alone', () => {
+      const p = panel(
+        loaded(retakeOpen, {
+          lastAttempt: { score: 40, setAverages: [] },
+          revisitNotes: [],
+        }),
+      );
+      expect(p.kind === 'finished' && p.report.result).toEqual({
+        passed: false,
+        score: 40,
+        setAverages: [],
+      });
+    });
+
+    it('Retake now pressed: the take panel, so the new attempt starts', () => {
+      expect(
+        panel(loaded(retakeOpen, { lastAttempt, revisitNotes: [] }), {
+          startRequested: true,
+        }),
+      ).toEqual({ kind: 'take', retake: true, resume: false });
+    });
+
+    it('no finished attempt: the intro', () => {
+      expect(
+        panel(loaded(retakeOpen, { lastAttempt: null, revisitNotes: [] })),
+      ).toEqual({ kind: 'take', retake: true, resume: false });
+    });
+
+    it('an open attempt to resume is taken, not the report', () => {
+      expect(
+        panel(
+          loaded(
+            { ...retakeOpen, resume: true },
+            { lastAttempt, revisitNotes: [] },
+          ),
+        ),
+      ).toEqual({ kind: 'take', retake: true, resume: true });
     });
   });
 
@@ -438,7 +512,7 @@ describe('setAveragesOf', () => {
         answered('q4', 41),
         answered('q5', 90),
       ]),
-    ).toEqual([68]);
+    ).toEqual([67.75]); // unrounded: rounding is for display
     expect(
       setAveragesOf(twoSets().questions, [
         ...['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 60)),
@@ -567,6 +641,30 @@ describe('finishedDebriefReport', () => {
     expect(report?.result.passed).toBe(true);
     expect(report?.note).toBeNull();
     expect(report?.revisitNotes).toEqual([]);
+  });
+
+  it('the ring shows the better set: 70 then 40 shows 70', () => {
+    const report = finishedDebriefReport({
+      lessonSlug: LESSON,
+      attempt: twoSets({
+        answered: [
+          ...['q1', 'q2', 'q3', 'q4'].map((id) => answered(id, 70)),
+          answered('q5', 40),
+        ],
+      }),
+      questionId: 'q6',
+      result: result({
+        evaluation: { score: 40, feedback: 'Viper says', revisitNote: '' },
+        setResult: { set: 2, average: 40, passed: true, score: totalAt(70) },
+        finished: 'set-passed',
+      }),
+      now: FINISHED_AT,
+    });
+    expect(report?.result).toEqual({
+      passed: true,
+      score: 70,
+      setAverages: [70, 40],
+    });
   });
 
   it('is null while the attempt goes on', () => {

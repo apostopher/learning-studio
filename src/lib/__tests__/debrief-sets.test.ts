@@ -8,6 +8,7 @@ import {
   setsProgress,
   splitIntoSets,
 } from '#/lib/debrief-sets';
+import { debriefJudge } from '#/lib/lesson-score';
 
 const scores = (entries: Record<string, number>) =>
   new Map(Object.entries(entries));
@@ -43,10 +44,10 @@ describe('splitIntoSets', () => {
 });
 
 describe('setAverage', () => {
-  it('is the rounded mean', () => {
+  it('is the unrounded mean: rounding is for display only', () => {
     expect(setAverage([100, 80, 50, 70])).toBe(75);
-    expect(setAverage([75, 74, 74, 74])).toBe(74); // 74.25
-    expect(setAverage([75, 75, 74, 74])).toBe(75); // 74.5 rounds up
+    expect(setAverage([75, 74, 74, 74])).toBe(74.25);
+    expect(setAverage([75, 75, 74, 74])).toBe(74.5);
   });
   it('is 0 for no scores', () => {
     expect(setAverage([])).toBe(0);
@@ -141,6 +142,23 @@ describe('setsProgress', () => {
   it('a lone set that missed is over', () => {
     const p = run([['q1', 'q2', 'q3']], { q1: 10, q2: 10, q3: 10 });
     expect(p).toMatchObject({ passed: false, over: true, reached: 1 });
+  });
+
+  it('judges the unrounded average: with video 1, quiz 1 and pass mark 85, a set averaging 39.5 does not pass', () => {
+    const seen: number[] = [];
+    const real = debriefJudge({ video: 1, quiz: 1 }, 85);
+    const p = setsProgress(
+      TWO_SETS,
+      scores({ q1: 40, q2: 40, q3: 39, q4: 39 }),
+      (avg) => {
+        seen.push(avg);
+        return real(avg);
+      },
+      { improveAccepted: false },
+    );
+    expect(seen).toContain(39.5);
+    expect(p.completed[0]).toEqual({ set: 1, average: 39.5, passed: false });
+    expect(p).toMatchObject({ passed: false, offer: false, reached: 2 });
   });
 
   it('a smaller second set is judged on what it asks', () => {

@@ -635,7 +635,7 @@ describe('answerQuestion', () => {
     const r = await answer('q4');
     expect(r).toMatchObject({
       ok: true,
-      setResult: { set: 1, average: 78, passed: true },
+      setResult: { set: 1, average: 77.5, passed: true },
       nextQuestions: [],
       offer: true,
       // Set 2 here has two questions: the offer's copy names the count.
@@ -672,13 +672,13 @@ describe('answerQuestion', () => {
       },
       setResult: {
         set: 1,
-        average: 68,
+        average: 67.5,
         passed: false,
         score: {
-          total: expect.closeTo(68),
+          total: expect.closeTo(67.5),
           passMark: 75,
           passed: false,
-          parts: [debriefPart(68)],
+          parts: [debriefPart(67.5)],
         },
       },
       nextQuestions: [
@@ -1134,6 +1134,118 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     });
     m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
     expect(await answer('q8')).toMatchObject({ finished: 'set-passed' });
+  });
+
+  describe('a completed set’s verdict is frozen when it completes', () => {
+    const resume = () =>
+      startOrResumeAttempt({
+        userId: 'u1',
+        courseId: 7,
+        lessonId: 41,
+        lessonSlug: 'l1',
+      });
+    const go = (choice: 'yes' | 'no') =>
+      continueAttempt({
+        userId: 'u1',
+        attemptId: 5,
+        choice,
+        lessonId: 41,
+        courseId: 7,
+      });
+
+    beforeEach(() => {
+      m.selectOpenAttempt.mockImplementation(async () =>
+        m.row ? structuredClone(m.row) : null,
+      );
+    });
+
+    it('set 1 passes, then the facts drop: the offer is still there and No works', async () => {
+      m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
+      m.evaluateFreeText.mockResolvedValue(scored(4, 50));
+      expect(await answer('q4')).toMatchObject({ offer: true });
+      expect(m.updateAttempt.mock.calls[0][2].questions).toEqual({
+        ...eightStored,
+        setVerdicts: [true],
+      });
+
+      // A worse quiz retake: 50 + 0 + 25 × 0.5 = 62.5 < 85 on today's facts.
+      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      const r = await resume();
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.offer).toBe(true);
+      expect(r.attempt.questions).toHaveLength(4);
+      expect(r.attempt.setResults).toMatchObject([{ set: 1, passed: true }]);
+
+      // A replay of the passing answer reads as it did.
+      expect(await answer('q4')).toMatchObject({
+        offer: true,
+        setResult: { set: 1, passed: true },
+      });
+
+      m.updateAttempt.mockClear();
+      expect(await go('no')).toMatchObject({ ok: true, choice: 'no' });
+      expect(m.updateAttempt).toHaveBeenCalledWith(m.tx, 5, {
+        completedAt: expect.any(Date),
+        finishedReason: 'set-passed',
+        totalScore: 50,
+      });
+    });
+
+    it('set 1 misses, then the facts rise: set 2 stays reachable and answerable', async () => {
+      // Quiz 0: 50 + 0 + 25 × 0.4 = 60 < 85.
+      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 40) });
+      m.evaluateFreeText.mockResolvedValue(scored(4, 40));
+      expect(await answer('q4')).toMatchObject({
+        offer: false,
+        nextQuestions: set2,
+        setResult: { set: 1, passed: false },
+      });
+      expect(m.updateAttempt.mock.calls[0][2].questions).toEqual({
+        ...eightStored,
+        setVerdicts: [false],
+      });
+
+      // A better quiz retake: 50 + 25 + 10 = 85 would pass set 1 today.
+      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
+      const r = await resume();
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.offer).toBe(false);
+      expect(r.attempt.questions).toHaveLength(8);
+      expect(r.attempt.setResults).toMatchObject([{ set: 1, passed: false }]);
+
+      m.evaluateFreeText.mockResolvedValue(scored(5, 90));
+      expect(await answer('q5')).toMatchObject({ ok: true });
+      expect(m.evaluateFreeText).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: 'q5' }),
+        'typed',
+        eightStored.chunks,
+        eightStored.context,
+      );
+      expect(await go('no')).toEqual({ ok: false, reason: 'no-offer' });
+    });
+
+    it('an attempt stored without verdicts (older rows) is judged on today’s facts', async () => {
+      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
+      const r = await resume();
+      if (!r.ok) throw new Error('expected ok');
+      expect(r.attempt.offer).toBe(false);
+      expect(r.attempt.questions).toHaveLength(8);
+    });
+
+    it('finishing set 2 freezes both verdicts', async () => {
+      m.row = attemptRow({
+        questions: { ...eightStored, setVerdicts: [false] },
+        answers: [...all(1, 4, 30), ...all(5, 7, 90)],
+      });
+      m.evaluateFreeText.mockResolvedValue(scored(8, 90));
+      await answer('q8');
+      expect(m.updateAttempt.mock.calls[0][2].questions).toEqual({
+        ...eightStored,
+        setVerdicts: [false, true],
+      });
+    });
   });
 
   describe('resume (toView)', () => {

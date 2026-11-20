@@ -1,3 +1,5 @@
+import { formatScore } from '#/lib/lesson-score';
+
 type ScoreRingProps = {
   score: number;
   size?: number;
@@ -25,12 +27,14 @@ export const ScoreRing = ({
       className="relative inline-flex items-center justify-center"
       style={{ inlineSize: size, blockSize: size }}
       role="img"
-      aria-label={`Score: ${score}%`}
+      aria-label={`Score: ${formatScore(score)}%`}
     >
       <svg
         viewBox={`0 0 ${size} ${size}`}
         style={{ inlineSize: size, blockSize: size }}
         className="-rotate-90"
+        // Decorative: the wrapper is the image, named by its aria-label.
+        aria-hidden="true"
       >
         <circle
           cx={size / 2}
@@ -53,7 +57,9 @@ export const ScoreRing = ({
           style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
         />
       </svg>
-      <span className="absolute text-lg font-bold text-primary">{score}%</span>
+      <span className="absolute text-lg font-bold text-primary">
+        {formatScore(score)}%
+      </span>
     </div>
   );
 };

@@ -6,6 +6,7 @@ import {
   debriefNotOpenAtom,
   debriefOpenedAnnouncementAtom,
   debriefRetakeLaterAtom,
+  debriefStartRequestedAtom,
   justFinishedDebriefAtom,
   startDebriefAttemptAtom,
 } from '#/atoms/debrief';
@@ -77,6 +78,7 @@ export const DebriefPanelContainer = ({
     enabled: false,
   });
   const finished = useAtomValue(justFinishedDebriefAtom);
+  const startRequested = useAtomValue(debriefStartRequestedAtom);
   const [opened, setOpened] = useAtom(debriefOpenedAnnouncementAtom);
   const setNotOpen = useSetAtom(debriefNotOpenAtom);
   const startAttempt = useSetAtom(startDebriefAttemptAtom);
@@ -91,6 +93,7 @@ export const DebriefPanelContainer = ({
     attemptInProgress:
       attemptCache.data !== undefined &&
       !(attemptCache.error instanceof DebriefNotOpenError),
+    startRequested: startRequested === lessonSlug,
   });
 
   // Outside `take` this lesson has no attempt on screen: drop the cached one,
@@ -124,8 +127,10 @@ export const DebriefPanelContainer = ({
   // The report's heading takes focus when the report appears (the button
   // that led here is gone) and again after Later closes the retake prompt.
   const reportHeading = useRef<HTMLHeadingElement>(null);
+  // A report restored on arrival (`restored`) was not just reached by a
+  // press, so it leaves focus where it is.
   const reportFocusKey =
-    panel.kind === 'finished'
+    panel.kind === 'finished' && !panel.restored
       ? `${panel.report.finishedAt}:${panel.report.note}`
       : null;
   useEffect(() => {

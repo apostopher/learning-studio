@@ -41,6 +41,14 @@ export const StoredAttemptSchema = z.object({
   sets: z.array(z.array(z.string())).optional(),
   /** The pilot took up the offer of set 2 after passing set 1. */
   improveAccepted: z.boolean().optional(),
+  /**
+   * Each completed set's verdict, frozen when the set completed (index 0 =
+   * set 1). The offer and the sets reached read these, never a re-judge on
+   * today's video and quiz facts: a quiz retaken mid-attempt must not take
+   * away an offer already made, nor shut a set 2 already opened. Absent on
+   * attempts from before (2026-11-20): their sets are judged live.
+   */
+  setVerdicts: z.array(z.boolean()).optional(),
 });
 export type StoredAttempt = z.infer<typeof StoredAttemptSchema>;
 
