@@ -4,7 +4,7 @@ import { act, render } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteLessonAtom, playLessonAtom } from '#/atoms/admin';
+import { playLessonAtom } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import type { BoardLesson, BoardModule, OrgLibrary } from '#/lib/admin-schemas';
 
@@ -43,7 +43,6 @@ vi.mock('../lesson-card', () => ({
   },
 }));
 
-import { DELETE_UNAVAILABLE_REASON } from '../lesson-card-labels';
 import { SortableLessonCard } from '../sortable-lesson-card';
 
 const lesson: BoardLesson = {
@@ -110,7 +109,7 @@ const LIBRARY: OrgLibrary = {
 };
 
 /** Renders the card, optionally with the org library already in cache. */
-function renderCard(library?: OrgLibrary) {
+function renderCard(library?: OrgLibrary, module: BoardModule = mod) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, enabled: false } },
   });
@@ -122,7 +121,7 @@ function renderCard(library?: OrgLibrary) {
     </QueryClientProvider>
   );
   const utils = render(
-    <SortableLessonCard courseId={7} lesson={lesson} module={mod} />,
+    <SortableLessonCard courseId={7} lesson={lesson} module={module} />,
     { wrapper },
   );
   return { ...utils, store };
@@ -143,31 +142,14 @@ describe('SortableLessonCard', () => {
   });
 
   /**
-   * This board knows one course; deleting a lesson ends it in every course.
-   * The count therefore has to come from the org library, and it has to be the
-   * REAL one — the confirmation's whole job is to state the blast radius.
-   *
-   * Mutant seen RED: `courseCount: 0` passed instead of the library's value.
-   * That compiles, renders, opens the dialog, and makes it say "is not in any
-   * course yet" about a lesson sitting in a module on this very board.
+   * Deleting a lesson everywhere moved to the library card only; the bin on
+   * this board was replaced by the paid/free padlock.
    */
-  it('opens the confirmation with the real course count, not a placeholder', async () => {
-    const { store } = renderCard(LIBRARY);
-    const onDelete = cardProps.mock.calls[0][0].onDelete as () => void;
+  it('offers no delete on a course board', () => {
+    renderCard(LIBRARY);
 
-    await act(async () => {
-      onDelete();
-    });
-
-    expect(store.get(deleteLessonAtom)).toEqual({
-      id: 10,
-      name: 'Crosswind landings',
-      courseCount: 3,
-      // This board has NO remove control, and the confirmation is told so —
-      // otherwise its copy would send the reader hunting for a button that is
-      // nowhere on this screen.
-      removeControlLabel: null,
-    });
+    expect(cardProps.mock.calls[0][0].onDelete).toBeUndefined();
+    expect(cardProps.mock.calls[0][0].deleteUnavailableReason).toBeUndefined();
   });
 
   /**
@@ -189,52 +171,6 @@ describe('SortableLessonCard', () => {
     });
 
     expect(store.get(playLessonAtom)).toEqual({ lessonId: 10, courseId: 7 });
-  });
-
-  /**
-   * Mutant seen RED: `courseCount ?? 0` in place of the null guard — the card
-   * then offers a delete whose confirmation understates (indeed denies) the
-   * blast radius while the library is still loading.
-   */
-  it('opens no confirmation while the course count is unknown', () => {
-    renderCard();
-
-    expect(cardProps.mock.calls[0][0].onDelete).toBeUndefined();
-  });
-
-  /**
-   * Withholding the control is right; withholding it silently is not. Every
-   * locked or unavailable control in this project states its reason, visibly
-   * and in its accessible name.
-   *
-   * Mutant seen RED: `deleteUnavailableReason` not passed — the button simply
-   * disappears while the library loads and reappears with no explanation.
-   */
-  it('says why deleting is unavailable rather than vanishing', () => {
-    renderCard();
-
-    const reason = cardProps.mock.calls[0][0].deleteUnavailableReason;
-    expect(reason).toBe(DELETE_UNAVAILABLE_REASON);
-    expect(reason).toMatch(/how many courses/i);
-  });
-
-  /**
-   * This board never removes a placement — that is the editor's job — so the
-   * confirmation must not describe a control it does not have.
-   *
-   * Mutant seen RED: `removeControlLabel: removeLessonLabel(lesson.name,
-   * mod.name)` passed here, copying the editor card. It compiles, and the
-   * dialog then quotes a button nobody on this screen can find.
-   */
-  it('tells the confirmation this surface has no remove control', async () => {
-    const { store } = renderCard(LIBRARY);
-    const onDelete = cardProps.mock.calls[0][0].onDelete as () => void;
-
-    await act(async () => {
-      onDelete();
-    });
-
-    expect(store.get(deleteLessonAtom)?.removeControlLabel).toBeNull();
   });
 });
 
@@ -276,5 +212,49 @@ describe('SortableLessonCard — visibility', () => {
     expect(cardProps.mock.calls[0][0].visibility).toMatchObject({
       isPending: false,
     });
+  });
+});
+
+/**
+ * The padlock makes the lesson paid or free through the same config mutation.
+ * Asserted on the PATCH that leaves the browser, not on the prop's shape.
+ */
+describe('SortableLessonCard — access padlock', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('makes a free lesson paid with its module’s subscriptions', async () => {
+    renderCard(LIBRARY);
+    const access = cardProps.mock.calls[0][0].access as {
+      isPaid: boolean;
+      onToggle: () => void;
+    };
+    expect(access.isPaid).toBe(false);
+
+    await act(async () => {
+      access.onToggle();
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`/api/admin/lessons/${lesson.id}`);
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      requiredSubscriptions: ['associate'],
+    });
+  });
+
+  it('locks the padlock in a free module, and says why', () => {
+    renderCard(LIBRARY, { ...mod, requiredSubscriptions: [] });
+
+    expect(cardProps.mock.calls[0][0].access.lockedReason).toMatch(
+      /module is free/,
+    );
   });
 });

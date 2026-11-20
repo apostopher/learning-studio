@@ -1,5 +1,5 @@
 import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
-import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
+import type { EditorBoardLesson } from '#/lib/admin-schemas';
 import { LessonQuickshot } from './lesson-quickshot';
 
 /**
@@ -14,12 +14,9 @@ import { LessonQuickshot } from './lesson-quickshot';
  */
 export const EditorLessonQuickshotContainer = ({
   lesson,
-  module,
   disabled,
 }: {
   lesson: EditorBoardLesson;
-  /** The lesson's own module: access depends on what the module allows. */
-  module: EditorBoardModule;
   disabled?: boolean;
 }) => {
   const updateConfig = useUpdateEditorLessonConfig();
@@ -27,7 +24,6 @@ export const EditorLessonQuickshotContainer = ({
   return (
     <LessonQuickshot
       lesson={lesson}
-      module={module}
       disabled={disabled}
       onPatch={(patch) => updateConfig.mutate({ lessonId: lesson.id, patch })}
     />

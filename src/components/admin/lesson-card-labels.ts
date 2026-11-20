@@ -1,7 +1,16 @@
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported (for real, not mocked) by the drag-rules test.
 
-import { disciplineLessons } from '#/lib/admin-schemas';
+import {
+  accessSubscriptions,
+  isSubscriptionDisabled,
+} from '#/components/admin/lesson-config/config-mappings';
+import type {
+  EditorBoardLesson,
+  EditorBoardModule,
+  UpdateLessonConfigInput,
+} from '#/lib/admin-schemas';
+import type { LessonCardAccess } from './lesson-card';
 
 /**
  * The accessible name and tooltip of a placed lesson's "remove" control.
@@ -25,40 +34,33 @@ export function removeLessonLabel(
 }
 
 /**
- * How many courses teach a lesson, per the org library, or `null` when the
- * library has not loaded (or does not hold the lesson).
+ * The padlock's props for a placed lesson: paid when it requires any
+ * subscription, locked open when its module is free.
  *
- * Shared by both surfaces' lesson cards. `null` is not zero and the two must
- * not be conflated: the delete confirmation says "is not in any course yet"
- * for zero, which would be a flat lie about a lesson currently sitting in a
- * module. Callers offer no delete control at all while the answer is `null`.
+ * Shared by both boards' card containers so the rule lives once. Making a
+ * lesson paid copies its module's subscriptions (`accessSubscriptions`); a
+ * free module has none to copy, so the toggle there would write `[]` back and
+ * appear to do nothing — it is inert and says why instead.
  */
-export function findLibraryCourseCount(
-  library:
-    | {
-        disciplines: {
-          modules: { lessons: { id: number; courseCount: number }[] }[];
-          untitled: { id: number; courseCount: number }[];
-        }[];
-        untitled: { id: number; courseCount: number }[];
-      }
-    | undefined,
-  lessonId: number,
-): number | null {
-  if (!library) return null;
-  const card = [
-    ...library.untitled,
-    ...library.disciplines.flatMap((d) => disciplineLessons(d)),
-  ].find((l) => l.id === lessonId);
-  return card?.courseCount ?? null;
+export function lessonAccess(
+  lesson: Pick<EditorBoardLesson, 'requiredSubscriptions'>,
+  module: EditorBoardModule,
+  save: (patch: Pick<UpdateLessonConfigInput, 'requiredSubscriptions'>) => void,
+  isPending: boolean,
+): LessonCardAccess {
+  const isPaid = lesson.requiredSubscriptions.length > 0;
+  return {
+    isPaid,
+    isPending,
+    lockedReason: isSubscriptionDisabled(module)
+      ? 'This module is free, so its lessons cannot be paid. Set the module’s access first.'
+      : undefined,
+    onToggle: () =>
+      save({
+        requiredSubscriptions: accessSubscriptions(
+          isPaid ? 'free' : 'subscription',
+          module,
+        ),
+      }),
+  };
 }
-
-/**
- * Why the delete control is inert while the org library is still loading.
- *
- * Shared by both surfaces' cards. The blast radius is the confirmation's
- * whole point, so the control cannot open until the count is known — but it
- * must say that rather than simply not being there.
- */
-export const DELETE_UNAVAILABLE_REASON =
-  'Checking how many courses teach this lesson — deleting is unavailable until that count arrives';

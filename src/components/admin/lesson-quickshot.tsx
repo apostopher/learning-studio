@@ -2,8 +2,6 @@ import { Toggle } from '@base-ui/react/toggle';
 import { Tooltip } from '@base-ui/react/tooltip';
 import { MotionConfig, motion } from 'motion/react';
 import {
-  accessSubscriptions,
-  isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   videoWatchWarning,
 } from '#/components/admin/lesson-config/config-mappings';
@@ -11,7 +9,6 @@ import { type ChipTone, chipClassName } from '#/components/ui/chip';
 import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
 import type {
   EditorBoardLesson,
-  EditorBoardModule,
   UpdateLessonConfigInput,
 } from '#/lib/admin-schemas';
 
@@ -28,8 +25,6 @@ interface LessonQuickshotProps {
    * omits `videoProvider`/`videoRef`. A full `BoardLesson` still satisfies it.
    */
   lesson: EditorBoardLesson;
-  /** Needed for access: a lesson can only be paid if its module is. */
-  module: EditorBoardModule;
   onPatch: (patch: UpdateLessonConfigInput) => void;
   /** Set while a mutation is in flight, or when the actor may not edit. */
   disabled?: boolean;
@@ -100,13 +95,12 @@ const QuickshotToggle = ({
  * No level chip: a lesson's levels belong to its discipline and are set on
  * the library's Update levels board, not per course.
  *
- * **The colour system carries meaning, so don't pick tones by taste:**
- * - *warning* (brown) — narrows **who may see** the lesson: paid access.
- * - *success* (green) — demands something **of the learner**: a debrief, a watched video.
- * - *muted* (grey) — unrestricted, or not required. The resting state of everything.
+ * Only what the lesson asks **of the learner** lives here. Who may see it —
+ * paid or free — is the padlock on the card itself (`LessonCard` `access`).
  *
- * So a row of grey chips means "open to everyone, asks nothing", which is what
- * an untouched lesson should look like.
+ * **The colour system carries meaning, so don't pick tones by taste:**
+ * - *success* (green) — demands something of the learner: a debrief, a watched video.
+ * - *muted* (grey) — not required. The resting state.
  *
  * **Every chip carries a tooltip, and that is not decoration.** `BRIEF` and
  * `WATCH` are five letters of jargon; without hover text an admin has to open
@@ -118,15 +112,9 @@ const QuickshotToggle = ({
  */
 export const LessonQuickshot = ({
   lesson,
-  module,
   onPatch,
   disabled = false,
 }: LessonQuickshotProps) => {
-  const isPaid = lesson.requiredSubscriptions.length > 0;
-
-  // A free module cannot contain a paid lesson: accessSubscriptions would copy
-  // the module's empty array back, so the chip would appear to do nothing.
-  const accessLocked = disabled || isSubscriptionDisabled(module);
   // You may LEAVE an unsatisfiable "watch required with no video" but not enter
   // one — see isVideoWatchRequiredDisabled.
   const watchLocked = disabled || isVideoWatchRequiredDisabled(lesson);
@@ -140,28 +128,6 @@ export const LessonQuickshot = ({
     // colour, which is the right reading of "gentler, not none".
     <MotionConfig reducedMotion="user">
       <div className="flex flex-wrap items-center gap-1 font-semibold">
-        <QuickshotToggle
-          label={isPaid ? 'Paid' : 'Free'}
-          tooltip={
-            isSubscriptionDisabled(module)
-              ? 'This module is free, so its lessons cannot be paid. Set the module’s access first.'
-              : isPaid
-                ? 'Paid — only subscribers see this lesson. Tap to make it free.'
-                : 'Free — anyone enrolled sees this lesson. Tap to make it paid.'
-          }
-          pressed={isPaid}
-          tone={isPaid ? 'soft-warning' : 'muted'}
-          disabled={accessLocked}
-          onPressedChange={(next) =>
-            onPatch({
-              requiredSubscriptions: accessSubscriptions(
-                next ? 'subscription' : 'free',
-                module,
-              ),
-            })
-          }
-        />
-
         <QuickshotToggle
           label="Brief"
           tooltip={

@@ -2,12 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { toast } from 'sonner';
-import {
-  deleteLessonAtom,
-  editLibraryLessonIdAtom,
-  playLessonAtom,
-} from '#/atoms/admin';
-import { useOrgLibrary } from '#/data-hooks/use-org-library';
+import { editLibraryLessonIdAtom, playLessonAtom } from '#/atoms/admin';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
 import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
@@ -15,34 +10,24 @@ import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { EditorLessonQuickshotContainer } from './editor-lesson-quickshot-container';
 import { LessonCard } from './lesson-card';
-import {
-  DELETE_UNAVAILABLE_REASON,
-  findLibraryCourseCount,
-  removeLessonLabel,
-} from './lesson-card-labels';
+import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
  * shared DndContext, carrying the controls that act on it.
  *
- * The two destructive ones are deliberately not siblings in meaning:
+ * **Remove from module** deletes the PLACEMENT. The lesson stays in the
+ * library and in every other course teaching it, and dragging it back from
+ * the library undoes it. Low stakes, so no confirmation — a dialog in front
+ * of a reversible act only trains people to dismiss dialogs. Deleting the
+ * lesson itself is not offered here: that lives on the library card only.
  *
- * - **Remove from module** deletes the PLACEMENT. The lesson stays in the
- *   library and in every other course teaching it, and dragging it back from
- *   the library undoes it. Low stakes, so no confirmation — a dialog in front
- *   of a reversible act only trains people to dismiss dialogs.
- * - **Delete lesson everywhere** deletes the LESSON, taking it out of every
- *   course at once and cascading learner progress. It opens the confirmation
- *   through `deleteLessonAtom`, which carries the course count so the dialog
- *   can name what is about to be lost.
- *
- * The third control, Edit, is neither: it opens the lesson-level modal shared
- * with the library pane. Its authority follows the lesson's discipline, not
+ * Edit opens the lesson-level modal shared with the library pane. Its authority follows the lesson's discipline, not
  * this course, which is what lets a discipline SME use it here.
  *
  * Otherwise this card is the SAME card the per-course board draws — poster,
- * play tile, edit, delete, quickshot chips — down to sharing `LessonCard` and
- * `LessonQuickshot`. The remove control is the one thing it adds, because a
+ * play tile, eye, padlock, edit, quickshot chips — down to sharing
+ * `LessonCard` and `LessonQuickshot`. The remove control is the one thing it adds, because a
  * placement is only undone here. Two boards showing the same lesson two
  * different ways was the thing to fix, not a difference worth keeping.
  */
@@ -55,8 +40,8 @@ export const EditorLessonCardContainer = ({
 }: {
   lesson: EditorBoardLesson;
   /**
-   * The whole module, not just its id and name: the quickshot's access chip
-   * depends on what the module allows, and dnd needs the id. Mirrors
+   * The whole module, not just its id and name: the padlock depends on what
+   * the module allows, and dnd needs the id. Mirrors
    * `SortableLessonCard`, which takes it for the same reason.
    */
   module: EditorBoardModule;
@@ -86,21 +71,11 @@ export const EditorLessonCardContainer = ({
   });
 
   const unlinkLesson = useUnlinkLesson();
-  const setDeleteLesson = useSetAtom(deleteLessonAtom);
   const editLesson = useSetAtom(editLibraryLessonIdAtom);
   const setPlayLesson = useSetAtom(playLessonAtom);
-  /**
-   * Read here rather than threaded down from `EditorContainer` through the
-   * course column and the module: the only thing this card needs from the
-   * library is one number, and the query is already in cache — the editor
-   * cannot render a card at all until it has loaded. Two components between
-   * here and there would otherwise carry a prop neither of them uses.
-   */
-  const { data: library } = useOrgLibrary();
-  // The same save the quickshot chips use, so the eye and the chips share
-  // one optimistic cache write and one rollback path.
+  // The same save the quickshot chips use, so the eye, the padlock and the
+  // chips share one optimistic cache write and one rollback path.
   const updateConfig = useUpdateEditorLessonConfig();
-  const courseCount = findLibraryCourseCount(library, lesson.id);
 
   return (
     <div
@@ -142,28 +117,12 @@ export const EditorLessonCardContainer = ({
             ),
           isPending: unlinkLesson.isPending,
         }}
-        // Offered only once the count is known. The confirmation's whole job
-        // is to state the blast radius, and a dialog that guessed at it —
-        // or fell back to "1 course" for a lesson taught by five — would be
-        // worse than no button. Until then the control is inert and says why,
-        // rather than silently not being there.
-        onDelete={
-          courseCount == null
-            ? undefined
-            : () =>
-                setDeleteLesson({
-                  id: lesson.id,
-                  name: lesson.name,
-                  courseCount,
-                  // This card HAS a remove control, so the confirmation may
-                  // point at it — by the same name the button wears.
-                  removeControlLabel: removeLessonLabel(
-                    lesson.name,
-                    moduleName,
-                  ),
-                })
-        }
-        deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
+        access={lessonAccess(
+          lesson,
+          mod,
+          (patch) => updateConfig.mutate({ lessonId: lesson.id, patch }),
+          updateConfig.isPending,
+        )}
         // With the column's course: the rail shows several courses and the
         // same lesson may sit in two of them, and the preview resolves
         // playback for the lesson IN one named course.
@@ -172,9 +131,7 @@ export const EditorLessonCardContainer = ({
             ? () => setPlayLesson({ lessonId: lesson.id, courseId })
             : undefined
         }
-        quickshotSlot={
-          <EditorLessonQuickshotContainer lesson={lesson} module={mod} />
-        }
+        quickshotSlot={<EditorLessonQuickshotContainer lesson={lesson} />}
       />
     </div>
   );

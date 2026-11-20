@@ -4,9 +4,13 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteLessonAtom, playLessonAtom } from '#/atoms/admin';
+import { playLessonAtom } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
-import type { BoardLesson, OrgLibrary } from '#/lib/admin-schemas';
+import type {
+  BoardLesson,
+  EditorBoardModule,
+  OrgLibrary,
+} from '#/lib/admin-schemas';
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -60,17 +64,17 @@ vi.mock('../../ui/tooltip-icon-button', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { EditorLessonCardContainer } from '../editor-lesson-card-container';
-import { removeLessonLabel } from '../lesson-card-labels';
 
 const LESSON_ID = 10;
 const MODULE_ID = 3;
 
 /**
- * The card now takes the whole module, not an id and a name: the quickshot
- * chips it draws read `module.requiredSubscriptions` to decide whether the
- * access chip is editable, the same way the per-course board's card does.
+ * The card takes the whole module, not an id and a name: the padlock reads
+ * `module.requiredSubscriptions` to decide whether access is editable, the
+ * same way the per-course board's card does. Free here, so the padlock is
+ * locked open unless a test passes a paid module.
  */
-const MODULE = {
+const MODULE: EditorBoardModule = {
   id: MODULE_ID,
   name: 'Fundamentals',
   slug: 'fundamentals',
@@ -135,7 +139,10 @@ const LIBRARY: OrgLibrary = {
 
 const fetchMock = vi.fn();
 
-function renderCard(over: Partial<BoardLesson> = {}) {
+function renderCard(
+  over: Partial<BoardLesson> = {},
+  module: EditorBoardModule = MODULE,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -146,7 +153,7 @@ function renderCard(over: Partial<BoardLesson> = {}) {
       <Provider store={store}>
         <EditorLessonCardContainer
           lesson={{ ...lesson, ...over }}
-          module={MODULE}
+          module={module}
           courseId={7}
         />
       </Provider>
@@ -212,31 +219,14 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
     expect(requestedUrls()).not.toContain(`/api/admin/lessons/${LESSON_ID}`);
   });
 
-  it('deletes nothing on click, and hands the confirmation the course count', async () => {
-    // Mutant seen RED (two of them): `onDelete` calling `unlinkLesson.mutate`
-    // — which fires a request and leaves the atom null; and
-    // `courseCount: 1` hard-coded, which makes the dialog understate a
-    // three-course blast radius.
-    const { store } = renderCard();
+  it('offers no delete-everywhere control: that lives in the library', () => {
+    // The bin was replaced by the padlock; deleting a lesson everywhere is
+    // done from the library card only.
+    renderCard();
 
-    await act(async () => {
-      fireEvent.click(
-        document.querySelector<HTMLButtonElement>(
-          '[aria-label="Delete lesson everywhere"]',
-        ) as HTMLButtonElement,
-      );
-    });
-
-    // Deleting is confirmed first: the click may write nothing to the server.
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(store.get(deleteLessonAtom)).toEqual({
-      id: LESSON_ID,
-      name: 'Stalls',
-      courseCount: 3,
-      // This surface HAS a remove control, so the confirmation is told its
-      // exact label and can point at it.
-      removeControlLabel: removeLessonLabel('Stalls', 'Fundamentals'),
-    });
+    expect(
+      document.querySelector('[aria-label="Delete lesson everywhere"]'),
+    ).toBeNull();
   });
 
   /**
@@ -334,5 +324,64 @@ describe('EditorLessonCardContainer — visibility', () => {
         document.querySelector('[aria-label="Updating visibility of Stalls…"]'),
       ).not.toBeNull(),
     );
+  });
+});
+
+/**
+ * The padlock is the paid/free toggle that replaced the FREE chip. Asserted on
+ * the PATCH body, since a padlock wired to a no-op renders identically.
+ */
+describe('EditorLessonCardContainer — access padlock', () => {
+  const PAID_MODULE: EditorBoardModule = {
+    ...MODULE,
+    requiredSubscriptions: ['rpoc'],
+  };
+  const patchBodies = () =>
+    fetchMock.mock.calls
+      .filter(([url]) => String(url) === `/api/admin/lessons/${LESSON_ID}`)
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+  const padlock = (name: string) =>
+    document.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`);
+
+  it('makes a free lesson paid with the module’s subscriptions', async () => {
+    renderCard({ requiredSubscriptions: [] }, PAID_MODULE);
+    const button = padlock(
+      'Free: anyone enrolled sees this lesson. Make it paid',
+    );
+    expect(button?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      fireEvent.click(button as HTMLButtonElement);
+    });
+
+    expect(patchBodies()).toEqual([{ requiredSubscriptions: ['rpoc'] }]);
+  });
+
+  it('makes a paid lesson free', async () => {
+    renderCard({ requiredSubscriptions: ['rpoc'] }, PAID_MODULE);
+    const button = padlock(
+      'Paid: only subscribers see this lesson. Make it free',
+    );
+    expect(button?.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(button as HTMLButtonElement);
+    });
+
+    expect(patchBodies()).toEqual([{ requiredSubscriptions: [] }]);
+  });
+
+  it('stays inert in a free module and says why', async () => {
+    renderCard();
+    const button = padlock(
+      'This module is free, so its lessons cannot be paid. Set the module’s access first.',
+    );
+    expect(button?.getAttribute('aria-disabled')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(button as HTMLButtonElement);
+    });
+
+    expect(patchBodies()).toEqual([]);
   });
 });

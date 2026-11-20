@@ -2,7 +2,7 @@
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
+import type { BoardLesson } from '#/lib/admin-schemas';
 
 /**
  * Every tooltip in the app must close the moment the pointer leaves its
@@ -75,23 +75,6 @@ const lesson = (): BoardLesson =>
     videoRef: null,
   }) as BoardLesson;
 
-const module_ = (): BoardModule =>
-  ({
-    id: 10,
-    name: 'Emergencies',
-    slug: 'emergencies',
-    rank: 1,
-    requiredSubscriptions: ['associate'],
-    sequentialLessons: true,
-    lessons: [],
-    dependsOn: [],
-    imageUrlAvif: null,
-    imageUrlWebp: null,
-    learnerCount: 0,
-    owner: { id: 10, name: 'Emergencies' },
-    otherCourseCount: 0,
-  }) as BoardModule;
-
 describe('tooltips close when the pointer leaves', () => {
   it('the shared icon button asks for it', () => {
     render(<TooltipIconButton label="Delete">x</TooltipIconButton>);
@@ -111,13 +94,7 @@ describe('tooltips close when the pointer leaves', () => {
    * behaving exactly as before.
    */
   it('every quickshot chip asks for it', () => {
-    render(
-      <LessonQuickshot
-        lesson={lesson()}
-        module={module_()}
-        onPatch={vi.fn()}
-      />,
-    );
+    render(<LessonQuickshot lesson={lesson()} onPatch={vi.fn()} />);
 
     expect(roots.props.length).toBeGreaterThan(0);
     for (const props of roots.props) {

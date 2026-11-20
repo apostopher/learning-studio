@@ -1,21 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import {
-  configureLessonIdAtom,
-  deleteLessonAtom,
-  playLessonAtom,
-} from '#/atoms/admin';
-import { useOrgLibrary } from '#/data-hooks/use-org-library';
+import { configureLessonIdAtom, playLessonAtom } from '#/atoms/admin';
 import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
-import {
-  DELETE_UNAVAILABLE_REASON,
-  findLibraryCourseCount,
-} from './lesson-card-labels';
+import { lessonAccess } from './lesson-card-labels';
 import { LessonQuickshotContainer } from './lesson-quickshot-container';
 
 export const SortableLessonCard = ({
@@ -26,8 +18,8 @@ export const SortableLessonCard = ({
 }: {
   courseId: number;
   lesson: BoardLesson;
-  /** The whole module, not just its id: the quickshot's access chip depends
-   *  on what the module allows, and dnd needs the id. */
+  /** The whole module, not just its id: the padlock depends on what the
+   *  module allows, and dnd needs the id. */
   module: BoardModule;
   posterUrl?: string | null;
 }) => {
@@ -45,25 +37,10 @@ export const SortableLessonCard = ({
     data: { type: 'lesson', lessonId: lesson.id, moduleId },
   });
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
-  const setDeleteLesson = useSetAtom(deleteLessonAtom);
   const setPlayLesson = useSetAtom(playLessonAtom);
-  /**
-   * Deleting a lesson ends it in EVERY course, so the confirmation has to name
-   * how many lose it — and this board, being one course's board, does not know.
-   * The org library is the only place that count is computed, so this card asks
-   * for it the same way the knowledge editor's card does.
-   *
-   * Passing `0` instead was the cheap option and is not available: the delete
-   * confirmation's zero branch reads "is not in any course yet", which is a
-   * flat lie about a lesson currently sitting in a module on this very board.
-   * `null` (library not loaded, or the lesson missing from it) withholds the
-   * control rather than guessing — see `findLibraryCourseCount`.
-   */
-  const { data: library } = useOrgLibrary();
-  // The same save the quickshot chips use, so the eye and the chips share
-  // one optimistic cache write and one rollback path.
+  // The same save the quickshot chips use, so the eye, the padlock and the
+  // chips share one optimistic cache write and one rollback path.
   const updateConfig = useUpdateLessonConfig(courseId);
-  const courseCount = findLibraryCourseCount(library, lesson.id);
 
   return (
     <div
@@ -90,25 +67,12 @@ export const SortableLessonCard = ({
           isPending: updateConfig.isPending,
         }}
         onEdit={() => setConfigureLessonId(lesson.id)}
-        onDelete={
-          courseCount == null
-            ? undefined
-            : () =>
-                setDeleteLesson({
-                  id: lesson.id,
-                  name: lesson.name,
-                  courseCount,
-                  // `null`: this board has no remove control — a lesson's
-                  // placement is undone in the knowledge library editor. The
-                  // confirmation says so rather than naming a button that is
-                  // nowhere on this screen.
-                  removeControlLabel: null,
-                })
-        }
-        // Inert-with-a-reason rather than absent while the count loads: a
-        // control that vanishes without explanation is the locked state this
-        // project does not ship.
-        deleteUnavailableReason={DELETE_UNAVAILABLE_REASON}
+        access={lessonAccess(
+          lesson,
+          mod,
+          (patch) => updateConfig.mutate({ lessonId: lesson.id, patch }),
+          updateConfig.isPending,
+        )}
         // With the course: the preview resolves playback for the lesson IN
         // this course, and this board is one course's board.
         onPlay={
@@ -117,11 +81,7 @@ export const SortableLessonCard = ({
             : undefined
         }
         quickshotSlot={
-          <LessonQuickshotContainer
-            courseId={courseId}
-            lesson={lesson}
-            module={mod}
-          />
+          <LessonQuickshotContainer courseId={courseId} lesson={lesson} />
         }
       />
     </div>

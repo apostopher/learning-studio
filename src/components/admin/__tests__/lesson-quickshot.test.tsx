@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { LessonQuickshot } from '#/components/admin/lesson-quickshot';
-import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
+import type { BoardLesson } from '#/lib/admin-schemas';
 
 function lesson(overrides: Partial<BoardLesson> = {}): BoardLesson {
   return {
@@ -25,36 +25,10 @@ function lesson(overrides: Partial<BoardLesson> = {}): BoardLesson {
   };
 }
 
-function module_(overrides: Partial<BoardModule> = {}): BoardModule {
-  return {
-    id: 10,
-    name: 'Emergencies',
-    slug: 'emergencies',
-    rank: 1,
-    requiredSubscriptions: ['associate'],
-    sequentialLessons: true,
-    lessons: [],
-    dependsOn: [],
-    imageUrlAvif: null,
-    imageUrlWebp: null,
-    learnerCount: 0,
-    owner: { id: 10, name: 'Emergencies' },
-    otherCourseCount: 0,
-    ...overrides,
-  } as BoardModule;
-}
-
-function renderQuickshot(
-  lessonOverrides: Partial<BoardLesson> = {},
-  moduleOverrides: Partial<BoardModule> = {},
-) {
+function renderQuickshot(lessonOverrides: Partial<BoardLesson> = {}) {
   const onPatch = vi.fn();
   render(
-    <LessonQuickshot
-      lesson={lesson(lessonOverrides)}
-      module={module_(moduleOverrides)}
-      onPatch={onPatch}
-    />,
+    <LessonQuickshot lesson={lesson(lessonOverrides)} onPatch={onPatch} />,
   );
   return onPatch;
 }
@@ -68,6 +42,14 @@ describe('LessonQuickshot toggles', () => {
     expect(screen.queryByRole('group', { name: /level/i })).toBeNull();
   });
 
+  // Paid/free moved to the padlock on the card itself.
+  it('offers no paid/free chip', () => {
+    renderQuickshot();
+    expect(
+      screen.queryByRole('button', { name: /make it (paid|free)/ }),
+    ).toBeNull();
+  });
+
   it('makes a debrief required and sends only that field', async () => {
     const user = userEvent.setup();
     const onPatch = renderQuickshot();
@@ -75,43 +57,6 @@ describe('LessonQuickshot toggles', () => {
     await user.click(screen.getByRole('button', { name: /Debrief optional/ }));
 
     expect(onPatch).toHaveBeenCalledWith({ hasDebrief: true });
-  });
-
-  it('copies the module’s subscriptions when a lesson is made paid', async () => {
-    const user = userEvent.setup();
-    const onPatch = renderQuickshot({}, { requiredSubscriptions: ['rpoc'] });
-
-    await user.click(
-      screen.getByRole('button', { name: /Tap to make it paid/ }),
-    );
-
-    expect(onPatch).toHaveBeenCalledWith({ requiredSubscriptions: ['rpoc'] });
-  });
-
-  it('clears subscriptions when a paid lesson is made free', async () => {
-    const user = userEvent.setup();
-    const onPatch = renderQuickshot({ requiredSubscriptions: ['associate'] });
-
-    await user.click(
-      screen.getByRole('button', { name: /Tap to make it free/ }),
-    );
-
-    expect(onPatch).toHaveBeenCalledWith({ requiredSubscriptions: [] });
-  });
-});
-
-describe('LessonQuickshot access lock', () => {
-  it('refuses to make a lesson paid inside a free module, and says why', async () => {
-    const user = userEvent.setup();
-    const onPatch = renderQuickshot({}, { requiredSubscriptions: [] });
-
-    const chip = screen.getByRole('button', { name: /This module is free/ });
-    expect(chip.getAttribute('aria-disabled')).toBe('true');
-
-    await user.click(chip);
-    // Without the lock this would write the module's empty array back and
-    // appear to do nothing — worse than being unavailable.
-    expect(onPatch).not.toHaveBeenCalled();
   });
 });
 

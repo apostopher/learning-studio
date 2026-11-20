@@ -34,7 +34,6 @@ import type {
 } from '@/lib/admin-schemas';
 import { moduleDndId, parseDndId } from '@/lib/dnd-ids';
 import { CreateLessonDialogContainer } from './create-lesson-dialog-container';
-import { DeleteLessonDialogContainer } from './delete-lesson-dialog-container';
 import { DeleteModuleDialogContainer } from './delete-module-dialog-container';
 import { EditModuleDialogContainer } from './edit-module-dialog-container';
 import { LessonCard } from './lesson-card';
@@ -389,11 +388,6 @@ export const ModuleBoardContainer = ({
       <CreateLessonDialogContainer courseId={courseId} />
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
-      {/* No `courseId`: a lesson is org-owned and can be taught by several
-          courses, so its delete confirmation is not scoped to this board. What
-          it needs — including how many courses lose the lesson — rides on
-          `deleteLessonAtom`. */}
-      <DeleteLessonDialogContainer />
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
       <LessonVideoModalContainer modules={modules} />
     </DndContext>
