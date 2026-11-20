@@ -20,12 +20,20 @@ const LABEL: Record<ScorePartName, string> = {
   debrief: 'Debrief',
 };
 
+/**
+ * The total as shown: a miss is floored to one decimal, so a total just
+ * under the mark (84.96) never reads as the mark itself ("85").
+ */
+function shownTotal(score: LessonScore): number {
+  return score.passed ? score.total : Math.floor(score.total * 10) / 10;
+}
+
 /** "Video 50 + Quiz 20 + Debrief 12.9 = 82.9 · pass mark 85". */
 export function scoreBreakdownLine(score: LessonScore): string {
   const sum = score.parts
     .map((p) => `${LABEL[p.part]} ${formatScore(p.points)}`)
     .join(' + ');
-  return `${sum} = ${formatScore(score.total)} · pass mark ${score.passMark}`;
+  return `${sum} = ${formatScore(shownTotal(score))} · pass mark ${score.passMark}`;
 }
 
 /**

@@ -245,7 +245,10 @@ describe('the lesson total judges the set, from the db facts through to the resp
       {
         id: 'quiz-1',
         question: 'Q?',
-        options: [{ id: 'a', value: 'A' }],
+        options: [
+          { id: 'a', value: 'A' },
+          { id: 'b', value: 'B' },
+        ],
         correctOptionId: 'a',
       },
     ]);

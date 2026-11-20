@@ -5,6 +5,7 @@ import {
   selectLessonScoreRow,
 } from '#/db/lesson-score-facts';
 import { watchedMilestones } from '#/lib/course-milestones';
+import { partitionQuiz } from '#/lib/lesson-quiz';
 import type { ScoreFacts } from '#/lib/lesson-score';
 import { DEFAULT_PASS_MARK } from '#/lib/pass-mark';
 
@@ -19,8 +20,9 @@ const WATCHED_TOTAL = watchedMilestones.length;
  * - Video: present when the lesson has a video (provider and ref) AND asks
  *   for it to be watched; the share of watched-milestones hit.
  * - Quiz: present when the authored quiz has a question; the share of the
- *   AUTHORED questions the LATEST attempt answered correctly, 0 when never
- *   taken. Graded against the authored key, matched by question id: the
+ *   ASKABLE authored questions (`partitionQuiz`: the ones the quiz tab
+ *   actually asks, duplicate ids once) the LATEST attempt answered
+ *   correctly, 0 when never taken, null when none is askable. Graded against the authored key, matched by question id: the
  *   saved attempt is the request body, so its `correctOptionId`s and its
  *   length are the client's word and never trusted. An answer to a question
  *   the quiz does not have counts for nothing.
@@ -44,7 +46,7 @@ export async function getScoreFacts(
     selectAuthoredQuiz(lessonSlug),
     getLatestLessonQuizAnswers(userId, lessonSlug),
   ]);
-  const questions = authored ?? [];
+  const questions = partitionQuiz(authored).askable;
   if (questions.length === 0) return { video, quiz: null };
   const picked = new Map(
     (latest?.answers ?? []).map((a) => [a.id, a.userOptionId]),

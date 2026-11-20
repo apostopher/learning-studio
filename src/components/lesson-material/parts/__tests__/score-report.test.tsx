@@ -105,7 +105,8 @@ describe('ScoreReport', () => {
       />,
     );
     expect(container.textContent).toContain(
-      'Video 50 + Quiz 20 + Debrief 12.9 = 82.9 · pass mark 85',
+      // 82.875, a miss: floored to one decimal.
+      'Video 50 + Quiz 20 + Debrief 12.9 = 82.8 · pass mark 85',
     );
   });
 

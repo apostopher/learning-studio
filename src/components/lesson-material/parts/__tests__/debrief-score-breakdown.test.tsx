@@ -16,7 +16,8 @@ describe('DebriefScoreBreakdown', () => {
       />,
     );
     expect(container.textContent).toBe(
-      'Video 50 + Quiz 20 + Debrief 12.9 = 82.9 · pass mark 85',
+      // 82.875, a miss: floored, never rounded up toward the mark.
+      'Video 50 + Quiz 20 + Debrief 12.9 = 82.8 · pass mark 85',
     );
   });
 
@@ -43,6 +44,19 @@ describe('DebriefScoreBreakdown', () => {
       />,
     );
     expect(container.textContent).not.toContain('Quiz not taken yet');
+  });
+
+  it('a failing total never rounds up to the pass mark: 84.96 against 85 shows 84.9', () => {
+    const score = lessonTotalScore(
+      { video: 1, quiz: null, debrief: 0.6992 },
+      85,
+    );
+    expect(score.total).toBeCloseTo(84.96);
+    expect(score.passed).toBe(false);
+    const { container } = render(
+      <DebriefScoreBreakdown score={score} quizTaken={true} />,
+    );
+    expect(container.textContent).toContain('= 84.9 · pass mark 85');
   });
 
   it('a lesson with no quiz names only the parts it has', () => {

@@ -128,6 +128,43 @@ describe('getScoreFacts', () => {
     expect((await facts()).quiz).toBeCloseTo(1 / 3);
   });
 
+  it('grades only the askable questions: one invalid of five, the four asked all right, is 1', async () => {
+    m.selectAuthoredQuiz.mockResolvedValue([
+      authored('1'),
+      authored('2'),
+      // Its correct option is not among its options: never asked.
+      { ...authored('bad'), correctOptionId: 'z' },
+      authored('3'),
+      authored('4'),
+    ]);
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: ['1', '2', '3', '4'].map((id) => answer(id, true)),
+    });
+    expect((await facts()).quiz).toBe(1);
+  });
+
+  it('a duplicated question id is graded once', async () => {
+    m.selectAuthoredQuiz.mockResolvedValue([
+      authored('1'),
+      authored('1'),
+      authored('2'),
+    ]);
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: [answer('1', false), answer('2', true)],
+    });
+    expect((await facts()).quiz).toBe(0.5);
+  });
+
+  it('no askable questions: quiz is null', async () => {
+    m.selectAuthoredQuiz.mockResolvedValue([
+      { ...authored('1'), correctOptionId: 'z' },
+    ]);
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: [answer('1', true)],
+    });
+    expect((await facts()).quiz).toBeNull();
+  });
+
   it('no authored questions: quiz is null', async () => {
     m.selectAuthoredQuiz.mockResolvedValue(null);
     m.getLatestLessonQuizAnswers.mockResolvedValue({
