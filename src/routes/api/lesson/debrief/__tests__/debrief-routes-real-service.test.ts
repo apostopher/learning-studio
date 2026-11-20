@@ -21,6 +21,7 @@ const m = vi.hoisted(() => ({
   ensureLessonChunks: vi.fn(),
   selectLessonScoreRow: vi.fn(),
   selectCoursePassMark: vi.fn(),
+  selectAuthoredQuiz: vi.fn(),
   getLatestLessonQuizAnswers: vi.fn(),
 }));
 
@@ -69,6 +70,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }));
 vi.mock('#/db/lesson-score-facts', () => ({
   selectLessonScoreRow: m.selectLessonScoreRow,
   selectCoursePassMark: m.selectCoursePassMark,
+  selectAuthoredQuiz: m.selectAuthoredQuiz,
 }));
 vi.mock('#/db/lesson-quiz', () => ({
   getLatestLessonQuizAnswers: m.getLatestLessonQuizAnswers,
@@ -239,7 +241,16 @@ describe('the lesson total judges the set, from the db facts through to the resp
       hasQuiz: true,
       watchedHits: 18,
     });
+    m.selectAuthoredQuiz.mockResolvedValue([
+      {
+        id: 'quiz-1',
+        question: 'Q?',
+        options: [{ id: 'a', value: 'A' }],
+        correctOptionId: 'a',
+      },
+    ]);
     const res = await answerDebriefHandler(post('answer', answerBody));
+    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1');
     expect(m.getLatestLessonQuizAnswers).toHaveBeenCalledWith('u1', 'l1');
     const json = await res.json();
     expect(json).toMatchObject({

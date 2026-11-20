@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({
   selectLessonScoreRow: vi.fn(),
   selectCoursePassMark: vi.fn(),
+  selectAuthoredQuiz: vi.fn(),
   getLatestLessonQuizAnswers: vi.fn(),
 }));
 
 vi.mock('#/db/lesson-score-facts', () => ({
   selectLessonScoreRow: m.selectLessonScoreRow,
   selectCoursePassMark: m.selectCoursePassMark,
+  selectAuthoredQuiz: m.selectAuthoredQuiz,
 }));
 vi.mock('#/db/lesson-quiz', () => ({
   getLatestLessonQuizAnswers: m.getLatestLessonQuizAnswers,
@@ -41,9 +43,25 @@ const answer = (id: string, correct: boolean) => ({
   userOptionId: correct ? 'a' : 'b',
 });
 
+/** An authored question: option 'a' is right. */
+const authored = (id: string) => ({
+  id,
+  question: `Q${id}`,
+  options: [
+    { id: 'a', value: 'A' },
+    { id: 'b', value: 'B' },
+  ],
+  correctOptionId: 'a',
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   m.selectLessonScoreRow.mockResolvedValue(lessonRow());
+  m.selectAuthoredQuiz.mockResolvedValue([
+    authored('1'),
+    authored('2'),
+    authored('3'),
+  ]);
   m.getLatestLessonQuizAnswers.mockResolvedValue(null);
 });
 
@@ -82,6 +100,40 @@ describe('getScoreFacts', () => {
     });
     expect((await facts()).quiz).toBeCloseTo(2 / 3);
     expect(m.getLatestLessonQuizAnswers).toHaveBeenCalledWith('u1', 'l1');
+  });
+
+  it('a forged correctOptionId is ignored: answers are graded against the authored quiz', async () => {
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: ['1', '2', '3'].map((id) => ({
+        ...answer(id, false),
+        // The client claims its own (wrong) pick is the right one.
+        correctOptionId: 'b',
+      })),
+    });
+    expect((await facts()).quiz).toBe(0);
+    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1');
+  });
+
+  it('the denominator is the authored question count: one right answer sent of three authored is 1/3', async () => {
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: [answer('1', true)],
+    });
+    expect((await facts()).quiz).toBeCloseTo(1 / 3);
+  });
+
+  it('an answer for a question not in the authored quiz counts for nothing', async () => {
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: [answer('1', true), answer('x', true), answer('y', true)],
+    });
+    expect((await facts()).quiz).toBeCloseTo(1 / 3);
+  });
+
+  it('no authored questions: quiz is null', async () => {
+    m.selectAuthoredQuiz.mockResolvedValue(null);
+    m.getLatestLessonQuizAnswers.mockResolvedValue({
+      answers: [answer('1', true)],
+    });
+    expect((await facts()).quiz).toBeNull();
   });
 
   it('quiz is 0 when the lesson has a quiz and none was taken', async () => {

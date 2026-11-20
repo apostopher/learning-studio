@@ -1,5 +1,6 @@
 import { getLatestLessonQuizAnswers } from '#/db/lesson-quiz';
 import {
+  selectAuthoredQuiz,
   selectCoursePassMark,
   selectLessonScoreRow,
 } from '#/db/lesson-score-facts';
@@ -18,7 +19,11 @@ const WATCHED_TOTAL = watchedMilestones.length;
  * - Video: present when the lesson has a video (provider and ref) AND asks
  *   for it to be watched; the share of watched-milestones hit.
  * - Quiz: present when the authored quiz has a question; the share of the
- *   LATEST attempt's answers that are correct, 0 when never taken.
+ *   AUTHORED questions the LATEST attempt answered correctly, 0 when never
+ *   taken. Graded against the authored key, matched by question id: the
+ *   saved attempt is the request body, so its `correctOptionId`s and its
+ *   length are the client's word and never trusted. An answer to a question
+ *   the quiz does not have counts for nothing.
  */
 export async function getScoreFacts(
   userId: string,
@@ -35,12 +40,20 @@ export async function getScoreFacts(
       : null;
 
   if (!row.hasQuiz) return { video, quiz: null };
-  const latest = await getLatestLessonQuizAnswers(userId, lessonSlug);
-  const answers = latest?.answers ?? [];
-  const correct = answers.filter(
-    (a) => a.userOptionId !== undefined && a.userOptionId === a.correctOptionId,
-  ).length;
-  return { video, quiz: answers.length === 0 ? 0 : correct / answers.length };
+  const [authored, latest] = await Promise.all([
+    selectAuthoredQuiz(lessonSlug),
+    getLatestLessonQuizAnswers(userId, lessonSlug),
+  ]);
+  const questions = authored ?? [];
+  if (questions.length === 0) return { video, quiz: null };
+  const picked = new Map(
+    (latest?.answers ?? []).map((a) => [a.id, a.userOptionId]),
+  );
+  const correct = questions.filter((q) => {
+    const choice = picked.get(q.id);
+    return choice !== undefined && choice === q.correctOptionId;
+  }).length;
+  return { video, quiz: correct / questions.length };
 }
 
 /** The course's pass mark; `DEFAULT_PASS_MARK` when there is no course row. */
