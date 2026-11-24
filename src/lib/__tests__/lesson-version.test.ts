@@ -6,6 +6,7 @@ import {
   isVersionLocked,
   lessonVersionSchema,
   lockedVersionMessage,
+  notHigherVersionMessage,
   versionEditError,
 } from '#/lib/lesson-version';
 
@@ -42,6 +43,12 @@ describe('lesson version rules', () => {
     );
     expect(lockedVersionMessage('1.0', 0)).toBe(
       'v1.0 was used by a course. Enter a higher version to make changes.',
+    );
+  });
+
+  it('words the not-higher message', () => {
+    expect(notHigherVersionMessage('1.10')).toBe(
+      'Enter a version higher than v1.10.',
     );
   });
 

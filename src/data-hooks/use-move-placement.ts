@@ -50,10 +50,12 @@ export function useMovePlacement() {
     // what confirms it. `useMoveLesson`, which this mirrors, settles for the
     // same reason.
     //
-    // Not `orgLibrary()`: moving a placement between modules of one course
-    // leaves every "in N courses" badge exactly as it was.
+    // `orgLibrary()` too: a module another course borrows brings the lesson to
+    // that course or takes it away, so which courses use it, and on which
+    // version, can change.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });
 }

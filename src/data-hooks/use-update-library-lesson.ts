@@ -1,59 +1,58 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { RenameLessonInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
+import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+
+const failure = (res: Response) =>
+  res.status === 403
+    ? 'Only an admin or a subject expert of this lesson’s discipline can edit it.'
+    : `Could not save the lesson (${res.status})`;
+
+const patchLesson = (lessonId: number, body: Record<string, unknown>) =>
+  fetch(`/api/admin/lessons/${lessonId}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 
 /**
- * Rename a library lesson, or change its availability, from the org-level
- * editor.
+ * Rename a library lesson from the org-level editor. The name is content, so
+ * the lesson's version gates it; availability below is a setting and is not.
  *
- * The lesson-level sibling of `useUpdateLesson`/`useUpdateLessonConfig`, which
- * both take a `courseId` — used only to pick the course board to refetch. A
- * lesson is org-owned and can be taught by several courses at once, so from
- * `/admin/editor` there is no single board to name: this invalidates the two
- * queries that screen actually reads, and the per-course board keys are left
- * to refetch on their own next mount.
- *
- * Both fields go to the same `PATCH /api/admin/lessons/:id`, in two separate
- * requests, because the route parses its body as a discriminated shape — the
- * config schema is `.strict()` and rejects `name`, and the rename schema
- * rejects everything else. Sending only what changed is therefore not an
- * optimisation but the contract.
+ * Both are the lesson-level siblings of `useUpdateLesson`/
+ * `useUpdateLessonConfig`, which take a `courseId` to pick the one course
+ * board to refetch. A lesson is org-owned and can be taught by several courses
+ * at once, so from `/admin/editor` there is no single board to name.
  *
  * Guarded by `requireLessonContentPermission`, so a discipline SME may do this
  * to their own lessons and an admin to any (RBAC rules 2, 3 and 6).
  */
+export function useRenameLibraryLesson(lessonId: number) {
+  const settle = useSettleContentWrite(lessonId);
+  return useMutation({
+    mutationKey: dataKeys.lessonContentWrite(lessonId),
+    mutationFn: async (input: RenameLessonInput) => {
+      const res = await patchLesson(lessonId, input);
+      await throwIfWriteFailed(res, failure(res));
+    },
+    onSuccess: (_data, { version }) => settle.saved(version),
+    onError: settle.failed,
+  });
+}
+
+/** Show a library lesson to learners, or hide it. */
 export function useUpdateLibraryLesson() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      lessonId: number;
-      name?: string;
-      isAvailable?: boolean;
-    }) => {
-      const patches: Record<string, unknown>[] = [];
-      if (input.name !== undefined) patches.push({ name: input.name });
-      if (input.isAvailable !== undefined) {
-        patches.push({ isAvailable: input.isAvailable });
-      }
-
-      for (const patch of patches) {
-        const res = await fetch(`/api/admin/lessons/${input.lessonId}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(patch),
-        });
-        if (!res.ok) {
-          throw new Error(
-            res.status === 403
-              ? 'Only an admin or a subject expert of this lesson’s discipline can edit it.'
-              : `Could not save the lesson (${res.status})`,
-          );
-        }
-      }
+    mutationFn: async (input: { lessonId: number; isAvailable: boolean }) => {
+      const { lessonId, ...patch } = input;
+      const res = await patchLesson(lessonId, patch);
+      if (!res.ok) throw new Error(failure(res));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
-      // The right-hand rail shows the same lesson's name and availability
-      // chip, so it goes stale on exactly the same writes.
+      // The right-hand rail shows the same lesson's availability chip, so it
+      // goes stale on exactly the same writes.
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
       // The PREFIX, not one course. This write changes data the per-course
       // board renders, and a lesson can sit in many courses — the editor

@@ -46,8 +46,13 @@ export const LessonConfigDialogContainer = ({
             courseId={courseId}
             source="course"
             lesson={lesson}
+            versioned={null}
           />
-          <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+          <MaterialSectionContainer
+            key={lesson.id}
+            lesson={lesson}
+            versioned={null}
+          />
         </div>
       ),
       // Pinned under the tabs so it never scrolls away with the material.
@@ -55,6 +60,7 @@ export const LessonConfigDialogContainer = ({
         <MaterialSaveButtonContainer
           key={lesson.id}
           lessonId={lesson.id}
+          version={null}
           fullWidth
         />
       ),

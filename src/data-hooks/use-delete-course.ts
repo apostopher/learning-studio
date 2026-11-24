@@ -43,6 +43,8 @@ export function useDeleteCourse() {
       // keeps the old name (or keeps a deleted course) until the board's own
       // staleTime elapses.
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+      // Its lessons are used by one course fewer.
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });
 }

@@ -1,17 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSetAtom } from 'jotai';
-import { useEffect } from 'react';
+import { type FormEvent, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
+import { useSetLessonVersion } from '#/data-hooks/use-set-lesson-version';
 import type { LessonMaterialGeneration } from '#/types';
 import { LessonMaterialGenerationSchema } from '#/types';
 import { AttachmentsList } from './attachments-list';
 import { MaterialForm } from './material-form';
 import { lessonMaterialFormId } from './material-form-id';
 import { MaterialUpload } from './material-upload';
+import { useVersionGate, type VersionedLesson } from './use-version-gate';
 
 const EMPTY: LessonMaterialGeneration = {
   text: '',
@@ -32,6 +34,7 @@ const EMPTY: LessonMaterialGeneration = {
  */
 export const MaterialSectionContainer = ({
   lesson,
+  versioned,
 }: {
   /**
    * Only the id is read — every hook below is lesson-scoped. Typed as the
@@ -40,10 +43,14 @@ export const MaterialSectionContainer = ({
    * them), can drive this section too.
    */
   lesson: { id: number };
+  /** The lesson's version, where the dialog has a Version field; else null. */
+  versioned: VersionedLesson | null;
 }) => {
   const existing = useLessonMaterial(lesson.id);
   const parse = useParseLessonMaterial(lesson.id);
   const save = useSaveLessonMaterial(lesson.id);
+  const setVersion = useSetLessonVersion(lesson.id);
+  const gate = useVersionGate(versioned);
 
   /**
    * Hydrated by react-hook-form itself, not by an effect.
@@ -93,7 +100,25 @@ export const MaterialSectionContainer = ({
     return () => setDirty(false);
   }, [isDirty, setDirty]);
 
-  const onSubmit = form.handleSubmit((values) => save.mutate(values));
+  const submitMaterial = (version: string | undefined) =>
+    form.handleSubmit((values) => {
+      setVersion.reset();
+      save.mutate(version === undefined ? values : { ...values, version }, {
+        onError: gate.onError,
+      });
+    });
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    gate.attempt((version) => {
+      if (version !== undefined && !isDirty) {
+        save.reset();
+        setVersion.mutate({ version }, { onError: gate.onError });
+        return;
+      }
+      void submitMaterial(version)();
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,7 +144,7 @@ export const MaterialSectionContainer = ({
         control={form.control}
         errors={form.formState.errors}
         onSubmit={onSubmit}
-        saveError={save.error?.message}
+        saveError={gate.formError(save.error ?? setVersion.error)}
       />
     </div>
   );

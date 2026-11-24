@@ -612,6 +612,38 @@ export const lessonMaterialDirtyAtomFamily = atomFamily((_lessonId: number) =>
 );
 
 /**
+ * The version typed in a lesson's editor and not saved yet; null = untouched.
+ * Every content write in the dialog sends it, so it lives outside the field.
+ * Keyed per lesson: one lesson's draft must never be sent with another's edit.
+ */
+export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
+  atom<string | null>(null),
+);
+
+/**
+ * Why a content write was refused by the lesson's version, shown at the
+ * Version field. A fresh object per refusal: refusing twice for the same
+ * reason must still move focus twice.
+ */
+export const lessonVersionRefusalAtomFamily = atomFamily((_lessonId: number) =>
+  atom<{ message: string } | null>(null),
+);
+
+/**
+ * Forget a lesson's version draft and refusal when its dialog closes. Dropped
+ * from the families too, or each would keep an entry per lesson ever opened.
+ */
+export const discardLessonVersionAtom = atom(
+  null,
+  (_get, set, lessonId: number) => {
+    set(lessonVersionDraftAtomFamily(lessonId), null);
+    set(lessonVersionRefusalAtomFamily(lessonId), null);
+    lessonVersionDraftAtomFamily.remove(lessonId);
+    lessonVersionRefusalAtomFamily.remove(lessonId);
+  },
+);
+
+/**
  * The lesson the AI Training Chat preview is scoped to, by slug. `null` until
  * the admin picks one; the composer stays disabled (and says so) until then.
  */

@@ -37,6 +37,10 @@ export function lockedVersionMessage(
   return `${used}. Enter a higher version to make changes.`;
 }
 
+export function notHigherVersionMessage(than: string): string {
+  return `Enter a version higher than ${formatVersion(than)}.`;
+}
+
 export type VersionState = { version: string; highestTaken: string | null };
 
 /** A version is frozen once a course has taken it. */

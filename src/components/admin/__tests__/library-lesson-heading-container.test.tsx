@@ -11,8 +11,14 @@ const mutate = vi.hoisted(() =>
     opts?.onSuccess?.(),
   ),
 );
+const rename = vi.hoisted(() =>
+  vi.fn((_input: unknown, opts?: { onSuccess?: () => void }) =>
+    opts?.onSuccess?.(),
+  ),
+);
 vi.mock('#/data-hooks/use-update-library-lesson', () => ({
   useUpdateLibraryLesson: () => ({ mutate, isPending: false }),
+  useRenameLibraryLesson: () => ({ mutate: rename, isPending: false }),
 }));
 vi.mock('../../ui/tooltip-icon-button', () => ({
   TooltipIconButton: ({
@@ -33,47 +39,47 @@ import { LibraryLessonHeadingContainer } from '../library-lesson-heading-contain
 const renderIsolated = (ui: ReactElement) =>
   render(<Provider store={createStore()}>{ui}</Provider>);
 
-afterEach(() => mutate.mockClear());
+const LESSON = {
+  id: 10,
+  name: 'Welcome Intro',
+  isAvailable: true,
+  version: '1.0',
+  highestTaken: null,
+  versionCourseCount: 0,
+};
+
+afterEach(() => {
+  mutate.mockClear();
+  rename.mockClear();
+});
 
 describe('LibraryLessonHeadingContainer', () => {
   it('renames through the mutation with the typed name, then leaves rename mode', async () => {
-    renderIsolated(
-      <LibraryLessonHeadingContainer
-        lesson={{ id: 10, name: 'Welcome Intro', isAvailable: true }}
-      />,
-    );
+    renderIsolated(<LibraryLessonHeadingContainer lesson={LESSON} />);
     fireEvent.click(screen.getByRole('button', { name: 'Rename lesson' }));
     const input = screen.getByLabelText('Lesson name') as HTMLInputElement;
     expect(input.value).toBe('Welcome Intro');
     fireEvent.change(input, { target: { value: 'Welcome & Intro' } });
     fireEvent.submit(input.closest('form') as HTMLFormElement);
     await screen.findByRole('heading');
-    expect(mutate).toHaveBeenCalledWith(
-      { lessonId: 10, name: 'Welcome & Intro' },
+    expect(rename).toHaveBeenCalledWith(
+      { name: 'Welcome & Intro', version: undefined },
       expect.anything(),
     );
   });
 
   it('does not write an unchanged name', async () => {
-    renderIsolated(
-      <LibraryLessonHeadingContainer
-        lesson={{ id: 10, name: 'Welcome Intro', isAvailable: true }}
-      />,
-    );
+    renderIsolated(<LibraryLessonHeadingContainer lesson={LESSON} />);
     fireEvent.click(screen.getByRole('button', { name: 'Rename lesson' }));
     fireEvent.submit(
       screen.getByLabelText('Lesson name').closest('form') as HTMLFormElement,
     );
     await screen.findByRole('heading');
-    expect(mutate).not.toHaveBeenCalled();
+    expect(rename).not.toHaveBeenCalled();
   });
 
   it('flips availability through the mutation', () => {
-    renderIsolated(
-      <LibraryLessonHeadingContainer
-        lesson={{ id: 10, name: 'Welcome Intro', isAvailable: true }}
-      />,
-    );
+    renderIsolated(<LibraryLessonHeadingContainer lesson={LESSON} />);
     fireEvent.click(
       screen.getByRole('button', { name: 'Published — hide from learners' }),
     );

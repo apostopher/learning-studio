@@ -116,30 +116,4 @@ describe('useMovePlacement', () => {
     const keys = invalidateSpy.mock.calls.map((call) => call[0]?.queryKey);
     expect(keys).toContainEqual(dataKeys.editorBoard());
   });
-
-  it('does not invalidate the library — a move changes no "in N courses" count', async () => {
-    // Mutant this kills: `orgLibrary()` invalidated alongside the board,
-    // refetching the whole library on every drag for a badge that cannot have
-    // changed. Moving a placement between modules of one course leaves the
-    // set of courses teaching that lesson exactly as it was.
-    const { client, wrapper } = makeHarness();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(null, { status: 204 }),
-    );
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useMovePlacement(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        lessonId: 9,
-        fromModuleId: 30,
-        targetModuleId: 40,
-        prevLessonId: null,
-        nextLessonId: null,
-      });
-    });
-
-    const keys = invalidateSpy.mock.calls.map((call) => call[0]?.queryKey);
-    expect(keys).not.toContainEqual(dataKeys.orgLibrary());
-  });
 });

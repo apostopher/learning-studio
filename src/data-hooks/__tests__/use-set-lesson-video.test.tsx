@@ -35,13 +35,12 @@ describe('useSetLessonVideo', () => {
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID), {
+    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
       wrapper,
     });
 
     await act(async () => {
       await result.current.mutateAsync({
-        lessonId: 10,
         provider: 'mux',
         ref: 'playback-abc',
       });
@@ -50,7 +49,8 @@ describe('useSetLessonVideo', () => {
     const invalidatedKeys = invalidateSpy.mock.calls.map(
       ([arg]) => arg?.queryKey,
     );
-    expect(invalidatedKeys).toContainEqual(dataKeys.courseBoard(COURSE_ID));
+    // Every board, not this course's: they all draw Disciplines' version.
+    expect(invalidatedKeys).toContainEqual(dataKeys.courseBoards());
     // The per-lesson PREFIX: playback is cached per course (Task 6b), and a
     // new video is a new video in every course teaching the lesson.
     expect(invalidatedKeys).toContainEqual(dataKeys.lessonPlaybacks(10));
@@ -70,11 +70,12 @@ describe('useSetLessonVideo', () => {
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(null), { wrapper });
+    const { result } = renderHook(() => useSetLessonVideo(null, 10), {
+      wrapper,
+    });
 
     await act(async () => {
       await result.current.mutateAsync({
-        lessonId: 10,
         provider: 'mux',
         ref: 'playback-abc',
       });
@@ -97,13 +98,12 @@ describe('useSetLessonVideo', () => {
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID), {
+    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
       wrapper,
     });
 
     await act(async () => {
       await result.current.mutateAsync({
-        lessonId: 10,
         provider: 'mux',
         ref: 'playback-abc',
       });
@@ -125,13 +125,12 @@ describe('useSetLessonVideo', () => {
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID), {
+    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
       wrapper,
     });
 
     await act(async () => {
       await result.current.mutateAsync({
-        lessonId: 10,
         provider: 'mux',
         ref: 'playback-abc',
       });

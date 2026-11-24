@@ -5,7 +5,8 @@ import { type CreateCourseInput, courseSchema } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
 
 /**
- * Create a course, then refetch the two lists that draw courses.
+ * Create a course, then refetch the two lists that draw courses, and the
+ * library.
  *
  * `editorBoard()` as well as `adminCourses()`: the org editor mounts this same
  * dialog as "New offering" and its rail is drawn from the editor board, so
@@ -29,6 +30,8 @@ export function useCreateCourse() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataKeys.adminCourses() });
       queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+      // A new course comes with the flagship's lessons.
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });
 }

@@ -71,9 +71,15 @@ export const dataKeys = {
    */
   disciplineLessonPosters: (disciplineId: number) =>
     [...dataKeys.allLessonPosters(), 'discipline', disciplineId] as const,
-  /** Mutation key for saving material — read by the sidebar's Save button via `useIsMutating`. */
-  lessonMaterialSave: (lessonId: number) =>
-    ['admin', 'lesson-material-save', lessonId] as const,
+  /**
+   * Mutation key every write of one lesson's content registers under, so the
+   * Version field knows any of them is in flight.
+   */
+  lessonContentWrite: (lessonId: number) =>
+    ['admin', 'lesson-content-write', lessonId] as const,
+  /** The writes the Save button makes: material, or the version alone. */
+  lessonSave: (lessonId: number) =>
+    [...dataKeys.lessonContentWrite(lessonId), 'save'] as const,
   /** Which video a lesson has (provider + ref) — the dialog's prefill. */
   lessonVideo: (lessonId: number) =>
     ['admin', 'lesson-video', lessonId] as const,

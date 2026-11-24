@@ -15,6 +15,7 @@ import { VIDEO_PROVIDERS } from '#/lib/video-providers';
 import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { AlternateVideoForm } from './alternate-video-form';
 import { AlternateVideosList } from './alternate-videos-list';
+import { useVersionGate, type VersionedLesson } from './use-version-gate';
 
 const formSchema = z.object({
   lang: alternateLangSchema,
@@ -24,6 +25,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AlternateVideosContainerProps {
   lessonId: number;
+  /** The lesson's version, where the dialog has a Version field; else null. */
+  versioned: VersionedLesson | null;
 }
 
 /**
@@ -34,10 +37,12 @@ interface AlternateVideosContainerProps {
  */
 export const AlternateVideosContainer = ({
   lessonId,
+  versioned,
 }: AlternateVideosContainerProps) => {
   const alternates = useLessonAlternateVideos(lessonId, true);
-  const setAlternate = useSetLessonAlternateVideo();
-  const removeAlternate = useRemoveLessonAlternateVideo();
+  const setAlternate = useSetLessonAlternateVideo(lessonId);
+  const removeAlternate = useRemoveLessonAlternateVideo(lessonId);
+  const gate = useVersionGate(versioned);
 
   const used = (alternates.data ?? []).map((a) => a.lang);
   const options = availableLanguages(used).map((code) => ({
@@ -65,15 +70,18 @@ export const AlternateVideosContainer = ({
   const onSubmit = form.handleSubmit((values) => {
     const hit = detectVideoUrl(values.url);
     if (!hit || lang === null) return;
-    setAlternate.mutate(
-      { lessonId, lang, provider: hit.provider, ref: hit.ref },
-      {
-        onSuccess: () =>
-          form.reset({
-            lang: options.find((o) => o.code !== lang)?.code ?? lang,
-            url: '',
-          }),
-      },
+    gate.attempt((version) =>
+      setAlternate.mutate(
+        { lang, provider: hit.provider, ref: hit.ref, version },
+        {
+          onSuccess: () =>
+            form.reset({
+              lang: options.find((o) => o.code !== lang)?.code ?? lang,
+              url: '',
+            }),
+          onError: gate.onError,
+        },
+      ),
     );
   });
 
@@ -82,9 +90,10 @@ export const AlternateVideosContainer = ({
     : undefined;
   // A failed remove belongs beside the list it concerns, named by language —
   // not under the add form, which is gone once every language is attached.
+  const removeError = gate.formError(removeAlternate.error);
   const removeFailure =
-    removeAlternate.error && removeAlternate.variables
-      ? `Couldn't remove ${labelForLang(removeAlternate.variables.lang)}: ${removeAlternate.error.message}`
+    removeError && removeAlternate.variables
+      ? `Couldn't remove ${labelForLang(removeAlternate.variables.lang)}: ${removeError}`
       : null;
 
   return (
@@ -119,7 +128,14 @@ export const AlternateVideosContainer = ({
               providerLabel: VIDEO_PROVIDERS[a.provider].label,
               removing: removingLang === a.lang,
             }))}
-            onRemove={(l) => removeAlternate.mutate({ lessonId, lang: l })}
+            onRemove={(l) =>
+              gate.attempt((version) =>
+                removeAlternate.mutate(
+                  { lang: l, version },
+                  { onError: gate.onError },
+                ),
+              )
+            }
           />
           {removeFailure && (
             <p role="alert" className="text-error-text text-sm">
@@ -138,7 +154,7 @@ export const AlternateVideosContainer = ({
             }
             showUnsupported={urlValue.trim().length > 0 && !detected}
             isPending={setAlternate.isPending}
-            serverError={setAlternate.error?.message}
+            serverError={gate.formError(setAlternate.error)}
           />
         </>
       )}

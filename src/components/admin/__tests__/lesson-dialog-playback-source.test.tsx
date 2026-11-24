@@ -50,6 +50,9 @@ vi.mock('../lesson-config/video-preview', () => ({ VideoPreview: () => null }));
 vi.mock('../lesson-config/alternate-videos-container', () => ({
   AlternateVideosContainer: () => null,
 }));
+vi.mock('../lesson-config/version-field-container', () => ({
+  VersionFieldContainer: () => null,
+}));
 vi.mock('../lesson-config/captions-status-container', () => ({
   CaptionsStatusContainer: () => null,
 }));

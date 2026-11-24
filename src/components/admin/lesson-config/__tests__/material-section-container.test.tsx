@@ -28,6 +28,7 @@ vi.mock('react', async () => {
 const hooks = vi.hoisted(() => ({
   material: vi.fn(),
   save: vi.fn(),
+  saveError: null as Error | null,
 }));
 vi.mock('#/data-hooks/use-lesson-material', () => ({
   useLessonMaterial: hooks.material,
@@ -36,7 +37,18 @@ vi.mock('#/data-hooks/use-parse-lesson-material', () => ({
   useParseLessonMaterial: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('#/data-hooks/use-save-lesson-material', () => ({
-  useSaveLessonMaterial: () => ({ mutate: hooks.save, error: null }),
+  useSaveLessonMaterial: () => ({
+    mutate: hooks.save,
+    reset: vi.fn(),
+    error: hooks.saveError,
+  }),
+}));
+vi.mock('#/data-hooks/use-set-lesson-version', () => ({
+  useSetLessonVersion: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    error: null,
+  }),
 }));
 // The upload control owns a file-input ref; the react-compiler + vitest pair
 // cannot render that (see component-render-test constraints), and the docx
@@ -65,13 +77,14 @@ vi.mock('../rich-text-editor', () => ({
   ),
 }));
 
+import { VersionConflictError } from '#/data-hooks/version-conflict';
 import { MaterialSectionContainer } from '../material-section-container';
 
 const renderFor = (lessonId: number) => {
   const store = createStore();
   const view = render(
     <Provider store={store}>
-      <MaterialSectionContainer lesson={{ id: lessonId }} />
+      <MaterialSectionContainer lesson={{ id: lessonId }} versioned={null} />
     </Provider>,
   );
   return { store, ...view };
@@ -161,5 +174,20 @@ describe('MaterialSectionContainer closing field', () => {
     renderFor(12);
     expect(screen.queryByLabelText('Job of the day (URL)')).toBeNull();
     expect(screen.queryByText('TEST THIS!')).toBeNull();
+  });
+});
+
+describe('MaterialSectionContainer without a Version field', () => {
+  it("shows the server's version refusal by the form, having nowhere else to", () => {
+    hooks.material.mockReturnValue({
+      data: { extraTab: 'testThis', values: null },
+      isLoading: false,
+    });
+    hooks.saveError = new VersionConflictError('Enter a higher version');
+    renderFor(13);
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Enter a higher version',
+    );
+    hooks.saveError = null;
   });
 });

@@ -35,6 +35,8 @@ import {
   type PreviewNotPlayableKind,
   previewLanguageNotice,
 } from './preview-language-notice';
+import { useVersionGate, type VersionedLesson } from './use-version-gate';
+import { VersionFieldContainer } from './version-field-container';
 import { VideoPreview } from './video-preview';
 import { VideoUrlForm } from './video-url-form';
 
@@ -64,6 +66,11 @@ interface VideoSectionContainerProps {
   source: PlaybackSource;
   lesson: VideoSectionLesson;
   /**
+   * The lesson's version, to show and gate by: only where the working copy is
+   * edited. Null in the course dialog.
+   */
+  versioned: VersionedLesson | null;
+  /**
    * One quiet line under the preview, for when the course above was chosen
    * for the lesson rather than by the admin — the library dialog signs with
    * the first course teaching the lesson and says so.
@@ -89,6 +96,7 @@ export const VideoSectionContainer = ({
   courseId,
   source,
   lesson,
+  versioned,
   previewNote,
 }: VideoSectionContainerProps) => {
   const [storedDraft, setStoredDraft] = useAtom(videoDraftDetectionAtom);
@@ -127,7 +135,8 @@ export const VideoSectionContainer = ({
   ) => setStoredDraft(next ? { lessonId: lesson.id, ...next } : null);
 
   const credentials = useCourseCredentials(courseId);
-  const setLessonVideo = useSetLessonVideo(courseId);
+  const setLessonVideo = useSetLessonVideo(courseId, lesson.id);
+  const gate = useVersionGate(versioned);
 
   const activeProvider = draftDetection?.provider ?? lesson.videoProvider;
   // A provider with no ref in hand (library payload) still means "has a
@@ -183,16 +192,21 @@ export const VideoSectionContainer = ({
   const handleUrlSubmit = urlForm.handleSubmit((values) => {
     const hit = detectVideoUrl(values.url);
     if (!hit) return;
-    setDraftDetection(hit);
-    setLessonVideo.mutate(
-      { lessonId: lesson.id, provider: hit.provider, ref: hit.ref },
-      {
-        // Back to pristine: the refetched current video then flows into the
-        // field through `values` above, so it shows what was just saved.
-        onSuccess: () => urlForm.reset(),
-        onError: () => setDraftDetection(null),
-      },
-    );
+    gate.attempt((version) => {
+      setDraftDetection(hit);
+      setLessonVideo.mutate(
+        { provider: hit.provider, ref: hit.ref, version },
+        {
+          // Back to pristine: the refetched current video then flows into the
+          // field through `values` above, so it shows what was just saved.
+          onSuccess: () => urlForm.reset(),
+          onError: (error) => {
+            setDraftDetection(null);
+            gate.onError(error);
+          },
+        },
+      );
+    });
   });
 
   // Two independent ways a stored key turns out to be dead, because the
@@ -300,10 +314,16 @@ export const VideoSectionContainer = ({
             }
             showUnsupported={urlValue.trim().length > 0 && !detected}
             isPending={setLessonVideo.isPending}
-            serverError={setLessonVideo.error?.message}
+            serverError={gate.formError(setLessonVideo.error)}
             submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
           />
-          {hasVideo && <AlternateVideosContainer lessonId={lesson.id} />}
+          {hasVideo && (
+            <AlternateVideosContainer
+              lessonId={lesson.id}
+              versioned={versioned}
+            />
+          )}
+          {versioned && <VersionFieldContainer lesson={versioned} />}
         </div>
       </div>
 

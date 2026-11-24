@@ -5,20 +5,28 @@ import { toast } from 'sonner';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its test.
 import { renamingLibraryLessonIdAtom } from '#/atoms/admin';
-import { useUpdateLibraryLesson } from '#/data-hooks/use-update-library-lesson';
+import {
+  useRenameLibraryLesson,
+  useUpdateLibraryLesson,
+} from '#/data-hooks/use-update-library-lesson';
 import {
   type RenameLessonInput,
   renameLessonInputSchema,
 } from '#/lib/admin-schemas';
+import {
+  useVersionGate,
+  type VersionedLesson,
+} from './lesson-config/use-version-gate';
 import { LessonHeading } from './lesson-heading';
 
 /**
  * The library "Edit lesson" dialog's heading: the lesson-LEVEL settings —
  * name and availability — that used to be a Details tab.
  *
- * Both are properties of the lesson itself, so they read and write the same
- * way from every course teaching it, which is what makes them safe to edit
- * here, where no course is in scope. Gates stay on the per-course surface.
+ * Both are properties of the lesson itself, which is what makes them safe to
+ * edit here, where no course is in scope. The name is content, so the lesson's
+ * version gates it; availability is a setting every course shares. Gates stay
+ * on the per-course surface.
  *
  * Mounted with `key={lesson.id}` by the dialog, so pointing the modal at a
  * different lesson remounts this and `defaultValues` reseeds the name — no
@@ -27,10 +35,12 @@ import { LessonHeading } from './lesson-heading';
 export const LibraryLessonHeadingContainer = ({
   lesson,
 }: {
-  lesson: { id: number; name: string; isAvailable: boolean };
+  lesson: VersionedLesson & { name: string; isAvailable: boolean };
 }) => {
   const [renamingId, setRenamingId] = useAtom(renamingLibraryLessonIdAtom);
+  const rename = useRenameLibraryLesson(lesson.id);
   const update = useUpdateLibraryLesson();
+  const gate = useVersionGate(lesson);
   const form = useForm<RenameLessonInput>({
     resolver: zodResolver(renameLessonInputSchema),
     mode: 'onSubmit',
@@ -43,15 +53,21 @@ export const LibraryLessonHeadingContainer = ({
       setRenamingId(null);
       return;
     }
-    update.mutate(
-      { lessonId: lesson.id, name: values.name },
-      {
-        onSuccess: () => {
-          toast.success('Lesson renamed');
-          setRenamingId(null);
+    gate.attempt((version) =>
+      rename.mutate(
+        { name: values.name, version },
+        {
+          onSuccess: () => {
+            toast.success('Lesson renamed');
+            setRenamingId(null);
+          },
+          onError: (error) => {
+            gate.onError(error);
+            const message = gate.formError(error);
+            if (message) toast.error(message);
+          },
         },
-        onError: (error) => toast.error(error.message),
-      },
+      ),
     );
   });
 
@@ -60,7 +76,7 @@ export const LibraryLessonHeadingContainer = ({
       name={lesson.name}
       isAvailable={lesson.isAvailable}
       isRenaming={isRenaming}
-      isSaving={update.isPending}
+      isSaving={rename.isPending || update.isPending}
       onStartRename={() => {
         form.reset({ name: lesson.name });
         setRenamingId(lesson.id);

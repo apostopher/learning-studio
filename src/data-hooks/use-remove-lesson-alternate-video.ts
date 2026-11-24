@@ -1,29 +1,29 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AlternateLang } from '#/lib/video-languages';
+import type { RemoveLessonAlternateVideoInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
+import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
 
 /** Detach a lesson's translated video for one language, then refetch what shows it. */
-export function useRemoveLessonAlternateVideo() {
+export function useRemoveLessonAlternateVideo(lessonId: number) {
   const queryClient = useQueryClient();
+  const settle = useSettleContentWrite(lessonId);
   return useMutation({
-    mutationFn: async ({
-      lessonId,
-      lang,
-    }: {
-      lessonId: number;
-      lang: AlternateLang;
-    }) => {
+    mutationKey: dataKeys.lessonContentWrite(lessonId),
+    mutationFn: async (input: RemoveLessonAlternateVideoInput) => {
       const res = await fetch(
         `/api/admin/lessons/${lessonId}/alternate-videos`,
         {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ lang }),
+          body: JSON.stringify(input),
         },
       );
-      if (!res.ok) throw new Error(`Failed to remove language (${res.status})`);
+      await throwIfWriteFailed(
+        res,
+        `Failed to remove language (${res.status})`,
+      );
     },
-    onSuccess: (_data, { lessonId }) => {
+    onSuccess: (_data, { version }) => {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonAlternateVideos(lessonId),
       });
@@ -34,6 +34,8 @@ export function useRemoveLessonAlternateVideo() {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonCaptionsAll(lessonId),
       });
+      settle.saved(version);
     },
+    onError: settle.failed,
   });
 }

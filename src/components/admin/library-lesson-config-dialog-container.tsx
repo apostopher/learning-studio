@@ -1,6 +1,10 @@
 import { useAtom, useSetAtom } from 'jotai';
 
-import { editLibraryLessonIdAtom, resetVideoSectionAtom } from '#/atoms/admin';
+import {
+  discardLessonVersionAtom,
+  editLibraryLessonIdAtom,
+  resetVideoSectionAtom,
+} from '#/atoms/admin';
 import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { disciplineLessons, type LibraryLesson } from '#/lib/admin-schemas';
 import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
@@ -52,6 +56,10 @@ function findLesson(
  * lesson placed nowhere yet saves its ref without a preview, and the section
  * explains why.
  *
+ * **The version** sits under the video. A version a course has taken is
+ * locked: every write here of what a course would get (material, video, a
+ * language, the name) asks `useVersionGate` first. Settings do not.
+ *
  * It reads the lesson out of the library query rather than taking it as a
  * prop, so the pencil on either pane needs only to set an id — and both panes
  * open the same modal against the same cached row.
@@ -59,6 +67,7 @@ function findLesson(
 export const LibraryLessonConfigDialogContainer = () => {
   const [lessonId, setLessonId] = useAtom(editLibraryLessonIdAtom);
   const resetVideoSection = useSetAtom(resetVideoSectionAtom);
+  const discardVersion = useSetAtom(discardLessonVersionAtom);
   const { data: library } = useOrgLibrary();
   const lesson = findLesson(library, lessonId);
 
@@ -80,13 +89,18 @@ export const LibraryLessonConfigDialogContainer = () => {
             courseId={lesson.courseIds[0] ?? null}
             source="discipline"
             lesson={lesson}
+            versioned={lesson}
             previewNote={
               lesson.courseIds.length > 1
                 ? `Preview is signed with the first of the ${lesson.courseIds.length} courses teaching this lesson.`
                 : undefined
             }
           />
-          <MaterialSectionContainer key={lesson.id} lesson={lesson} />
+          <MaterialSectionContainer
+            key={lesson.id}
+            lesson={lesson}
+            versioned={lesson}
+          />
         </div>
       ),
     },
@@ -101,6 +115,7 @@ export const LibraryLessonConfigDialogContainer = () => {
           // Cleared on the close EVENT, as the course dialog does — reopening
           // should not restore a half-finished "replace video" form.
           resetVideoSection();
+          if (lessonId !== null) discardVersion(lessonId);
         }
       }}
       title="Edit lesson"
@@ -112,7 +127,11 @@ export const LibraryLessonConfigDialogContainer = () => {
       }
       headerActions={
         lesson && (
-          <MaterialSaveButtonContainer key={lesson.id} lessonId={lesson.id} />
+          <MaterialSaveButtonContainer
+            key={lesson.id}
+            lessonId={lesson.id}
+            version={lesson.version}
+          />
         )
       }
       sections={sections}

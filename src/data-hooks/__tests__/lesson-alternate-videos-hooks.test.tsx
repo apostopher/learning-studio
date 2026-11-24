@@ -43,10 +43,10 @@ describe('useLessonAlternateVideos', () => {
 describe('useSetLessonAlternateVideo', () => {
   it('PUTs the entry and invalidates the alternates list and every playback for the lesson', async () => {
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonAlternateVideo(), {
+    const { result } = renderHook(() => useSetLessonAlternateVideo(10), {
       wrapper,
     });
-    await act(() => result.current.mutateAsync({ lessonId: 10, ...entry }));
+    await act(() => result.current.mutateAsync(entry));
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/admin/lessons/10/alternate-videos');
     expect(init.method).toBe('PUT');
@@ -68,12 +68,10 @@ describe('useSetLessonAlternateVideo', () => {
 describe('useRemoveLessonAlternateVideo', () => {
   it('DELETEs by lang and invalidates the same keys', async () => {
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useRemoveLessonAlternateVideo(), {
+    const { result } = renderHook(() => useRemoveLessonAlternateVideo(10), {
       wrapper,
     });
-    await act(() =>
-      result.current.mutateAsync({ lessonId: 10, lang: 'fr-CA' }),
-    );
+    await act(() => result.current.mutateAsync({ lang: 'fr-CA' }));
     const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(init.method).toBe('DELETE');
     expect(JSON.parse(init.body as string)).toEqual({ lang: 'fr-CA' });

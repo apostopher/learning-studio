@@ -132,6 +132,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       <VideoSectionContainer
         courseId={null}
         source="discipline"
+        versioned={null}
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -139,7 +140,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
     expect(screen.getByLabelText('Video URL or ID')).toBeTruthy();
     expect(screen.getByTestId('video-preview')).toBeTruthy();
     expect(hooks.credentials).toHaveBeenCalledWith(null);
-    expect(hooks.setVideo).toHaveBeenCalledWith(null);
+    expect(hooks.setVideo).toHaveBeenCalledWith(null, 10);
     expect(hooks.playback).toHaveBeenCalledWith(null, false);
     expect(screen.queryByTestId('credential-flow')).toBeNull();
     // No primary video → nothing for a translation to be an alternate to.
@@ -152,6 +153,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       <VideoSectionContainer
         courseId={null}
         source="discipline"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
@@ -183,6 +185,7 @@ describe('VideoSectionContainer with a course', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
         previewNote="Preview is signed with the first course teaching this lesson."
       />,
@@ -207,6 +210,7 @@ describe('VideoSectionContainer with a course', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -230,6 +234,7 @@ describe('VideoSectionContainer with a course', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc123' }}
       />,
       { wrapper },
@@ -245,6 +250,7 @@ describe('VideoSectionContainer with a course', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -282,6 +288,7 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -304,6 +311,7 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -329,6 +337,7 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -353,6 +362,7 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -391,6 +401,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -460,6 +471,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -486,6 +498,7 @@ describe('VideoSectionContainer captions status', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -504,6 +517,7 @@ describe('VideoSectionContainer captions status', () => {
       <VideoSectionContainer
         courseId={null}
         source="discipline"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -529,6 +543,7 @@ describe('VideoSectionContainer recovery', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
+        versioned={null}
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },

@@ -4,10 +4,23 @@ import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
+import { useCopyLibraryModule } from '#/data-hooks/use-copy-library-module';
 import { useCreateCourse } from '#/data-hooks/use-create-course';
+import { useDeleteCourse } from '#/data-hooks/use-delete-course';
+import { useDeleteLesson } from '#/data-hooks/use-delete-lesson';
+import { useDeleteModule } from '#/data-hooks/use-delete-module';
 import { useLinkLesson } from '#/data-hooks/use-link-lesson';
+import { useMoveLesson } from '#/data-hooks/use-move-lesson';
+import { useMovePlacement } from '#/data-hooks/use-move-placement';
+import {
+  useRemixCourse,
+  useUnremixCourse,
+} from '#/data-hooks/use-remix-course';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
-import { useUpdateLibraryLesson } from '#/data-hooks/use-update-library-lesson';
+import {
+  useRenameLibraryLesson,
+  useUpdateLibraryLesson,
+} from '#/data-hooks/use-update-library-lesson';
 
 const COURSE_ID = 4;
 
@@ -33,6 +46,41 @@ function makeHarness() {
   );
   return { client, wrapper };
 }
+
+type Wrapper = ReturnType<typeof makeHarness>['wrapper'];
+
+const COPIED = {
+  module: {
+    id: 3,
+    name: 'Approaches',
+    slug: 'approaches',
+    rank: 1,
+    requiredSubscriptions: [],
+    sequentialLessons: false,
+    imageUrlAvif: null,
+    imageUrlWebp: null,
+    dependsOn: [],
+    learnerCount: 0,
+    owner: { id: 4, name: 'Course' },
+    otherCourseCount: 0,
+    lessons: [],
+  },
+  placedLessonIds: [10],
+  skipped: [],
+};
+
+/** Make one write through its hook. */
+const run =
+  <TVars,>(
+    useHook: () => { mutateAsync: (vars: TVars) => Promise<unknown> },
+    vars: TVars,
+  ) =>
+  async (wrapper: Wrapper) => {
+    const { result } = renderHook(useHook, { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync(vars);
+    });
+  };
 
 const stale = (client: QueryClient, key: readonly unknown[]) =>
   client.getQueryState(key)?.isInvalidated === true;
@@ -85,20 +133,34 @@ describe('writes that both editor surfaces read', () => {
     expect(stale(client, dataKeys.editorBoard())).toBe(true);
   });
 
-  it('useUpdateLibraryLesson reaches the per-course board too', async () => {
-    const { client, wrapper } = makeHarness();
-    const { result } = renderHook(() => useUpdateLibraryLesson(), { wrapper });
-
+  it('a rename or an availability change reaches the per-course board too', async () => {
+    const renamed = makeHarness();
+    const rename = renderHook(() => useRenameLibraryLesson(10), {
+      wrapper: renamed.wrapper,
+    });
     await act(async () => {
-      await result.current.mutateAsync({ lessonId: 10, name: 'Renamed' });
+      await rename.result.current.mutateAsync({ name: 'Renamed' });
     });
 
-    // Renaming from the editor's lesson modal and then clicking a course
-    // column's gear lands on a board whose cached entry is still fresh — it
-    // showed the OLD name for the rest of that mount.
-    expect(stale(client, dataKeys.editorBoard())).toBe(true);
-    expect(stale(client, dataKeys.orgLibrary())).toBe(true);
-    expect(stale(client, dataKeys.courseBoard(COURSE_ID))).toBe(true);
+    const hidden = makeHarness();
+    const update = renderHook(() => useUpdateLibraryLesson(), {
+      wrapper: hidden.wrapper,
+    });
+    await act(async () => {
+      await update.result.current.mutateAsync({
+        lessonId: 10,
+        isAvailable: false,
+      });
+    });
+
+    // Editing from the lesson modal and then clicking a course column's gear
+    // lands on a board whose cached entry is still fresh — it showed the OLD
+    // value for the rest of that mount.
+    for (const { client } of [renamed, hidden]) {
+      expect(stale(client, dataKeys.editorBoard())).toBe(true);
+      expect(stale(client, dataKeys.orgLibrary())).toBe(true);
+      expect(stale(client, dataKeys.courseBoard(COURSE_ID))).toBe(true);
+    }
   });
 
   it('useLinkLesson and useUnlinkLesson settle the per-course board', async () => {
@@ -119,5 +181,61 @@ describe('writes that both editor surfaces read', () => {
     // A lesson added to or removed from a course is exactly what that board
     // draws, so leaving it fresh shows a placement that is no longer there.
     expect(stale(fresh.client, dataKeys.courseBoard(COURSE_ID))).toBe(true);
+  });
+});
+
+/**
+ * Each of these changes which courses show a lesson, so which versions are
+ * taken. The lesson editor's lock reads the library for that: left fresh, it
+ * would call a locked version free, or count courses that are gone.
+ */
+describe('membership changes reach the library, where the version lock reads', () => {
+  const move = {
+    lessonId: 10,
+    fromModuleId: 3,
+    targetModuleId: 4,
+    prevLessonId: null,
+    nextLessonId: null,
+  };
+  const remix = { courseId: 4, sourceCourseId: 6 };
+
+  it.each<[string, (wrapper: Wrapper) => Promise<unknown>]>([
+    ['useLinkLesson', run(useLinkLesson, { moduleId: 3, lessonId: 10 })],
+    ['useUnlinkLesson', run(useUnlinkLesson, { moduleId: 3, lessonId: 10 })],
+    ['useMovePlacement', run(useMovePlacement, move)],
+    ['useMoveLesson', run(() => useMoveLesson(COURSE_ID), move)],
+    ['useRemixCourse', run(useRemixCourse, remix)],
+    ['useUnremixCourse', run(useUnremixCourse, remix)],
+    ['useDeleteModule', run(() => useDeleteModule(COURSE_ID), 3)],
+    ['useCreateCourse', run(useCreateCourse, { name: 'CPL' })],
+    ['useDeleteCourse', run(useDeleteCourse, COURSE_ID)],
+    ['useDeleteLesson', run(useDeleteLesson, 10)],
+  ])('%s', async (_name, write) => {
+    const { client, wrapper } = makeHarness();
+    await write(wrapper);
+    expect(stale(client, dataKeys.orgLibrary())).toBe(true);
+  });
+
+  it('useCopyLibraryModule', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(COPIED), { status: 201 }),
+    );
+    const { client, wrapper } = makeHarness();
+    await run(useCopyLibraryModule, {
+      courseId: COURSE_ID,
+      disciplineModuleId: 2,
+      afterModuleId: null,
+    })(wrapper);
+    expect(stale(client, dataKeys.orgLibrary())).toBe(true);
+  });
+
+  it.each([
+    ['useMovePlacement', run(useMovePlacement, move)],
+    ['useMoveLesson', run(() => useMoveLesson(COURSE_ID), move)],
+  ])('%s, even when it failed: the server may have kept it', async (_name, write) => {
+    vi.mocked(fetch).mockResolvedValue(new Response('no', { status: 500 }));
+    const { client, wrapper } = makeHarness();
+    await write(wrapper).catch(() => {});
+    expect(stale(client, dataKeys.orgLibrary())).toBe(true);
   });
 });

@@ -2,14 +2,15 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '#/lib/cn';
 
 const label = (isSaving: boolean, isDirty: boolean) => {
-  if (isSaving) return 'Saving material…';
-  if (isDirty) return 'Save material — unsaved changes';
-  return 'Save material';
+  if (isSaving) return 'Saving…';
+  if (isDirty) return 'Save, unsaved changes';
+  return 'Save';
 };
 
 /**
- * The material form's submit, rendered OUTSIDE the form — in the modal's
- * sidebar footer or the header — and wired to it by `form={formId}`.
+ * The lesson editor's Save: material and version. It submits the material
+ * form from OUTSIDE it — the modal's sidebar footer or the header — by
+ * `form={formId}`.
  * `fullWidth` in a sidebar: the column is narrow, and a primary action
  * pinned in it reads as a bar, not a chip.
  *
@@ -26,7 +27,7 @@ export const MaterialSaveButton = ({
 }: {
   formId: string;
   isSaving: boolean;
-  /** The form has edits that are not yet saved. */
+  /** There are edits that are not yet saved. */
   isDirty?: boolean;
   /** Stretch to the column — for a sidebar footer; a header keeps its own width. */
   fullWidth?: boolean;
@@ -55,7 +56,7 @@ export const MaterialSaveButton = ({
           aria-hidden="true"
         />
       )}
-      Save material
+      {isSaving ? 'Saving…' : 'Save'}
     </button>
   );
 };

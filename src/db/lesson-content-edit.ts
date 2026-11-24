@@ -8,8 +8,8 @@ import {
 import { lessonsTable } from '#/db/schema';
 import type { VersionConflictBody } from '#/lib/admin-schemas';
 import {
-  formatVersion,
   lockedVersionMessage,
+  notHigherVersionMessage,
   versionEditError,
 } from '#/lib/lesson-version';
 
@@ -56,7 +56,7 @@ async function lockEditable(
               lesson.version,
               await countCoursesOnVersion(lessonId, lesson.version, tx),
             )
-          : `Enter a version higher than ${formatVersion(refusal.than)}.`,
+          : notHigherVersionMessage(refusal.than),
       code: 'version',
       ...state,
     });

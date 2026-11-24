@@ -235,6 +235,9 @@ export type VersionConflictBody = z.infer<typeof versionConflictSchema>;
 /** POST body of the material save. */
 export const saveLessonMaterialInputSchema =
   LessonMaterialGenerationSchema.extend(contentVersion);
+export type SaveLessonMaterialInput = z.infer<
+  typeof saveLessonMaterialInputSchema
+>;
 
 // Canonical id list lives in PROVIDER_IDS (src/lib/video-providers); derive
 // the schema from it so adding a provider can't drift between the two.
@@ -513,6 +516,9 @@ export const removeLessonAlternateVideoInputSchema = z.object({
   lang: alternateLangSchema,
   ...contentVersion,
 });
+export type RemoveLessonAlternateVideoInput = z.infer<
+  typeof removeLessonAlternateVideoInputSchema
+>;
 
 /** A resolved, playable video. Mirrors `Playback` in `#/lib/video-providers/resolve.server`. */
 export const lessonPlaybackReadySchema = z.object({

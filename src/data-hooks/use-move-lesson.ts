@@ -34,6 +34,9 @@ export function useMoveLesson(courseId: number) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: key });
+      // A borrowed module brings or takes the lesson for other courses: see
+      // `useMovePlacement`.
+      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
     },
   });
 }

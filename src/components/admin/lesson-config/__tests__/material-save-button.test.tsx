@@ -23,7 +23,7 @@ describe('MaterialSaveButton', () => {
         />
       </>,
     );
-    const button = screen.getByRole('button', { name: 'Save material' });
+    const button = screen.getByRole('button', { name: 'Save' });
     expect(button.getAttribute('form')).toBe('lesson-material-form-10');
     fireEvent.click(button);
     expect(onSubmit).toHaveBeenCalledOnce();
@@ -32,7 +32,7 @@ describe('MaterialSaveButton', () => {
   it('is disabled and says so while saving', () => {
     render(<MaterialSaveButton formId="f" isSaving />);
     const button = screen.getByRole('button', {
-      name: 'Saving material…',
+      name: 'Saving…',
     }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
@@ -45,7 +45,7 @@ describe('MaterialSaveButton', () => {
   it('turns accent and says it has unsaved changes when the form is dirty', () => {
     render(<MaterialSaveButton formId="f" isSaving={false} isDirty />);
     const button = screen.getByRole('button', {
-      name: 'Save material — unsaved changes',
+      name: 'Save, unsaved changes',
     });
     expect(button.className).toContain('bg-accent-9');
     expect(button.className).not.toContain('bg-apple-9');
@@ -53,15 +53,13 @@ describe('MaterialSaveButton', () => {
 
   it('stays the plain primary when the form is clean', () => {
     render(<MaterialSaveButton formId="f" isSaving={false} isDirty={false} />);
-    const button = screen.getByRole('button', { name: 'Save material' });
+    const button = screen.getByRole('button', { name: 'Save' });
     expect(button.className).toContain('bg-apple-9');
     expect(button.className).not.toContain('bg-accent-9');
   });
 
   it('reads as saving, not dirty, once the save is in flight', () => {
     render(<MaterialSaveButton formId="f" isSaving isDirty />);
-    expect(
-      screen.getByRole('button', { name: 'Saving material…' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy();
   });
 });

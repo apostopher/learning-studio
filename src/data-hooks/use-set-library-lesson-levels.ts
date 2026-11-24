@@ -1,27 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { LibraryLesson, OrgLibrary } from '#/lib/admin-schemas';
+import type { OrgLibrary } from '#/lib/admin-schemas';
 import type { LessonLevel } from '#/types';
 import { dataKeys } from './keys';
-
-/** Every lesson list the library holds, with `lessonId`'s levels replaced. */
-function withLevels(
-  library: OrgLibrary,
-  lessonId: number,
-  levels: LessonLevel[],
-): OrgLibrary {
-  const patch = (lessons: LibraryLesson[]) =>
-    lessons.map((l) => (l.id === lessonId ? { ...l, levels } : l));
-  return {
-    ...library,
-    untitled: patch(library.untitled),
-    disciplines: library.disciplines.map((d) => ({
-      ...d,
-      untitled: patch(d.untitled),
-      modules: d.modules.map((m) => ({ ...m, lessons: patch(m.lessons) })),
-    })),
-  };
-}
+import { patchLibraryLesson } from './patch-library-lesson';
 
 /**
  * Set a library lesson's levels from the Update levels board.
@@ -60,7 +42,10 @@ export function useSetLibraryLessonLevels() {
       if (previous) {
         queryClient.setQueryData<OrgLibrary>(
           key,
-          withLevels(previous, input.lessonId, input.levels),
+          patchLibraryLesson(previous, input.lessonId, (lesson) => ({
+            ...lesson,
+            levels: input.levels,
+          })),
         );
       }
       return { previous };

@@ -23,7 +23,7 @@ const renderFor = (lessonId: number, store: ReturnType<typeof createStore>) =>
   render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
-        <MaterialSaveButtonContainer lessonId={lessonId} />
+        <MaterialSaveButtonContainer lessonId={lessonId} version="1.0" />
       </Provider>
     </QueryClientProvider>,
   );
