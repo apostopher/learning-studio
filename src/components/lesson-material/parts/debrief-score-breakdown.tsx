@@ -15,7 +15,6 @@ type DebriefScoreBreakdownProps = {
 };
 
 const LABEL: Record<ScorePartName, string> = {
-  video: 'Video',
   quiz: 'Quiz',
   debrief: 'Debrief',
 };
@@ -28,7 +27,7 @@ function shownTotal(score: LessonScore): number {
   return score.passed ? score.total : Math.floor(score.total * 10) / 10;
 }
 
-/** "Video 50 + Quiz 20 + Debrief 12.9 = 82.9 · pass mark 85". */
+/** "Quiz 20 + Debrief 51.5 = 71.5 · pass mark 85". */
 export function scoreBreakdownLine(score: LessonScore): string {
   const sum = score.parts
     .map((p) => `${LABEL[p.part]} ${formatScore(p.points)}`)
@@ -38,7 +37,7 @@ export function scoreBreakdownLine(score: LessonScore): string {
 
 /**
  * How a set's lesson total adds up: each part's points, the total and the
- * course's pass mark, so the pilot sees why a set passed or missed.
+ * lesson's pass mark, so the pilot sees why a set passed or missed.
  *
  * Presentational and hookless.
  */

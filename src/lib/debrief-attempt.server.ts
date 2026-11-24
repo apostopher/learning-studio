@@ -226,11 +226,10 @@ type Scoring = { facts: ScoreFacts; passMark: number; judge: SetJudge };
 async function loadScoring(k: {
   userId: string;
   lessonSlug: string;
-  lessonId: number;
   courseId: number;
 }): Promise<Scoring> {
   const [facts, passMark] = await Promise.all([
-    getScoreFacts(k.userId, k.lessonSlug, k.lessonId),
+    getScoreFacts(k.userId, k.lessonSlug),
     getCoursePassMark(k.courseId),
   ]);
   return { facts, passMark, judge: debriefJudge(facts, passMark) };
@@ -394,9 +393,10 @@ const isChunkAttempt = (row: AttemptRow | null, userId: string) =>
  * chunk score is applied to the pilot's mastery of the lesson's CURRENT chunk
  * list (mapped across one regeneration), which only orders the next draw.
  *
- * A completed set is judged on the LESSON TOTAL (`setScore`): the pilot's
- * video and quiz parts (`getScoreFacts`) plus the better set average so far
- * as the debrief part, against the course's pass mark (`getCoursePassMark`).
+ * A completed set is judged on the LESSON TOTAL (`setScore`): the better set
+ * average so far plus 5 points per right quiz answer (`getScoreFacts`),
+ * against the course's pass mark (`getCoursePassMark`), lowered for a short
+ * quiz (`lessonPassMark`).
  * When the answer completes a set:
  * - set 1 passes and there is a set 2: the pass is recorded now
  *   (`passedNow`) and the attempt stays open with `offer` — the pilot either
@@ -430,7 +430,6 @@ export async function answerQuestion(a: {
   const scoring = await loadScoring({
     userId: a.userId,
     lessonSlug: row.lessonSlug,
-    lessonId: a.lessonId,
     courseId: a.courseId,
   });
 
@@ -532,7 +531,7 @@ export async function answerQuestion(a: {
       answers: newAnswers,
       draft: null,
       // A set completed here: freeze its verdict, so the offer and the sets
-      // reached never move with later video or quiz facts.
+      // reached never move with a later quiz retake.
       ...(step.verdicts && {
         questions: { ...lockedStored, setVerdicts: step.verdicts },
       }),
@@ -704,7 +703,6 @@ export async function continueAttempt(a: {
   userId: string;
   attemptId: number;
   choice: 'yes' | 'no';
-  lessonId: number;
   courseId: number;
 }): Promise<ContinueResult> {
   const row = await selectAttempt(a.attemptId);
@@ -714,7 +712,6 @@ export async function continueAttempt(a: {
   const scoring = await loadScoring({
     userId: a.userId,
     lessonSlug: row.lessonSlug,
-    lessonId: a.lessonId,
     courseId: a.courseId,
   });
 
@@ -786,14 +783,13 @@ export async function saveDraft(d: {
 
 /**
  * After a quiz save: record the pass if the best completed set so far, plus
- * the current video and quiz, reaches the course pass mark. True when it
+ * the current quiz, reaches the course pass mark. True when it
  * recorded one. Sets of every chunk-format attempt count, finished or open;
  * rows that no longer parse are skipped. No completed set means no pass.
  */
 export async function recheckDebriefPass(a: {
   userId: string;
   lessonSlug: string;
-  lessonId: number;
   courseId: number;
 }): Promise<boolean> {
   if (await selectHasPass(db, a)) return false;
@@ -814,7 +810,7 @@ export async function recheckDebriefPass(a: {
   const best = Math.max(...averages);
 
   const [facts, passMark] = await Promise.all([
-    getScoreFacts(a.userId, a.lessonSlug, a.lessonId),
+    getScoreFacts(a.userId, a.lessonSlug),
     getCoursePassMark(a.courseId),
   ]);
   if (!debriefJudge(facts, passMark)(best)) return false;

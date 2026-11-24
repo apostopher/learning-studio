@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { lessonTotalScore } from '#/lib/lesson-score';
+import { setScore } from '#/lib/lesson-score';
 import { ScoreReport, setSummary } from '../score-report';
 
 // Capture what the ring was handed: the report's number IS the ring's prop.
@@ -99,14 +99,14 @@ describe('ScoreReport', () => {
     const { container } = render(
       <ScoreReport
         {...holes}
-        score={lessonTotalScore({ video: 1, quiz: 0.8, debrief: 0.515 }, 85)}
+        score={setScore({ quiz: { correct: 4, total: 5 } }, 85, 51.5)}
         headingLevel={2}
         idBase=":r1:"
       />,
     );
     expect(container.textContent).toContain(
       // 82.875, a miss: floored to one decimal.
-      'Video 50 + Quiz 20 + Debrief 12.9 = 82.8 · pass mark 85',
+      'Quiz 20 + Debrief 51.5 = 71.5 · pass mark 85',
     );
   });
 

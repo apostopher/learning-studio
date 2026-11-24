@@ -22,7 +22,7 @@ const questionSchema = z.object({
 });
 
 const scorePartSchema = z.object({
-  part: z.enum(['video', 'quiz', 'debrief']),
+  part: z.enum(['quiz', 'debrief']),
   weight: z.number(),
   fraction: z.number(),
   points: z.number(),

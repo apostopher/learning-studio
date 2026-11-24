@@ -331,7 +331,6 @@ describe('continue', () => {
       userId: 'u1',
       attemptId: 5,
       choice: 'yes',
-      lessonId: 41,
       courseId: 7,
     });
     expect(res.status).toBe(200);

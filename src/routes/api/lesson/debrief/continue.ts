@@ -66,7 +66,6 @@ export async function continueDebriefHandler(
       userId,
       attemptId,
       choice,
-      lessonId: access.lessonId,
       courseId: access.courseId,
     });
     if (!result.ok) {

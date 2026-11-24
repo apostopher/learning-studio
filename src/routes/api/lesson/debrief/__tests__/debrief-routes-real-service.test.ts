@@ -19,7 +19,6 @@ const m = vi.hoisted(() => ({
   evaluateFreeText: vi.fn(),
   resolveDebriefSource: vi.fn(),
   ensureLessonChunks: vi.fn(),
-  selectLessonScoreRow: vi.fn(),
   selectCoursePassMark: vi.fn(),
   selectAuthoredQuiz: vi.fn(),
   getLatestLessonQuizAnswers: vi.fn(),
@@ -68,7 +67,6 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }));
 vi.mock('#/db/lesson-score-facts', () => ({
-  selectLessonScoreRow: m.selectLessonScoreRow,
   selectCoursePassMark: m.selectCoursePassMark,
   selectAuthoredQuiz: m.selectAuthoredQuiz,
 }));
@@ -78,6 +76,16 @@ vi.mock('#/db/lesson-quiz', () => ({
 
 import { answerDebriefHandler } from '../answer';
 import { startDebriefHandler } from '../start';
+
+const quizQuestion = {
+  id: 'quiz-1',
+  question: 'Q?',
+  options: [
+    { id: 'a', value: 'A' },
+    { id: 'b', value: 'B' },
+  ],
+  correctOptionId: 'a',
+};
 
 const chunks = [
   { id: 'v1-c1', title: 'Stall AoA', summary: 'SECRET-SUMMARY-1' },
@@ -141,23 +149,20 @@ beforeEach(() => {
   m.evaluateFreeText.mockResolvedValue({
     questionId: 'q1',
     type: 'free-text',
-    score: 80,
+    score: 60,
     userAnswer: 'typed',
     explanation: '',
     chunkScores: { 'v1-c1': 80 },
     revisitNote: '',
     feedback: 'You named the critical angle.',
   });
-  // A watched video, no quiz, the course's pass mark 85.
-  m.selectLessonScoreRow.mockResolvedValue({
-    videoProvider: 'mux',
-    videoRef: 'v',
-    needsVideoWatch: true,
-    hasQuiz: false,
-    watchedHits: 18,
-  });
+  // One quiz question, answered right (5 points); the course's pass mark 85,
+  // so this lesson needs 65 (four questions short of five).
+  m.selectAuthoredQuiz.mockResolvedValue([quizQuestion]);
   m.selectCoursePassMark.mockResolvedValue(85);
-  m.getLatestLessonQuizAnswers.mockResolvedValue(null);
+  m.getLatestLessonQuizAnswers.mockResolvedValue({
+    answers: [{ ...quizQuestion, userOptionId: 'a' }],
+  });
 });
 
 const answerBody = {
@@ -206,24 +211,23 @@ describe('an open attempt whose source has disappeared (Review Focus 2)', () => 
       chunks,
       'SECRET-CONTEXT',
     );
-    // A pre-sets attempt is one set: its only answer, at 80, with the video
-    // watched, totals 50 + 40 = 90 against the course's 85.
+    // A pre-sets attempt is one set: its only answer, at 60, with one
+    // right quiz answer, totals 60 + 5 = 65 against this lesson's 65.
     const json = await res.json();
     expect(json).toMatchObject({
       evaluation: {
-        score: 80,
+        score: 60,
         feedback: 'You named the critical angle.',
         revisitNote: '',
       },
-      setResult: { set: 1, average: 80, passed: true },
+      setResult: { set: 1, average: 60, passed: true },
       nextQuestions: [],
       offer: false,
       passedNow: true,
       finished: 'set-passed',
     });
-    expect(json.setResult.score).toMatchObject({ passMark: 85, passed: true });
-    expect(json.setResult.score.total).toBeCloseTo(90);
-    expect(m.selectLessonScoreRow).toHaveBeenCalledWith('u1', 41);
+    expect(json.setResult.score).toMatchObject({ passMark: 65, passed: true });
+    expect(json.setResult.score.total).toBe(65);
     expect(m.selectCoursePassMark).toHaveBeenCalledWith(7);
     expect(m.settleProgress).toHaveBeenCalledWith({
       userId: 'u1',
@@ -233,38 +237,21 @@ describe('an open attempt whose source has disappeared (Review Focus 2)', () => 
 });
 
 describe('the lesson total judges the set, from the db facts through to the response', () => {
-  it('a quiz never taken costs its share: 80 on the debrief totals 70, missed', async () => {
-    m.selectLessonScoreRow.mockResolvedValue({
-      videoProvider: 'mux',
-      videoRef: 'v',
-      needsVideoWatch: true,
-      hasQuiz: true,
-      watchedHits: 18,
-    });
-    m.selectAuthoredQuiz.mockResolvedValue([
-      {
-        id: 'quiz-1',
-        question: 'Q?',
-        options: [
-          { id: 'a', value: 'A' },
-          { id: 'b', value: 'B' },
-        ],
-        correctOptionId: 'a',
-      },
-    ]);
+  it('a quiz never taken adds nothing: 60 on the debrief totals 60, missed', async () => {
+    m.getLatestLessonQuizAnswers.mockResolvedValue(null);
     const res = await answerDebriefHandler(post('answer', answerBody));
     expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1');
     expect(m.getLatestLessonQuizAnswers).toHaveBeenCalledWith('u1', 'l1');
     const json = await res.json();
     expect(json).toMatchObject({
-      setResult: { set: 1, average: 80, passed: false },
+      setResult: { set: 1, average: 60, passed: false },
       passedNow: false,
       finished: 'sets-missed',
     });
-    expect(json.setResult.score.total).toBeCloseTo(70);
+    expect(json.setResult.score.total).toBe(60);
     expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
       finishedReason: 'sets-missed',
-      totalScore: 80,
+      totalScore: 60,
     });
   });
 });

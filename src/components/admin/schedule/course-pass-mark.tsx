@@ -70,7 +70,8 @@ export const CoursePassMark = ({
               id={`pass-mark-hint-${courseId}`}
               className="text-secondary text-xs"
             >
-              0–100: lessons pass at this total score
+              0–100: the score a lesson with five quiz questions needs. Each
+              question fewer lowers it by 5.
             </p>
             {fieldError ? (
               <p role="alert" className="text-error-text text-xs">

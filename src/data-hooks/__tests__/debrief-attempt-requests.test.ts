@@ -57,7 +57,6 @@ const score = {
   passMark: 85,
   passed: true,
   parts: [
-    { part: 'video' as const, weight: 50, fraction: 1, points: 50 },
     { part: 'quiz' as const, weight: 25, fraction: 1, points: 25 },
     { part: 'debrief' as const, weight: 25, fraction: 0.5, points: 12.5 },
   ],

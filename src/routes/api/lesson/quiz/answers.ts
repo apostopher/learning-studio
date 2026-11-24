@@ -108,7 +108,6 @@ export async function submitLessonQuizHandler(
         await recheckDebriefPass({
           userId: session.user.id,
           lessonSlug: parsed.data.lessonSlug,
-          lessonId: lesson.id,
           courseId: gate.courseId,
         });
       }

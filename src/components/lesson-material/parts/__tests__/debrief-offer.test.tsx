@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DEBRIEF_PASS_OFFER_COPY, passOfferCopy } from '#/lib/debrief-copy';
-import { lessonTotalScore } from '#/lib/lesson-score';
+import { setScore } from '#/lib/lesson-score';
 import { DebriefOffer } from '../debrief-offer';
 
 // Base UI's Button calls hooks: one React, the CJS shim as in
@@ -20,7 +20,7 @@ function setup(props: Partial<Parameters<typeof DebriefOffer>[0]> = {}) {
   render(
     <DebriefOffer
       copy={DEBRIEF_PASS_OFFER_COPY}
-      score={lessonTotalScore({ video: 1, quiz: 1, debrief: 0.5 }, 85)}
+      score={setScore({ quiz: { correct: 5, total: 5 } }, 85, 62.5)}
       quizTaken={true}
       pending={null}
       error=""
@@ -39,7 +39,7 @@ describe('DebriefOffer', () => {
     setup({ copy: passOfferCopy(2) });
     const region = screen.getByRole('region', { name: 'Set 1 passed' });
     expect(region.textContent).toContain(
-      'Video 50 + Quiz 25 + Debrief 12.5 = 87.5 · pass mark 85',
+      'Quiz 25 + Debrief 62.5 = 87.5 · pass mark 85',
     );
     expect(screen.getByText(passOfferCopy(2))).toBeDefined();
   });

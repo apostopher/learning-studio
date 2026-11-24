@@ -208,12 +208,11 @@ describe('re-checking the debrief after a quiz save', () => {
       post({ lessonSlug: 'l1', courseSlug: 'c1', answers }),
     );
 
-  it('rechecks with the lesson id and the gate course, after the save and before settling', async () => {
+  it('rechecks this lesson in the gate course, after the save and before settling', async () => {
     await run();
     expect(m.recheckDebriefPass).toHaveBeenCalledWith({
       userId: 'u1',
       lessonSlug: 'l1',
-      lessonId: 41,
       courseId: 7,
     });
     const recheckAt = m.recheckDebriefPass.mock.invocationCallOrder[0];

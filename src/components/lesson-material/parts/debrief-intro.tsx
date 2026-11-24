@@ -14,7 +14,7 @@ const REASON_ID = 'debrief-intro-readonly-reason';
 
 /** The set rules (a set is judged on the lesson total), in the pilot's words. */
 const HOW_IT_WORKS =
-  'Viper gives you feedback after each answer. Each set is scored together with your video and quiz, and reaching the course pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
+  'Viper gives you feedback after each answer. A set’s score is its average plus 5 points for each quiz question you got right, and reaching the lesson’s pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
 
 /**
  * The Debrief tab once the debrief is open, before it has been generated.

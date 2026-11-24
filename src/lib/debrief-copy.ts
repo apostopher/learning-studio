@@ -11,7 +11,7 @@ export const DEBRIEF_PASS_OFFER_COPY =
 export const DEBRIEF_DECLINE_COPY =
   "Okay that's fine. Just proceed to the next video.";
 
-/** Set 1 missed: set 2 comes next. */
+/** Set 1 missed: the prompt over the offer of set 2. */
 export const DEBRIEF_SET1_MISSED_COPY =
   "Let's try some of the other teaching points";
 
@@ -39,6 +39,12 @@ export function passOfferCopy(set2Count: number): string {
     'answering four more questions',
     `answering ${word} more ${noun}`,
   );
+}
+
+/** The button that starts set 2 after a missed set 1: "Answer four more questions". */
+export function secondSetLabel(set2Count: number): string {
+  const word = NUMBER_WORDS[set2Count] ?? String(set2Count);
+  return `Answer ${word} more ${set2Count === 1 ? 'question' : 'questions'}`;
 }
 
 /** The offer's buttons. */

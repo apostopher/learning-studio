@@ -144,9 +144,9 @@ describe('setsProgress', () => {
     expect(p).toMatchObject({ passed: false, over: true, reached: 1 });
   });
 
-  it('judges the unrounded average: with video 1, quiz 1 and pass mark 85, a set averaging 39.5 does not pass', () => {
+  it('judges the unrounded average: with a full quiz and pass mark 65, a set averaging 39.5 does not pass', () => {
     const seen: number[] = [];
-    const real = debriefJudge({ video: 1, quiz: 1 }, 85);
+    const real = debriefJudge({ quiz: { correct: 5, total: 5 } }, 65);
     const p = setsProgress(
       TWO_SETS,
       scores({ q1: 40, q2: 40, q3: 39, q4: 39 }),

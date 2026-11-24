@@ -38,6 +38,7 @@ import {
   debriefQuizView,
   declinedDebriefReport,
   feedbackNextLabel,
+  feedbackPrompt,
   finishedDebriefReport,
   questionPosition,
   startErrorOf,
@@ -171,6 +172,7 @@ export const DebriefQuizContainer = ({
         score: result.evaluation.score,
         feedback: feedbackText(result.evaluation),
         setResult: result.setResult,
+        prompt: feedbackPrompt(result),
         nextLabel: feedbackNextLabel(result),
         report: finishedDebriefReport({
           lessonSlug,
@@ -404,6 +406,7 @@ export const DebriefQuizContainer = ({
           feedback={feedback.feedback}
           setResult={feedback.setResult}
           quizTaken={quizTaken}
+          prompt={feedback.prompt}
           nextLabel={feedback.nextLabel}
           onNext={handleNext}
           headingLevel={headingLevel}

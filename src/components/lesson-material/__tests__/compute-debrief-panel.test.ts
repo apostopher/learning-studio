@@ -17,7 +17,7 @@ import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
 import { DEBRIEF_SET1_MISSED_COPY } from '#/lib/debrief-copy';
 import type { DebriefState } from '#/lib/debrief-schedule';
-import { lessonTotalScore } from '#/lib/lesson-score';
+import { setScore } from '#/lib/lesson-score';
 import {
   answerErrorCopy,
   attemptFormat,
@@ -36,6 +36,7 @@ import {
   declinedDebriefReport,
   type FinishedDebrief,
   feedbackNextLabel,
+  feedbackPrompt,
   finishedDebriefReport,
   questionPosition,
   setAveragesOf,
@@ -75,7 +76,7 @@ const loaded = (
 
 /** The lesson total a set average gives on a video + quiz + debrief lesson. */
 const totalAt = (average: number, passMark = 85) =>
-  lessonTotalScore({ video: 1, quiz: 0.8, debrief: average / 100 }, passMark);
+  setScore({ quiz: { correct: 4, total: 5 } }, passMark, average);
 
 const finished = (over: Partial<FinishedDebrief> = {}): FinishedDebrief => ({
   lessonSlug: LESSON,
@@ -468,15 +469,39 @@ describe('feedbackNextLabel', () => {
     }
   });
 
-  it('a missed set with another to come tries the other teaching points', () => {
+  it('a missed set 1 prompts for the other teaching points and offers four more questions', () => {
+    const missed = {
+      finished: null,
+      setResult: set1(false),
+      nextQuestions: ['q5', 'q6', 'q7', 'q8'].map((id) => ({ ...q5, id })),
+      offer: false,
+    };
+    expect(feedbackPrompt(missed)).toBe(DEBRIEF_SET1_MISSED_COPY);
+    expect(feedbackNextLabel(missed)).toBe('Answer four more questions');
+    // A short second set offers what it holds.
+    expect(feedbackNextLabel({ ...missed, nextQuestions: [q5] })).toBe(
+      'Answer one more question',
+    );
+  });
+
+  it('prompts for nothing mid-set, on the offer, or once finished', () => {
+    const base = {
+      finished: null,
+      setResult: null,
+      nextQuestions: [],
+      offer: false,
+    };
+    expect(feedbackPrompt(base)).toBe('');
     expect(
-      feedbackNextLabel({
-        finished: null,
+      feedbackPrompt({ ...base, setResult: set1(true), offer: true }),
+    ).toBe('');
+    expect(
+      feedbackPrompt({
+        ...base,
         setResult: set1(false),
-        nextQuestions: [q5],
-        offer: false,
+        finished: 'sets-missed',
       }),
-    ).toBe(DEBRIEF_SET1_MISSED_COPY);
+    ).toBe('');
   });
 
   it('a passed set with the improve offer continues to the offer', () => {

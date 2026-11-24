@@ -12,7 +12,7 @@ import {
 } from '#/data-hooks/use-debrief-status';
 import { revisitNotesOf } from '#/lib/client-debrief-attempt';
 import type { OutstandingItem } from '#/lib/course-progress-agg';
-import { DEBRIEF_SET1_MISSED_COPY } from '#/lib/debrief-copy';
+import { DEBRIEF_SET1_MISSED_COPY, secondSetLabel } from '#/lib/debrief-copy';
 import { setAverage } from '#/lib/debrief-sets';
 import type { LessonScore } from '#/lib/lesson-score';
 
@@ -277,8 +277,8 @@ export function questionPosition(q: {
 
 /**
  * What the feedback's one button says, from what the answer did: the result
- * once the attempt is over, the offer of set 2 after a passing set 1, the
- * other teaching points after a missed set 1.
+ * once the attempt is over, the offer of set 2 after a passing set 1, set 2
+ * itself after a missed set 1 (under `feedbackPrompt`).
  */
 export function feedbackNextLabel(
   result: Pick<
@@ -289,9 +289,24 @@ export function feedbackNextLabel(
   if (result.finished !== null) return 'See your result';
   if (result.offer) return 'Continue';
   if (result.setResult && result.nextQuestions.length > 0) {
-    return DEBRIEF_SET1_MISSED_COPY;
+    return secondSetLabel(result.nextQuestions.length);
   }
   return 'Next question';
+}
+
+/** What introduces set 2 after a missed set 1; '' after any other answer. */
+export function feedbackPrompt(
+  result: Pick<
+    DebriefAnswerResult,
+    'finished' | 'setResult' | 'nextQuestions' | 'offer'
+  >,
+): string {
+  return result.finished === null &&
+    !result.offer &&
+    result.setResult !== null &&
+    result.nextQuestions.length > 0
+    ? DEBRIEF_SET1_MISSED_COPY
+    : '';
 }
 
 /**

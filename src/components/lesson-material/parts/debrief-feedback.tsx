@@ -25,6 +25,8 @@ type DebriefFeedbackProps = {
   setResult: DebriefScoredSet | null;
   /** The pilot has a quiz result for this lesson (`DebriefScoreBreakdown`). */
   quizTaken: boolean;
+  /** Introduces set 2 after a missed set 1 (`feedbackPrompt`); '' otherwise. */
+  prompt: string;
   /** The next step's label (`feedbackNextLabel`). */
   nextLabel: string;
   onNext: () => void;
@@ -55,6 +57,7 @@ export const DebriefFeedback = ({
   feedback,
   setResult,
   quizTaken,
+  prompt,
   nextLabel,
   onNext,
   headingLevel,
@@ -102,7 +105,8 @@ export const DebriefFeedback = ({
         {feedback}
       </p>
 
-      <details className="group text-sm">
+      {/* Open: the feedback is read against what the pilot wrote. */}
+      <details open className="group text-sm">
         <summary className="cursor-pointer text-secondary hover:text-primary">
           Question and your answer
         </summary>
@@ -129,6 +133,10 @@ export const DebriefFeedback = ({
             quizTaken={quizTaken}
           />
         </div>
+      )}
+
+      {prompt && (
+        <p className="max-w-prose text-sm font-medium text-primary">{prompt}</p>
       )}
 
       <div>

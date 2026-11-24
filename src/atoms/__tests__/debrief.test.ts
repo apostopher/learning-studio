@@ -96,6 +96,7 @@ describe('startDebriefAttemptAtom (Start, Retake now)', () => {
       score: 0,
       feedback: '',
       setResult: null,
+      prompt: '',
       nextLabel: '',
       report: missed,
     });

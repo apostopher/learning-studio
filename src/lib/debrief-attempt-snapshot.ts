@@ -44,7 +44,7 @@ export const StoredAttemptSchema = z.object({
   /**
    * Each completed set's verdict, frozen when the set completed (index 0 =
    * set 1). The offer and the sets reached read these, never a re-judge on
-   * today's video and quiz facts: a quiz retaken mid-attempt must not take
+   * today's quiz facts: a quiz retaken mid-attempt must not take
    * away an offer already made, nor shut a set 2 already opened. Absent on
    * attempts from before (2026-11-20): their sets are judged live.
    */

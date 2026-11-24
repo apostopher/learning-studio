@@ -30,6 +30,8 @@ export type DebriefFeedbackShown = {
   feedback: string;
   /** The set this answer completed, with the lesson total it was judged on. */
   setResult: DebriefScoredSet | null;
+  /** `feedbackPrompt`: introduces set 2 after a missed set 1, else ''. */
+  prompt: string;
   /** `feedbackNextLabel`. */
   nextLabel: string;
   report: FinishedDebrief | null;

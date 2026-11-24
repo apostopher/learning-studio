@@ -82,7 +82,7 @@ describe('DebriefIntro', () => {
   });
 
   const HOW =
-    'Viper gives you feedback after each answer. Each set is scored together with your video and quiz, and reaching the course pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
+    'Viper gives you feedback after each answer. A set’s score is its average plus 5 points for each quiz question you got right, and reaching the lesson’s pass mark completes the debrief. If not, you get a second set on other key points, when the lesson has more. Your answer saves as you type, so you can come back and finish later.';
 
   it('says how the debrief works before the pilot starts: feedback after each answer, and that the lesson total against the pass mark decides it', () => {
     render(

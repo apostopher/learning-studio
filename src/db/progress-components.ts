@@ -117,9 +117,8 @@ export const chunksTotalSql = (lessonId: LessonIdRef) =>
   )`;
 
 /**
- * The lesson's authored quiz has at least one question. Shared by the progress
- * rollup (the ring) and `getScoreFacts` (the debrief judge), so the two agree
- * on whether a lesson has a quiz.
+ * The lesson's authored quiz has at least one question. `selectAuthoredQuiz`
+ * (the debrief judge) reads the same rows.
  */
 export const hasQuizSql = (lessonSlug: LessonSlugRef) =>
   sql<boolean>`exists (

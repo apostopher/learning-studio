@@ -230,8 +230,9 @@ beforeEach(() => {
   // No video, no quiz, pass mark 75: the debrief is the whole score, so a set
   // passes at an average of 75 (the cases below that predate the lesson
   // total). The lesson-total cases set their own facts.
-  m.getScoreFacts.mockResolvedValue({ video: null, quiz: null });
-  m.getCoursePassMark.mockResolvedValue(75);
+  m.getScoreFacts.mockResolvedValue({ quiz: null });
+  // No quiz lowers the mark by 25: a set is judged against 75.
+  m.getCoursePassMark.mockResolvedValue(100);
 });
 
 describe('startOrResumeAttempt', () => {
@@ -837,8 +838,8 @@ describe('answerQuestion', () => {
 });
 
 /**
- * Judged on the lesson total: video and quiz full, pass mark 85, so the
- * debrief's quarter must bring 35 — a set passes at an average of 40.
+ * Judged on the lesson total: a full quiz (25 points) and a pass mark of 65,
+ * so a set passes at an average of 40.
  */
 describe('sets judged on the lesson total against the course pass mark', () => {
   const eightChunks = Array.from({ length: 8 }, (_, i) => ({
@@ -870,15 +871,15 @@ describe('sets judged on the lesson total against the course pass mark', () => {
   }));
 
   beforeEach(() => {
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
-    m.getCoursePassMark.mockResolvedValue(85);
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 5, total: 5 } });
+    m.getCoursePassMark.mockResolvedValue(65);
   });
 
   it('reads the facts for this pilot and lesson, and the pass mark of the route’s course', async () => {
     m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
     m.evaluateFreeText.mockResolvedValue(scored(4, 50));
     await answer('q4');
-    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
     expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
   });
 
@@ -901,8 +902,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       nextQuestions: [],
       setResult: { set: 1, average: 50, passed: true },
     });
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
-    expect(r.ok && r.setResult?.score.passMark).toBe(85);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(75);
+    expect(r.ok && r.setResult?.score.passMark).toBe(65);
     expect(m.waitUntil).not.toHaveBeenCalled();
   });
 
@@ -976,12 +977,12 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     expect(m.insertPass).toHaveBeenCalledOnce();
   });
 
-  it('a quiz not taken (quiz 0) and 60 on the debrief totals 65: not passed', async () => {
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+  it('a quiz not taken (quiz 0) and 60 on the debrief totals 60: not passed', async () => {
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
     m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 60) });
     m.evaluateFreeText.mockResolvedValue(scored(4, 60));
     const r = await answer('q4');
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(65);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(60);
     expect(r).toMatchObject({
       setResult: { set: 1, average: 60, passed: false },
       passedNow: false,
@@ -992,13 +993,69 @@ describe('sets judged on the lesson total against the course pass mark', () => {
 
   it('the judge counts the debrief even when the lesson’s debrief switch is off', async () => {
     // getScoreFacts carries no debrief switch: the judge always adds the part.
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: null });
-    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 69) });
-    m.evaluateFreeText.mockResolvedValue(scored(4, 69));
+    m.getScoreFacts.mockResolvedValue({ quiz: null });
+    m.getCoursePassMark.mockResolvedValue(85);
+    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 59) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 59));
     const r = await answer('q4');
-    // 50 + 50 × 0.69 = 84.5 < 85.
+    // No quiz lowers the course's 85 to 60: 59 < 60.
     expect(r).toMatchObject({ finished: 'sets-missed' });
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(84.5);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(59);
+    expect(r.ok && r.setResult?.score.passMark).toBe(60);
+  });
+
+  it('a lesson with no quiz passes at 60 in a course marked 85', async () => {
+    m.getScoreFacts.mockResolvedValue({ quiz: null });
+    m.getCoursePassMark.mockResolvedValue(85);
+    m.row = attemptRow({ questions: fourStored, answers: all(1, 3, 60) });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 60));
+    expect(await answer('q4')).toMatchObject({
+      finished: 'set-passed',
+      setResult: { passed: true, score: { total: 60, passMark: 60 } },
+    });
+    expect(m.insertPass).toHaveBeenCalledOnce();
+  });
+
+  it('doc example, set 1: 51.5 + 4 right answers = 71.5 misses at 85 and opens set 2', async () => {
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 4, total: 5 } });
+    m.getCoursePassMark.mockResolvedValue(85);
+    m.row = attemptRow({
+      questions: eightStored,
+      answers: [scored(1, 64), scored(2, 55), scored(3, 45)],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(4, 42));
+    const r = await answer('q4');
+    expect(r).toMatchObject({
+      offer: false,
+      finished: null,
+      nextQuestions: set2,
+      setResult: { average: 51.5, passed: false, score: { total: 71.5 } },
+    });
+    expect(m.insertPass).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['corrected to 5 of 5 = 85.5, a pass', 5, 85.5, 'set-passed'],
+    ['left at 4 of 5 = 80.5, a miss', 4, 80.5, 'sets-missed'],
+  ])('doc example, set 2: 60.5 with the quiz %s', async (_w, correct, total, finished) => {
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct, total: 5 } });
+    m.getCoursePassMark.mockResolvedValue(85);
+    m.row = attemptRow({
+      questions: { ...eightStored, setVerdicts: [false] },
+      answers: [
+        ...[64, 55, 45, 42].map((n, i) => scored(i + 1, n)),
+        ...[64, 83, 40].map((n, i) => scored(i + 5, n)),
+      ],
+    });
+    m.evaluateFreeText.mockResolvedValue(scored(8, 55));
+    const r = await answer('q8');
+    expect(r).toMatchObject({
+      finished,
+      setResult: { set: 2, average: 60.5, score: { total } },
+    });
+    expect(m.insertPass).toHaveBeenCalledTimes(
+      finished === 'set-passed' ? 1 : 0,
+    );
   });
 
   it('a replay of the passing answer reports the offer again, with no second pass', async () => {
@@ -1011,7 +1068,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       finished: null,
       setResult: { set: 1, average: 50, passed: true },
     });
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(75);
     expect(m.insertPass).not.toHaveBeenCalled();
     expect(m.evaluateFreeText).not.toHaveBeenCalled();
   });
@@ -1060,7 +1117,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       finished: 'set-passed',
       setResult: { set: 2, average: 90, passed: true },
     });
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(97.5);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(115);
     expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
       completedAt: expect.any(Date),
       finishedReason: 'set-passed',
@@ -1080,7 +1137,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       finished: 'set-passed',
       setResult: { set: 2, average: 10, passed: true },
     });
-    expect(r.ok && r.setResult?.score.total).toBeCloseTo(87.5);
+    expect(r.ok && r.setResult?.score.total).toBeCloseTo(75);
     expect(m.updateAttempt.mock.calls[0][2].totalScore).toBe(50);
     expect(m.waitUntil).not.toHaveBeenCalled();
   });
@@ -1090,8 +1147,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       questions: { ...eightStored, improveAccepted: true },
       answers: [...all(1, 4, 50), ...all(5, 7, 30)],
     });
-    // A worse quiz retake since set 1 passed: 50 + 0 + 25 × 0.5 = 62.5 < 85.
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+    // A worse quiz retake since set 1 passed: 50 + 0 = 50 < 65.
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
     m.evaluateFreeText.mockResolvedValue(scored(8, 30));
     const r = await answer('q8');
     expect(m.updateAttempt.mock.calls[0][2]).toMatchObject({
@@ -1132,7 +1189,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       finishedReason: 'set-passed',
       totalScore: 50,
     });
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
     expect(await answer('q8')).toMatchObject({ finished: 'set-passed' });
   });
 
@@ -1149,7 +1206,6 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         userId: 'u1',
         attemptId: 5,
         choice,
-        lessonId: 41,
         courseId: 7,
       });
 
@@ -1168,8 +1224,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         setVerdicts: [true],
       });
 
-      // A worse quiz retake: 50 + 0 + 25 × 0.5 = 62.5 < 85 on today's facts.
-      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      // A worse quiz retake: 50 + 0 = 50 < 65 on today's facts.
+      m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
       const r = await resume();
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(true);
@@ -1192,8 +1248,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     });
 
     it('set 1 misses, then the facts rise: set 2 stays reachable and answerable', async () => {
-      // Quiz 0: 50 + 0 + 25 × 0.4 = 60 < 85.
-      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      // Quiz 0: 40 + 0 = 40 < 65.
+      m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
       m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 40) });
       m.evaluateFreeText.mockResolvedValue(scored(4, 40));
       expect(await answer('q4')).toMatchObject({
@@ -1206,8 +1262,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         setVerdicts: [false],
       });
 
-      // A better quiz retake: 50 + 25 + 10 = 85 would pass set 1 today.
-      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
+      // A better quiz retake: 40 + 25 = 65 would pass set 1 today.
+      m.getScoreFacts.mockResolvedValue({ quiz: { correct: 5, total: 5 } });
       const r = await resume();
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(false);
@@ -1226,7 +1282,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     });
 
     it('an attempt stored without verdicts (older rows) is judged on today’s facts', async () => {
-      m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0 });
+      m.getScoreFacts.mockResolvedValue({ quiz: { correct: 0, total: 5 } });
       m.row = attemptRow({ questions: eightStored, answers: all(1, 4, 50) });
       const r = await resume();
       if (!r.ok) throw new Error('expected ok');
@@ -1262,7 +1318,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         attemptRow({ questions: eightStored, answers: all(1, 4, 50) }),
       );
       const r = await start();
-      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
       expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(true);
@@ -1276,7 +1332,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       expect(r.attempt.setResults).toMatchObject([
         { set: 1, average: 50, passed: true },
       ]);
-      expect(r.attempt.setResults[0]?.score.total).toBeCloseTo(87.5);
+      expect(r.attempt.setResults[0]?.score.total).toBeCloseTo(75);
     });
 
     it('after taking the offer up: set 2 is shown, no offer', async () => {
@@ -1303,8 +1359,8 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       const r = await start();
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.setResults.map((x) => x.score.total)).toEqual([
-        expect.closeTo(87.5),
-        expect.closeTo(87.5),
+        expect.closeTo(75),
+        expect.closeTo(75),
       ]);
     });
   });
@@ -1315,7 +1371,6 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         userId: 'u1',
         attemptId: 5,
         choice,
-        lessonId: 41,
         courseId: 7,
         ...over,
       });
@@ -1332,7 +1387,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       });
       expect(r).toEqual({ ok: true, choice: 'yes', questions: set2 });
       expect(JSON.stringify(r)).not.toContain('SECRET');
-      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
       expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
     });
 
@@ -1476,7 +1531,6 @@ describe('recheckDebriefPass', () => {
     recheckDebriefPass({
       userId: 'u1',
       lessonSlug: 'l1',
-      lessonId: 41,
       courseId: 7,
     });
   /** A finished attempt whose set 1 (q1-q4) averaged `avg`. */
@@ -1491,14 +1545,14 @@ describe('recheckDebriefPass', () => {
   beforeEach(() => {
     m.selectHasPass.mockResolvedValue(false);
     m.insertPass.mockResolvedValue(true);
-    m.getCoursePassMark.mockResolvedValue(85);
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 1 });
+    m.getCoursePassMark.mockResolvedValue(65);
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 5, total: 5 } });
     m.selectChunkAttempts.mockResolvedValue([withSet1(50)]);
   });
 
-  it('records the pass when the best set plus video and quiz reaches the pass mark', async () => {
+  it('records the pass when the best set plus the quiz reaches the pass mark', async () => {
     expect(await recheck()).toBe(true);
-    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
     expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
     expect(m.insertPass).toHaveBeenCalledWith(expect.anything(), {
       userId: 'u1',
@@ -1506,14 +1560,14 @@ describe('recheckDebriefPass', () => {
     });
   });
 
-  it('does not record it when the total falls short (quiz 0.6 -> 77.5)', async () => {
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0.6 });
+  it('does not record it when the total falls short (50 + 2 right answers = 60)', async () => {
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 2, total: 5 } });
     expect(await recheck()).toBe(false);
     expect(m.insertPass).not.toHaveBeenCalled();
   });
 
   it('judges the best completed set over every attempt, open ones included', async () => {
-    m.getScoreFacts.mockResolvedValue({ video: 1, quiz: 0.6 });
+    m.getScoreFacts.mockResolvedValue({ quiz: { correct: 2, total: 5 } });
     m.selectChunkAttempts.mockResolvedValue([
       withSet1(50),
       withSet1(100, { completedAt: null }),
@@ -1521,7 +1575,7 @@ describe('recheckDebriefPass', () => {
     expect(await recheck()).toBe(true);
   });
 
-  it('records nothing without a completed set, even with video and quiz at 1', async () => {
+  it('records nothing without a completed set, even with a full quiz', async () => {
     m.selectChunkAttempts.mockResolvedValue([
       attemptRow({
         questions: setStored,

@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { lessonTotalScore } from '#/lib/lesson-score';
+import { setScore } from '#/lib/lesson-score';
 import { DebriefFeedback, setResultCopy } from '../debrief-feedback';
 
 // motion's useReducedMotion needs one React: the CJS shim, as in
@@ -25,6 +25,7 @@ function setup(props: Partial<Parameters<typeof DebriefFeedback>[0]> = {}) {
       feedback="You tied the brief to shared expectations; add who calls it."
       setResult={null}
       quizTaken={true}
+      prompt=""
       nextLabel="Next question"
       onNext={onNext}
       headingLevel={2}
@@ -52,6 +53,8 @@ describe('DebriefFeedback', () => {
     setup();
     expect(screen.getByText('Why brief the go-around?')).toBeDefined();
     expect(screen.getByText('So nobody improvises')).toBeDefined();
+    // Shown without a press, not folded away.
+    expect(document.querySelector('details')?.open).toBe(true);
   });
 
   it('moves on only when the pilot presses its one button, labelled as given', async () => {
@@ -59,6 +62,13 @@ describe('DebriefFeedback', () => {
     expect(onNext).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Start set 2' }));
     expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it('shows the prompt that introduces set 2 when given one', () => {
+    setup({ prompt: "Let's try some of the other teaching points" });
+    expect(
+      screen.getByText("Let's try some of the other teaching points"),
+    ).toBeDefined();
   });
 
   it('hands the heading to the ref it is given, focusable so the feedback is read first', () => {
@@ -84,7 +94,7 @@ describe('DebriefFeedback', () => {
         set: 1,
         average: 68,
         passed: false,
-        score: lessonTotalScore({ video: 1, quiz: 0, debrief: 0.68 }, 85),
+        score: setScore({ quiz: { correct: 0, total: 5 } }, 85, 68),
       },
       quizTaken: false,
     });
@@ -92,7 +102,7 @@ describe('DebriefFeedback', () => {
       screen.getByText('Set 1 average: 68. That is short of the pass mark.'),
     ).toBeDefined();
     expect(
-      screen.getByText('Video 50 + Quiz 0 + Debrief 17 = 67 · pass mark 85'),
+      screen.getByText('Quiz 0 + Debrief 68 = 68 · pass mark 85'),
     ).toBeDefined();
     expect(
       screen.getByText('Quiz not taken yet — taking it adds up to 25 points.'),
