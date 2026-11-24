@@ -1,4 +1,5 @@
 import { Tabs } from '@base-ui/react/tabs';
+import { useEffect } from 'react';
 import { ScrollArea } from '#/components/scroll-area';
 import type { LessonMaterial } from '#/db/lesson';
 import { useActiveTab } from '#/hooks/data/use-lesson-ai-test';
@@ -7,6 +8,7 @@ import {
   computeMaterialTabs,
   type DebriefTabFacts,
   defaultMaterialTab,
+  pinnedDefaultTab,
   resolveActiveTab,
 } from './compute-material-tabs';
 import { Assignments } from './parts/assignments';
@@ -69,6 +71,12 @@ export const LessonMaterialView = ({
     material.lessonSlug,
     defaultMaterialTab(tabs, debriefFacts, new Date()),
   );
+  // A Debrief tab opened by default stays open when the debrief's own
+  // answers change the default (`pinnedDefaultTab`).
+  const pin = pinnedDefaultTab(activeTab, material.lessonSlug, selected);
+  useEffect(() => {
+    if (pin) setActiveTab(pin);
+  }, [pin, setActiveTab]);
 
   return (
     <Tabs.Root

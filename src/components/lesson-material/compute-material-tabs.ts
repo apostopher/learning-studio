@@ -101,6 +101,28 @@ export function defaultMaterialTab(
 }
 
 /**
+ * What to record as the pilot's selection when the lesson opened on the
+ * Debrief tab by default, or null to record nothing.
+ *
+ * The default is recomputed from the course progress summary, and a debrief
+ * answer re-reads that summary. The answer that passes the debrief therefore
+ * flips the default to Key Points, so a Debrief tab nobody pressed was
+ * unmounted with Viper's feedback still on it (David Cooke, 2026-11-20).
+ * Recording it as chosen keeps it put for the rest of the visit.
+ *
+ * Only Debrief is pinned: Key Points is also the default while the summary
+ * is loading, and pinning it then would stop a waiting debrief from opening.
+ */
+export function pinnedDefaultTab(
+  chosen: ChosenTab | null,
+  lessonSlug: string,
+  selected: MaterialTabValue,
+): ChosenTab | null {
+  if (chosen?.lessonSlug === lessonSlug) return null;
+  return selected === 'debrief' ? { lessonSlug, tab: 'debrief' } : null;
+}
+
+/**
  * The tab to actually show.
  *
  * A selection belongs to the lesson it was made on: arriving at another

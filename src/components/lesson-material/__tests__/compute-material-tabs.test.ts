@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeMaterialTabs,
   defaultMaterialTab,
+  pinnedDefaultTab,
   resolveActiveTab,
 } from '../compute-material-tabs';
 
@@ -298,5 +299,40 @@ describe('computeMaterialTabs — Debrief tab source (call 11)', () => {
         readOnly: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe('pinnedDefaultTab', () => {
+  const tabs = computeMaterialTabs({
+    hasQuiz: true,
+    debrief: debriefOn(true),
+    extraTab: 'jobOfTheDay',
+    courseSlug: '3d-airmanship',
+  });
+
+  it('keeps a Debrief tab opened by default on screen when passing flips the default to Key Points', () => {
+    // Arrival: nothing chosen, the debrief is due, so Debrief is the default.
+    const arrived = resolveActiveTab(tabs, null, 'l1', 'debrief');
+    const chosen = pinnedDefaultTab(null, 'l1', arrived);
+    // The answer that passes the debrief re-reads progress: default flips.
+    expect(resolveActiveTab(tabs, chosen, 'l1', 'keyPoints')).toBe('debrief');
+  });
+
+  it('never pins Key Points, so a debrief that turns out to be due still opens', () => {
+    // Key Points is the default while the progress summary loads.
+    const chosen = pinnedDefaultTab(null, 'l1', 'keyPoints');
+    expect(resolveActiveTab(tabs, chosen, 'l1', 'debrief')).toBe('debrief');
+  });
+
+  it('leaves a selection the pilot made on this lesson alone', () => {
+    expect(
+      pinnedDefaultTab({ lessonSlug: 'l1', tab: 'proTips' }, 'l1', 'proTips'),
+    ).toBeNull();
+  });
+
+  it("pins on a new lesson even with the last lesson's tab remembered", () => {
+    expect(
+      pinnedDefaultTab({ lessonSlug: 'l0', tab: 'links' }, 'l1', 'debrief'),
+    ).toEqual({ lessonSlug: 'l1', tab: 'debrief' });
   });
 });
