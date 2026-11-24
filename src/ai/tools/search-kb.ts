@@ -2,9 +2,13 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { getGatedCourseForAgent } from '#/db/course-content';
 import { getAllHelpTopics } from '#/db/help-topics';
-import { type KBResult, searchKB } from '#/db/knowledge-base';
+import {
+  type KBResult,
+  newestVersionIdForSlug,
+  searchKB,
+} from '#/db/knowledge-base';
 import { resolveKBCourseId } from '#/db/knowledge-base-scope';
-import { allowedLessonSlugs, courseOutline } from '#/lib/course-content';
+import { allowedLessonVersionIds, courseOutline } from '#/lib/course-content';
 
 // The query only. How many results and how relevant they must be are fixed in
 // `searchKB`, not offered to the model: as tool parameters it could ask for
@@ -77,7 +81,7 @@ export function makeSearchKBTool(opts: {
       // most of every long chat's input.
       const kbResults = await searchKB(query, {
         courseId,
-        lessonSlugs: gated ? allowedLessonSlugs(gated) : [],
+        lessonVersionIds: gated ? allowedLessonVersionIds(gated) : [],
       });
       return buildKBContext({
         kbResults,
@@ -89,8 +93,8 @@ export function makeSearchKBTool(opts: {
 }
 
 /**
- * Admin preview: Viper scoped to one lesson plus the shared (org-wide)
- * documents, with no learner, course or gating involved.
+ * Admin preview: Viper scoped to one lesson (its newest snapshot) plus the
+ * shared (org-wide) documents, with no learner, course or gating involved.
  *
  * Admin-only: it bypasses lesson gating, so only a caller that has already
  * passed `requireAdmin` (POST /api/admin/viper/preview) may build it.
@@ -107,8 +111,15 @@ export function makePreviewSearchKBTool(opts: {
         return QUERY_TOO_SHORT;
       }
       announceThinking(opts.writer);
+      const search = async () => {
+        const versionId = await newestVersionIdForSlug(opts.lessonSlug);
+        return searchKB(query, {
+          courseId: null,
+          lessonVersionIds: versionId === null ? [] : [versionId],
+        });
+      };
       const [kbResults, helpTopics] = await Promise.all([
-        searchKB(query, { courseId: null, lessonSlugs: [opts.lessonSlug] }),
+        search(),
         getAllHelpTopics(),
       ]);
       return buildKBContext({ kbResults, outline: '', helpTopics });

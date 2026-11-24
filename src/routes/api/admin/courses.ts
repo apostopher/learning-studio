@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { waitUntil } from '@vercel/functions';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { createCourse, listAdminCourses } from '#/db/admin';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { createCourseInputSchema } from '#/lib/admin-schemas';
+import { indexLessonVersions } from '#/lib/index-lesson-versions.server';
 import {
   getStaffScopedCourseIds,
   requireCourseCreation,
@@ -82,10 +84,11 @@ export async function createCourseHandler(request: Request): Promise<Response> {
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { createdVersionIds: _, ...course } = await createCourse(
+  const { createdVersionIds, ...course } = await createCourse(
     parsed.data,
     getActiveOrgId(),
   );
+  waitUntil(indexLessonVersions(createdVersionIds));
   return Response.json(course);
 }
 

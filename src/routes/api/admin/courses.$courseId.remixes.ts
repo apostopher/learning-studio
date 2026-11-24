@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { waitUntil } from '@vercel/functions';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
 import { remixCourse } from '#/db/course-remixes';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { remixCourseInputSchema } from '#/lib/admin-schemas';
+import { indexLessonVersions } from '#/lib/index-lesson-versions.server';
 import {
   type CourseActor,
   requireCoursePermission,
@@ -82,6 +84,7 @@ export async function postRemixHandler(
     actorId: actor.userId,
   });
   if (result.ok) {
+    waitUntil(indexLessonVersions(result.createdVersionIds));
     return Response.json({ moduleCount: result.moduleCount }, { status: 201 });
   }
   if (result.reason === 'already-remixed') {

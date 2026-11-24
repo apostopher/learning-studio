@@ -42,7 +42,7 @@ beforeEach(() => {
 
 describe('searchKB', () => {
   it('reads org-wide docs only when no course is resolved', async () => {
-    await searchKB('q', { courseId: null, lessonSlugs: [] });
+    await searchKB('q', { courseId: null, lessonVersionIds: [] });
     const { sql, params } = rendered();
     expect(sql).toContain('"docs"."course_id" is null');
     expect(sql).not.toMatch(/"docs"\."course_id" = /);
@@ -50,7 +50,7 @@ describe('searchKB', () => {
   });
 
   it("reads one course's docs plus org-wide ones — never every course's", async () => {
-    await searchKB('q', { courseId: 2, lessonSlugs: [] });
+    await searchKB('q', { courseId: 2, lessonVersionIds: [] });
     const { sql, params } = rendered();
     expect(sql).toMatch(
       /\("docs"\."course_id" = \$\d+ or "docs"\."course_id" is null\)/,
@@ -59,7 +59,7 @@ describe('searchKB', () => {
   });
 
   it('applies the fixed relevance floor and result cap', async () => {
-    await searchKB('q', { courseId: null, lessonSlugs: [] });
+    await searchKB('q', { courseId: null, lessonVersionIds: [] });
     const { sql, params } = rendered();
     expect(sql).toMatch(/> \$\d+/);
     expect(params).toContain(KB_MIN_SIMILARITY);
@@ -67,16 +67,18 @@ describe('searchKB', () => {
   });
 
   it('never returns lesson chunks from an org-wide search', async () => {
-    await searchKB('q', { courseId: null, lessonSlugs: [] });
+    await searchKB('q', { courseId: null, lessonVersionIds: [] });
     expect(rendered().sql).toContain('"docs"."lesson_slug" is null');
   });
 
-  it('adds exactly the allowed lessons', async () => {
-    await searchKB('q', { courseId: 2, lessonSlugs: ['wx-1', 'wx-2'] });
+  it('uploaded-document filter still requires lesson_slug is null', async () => {
+    await searchKB('q', { courseId: 2, lessonVersionIds: [101, 102] });
     const { sql, params } = rendered();
-    expect(sql).toMatch(/"docs"\."lesson_slug" in \(\$\d+, \$\d+\)/);
-    expect(params).toEqual(expect.arrayContaining(['wx-1', 'wx-2']));
-    expect(sql).toContain('"docs"."lesson_slug" is null'); // docs half still excludes lessons
+    // The whole scope: uploads, or exactly the allowed snapshots.
+    expect(sql).toMatch(
+      /\("docs"\."lesson_slug" is null and \("docs"\."course_id" = \$\d+ or "docs"\."course_id" is null\)\) or "docs"\."lesson_version_id" in \(\$\d+, \$\d+\)/,
+    );
+    expect(params).toEqual(expect.arrayContaining([101, 102]));
   });
 
   it('keeps the floor between measured off-topic and on-topic scores', () => {

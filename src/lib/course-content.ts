@@ -15,9 +15,12 @@ export type GatedCourse = {
   modules: { name: string; lessons: GatedLesson[] }[];
 };
 
-/** Lessons the learner may read — the only lesson chunks searchKB may return. */
-export function allowedLessonSlugs(course: GatedCourse): string[] {
-  return course.modules.flatMap((m) => m.lessons.map((l) => l.slug));
+/**
+ * The course's snapshots of the lessons the learner may read — the only lesson
+ * chunks searchKB may return.
+ */
+export function allowedLessonVersionIds(course: GatedCourse): number[] {
+  return course.modules.flatMap((m) => m.lessons.map((l) => l.versionId));
 }
 
 /**

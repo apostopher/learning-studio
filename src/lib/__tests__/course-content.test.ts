@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowedLessonSlugs,
+  allowedLessonVersionIds,
   courseContentToHtml,
   courseOutline,
 } from '#/lib/course-content';
@@ -48,12 +48,18 @@ const gatedCourse = {
       lessons: [
         {
           slug: 'wx-1',
-          versionId: 1,
+          versionId: 101,
           name: 'METARs',
           text: 'x',
           proTips: null,
         },
-        { slug: 'wx-2', versionId: 2, name: 'TAFs', text: 'y', proTips: null },
+        {
+          slug: 'wx-2',
+          versionId: 102,
+          name: 'TAFs',
+          text: 'y',
+          proTips: null,
+        },
       ],
     },
     { name: 'Empty', lessons: [] },
@@ -61,8 +67,8 @@ const gatedCourse = {
 };
 
 describe('course outline helpers', () => {
-  it('lists allowed slugs', () => {
-    expect(allowedLessonSlugs(gatedCourse)).toEqual(['wx-1', 'wx-2']);
+  it('lists the snapshots of the allowed lessons', () => {
+    expect(allowedLessonVersionIds(gatedCourse)).toEqual([101, 102]);
   });
   it('outlines modules and lesson names without material', () => {
     const out = courseOutline(gatedCourse);

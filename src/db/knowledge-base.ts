@@ -12,7 +12,8 @@ import {
 } from 'drizzle-orm';
 import { embeddingModel } from '#/ai/gemini';
 import { db } from '#/db';
-import { docs } from '#/db/schema';
+import { docs, lessonsTable, lessonVersionsTable } from '#/db/schema';
+import { compareVersions } from '#/lib/lesson-version';
 
 export type KBResult = {
   chunk: string;
@@ -48,13 +49,17 @@ export const KB_MIN_SIMILARITY = 0.56;
  * the chat tool did, since it never passed one. Resolve it with
  * `resolveKBCourseId`, which checks the caller may read that course.
  *
- * `lessonSlugs` are the lessons whose chunks may be returned. They MUST come
- * from the gate (`allowedLessonSlugs(getGatedCourseForAgent(...))`); never pass
- * slugs from anywhere else. Empty means no lesson chunks at all.
+ * `lessonVersionIds` are the snapshots whose chunks may be returned. For a
+ * learner they MUST come from the gate
+ * (`allowedLessonVersionIds(getGatedCourseForAgent(...))`), which names the
+ * versions their course is pinned to. Empty means no lesson chunks at all.
  */
 export async function searchKB(
   query: string,
-  { courseId, lessonSlugs }: { courseId: number | null; lessonSlugs: string[] },
+  {
+    courseId,
+    lessonVersionIds,
+  }: { courseId: number | null; lessonVersionIds: number[] },
 ): Promise<KBResult[]> {
   const { embedding } = await embed({ model: embeddingModel, value: query });
   const similarity = sql<number>`1 - (${cosineDistance(docs.embedding, embedding)})`;
@@ -67,9 +72,10 @@ export async function searchKB(
       ? isNull(docs.courseId)
       : or(eq(docs.courseId, courseId), isNull(docs.courseId)),
   );
-  // Lesson chunks: only lessons the caller's gate allowed. Empty = none.
-  const scope = lessonSlugs.length
-    ? or(documents, inArray(docs.lessonSlug, lessonSlugs))
+  // Lesson chunks: only snapshots the caller's gate allowed. Empty = none. A
+  // lesson row with no snapshot is stale, and neither half matches it.
+  const scope = lessonVersionIds.length
+    ? or(documents, inArray(docs.lessonVersionId, lessonVersionIds))
     : documents;
   return db
     .select({ chunk: docs.chunk, heading: docs.heading, similarity })
@@ -77,4 +83,24 @@ export async function searchKB(
     .where(and(scope, gt(similarity, KB_MIN_SIMILARITY)))
     .orderBy((t) => desc(t.similarity))
     .limit(KB_MAX_RESULTS);
+}
+
+/**
+ * The lesson's newest snapshot, for the admin preview, which has no course to
+ * ask for a pin. Null when no course has ever taken the lesson.
+ */
+export async function newestVersionIdForSlug(
+  lessonSlug: string,
+): Promise<number | null> {
+  const rows = await db
+    .select({
+      id: lessonVersionsTable.id,
+      version: lessonVersionsTable.version,
+    })
+    .from(lessonVersionsTable)
+    .innerJoin(lessonsTable, eq(lessonsTable.id, lessonVersionsTable.lessonId))
+    .where(eq(lessonsTable.slug, lessonSlug));
+  // Stored as text, where '1.9' sorts above '1.10'.
+  rows.sort((a, b) => compareVersions(b.version, a.version));
+  return rows[0]?.id ?? null;
 }

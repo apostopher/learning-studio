@@ -10,6 +10,8 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
+    waitUntil: vi.fn(),
+    indexLessonVersions: vi.fn(),
     requirePermission: vi.fn(),
     requireCourseCreation: vi.fn(),
     getStaffScopedCourseIds: vi.fn(),
@@ -25,6 +27,10 @@ vi.mock('#/lib/permissions.server', () => ({
   requirePermission: m.requirePermission,
   requireCourseCreation: m.requireCourseCreation,
   getStaffScopedCourseIds: m.getStaffScopedCourseIds,
+}));
+vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
+vi.mock('#/lib/index-lesson-versions.server', () => ({
+  indexLessonVersions: m.indexLessonVersions,
 }));
 vi.mock('#/db/admin', () => ({
   listAdminCourses: m.listAdminCourses,

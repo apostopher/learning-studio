@@ -10,6 +10,8 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
+    waitUntil: vi.fn(),
+    indexLessonVersions: vi.fn(),
     requireCoursePermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     copyDisciplineModuleIntoCourse: vi.fn(),
@@ -21,6 +23,10 @@ vi.mock('#/lib/admin-functions.server', () => ({
 vi.mock('#/lib/permissions.server', () => ({
   requireCoursePermission: m.requireCoursePermission,
   absentResourceResponse: m.absentResourceResponse,
+}));
+vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
+vi.mock('#/lib/index-lesson-versions.server', () => ({
+  indexLessonVersions: m.indexLessonVersions,
 }));
 vi.mock('#/db/copy-discipline-module', () => ({
   copyDisciplineModuleIntoCourse: m.copyDisciplineModuleIntoCourse,

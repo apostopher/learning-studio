@@ -10,6 +10,8 @@ const m = vi.hoisted(() => {
   }
   return {
     ForbiddenError,
+    waitUntil: vi.fn(),
+    indexLessonVersions: vi.fn(),
     requireCoursePermission: vi.fn(),
     remixCourse: vi.fn(),
     unremixCourse: vi.fn(),
@@ -24,6 +26,10 @@ vi.mock('#/lib/permissions.server', () => ({
 }));
 vi.mock('#/lib/active-org.server', () => ({
   getActiveOrgId: m.getActiveOrgId,
+}));
+vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
+vi.mock('#/lib/index-lesson-versions.server', () => ({
+  indexLessonVersions: m.indexLessonVersions,
 }));
 vi.mock('#/db/course-remixes', () => ({
   remixCourse: m.remixCourse,
@@ -44,7 +50,11 @@ function post(body: unknown): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   m.requireCoursePermission.mockResolvedValue({ userId: 'u1' });
-  m.remixCourse.mockResolvedValue({ ok: true, moduleCount: 7 });
+  m.remixCourse.mockResolvedValue({
+    ok: true,
+    moduleCount: 7,
+    createdVersionIds: [501],
+  });
   m.unremixCourse.mockResolvedValue({ ok: true, moduleCount: 7 });
 });
 

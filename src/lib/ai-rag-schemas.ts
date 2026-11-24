@@ -3,7 +3,7 @@ import { DocSourceSchema } from '#/lib/doc-source';
 
 const courseId = z.number().int().positive().optional();
 
-// `lesson:<slug>` is the sourcePath of per-lesson chunks (generateLessonEmbeddings).
+// `lesson:<slug>@<version>` is the sourcePath of lesson chunks (generateLessonEmbeddings).
 // A document must never take one, or it could overwrite or delete a lesson's rows.
 const documentSourcePath = z
   .string()

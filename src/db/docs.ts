@@ -7,9 +7,9 @@ function courseFilter(col: Column, courseId: number | null) {
   return courseId === null ? isNull(col) : eq(col, courseId);
 }
 
-// Lesson chunks (lesson_slug set) are managed by the lesson-embedding backfill,
-// not uploaded as admin documents: left in, every lesson would show up in the
-// org-wide list as a `lesson:<slug>` "document" that the delete route 400s on.
+// Lesson chunks (lesson_slug set) are written by generateLessonEmbeddings, not
+// uploaded as admin documents: left in, every snapshot would show up in the
+// org-wide list as a "document" that the delete route 400s on.
 const adminDocFilter = (courseId: number | null) =>
   and(courseFilter(docs.courseId, courseId), isNull(docs.lessonSlug));
 

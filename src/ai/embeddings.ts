@@ -1,10 +1,10 @@
 import { embedMany } from 'ai';
 import { and, eq, isNull } from 'drizzle-orm';
+import { chunkSectionTokens, htmlToSections } from '#/ai/embeddings-helper';
 import { embeddingModel } from '#/ai/gemini';
 import { db } from '#/db';
-import { docs } from '#/db/schema';
+import { docs, lessonsTable, lessonVersionsTable } from '#/db/schema';
 import type { DocSource } from '#/lib/doc-source';
-import { htmlToSections, chunkSectionTokens } from '#/ai/embeddings-helper';
 
 export type GenerateEmbeddingsArgs = {
   courseId: number | null;
@@ -82,7 +82,7 @@ export async function generateHTMLEmbeddings({
 
 /** The lesson fields Viper may quote: the material text and its pro tips. */
 export function lessonMaterialHtml(m: {
-  text: string;
+  text: string | null;
   proTips: string | null;
 }): string {
   return [m.text, m.proTips ? `Pro tips: ${m.proTips}` : '']
@@ -91,22 +91,28 @@ export function lessonMaterialHtml(m: {
 }
 
 /**
- * Re-index one lesson's material as `docs` rows keyed by `lesson_slug`
+ * Index one snapshot of a lesson as `docs` rows keyed by `lesson_version_id`
  * (course_id null — access is per lesson, decided at search time by
- * getGatedCourseForAgent). Always replaces: empty material leaves the lesson
- * with no chunks, never with stale ones.
+ * getGatedCourseForAgent). Replaces that snapshot's rows and no others: empty
+ * material leaves it with none, never with stale ones.
  *
  * The (course_id, source_path, heading, chunk) unique constraint omits
- * lesson_slug; that is safe only because `lesson:${lessonSlug}` makes
- * source_path lesson-unique. Keep it that way.
+ * lesson_version_id; that is safe only because the slug and version make
+ * source_path unique to the snapshot. Keep it that way.
  */
 export async function generateLessonEmbeddings({
+  lessonVersionId,
   lessonSlug,
+  version,
   html,
 }: {
+  lessonVersionId: number;
   lessonSlug: string;
+  version: string;
   html: string;
 }): Promise<{ chunks: number }> {
+  // The name goes into each chunk's text, which learners' browsers receive as
+  // the search tool's output, so it leaves the version out.
   const toEmbed = htmlToSections(html, `lesson:${lessonSlug}`).flatMap(
     chunkSectionTokens,
   );
@@ -115,7 +121,21 @@ export async function generateLessonEmbeddings({
     : [];
 
   await db.transaction(async (tx) => {
-    await tx.delete(docs).where(eq(docs.lessonSlug, lessonSlug));
+    // One indexer of a snapshot at a time, so that each deletes what the one
+    // before it inserted. The lesson's lock comes first because deleting a
+    // lesson takes the two in that order.
+    await tx
+      .select({ id: lessonsTable.id })
+      .from(lessonsTable)
+      .where(eq(lessonsTable.slug, lessonSlug))
+      .for('key share');
+    await tx
+      .select({ id: lessonVersionsTable.id })
+      .from(lessonVersionsTable)
+      .where(eq(lessonVersionsTable.id, lessonVersionId))
+      .for('no key update');
+
+    await tx.delete(docs).where(eq(docs.lessonVersionId, lessonVersionId));
     if (toEmbed.length === 0) return;
     await tx
       .insert(docs)
@@ -123,12 +143,14 @@ export async function generateLessonEmbeddings({
         toEmbed.map((c, i) => ({
           courseId: null,
           lessonSlug,
-          sourcePath: c.name,
+          lessonVersionId,
+          sourcePath: `lesson:${lessonSlug}@${version}`,
           heading: c.heading,
           chunk: c.text,
           embedding: embeddings[i],
         })),
       )
+      // A passage repeated within the lesson is stored once.
       .onConflictDoNothing();
   });
   return { chunks: toEmbed.length };

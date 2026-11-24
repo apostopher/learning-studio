@@ -10,16 +10,21 @@ const {
   getGatedCourseForAgent,
   getAllHelpTopics,
   searchKB,
+  newestVersionIdForSlug,
   resolveKBCourseId,
 } = vi.hoisted(() => ({
   getGatedCourseForAgent: vi.fn(),
   getAllHelpTopics: vi.fn(),
   searchKB: vi.fn(),
+  newestVersionIdForSlug: vi.fn(),
   resolveKBCourseId: vi.fn(),
 }));
 vi.mock('#/db/course-content', () => ({ getGatedCourseForAgent }));
 vi.mock('#/db/help-topics', () => ({ getAllHelpTopics }));
-vi.mock('#/db/knowledge-base', () => ({ searchKB }));
+vi.mock('#/db/knowledge-base', () => ({
+  searchKB,
+  newestVersionIdForSlug,
+}));
 vi.mock('#/db/knowledge-base-scope', () => ({ resolveKBCourseId }));
 
 import {
@@ -68,7 +73,7 @@ describe('makeSearchKBTool', () => {
           lessons: [
             {
               slug: 'wx-1',
-              versionId: 1,
+              versionId: 101,
               name: 'METARs',
               text: 'FULL LESSON TEXT',
               proTips: null,
@@ -137,7 +142,7 @@ describe('makeSearchKBTool', () => {
     });
     expect(searchKB).toHaveBeenCalledWith('pre-flight checks', {
       courseId: 2,
-      lessonSlugs: ['wx-1'],
+      lessonVersionIds: [101],
     });
   });
 
@@ -152,18 +157,18 @@ describe('makeSearchKBTool', () => {
     await kbTool.execute!({ query: 'pre-flight checks' }, toolCallOptions);
     expect(searchKB).toHaveBeenCalledWith('pre-flight checks', {
       courseId: null,
-      lessonSlugs: [],
+      lessonVersionIds: [],
     });
   });
 
-  it('searches only the lessons the gate allows', async () => {
+  it("searchKB receives only the gated course's snapshot ids", async () => {
     resolveKBCourseId.mockResolvedValue(2);
     const kbTool = makeSearchKBTool({ courseSlug: 'uas', userId: 'user-1' });
     // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
     await kbTool.execute!({ query: 'metar' }, toolCallOptions);
     expect(searchKB).toHaveBeenCalledWith('metar', {
       courseId: 2,
-      lessonSlugs: ['wx-1'],
+      lessonVersionIds: [101],
     });
   });
 
@@ -186,7 +191,7 @@ describe('makeSearchKBTool', () => {
     expect(getGatedCourseForAgent).not.toHaveBeenCalled();
     expect(searchKB).toHaveBeenCalledWith('metar', {
       courseId: null,
-      lessonSlugs: [],
+      lessonVersionIds: [],
     });
   });
 
@@ -201,7 +206,7 @@ describe('makeSearchKBTool', () => {
     );
     expect(searchKB).toHaveBeenCalledWith('pre-flight checks', {
       courseId: null,
-      lessonSlugs: [],
+      lessonVersionIds: [],
     });
   });
 });
@@ -211,19 +216,32 @@ describe('makePreviewSearchKBTool', () => {
     vi.clearAllMocks();
     getAllHelpTopics.mockResolvedValue([]);
     searchKB.mockResolvedValue([]);
+    newestVersionIdForSlug.mockResolvedValue(null);
   });
 
-  it('searches only the picked lesson and the shared docs', async () => {
+  it("the preview searches the lesson's newest snapshot and the shared docs", async () => {
+    newestVersionIdForSlug.mockResolvedValue(105);
     const kbTool = makePreviewSearchKBTool({
       lessonSlug: 'crosswind-landings',
     });
     // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
     await kbTool.execute!({ query: 'crosswind limits' }, toolCallOptions);
+    expect(newestVersionIdForSlug).toHaveBeenCalledWith('crosswind-landings');
     expect(searchKB).toHaveBeenCalledWith('crosswind limits', {
       courseId: null,
-      lessonSlugs: ['crosswind-landings'],
+      lessonVersionIds: [105],
     });
     expect(getGatedCourseForAgent).not.toHaveBeenCalled();
+  });
+
+  it('the preview searches no lesson chunks when no course has taken the lesson', async () => {
+    const kbTool = makePreviewSearchKBTool({ lessonSlug: 'draft' });
+    // biome-ignore lint/style/noNonNullAssertion: execute is always defined on a static tool() config
+    await kbTool.execute!({ query: 'crosswind limits' }, toolCallOptions);
+    expect(searchKB).toHaveBeenCalledWith('crosswind limits', {
+      courseId: null,
+      lessonVersionIds: [],
+    });
   });
 
   it('hands the model the chunks with no outline', async () => {
