@@ -111,6 +111,7 @@ beforeEach(() => {
   );
   m.ensureLessonChunks.mockResolvedValue({
     kind: 'ready',
+    lessonVersionId: 5,
     version: 2,
     chunks,
     context: 'ctx',
@@ -125,12 +126,13 @@ describe('preparedFingerprint', () => {
     expect(DEBRIEF_ATTEMPT_FORMAT).toBe('knowledge-chunks-v1');
   });
 
-  it('is sha256 of both formats, the chunk version and the mastery SORTED by chunk id', () => {
-    expect(preparedFingerprint(2, mastery)).toBe(
+  it('is sha256 of both formats, the snapshot, the chunk version and the mastery SORTED by chunk id', () => {
+    expect(preparedFingerprint(5, 2, mastery)).toBe(
       sha256(
         JSON.stringify([
           DEBRIEF_ATTEMPT_FORMAT,
           'key-point-sets-v1',
+          5,
           2,
           [
             ['v2-c1', 90],
@@ -141,11 +143,12 @@ describe('preparedFingerprint', () => {
     );
   });
 
-  it('ignores row order and the cleared flag, but not version or any score', () => {
-    const fp = preparedFingerprint(2, mastery);
-    expect(preparedFingerprint(2, [...mastery].reverse())).toBe(fp);
+  it('ignores row order and the cleared flag, but not the snapshot, version or any score', () => {
+    const fp = preparedFingerprint(5, 2, mastery);
+    expect(preparedFingerprint(5, 2, [...mastery].reverse())).toBe(fp);
     expect(
       preparedFingerprint(
+        5,
         2,
         mastery.map((r) => ({
           chunkId: r.chunkId,
@@ -153,11 +156,15 @@ describe('preparedFingerprint', () => {
         })),
       ),
     ).toBe(fp);
-    expect(preparedFingerprint(3, mastery)).not.toBe(fp);
+    expect(preparedFingerprint(6, 2, mastery)).not.toBe(fp);
+    expect(preparedFingerprint(5, 3, mastery)).not.toBe(fp);
     expect(
-      preparedFingerprint(2, [mastery[0], { ...mastery[1], latestScore: 41 }]),
+      preparedFingerprint(5, 2, [
+        mastery[0],
+        { ...mastery[1], latestScore: 41 },
+      ]),
     ).not.toBe(fp);
-    expect(preparedFingerprint(2, [mastery[0]])).not.toBe(fp);
+    expect(preparedFingerprint(5, 2, [mastery[0]])).not.toBe(fp);
   });
 });
 
@@ -177,14 +184,14 @@ describe('prepareDebrief', () => {
     expect(m.upsertPreparedDebrief).toHaveBeenCalledWith(
       key,
       test,
-      preparedFingerprint(2, mastery),
+      preparedFingerprint(5, 2, mastery),
     );
   });
 
   it('skips the model when a test for the CURRENT version and mastery is stored', async () => {
     m.rows.set(rowKey(key), {
       test,
-      sourceFingerprint: preparedFingerprint(2, mastery),
+      sourceFingerprint: preparedFingerprint(5, 2, mastery),
     });
     expect(await prepareDebrief(k)).toBe('already-prepared');
     expect(m.generateTest).not.toHaveBeenCalled();
@@ -194,7 +201,7 @@ describe('prepareDebrief', () => {
     m.rows.set(rowKey(key), {
       test,
       // Drawn before c2 was answered.
-      sourceFingerprint: preparedFingerprint(2, [mastery[0]]),
+      sourceFingerprint: preparedFingerprint(5, 2, [mastery[0]]),
     });
     expect(await prepareDebrief(k)).toBe('prepared');
     expect(m.generateTest).toHaveBeenCalledOnce();
@@ -215,6 +222,7 @@ describe('prepareDebrief', () => {
   it('asks nothing only when there is nothing to draw', async () => {
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 5,
       version: 2,
       chunks: [],
       context: 'ctx',
@@ -262,7 +270,7 @@ describe('discardPreparedDebrief', () => {
 });
 
 describe('takePreparedDebrief', () => {
-  const fp = () => preparedFingerprint(2, mastery);
+  const fp = () => preparedFingerprint(5, 2, mastery);
 
   it('returns the test once, so a retake gets fresh questions', async () => {
     await prepareDebrief(k);
@@ -280,9 +288,41 @@ describe('takePreparedDebrief', () => {
   it('returns null on a fingerprint mismatch, and the stale row is gone', async () => {
     await prepareDebrief(k);
     expect(
-      await takePreparedDebrief(key, preparedFingerprint(3, mastery)),
+      await takePreparedDebrief(key, preparedFingerprint(5, 3, mastery)),
     ).toBeNull();
     expect(m.rows.has(rowKey(key))).toBe(false);
+  });
+
+  it('never returns a test prepared from another snapshot, and drops it', async () => {
+    await prepareDebrief(k);
+    // The course has moved to another version since.
+    expect(
+      await takePreparedDebrief(key, preparedFingerprint(6, 2, mastery)),
+    ).toBeNull();
+    expect(m.rows.has(rowKey(key))).toBe(false);
+  });
+
+  it('a pilot in two courses on different versions has one prepared test for each', async () => {
+    const other = { ...key, courseId: 8 };
+    const ready = { kind: 'ready', version: 2, chunks, context: 'ctx' };
+    m.ensureLessonChunks.mockImplementation(
+      async (_lessonId: number, _slug: string, courseId: number) => ({
+        ...ready,
+        lessonVersionId: courseId === 8 ? 6 : 5,
+      }),
+    );
+    m.generateTest.mockResolvedValueOnce(test).mockResolvedValueOnce({
+      ...test,
+      questions: [{ ...test.questions[0], question: 'Of the other version?' }],
+    });
+    expect(await prepareDebrief(k)).toBe('prepared');
+    expect(await prepareDebrief({ ...k, courseId: 8 })).toBe('prepared');
+
+    expect(
+      (await takePreparedDebrief(other, preparedFingerprint(6, 2, mastery)))
+        ?.questions[0].question,
+    ).toBe('Of the other version?');
+    expect(await takePreparedDebrief(key, fp())).toEqual(test);
   });
 
   it('treats an untagged (pre-chunk) or unreadable row as a miss', async () => {

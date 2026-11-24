@@ -1,4 +1,5 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import {
   progressComponentColumns,
   progressComponentGroupBy,
@@ -11,10 +12,12 @@ import {
 } from '#/lib/course-progress-agg';
 import { db } from '@/db';
 import {
+  courseLessonVersionsTable,
   courseModulesTable,
   coursesTable,
   lessonMaterialProgressTable,
   lessonsTable,
+  lessonVersionsTable,
   moduleLessonsTable,
   modulesTable,
   videoProgressTable,
@@ -26,8 +29,8 @@ import {
  * the join runs off the (user_id, lesson_id) index (videos_progress_user_lesson_idx)
  * and only watched-milestone rows are joined, so it never pulls raw progress
  * events to the app. The result is one row per lesson (plus a lessonId:null
- * row per empty module), which aggregateCourseProgress rolls up to lesson /
- * module / course.
+ * row per empty module, or per lesson the course has no version of), which
+ * aggregateCourseProgress rolls up to lesson / module / course.
  *
  * Each row also carries the three facts that decide whether watching is the
  * measure at all — video presence, `needs_video_watch`, and whether the
@@ -48,7 +51,6 @@ export async function getCourseProgress({
   const rows = await db
     .select({
       moduleId: modulesTable.id,
-      lessonId: lessonsTable.id,
       watchedHits: countDistinct(videoProgressTable.progress),
       ...progressComponentColumns(userId),
     })
@@ -82,6 +84,10 @@ export async function getCourseProgress({
         eq(lessonsTable.isAvailable, true),
       ),
     )
+    // This course's version of the lesson, which every component is read
+    // from; also LEFT, so a lesson with no pin still leaves its module's row.
+    .leftJoin(courseLessonVersionsTable, isPinOf(coursesTable.id))
+    .leftJoin(lessonVersionsTable, isPinnedSnapshot())
     .leftJoin(
       videoProgressTable,
       and(

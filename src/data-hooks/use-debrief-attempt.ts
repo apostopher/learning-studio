@@ -298,7 +298,7 @@ export function applyAnswerResult(
   result: DebriefAnswerResult,
 ) {
   queryClient.setQueryData<DebriefAttemptView>(
-    dataKeys.debriefAttempt(input.lessonSlug),
+    dataKeys.debriefAttempt(input.courseSlug, input.lessonSlug),
     (old) => (old ? withAnswerRecorded(old, input.questionId, result) : old),
   );
   // A finished attempt changes the debrief's state and the course rollup.
@@ -318,7 +318,7 @@ export function applyContinueResult(
 ): Promise<unknown> {
   if (result.choice === 'yes') {
     queryClient.setQueryData<DebriefAttemptView>(
-      dataKeys.debriefAttempt(lesson.lessonSlug),
+      dataKeys.debriefAttempt(lesson.courseSlug, lesson.lessonSlug),
       (old) => {
         if (!old) return old;
         const known = new Set(old.questions.map((q) => q.id));
@@ -350,7 +350,7 @@ export function useStartDebrief({
   enabled = true,
 }: LessonRef & { enabled?: boolean }) {
   return useQuery({
-    queryKey: dataKeys.debriefAttempt(lessonSlug),
+    queryKey: dataKeys.debriefAttempt(courseSlug, lessonSlug),
     queryFn: () => fetchStartDebrief({ courseSlug, lessonSlug }),
     enabled: enabled && courseSlug.length > 0 && lessonSlug.length > 0,
     staleTime: 0,

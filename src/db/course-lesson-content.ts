@@ -1,4 +1,12 @@
-import { and, asc, desc, eq, getTableColumns, inArray } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  type Column,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+} from 'drizzle-orm';
 import { db } from '#/db';
 import { courseModuleIds } from '#/db/course-modules';
 import type { LessonMaterial } from '#/db/lesson';
@@ -10,6 +18,24 @@ import {
   moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
+
+/**
+ * What a pin is: `course_lesson_versions` of this course and this lesson, by
+ * default the query's `lessons` row. At most one row, so joining on it never
+ * multiplies.
+ */
+export const isPinOf = (
+  courseId: Column | number,
+  lessonId: Column | number = lessonsTable.id,
+) =>
+  and(
+    eq(courseLessonVersionsTable.courseId, courseId),
+    eq(courseLessonVersionsTable.lessonId, lessonId),
+  );
+
+/** The snapshot a joined pin names. */
+export const isPinnedSnapshot = () =>
+  eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId);
 
 /**
  * A lesson's content AS ONE COURSE HAS IT: the snapshot the course is pinned
@@ -26,17 +52,8 @@ export async function getPinnedSnapshot(lessonSlug: string, courseId: number) {
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(
-      courseLessonVersionsTable,
-      and(
-        eq(courseLessonVersionsTable.courseId, courseId),
-        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
-      ),
-    )
-    .innerJoin(
-      lessonVersionsTable,
-      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
-    )
+    .innerJoin(courseLessonVersionsTable, isPinOf(courseId))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(
       and(
         eq(lessonsTable.slug, lessonSlug),

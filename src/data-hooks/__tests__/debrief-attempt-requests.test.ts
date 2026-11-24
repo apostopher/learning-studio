@@ -157,7 +157,7 @@ describe('debrief attempt requests', () => {
 
   it('a recorded answer reaches the attempt cache with its feedback; status and progress are invalidated', async () => {
     const qc = new QueryClient();
-    qc.setQueryData(dataKeys.debriefAttempt('l1'), attempt);
+    qc.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), attempt);
     const spy = vi.spyOn(qc, 'invalidateQueries');
     await applyAnswerResult(
       qc,
@@ -174,7 +174,7 @@ describe('debrief attempt requests', () => {
       },
     );
     const cached = qc.getQueryData<DebriefAttemptView>(
-      dataKeys.debriefAttempt('l1'),
+      dataKeys.debriefAttempt('ppl', 'l1'),
     );
     expect(cached?.answered).toEqual([
       { questionId: 'q1', score: 80, feedback: 'Viper says', revisitNote: 'n' },
@@ -183,6 +183,71 @@ describe('debrief attempt requests', () => {
     const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
     expect(keys).toContainEqual(dataKeys.debriefStatus('ppl', 'l1'));
     expect(keys).toContainEqual(dataKeys.courseProgressSummary('ppl'));
+  });
+});
+
+/** Set 1 passed, set 2 on offer. */
+const onOffer: DebriefAttemptView = {
+  ...attempt,
+  answered: [
+    { questionId: 'q1', score: 50, feedback: 'f', revisitNote: '' },
+    { questionId: 'q2', score: 50, feedback: 'f', revisitNote: '' },
+  ],
+  draft: null,
+  offer: true,
+  offerQuestionCount: 2,
+  setResults: [{ set: 1, average: 50, passed: true, score }],
+};
+const set2 = [
+  { id: 'q3', question: 'C?', set: 2 },
+  { id: 'q4', question: 'D?', set: 2 },
+];
+
+/**
+ * The same open attempt, seen in two courses: its scores are judged on each
+ * course's quiz and pass mark.
+ */
+describe("a course's copy of the attempt", () => {
+  const elsewhere = { ...lesson, courseSlug: 'uas' };
+  const other = { ...onOffer, attemptId: 99 };
+
+  it("an answer leaves the other course's copy alone", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), attempt);
+    qc.setQueryData(dataKeys.debriefAttempt('uas', 'l1'), other);
+    await applyAnswerResult(
+      qc,
+      { ...lesson, attemptId: 7, questionId: 'q1', answer: 'abc', metrics },
+      {
+        evaluation: { score: 80, feedback: 'f', revisitNote: '' },
+        setResult: null,
+        nextQuestions: [],
+        offer: false,
+        offerQuestionCount: 0,
+        passedNow: false,
+        finished: null,
+        promotion: null,
+      },
+    );
+    expect(qc.getQueryData(dataKeys.debriefAttempt('uas', 'l1'))).toEqual(
+      other,
+    );
+  });
+
+  it('taking set 2 reaches only the course it was taken in', async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), onOffer);
+    qc.setQueryData(dataKeys.debriefAttempt('uas', 'l1'), other);
+    await applyContinueResult(qc, elsewhere, {
+      choice: 'yes',
+      questions: set2,
+      promotion: null,
+    });
+    const offerIn = (courseSlug: string) =>
+      qc.getQueryData<DebriefAttemptView>(
+        dataKeys.debriefAttempt(courseSlug, 'l1'),
+      )?.offer;
+    expect([offerIn('ppl'), offerIn('uas')]).toEqual([true, false]);
   });
 });
 
@@ -239,22 +304,6 @@ describe('withAnswerRecorded', () => {
 });
 
 describe('continue (the improve offer)', () => {
-  const onOffer: DebriefAttemptView = {
-    ...attempt,
-    answered: [
-      { questionId: 'q1', score: 50, feedback: 'f', revisitNote: '' },
-      { questionId: 'q2', score: 50, feedback: 'f', revisitNote: '' },
-    ],
-    draft: null,
-    offer: true,
-    offerQuestionCount: 2,
-    setResults: [{ set: 1, average: 50, passed: true, score }],
-  };
-  const set2 = [
-    { id: 'q3', question: 'C?', set: 2 },
-    { id: 'q4', question: 'D?', set: 2 },
-  ];
-
   it('posts the course, the attempt and the choice to the continue route', async () => {
     const f = stub(200, { choice: 'yes', questions: set2 });
     const r = await postContinueDebrief({
@@ -300,7 +349,7 @@ describe('continue (the improve offer)', () => {
 
   it('yes puts set 2 in the attempt cache after set 1, and takes the offer away; nothing is invalidated', async () => {
     const qc = new QueryClient();
-    qc.setQueryData(dataKeys.debriefAttempt('l1'), onOffer);
+    qc.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), onOffer);
     const spy = vi.spyOn(qc, 'invalidateQueries');
     await applyContinueResult(qc, lesson, {
       choice: 'yes',
@@ -308,7 +357,7 @@ describe('continue (the improve offer)', () => {
       promotion: null,
     });
     const cached = qc.getQueryData<DebriefAttemptView>(
-      dataKeys.debriefAttempt('l1'),
+      dataKeys.debriefAttempt('ppl', 'l1'),
     );
     expect(cached?.questions.map((q) => q.id)).toEqual([
       'q1',
@@ -323,7 +372,7 @@ describe('continue (the improve offer)', () => {
 
   it('no finishes the attempt: the debrief status and course progress are invalidated', async () => {
     const qc = new QueryClient();
-    qc.setQueryData(dataKeys.debriefAttempt('l1'), onOffer);
+    qc.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), onOffer);
     const spy = vi.spyOn(qc, 'invalidateQueries');
     await applyContinueResult(qc, lesson, {
       choice: 'no',

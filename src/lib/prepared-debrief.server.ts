@@ -48,14 +48,16 @@ function claimKey({
 const PREPARED_FORMAT = 'key-point-sets-v1';
 
 /**
- * sha256 hex of the debrief formats, the lesson's chunk version and the
+ * sha256 hex of the debrief formats, the snapshot, its chunk version and the
  * pilot's mastery (chunk id and latest score, sorted). A prepared test is
- * served only when all of them still match: the chunks were not regenerated
- * since, and the pilot has answered nothing since it was drawn. The draw
+ * served only when all of them still match: the course has not moved to
+ * another version since, the chunks were not regenerated, and the pilot has
+ * answered nothing since it was drawn. The draw
  * itself is random (`drawAttemptKeyPoints`), so the fingerprint names what it
  * was drawn FROM, never the draw.
  */
 export function preparedFingerprint(
+  lessonVersionId: number,
   chunkVersion: number,
   mastery: readonly { chunkId: string; latestScore: number }[],
 ): string {
@@ -64,6 +66,7 @@ export function preparedFingerprint(
       JSON.stringify([
         DEBRIEF_ATTEMPT_FORMAT,
         PREPARED_FORMAT,
+        lessonVersionId,
         chunkVersion,
         mastery
           .map((m) => [m.chunkId, m.latestScore] as const)
@@ -102,8 +105,9 @@ export type PrepareOutcome =
  * questions are never returned from here: handing them out before the debrief
  * opens would leak it.
  *
- * Skips the model when a test for the current chunk version and mastery is
- * already stored.
+ * Skips the model when a test for the current snapshot, chunk version and
+ * mastery is already stored. Claim and row are both per course, so a pilot in
+ * two courses on different versions has one of each.
  */
 export async function prepareDebrief(
   k: PreparedDebriefKey & { lessonId: number },
@@ -139,7 +143,11 @@ export async function prepareDebrief(
       lesson.chunks,
       await selectMastery(k.userId, k.lessonId),
     );
-    const fingerprint = preparedFingerprint(lesson.version, mastery);
+    const fingerprint = preparedFingerprint(
+      lesson.lessonVersionId,
+      lesson.version,
+      mastery,
+    );
     if ((await selectPreparedFingerprint(key)) === fingerprint) {
       return 'already-prepared';
     }
@@ -186,7 +194,7 @@ const PreparedTestSchema = z.object({
  * The prepared debrief, removed as it is read — each one is served once, so a
  * retake gets a fresh set rather than replaying the same questions.
  *
- * Null on a miss; on a test prepared for another chunk version or mastery
+ * Null on a miss; on a test prepared for another snapshot, chunk version or mastery
  * (`currentFingerprint` — the row is still deleted, it can never be served);
  * and on a row that no longer parses as chunk-tagged questions (a shape
  * change across a deploy). The caller then generates on demand.

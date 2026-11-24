@@ -7,7 +7,6 @@ import {
   DEBRIEF_ATTEMPT_FORMAT,
   type StoredAttempt,
 } from '#/lib/debrief-attempt-snapshot';
-import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import {
   type DebriefChunkMasterySelect,
   debriefAnswerLogsTable,
@@ -170,7 +169,7 @@ export async function updateDraft(
 }
 
 /**
- * The lesson's current chunk list, or null when none is stored.
+ * A snapshot's current chunk list, or null when none is stored.
  *
  * `forShare` (inside the answer transaction): the row is read `for share`,
  * so a concurrent regeneration's upsert waits for this transaction to commit
@@ -178,28 +177,26 @@ export async function updateDraft(
  * replaced (its carry-over would then miss these rows).
  */
 export async function selectCurrentChunks(
-  lessonId: number,
+  lessonVersionId: number,
   ex: Tx = db,
   opts: { forShare?: boolean } = {},
 ): Promise<{
   version: number;
-  chunks: KnowledgeChunk[];
   previousMapping: Record<string, string | null> | null;
 } | null> {
   const query = ex
     .select({
       version: lessonKnowledgeChunksTable.version,
-      chunks: lessonKnowledgeChunksTable.chunks,
       previousMapping: lessonKnowledgeChunksTable.previousMapping,
     })
     .from(lessonKnowledgeChunksTable)
-    .where(eq(lessonKnowledgeChunksTable.lessonId, lessonId))
+    .where(eq(lessonKnowledgeChunksTable.lessonVersionId, lessonVersionId))
     .limit(1);
   const [row] = await (opts.forShare ? query.for('share') : query);
   return row ?? null;
 }
 
-/** Every mastery row of this pilot on the lesson, any chunk version. */
+/** Every mastery row of this pilot on the lesson: any chunk version, any snapshot. */
 export async function selectMastery(
   userId: string,
   lessonId: number,

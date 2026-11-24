@@ -103,13 +103,13 @@ export const DebriefPanelContainer = ({
   useEffect(() => {
     if (panel.kind === 'take' || panel.kind === 'loading') return;
     queryClient.removeQueries({
-      queryKey: dataKeys.debriefAttempt(lessonSlug),
+      queryKey: dataKeys.debriefAttempt(courseSlug, lessonSlug),
       exact: true,
     });
     setNotOpen((current) =>
       current?.lessonSlug === lessonSlug ? null : current,
     );
-  }, [panel.kind, queryClient, lessonSlug, setNotOpen]);
+  }, [panel.kind, queryClient, courseSlug, lessonSlug, setNotOpen]);
 
   // Screen readers hear when the 12 h wait ends and the debrief opens — here,
   // in a region the panel always renders.

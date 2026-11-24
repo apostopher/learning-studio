@@ -31,6 +31,7 @@ const m = vi.hoisted(() => ({
   waitUntil: vi.fn(),
   getScoreFacts: vi.fn(),
   getCoursePassMark: vi.fn(),
+  getPinnedVersionId: vi.fn(),
 }));
 
 vi.mock('#/db', () => ({
@@ -62,11 +63,20 @@ vi.mock('#/lib/prepared-debrief.server', () => ({
   takePreparedDebrief: m.takePreparedDebrief,
   prepareDebrief: m.prepareDebrief,
   preparedFingerprint: (
+    lessonVersionId: number,
     version: number,
     mastery: { chunkId: string; latestScore: number }[],
   ) =>
-    `fp(${version}|${mastery.map((r) => `${r.chunkId}:${r.latestScore}`).join(',')})`,
+    `fp(${lessonVersionId}|${version}|${mastery.map((r) => `${r.chunkId}:${r.latestScore}`).join(',')})`,
   keyPointFocus: (chunkIds: string[]) => ({ holes: chunkIds, review: [] }),
+}));
+// For `importActual` of knowledge-chunks.server: nothing here may be reached.
+vi.mock('#/integrations/upstash/redis', () => ({ redis: {} }));
+vi.mock('#/ai/generate-knowledge-chunks', () => ({
+  generateKnowledgeChunks: vi.fn(),
+}));
+vi.mock('#/ai/match-knowledge-chunks', () => ({
+  matchKnowledgeChunks: vi.fn(),
 }));
 vi.mock('#/ai/generate-test', () => ({ generateTest: m.generateTest }));
 vi.mock('#/ai/evaluate-answer', () => ({
@@ -76,6 +86,9 @@ vi.mock('#/lib/lesson-debrief-source.server', () => ({
   resolveDebriefSource: m.resolveDebriefSource,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
+vi.mock('#/db/course-lesson-content', () => ({
+  getPinnedVersionId: m.getPinnedVersionId,
+}));
 vi.mock('#/lib/lesson-score.server', () => ({
   getScoreFacts: m.getScoreFacts,
   getCoursePassMark: m.getCoursePassMark,
@@ -223,6 +236,7 @@ beforeEach(() => {
     (scores: Record<string, number>) => scores,
   );
   m.evaluateFreeText.mockResolvedValue(evaluation('q1', { 'v1-c2': 40 }));
+  m.getPinnedVersionId.mockResolvedValue(61);
   m.resolveDebriefSource.mockResolvedValue(null);
   m.prepareDebrief.mockResolvedValue('prepared');
   m.selectAskedQuestions.mockResolvedValue(['Asked before?']);
@@ -285,6 +299,7 @@ describe('startOrResumeAttempt', () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 61,
       version: 1,
       chunks,
       context: stored.context,
@@ -302,7 +317,7 @@ describe('startOrResumeAttempt', () => {
     expect(m.selectMastery).toHaveBeenCalledWith('u1', 41);
     expect(m.takePreparedDebrief).toHaveBeenCalledWith(
       { userId: 'u1', courseId: 7, lessonSlug: 'l1' },
-      'fp(1|v1-c1:85)',
+      'fp(61|1|v1-c1:85)',
     );
     // c2 was never asked, so it is drawn before c1 (answered well).
     expect(m.generateTest).toHaveBeenCalledWith({
@@ -326,6 +341,7 @@ describe('startOrResumeAttempt', () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 61,
       version: 1,
       chunks,
       context: 'c',
@@ -350,6 +366,7 @@ describe('startOrResumeAttempt', () => {
       .mockResolvedValueOnce(attemptRow({ id: 77 }));
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 61,
       version: 1,
       chunks,
       context: 'c',
@@ -382,6 +399,7 @@ describe('startOrResumeAttempt', () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 61,
       version: 1,
       chunks,
       context: 'c',
@@ -410,6 +428,7 @@ describe('startOrResumeAttempt', () => {
     m.selectOpenAttempt.mockResolvedValue(null);
     m.ensureLessonChunks.mockResolvedValue({
       kind: 'ready',
+      lessonVersionId: 61,
       version: 1,
       chunks,
       context: 'c',
@@ -494,7 +513,7 @@ describe('answerQuestion', () => {
 
   it('reads the current chunk list FOR SHARE inside the answer transaction', async () => {
     await answer('q1');
-    expect(m.selectCurrentChunks).toHaveBeenCalledWith(41, m.tx, {
+    expect(m.selectCurrentChunks).toHaveBeenCalledWith(61, m.tx, {
       forShare: true,
     });
   });
@@ -804,6 +823,49 @@ describe('answerQuestion', () => {
       2,
     );
     expect(m.upsertMastery.mock.calls[0][1][0].chunkId).toBe('v2-c2');
+  });
+
+  it('an open attempt from 1.0 answered after the update is graded, records no mastery against 1.1 ids, and can still pass', async () => {
+    const actual = await vi.importActual<
+      typeof import('../knowledge-chunks.server')
+    >('../knowledge-chunks.server');
+    m.mapToCurrentChunkIds.mockImplementation(actual.mapToCurrentChunkIds);
+    // The course is on 1.1 now, whose list replaced none of 1.0's.
+    m.getPinnedVersionId.mockResolvedValue(62);
+    m.selectCurrentChunks.mockImplementation(async (versionId: number) =>
+      versionId === 62
+        ? { version: 2, previousMapping: null }
+        : { version: 1, previousMapping: null },
+    );
+    m.evaluateFreeText
+      .mockResolvedValueOnce(evaluation('q1', { 'v1-c2': 90 }))
+      .mockResolvedValueOnce(evaluation('q2', { 'v1-c1': 90 }));
+
+    await answer('q1');
+    expect(m.getPinnedVersionId).toHaveBeenCalledWith('l1', 7);
+    expect(m.evaluateFreeText).toHaveBeenCalledWith(
+      stored.questions[0],
+      'typed',
+      stored.chunks,
+      stored.context,
+    );
+    expect(await answer('q2')).toMatchObject({
+      ok: true,
+      finished: 'set-passed',
+      passedNow: true,
+    });
+    expect(m.insertPass).toHaveBeenCalledWith(m.tx, {
+      userId: 'u1',
+      lessonSlug: 'l1',
+    });
+    expect(m.upsertMastery).not.toHaveBeenCalled();
+  });
+
+  it('a lesson the course no longer has a version of: graded, no mastery', async () => {
+    m.getPinnedVersionId.mockResolvedValue(null);
+    expect(await answer('q1')).toMatchObject({ ok: true });
+    expect(m.selectCurrentChunks).not.toHaveBeenCalled();
+    expect(m.upsertMastery).not.toHaveBeenCalled();
   });
 
   it('an id that maps to nothing updates no mastery (it stays on the attempt)', async () => {

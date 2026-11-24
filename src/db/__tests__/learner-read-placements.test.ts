@@ -477,6 +477,19 @@ describe('getCourseDetails — placement is the source of truth (site 1)', () =>
   });
 });
 
+/** The course's pin right after `lessons`, then the snapshot it names. */
+const expectPinThenSnapshot = (joins: JoinCalls['leftJoin']) =>
+  expect(joins.map(([table, on]) => [table, render(on)])).toEqual([
+    [
+      courseLessonVersionsTable,
+      '("course_lesson_versions"."course_id" = "courses"."id" and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    ],
+    [
+      lessonVersionsTable,
+      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
+    ],
+  ]);
+
 describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule)', () => {
   // Mutant: change `.leftJoin(moduleLessonsTable, ...)` in getMyCourses
   // (src/db/course.ts) to `.innerJoin(...)`. Correct-shaped (compiles,
@@ -546,6 +559,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     // lesson dropped, every WIP lesson counted), and the string-only
     // assertion above could not have caught it.
     expect(renderSqlParams(calls.leftJoin[3][1])).toEqual([true]);
+    expectPinThenSnapshot(calls.leftJoin.slice(4, 6));
   });
 
   // Mutant: change `.leftJoin(lessonsTable, ...)` in getCourseProgress
@@ -573,6 +587,9 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     );
 
     expect(calls.innerJoin.some(([t]) => t === lessonsTable)).toBe(false);
+    expectPinThenSnapshot(
+      calls.leftJoin.slice(moduleLessonsIndex + 2, moduleLessonsIndex + 4),
+    );
   });
 
   // Mutant: change `.leftJoin(moduleLessonsTable, ...)` in
@@ -621,14 +638,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     expect(render(calls.leftJoin[3][1])).toBe(
       '"lessons"."id" = "module_lessons"."lesson_id"',
     );
-    expect(calls.leftJoin[4][0]).toBe(courseLessonVersionsTable);
-    expect(render(calls.leftJoin[4][1])).toBe(
-      '("course_lesson_versions"."course_id" = "courses"."id" and "course_lesson_versions"."lesson_id" = "lessons"."id")',
-    );
-    expect(calls.leftJoin[5][0]).toBe(lessonVersionsTable);
-    expect(render(calls.leftJoin[5][1])).toBe(
-      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
-    );
+    expectPinThenSnapshot(calls.leftJoin.slice(4, 6));
   });
 
   // Mutant: in getCourseContentForAgent's `.orderBy(...)`, keep

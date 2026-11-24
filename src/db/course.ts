@@ -8,6 +8,7 @@ import {
 } from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
 import {
@@ -183,17 +184,8 @@ export async function getCourseDetails(slug: string) {
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(
-      courseLessonVersionsTable,
-      and(
-        eq(courseLessonVersionsTable.courseId, course.id),
-        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
-      ),
-    )
-    .innerJoin(
-      lessonVersionsTable,
-      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
-    )
+    .innerJoin(courseLessonVersionsTable, isPinOf(course.id))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .leftJoin(
       moduleDependenciesTable,
       eq(moduleLessonsTable.moduleId, moduleDependenciesTable.moduleId),
@@ -376,7 +368,6 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       imageUrlAvif: coursesTable.imageUrlAvif,
       imageUrlWebp: coursesTable.imageUrlWebp,
       moduleId: modulesTable.id,
-      lessonId: lessonsTable.id,
       // Needed to drop out-of-tier lessons from the card's percentage. Not in
       // GROUP BY because `lessons.id` is, and Postgres treats every other
       // column of that table as functionally dependent on its primary key.
@@ -416,6 +407,10 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         eq(lessonsTable.isAvailable, true),
       ),
     )
+    // This course's version of the lesson, which every component is read
+    // from; also LEFT, so a lesson with no pin still leaves its module's row.
+    .leftJoin(courseLessonVersionsTable, isPinOf(coursesTable.id))
+    .leftJoin(lessonVersionsTable, isPinnedSnapshot())
     .leftJoin(
       videoProgressTable,
       and(

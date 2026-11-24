@@ -80,7 +80,7 @@ describe('getDebriefAccess refusals', () => {
     m.getCourseDetailsWithCache.mockResolvedValue(detailsWith(false));
     const res = await getDebriefAccess(args);
     expect(res.ok).toBe(true);
-    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41, 7);
   });
 
   it('404s a lesson the course does not list', async () => {
@@ -103,9 +103,9 @@ describe('getDebriefAccess state', () => {
     expect(m.getCourseDetailsWithCache).toHaveBeenCalledWith('c1');
   });
 
-  it("reads the facts for the session user and THIS lesson's id", async () => {
+  it("passes the gate's courseId to getDebriefFacts: the facts are of that course's version", async () => {
     await getDebriefAccess(args);
-    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41);
+    expect(m.getDebriefFacts).toHaveBeenCalledWith('u1', 'l1', 41, 7);
   });
 
   it('returns computeDebriefState of those facts at `now`', async () => {

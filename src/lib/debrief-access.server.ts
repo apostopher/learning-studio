@@ -64,7 +64,12 @@ export async function getDebriefAccess({
     .find((l) => l.slug === lessonSlug);
   if (!lesson) return { ok: false, status: 404 };
 
-  const facts = await getDebriefFacts(userId, lessonSlug, lesson.id);
+  const facts = await getDebriefFacts(
+    userId,
+    lessonSlug,
+    lesson.id,
+    gate.courseId,
+  );
   return {
     ok: true,
     courseId: gate.courseId,

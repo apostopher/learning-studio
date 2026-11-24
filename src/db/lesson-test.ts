@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '#/db';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import {
   debriefFactColumns,
   toDebriefFactFields,
@@ -14,9 +15,11 @@ import {
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import { type DebriefFacts, debriefClockStart } from '#/lib/debrief-schedule';
 import {
+  courseLessonVersionsTable,
   lessonCompletionsTable,
   lessonsTable,
   lessonTestResultsTable,
+  lessonVersionsTable,
 } from './schema';
 
 export type DebriefAttempt = {
@@ -166,8 +169,9 @@ export async function selectLatestFinishedChunkAttempt(
  *   on the lesson, legacy ones included, so a pilot with only old below-par
  *   attempts is offered a retake (at once: there is no retake wait);
  * - hasOpenAttempt: an unfinished chunk-format attempt exists;
- * - mastery: cleared of total against the lesson's CURRENT chunk list, or
- *   null when the lesson has no chunks stored yet;
+ * - mastery: cleared of total against the CURRENT chunk list of the version
+ *   this course shows, or null when it has no chunks stored yet. It is the
+ *   only fact an update resets: the others are the lesson's, not a version's;
  * - clockStartAt: the video's first full coverage (the shared
  *   `videoWatchedAtSql` fragment) on a video lesson, else the sticky
  *   `lesson_completions.done_at` — see `debriefClockStart`.
@@ -176,6 +180,7 @@ export async function getDebriefFacts(
   userId: string,
   lessonSlug: string,
   lessonId: number,
+  courseId: number,
 ): Promise<DebriefFacts> {
   const [completions, lessonRows] = await Promise.all([
     db
@@ -188,17 +193,19 @@ export async function getDebriefFacts(
         ),
       )
       .limit(1),
-    // From `lessons` alone, with the same fact columns the progress rollup
-    // selects: the two cannot disagree about passed / finished / open /
+    // The same fact columns the progress rollup selects, from the same
+    // snapshot: the two cannot disagree about passed / finished / open /
     // mastery, nor about when the video was watched.
     db
       .select({
         ...debriefFactColumns(userId),
         videoWatchedAt: videoWatchedAtSql(userId, lessonsTable.id),
-        videoProvider: lessonsTable.videoProvider,
-        videoRef: lessonsTable.videoRef,
+        videoProvider: lessonVersionsTable.videoProvider,
+        videoRef: lessonVersionsTable.videoRef,
       })
       .from(lessonsTable)
+      .innerJoin(courseLessonVersionsTable, isPinOf(courseId))
+      .innerJoin(lessonVersionsTable, isPinnedSnapshot())
       // The fact fragments key on `lessons.slug`; pin it to the slug asked for.
       .where(
         and(eq(lessonsTable.id, lessonId), eq(lessonsTable.slug, lessonSlug)),

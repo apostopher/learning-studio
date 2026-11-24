@@ -6,13 +6,17 @@ import {
   deleteStaleMastery,
   type Executor,
   insertCarriedMastery,
+  nextChunkVersion,
   selectLessonChunks,
   selectStaleMastery,
   upsertLessonChunks,
 } from '#/db/knowledge-chunks';
 import { redis } from '#/integrations/upstash/redis';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
-import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
+import {
+  type DebriefSource,
+  resolveDebriefSource,
+} from '#/lib/lesson-debrief-source.server';
 
 /**
  * Bump with any change a stored chunk list must not outlive. v2: one chunk per
@@ -24,7 +28,8 @@ import { resolveDebriefSource } from '#/lib/lesson-debrief-source.server';
 const CHUNKS_FORMAT = 'knowledge-chunks-v3';
 const CLAIM_TTL_SECONDS = 60 * 5;
 
-const claimKey = (lessonId: number) => `knowledge-chunks:claim:${lessonId}`;
+const claimKey = (lessonVersionId: number) =>
+  `knowledge-chunks:claim:${lessonVersionId}`;
 
 /** sha256 hex of the format tag, key points and context the chunks derive from. */
 export function chunkFingerprint(source: {
@@ -43,9 +48,9 @@ export function chunkIdVersion(id: string): number | null {
 }
 
 /**
- * Re-key scores recorded against chunk ids of the current or the previous
- * version onto the current ids. Current ids pass through, one-version-old ids
- * go through `mapping`, anything unmapped or older is dropped.
+ * Re-key scores onto a snapshot's current chunk ids. Current ids pass through,
+ * ids of the list it replaced go through `mapping`, and the rest are dropped:
+ * an older list's, and another snapshot's, which are other key points.
  */
 export function mapToCurrentChunkIds(
   scores: Record<string, number>,
@@ -54,31 +59,27 @@ export function mapToCurrentChunkIds(
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, score] of Object.entries(scores)) {
-    const v = chunkIdVersion(id);
-    if (v === currentVersion) {
-      out[id] = score;
-    } else if (v === currentVersion - 1) {
-      const next = mapping?.[id];
-      if (next) out[next] = score;
-    }
+    const current = chunkIdVersion(id) === currentVersion ? id : mapping?.[id];
+    if (current) out[current] = score;
   }
   return out;
 }
 
 /**
  * What `ensureLessonChunks` found:
- * - `ready`: the current chunks, plus the context they were resolved
+ * - `ready`: the snapshot's current chunks, plus the context they were resolved
  *   alongside — what question generation reads next, returned so a caller
  *   does not resolve the source (a transcript fetch) a second time;
  * - `no-source`: there is nothing to debrief from (no source, or generation
  *   produced no chunks);
- * - `busy`: another request is generating this lesson's FIRST chunk list and
+ * - `busy`: another request is generating this snapshot's FIRST chunk list and
  *   it did not land within `CHUNKS_BUSY_WAIT_MS`. Retry shortly — this is not
  *   "nothing to debrief".
  */
 export type EnsuredChunks =
   | {
       kind: 'ready';
+      lessonVersionId: number;
       version: number;
       chunks: KnowledgeChunk[];
       context: string;
@@ -93,20 +94,22 @@ export const CHUNKS_BUSY_WAIT_MS = 6_000;
 
 const ready = (
   row: { version: number; chunks: KnowledgeChunk[] },
-  context: string,
+  source: DebriefSource,
 ): EnsuredChunks => ({
   kind: 'ready',
+  lessonVersionId: source.lessonVersionId,
   version: row.version,
   chunks: row.chunks,
-  context,
+  context: source.context,
 });
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * The lesson's current knowledge chunks, generating them when missing or when
- * the source changed. Stored ids are version-scoped (`v2-c3`).
+ * The current knowledge chunks of the lesson as this course has it, generating
+ * them when missing or when the source changed. One list per snapshot, shared
+ * by the courses on it. Stored ids carry the list's number (`v2-c3`).
  *
  * A DEGRADED source (the transcript lookup failed, so the context fell back
  * to the material text) is not a changed source: with a row stored it is
@@ -126,38 +129,39 @@ export async function ensureLessonChunks(
 ): Promise<EnsuredChunks> {
   const source = await resolveDebriefSource(lessonSlug, courseId);
   if (!source) return { kind: 'no-source' };
+  const { lessonVersionId } = source;
   const fingerprint = chunkFingerprint(source);
 
-  const current = await selectLessonChunks(lessonId);
+  const current = await selectLessonChunks(lessonVersionId);
   if (
     current &&
     (source.degraded || current.sourceFingerprint === fingerprint)
   ) {
-    return ready(current, source.context);
+    return ready(current, source);
   }
 
-  const claimed = await redis.set(claimKey(lessonId), '1', {
+  const claimed = await redis.set(claimKey(lessonVersionId), '1', {
     nx: true,
     ex: CLAIM_TTL_SECONDS,
   });
   if (claimed !== 'OK') {
-    if (current) return ready(current, source.context);
+    if (current) return ready(current, source);
     // The holder is writing the FIRST list: wait for it rather than calling
     // the lesson empty.
     for (let waited = 0; waited < CHUNKS_BUSY_WAIT_MS; ) {
       await sleep(CHUNKS_BUSY_POLL_MS);
       waited += CHUNKS_BUSY_POLL_MS;
-      const landed = await selectLessonChunks(lessonId);
-      if (landed) return ready(landed, source.context);
+      const landed = await selectLessonChunks(lessonVersionId);
+      if (landed) return ready(landed, source);
     }
     return { kind: 'busy' };
   }
 
   try {
     // Re-read: the previous holder may have just finished.
-    const latest = await selectLessonChunks(lessonId);
+    const latest = await selectLessonChunks(lessonVersionId);
     if (latest?.sourceFingerprint === fingerprint) {
-      return ready(latest, source.context);
+      return ready(latest, source);
     }
 
     const generated = await generateKnowledgeChunks({
@@ -166,18 +170,30 @@ export async function ensureLessonChunks(
     });
     if (generated.length === 0) return { kind: 'no-source' };
 
-    const version = (latest?.version ?? 0) + 1;
-    const chunks = generated.map((c) => ({ ...c, id: `v${version}-${c.id}` }));
-    const mapping = latest
-      ? await matchKnowledgeChunks(latest.chunks, chunks)
+    // Matched before they are numbered: the number is taken under a lock on
+    // the lesson, which a model call must not hold.
+    const matches = latest
+      ? await matchKnowledgeChunks(latest.chunks, generated)
       : null;
 
     // One transaction: a crash can never leave the new fingerprint stored
     // with the carry-over undone (nothing would ever retry it).
-    await db.transaction(async (tx) => {
+    const stored = await db.transaction(async (tx) => {
+      const version = await nextChunkVersion(lessonId, tx);
+      const numbered = (id: string) => `v${version}-${id}`;
+      const chunks = generated.map((c) => ({ ...c, id: numbered(c.id) }));
+      const mapping =
+        matches &&
+        Object.fromEntries(
+          Object.entries(matches).map(([was, now]) => [
+            was,
+            now === null ? null : numbered(now),
+          ]),
+        );
       await upsertLessonChunks(
         {
           lessonId,
+          lessonVersionId,
           version,
           sourceFingerprint: fingerprint,
           chunks,
@@ -185,23 +201,26 @@ export async function ensureLessonChunks(
         },
         tx,
       );
-      if (mapping) {
-        await carryOverMastery(lessonId, mapping, version, tx);
+      if (latest && mapping) {
+        await carryOverMastery(lessonId, mapping, latest.version, tx);
       }
+      return { version, chunks };
     });
-    return { kind: 'ready', version, chunks, context: source.context };
+    return ready(stored, source);
   } finally {
-    await redis.del(claimKey(lessonId));
+    await redis.del(claimKey(lessonVersionId));
   }
 }
 
 /**
- * After a regeneration to `newVersion`: for every pilot WITHOUT a permanent
- * pass, keep their cleared chunks that map to a new id (with `clearedAt` and
- * `latestScore`) and drop the rest of their OLD-version rows. Rows already at
- * `newVersion` are never touched. Delete-then-insert, never in-place id
- * updates: a swap (c1->c2, c2->c1) would break the unique key. When the new id
- * already has a row, it is kept and just ensured cleared.
+ * After the list numbered `previousVersion` is replaced: for every pilot
+ * WITHOUT a permanent pass, keep their cleared chunks that map to a new id
+ * (with `clearedAt` and `latestScore`) and drop the rest of their rows of that
+ * list. Rows of any other list are never touched: the new one, and those of
+ * the lesson's other snapshots, which a learner of another course may be on.
+ * Delete-then-insert, never in-place id updates: a swap (c1->c2, c2->c1) would
+ * break the unique key. When the new id already has a row, it is kept and just
+ * ensured cleared.
  *
  * Never records a pass: since 2026-11-18 a debrief is passed only by a set of
  * answers (`#/lib/debrief-sets`), so carried mastery only orders the next
@@ -212,12 +231,12 @@ export async function ensureLessonChunks(
 export async function carryOverMastery(
   lessonId: number,
   mapping: Record<string, string | null>,
-  newVersion: number,
+  previousVersion: number,
   ex?: Executor,
 ): Promise<void> {
   const run = async (tx: Executor) => {
-    const rows = await selectStaleMastery(tx, lessonId, newVersion);
-    await deleteStaleMastery(tx, lessonId, newVersion);
+    const rows = await selectStaleMastery(tx, lessonId, previousVersion);
+    await deleteStaleMastery(tx, lessonId, previousVersion);
 
     const carried = new Map<
       string,

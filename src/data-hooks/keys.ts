@@ -115,9 +115,13 @@ export const dataKeys = {
   /** One lesson's debrief state, as the Debrief tab reads it. */
   debriefStatus: (courseSlug: string, lessonSlug: string) =>
     ['user', 'debrief-status', courseSlug, lessonSlug] as const,
-  /** A pilot's open debrief attempt on one lesson (questions, answers, draft). */
-  debriefAttempt: (lessonSlug: string) =>
-    ['user', 'debrief-attempt', lessonSlug] as const,
+  /**
+   * A pilot's open debrief attempt on one lesson (questions, answers, draft).
+   * The attempt is the lesson's, but its scores are judged on the course's quiz
+   * and pass mark.
+   */
+  debriefAttempt: (courseSlug: string, lessonSlug: string) =>
+    ['user', 'debrief-attempt', courseSlug, lessonSlug] as const,
   myCourses: () => ['user', 'my-courses'] as const,
   onboardingSession: (courseSlug: string) =>
     ['user', 'onboarding-session', courseSlug] as const,

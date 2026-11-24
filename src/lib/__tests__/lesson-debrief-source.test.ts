@@ -52,6 +52,7 @@ describe('resolveDebriefSource', () => {
     });
 
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
+      lessonVersionId: 31,
       kind: 'material',
       keyPoints: ['authored'],
       context: 'lesson body',
@@ -64,6 +65,7 @@ describe('resolveDebriefSource', () => {
     hasMaterial({ text: 'lesson body', keyPoints: [] });
 
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
+      lessonVersionId: 31,
       kind: 'material-derived',
       keyPoints: ['derived one', 'derived two'],
       context: 'lesson body',
@@ -77,6 +79,7 @@ describe('resolveDebriefSource', () => {
     getLessonTranscript.mockResolvedValue('spoken words from the video');
 
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
+      lessonVersionId: 31,
       kind: 'transcript',
       keyPoints: ['derived one', 'derived two'],
       context: 'spoken words from the video',
@@ -124,6 +127,7 @@ describe('resolveDebriefSource', () => {
     const source = await resolveDebriefSource('l-1', 7);
 
     expect(source).toEqual({
+      lessonVersionId: 31,
       kind: 'material',
       keyPoints: ['authored'],
       context: 'the transcript',
@@ -167,6 +171,7 @@ describe('resolveDebriefSource', () => {
 
     // Degraded: chunk generation must not treat this as a changed source.
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
+      lessonVersionId: 31,
       kind: 'material',
       keyPoints: ['authored'],
       context: 'lesson body',
@@ -203,6 +208,7 @@ describe('resolveDebriefSource', () => {
       const pending = resolveDebriefSource('l-1', 7);
       await vi.advanceTimersByTimeAsync(TRANSCRIPT_LOOKUP_TIMEOUT_MS);
       await expect(pending).resolves.toEqual({
+        lessonVersionId: 31,
         kind: 'material',
         keyPoints: ['authored'],
         context: 'lesson body',
@@ -222,6 +228,7 @@ describe('resolveDebriefSource', () => {
     getLessonTranscript.mockResolvedValue('spoken');
     const source = await resolveDebriefSource('l-1', 7);
     expect(source).toEqual({
+      lessonVersionId: 31,
       kind: 'material',
       keyPoints: ['authored'],
       context: 'spoken',

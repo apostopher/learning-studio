@@ -34,13 +34,19 @@ vi.mock('#/db', () => {
   };
   return { db: { select: () => chain } };
 });
+vi.mock('#/db/course-lesson-content', () => ({
+  isPinOf: vi.fn(),
+  isPinnedSnapshot: vi.fn(),
+}));
 vi.mock('@/db/schema', () => ({
+  courseLessonVersionsTable: {},
   courseSubscriptionsTable: {},
   courseModulesTable: {},
   coursesTable: {},
   lessonDependenciesTable: {},
   lessonMaterialProgressTable: {},
   lessonsTable: {},
+  lessonVersionsTable: {},
   moduleDependenciesTable: {},
   moduleLessonsTable: {},
   modulesTable: {},

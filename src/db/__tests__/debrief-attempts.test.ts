@@ -142,14 +142,17 @@ describe('selectCurrentChunks', () => {
   it('in the answer transaction, reads the chunk row FOR SHARE so a regeneration cannot commit under it', async () => {
     const tx = db as never;
     m.queue.push([]);
-    await selectCurrentChunks(41, tx, { forShare: true });
+    await selectCurrentChunks(61, tx, { forShare: true });
     expect(call('for').args).toEqual(['share']);
-    expect(whereSql()).toBe('"lesson_knowledge_chunks"."lesson_id" = $1');
+    expect(whereSql()).toBe(
+      '"lesson_knowledge_chunks"."lesson_version_id" = $1',
+    );
+    expect(whereParams()).toEqual([61]);
   });
 
   it('outside a transaction it takes no lock', async () => {
     m.queue.push([]);
-    await selectCurrentChunks(41);
+    await selectCurrentChunks(61);
     expect(call('for')).toBeUndefined();
   });
 
@@ -172,9 +175,9 @@ describe('selectCurrentChunks', () => {
         };
       },
     } as never;
-    await selectCurrentChunks(41, ex, { forShare: true }).catch(() => {});
+    await selectCurrentChunks(61, ex, { forShare: true }).catch(() => {});
     expect(built?.toSQL().sql).toBe(
-      'select "version", "chunks", "previous_mapping" from "lesson_knowledge_chunks" where "lesson_knowledge_chunks"."lesson_id" = $1 limit $2 for share',
+      'select "version", "previous_mapping" from "lesson_knowledge_chunks" where "lesson_knowledge_chunks"."lesson_version_id" = $1 limit $2 for share',
     );
   });
 });

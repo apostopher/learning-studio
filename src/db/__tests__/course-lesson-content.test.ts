@@ -349,6 +349,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
 
     it("resolveDebriefSource uses the served course's snapshot and that version's home course", async () => {
       const source = {
+        lessonVersionId: 1,
         kind: 'material',
         keyPoints: ['a kp 1.0'],
         context: spoken('a-ref-1.0'),
@@ -361,12 +362,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(h.resolveCourseProvider.mock.calls).toEqual([[1, 'mux']]);
       // Course 2 is on another version of the same lesson.
       expect(await resolveDebriefSource('a', 2)).toEqual({
+        lessonVersionId: 2,
         kind: 'material',
         keyPoints: ['a kp 1.1'],
         context: spoken('a-ref-1.1'),
       });
       // No material: the transcript is the source, the version's own.
       expect(await resolveDebriefSource('d', 3)).toEqual({
+        lessonVersionId: 5,
         kind: 'transcript',
         keyPoints: [`from ${spoken('d-ref-1.0')}`],
         context: spoken('d-ref-1.0'),

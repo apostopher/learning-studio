@@ -73,7 +73,7 @@ vi.mock('#/db/course-modules', () => membership);
 vi.mock('@/db/schema', () => vi.importActual('#/db/schema'));
 vi.mock('#/db/progress-components', () => ({
   progressComponentColumns: () => ({}),
-  progressComponentGroupBy: [],
+  progressComponentGroupBy: ['shared group by'],
   toComponentFields: () => ({}),
 }));
 
@@ -81,7 +81,9 @@ const { getCourseProgress } = await import('../course-progress');
 const { getLibraryForCourse, getCourseSlugsForLibraryFile } = await import(
   '../library'
 );
-const { courseModulesTable, modulesTable } = await import('#/db/schema');
+const { courseModulesTable, lessonsTable, modulesTable } = await import(
+  '#/db/schema'
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -142,6 +144,11 @@ describe('getCourseProgress', () => {
 
     expect(cap.captured.groupBy[0]).toBe(modulesTable.id);
     expect(cap.captured.groupBy[1]).toBe(courseModulesTable.rank);
+    // Where the snapshot's columns are covered (`progressComponentGroupBy`).
+    expect(cap.captured.groupBy.slice(-2)).toEqual([
+      lessonsTable.id,
+      'shared group by',
+    ]);
   });
 });
 

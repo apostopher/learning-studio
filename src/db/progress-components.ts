@@ -1,5 +1,10 @@
 import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
-import { lessonMaterialProgressTable, lessonsTable } from '#/db/schema';
+import {
+  courseLessonVersionsTable,
+  lessonMaterialProgressTable,
+  lessonsTable,
+  lessonVersionsTable,
+} from '#/db/schema';
 import { watchedMilestones } from '#/lib/course-milestones';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import { debriefPassedOf, masteryFromCounts } from '#/lib/debrief-mastery';
@@ -19,6 +24,11 @@ import {
  * feed the same aggregator from different queries. Anything that lives in only
  * one of them makes a course card disagree with its own sidebar, so the shared
  * parts live here and both spread them.
+ *
+ * What the lesson ASKS for (video, tabs, quiz, debrief source) is read from the
+ * course's snapshot, `lesson_versions`, so both queries LEFT JOIN the pin and
+ * then the snapshot right after `lessons`. What the learner has DONE is keyed
+ * on the lesson, and so survives the course moving to another version.
  *
  * Everything is reduced to a boolean or an integer IN POSTGRES. A sidebar
  * render must not pull lesson body text or quiz JSON across the wire just to
@@ -57,7 +67,7 @@ const outerRef = (value: SQL | Column | number | string) =>
     : sql`${value}`;
 
 type LessonSlugRef = SQL | typeof lessonsTable.slug | string;
-type LessonIdRef = SQL | typeof lessonsTable.id | number;
+type LessonVersionIdRef = SQL | typeof lessonVersionsTable.id | number;
 
 /** A row in `debrief_passes` (permanent; legacy passes were backfilled). */
 export const debriefPassedSql = (userId: string, lessonSlug: LessonSlugRef) =>
@@ -96,55 +106,49 @@ export const hasOpenDebriefSql = (userId: string, lessonSlug: LessonSlugRef) =>
   )`;
 
 /**
- * Chunks this pilot has cleared of the lesson's CURRENT version. Chunk ids are
- * version-scoped (`v2-c3`), so rows kept from an older version never match.
+ * Chunks this pilot has cleared of the snapshot's CURRENT list. Chunk ids carry
+ * the list's number (`v2-c3`), unique across the lesson's snapshots, so rows of
+ * an older list, or of another snapshot's, never match.
  */
-export const chunksClearedSql = (userId: string, lessonId: LessonIdRef) =>
+export const chunksClearedSql = (
+  userId: string,
+  lessonVersionId: LessonVersionIdRef,
+) =>
   sql<number>`coalesce((
     select count(*)::int from debrief_chunk_mastery m
     join lesson_knowledge_chunks k on k.lesson_id = m.lesson_id
     where m.user_id = ${userId}
-      and m.lesson_id = ${outerRef(lessonId)}
+      and k.lesson_version_id = ${outerRef(lessonVersionId)}
       and m.cleared_at is not null
       and m.chunk_id like 'v' || k.version || '-%'
   ), 0)`;
 
-/** Length of the stored chunk list; null when the lesson has none yet. */
-export const chunksTotalSql = (lessonId: LessonIdRef) =>
+/** Length of the snapshot's stored chunk list; null when it has none yet. */
+export const chunksTotalSql = (lessonVersionId: LessonVersionIdRef) =>
   sql<number | null>`(
     select jsonb_array_length(k.chunks) from lesson_knowledge_chunks k
-    where k.lesson_id = ${outerRef(lessonId)}
+    where k.lesson_version_id = ${outerRef(lessonVersionId)}
   )`;
 
-/**
- * The lesson's authored quiz has at least one question. `selectAuthoredQuiz`
- * (the debrief judge) reads the same rows.
- */
-export const hasQuizSql = (lessonSlug: LessonSlugRef) =>
-  sql<boolean>`exists (
-    select 1 from lesson_material m
-    where m.lesson_slug = ${outerRef(lessonSlug)}
-      and json_array_length(m.quiz) > 0
-  )`;
-
-/** The lesson has stored chunks (so its debrief exists for every pilot). */
-const hasChunksSql = (lessonId: LessonIdRef) =>
+/** The snapshot has stored chunks (so its debrief exists for every pilot). */
+export const hasChunksSql = (lessonVersionId: LessonVersionIdRef) =>
   sql<boolean>`exists (
     select 1 from lesson_knowledge_chunks k
-    where k.lesson_id = ${outerRef(lessonId)}
+    where k.lesson_version_id = ${outerRef(lessonVersionId)}
   )`;
 
 /**
  * The debrief schedule facts, selected identically by the progress rollup and
  * by `getDebriefFacts`, so the sidebar ring and the debrief routes read the
- * same SQL and cannot disagree. Select from `lessons`.
+ * same SQL and cannot disagree. Select from `lessons` joined to the course's
+ * snapshot.
  */
 export const debriefFactColumns = (userId: string) => ({
   debriefPassed: debriefPassedSql(userId, lessonsTable.slug),
   lastFinishedDebriefAt: lastFinishedDebriefAtSql(userId, lessonsTable.slug),
   hasOpenDebrief: hasOpenDebriefSql(userId, lessonsTable.slug),
-  chunksCleared: chunksClearedSql(userId, lessonsTable.id),
-  chunksTotal: chunksTotalSql(lessonsTable.id),
+  chunksCleared: chunksClearedSql(userId, lessonVersionsTable.id),
+  chunksTotal: chunksTotalSql(lessonVersionsTable.id),
 });
 
 type DebriefFactRow = {
@@ -190,48 +194,44 @@ const fullWatchAtSql = (
 /**
  * Correlated EXISTS/scalar subqueries rather than joins, deliberately.
  *
- * Joining `lesson_quiz_answers` (one row per attempt), `lesson_test_results`
- * (one per debrief) and `lesson_material` (no UNIQUE on lesson_slug, so
- * duplicates are possible) would multiply against the ≤18 video-progress rows
- * and ≤6 section rows already joined per lesson. On a 100-lesson course that
+ * Joining `lesson_quiz_answers` (one row per attempt) and
+ * `lesson_test_results` (one per debrief) would multiply against the ≤18
+ * video-progress rows and ≤6 section rows already joined per lesson. On a 100-lesson course that
  * is tens of thousands of intermediate rows to aggregate away. A scalar
  * subquery is evaluated once per lesson and cannot multiply anything; both
  * tables carry a (user_id, lesson_slug) index for it to ride.
  */
 export const progressComponentColumns = (userId: string) => ({
-  videoProvider: lessonsTable.videoProvider,
-  videoRef: lessonsTable.videoRef,
+  /**
+   * The SNAPSHOT's lesson, not `lessons.id`: null for a lesson the course has
+   * no version of, as for a module with no lessons. The payload leaves such a
+   * lesson out (`getCourseDetails`), so it must not count.
+   */
+  lessonId: lessonVersionsTable.lessonId,
+  videoProvider: lessonVersionsTable.videoProvider,
+  videoRef: lessonVersionsTable.videoRef,
   needsVideoWatch: lessonsTable.needsVideoWatch,
   hasDebrief: lessonsTable.hasDebrief,
 
   /**
    * Tabs with content behind them. `json_array_length(NULL)` is NULL and
-   * `NULL > 0` is NULL, so a missing material row or an unset column falls
-   * through every CASE to 0 — a lesson with no material asks for no sections.
+   * `NULL > 0` is NULL, so an unset column, or no snapshot at all, falls
+   * through every CASE — a lesson with no material asks for no sections.
    *
-   * The closing tab counts by DISCIPLINE, mirroring `materialExtraTabFor`:
-   * Job of the Day on 3D Airmanship lessons, TEST THIS! on every other (a
-   * lesson with no discipline included — its slug subquery is NULL, which
-   * fails the `=` and takes the ELSE). Counting whichever column is filled
-   * would let a stray value demand a tab the learner is never shown, and the
-   * lesson could then never complete.
+   * The closing tab counts by the snapshot's `extra_tab`, the tab the learner
+   * is shown. Counting whichever column is filled would let a stray value
+   * demand a tab they never see, and the lesson could then never complete.
    */
-  applicableSectionNames: sql<string[]>`coalesce((
-    select array_remove(array[
-        (case when json_array_length(m.key_points) > 0 then 'keyPoints' end),
-        (case when coalesce(m.pro_tips, '') <> '' then 'proTips' end),
-        (case when json_array_length(m.links) > 0 then 'links' end),
-        (case when coalesce(m.assignments, '') <> '' then 'assignments' end),
-        (case
-          when (select d.slug from disciplines d where d.id = ${lessonsTable.disciplineId}) = ${FLAGSHIP_DISCIPLINE_SLUG}
-            then (case when coalesce(m.job_of_the_day, '') <> '' then 'jobOfTheDay' end)
-          else (case when json_array_length(m.test_this) > 0 then 'testThis' end)
-        end)
-      ], null)
-    from lesson_material m
-    where m.lesson_slug = ${lessonsTable.slug}
-    limit 1
-  ), '{}')`,
+  applicableSectionNames: sql<string[]>`array_remove(array[
+    (case when json_array_length(${lessonVersionsTable.keyPoints}) > 0 then 'keyPoints' end),
+    (case when coalesce(${lessonVersionsTable.proTips}, '') <> '' then 'proTips' end),
+    (case when json_array_length(${lessonVersionsTable.links}) > 0 then 'links' end),
+    (case when coalesce(${lessonVersionsTable.assignments}, '') <> '' then 'assignments' end),
+    (case when ${lessonVersionsTable.extraTab} = 'jobOfTheDay'
+      then (case when coalesce(${lessonVersionsTable.jobOfTheDay}, '') <> '' then 'jobOfTheDay' end)
+      else (case when json_array_length(${lessonVersionsTable.testThis}) > 0 then 'testThis' end)
+    end)
+  ], null)`,
 
   /**
    * Distinct tracked sections this learner has selected.
@@ -246,38 +246,47 @@ export const progressComponentColumns = (userId: string) => ({
       and ${lessonMaterialProgressTable.sectionName} in (${sql.raw(TRACKED_SECTIONS_SQL_LIST)})),
     '{}')`,
 
-  /** The authored quiz has at least one question. Approximate — see the ledger. */
-  hasQuiz: hasQuizSql(lessonsTable.slug),
+  /**
+   * The authored quiz has at least one question. `selectAuthoredQuiz` (the
+   * debrief judge) reads the same snapshot. Approximate — see the ledger.
+   */
+  hasQuiz: sql<boolean>`coalesce(json_array_length(${lessonVersionsTable.quiz}) > 0, false)`,
 
   /**
    * Whether the debrief counts toward the COURSE percent (call 11).
    *
-   * The switch is on AND either the lesson has authored body text, or the
-   * server has already produced a debrief for this pilot (prepared or taken),
-   * or the lesson has stored knowledge chunks.
+   * The switch is on AND the snapshot has something to debrief from: authored
+   * body text, or a video with a sign that its captions are usable — the
+   * server has already produced a debrief for this pilot (prepared in this
+   * course, or taken), or the snapshot has stored knowledge chunks.
    * A transcript-only debrief therefore becomes bearing only once one really
    * exists, so a lesson whose captions turn out unusable never blocks
-   * course-done.
+   * course-done. Nor does what a pilot did on an older version, once the
+   * version shown has neither text nor video and so no debrief to take.
    */
   debriefBearing: sql<boolean>`(${lessonsTable.hasDebrief} and (
-    exists (
-      select 1 from lesson_material m
-      where m.lesson_slug = ${outerRef(lessonsTable.slug)} and coalesce(m.text, '') <> ''
+    coalesce(${lessonVersionsTable.text}, '') <> ''
+    or (${lessonVersionsTable.videoProvider} is not null
+      and ${lessonVersionsTable.videoRef} is not null
+      and (
+        exists (
+          select 1 from prepared_debriefs p
+          where p.user_id = ${userId}
+            and p.course_id = ${outerRef(courseLessonVersionsTable.courseId)}
+            and p.lesson_slug = ${outerRef(lessonsTable.slug)}
+        )
+        or exists (
+          select 1 from lesson_test_results t
+          where t.user_id = ${userId} and t.lesson_slug = ${outerRef(lessonsTable.slug)}
+        )
+        or ${hasChunksSql(lessonVersionsTable.id)}
+      )
     )
-    or exists (
-      select 1 from prepared_debriefs p
-      where p.user_id = ${userId} and p.lesson_slug = ${outerRef(lessonsTable.slug)}
-    )
-    or exists (
-      select 1 from lesson_test_results t
-      where t.user_id = ${userId} and t.lesson_slug = ${outerRef(lessonsTable.slug)}
-    )
-    or ${hasChunksSql(lessonsTable.id)}
   ))`,
 
   /**
-   * A 3D Airmanship lesson, by DISCIPLINE (the same test as the closing tab
-   * above): its ring closes on the quiz, the debrief being optional there.
+   * A 3D Airmanship lesson, by DISCIPLINE, which is not versioned: its ring
+   * closes on the quiz, the debrief being optional there.
    */
   flagshipDiscipline: sql<boolean>`coalesce((
     select d.slug = ${FLAGSHIP_DISCIPLINE_SLUG} from disciplines d
@@ -311,13 +320,20 @@ export const progressComponentColumns = (userId: string) => ({
  * primary key, but `slug` is referenced inside the correlated subqueries above
  * and the rest are plain selects — listing them explicitly costs nothing
  * (they are all constant within a group) and removes any doubt.
+ *
+ * `lesson_versions.id` is its primary key and carries the rest of the
+ * snapshot's columns, the `json` ones included: those cannot be listed, having
+ * no equality.
  */
 export const progressComponentGroupBy = [
   lessonsTable.slug,
-  lessonsTable.videoProvider,
-  lessonsTable.videoRef,
   lessonsTable.needsVideoWatch,
   lessonsTable.hasDebrief,
+  courseLessonVersionsTable.courseId,
+  lessonVersionsTable.id,
+  lessonVersionsTable.lessonId,
+  lessonVersionsTable.videoProvider,
+  lessonVersionsTable.videoRef,
 ] as const;
 
 type ComponentRow = {
@@ -354,8 +370,8 @@ function toSectionNames(names: readonly string[]): TrackedLessonSection[] {
  * Map a selected row to the aggregator's component fields.
  *
  * The booleans are nullable in TS because the lessons table is LEFT JOINed for
- * the empty-module placeholder; that row is discarded by the aggregator, so
- * the defaults here only ever apply to a row nobody scores.
+ * the empty-module placeholder; a row with no `lessonId` is discarded by the
+ * aggregator, so the defaults here only ever apply to a row nobody scores.
  */
 export function toComponentFields(row: ComponentRow) {
   return {

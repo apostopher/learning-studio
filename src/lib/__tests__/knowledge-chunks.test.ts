@@ -6,6 +6,7 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 
 type Stored = {
   lessonId: number;
+  lessonVersionId: number;
   version: number;
   sourceFingerprint: string;
   chunks: { id: string; title: string; summary: string }[];
@@ -19,6 +20,8 @@ const m = vi.hoisted(() => ({
   generateKnowledgeChunks: vi.fn(),
   matchKnowledgeChunks: vi.fn(),
   upsertLessonChunks: vi.fn(),
+  selectLessonChunks: vi.fn(),
+  nextChunkVersion: vi.fn(),
   txCalls: [] as { op: string; arg: unknown }[],
   clearedRows: [] as unknown[],
   failSelect: false,
@@ -82,11 +85,12 @@ vi.mock('#/db', () => {
   return {
     db: {
       // Mimics rollback: work only counts as committed if the callback resolves.
-      transaction: async (fn: (t: typeof tx) => Promise<void>) => {
+      transaction: async (fn: (t: typeof tx) => Promise<unknown>) => {
         const before = m.txCalls.length;
         try {
-          await fn(tx);
+          const result = await fn(tx);
           m.commits++;
+          return result;
         } catch (e) {
           m.rolledBack = m.txCalls.splice(before);
           throw e;
@@ -101,7 +105,8 @@ vi.mock('#/db/knowledge-chunks', async () => {
   );
   return {
     ...actual,
-    selectLessonChunks: vi.fn(async () => m.stored),
+    selectLessonChunks: m.selectLessonChunks,
+    nextChunkVersion: m.nextChunkVersion,
     upsertLessonChunks: m.upsertLessonChunks,
   };
 });
@@ -116,7 +121,12 @@ import {
   mapToCurrentChunkIds,
 } from '../knowledge-chunks.server';
 
-const source = { kind: 'video', keyPoints: ['a', 'b'], context: 'ctx' };
+const source = {
+  lessonVersionId: 9,
+  kind: 'video',
+  keyPoints: ['a', 'b'],
+  context: 'ctx',
+};
 const gen = [
   { id: 'c1', title: 'T1', summary: 'S1' },
   { id: 'c2', title: 'T2', summary: 'S2' },
@@ -137,9 +147,14 @@ beforeEach(() => {
   m.commits = 0;
   m.rolledBack = [];
   m.conflictCfg = null;
+  m.selectLessonChunks.mockImplementation(async () => m.stored);
+  // One past every list of the lesson, of any snapshot.
+  m.nextChunkVersion.mockImplementation(
+    async () => ((m.stored as Stored | null)?.version ?? 0) + 1,
+  );
   m.resolveDebriefSource.mockResolvedValue(source);
   m.generateKnowledgeChunks.mockResolvedValue(gen);
-  m.matchKnowledgeChunks.mockResolvedValue({ 'v1-c1': 'v2-c2', 'v1-c2': null });
+  m.matchKnowledgeChunks.mockResolvedValue({ 'v1-c1': 'c2', 'v1-c2': null });
 });
 
 describe('ensureLessonChunks', () => {
@@ -156,6 +171,7 @@ describe('ensureLessonChunks', () => {
   it('matching fingerprint: no model call, returns stored', async () => {
     const stored: Stored = {
       lessonId: 1,
+      lessonVersionId: 9,
       version: 3,
       sourceFingerprint: fp,
       chunks: [{ id: 'v3-c1', title: 'x', summary: 'y' }],
@@ -167,6 +183,7 @@ describe('ensureLessonChunks', () => {
     expect(m.upsertLessonChunks).not.toHaveBeenCalled();
     expect(r).toEqual({
       kind: 'ready',
+      lessonVersionId: 9,
       version: 3,
       chunks: stored.chunks,
       context: source.context,
@@ -182,7 +199,8 @@ describe('ensureLessonChunks', () => {
     });
     expect(m.matchKnowledgeChunks).not.toHaveBeenCalled();
     const arg = m.upsertLessonChunks.mock.calls[0][0];
-    expect(arg.version).toBe(1);
+    expect(arg).toMatchObject({ lessonId: 1, lessonVersionId: 9, version: 1 });
+    expect(m.selectLessonChunks).toHaveBeenCalledWith(9);
     expect(arg.sourceFingerprint).toBe(fp);
     expect(arg.chunks.map((c: { id: string }) => c.id)).toEqual([
       'v1-c1',
@@ -199,6 +217,7 @@ describe('ensureLessonChunks', () => {
     ];
     m.stored = {
       lessonId: 1,
+      lessonVersionId: 9,
       version: 1,
       sourceFingerprint: 'stale',
       chunks: oldChunks,
@@ -215,12 +234,15 @@ describe('ensureLessonChunks', () => {
     const r = await ensureLessonChunks(1, 'l', 2);
     expect(m.generateKnowledgeChunks).toHaveBeenCalledTimes(1);
     const newStored = gen.map((c) => ({ ...c, id: `v2-${c.id}` }));
-    expect(m.matchKnowledgeChunks).toHaveBeenCalledWith(oldChunks, newStored);
+    // Matched before numbering, which takes a lock.
+    expect(m.matchKnowledgeChunks).toHaveBeenCalledWith(oldChunks, gen);
+    expect(m.nextChunkVersion).toHaveBeenCalledWith(1, m.tx);
     const arg = m.upsertLessonChunks.mock.calls[0][0];
     expect(arg.version).toBe(2);
     expect(arg.previousMapping).toEqual({ 'v1-c1': 'v2-c2', 'v1-c2': null });
     expect(r).toEqual({
       kind: 'ready',
+      lessonVersionId: 9,
       version: 2,
       chunks: newStored,
       context: source.context,
@@ -240,6 +262,7 @@ describe('ensureLessonChunks', () => {
   it('a regeneration whose carry-over clears every new chunk records no pass', async () => {
     m.stored = {
       lessonId: 1,
+      lessonVersionId: 9,
       version: 1,
       sourceFingerprint: 'stale',
       chunks: [
@@ -249,8 +272,8 @@ describe('ensureLessonChunks', () => {
       previousMapping: null,
     };
     m.matchKnowledgeChunks.mockResolvedValue({
-      'v1-c1': 'v2-c2',
-      'v1-c2': 'v2-c1',
+      'v1-c1': 'c2',
+      'v1-c2': 'c1',
     });
     const t = new Date();
     m.clearedRows = [
@@ -265,12 +288,13 @@ describe('ensureLessonChunks', () => {
   it('claim held by another caller: returns stored row without generating', async () => {
     m.stored = {
       lessonId: 1,
+      lessonVersionId: 9,
       version: 1,
       sourceFingerprint: 'stale',
       chunks: [{ id: 'v1-c1', title: 'o', summary: '' }],
       previousMapping: null,
     };
-    m.claims.set('knowledge-chunks:claim:1', '1');
+    m.claims.set('knowledge-chunks:claim:9', '1');
     const r = await ensureLessonChunks(1, 'l', 2);
     expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
     expect(r.kind === 'ready' && r.version).toBe(1);
@@ -279,7 +303,7 @@ describe('ensureLessonChunks', () => {
   describe('claim held and nothing stored yet (first generation in flight)', () => {
     beforeEach(() => {
       vi.useFakeTimers();
-      m.claims.set('knowledge-chunks:claim:1', '1');
+      m.claims.set('knowledge-chunks:claim:9', '1');
     });
     afterEach(() => {
       vi.useRealTimers();
@@ -290,6 +314,7 @@ describe('ensureLessonChunks', () => {
       await vi.advanceTimersByTimeAsync(CHUNKS_BUSY_POLL_MS);
       m.stored = {
         lessonId: 1,
+        lessonVersionId: 9,
         version: 1,
         sourceFingerprint: fp,
         chunks: [{ id: 'v1-c1', title: 'x', summary: 'y' }],
@@ -298,6 +323,7 @@ describe('ensureLessonChunks', () => {
       await vi.advanceTimersByTimeAsync(CHUNKS_BUSY_POLL_MS);
       await expect(pending).resolves.toEqual({
         kind: 'ready',
+        lessonVersionId: 9,
         version: 1,
         chunks: [{ id: 'v1-c1', title: 'x', summary: 'y' }],
         context: source.context,
@@ -311,12 +337,13 @@ describe('ensureLessonChunks', () => {
       await expect(pending).resolves.toEqual({ kind: 'busy' });
       expect(m.generateKnowledgeChunks).not.toHaveBeenCalled();
       // The holder's claim is theirs to release.
-      expect(m.claims.has('knowledge-chunks:claim:1')).toBe(true);
+      expect(m.claims.has('knowledge-chunks:claim:9')).toBe(true);
     });
   });
 
   describe('degraded source (transcript lookup failed)', () => {
     const degraded = {
+      lessonVersionId: 9,
       kind: 'material',
       keyPoints: ['a', 'b'],
       context: 'material text',
@@ -326,6 +353,7 @@ describe('ensureLessonChunks', () => {
     it('with a row stored: returns it unchanged — no claim, no generate, no match, no write', async () => {
       const stored: Stored = {
         lessonId: 1,
+        lessonVersionId: 9,
         version: 4,
         sourceFingerprint: fp, // built from the transcript, not this context
         chunks: [{ id: 'v4-c1', title: 'x', summary: 'y' }],
@@ -336,6 +364,7 @@ describe('ensureLessonChunks', () => {
       const r = await ensureLessonChunks(1, 'l', 2);
       expect(r).toEqual({
         kind: 'ready',
+        lessonVersionId: 9,
         version: 4,
         chunks: stored.chunks,
         context: 'material text',
@@ -376,7 +405,7 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'v1-c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(5, { 'v1-c1': 'v2-c2', 'v1-c2': 'v2-c1' }, 2);
+    await carryOverMastery(5, { 'v1-c1': 'v2-c2', 'v1-c2': 'v2-c1' }, 1);
     expect(m.commits).toBe(1);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
     expect(m.txCalls.some((c) => c.op === 'insert-pass')).toBe(false);
@@ -388,15 +417,15 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: null }, 2);
+    await carryOverMastery(5, { c1: 'c2', c2: null }, 1);
     const [sel, del, ins] = m.txCalls;
     expect([sel.op, del.op, ins.op]).toEqual(['select', 'delete', 'insert']);
 
     for (const c of [sel, del]) {
       expect(renderSql(c.arg as SQL)).toBe(
-        '"debrief_chunk_mastery"."lesson_id" = $1 and not exists (select 1 from debrief_passes dp inner join lessons l on l.slug = dp.lesson_slug where dp.user_id = "debrief_chunk_mastery"."user_id" and l.id = $2) and "debrief_chunk_mastery"."chunk_id" not like $3',
+        '"debrief_chunk_mastery"."lesson_id" = $1 and not exists (select 1 from debrief_passes dp inner join lessons l on l.slug = dp.lesson_slug where dp.user_id = "debrief_chunk_mastery"."user_id" and l.id = $2) and "debrief_chunk_mastery"."chunk_id" like $3',
       );
-      expect(renderSqlParams(c.arg as SQL)).toEqual([5, 5, 'v2-%']);
+      expect(renderSqlParams(c.arg as SQL)).toEqual([5, 5, 'v1-%']);
     }
     // c1 -> c2 keeps clearedAt and score; c2 (unmapped) is dropped.
     expect(ins.arg).toEqual([
@@ -416,7 +445,7 @@ describe('carryOverMastery', () => {
       { userId: 'u1', chunkId: 'c1', latestScore: 71, clearedAt: t },
       { userId: 'u1', chunkId: 'c2', latestScore: 72, clearedAt: t },
     ];
-    await carryOverMastery(5, { c1: 'c2', c2: 'c1' }, 2);
+    await carryOverMastery(5, { c1: 'c2', c2: 'c1' }, 1);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete', 'insert']);
     expect(
       (m.txCalls[2].arg as { chunkId: string }[]).map((r) => r.chunkId),
@@ -427,17 +456,17 @@ describe('carryOverMastery', () => {
     m.clearedRows = [
       { userId: 'u1', chunkId: 'c1', latestScore: 20, clearedAt: null },
     ];
-    await carryOverMastery(5, { c1: 'c1' }, 2);
+    await carryOverMastery(5, { c1: 'c1' }, 1);
     expect(m.txCalls.map((c) => c.op)).toEqual(['select', 'delete']);
   });
 });
 
 describe('carryOverMastery safety', () => {
-  it('only selects and deletes rows NOT at the new version; current rows survive', async () => {
+  it('only selects and deletes rows of the list replaced, never of another list', async () => {
     await carryOverMastery(5, { c1: 'c2' }, 3);
     for (const c of m.txCalls.filter((x) => x.op !== 'insert')) {
       expect(renderSql(c.arg as SQL)).toContain(
-        '"debrief_chunk_mastery"."chunk_id" not like $3',
+        '"debrief_chunk_mastery"."chunk_id" like $3',
       );
       expect(renderSqlParams(c.arg as SQL)[2]).toBe('v3-%');
     }
@@ -448,7 +477,7 @@ describe('carryOverMastery safety', () => {
     m.clearedRows = [
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
     ];
-    await carryOverMastery(5, { 'v1-c1': 'v2-c1' }, 2);
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1' }, 1);
     const cfg = m.conflictCfg as { target: unknown[]; set: { clearedAt: SQL } };
     expect(cfg.target).toHaveLength(3);
     expect(renderSql(cfg.set.clearedAt)).toBe(
@@ -462,13 +491,14 @@ describe('carryOverMastery safety', () => {
       { userId: 'u1', chunkId: 'v1-c1', latestScore: 80, clearedAt: t },
       { userId: 'u1', chunkId: 'v1-c2', latestScore: 90, clearedAt: t },
     ];
-    await carryOverMastery(5, { 'v1-c1': 'v2-c1', 'v1-c2': 'v2-c1' }, 2);
+    await carryOverMastery(5, { 'v1-c1': 'v2-c1', 'v1-c2': 'v2-c1' }, 1);
     expect(m.txCalls.at(-1)?.arg).toHaveLength(1);
   });
 
   it('carry-over throwing rolls back the chunk upsert', async () => {
     m.stored = {
       lessonId: 1,
+      lessonVersionId: 9,
       version: 1,
       sourceFingerprint: 'stale',
       chunks: [{ id: 'v1-c1', title: 'o', summary: '' }],
@@ -493,7 +523,7 @@ describe('chunk id versions', () => {
     expect(chunkIdVersion('x2-c3')).toBeNull();
   });
 
-  it('keeps current ids, maps one-version-old ids, drops the rest', () => {
+  it('keeps current ids, maps the ids of the list it replaced, drops the rest', () => {
     const out = mapToCurrentChunkIds(
       {
         'v2-c1': 80,
@@ -507,6 +537,16 @@ describe('chunk id versions', () => {
       2,
     );
     expect(out).toEqual({ 'v2-c1': 80, 'v2-c4': 70 });
+  });
+
+  it('maps across a gap: another snapshot may have taken the numbers between', () => {
+    expect(
+      mapToCurrentChunkIds(
+        { 'v1-c1': 70, 'v3-c1': 60, 'v4-c2': 80 },
+        { 'v1-c1': 'v4-c1' },
+        4,
+      ),
+    ).toEqual({ 'v4-c1': 70, 'v4-c2': 80 });
   });
 
   it('with no mapping drops old ids', () => {

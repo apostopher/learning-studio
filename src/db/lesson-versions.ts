@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { isPinOf } from '#/db/course-lesson-content';
 import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import {
@@ -194,10 +195,7 @@ export async function updateCourseLessonVersion(i: {
       .for('update');
     if (!lesson) return { ok: false, reason: 'not-found' } as const;
 
-    const pinned = and(
-      eq(courseLessonVersionsTable.courseId, i.courseId),
-      eq(courseLessonVersionsTable.lessonId, i.lessonId),
-    );
+    const pinned = isPinOf(i.courseId, i.lessonId);
     // Of a lesson the course shows: a pin left behind is not one to move.
     const [pin] = await tx
       .select({ version: lessonVersionsTable.version })

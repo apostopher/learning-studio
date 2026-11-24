@@ -49,6 +49,9 @@ vi.mock('#/db/debrief-attempts', () => ({
   updateDraft: vi.fn(),
   selectAskedQuestions: vi.fn(),
 }));
+vi.mock('#/db/course-lesson-content', () => ({
+  getPinnedVersionId: async () => 61,
+}));
 vi.mock('#/lib/knowledge-chunks.server', () => ({
   ensureLessonChunks: m.ensureLessonChunks,
   mapToCurrentChunkIds: (s: Record<string, number>) => s,

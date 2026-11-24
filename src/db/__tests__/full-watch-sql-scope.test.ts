@@ -6,12 +6,17 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 import {
   debriefFactColumns,
   progressComponentColumns,
+  progressComponentGroupBy,
   videoWatchedAtSql,
 } from '#/db/progress-components';
-import { lessonsTable } from '#/db/schema';
+import {
+  courseLessonVersionsTable,
+  lessonsTable,
+  lessonVersionsTable,
+} from '#/db/schema';
 
 /**
- * `getDebriefFacts` selects these fragments from `lessons` ALONE, and in a
+ * `getDebriefFacts` selected these fragments from `lessons` ALONE, and in a
  * single-table select drizzle renders a column bare: `"id"`. Inside the
  * fragment's subquery over `videos_progress v`, Postgres binds a bare "id" to
  * the NEAREST scope — `v.id` — so `v.lesson_id = "id"` matched no watch and
@@ -37,9 +42,8 @@ describe('full-watch SQL in a single-table select', () => {
 });
 
 /**
- * The debrief fact columns are selected from `lessons` alone by
- * `getDebriefFacts` too, where the same bare-column binding bug applies. Each
- * fragment goes through `inSingleTableSelect` (a bare `renderSql` qualifies
+ * The debrief fact columns must name their outer tables too, whatever select
+ * they are put in: the same bare-column binding bug applies. Each fragment goes through `inSingleTableSelect` (a bare `renderSql` qualifies
  * columns anyway and would hide the bug) and its outer predicate is pinned.
  */
 describe('debrief fact columns in a single-table select', () => {
@@ -66,24 +70,24 @@ describe('debrief fact columns in a single-table select', () => {
     ).toBe('t.lesson_slug = "lessons"."slug"');
   });
 
-  it('chunksCleared ties mastery rows to the OUTER lesson id', () => {
+  it('chunksCleared ties the chunk list to the OUTER snapshot', () => {
     expect(
-      predicate(inSingleTableSelect(cols.chunksCleared), 'm.lesson_id'),
-    ).toBe('m.lesson_id = "lessons"."id"');
+      predicate(inSingleTableSelect(cols.chunksCleared), 'k.lesson_version_id'),
+    ).toBe('k.lesson_version_id = "lesson_versions"."id"');
   });
 
-  it('chunksTotal ties the chunk row to the OUTER lesson id', () => {
+  it('chunksTotal ties the chunk row to the OUTER snapshot', () => {
     expect(
-      predicate(inSingleTableSelect(cols.chunksTotal), 'k.lesson_id'),
-    ).toBe('k.lesson_id = "lessons"."id"');
+      predicate(inSingleTableSelect(cols.chunksTotal), 'k.lesson_version_id'),
+    ).toBe('k.lesson_version_id = "lesson_versions"."id"');
   });
 
-  it('debriefBearing ties every subquery to the OUTER lesson', () => {
+  it('debriefBearing ties every subquery to the OUTER lesson, course or snapshot', () => {
     const text = inSingleTableSelect(
       progressComponentColumns('u1').debriefBearing,
     );
-    expect(predicate(text, 'm.lesson_slug')).toBe(
-      `m.lesson_slug = "lessons"."slug" and coalesce(m.text, '') <> ''`,
+    expect(predicate(text, 'p.course_id')).toBe(
+      'p.course_id = "course_lesson_versions"."course_id"',
     );
     expect(predicate(text, 'p.lesson_slug')).toBe(
       'p.lesson_slug = "lessons"."slug"',
@@ -91,7 +95,9 @@ describe('debrief fact columns in a single-table select', () => {
     expect(predicate(text, 't.lesson_slug')).toBe(
       't.lesson_slug = "lessons"."slug"',
     );
-    expect(predicate(text, 'k.lesson_id')).toBe('k.lesson_id = "lessons"."id"');
+    expect(predicate(text, 'k.lesson_version_id')).toBe(
+      'k.lesson_version_id = "lesson_versions"."id"',
+    );
   });
 
   it('hasOpenDebrief filters on the chunk-format tag', () => {
@@ -108,4 +114,19 @@ describe('debrief fact columns in a single-table select', () => {
       expect(renderSqlParams(rollup[key])).toEqual(renderSqlParams(cols[key]));
     }
   });
+});
+
+// The rest of the snapshot's columns hang off its primary key; the two queries
+// run for real in lesson-version-progress.test.ts.
+it('the shared GROUP BY names the snapshot and the course that pins it', () => {
+  expect(progressComponentGroupBy).toEqual([
+    lessonsTable.slug,
+    lessonsTable.needsVideoWatch,
+    lessonsTable.hasDebrief,
+    courseLessonVersionsTable.courseId,
+    lessonVersionsTable.id,
+    lessonVersionsTable.lessonId,
+    lessonVersionsTable.videoProvider,
+    lessonVersionsTable.videoRef,
+  ]);
 });

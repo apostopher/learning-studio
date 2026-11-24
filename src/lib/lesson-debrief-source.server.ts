@@ -6,6 +6,8 @@ import { getDerivedKeyPoints } from '#/db/derived-key-points';
 import { getLessonTranscript } from '#/db/lesson-transcript';
 
 export type DebriefSource = {
+  /** The snapshot everything here is of. */
+  lessonVersionId: number;
   /**
    * Which input the questions were built from. Reported for logging only — the
    * learner is never shown a different debrief depending on this.
@@ -114,6 +116,7 @@ export async function resolveDebriefSource(
     const flag = degraded ? { degraded: true as const } : {};
     if (snapshot.keyPoints?.length) {
       return {
+        lessonVersionId: snapshot.id,
         kind: 'material',
         keyPoints: snapshot.keyPoints,
         context,
@@ -122,12 +125,23 @@ export async function resolveDebriefSource(
     }
     const derived = await getDerivedKeyPoints(snapshot.text);
     if (derived.length > 0) {
-      return { kind: 'material-derived', keyPoints: derived, context, ...flag };
+      return {
+        lessonVersionId: snapshot.id,
+        kind: 'material-derived',
+        keyPoints: derived,
+        context,
+        ...flag,
+      };
     }
   }
 
   if (!transcript) return null;
   const keyPoints = await getDerivedKeyPoints(transcript);
   if (keyPoints.length === 0) return null;
-  return { kind: 'transcript', keyPoints, context: transcript };
+  return {
+    lessonVersionId: snapshot.id,
+    kind: 'transcript',
+    keyPoints,
+    context: transcript,
+  };
 }

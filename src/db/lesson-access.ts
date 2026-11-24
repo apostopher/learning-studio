@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
+import { isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import {
   courseLessonVersionsTable,
@@ -52,13 +53,7 @@ export async function getLessonInCourse({
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
-    .innerJoin(
-      courseLessonVersionsTable,
-      and(
-        eq(courseLessonVersionsTable.courseId, course.id),
-        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
-      ),
-    )
+    .innerJoin(courseLessonVersionsTable, isPinOf(course.id))
     .where(
       and(
         eq(lessonsTable.slug, lessonSlug),

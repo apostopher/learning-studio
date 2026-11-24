@@ -7,6 +7,7 @@ import {
   AIEvaluationResultSchema,
 } from '#/ai/schemas';
 import { db } from '#/db';
+import { getPinnedVersionId } from '#/db/course-lesson-content';
 import {
   type AttemptRow,
   insertAnswerLog,
@@ -20,7 +21,6 @@ import {
   selectHasPass,
   selectMastery,
   selectOpenAttempt,
-  type Tx,
   updateAttempt,
   updateDraft,
   upsertMastery,
@@ -38,7 +38,6 @@ import {
 import {
   applyChunkScore,
   drawAttemptKeyPoints,
-  type KnowledgeChunk,
   masteryOf,
 } from '#/lib/debrief-mastery';
 import {
@@ -195,27 +194,6 @@ function clientQuestions(
     );
 }
 
-/**
- * The lesson's current chunk list, for counting mastery. Falls back to the
- * attempt's own snapshot when the lesson no longer has stored chunks, so an
- * open attempt still shows a sensible count. Inside a transaction (`ex`) the
- * row is read `for share` (see `selectCurrentChunks`).
- */
-async function currentChunksOr(
-  lessonId: number,
-  fallback: KnowledgeChunk[],
-  ex?: Tx,
-) {
-  const row = ex
-    ? await selectCurrentChunks(lessonId, ex, { forShare: true })
-    : await selectCurrentChunks(lessonId);
-  return {
-    chunks: row?.chunks ?? fallback,
-    version: row?.version ?? null,
-    previousMapping: row?.previousMapping ?? null,
-  };
-}
-
 /** How a lesson's sets are judged for this pilot: the facts, the course's pass mark, the judge. */
 type Scoring = { facts: ScoreFacts; passMark: number; judge: SetJudge };
 
@@ -299,8 +277,8 @@ function toView(row: AttemptRow, scoring: Scoring): AttemptView {
  * A new attempt asks up to eight of the lesson's key points, a fresh random
  * draw with the pilot's misses first (`drawAttemptKeyPoints`), in sets of
  * four. It is served from the prepared test when that was drawn for exactly
- * this chunk version and mastery, else generated now. It stores a snapshot of
- * the questions, their sets, the chunks and the context, which is all
+ * this version of the lesson, chunk version and mastery, else generated now.
+ * It stores a snapshot of the questions, their sets, the chunks and the context, which is all
  * grading ever reads.
  *
  * The caller has already checked the debrief is open (`getDebriefAccess`).
@@ -331,7 +309,7 @@ export async function startOrResumeAttempt(k: {
   const test =
     (await takePreparedDebrief(
       key,
-      preparedFingerprint(lesson.version, mastery),
+      preparedFingerprint(lesson.lessonVersionId, lesson.version, mastery),
     )) ??
     (await generateTest({
       lessonSlug: k.lessonSlug,
@@ -390,8 +368,11 @@ const isChunkAttempt = (row: AttemptRow | null, userId: string) =>
  * only the first commits and the second returns the first's evaluation.
  *
  * Questions are answered in order, and only within the sets reached. Each
- * chunk score is applied to the pilot's mastery of the lesson's CURRENT chunk
- * list (mapped across one regeneration), which only orders the next draw.
+ * chunk score is applied to the pilot's mastery of the CURRENT chunk list of
+ * the version this course shows (mapped across one regeneration), which only
+ * orders the next draw. An attempt on another version — the course has moved
+ * on, or it was opened in another course — is graded just the same and can
+ * still pass, but says nothing about this version's key points.
  *
  * A completed set is judged on the LESSON TOTAL (`setScore`): the better set
  * average so far plus 5 points per right quiz answer (`getScoreFacts`),
@@ -442,6 +423,8 @@ export async function answerQuestion(a: {
     return { ok: false, reason: 'out-of-order' };
   }
 
+  const lessonVersionId = await getPinnedVersionId(row.lessonSlug, a.courseId);
+
   // The snapshot, never the lesson's current source (Review Focus 2).
   const evaluation = await evaluateFreeText(
     next,
@@ -471,16 +454,18 @@ export async function answerQuestion(a: {
       return { ok: false, reason: 'out-of-order' };
     }
 
-    const current = await currentChunksOr(a.lessonId, stored.chunks, tx);
+    const current =
+      lessonVersionId === null
+        ? null
+        : await selectCurrentChunks(lessonVersionId, tx, { forShare: true });
     const rows = await selectMastery(a.userId, a.lessonId, tx);
-    const scores =
-      current.version === null
-        ? {}
-        : mapToCurrentChunkIds(
-            evaluation.chunkScores ?? {},
-            current.previousMapping,
-            current.version,
-          );
+    const scores = current
+      ? mapToCurrentChunkIds(
+          evaluation.chunkScores ?? {},
+          current.previousMapping,
+          current.version,
+        )
+      : {};
 
     const now = new Date();
     const byId = new Map(rows.map((r) => [r.chunkId, r]));

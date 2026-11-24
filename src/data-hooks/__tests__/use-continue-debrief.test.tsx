@@ -31,11 +31,11 @@ function setup(body: unknown) {
       .mockResolvedValue({ ok: true, status: 200, json: async () => body }),
   );
   const client = new QueryClient();
-  client.setQueryData(dataKeys.debriefAttempt('l1'), onOffer);
+  client.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), onOffer);
   const store = createStore();
   const seen: unknown[] = [];
   const onContinued = vi.fn(() => {
-    seen.push(client.getQueryData(dataKeys.debriefAttempt('l1')));
+    seen.push(client.getQueryData(dataKeys.debriefAttempt('ppl', 'l1')));
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <Provider store={store}>

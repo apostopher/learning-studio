@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 // toComponentFields is pure; the module's top level only builds sql fragments
 // from schema columns, so a bare stub of the schema is enough.
 vi.mock('#/db/schema', () => ({
+  courseLessonVersionsTable: {},
   lessonMaterialProgressTable: {},
   lessonsTable: {},
+  lessonVersionsTable: {},
 }));
 
 import { toComponentFields } from '#/db/progress-components';

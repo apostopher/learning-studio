@@ -12,6 +12,7 @@ import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
 const m = vi.hoisted(() => ({
   queue: [] as unknown[][],
   wheres: [] as unknown[],
+  joins: [] as unknown[][],
   selects: [] as Record<string, unknown>[],
 }));
 
@@ -20,6 +21,10 @@ function chain(result: unknown) {
     Record<string, (...a: unknown[]) => unknown>;
   Object.assign(p, {
     from: () => p,
+    innerJoin: (table: unknown, on: unknown) => {
+      m.joins.push([table, on]);
+      return p;
+    },
     where: (cond: unknown) => {
       m.wheres.push(cond);
       return p;
@@ -48,7 +53,11 @@ import {
   debriefFactColumns,
   videoWatchedAtSql,
 } from '#/db/progress-components';
-import { lessonsTable } from '#/db/schema';
+import {
+  courseLessonVersionsTable,
+  lessonsTable,
+  lessonVersionsTable,
+} from '#/db/schema';
 import { computeDebriefState } from '#/lib/debrief-schedule';
 
 const at = (iso: string) => new Date(iso);
@@ -56,6 +65,7 @@ const at = (iso: string) => new Date(iso);
 beforeEach(() => {
   m.queue.length = 0;
   m.wheres.length = 0;
+  m.joins.length = 0;
   m.selects.length = 0;
 });
 
@@ -121,7 +131,7 @@ describe('getDebriefFacts', () => {
         videoRef: hasVideo ? 'ref' : null,
       },
     ]);
-    return getDebriefFacts('u1', 'l1', 41);
+    return getDebriefFacts('u1', 'l1', 41, 7);
   };
 
   it('nothing recorded → no clock, not passed, never finished, nothing open, no chunks', async () => {
@@ -152,7 +162,7 @@ describe('getDebriefFacts', () => {
     });
   });
 
-  it('selects the SAME fact fragments as the progress rollup, from lessons alone', async () => {
+  it('selects the SAME fact fragments as the progress rollup, from the version this course is pinned to', async () => {
     await facts();
     const sel = m.selects[1] as Record<string, SQL>;
     const shared = debriefFactColumns('u1');
@@ -167,6 +177,18 @@ describe('getDebriefFacts', () => {
       '("lessons"."id" = $1 and "lessons"."slug" = $2)',
     );
     expect(renderSqlParams(where)).toEqual([41, 'l1']);
+    const [[pin, onPin], [snapshot, onSnapshot]] = m.joins;
+    expect(pin).toBe(courseLessonVersionsTable);
+    expect(renderSql(onPin as SQL)).toBe(
+      '("course_lesson_versions"."course_id" = $1 and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(renderSqlParams(onPin as SQL)).toEqual([7]);
+    expect(snapshot).toBe(lessonVersionsTable);
+    expect(renderSql(onSnapshot as SQL)).toBe(
+      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
+    );
+    expect(sel.videoProvider).toBe(lessonVersionsTable.videoProvider);
+    expect(sel.videoRef).toBe(lessonVersionsTable.videoRef);
   });
 
   // 2026-11-18: only a passing set passes. Every chunk cleared across

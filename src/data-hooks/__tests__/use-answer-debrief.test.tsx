@@ -66,12 +66,12 @@ describe('useAnswerDebrief', () => {
       }),
     );
     const client = new QueryClient();
-    client.setQueryData(dataKeys.debriefAttempt('l1'), attempt);
+    client.setQueryData(dataKeys.debriefAttempt('ppl', 'l1'), attempt);
     const seen: unknown[] = [];
     const onAnswered = vi.fn(() => {
       // The quiz records Viper's feedback from here, and must show it in the
       // same render the attempt cache moves on — never the next question.
-      seen.push(client.getQueryData(dataKeys.debriefAttempt('l1')));
+      seen.push(client.getQueryData(dataKeys.debriefAttempt('ppl', 'l1')));
     });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -96,8 +96,9 @@ describe('useAnswerDebrief', () => {
     ]);
     expect(seen[0]).toEqual(attempt);
     expect(
-      client.getQueryData<DebriefAttemptView>(dataKeys.debriefAttempt('l1'))
-        ?.answered,
+      client.getQueryData<DebriefAttemptView>(
+        dataKeys.debriefAttempt('ppl', 'l1'),
+      )?.answered,
     ).toHaveLength(2);
   });
 });

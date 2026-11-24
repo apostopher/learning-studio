@@ -14,6 +14,7 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "#/db";
+import { isPinnedSnapshot, isPinOf } from "#/db/course-lesson-content";
 import { getCourseProgress } from "#/db/course-progress";
 import {
   progressComponentColumns,
@@ -21,12 +22,14 @@ import {
   toComponentFields,
 } from "#/db/progress-components";
 import {
+  courseLessonVersionsTable,
   courseSubscriptionsTable,
   coursesTable,
   lessonCompletionsTable,
   lessonMaterialProgressTable,
   lessonQuizAnswersTable,
   lessonsTable,
+  lessonVersionsTable,
   videoProgressTable,
 } from "#/db/schema";
 import { watchedMilestones } from "#/lib/course-milestones";
@@ -39,7 +42,7 @@ type Candidate = { userId: string; lessonId: number; doneAt: Date };
 
 async function candidatesFor(
   userId: string,
-  courseSlug: string,
+  course: { id: number; slug: string },
   lessonIds: number[],
   skipped: string[],
 ): Promise<Candidate[]> {
@@ -47,11 +50,12 @@ async function candidatesFor(
   // ring reads, so "needed" cannot drift from "100%".
   const lessonRows = await db
     .select({
-      lessonId: lessonsTable.id,
       slug: lessonsTable.slug,
       ...progressComponentColumns(userId),
     })
     .from(lessonsTable)
+    .innerJoin(courseLessonVersionsTable, isPinOf(course.id))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .leftJoin(
       lessonMaterialProgressTable,
       and(
@@ -145,7 +149,7 @@ async function candidatesFor(
     if (doneAt) out.push({ userId, lessonId: row.lessonId, doneAt });
     else
       skipped.push(
-        `${userId} ${courseSlug} lesson ${row.lessonId} (${row.slug})`,
+        `${userId} ${course.slug} lesson ${row.lessonId} (${row.slug})`,
       );
   }
   return out;
@@ -155,6 +159,7 @@ async function main(): Promise<void> {
   const subs = await db
     .select({
       userId: courseSubscriptionsTable.userId,
+      id: coursesTable.id,
       slug: coursesTable.slug,
     })
     .from(courseSubscriptionsTable)
@@ -168,7 +173,7 @@ async function main(): Promise<void> {
   let toBackfill = 0;
   let alreadyDone = 0;
 
-  for (const { userId, slug } of subs) {
+  for (const { userId, id, slug } of subs) {
     courses.add(slug);
     const progress = await getCourseProgress({ userId, slug });
     alreadyDone += progress.lessons.filter((l) => l.done).length;
@@ -177,7 +182,7 @@ async function main(): Promise<void> {
       .map((l) => l.lessonId);
     if (ids.length === 0) continue;
 
-    const rows = await candidatesFor(userId, slug, ids, skipped);
+    const rows = await candidatesFor(userId, { id, slug }, ids, skipped);
     toBackfill += rows.length;
     if (!DRY_RUN && rows.length > 0) {
       await db

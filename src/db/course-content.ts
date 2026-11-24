@@ -1,7 +1,8 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
@@ -135,17 +136,8 @@ export async function getGatedCourseForAgent(
       eq(moduleLessonsTable.moduleId, modulesTable.id),
     )
     .leftJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
-    .leftJoin(
-      courseLessonVersionsTable,
-      and(
-        eq(courseLessonVersionsTable.courseId, coursesTable.id),
-        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
-      ),
-    )
-    .leftJoin(
-      lessonVersionsTable,
-      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
-    )
+    .leftJoin(courseLessonVersionsTable, isPinOf(coursesTable.id))
+    .leftJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(eq(coursesTable.slug, slug))
     // Both ranks are the PLACEMENT's: the module's position in this course,
     // then the lesson's position in its module.
