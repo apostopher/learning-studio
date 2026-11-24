@@ -77,9 +77,12 @@ export async function createDb(
   // template0: nobody can be connected to it, so parallel files never collide.
   await admin(`create database "${name}" template template0`);
   const pool = new pg.Pool({ ...connection, database: name });
-  const drop = async () => {
-    await pool.end();
-    await admin(`drop database if exists "${name}"`);
+  let dropped: Promise<void> | undefined;
+  const drop = () => {
+    dropped ??= pool
+      .end()
+      .then(() => admin(`drop database if exists "${name}"`));
+    return dropped;
   };
   try {
     const { rows } = await pool.query<{ v: number }>(

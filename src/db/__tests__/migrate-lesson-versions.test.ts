@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { generateDrizzleJson, generateMigration } from 'drizzle-kit/api';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Never the real client: under vitest DATABASE_URL may name production.
 vi.mock('#/db', () => ({ db: {} }));
 
 import {
+  FIRST_RUN_LABELS,
   LESSON_VERSIONS_STATEMENTS,
   migrateLessonVersions,
 } from '../migrate-lesson-versions';
@@ -14,7 +16,9 @@ import * as schema from '../schema';
 import { createDb, type FreshDb, freshDb } from './support/local-pg';
 
 const sqls = () =>
-  LESSON_VERSIONS_STATEMENTS.map((s) => new PgDialect().sqlToQuery(s).sql);
+  [...LESSON_VERSIONS_STATEMENTS, ...Object.values(FIRST_RUN_LABELS)].map(
+    (s) => new PgDialect().sqlToQuery(s).sql,
+  );
 
 describe('migrate-lesson-versions', () => {
   it('never drops or truncates data', () => {
@@ -171,14 +175,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         { course_id: 1, lesson_id: 3, version: '1.0' },
         { course_id: 2, lesson_id: 3, version: '1.0' },
       ]);
-      // C's rows, left alone while it was unplaced, are labelled now.
-      expect(
-        await rows(
-          `select 1 from docs where lesson_slug is not null and lesson_version_id is null
-           union all
-           select 1 from lesson_knowledge_chunks where lesson_version_id is null`,
-        ),
-      ).toEqual([]);
     });
 
     it('a re-run neither takes a version being worked on nor moves a pin', async () => {
@@ -192,8 +188,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         update course_lesson_versions set lesson_version_id =
             (select id from lesson_versions where lesson_id = 1 and version = '1.1')
           where course_id = 2 and lesson_id = 1;
-        insert into docs (lesson_slug, source_path, chunk, embedding)
-          values ('a', 'lesson:a', 'a3', array_fill(0.1::real, array[3072])::vector);
       `);
       await migrate();
       expect(await pins()).toEqual([
@@ -207,36 +201,95 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         [2, '1.0'],
         [1, '1.1'],
       ]);
-      // An unlabelled row belongs to the lesson's lowest snapshot.
-      expect(
-        await rows(`select v.version from docs d
-          join lesson_versions v on v.id = d.lesson_version_id where d.chunk = 'a3'`),
-      ).toEqual([{ version: '1.0' }]);
     });
 
-    it('keeps an unlabelled chunk row when its snapshot already has chunks', async () => {
+    const cDocs = () =>
+      rows(`select d.chunk, v.text from docs d
+        left join lesson_versions v on v.id = d.lesson_version_id
+        where d.lesson_slug = 'c' order by 1`);
+
+    it('a later run leaves old search rows off a snapshot the new code indexed', async () => {
       await pgDb.pool.query(SEED);
       await migrate();
-      // C is placed and gets its own chunks on the new code, beside its old row.
+      await pgDb.pool.query(`
+        update lesson_material set text = 'NEW' where lesson_slug = 'c';
+        insert into module_lessons (module_id, lesson_id, rank) values (1, 3, 3);
+        insert into lesson_versions (lesson_id, version, name, text, extra_tab)
+          values (3, '1.0', 'C', 'NEW', 'testThis');
+        insert into docs (lesson_slug, lesson_version_id, source_path, chunk, embedding)
+          select 'c', id, 'lesson:c@1.0', 'c-new', array_fill(0.1::real, array[3072])::vector
+          from lesson_versions where lesson_id = 3;
+      `);
+      await migrate();
+      expect(await cDocs()).toEqual([
+        { chunk: 'c-new', text: 'NEW' },
+        { chunk: 'c1', text: null },
+      ]);
+    });
+
+    it('a later run leaves the snapshot it takes unindexed rather than label old search rows', async () => {
+      await pgDb.pool.query(SEED);
+      await migrate();
+      await pgDb.pool.query(`
+        update lesson_material set text = 'NEW' where lesson_slug = 'c';
+        insert into module_lessons (module_id, lesson_id, rank) values (1, 3, 3);
+      `);
+      await migrate();
+      expect(
+        await rows('select text from lesson_versions where lesson_id = 3'),
+      ).toEqual([{ text: 'NEW' }]);
+      expect(await cDocs()).toEqual([{ chunk: 'c1', text: null }]);
+    });
+
+    it('a later run leaves unlabelled chunk rows alone and does not abort when a lesson has two of them', async () => {
+      await pgDb.pool.query(SEED);
+      await migrate();
       await pgDb.pool.query(`
         insert into module_lessons (module_id, lesson_id, rank) values (1, 3, 3);
-        insert into lesson_versions (lesson_id, version, name, extra_tab)
-          values (3, '1.0', 'C', 'testThis');
-        insert into lesson_knowledge_chunks
-            (lesson_id, version, source_fingerprint, chunks, lesson_version_id)
-          select 3, 2, 'new', '[]', id from lesson_versions where lesson_id = 3;
+        insert into lesson_knowledge_chunks (lesson_id, version, source_fingerprint, chunks)
+          values (3, 2, 'fp2', '[]');
       `);
       await migrate();
       expect(
         await rows(
-          `select source_fingerprint as fp, lesson_version_id is null as unlabelled
+          `select source_fingerprint as fp, lesson_version_id as v
            from lesson_knowledge_chunks where lesson_id = 3 order by 1`,
         ),
       ).toEqual([
-        { fp: 'fp', unlabelled: true },
-        { fp: 'new', unlabelled: false },
+        { fp: 'fp', v: null },
+        { fp: 'fp2', v: null },
       ]);
+      expect((await pins()).filter((p) => p.lesson_id === 3)).toHaveLength(2);
     });
+
+    it('a rolled-back run does not count as the first', async () => {
+      await pgDb.pool.query(SEED);
+      // Fails after the lesson_version_id columns are added.
+      await pgDb.pool.query('alter table module_lessons rename to gone');
+      await expect(migrate()).rejects.toThrow();
+      await pgDb.pool.query('alter table gone rename to module_lessons');
+      await migrate();
+      expect(
+        await rows(`select 'doc' as what from docs where lesson_version_id is not null
+          union all
+          select 'chunks' from lesson_knowledge_chunks where lesson_version_id is not null
+          order by 1`),
+      ).toEqual([{ what: 'chunks' }, { what: 'doc' }, { what: 'doc' }]);
+    });
+
+    it('gives up rather than queue everyone behind a long-running reader', async () => {
+      const reader = new pg.Client({ ...pgDb.pool.options });
+      await reader.connect();
+      try {
+        await reader.query('begin; select 1 from lessons');
+        // 55P03: lock_not_available.
+        await expect(migrate()).rejects.toMatchObject({
+          cause: { code: '55P03' },
+        });
+      } finally {
+        await reader.end();
+      }
+    }, 15_000);
 
     it('backfills content_updated_at once', async () => {
       await pgDb.pool.query(SEED);

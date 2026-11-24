@@ -46,19 +46,27 @@ describe.skipIf(!url)('freshDb', () => {
       freshDb({ migrated: false }),
       freshDb({ migrated: false }),
     ]);
-    const nameOf = async (d: typeof a) =>
-      (await d.pool.query('select current_database() as n')).rows[0].n;
-    const names = [await nameOf(a), await nameOf(b)];
-    expect(new Set(names).size).toBe(2);
-    for (const n of names) expect(n).toMatch(/^rmtp_versions_test_/);
+    try {
+      const nameOf = async (d: typeof a) =>
+        (await d.pool.query('select current_database() as n')).rows[0].n;
+      const names = [await nameOf(a), await nameOf(b)];
+      expect(new Set(names).size).toBe(2);
+      for (const n of names) expect(n).toMatch(/^rmtp_versions_test_/);
 
-    await Promise.all([a.drop(), b.drop()]);
-    const local = localPg();
-    const left = await local?.pool.query(
-      'select datname from pg_database where datname = any($1)',
-      [names],
-    );
-    await local?.pool.end();
-    expect(left?.rows).toEqual([]);
+      await Promise.all([a.drop(), b.drop()]);
+      await a.drop(); // idempotent: a test may drop before its afterEach does
+      const local = localPg();
+      try {
+        const left = await local?.pool.query(
+          'select datname from pg_database where datname = any($1)',
+          [names],
+        );
+        expect(left?.rows).toEqual([]);
+      } finally {
+        await local?.pool.end();
+      }
+    } finally {
+      await Promise.all([a.drop(), b.drop()]);
+    }
   });
 });

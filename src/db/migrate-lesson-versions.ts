@@ -7,12 +7,14 @@ import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
  * `lessons.version` and `lessons.content_updated_at`, the `lesson_versions`
  * (snapshots) and `course_lesson_versions` (pins) tables, and
  * `lesson_version_id` on `lesson_knowledge_chunks` and `docs`. Then every
- * (course, lesson) a course shows without a pin gets one, and existing chunk
- * and lesson doc rows are labelled with their lesson's snapshot.
+ * (course, lesson) a course shows without a pin gets one, and, on the first
+ * run only, existing chunk and lesson doc rows are labelled with their
+ * lesson's snapshot (`FIRST_RUN_LABELS`).
  *
  * Run order: MIGRATE -> DEPLOY -> MIGRATE AGAIN. The second run pins whatever
- * the old code placed, and labels whatever it indexed, between the two. Until
- * the deploy:
+ * the old code placed between the two. It labels nothing: afterwards
+ * `pnpm db:index-lesson-versions` embeds snapshots with no search rows, and
+ * the debrief regenerates missing chunks. Until the deploy:
  * - do not edit lesson content: a snapshot is already frozen, so an edit made
  *   on the old code stays out of every course until the lesson goes to 1.1;
  * - the old code cannot store newly generated debrief chunks (it upserts on
@@ -24,7 +26,9 @@ import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
  *
  * Re-running is safe: a pin is never moved, a snapshot never changed, and a
  * lesson whose courses all have pins is never snapshotted again (a snapshot
- * would lock the version an author is working on).
+ * would lock the version an author is working on). It gives up after waiting
+ * 5s for a lock rather than queue the whole site behind a long-running reader;
+ * just run it again.
  *
  * Usage:
  *   pnpm db:migrate-lesson-versions
@@ -114,25 +118,43 @@ export const LESSON_VERSIONS_STATEMENTS: SQL[] = [
     join "lessons" l on l."id" = ml."lesson_id"
     join "lesson_versions" v on v."lesson_id" = l."id" and v."version" = l."version"
     on conflict ("course_id","lesson_id") do nothing`,
-
-  // A snapshot that already has chunks keeps them (one row per snapshot).
-  sql`update "lesson_knowledge_chunks" c set "lesson_version_id" = s."id"
-    from (select "lesson_id", min("id") as "id" from "lesson_versions" group by "lesson_id") s
-    where s."lesson_id" = c."lesson_id" and c."lesson_version_id" is null
-      and not exists (select 1 from "lesson_knowledge_chunks" o where o."lesson_version_id" = s."id")`,
-  sql`update "docs" doc set "lesson_version_id" = s."id"
-    from "lessons" l
-    join (select "lesson_id", min("id") as "id" from "lesson_versions" group by "lesson_id") s on s."lesson_id" = l."id"
-    where l."slug" = doc."lesson_slug" and doc."lesson_version_id" is null`,
 ];
+
+/**
+ * Labels existing rows with their lesson's snapshot: by table, run only by the
+ * run that adds that table's `lesson_version_id`. Only then is every snapshot
+ * a copy of the content those rows were made from; later, the working copy may
+ * have moved on and a label would pass old rows off as the new snapshot's.
+ */
+export const FIRST_RUN_LABELS: Record<'lesson_knowledge_chunks' | 'docs', SQL> =
+  {
+    lesson_knowledge_chunks: sql`update "lesson_knowledge_chunks" c set "lesson_version_id" = v."id"
+    from "lesson_versions" v
+    where v."lesson_id" = c."lesson_id"`,
+    docs: sql`update "docs" doc set "lesson_version_id" = v."id"
+    from "lessons" l
+    join "lesson_versions" v on v."lesson_id" = l."id"
+    where l."slug" = doc."lesson_slug"`,
+  };
 
 /** One transaction: a failure part-way leaves the database as it was. */
 export async function migrateLessonVersions(
   db: Pick<typeof import('#/db').db, 'transaction'>,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.execute(sql`set local lock_timeout = '5s'`);
+    // Asked before the columns exist. A run that rolls back takes them with
+    // it, so it does not count.
+    const { rows } = await tx.execute<{ table_name: string }>(sql`
+      select table_name from information_schema.columns
+      where table_schema = current_schema() and column_name = 'lesson_version_id'`);
+    const labelled = new Set(rows.map((r) => r.table_name));
+
     for (const statement of LESSON_VERSIONS_STATEMENTS) {
       await tx.execute(statement);
+    }
+    for (const [table, label] of Object.entries(FIRST_RUN_LABELS)) {
+      if (!labelled.has(table)) await tx.execute(label);
     }
   });
 }

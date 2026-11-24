@@ -2070,7 +2070,8 @@ export const docs = pgTable(
     lessonSlug: text('lesson_slug').references(() => lessonsTable.slug, {
       onDelete: 'cascade',
     }),
-    // The snapshot a lesson chunk was embedded from; null for an upload.
+    // The snapshot a lesson chunk was embedded from. Null for an upload, and
+    // for a lesson chunk older than lesson versions that no course showed.
     lessonVersionId: integer('lesson_version_id').references(
       () => lessonVersionsTable.id,
       { onDelete: 'cascade' },
@@ -2666,7 +2667,7 @@ export const videoCalls = pgTable(
 
 /**
  * AI-generated knowledge chunks for a lesson, one row per lesson snapshot
- * (`lessonVersionId`; null only on an old row of a lesson no course has taken).
+ * (`lessonVersionId`; null only on a row older than lesson versions).
  * `sourceFingerprint` detects stale chunks; `version` bumps on regeneration.
  * `previousMapping` (old chunk id -> new chunk id | null) is written on
  * regeneration so mastery rows can be carried over. Created by

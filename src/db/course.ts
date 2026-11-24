@@ -46,13 +46,10 @@ import type {
 } from '@/types';
 import { db } from '.';
 
-// Plain `DBLesson &` (no `Omit` needed): `rank` here is ALWAYS the
-// placement's rank (see the `lessonMap.set(...)` override below), never a
-// lesson-row rank — and now that Task 7 has dropped `lessons.rank` from the
-// schema, `DBLesson` no longer carries the field at all, so there is nothing
-// left to omit. Declared here independently of `DBLesson` so
-// `shapeModuleLessons`'s `ShapeableLesson` constraint (which needs a `rank:
-// string`) is satisfied.
+// `version` and `contentUpdatedAt` are staff-only and never read for this
+// payload, so they are omitted. `rank` is the PLACEMENT's (see the
+// `lessonMap.set(...)` below): `lessons` has no rank column. It is declared
+// here to satisfy `shapeModuleLessons`'s `ShapeableLesson` constraint.
 type LessonDetails = Omit<DBLesson, 'version' | 'contentUpdatedAt'> & {
   rank: string;
   dependsOn: CourseLessonDependencies;
