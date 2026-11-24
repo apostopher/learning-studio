@@ -6,12 +6,25 @@ import {
   type UseFormRegister,
 } from 'react-hook-form';
 import type { MaterialExtraTab } from '#/lib/flagship-course';
-import type { LessonMaterialGeneration } from '#/types';
+import type { LessonMaterialGeneration, MaterialLink } from '#/types';
 import { LinkListField } from './link-list-field';
 import { QuizField } from './quiz-field';
 import { RichTextEditor } from './rich-text-editor';
 import { INLINE_CONTROLS } from './rich-text-toolbar';
 import { StringListField } from './string-list-field';
+
+/** What each link list is called: its legend, and what its ids are made of. */
+export const LINK_LIST_LABELS = {
+  links: 'Links',
+  testThis: 'TEST THIS!',
+} as const;
+
+/** A link list's errors by row. Takes the list too: errors may be sparse. */
+const urlErrors = (
+  errors: FieldErrors<LessonMaterialGeneration>,
+  list: keyof typeof LINK_LIST_LABELS,
+  value: MaterialLink[],
+) => value.map((_, i) => errors[list]?.[i]?.url?.message);
 
 const labelCls = 'font-medium text-secondary text-xs uppercase tracking-wide';
 
@@ -52,7 +65,15 @@ export const MaterialForm = ({
   saveError?: string;
 }) => {
   return (
-    <form id={formId} onSubmit={onSubmit} className="flex flex-col gap-6">
+    // `noValidate`: the browser's own link check would stop a version-only
+    // Save, and the version's refusal, before either ran. `materialFormSchema`
+    // checks links when the material itself is saved.
+    <form
+      id={formId}
+      onSubmit={onSubmit}
+      noValidate
+      className="flex flex-col gap-6"
+    >
       <div className="flex flex-col gap-1.5">
         <span className={labelCls}>Text</span>
         <Controller
@@ -126,8 +147,9 @@ export const MaterialForm = ({
           name="testThis"
           render={({ field }) => (
             <LinkListField
-              label="TEST THIS!"
+              label={LINK_LIST_LABELS.testThis}
               value={field.value ?? []}
+              urlErrors={urlErrors(errors, 'testThis', field.value ?? [])}
               onChange={field.onChange}
             />
           )}
@@ -169,7 +191,12 @@ export const MaterialForm = ({
         control={control}
         name="links"
         render={({ field }) => (
-          <LinkListField value={field.value ?? []} onChange={field.onChange} />
+          <LinkListField
+            label={LINK_LIST_LABELS.links}
+            value={field.value ?? []}
+            urlErrors={urlErrors(errors, 'links', field.value ?? [])}
+            onChange={field.onChange}
+          />
         )}
       />
 

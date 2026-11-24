@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai';
 import {
   lessonMaterialDirtyAtomFamily,
   lessonVersionDraftAtomFamily,
+  noLessonVersionDraftAtom,
 } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import { lessonMaterialFormId } from './material-form-id';
@@ -35,7 +36,11 @@ export const MaterialSaveButtonContainer = ({
     mutationKey: dataKeys.lessonSave(lessonId),
   });
   const isMaterialDirty = useAtomValue(lessonMaterialDirtyAtomFamily(lessonId));
-  const draft = useAtomValue(lessonVersionDraftAtomFamily(lessonId));
+  const draft = useAtomValue(
+    version === null
+      ? noLessonVersionDraftAtom
+      : lessonVersionDraftAtomFamily(lessonId),
+  );
   const isDirty =
     isMaterialDirty || (version !== null && isVersionDirty(draft, version));
   return (

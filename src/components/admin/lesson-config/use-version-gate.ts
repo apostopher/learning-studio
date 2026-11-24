@@ -1,7 +1,9 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import {
+  type LessonVersionRefusal,
   lessonVersionDraftAtomFamily,
   lessonVersionRefusalAtomFamily,
+  noLessonVersionDraftAtom,
 } from '#/atoms/admin';
 import { VersionConflictError } from '#/data-hooks/version-conflict';
 import {
@@ -23,7 +25,10 @@ export type VersionGate = {
   version: string | undefined;
   /** Why the write may not be made; null when it may. */
   blocked: string | null;
-  /** Say why at the Version field and move focus there. */
+  /**
+   * Say why at the Version field and move focus there: what `blocked` says
+   * from now on, or the server's message.
+   */
   refuse: (message?: string) => void;
   /** Make the write if the version allows it; otherwise refuse. */
   attempt: (write: (version: string | undefined) => void) => void;
@@ -61,8 +66,7 @@ export const isVersionDirty = (
   version: string,
 ): boolean => draft !== null && draft.trim() !== version;
 
-const noDraftAtom = atom<string | null>(null);
-const noRefusalAtom = atom<{ message: string } | null>(null);
+const noRefusalAtom = atom<LessonVersionRefusal | null>(null);
 
 /**
  * What every content write in the lesson editor asks before it is made. The
@@ -71,7 +75,7 @@ const noRefusalAtom = atom<{ message: string } | null>(null);
  */
 export function useVersionGate(lesson: VersionedLesson | null): VersionGate {
   const draft = useAtomValue(
-    lesson ? lessonVersionDraftAtomFamily(lesson.id) : noDraftAtom,
+    lesson ? lessonVersionDraftAtomFamily(lesson.id) : noLessonVersionDraftAtom,
   );
   const setRefusal = useSetAtom(
     lesson ? lessonVersionRefusalAtomFamily(lesson.id) : noRefusalAtom,
@@ -80,8 +84,8 @@ export function useVersionGate(lesson: VersionedLesson | null): VersionGate {
     ? judge(lesson, draft)
     : { version: undefined, blocked: null };
 
-  const refuse = (message: string | null = blocked) => {
-    if (lesson && message !== null) setRefusal({ message });
+  const refuse = (message: string | null = null) => {
+    if (lesson) setRefusal({ message, focus: {} });
   };
   const isRefusal = (error: Error) =>
     lesson !== null && error instanceof VersionConflictError;

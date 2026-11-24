@@ -620,13 +620,18 @@ export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
   atom<string | null>(null),
 );
 
+/** The draft where there is no Version field, so no lesson's family entry. */
+export const noLessonVersionDraftAtom = atom<string | null>(null);
+
 /**
- * Why a content write was refused by the lesson's version, shown at the
- * Version field. A fresh object per refusal: refusing twice for the same
- * reason must still move focus twice.
+ * A content write the lesson's version refused, shown at the Version field.
+ * `message` is the server's, until this page knows what the server knew; null
+ * means the reason is read off the lesson as it is now. A fresh `focus` per
+ * refusal: refusing twice for the same reason must move focus twice.
  */
+export type LessonVersionRefusal = { message: string | null; focus: object };
 export const lessonVersionRefusalAtomFamily = atomFamily((_lessonId: number) =>
-  atom<{ message: string } | null>(null),
+  atom<LessonVersionRefusal | null>(null),
 );
 
 /**

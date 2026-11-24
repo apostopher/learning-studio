@@ -78,6 +78,8 @@ vi.mock('../rich-text-editor', () => ({
 }));
 
 import { VersionConflictError } from '#/data-hooks/version-conflict';
+import { lessonMaterialFormId } from '../material-form-id';
+import { MaterialSaveButton } from '../material-save-button';
 import { MaterialSectionContainer } from '../material-section-container';
 
 const renderFor = (lessonId: number) => {
@@ -85,6 +87,10 @@ const renderFor = (lessonId: number) => {
   const view = render(
     <Provider store={store}>
       <MaterialSectionContainer lesson={{ id: lessonId }} versioned={null} />
+      <MaterialSaveButton
+        formId={lessonMaterialFormId(lessonId)}
+        isSaving={false}
+      />
     </Provider>,
   );
   return { store, ...view };
@@ -150,7 +156,7 @@ describe('MaterialSectionContainer closing field', () => {
       data: { extraTab: 'testThis', values: null },
       isLoading: false,
     });
-    const { container } = renderFor(11);
+    renderFor(11);
     expect(screen.queryByLabelText('Job of the day (URL)')).toBeNull();
     const group = within(screen.getByRole('group', { name: 'TEST THIS!' }));
 
@@ -161,12 +167,39 @@ describe('MaterialSectionContainer closing field', () => {
     fireEvent.input(group.getByLabelText('Link 1 URL'), {
       target: { value: 'https://example.com/try' },
     });
-    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(hooks.save).toHaveBeenCalled());
     expect(hooks.save.mock.calls[0][0].testThis).toEqual([
       { name: 'Try it', url: 'https://example.com/try' },
     ]);
+  });
+
+  it('refuses a TEST THIS! link that is not a full web address, at its row', async () => {
+    hooks.save.mockClear();
+    hooks.material.mockReturnValue({
+      data: {
+        extraTab: 'testThis',
+        values: {
+          text: '',
+          keyPoints: [],
+          proTips: '',
+          quiz: [],
+          links: [{ name: '', url: 'also.wrong' }],
+          testThis: [{ name: '', url: 'www.faa.gov' }],
+        },
+      },
+      isLoading: false,
+    });
+    renderFor(14);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const group = within(screen.getByRole('group', { name: 'TEST THIS!' }));
+    expect((await group.findByRole('alert')).textContent).toBe(
+      'Enter a full web address, like https://example.com',
+    );
+    // The first wrong one as drawn: TEST THIS! stands above Links.
+    expect(document.activeElement).toBe(group.getByLabelText('Link 1 URL'));
+    expect(hooks.save).not.toHaveBeenCalled();
   });
 
   it('draws neither closing field until the lesson has loaded', () => {

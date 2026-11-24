@@ -3,7 +3,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { describe, expect, it, vi } from 'vitest';
-import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
+import {
+  lessonMaterialDirtyAtomFamily,
+  lessonVersionDraftAtomFamily,
+} from '#/atoms/admin';
 
 const m = vi.hoisted(() => ({ button: vi.fn() }));
 
@@ -19,11 +22,15 @@ vi.mock('../material-save-button', () => ({
 
 import { MaterialSaveButtonContainer } from '../material-save-button-container';
 
-const renderFor = (lessonId: number, store: ReturnType<typeof createStore>) =>
+const renderFor = (
+  lessonId: number,
+  store: ReturnType<typeof createStore>,
+  version: string | null = '1.0',
+) =>
   render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
-        <MaterialSaveButtonContainer lessonId={lessonId} version="1.0" />
+        <MaterialSaveButtonContainer lessonId={lessonId} version={version} />
       </Provider>
     </QueryClientProvider>,
   );
@@ -45,5 +52,13 @@ describe('MaterialSaveButtonContainer', () => {
     expect(m.button).toHaveBeenLastCalledWith(
       expect.objectContaining({ isDirty: false }),
     );
+  });
+
+  it('where there is no Version field, keeps no draft for the lesson', () => {
+    renderFor(12, createStore(), null);
+    expect(m.button).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isDirty: false }),
+    );
+    expect([...lessonVersionDraftAtomFamily.getParams()]).not.toContain(12);
   });
 });

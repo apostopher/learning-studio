@@ -313,6 +313,10 @@ const type = (label: string, value: string) =>
 const typeVersion = (value: string) =>
   fireEvent.change(field(), { target: { value } });
 const save = () => screen.getByRole('button', { name: /^Sav(e|ing…)(, |$)/ });
+/** The real buttons, so whatever the browser does first happens here too. */
+const press = (name: string) =>
+  fireEvent.click(screen.getByRole('button', { name }));
+const pressSave = () => fireEvent.click(save());
 const description = () =>
   (field().getAttribute('aria-describedby') ?? '')
     .split(' ')
@@ -338,9 +342,7 @@ const WRITES: {
     name: 'Save',
     act: () => {
       type('Job of the day (URL)', 'https://example.com/job');
-      fireEvent.submit(
-        document.getElementById('lesson-material-form-10') as HTMLElement,
-      );
+      pressSave();
     },
     method: 'POST',
     path: '/api/admin/lessons/10/material',
@@ -350,9 +352,7 @@ const WRITES: {
     name: 'Replace video',
     act: () => {
       type('Video URL or ID', 'newplayback');
-      fireEvent.submit(
-        screen.getByLabelText('Video URL or ID').closest('form') as HTMLElement,
-      );
+      press('Replace video');
     },
     method: 'PUT',
     path: '/api/admin/lessons/10/video',
@@ -362,11 +362,7 @@ const WRITES: {
     name: 'Add language',
     act: () => {
       type('Translated video URL or ID', 'germancut');
-      fireEvent.submit(
-        screen
-          .getByLabelText('Translated video URL or ID')
-          .closest('form') as HTMLElement,
-      );
+      press('Add language');
     },
     method: 'PUT',
     path: '/api/admin/lessons/10/alternate-videos',
@@ -385,9 +381,7 @@ const WRITES: {
     act: () => {
       fireEvent.click(screen.getByRole('button', { name: 'Rename lesson' }));
       type('Lesson name', 'Crosswinds');
-      fireEvent.submit(
-        screen.getByLabelText('Lesson name').closest('form') as HTMLElement,
-      );
+      press('Save name');
     },
     method: 'PATCH',
     path: '/api/admin/lessons/10',
@@ -495,16 +489,16 @@ describe.each(WRITES)('$name', (write) => {
     await waitFor(() => expect(save().textContent).toBe('Save'));
   });
 
-  it('the field is disabled while it is in flight', async () => {
+  it('the field is read-only while it is in flight', async () => {
     let release = () => {};
     await open(UNLOCKED);
     server.holdWrites = new Promise((r) => {
       release = r;
     });
     write.act();
-    await waitFor(() => expect(field().disabled).toBe(true));
+    await waitFor(() => expect(field().readOnly).toBe(true));
     await act(async () => release());
-    await waitFor(() => expect(field().disabled).toBe(false));
+    await waitFor(() => expect(field().readOnly).toBe(false));
   });
 
   it('a draft that is not higher than the taken version is blocked', async () => {
@@ -514,22 +508,17 @@ describe.each(WRITES)('$name', (write) => {
     await waitFor(() =>
       expect(alertText()).toBe('Enter a version higher than v1.0.'),
     );
-    // Still says why it is locked.
-    expect(screen.getByText(LOCKED)).toBeTruthy();
+    // Still says why it is locked, after what is wrong.
+    expect(description()).toBe(`Enter a version higher than v1.0. ${LOCKED}`);
     expect(server.writes).toEqual([]);
   });
 });
 
 describe('Save', () => {
-  const submit = () =>
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-10') as HTMLElement,
-    );
-
   it('a malformed draft blocks it', async () => {
     await open(UNLOCKED);
     typeVersion('1');
-    submit();
+    pressSave();
     await waitFor(() => expect(alertText()).toBe('Use a number like 1.0'));
     await waitFor(() => expect(document.activeElement).toBe(field()));
     expect(server.writes).toEqual([]);
@@ -538,7 +527,7 @@ describe('Save', () => {
   it('an emptied field blocks it: the version is required', async () => {
     await open(UNLOCKED);
     typeVersion('');
-    submit();
+    pressSave();
     await waitFor(() => expect(alertText()).toBe('Use a number like 1.0'));
     expect(server.writes).toEqual([]);
   });
@@ -551,7 +540,7 @@ describe('Save', () => {
     expect(
       screen.getByRole('button', { name: 'Save, unsaved changes' }),
     ).toBeTruthy();
-    submit();
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes).toEqual([
       {
@@ -572,7 +561,7 @@ describe('Save', () => {
     expect(save().getAttribute('aria-label')).toBe('Save, unsaved changes');
     typeVersion('1.0');
     await waitFor(() => expect(save().getAttribute('aria-label')).toBe('Save'));
-    submit();
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes[0].method).toBe('POST');
     expect(server.writes[0].body).not.toHaveProperty('version');
@@ -585,18 +574,36 @@ describe('Save', () => {
       release = r;
     });
     typeVersion('1.1');
-    submit();
+    pressSave();
     const saving = await screen.findByRole('button', { name: 'Saving…' });
     expect((saving as HTMLButtonElement).disabled).toBe(true);
     await act(async () => release());
     await screen.findByRole('button', { name: 'Save' });
   });
 
+  it('leaves focus in the Version field while it saves from there', async () => {
+    let release = () => {};
+    await open();
+    server.holdWrites = new Promise((r) => {
+      release = r;
+    });
+    field().focus();
+    typeVersion('1.1');
+    pressSave();
+    await screen.findByRole('button', { name: 'Saving…' });
+    await waitFor(() => expect(field().readOnly).toBe(true));
+    expect(field().disabled).toBe(false);
+    expect(document.activeElement).toBe(field());
+    await act(async () => release());
+    await screen.findByRole('button', { name: 'Save' });
+    expect(document.activeElement).toBe(field());
+  });
+
   it('shows a failed version save by the form', async () => {
     await open();
     typeVersion('1.1');
     server.failWith = 500;
-    submit();
+    pressSave();
     expect(
       await screen.findByText('Could not save the version (500)'),
     ).toBeTruthy();
@@ -623,7 +630,7 @@ describe('Save', () => {
       expect(save().getAttribute('aria-label')).toBe('Save, unsaved changes'),
     );
     typeVersion('1.1');
-    submit();
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes[0]).toMatchObject({
       method: 'POST',
@@ -639,12 +646,108 @@ describe('Save', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy(),
     );
     typeVersion('1.2');
-    submit();
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(2));
     expect(server.writes[1]).toMatchObject({
       method: 'PATCH',
       body: { version: '1.2' },
     });
+  });
+});
+
+describe('a link that is not a full web address', () => {
+  const NOT_A_URL = 'Enter a full web address, like https://example.com';
+  const openWithLink = async (patch: Partial<LibraryLesson> = {}) => {
+    server.material = {
+      ...MATERIAL,
+      links: [
+        { name: 'FAA', url: 'www.faa.gov' },
+        { name: 'Blank', url: '' },
+      ],
+    };
+    return open(patch);
+  };
+  const row = (n: number) =>
+    screen.getByLabelText(`Link ${n} URL`) as HTMLInputElement;
+
+  it('does not stop a version-only Save', async () => {
+    await openWithLink();
+    typeVersion('1.1');
+    pressSave();
+    await waitFor(() =>
+      expect(server.writes).toEqual([
+        {
+          method: 'PATCH',
+          path: '/api/admin/lessons/10',
+          body: { version: '1.1' },
+        },
+      ]),
+    );
+    expect(screen.queryByText(NOT_A_URL)).toBeNull();
+  });
+
+  it('does not come before the reason a lesson is locked', async () => {
+    await openWithLink();
+    pressSave();
+    await waitFor(() => expect(alertText()).toBe(LOCKED));
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect(server.writes).toEqual([]);
+  });
+
+  it('refuses a material Save at its row, and the fixed link saves', async () => {
+    await openWithLink(UNLOCKED);
+    type('Job of the day (URL)', 'https://example.com/job');
+    pressSave();
+    const alert = await screen.findByText(NOT_A_URL);
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(row(1).getAttribute('aria-invalid')).toBe('true');
+    expect(row(1).getAttribute('aria-describedby')).toBe(alert.id);
+    expect(document.activeElement).toBe(row(1));
+    // A blank row is not wrong.
+    expect(row(2).getAttribute('aria-invalid')).toBeNull();
+    expect(server.writes).toEqual([]);
+
+    fireEvent.input(row(1), { target: { value: 'https://www.faa.gov' } });
+    await waitFor(() => expect(screen.queryByText(NOT_A_URL)).toBeNull());
+    pressSave();
+    await waitFor(() => expect(server.writes).toHaveLength(1));
+    expect(server.writes[0].body.links).toEqual([
+      { name: 'FAA', url: 'https://www.faa.gov' },
+      { name: 'Blank', url: '' },
+    ]);
+  });
+
+  it.each([
+    'ftp://example.com',
+    'javascript:alert(1)',
+    'example.com:80',
+  ])('refuses %s', async (url) => {
+    await openWithLink(UNLOCKED);
+    fireEvent.input(row(1), { target: { value: url } });
+    pressSave();
+    expect(await screen.findByText(NOT_A_URL)).toBeTruthy();
+    expect(server.writes).toEqual([]);
+  });
+
+  it('keeps the typed version when the material it goes with is refused', async () => {
+    await openWithLink();
+    type('Job of the day (URL)', 'https://example.com/job');
+    typeVersion('1.1');
+    pressSave();
+    await screen.findByText(NOT_A_URL);
+    expect(field().value).toBe('1.1');
+    expect(server.writes).toEqual([]);
+  });
+
+  it('is not looked for in a list this lesson does not show', async () => {
+    // A Job of the Day lesson still holding TEST THIS! links.
+    server.material = {
+      ...MATERIAL,
+      testThis: [{ name: '', url: 'www.faa.gov' }],
+    };
+    await open(UNLOCKED);
+    pressSave();
+    await waitFor(() => expect(server.writes).toHaveLength(1));
   });
 });
 
@@ -659,12 +762,10 @@ describe('several writes sharing one typed version', () => {
     expect(server.writes[0].body.version).toBe('1.1');
     // The first success already unlocked the lesson and spent the draft.
     await waitFor(() => expect(screen.queryByText(LOCKED)).toBeNull());
-    await waitFor(() => expect(field().disabled).toBe(false));
+    await waitFor(() => expect(field().readOnly).toBe(false));
     expect(field().value).toBe('1.1');
 
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-10') as HTMLElement,
-    );
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(2));
     expect(server.writes[1].body).not.toHaveProperty('version');
     expect(server.writes[1].body.jobOfTheDay).toBe('https://example.com/job');
@@ -708,7 +809,7 @@ describe('several writes sharing one typed version', () => {
     WRITES[0].act();
     await waitFor(() => expect(server.writes).toHaveLength(2));
     await act(async () => release());
-    await waitFor(() => expect(field().disabled).toBe(false));
+    await waitFor(() => expect(field().readOnly).toBe(false));
     expect(server.writes.map((w) => w.body.version)).toEqual(['1.1', '1.1']);
     expect(alertText()).toBeUndefined();
     expect(field().value).toBe('1.1');
@@ -737,27 +838,11 @@ describe('a course takes the version mid-edit', () => {
     typeVersion('1.2');
     await waitFor(() => expect(alertText()).toBeUndefined());
     const form: Record<string, () => void> = {
-      Save: () =>
-        fireEvent.submit(
-          document.getElementById('lesson-material-form-10') as HTMLElement,
-        ),
-      'Replace video': () =>
-        fireEvent.submit(
-          screen
-            .getByLabelText('Video URL or ID')
-            .closest('form') as HTMLElement,
-        ),
-      'Add language': () =>
-        fireEvent.submit(
-          screen
-            .getByLabelText('Translated video URL or ID')
-            .closest('form') as HTMLElement,
-        ),
+      Save: () => pressSave(),
+      'Replace video': () => press('Replace video'),
+      'Add language': () => press('Add language'),
       'Remove language': write.act,
-      rename: () =>
-        fireEvent.submit(
-          screen.getByLabelText('Lesson name').closest('form') as HTMLElement,
-        ),
+      rename: () => press('Save name'),
     };
     // Submitted as it stands: nothing is typed again.
     form[write.name]();
@@ -778,9 +863,7 @@ describe('a course takes the version mid-edit', () => {
     courseTakes(10);
     type('Job of the day (URL)', 'https://example.com/job');
     typeVersion('1.1');
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-10') as HTMLElement,
-    );
+    pressSave();
     await waitFor(() =>
       expect(alertText()).toBe('Enter a version higher than v1.2.'),
     );
@@ -798,9 +881,7 @@ describe('a course takes the version mid-edit', () => {
     server.lessons.set(10, { ...LESSON, version: '1.3' });
     courseTakes(10);
     typeVersion('1.2');
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-10') as HTMLElement,
-    );
+    pressSave();
     await waitFor(() =>
       expect(alertText()).toBe('Enter a version higher than v1.3.'),
     );
@@ -814,7 +895,7 @@ describe('a course takes the version mid-edit', () => {
     ).toBeTruthy();
   });
 
-  it('focuses the field once it can take focus, with another write still in flight', async () => {
+  it('focuses the field with another write still in flight', async () => {
     const release: (() => void)[] = [];
     const hold = () => {
       server.holdWrites = new Promise((r) => release.push(r));
@@ -829,12 +910,11 @@ describe('a course takes the version mid-edit', () => {
     await waitFor(() => expect(server.writes).toHaveLength(2));
     await act(async () => release[0]());
     await waitFor(() => expect(alertText()).toBe(TAKEN));
-    await settle();
-    expect(field().disabled).toBe(true);
-    // The second one fails for a reason of its own, which takes no focus.
-    server.failWith = 500;
-    await act(async () => release[1]());
     await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect(field().readOnly).toBe(true);
+    await act(async () => release[1]());
+    await waitFor(() => expect(field().readOnly).toBe(false));
+    expect(document.activeElement).toBe(field());
   });
 });
 
@@ -856,15 +936,60 @@ describe('another SME raises the version meanwhile', () => {
     expect(save().getAttribute('aria-label')).toBe('Save');
   });
 
-  it('an earlier refusal goes when the next write is allowed', async () => {
+  it('a refusal goes when what it says stops being so', async () => {
     const { client } = await open();
     WRITES[3].act();
     await waitFor(() => expect(alertText()).toBe(LOCKED));
     await raise(client, '1.1');
     await waitFor(() => expect(field().value).toBe('1.1'));
-    WRITES[3].act();
-    await waitFor(() => expect(server.writes).toHaveLength(1));
     await waitFor(() => expect(alertText()).toBeUndefined());
+    expect(field().getAttribute('aria-invalid')).toBe('false');
+    // And does not come back by itself when a course takes 1.1.
+    courseTakes(10);
+    await act(() =>
+      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
+    );
+    await screen.findByText(/^v1.1 is used by 1 course/);
+    expect(alertText()).toBeUndefined();
+  });
+
+  it('a refusal here says the state as it is now, once', async () => {
+    const { client } = await open();
+    WRITES[3].act();
+    await waitFor(() => expect(alertText()).toBe(LOCKED));
+    server.lessons.set(10, { ...LESSON, versionCourseCount: 4 });
+    await act(() =>
+      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
+    );
+    await waitFor(() =>
+      expect(alertText()).toBe(LOCKED.replace('3 courses', '4 courses')),
+    );
+    expect(screen.getAllByText(/Enter a higher version/)).toHaveLength(1);
+  });
+
+  it('a refusal from the server follows the state too, and does not take focus back', async () => {
+    const { client } = await open({
+      version: '1.1',
+      highestTaken: '1.0',
+      versionCourseCount: 0,
+    });
+    courseTakes(10);
+    WRITES[3].act();
+    await waitFor(() => expect(alertText()).toMatch(/^v1.1 is used by 1/));
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    await settle();
+    screen.getByLabelText('Pro tips').focus();
+    server.lessons.set(10, {
+      ...(server.lessons.get(10) as LibraryLesson),
+      versionCourseCount: 2,
+    });
+    await act(() =>
+      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
+    );
+    await waitFor(() => expect(alertText()).toMatch(/^v1.1 is used by 2/));
+    expect(screen.getAllByText(/Enter a higher version/)).toHaveLength(1);
+    await settle();
+    expect(document.activeElement).toBe(screen.getByLabelText('Pro tips'));
   });
 });
 
@@ -884,7 +1009,7 @@ describe('what the version never gates', () => {
       ]),
     );
     expect(alertText()).toBeUndefined();
-    expect(field().disabled).toBe(false);
+    expect(field().readOnly).toBe(false);
   });
 
   it('Word-doc fill fills the form while locked and does not touch the version', async () => {
@@ -898,9 +1023,7 @@ describe('what the version never gates', () => {
     );
     expect(field().value).toBe('1.1');
     expect(server.writes).toEqual([]);
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-10') as HTMLElement,
-    );
+    pressSave();
     await waitFor(() =>
       expect(server.writes[0]?.body).toMatchObject({
         text: 'From the document',
@@ -940,9 +1063,7 @@ describe('the draft lives as long as the dialog', () => {
     act(() => store.set(editLibraryLessonIdAtom, 11));
     await waitFor(() => expect(field().value).toBe('2.0'));
     expect(save().getAttribute('aria-label')).toBe('Save');
-    fireEvent.submit(
-      document.getElementById('lesson-material-form-11') as HTMLElement,
-    );
+    pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes[0].path).toBe('/api/admin/lessons/11/material');
     expect(server.writes[0].body).not.toHaveProperty('version');

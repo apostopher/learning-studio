@@ -12,7 +12,7 @@ export const VersionField = ({
   register,
   error,
   lockedReason,
-  disabled,
+  readOnly,
 }: {
   id: string;
   /** The form Enter submits: the Save button's, which this field is outside. */
@@ -21,7 +21,8 @@ export const VersionField = ({
   error?: string;
   /** Why content cannot be changed at the current version; null when it can. */
   lockedReason: string | null;
-  disabled: boolean;
+  /** A save is in flight. Not `disabled`, which would drop keyboard focus. */
+  readOnly: boolean;
 }) => {
   // A refusal often IS the locked reason; said once, as the error.
   const hint = lockedReason !== error ? lockedReason : null;
@@ -40,15 +41,18 @@ export const VersionField = ({
         inputMode="decimal"
         autoComplete="off"
         spellCheck={false}
-        disabled={disabled}
+        readOnly={readOnly}
         aria-invalid={!!error}
         aria-describedby={
-          [hint && hintId, error && errorId].filter(Boolean).join(' ') ||
+          [error && errorId, hint && hintId].filter(Boolean).join(' ') ||
           undefined
         }
         className={cn(
-          'w-32 rounded-lg border bg-gray-1 px-3.5 py-2.5 text-primary text-sm tabular-nums outline-none transition-colors duration-100',
-          'focus-visible:border-apple-9 focus-visible:ring-2 focus-visible:ring-apple-9 disabled:opacity-60',
+          'w-32 rounded-lg border px-3.5 py-2.5 text-sm tabular-nums outline-none transition-colors duration-100',
+          'focus-visible:border-apple-9 focus-visible:ring-2 focus-visible:ring-apple-9',
+          readOnly
+            ? 'cursor-default bg-gray-3 text-secondary'
+            : 'bg-gray-1 text-primary',
           error
             ? 'border-error-9 focus-visible:border-error-9 focus-visible:ring-error-9'
             : 'border-gray-6 hover:border-gray-8',

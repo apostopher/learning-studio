@@ -16,7 +16,7 @@ const meta: Meta<typeof VersionField> = {
       },
     },
     lockedReason: null,
-    disabled: false,
+    readOnly: false,
   },
   decorators: [
     (Story) => (
@@ -35,6 +35,10 @@ export const Unlocked: StoryObj<typeof VersionField> = {};
 
 export const Locked: StoryObj<typeof VersionField> = {
   args: { lockedReason: LOCKED },
+};
+
+export const Saving: StoryObj<typeof VersionField> = {
+  args: { lockedReason: LOCKED, readOnly: true },
 };
 
 /** A save was refused for the reason already on show: said once, as the error. */

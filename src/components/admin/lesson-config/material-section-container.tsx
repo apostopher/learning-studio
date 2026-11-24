@@ -1,17 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSetAtom } from 'jotai';
 import { type FormEvent, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { type FieldErrors, useForm } from 'react-hook-form';
 import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
 import { useSetLessonVersion } from '#/data-hooks/use-set-lesson-version';
 import type { LessonMaterialGeneration } from '#/types';
-import { LessonMaterialGenerationSchema } from '#/types';
 import { AttachmentsList } from './attachments-list';
-import { MaterialForm } from './material-form';
+import { linkUrlId } from './link-list-field';
+import { LINK_LIST_LABELS, MaterialForm } from './material-form';
 import { lessonMaterialFormId } from './material-form-id';
+import { materialFormSchema } from './material-form-schema';
 import { MaterialUpload } from './material-upload';
 import { useVersionGate, type VersionedLesson } from './use-version-gate';
 
@@ -25,6 +26,16 @@ const EMPTY: LessonMaterialGeneration = {
   jobOfTheDay: '',
   testThis: [],
   attachments: [],
+};
+
+/** Put focus on the first refused link, in the order the form draws them. */
+const focusFirstBadLink = (errors: FieldErrors<LessonMaterialGeneration>) => {
+  for (const list of ['testThis', 'links'] as const) {
+    const row = errors[list]?.findIndex?.((error) => error?.url) ?? -1;
+    if (row === -1) continue;
+    document.getElementById(linkUrlId(LINK_LIST_LABELS[list], row))?.focus();
+    return;
+  }
 };
 
 /**
@@ -71,7 +82,7 @@ export const MaterialSectionContainer = ({
    * there is nothing to supply, so `defaultValues` (EMPTY) stands.
    */
   const form = useForm<LessonMaterialGeneration>({
-    resolver: zodResolver(LessonMaterialGenerationSchema),
+    resolver: zodResolver(materialFormSchema(existing.data?.extraTab)),
     defaultValues: EMPTY,
     // `?? undefined`, not the raw value: the query resolves to `null` for a
     // lesson with no material yet, and RHF reads only `undefined` as "no
@@ -106,7 +117,7 @@ export const MaterialSectionContainer = ({
       save.mutate(version === undefined ? values : { ...values, version }, {
         onError: gate.onError,
       });
-    });
+    }, focusFirstBadLink);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
