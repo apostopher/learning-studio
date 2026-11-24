@@ -38,6 +38,17 @@ export function findBoardLesson(
     .find((l) => l.id === lessonId);
 }
 
+/** Names of the courses showing a lesson, borrowed modules included, A to Z. */
+export function courseNamesShowing(
+  board: OrgEditorBoard,
+  lessonId: number,
+): string[] {
+  return board
+    .filter((cb) => findBoardLesson(board, cb.course.id, lessonId))
+    .map((cb) => cb.course.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Where in a module's lesson list a drop lands: a `lesson` over id names the
  * slot it takes, anything else appends.

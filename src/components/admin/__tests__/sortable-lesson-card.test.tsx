@@ -128,7 +128,12 @@ function renderCard(library?: OrgLibrary, module: BoardModule = mod) {
     </QueryClientProvider>
   );
   const utils = render(
-    <SortableLessonCard courseId={7} lesson={lesson} module={module} />,
+    <SortableLessonCard
+      courseId={7}
+      courseName="UAS 2-Week"
+      lesson={lesson}
+      module={module}
+    />,
     { wrapper },
   );
   return { ...utils, store };

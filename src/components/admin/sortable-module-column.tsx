@@ -1,24 +1,25 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
-import {
-  createLessonModuleIdAtom,
-  deleteModuleAtom,
-  editModuleAtom,
-} from '@/atoms/admin';
-import type { BoardModule } from '@/lib/admin-schemas';
-import { cn } from '@/lib/cn';
-import { moduleDndId } from '@/lib/dnd-ids';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
+// imported directly by its component test.
+import { deleteModuleAtom, editModuleAtom } from '#/atoms/admin';
+import type { BoardModule } from '#/lib/admin-schemas';
+import { cn } from '#/lib/cn';
+import { moduleDndId } from '#/lib/dnd-ids';
+import { BorrowedLessonList } from './borrowed-lesson-list';
 import { LessonBoardContainer } from './lesson-board-container';
 import { ModuleColumn } from './module-column';
 import { moduleProvenance } from './module-provenance';
 
 export const SortableModuleColumn = ({
   courseId,
+  courseName,
   module: mod,
   posters,
 }: {
   courseId: number;
+  courseName: string;
   module: BoardModule;
   posters: Record<string, string>;
 }) => {
@@ -34,15 +35,13 @@ export const SortableModuleColumn = ({
     id: moduleDndId(courseId, mod.id),
     data: { type: 'module', moduleId: mod.id },
   });
-  const setLessonModuleId = useSetAtom(createLessonModuleIdAtom);
   const setEditModule = useSetAtom(editModuleAtom);
   const setDeleteModule = useSetAtom(deleteModuleAtom);
 
   // Present exactly when this course doesn't own the module — see
   // `moduleProvenance`. Borrowed modules keep their drag handle (position is
-  // THIS course's rail, not the owner's) but lose add/edit/delete and the
-  // DnD-enabled lessons list: `ModuleColumn`'s static fallback then draws the
-  // lessons read-only, straight from `posters`.
+  // THIS course's rail, not the owner's) but lose edit/delete and the
+  // DnD-enabled lessons list.
   const provenance = moduleProvenance(mod, courseId);
   const borrowed = provenance !== undefined;
 
@@ -63,7 +62,6 @@ export const SortableModuleColumn = ({
         dragHandleProps={{ ...attributes, ...listeners }}
         provenance={provenance}
         posters={posters}
-        onAddLesson={borrowed ? undefined : () => setLessonModuleId(mod.id)}
         onEditModule={
           borrowed
             ? undefined
@@ -86,9 +84,24 @@ export const SortableModuleColumn = ({
                 })
         }
         lessonsSlot={
-          borrowed ? undefined : (
+          provenance ? (
+            mod.lessons.length === 0 ? (
+              <p className="text-pretty px-1 py-4 text-center text-tertiary text-xs">
+                No lessons yet. Drag one into {mod.name} in{' '}
+                {provenance.ownerName} from Disciplines, in the knowledge
+                library.
+              </p>
+            ) : (
+              <BorrowedLessonList
+                course={{ id: courseId, name: courseName }}
+                lessons={mod.lessons}
+                posters={posters}
+              />
+            )
+          ) : (
             <LessonBoardContainer
               courseId={courseId}
+              courseName={courseName}
               module={mod}
               posters={posters}
             />

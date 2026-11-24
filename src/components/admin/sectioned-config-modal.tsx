@@ -30,13 +30,6 @@ export interface ConfigModalSection {
   fill?: boolean;
   /** Panel body, rendered in the main area when this section is active. */
   content: ReactNode;
-  /**
-   * Pinned under the tab list while this section is active — the place for
-   * the section's primary action (a Save button), so it stays in view however
-   * far the panel scrolls. The section keeps its own form; a button here
-   * reaches it through the `form` attribute.
-   */
-  sidebarFooter?: ReactNode;
 }
 
 interface SectionedConfigModalProps {
@@ -53,8 +46,7 @@ interface SectionedConfigModalProps {
   sidebarWidth?: string;
   /**
    * Rendered in the header between the title and Close — the dialog's
-   * primary action when it has no sidebar to pin one under (a single-section
-   * dialog), so Save sits where the eye already goes to leave.
+   * primary action, so Save sits where the eye already goes to leave.
    */
   headerActions?: ReactNode;
   /**
@@ -91,18 +83,16 @@ export const SectionedConfigModal = ({
   headerActions,
   headingSlot,
 }: SectionedConfigModalProps) => {
-  // One section has nothing to tab between: no sidebar, no footer. The
-  // grid collapses to the panel alone.
+  // One section has nothing to tab between: no sidebar. The grid collapses to the panel alone.
   const hasSidebar = sections.length > 1;
   const firstValue =
     sections.find((section) => section.value === defaultSection)?.value ??
     sections[0]?.value;
   // Which tab is open, held in an atom (jotai, per the project's state rule;
-  // and this shell is rendered by tests, where a first-party React hook
-  // trips the compiler's dispatcher) so the sidebar can pin the ACTIVE
-  // section's footer — Base UI would otherwise keep the choice to itself. A
-  // remembered value that names no section of THIS dialog falls back to its
-  // default, so one atom serves every dialog without stranding any of them.
+  // and this shell is rendered by tests, where a first-party React hook trips
+  // the compiler's dispatcher). A remembered value that names no section of
+  // THIS dialog falls back to its default, so one atom serves every dialog
+  // without stranding any of them.
   const [chosenValue, setChosenValue] = useAtom(configModalSectionAtom);
   const active =
     sections.find((section) => section.value === chosenValue) ??
@@ -157,11 +147,6 @@ export const SectionedConfigModal = ({
                       </Tabs.Tab>
                     ))}
                   </Tabs.List>
-                  {active?.sidebarFooter && (
-                    <div className="border-gray-6 border-t p-4">
-                      {active.sidebarFooter}
-                    </div>
-                  )}
                 </div>
               )}
 

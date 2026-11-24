@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Provider } from 'jotai';
+import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { videoDraftDetectionAtom } from '#/atoms/admin';
 
 /**
  * The three data hooks are the section's collaborators; each is stubbed so a
@@ -62,7 +63,19 @@ vi.mock('../captions-status-container', () => ({
   CaptionsStatusContainer: captionsStatus,
 }));
 
+vi.mock('../version-field-container', () => ({
+  VersionFieldContainer: () => <div data-testid="version-field" />,
+}));
+
 import { VideoSectionContainer } from '../video-section-container';
+
+/** A lesson of Disciplines, as its editor hands it over. */
+const VERSIONED = {
+  id: 10,
+  version: '1.0',
+  highestTaken: null,
+  versionCourseCount: 0,
+};
 
 // A fresh jotai store per render: the preview-language atom family is keyed
 // by lesson id, and every test here uses lesson 10 — a language picked in one
@@ -132,7 +145,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       <VideoSectionContainer
         courseId={null}
         source="discipline"
-        versioned={null}
+        versioned={VERSIONED}
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -140,7 +153,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
     expect(screen.getByLabelText('Video URL or ID')).toBeTruthy();
     expect(screen.getByTestId('video-preview')).toBeTruthy();
     expect(hooks.credentials).toHaveBeenCalledWith(null);
-    expect(hooks.setVideo).toHaveBeenCalledWith(null, 10);
+    expect(hooks.setVideo).toHaveBeenCalledWith(10);
     expect(hooks.playback).toHaveBeenCalledWith(null, false);
     expect(screen.queryByTestId('credential-flow')).toBeNull();
     // No primary video → nothing for a translation to be an alternate to.
@@ -153,7 +166,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
       <VideoSectionContainer
         courseId={null}
         source="discipline"
-        versioned={null}
+        versioned={VERSIONED}
         lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
@@ -184,15 +197,15 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
-        source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        source="discipline"
+        versioned={VERSIONED}
+        lesson={{ id: 10, videoProvider: 'mux' }}
         previewNote="Preview is signed with the first course teaching this lesson."
       />,
       { wrapper },
     );
     expect(hooks.playback).toHaveBeenCalledWith(
-      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'discipline', lang: 'en' },
       true,
     );
     expect(screen.getByTestId('video-preview')).toBeTruthy();
@@ -210,8 +223,8 @@ describe('VideoSectionContainer with a course', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -233,9 +246,9 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
-        source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc123' }}
+        source="discipline"
+        versioned={VERSIONED}
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -249,8 +262,8 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
-        source="course"
-        versioned={null}
+        source="discipline"
+        versioned={VERSIONED}
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -288,8 +301,8 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -311,8 +324,8 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -337,8 +350,8 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -362,8 +375,8 @@ describe('VideoSectionContainer preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -401,8 +414,8 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -471,8 +484,8 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -497,9 +510,9 @@ describe('VideoSectionContainer captions status', () => {
     render(
       <VideoSectionContainer
         courseId={7}
-        source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        source="discipline"
+        versioned={VERSIONED}
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
@@ -517,12 +530,58 @@ describe('VideoSectionContainer captions status', () => {
       <VideoSectionContainer
         courseId={null}
         source="discipline"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        versioned={VERSIONED}
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );
     expect(captionsStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideoSectionContainer in a course', () => {
+  it('only plays: nothing to change the video, its languages or its captions with', () => {
+    stubHooks({ configured: true });
+    render(
+      <VideoSectionContainer
+        courseId={7}
+        source="course"
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByTestId('video-preview')).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByTestId('alternate-videos')).toBeNull();
+    expect(screen.queryByTestId('version-field')).toBeNull();
+    expect(captionsStatus).not.toHaveBeenCalled();
+    // The working copy's video is not this course's to read.
+    expect(hooks.video).not.toHaveBeenCalled();
+  });
+
+  it("never takes Disciplines' unsaved video for its own", () => {
+    stubHooks({ configured: true });
+    const store = createStore();
+    store.set(videoDraftDetectionAtom, {
+      lessonId: 10,
+      provider: 'synthesia',
+      ref: 'new',
+    });
+    render(
+      <Provider store={store}>
+        <VideoSectionContainer
+          courseId={7}
+          source="course"
+          readOnly
+          lesson={{ id: 10, videoProvider: 'mux' }}
+        />
+      </Provider>,
+      { wrapper },
+    );
+    expect(screen.getByText('Mux')).toBeTruthy();
+    expect(hooks.playback.mock.calls.at(-1)?.[1]).toBe(true);
   });
 });
 
@@ -543,8 +602,8 @@ describe('VideoSectionContainer recovery', () => {
       <VideoSectionContainer
         courseId={7}
         source="course"
-        versioned={null}
-        lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
+        readOnly
+        lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
     );

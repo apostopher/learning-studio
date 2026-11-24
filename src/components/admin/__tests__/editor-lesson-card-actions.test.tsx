@@ -162,6 +162,7 @@ function renderCard(
           lesson={{ ...lesson, ...over }}
           module={module}
           courseId={7}
+          courseName="UAS 2-Week"
         />
       </Provider>
     </QueryClientProvider>,

@@ -23,6 +23,7 @@ import {
   updateLessonConfigInputSchema,
   updateLessonDependenciesInputSchema,
 } from '#/lib/admin-schemas';
+import { lessonInUseMessage } from '#/lib/lesson-in-use';
 import {
   absentResourceResponse,
   requireCoursePermission,
@@ -333,11 +334,9 @@ export async function deleteLessonHandler(
     return new Response('Not found', { status: 404 });
   }
   const { courses } = deleted;
-  const names = new Intl.ListFormat('en-GB').format(courses.map((c) => c.name));
-  const those = courses.length === 1 ? 'that course' : 'those courses';
   return Response.json(
     {
-      error: `Used by ${names}. Remove it from ${those} first.`,
+      error: lessonInUseMessage(courses.map((c) => c.name)),
       code: 'in-use',
       courses,
     } satisfies LessonInUseBody,

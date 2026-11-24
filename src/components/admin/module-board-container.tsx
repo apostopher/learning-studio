@@ -33,7 +33,6 @@ import type {
   CourseBoard,
 } from '@/lib/admin-schemas';
 import { moduleDndId, parseDndId } from '@/lib/dnd-ids';
-import { CreateLessonDialogContainer } from './create-lesson-dialog-container';
 import { DeleteModuleDialogContainer } from './delete-module-dialog-container';
 import { EditModuleDialogContainer } from './edit-module-dialog-container';
 import { LessonCard } from './lesson-card';
@@ -41,6 +40,7 @@ import { LessonConfigDialogContainer } from './lesson-config-dialog-container';
 import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { ModuleColumn } from './module-column';
 import { SortableModuleColumn } from './sortable-module-column';
+import { UpdateLessonVersionDialogContainer } from './update-lesson-version-dialog-container';
 
 /**
  * Which of this course's OWN modules holds the given lesson, or null.
@@ -137,9 +137,11 @@ function placeLesson(
 
 export const ModuleBoardContainer = ({
   courseId,
+  courseName,
   modules,
 }: {
   courseId: number;
+  courseName: string;
   modules: BoardModule[];
 }) => {
   const queryClient = useQueryClient();
@@ -366,6 +368,7 @@ export const ModuleBoardContainer = ({
               <SortableModuleColumn
                 key={mod.id}
                 courseId={courseId}
+                courseName={courseName}
                 module={mod}
                 posters={postersById}
               />
@@ -385,12 +388,17 @@ export const ModuleBoardContainer = ({
           />
         ) : null}
       </DragOverlay>
-      <CreateLessonDialogContainer courseId={courseId} />
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
       <LessonVideoModalContainer
         boards={[{ course: { id: courseId }, modules }]}
+      />
+      <UpdateLessonVersionDialogContainer
+        readBoards={() => {
+          const board = queryClient.getQueryData<CourseBoard | null>(key);
+          return board ? [board] : [];
+        }}
       />
     </DndContext>
   );

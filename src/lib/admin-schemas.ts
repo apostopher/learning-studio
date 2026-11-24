@@ -197,6 +197,15 @@ export type UpdateCourseLessonVersionInput = z.infer<
   typeof updateCourseLessonVersionInputSchema
 >;
 
+/** Why a course was not moved: the 409 (with its code) or the 404. */
+export const courseLessonVersionRefusalSchema = z.object({
+  error: z.string(),
+  code: z.enum(['stale', 'current']).optional(),
+});
+export type CourseLessonVersionRefusal = z.infer<
+  typeof courseLessonVersionRefusalSchema
+>;
+
 /** The 409 of deleting a lesson some course shows. */
 export const lessonInUseSchema = z.object({
   error: z.string(),

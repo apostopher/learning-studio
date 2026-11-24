@@ -13,13 +13,14 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { ClampedText } from '../clamped-text';
-import { Chip, chipClassName } from '../ui/chip';
+import { Chip } from '../ui/chip';
 import {
   IconButtonTooltip,
   iconButtonClass,
   TooltipIconButton,
 } from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
+import { VersionChip, type VersionChipProps } from './version-chip';
 
 /**
  * Only the fields this card actually reads.
@@ -51,11 +52,12 @@ export const LessonCard = ({
   lesson,
   posterUrl,
   dragHandleProps,
-  onEdit,
+  onConfigure,
   remove,
   access,
   onPlay,
   quickshotSlot,
+  version,
   alsoIn,
   visibility,
 }: {
@@ -63,7 +65,8 @@ export const LessonCard = ({
   /** Poster frame for this lesson's video, when its provider exposes one. */
   posterUrl?: string | null;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
-  onEdit?: () => void;
+  /** Opens the lesson's settings in this course; its content is Disciplines'. */
+  onConfigure?: () => void;
   /**
    * Take this lesson out of the module it is sitting in — a placement is
    * deleted, the lesson survives. A different act from deleting the lesson
@@ -85,9 +88,8 @@ export const LessonCard = ({
   };
   /**
    * Paid or free, as a padlock toggle: locked (pressed) = paid, open = free.
-   * Replaced the FREE chip and took the bin's slot — deleting a lesson
-   * everywhere now happens only from the library, where the whole lesson
-   * lives. Omitted on read-only cards (drag overlay, borrowed lists).
+   * Replaced the FREE chip and took the bin's slot — deleting a
+   * lesson happens only from the library, where the whole lesson lives. Omitted on read-only cards (drag overlay, borrowed lists).
    */
   access?: LessonCardAccess;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
@@ -99,6 +101,11 @@ export const LessonCard = ({
    * edit — without it the card collapses back to its original single row.
    */
   quickshotSlot?: ReactNode;
+  /**
+   * The version this course is on, as the last chip of that row. On every card
+   * in a course, borrowed ones too; omitted by the drag overlays.
+   */
+  version?: VersionChipProps;
   /**
    * Names of the OTHER modules in this course that also hold this lesson —
    * whole-course remixing makes teaching a lesson twice common, and the spec
@@ -125,7 +132,7 @@ export const LessonCard = ({
     // transform on the hover target moves it out from under the cursor.
     // `has-focus-visible`, not `focus-within`: the card is not focusable,
     // its buttons are, and only KEYBOARD focus on one of them should light
-    // the whole card — a mouse click on Edit would otherwise leave the
+    // the whole card — a mouse click on one would otherwise leave the
     // outline stuck on until blur.
     <div className="flex items-center gap-2 rounded-lg border border-gray-6 bg-gray-1 px-3 py-2 text-sm text-primary outline outline-2 outline-offset-0 outline-transparent transition-[outline-color,background-color] duration-150 hover:bg-gray-2 hover:outline-warning-9 has-focus-visible:outline-warning-9">
       <LessonVideoTile
@@ -187,8 +194,8 @@ export const LessonCard = ({
               </span>
             )
           )}
-          {onEdit && (
-            <TooltipIconButton label="Edit lesson" onClick={onEdit}>
+          {onConfigure && (
+            <TooltipIconButton label="Configure lesson" onClick={onConfigure}>
               <Pencil className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
@@ -225,13 +232,13 @@ export const LessonCard = ({
             Also in {alsoIn.join(', ')}
           </Chip>
         )}
-        {quickshotSlot && (
+        {(quickshotSlot || version) && (
           // Right-aligned so the last chip ends under the padlock. `pe-1.5`
           // is the icon button's own inset ((28px box − 16px glyph) / 2), so
           // the chip lines up with the padlock you see, not its hit area.
           <div className="col-start-1 flex flex-wrap items-center justify-end gap-1.5 pe-1.5">
             {quickshotSlot}
-            <VersionChip />
+            {version && <VersionChip {...version} />}
           </div>
         )}
       </div>
@@ -291,28 +298,3 @@ const AccessToggle = ({
     </Tooltip.Root>
   );
 };
-
-/**
- * Placeholder for the lesson-version flag (design 2026-11-19): gold once
- * versioning exists will mean "a newer version is in Disciplines". Until
- * then it is inert and says so — `aria-disabled` rather than `disabled`
- * because Base UI's Tooltip.Trigger swallows the native attribute, and no
- * handler at all, so neither a click nor Enter does anything.
- */
-const VersionChip = () => (
-  // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
-  <Tooltip.Root disableHoverablePopup>
-    <Tooltip.Trigger
-      render={<button type="button" />}
-      aria-disabled="true"
-      aria-label="Ver: lesson versions are coming soon"
-      className={chipClassName(
-        'solid-accent',
-        'cursor-not-allowed focus-visible:outline-2 focus-visible:outline-apple-9 focus-visible:outline-offset-2',
-      )}
-    >
-      Ver
-    </Tooltip.Trigger>
-    <IconButtonTooltip label="Ver: lesson versions are coming soon" />
-  </Tooltip.Root>
-);

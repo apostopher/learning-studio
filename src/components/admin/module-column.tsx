@@ -1,4 +1,4 @@
-import { GripVertical, ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its component test.
@@ -12,7 +12,6 @@ import { OptimizedPicture } from './optimized-picture';
 export const ModuleColumn = ({
   module: mod,
   dragHandleProps,
-  onAddLesson,
   onEditModule,
   onDeleteModule,
   lessonsSlot,
@@ -21,10 +20,9 @@ export const ModuleColumn = ({
 }: {
   module: BoardModule;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
-  onAddLesson?: () => void;
   onEditModule?: () => void;
   onDeleteModule?: () => void;
-  /** DnD-enabled lessons list; falls back to a static list (e.g. drag overlay). */
+  /** The lessons list; falls back to a static one, for the drag overlay. */
   lessonsSlot?: ReactNode;
   /** Only used by the static fallback list below, i.e. the module drag
    *  overlay — when `lessonsSlot` is supplied it carries its own posters. */
@@ -47,11 +45,6 @@ export const ModuleColumn = ({
           text={mod.name}
           className="min-w-0 flex-1 text-sm font-semibold text-primary"
         />
-        {onAddLesson && (
-          <TooltipIconButton label="Add lesson" onClick={onAddLesson}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </TooltipIconButton>
-        )}
         {onEditModule && (
           <TooltipIconButton label="Edit module" onClick={onEditModule}>
             <Pencil className="h-4 w-4" aria-hidden="true" />

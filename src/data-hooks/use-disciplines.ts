@@ -235,10 +235,8 @@ function staffBody(userId: string): string {
  * Create a lesson filed under one discipline, from the library column's own
  * "add lesson" action.
  *
- * Separate from `useCreateLesson`, which posts to a MODULE and refetches one
- * course board. This one creates an unplaced library lesson — it teaches no
- * course until someone drags it into one — so the only reader to invalidate
- * is the org library.
+ * The lesson is unplaced — no course shows it until someone drags it into one
+ * — so the only reader to invalidate is the org library.
  *
  * The 403 is surfaced as its own sentence because it is the likeliest refusal
  * here and the one with a real remedy: the library admits anyone staffed

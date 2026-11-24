@@ -4,8 +4,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
-import type { BoardModule } from '@/lib/admin-schemas';
-import { containerDndId, lessonDndId } from '@/lib/dnd-ids';
+// `#/` not `@/`: vitest cannot resolve the `@/` alias, and the column's test
+// renders this module.
+import type { BoardModule } from '#/lib/admin-schemas';
+import { containerDndId, lessonDndId } from '#/lib/dnd-ids';
 import { SortableLessonCard } from './sortable-lesson-card';
 
 /**
@@ -15,17 +17,19 @@ import { SortableLessonCard } from './sortable-lesson-card';
  */
 export const LessonBoardContainer = ({
   courseId,
+  courseName,
   module: mod,
   posters,
 }: {
   courseId: number;
+  courseName: string;
   /** The whole module: each card's quickshot needs it, not just its id. */
   module: BoardModule;
   /** lessonId → poster url, from `useLessonPosters`. Missing ids draw the
    *  grey tile. */
   posters: Record<string, string>;
 }) => {
-  const { id: moduleId, lessons } = mod;
+  const { id: moduleId, name, lessons } = mod;
   const { setNodeRef } = useDroppable({
     id: containerDndId(courseId, moduleId),
     data: { type: 'container', moduleId },
@@ -36,14 +40,16 @@ export const LessonBoardContainer = ({
     <div ref={setNodeRef} className="flex min-h-12 flex-col gap-2">
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {lessons.length === 0 ? (
-          <p className="px-1 py-4 text-center text-xs text-tertiary">
-            No lessons
+          <p className="text-pretty px-1 py-4 text-center text-tertiary text-xs">
+            No lessons yet. Drag one into {name} from Disciplines, in the
+            knowledge library.
           </p>
         ) : (
           lessons.map((lesson) => (
             <SortableLessonCard
               key={lesson.id}
               courseId={courseId}
+              courseName={courseName}
               lesson={lesson}
               module={mod}
               posterUrl={posters[lesson.id]}

@@ -56,7 +56,11 @@ export const CourseBoardContainer = ({
           <p className="text-sm text-secondary">No modules yet</p>
         </div>
       ) : (
-        <ModuleBoardContainer courseId={courseId} modules={board.modules} />
+        <ModuleBoardContainer
+          courseId={courseId}
+          courseName={board.course.name}
+          modules={board.modules}
+        />
       )}
     </CourseBoard>
   );

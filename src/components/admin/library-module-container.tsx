@@ -78,7 +78,7 @@ export const LibraryModuleContainer = ({
         module={mod}
         dragHandleProps={{ ...attributes, ...listeners }}
         // A lesson is born filed in the module whose header it was added
-        // from, as on the course rail — never in Untitled to be dragged over.
+        // from, never in Untitled to be dragged over.
         onAddLesson={() =>
           openAddLesson({
             id: disciplineId,

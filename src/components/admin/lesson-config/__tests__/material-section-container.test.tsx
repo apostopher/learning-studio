@@ -28,7 +28,6 @@ vi.mock('react', async () => {
 const hooks = vi.hoisted(() => ({
   material: vi.fn(),
   save: vi.fn(),
-  saveError: null as Error | null,
 }));
 vi.mock('#/data-hooks/use-lesson-material', () => ({
   useLessonMaterial: hooks.material,
@@ -40,7 +39,7 @@ vi.mock('#/data-hooks/use-save-lesson-material', () => ({
   useSaveLessonMaterial: () => ({
     mutate: hooks.save,
     reset: vi.fn(),
-    error: hooks.saveError,
+    error: null,
   }),
 }));
 vi.mock('#/data-hooks/use-set-lesson-version', () => ({
@@ -77,7 +76,6 @@ vi.mock('../rich-text-editor', () => ({
   ),
 }));
 
-import { VersionConflictError } from '#/data-hooks/version-conflict';
 import { lessonMaterialFormId } from '../material-form-id';
 import { MaterialSaveButton } from '../material-save-button';
 import { MaterialSectionContainer } from '../material-section-container';
@@ -86,7 +84,15 @@ const renderFor = (lessonId: number) => {
   const store = createStore();
   const view = render(
     <Provider store={store}>
-      <MaterialSectionContainer lesson={{ id: lessonId }} versioned={null} />
+      <MaterialSectionContainer
+        lesson={{ id: lessonId }}
+        versioned={{
+          id: lessonId,
+          version: '1.0',
+          highestTaken: null,
+          versionCourseCount: 0,
+        }}
+      />
       <MaterialSaveButton
         formId={lessonMaterialFormId(lessonId)}
         isSaving={false}
@@ -207,20 +213,5 @@ describe('MaterialSectionContainer closing field', () => {
     renderFor(12);
     expect(screen.queryByLabelText('Job of the day (URL)')).toBeNull();
     expect(screen.queryByText('TEST THIS!')).toBeNull();
-  });
-});
-
-describe('MaterialSectionContainer without a Version field', () => {
-  it("shows the server's version refusal by the form, having nowhere else to", () => {
-    hooks.material.mockReturnValue({
-      data: { extraTab: 'testThis', values: null },
-      isLoading: false,
-    });
-    hooks.saveError = new VersionConflictError('Enter a higher version');
-    renderFor(13);
-    expect(screen.getByRole('alert').textContent).toBe(
-      'Enter a higher version',
-    );
-    hooks.saveError = null;
   });
 });

@@ -251,37 +251,52 @@ describe('LessonCard', () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 
-  it('shows an inert Ver chip beside the quickshot chips', () => {
-    const onEdit = vi.fn();
-    const onPlay = vi.fn();
-    const onToggle = vi.fn();
+  it('updates from the version chip without dragging, playing or configuring', () => {
+    const onUpdate = vi.fn();
+    const others = {
+      onConfigure: vi.fn(),
+      onPlay: vi.fn(),
+      onToggle: vi.fn(),
+      onPointerDown: vi.fn(),
+      onKeyDown: vi.fn(),
+    };
     render(
       <LessonCard
         lesson={lesson()}
-        onEdit={onEdit}
-        onPlay={onPlay}
-        visibility={{ onToggle }}
+        onConfigure={others.onConfigure}
+        onPlay={others.onPlay}
+        visibility={{ onToggle: others.onToggle }}
+        dragHandleProps={{
+          onPointerDown: others.onPointerDown,
+          onKeyDown: others.onKeyDown,
+        }}
         quickshotSlot={<span>chips</span>}
+        version={{ version: '1.0', disciplineVersion: '1.1', onUpdate }}
       />,
     );
-    const ver = screen.getByRole('button', {
-      name: 'Ver: lesson versions are coming soon',
-    });
-    expect(ver.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(ver);
-    fireEvent.keyDown(ver, { key: 'Enter' });
-    expect(onEdit).not.toHaveBeenCalled();
-    expect(onPlay).not.toHaveBeenCalled();
-    expect(onToggle).not.toHaveBeenCalled();
+    const chip = screen.getByRole('button', { name: /Update this lesson/ });
+    fireEvent.pointerDown(chip);
+    fireEvent.keyDown(chip, { key: 'Enter' });
+    fireEvent.click(chip);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    for (const other of Object.values(others)) {
+      expect(other).not.toHaveBeenCalled();
+    }
   });
 
-  it('draws no Ver chip on a card without chips', () => {
-    render(<LessonCard lesson={lesson()} />);
-    expect(
-      screen.queryByRole('button', {
-        name: 'Ver: lesson versions are coming soon',
-      }),
-    ).toBeNull();
+  it('draws the version chip on a card with no settings chips', () => {
+    render(
+      <LessonCard
+        lesson={lesson()}
+        version={{ version: '1.0', disciplineVersion: '1.0' }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Up to date/ })).toBeTruthy();
+  });
+
+  it('draws no version on a card given none (the drag overlay)', () => {
+    render(<LessonCard lesson={lesson()} quickshotSlot={<span>chips</span>} />);
+    expect(screen.queryByText('v1.0')).toBeNull();
   });
 
   it('draws no padlock on a read-only card', () => {

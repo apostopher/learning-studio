@@ -104,6 +104,7 @@ import { RemoveCourseModuleDialogContainer } from './remove-course-module-dialog
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { RenameDisciplineModuleDialogContainer } from './rename-discipline-module-dialog-container';
 import { type DragOrigin, resolveDrop } from './resolve-drop';
+import { UpdateLessonVersionDialogContainer } from './update-lesson-version-dialog-container';
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
@@ -1433,9 +1434,9 @@ export const EditorContainer = ({
 
       {/*
         Mounted once for the whole editor, not once per course: a lesson is
-        org-owned, so the confirmation is not scoped to any one course. Which
-        lesson it is about — and how many courses lose it — arrives on
-        `deleteLessonAtom` from whichever card was clicked.
+        org-owned, so the dialog is not scoped to any one course. Which lesson it
+        is about, and how many courses show it, arrives on `deleteLessonAtom`
+        from whichever library card was clicked.
       */}
       <RemoveCourseModuleDialogContainer />
       <DeleteLessonDialogContainer />
@@ -1453,10 +1454,9 @@ export const EditorContainer = ({
       */}
       <CreateLibraryLessonDialogContainer />
       {/*
-        Editing what a lesson IS — name, availability, written content — from
-        either pane. Lesson-level, not course-level: see the container's note
-        for the split against `LessonConfigDialogContainer`, and for why video
-        is not here.
+        Editing what a lesson IS — name, video, written content, version —
+        from the library pane. Lesson-level, not course-level: see the
+        container's note for the split against `LessonConfigDialogContainer`.
       */}
       <LibraryLessonConfigDialogContainer />
       {/*
@@ -1478,6 +1478,9 @@ export const EditorContainer = ({
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer navigateAfterDelete={false} />
       <LessonVideoModalContainer boards={board} />
+      <UpdateLessonVersionDialogContainer
+        readBoards={() => readBoard() ?? []}
+      />
       <RenameDisciplineDialogContainer />
       <DisciplineLevelsDialogContainer />
       <DeleteDisciplineDialogContainer />

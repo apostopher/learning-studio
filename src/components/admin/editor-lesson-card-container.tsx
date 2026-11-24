@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { toast } from 'sonner';
-import { editLibraryLessonIdAtom, playLessonAtom } from '#/atoms/admin';
+import { playLessonAtom } from '#/atoms/admin';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
 import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
@@ -11,6 +11,7 @@ import { lessonDndId } from '#/lib/dnd-ids';
 import { EditorLessonQuickshotContainer } from './editor-lesson-quickshot-container';
 import { LessonCard } from './lesson-card';
 import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
+import { useLessonVersionChip } from './use-lesson-version-chip';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
@@ -22,19 +23,20 @@ import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
  * of a reversible act only trains people to dismiss dialogs. Deleting the
  * lesson itself is not offered here: that lives on the library card only.
  *
- * Edit opens the lesson-level modal shared with the library pane. Its authority follows the lesson's discipline, not
- * this course, which is what lets a discipline SME use it here.
+ * There is no Edit: what a lesson IS is edited in Disciplines, and this course
+ * takes a newer version of it through the version chip.
  *
  * Otherwise this card is the SAME card the per-course board draws — poster,
- * play tile, eye, padlock, edit, quickshot chips — down to sharing
- * `LessonCard` and `LessonQuickshot`. The remove control is the one thing it adds, because a
- * placement is only undone here. Two boards showing the same lesson two
+ * play tile, eye, padlock, quickshot and version chips — down to sharing
+ * `LessonCard` and `LessonQuickshot`. The remove control is the one thing it
+ * adds, because a placement is only undone here. Two boards showing the same lesson two
  * different ways was the thing to fix, not a difference worth keeping.
  */
 export const EditorLessonCardContainer = ({
   lesson,
   module: mod,
   courseId,
+  courseName,
   posterUrl,
   alsoIn,
 }: {
@@ -46,6 +48,8 @@ export const EditorLessonCardContainer = ({
    */
   module: EditorBoardModule;
   courseId: number;
+  /** Named by the dialog the version chip opens. */
+  courseName: string;
   /** Poster frame for this lesson's video, when its provider exposes one. */
   posterUrl?: string | null;
   /**
@@ -71,11 +75,14 @@ export const EditorLessonCardContainer = ({
   });
 
   const unlinkLesson = useUnlinkLesson();
-  const editLesson = useSetAtom(editLibraryLessonIdAtom);
   const setPlayLesson = useSetAtom(playLessonAtom);
   // The same save the quickshot chips use, so the eye, the padlock and the
   // chips share one optimistic cache write and one rollback path.
   const updateConfig = useUpdateEditorLessonConfig();
+  const version = useLessonVersionChip(
+    { id: courseId, name: courseName },
+    lesson,
+  );
 
   return (
     <div
@@ -102,12 +109,6 @@ export const EditorLessonCardContainer = ({
             }),
           isPending: updateConfig.isPending,
         }}
-        // RBAC rule 6 — the SME edits their lesson from the RIGHT pane too.
-        // It opens the lesson-LEVEL modal, the same one the library card
-        // opens, not the per-course configure surface: what a lesson is has
-        // one answer in every course teaching it, and authority over it
-        // follows the lesson's discipline rather than this course.
-        onEdit={() => editLesson(lesson.id)}
         remove={{
           label: removeLessonLabel(lesson.name, moduleName),
           onClick: () =>
@@ -132,6 +133,7 @@ export const EditorLessonCardContainer = ({
             : undefined
         }
         quickshotSlot={<EditorLessonQuickshotContainer lesson={lesson} />}
+        version={version}
       />
     </div>
   );

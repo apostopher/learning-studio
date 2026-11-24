@@ -6,16 +6,11 @@ import { dataKeys } from './keys';
 import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
 
 /**
- * Attach a provider video reference to a lesson, then refetch everything
- * that draws it.
- *
- * `courseId` is the course whose board opened the dialog, or `null` from the
- * library's "Edit lesson" dialog, which has no course in hand. A video is a
- * property of the LESSON — org-owned, taught by any number of courses — so
- * the library, the org editor's rail and every course board refetch. Posters
- * refresh for the named course only; without one, by prefix.
+ * Attach a provider video reference to a lesson's working copy, then refetch
+ * everything that draws it: the library, its posters and, for the version that
+ * may come with it, every board.
  */
-export function useSetLessonVideo(courseId: number | null, lessonId: number) {
+export function useSetLessonVideo(lessonId: number) {
   const queryClient = useQueryClient();
   const settle = useSettleContentWrite(lessonId);
   return useMutation({
@@ -35,8 +30,7 @@ export function useSetLessonVideo(courseId: number | null, lessonId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonVideo(lessonId),
       });
-      // The prefix, not this course's entry: a new video is a new video in
-      // every course teaching the lesson.
+      // The prefix: the working copy is previewed through any course.
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonPlaybacks(lessonId),
       });
@@ -44,14 +38,11 @@ export function useSetLessonVideo(courseId: number | null, lessonId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonCaptionsAll(lessonId),
       });
-      // Without this the board's tile flips to a play button on refetch but
+      // Without this the card's tile flips to its video state on refetch but
       // its poster stays grey for the full 30-minute lessonPosters staleTime
       // — the exact moment an admin looks to confirm the attach worked.
       queryClient.invalidateQueries({
-        queryKey:
-          courseId === null
-            ? dataKeys.allLessonPosters()
-            : dataKeys.lessonPosters(courseId),
+        queryKey: dataKeys.allLessonPosters(),
       });
       settle.saved(version);
     },

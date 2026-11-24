@@ -25,8 +25,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AlternateVideosContainerProps {
   lessonId: number;
-  /** The lesson's version, where the dialog has a Version field; else null. */
-  versioned: VersionedLesson | null;
+  /** The lesson's version, which its edits are gated by. */
+  versioned: VersionedLesson;
 }
 
 /**

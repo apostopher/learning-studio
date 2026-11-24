@@ -1,8 +1,5 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtom } from 'jotai';
 import { Loader2, RotateCcw } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import {
   adminPreviewLangAtomFamily,
@@ -10,23 +7,15 @@ import {
   videoPlaybackForbiddenLessonIdAtom,
 } from '#/atoms/admin';
 import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
-import { useLessonVideo } from '#/data-hooks/use-lesson-video';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
-import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
-import type {
-  BoardLesson,
-  PlaybackSource,
-  ProviderId,
-} from '#/lib/admin-schemas';
+import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
 import {
   isVideoLang,
   labelForLang,
   PRIMARY_VIDEO_LANG,
 } from '#/lib/video-languages';
 import { VIDEO_PROVIDERS } from '#/lib/video-providers';
-import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { PlaybackError } from '#/lib/video-providers/errors';
-import { AlternateVideosContainer } from './alternate-videos-container';
 import { CaptionsStatusContainer } from './captions-status-container';
 import { computeVideoPreviewState } from './compute-video-preview-state';
 import { CredentialFlowContainer } from './credential-flow-container';
@@ -35,58 +24,57 @@ import {
   type PreviewNotPlayableKind,
   previewLanguageNotice,
 } from './preview-language-notice';
-import { useVersionGate, type VersionedLesson } from './use-version-gate';
-import { VersionFieldContainer } from './version-field-container';
+import type { VersionedLesson } from './use-version-gate';
+import { VideoEditorContainer } from './video-editor-container';
 import { VideoPreview } from './video-preview';
-import { VideoUrlForm } from './video-url-form';
-
-const videoUrlFormSchema = z.object({
-  url: z.string().trim().min(1, 'Paste a video URL or ID'),
-});
-type VideoUrlFormValues = z.infer<typeof videoUrlFormSchema>;
 
 /**
- * Only what this section reads. `videoRef` is optional because the library
- * payload deliberately omits it (a bare Mux ref is streamable) while still
- * naming the provider; the ref is only ever compared against a draft here.
+ * Only what this section reads. Never a `videoRef`: the library payload
+ * deliberately omits it (a bare Mux ref is streamable).
  */
-export type VideoSectionLesson = Pick<BoardLesson, 'id' | 'videoProvider'> & {
-  videoRef?: string | null;
-};
+export type VideoSectionLesson = Pick<BoardLesson, 'id' | 'videoProvider'>;
 
-interface VideoSectionContainerProps {
-  /**
-   * The course whose provider credentials sign the playback preview, or
-   * `null` from the library's dialog for a lesson placed in no course yet.
-   * The video REF is a property of the lesson and saves either way; only the
-   * preview and the credential hand-off need a course.
-   */
-  courseId: number | null;
-  /** What the preview plays: that course's version, or the working copy. */
-  source: PlaybackSource;
-  lesson: VideoSectionLesson;
-  /**
-   * The lesson's version, to show and gate by: only where the working copy is
-   * edited. Null in the course dialog.
-   */
-  versioned: VersionedLesson | null;
-  /**
-   * One quiet line under the preview, for when the course above was chosen
-   * for the lesson rather than by the admin — the library dialog signs with
-   * the first course teaching the lesson and says so.
-   */
-  previewNote?: string;
-}
+type VideoSectionContainerProps = { lesson: VideoSectionLesson } & (
+  | {
+      /** Disciplines: the working copy, played and edited. */
+      source: 'discipline';
+      readOnly?: false;
+      /**
+       * The course whose provider credentials sign the playback preview, or
+       * `null` for a lesson placed in no course yet. The video REF is a
+       * property of the lesson and saves either way; only the preview and the
+       * credential hand-off need a course.
+       */
+      courseId: number | null;
+      /** The working copy, with the version its edits are gated by. */
+      versioned: VersionedLesson;
+      /**
+       * One quiet line under the preview, for when the course above was chosen
+       * for the lesson rather than by the admin — the library dialog signs with
+       * the first course teaching the lesson and says so.
+       */
+      previewNote?: string;
+    }
+  | {
+      /** A course's dialog: the version it is on, only played. */
+      source: 'course';
+      readOnly: true;
+      courseId: number;
+      versioned?: undefined;
+      previewNote?: undefined;
+    }
+);
 
 /**
- * Orchestrates the Video tab: URL entry → provider detection → persist the ref
- * on the lesson → (if the course has no credential for that provider) hand off
- * to `CredentialFlowContainer` → resolved playback preview.
+ * A lesson's video: the resolved playback preview or, if the course has no
+ * credential for its provider, a hand-off to `CredentialFlowContainer`. In
+ * Disciplines, `VideoEditorContainer` beside it changes the video; a course
+ * plays the version it is on and changes nothing.
  *
- * The *video* side is still derived from server data (the lesson's persisted
- * provider/ref and the playback query) plus two jotai atoms for the sliver with
- * no server home yet: a not-yet-confirmed URL detection, and whether the
- * "replace video" form is showing over an already-configured video.
+ * The *video* side is derived from server data (the lesson's persisted provider
+ * and the playback query) plus two jotai atoms for the sliver with no server
+ * home yet: a not-yet-confirmed URL detection, and a preview that could not be
+ * played.
  *
  * The *credential* side is not derived here — `credentialMachine` owns it, via
  * the same container the course-edit dialog uses. This file only decides
@@ -95,6 +83,7 @@ interface VideoSectionContainerProps {
 export const VideoSectionContainer = ({
   courseId,
   source,
+  readOnly = false,
   lesson,
   versioned,
   previewNote,
@@ -112,35 +101,27 @@ export const VideoSectionContainer = ({
   const setPlaybackForbidden = (next: boolean) =>
     setPlaybackForbiddenLessonId(next ? lesson.id : null);
 
-  const ownDraft = storedDraft?.lessonId === lesson.id ? storedDraft : null;
+  // A draft is of the working copy, so never of what a course plays.
+  const ownDraft =
+    !readOnly && storedDraft?.lessonId === lesson.id ? storedDraft : null;
   /**
    * The draft, but only while it is still ahead of the lesson record.
    *
-   * Once the board refetches and the lesson carries the same provider/ref, the
-   * draft and the record agree and the record becomes the source of truth.
-   * That used to be a second effect clearing the atom on the match; as a
-   * derivation it cannot race the refetch, and there is no window where both
-   * are live and disagreeing.
+   * Once the library refetches and the lesson carries the same provider, the
+   * record becomes the source of truth. That used to be a second effect
+   * clearing the atom on the match; as a derivation it cannot race the
+   * refetch, and there is no window where both are live and disagreeing.
    */
-  // A lesson that carries no `videoRef` (the library payload) is compared on
-  // provider alone, so the draft still retires once the refetch agrees.
   const draftDetection =
-    ownDraft &&
-    (lesson.videoProvider !== ownDraft.provider ||
-      (lesson.videoRef !== undefined && lesson.videoRef !== ownDraft.ref))
-      ? ownDraft
-      : null;
+    ownDraft && lesson.videoProvider !== ownDraft.provider ? ownDraft : null;
   const setDraftDetection = (
     next: { provider: ProviderId; ref: string } | null,
   ) => setStoredDraft(next ? { lessonId: lesson.id, ...next } : null);
 
   const credentials = useCourseCredentials(courseId);
-  const setLessonVideo = useSetLessonVideo(courseId, lesson.id);
-  const gate = useVersionGate(versioned);
 
   const activeProvider = draftDetection?.provider ?? lesson.videoProvider;
-  // A provider with no ref in hand (library payload) still means "has a
-  // video": the ref exists on the lesson row, it just isn't sent.
+  // A provider means "has a video": the ref exists, it just isn't sent.
   const hasVideo = activeProvider !== null;
 
   // Plain derivations, not `useMemo`: the compiler memoises these, and a
@@ -166,48 +147,6 @@ export const VideoSectionContainer = ({
     playbackEnabled,
   );
   const previewState = computeVideoPreviewState(playback.data);
-
-  // The current video's canonical URL, for the field's prefill: read per
-  // lesson under the content guard (the library payload carries no ref).
-  // Only asked for when there is a video to show.
-  const currentVideo = useLessonVideo(lesson.id, hasVideo);
-  const currentUrl =
-    currentVideo.data?.provider && currentVideo.data.ref
-      ? VIDEO_PROVIDERS[currentVideo.data.provider].toUrl(currentVideo.data.ref)
-      : '';
-
-  // Hydrated by react-hook-form's own `values`, not an effect: the field
-  // fills when the current video arrives and again after a replace lands,
-  // while `keepDirtyValues` leaves anything the admin has typed alone.
-  const urlForm = useForm<VideoUrlFormValues>({
-    resolver: zodResolver(videoUrlFormSchema),
-    mode: 'onSubmit',
-    defaultValues: { url: '' },
-    values: { url: currentUrl },
-    resetOptions: { keepDirtyValues: true },
-  });
-  const urlValue = urlForm.watch('url');
-  const detected = urlValue.trim() ? detectVideoUrl(urlValue) : null;
-
-  const handleUrlSubmit = urlForm.handleSubmit((values) => {
-    const hit = detectVideoUrl(values.url);
-    if (!hit) return;
-    gate.attempt((version) => {
-      setDraftDetection(hit);
-      setLessonVideo.mutate(
-        { provider: hit.provider, ref: hit.ref, version },
-        {
-          // Back to pristine: the refetched current video then flows into the
-          // field through `values` above, so it shows what was just saved.
-          onSuccess: () => urlForm.reset(),
-          onError: (error) => {
-            setDraftDetection(null);
-            gate.onError(error);
-          },
-        },
-      );
-    });
-  });
 
   // Two independent ways a stored key turns out to be dead, because the
   // providers fail in different places: Synthesia refuses our server's API call
@@ -266,12 +205,12 @@ export const VideoSectionContainer = ({
 
   /**
    * Two equal columns: the thumbnail on the left, large enough to actually
-   * recognise the video; on the right, the main URL field and the per-language
-   * alternates under it — every way of setting this lesson's video in one
-   * stack. There is no "Replace" toggle to find first — pasting a new URL IS
-   * replacing. Status lines (rendering, failed, dead key, connect the
-   * provider) sit under both columns at full width so their controls have
-   * room. Stacks to one column on a narrow screen.
+   * recognise the video; on the right, every way of setting this lesson's
+   * video in one stack — empty where the video is only played. There is no
+   * "Replace" toggle to find first — pasting a new URL IS replacing. Status
+   * lines (rendering, failed, dead key, connect the provider) sit under both
+   * columns at full width so their controls have room. Stacks to one column
+   * on a narrow screen.
    */
   const thumbnailPlayback =
     courseId !== null && canPlay && previewState.kind === 'ready'
@@ -301,30 +240,18 @@ export const VideoSectionContainer = ({
           )}
         </div>
 
-        {/* `@container`: the alternates' language/URL row lays itself out by
-            this column's width, not the viewport's — at half a modal, a
-            side-by-side row would crush the URL field. */}
-        <div className="@container flex min-w-0 flex-col gap-6">
-          <VideoUrlForm
-            onSubmit={handleUrlSubmit}
-            registerUrl={urlForm.register('url')}
-            urlError={urlForm.formState.errors.url?.message}
-            detectedLabel={
-              detected ? VIDEO_PROVIDERS[detected.provider].label : null
-            }
-            showUnsupported={urlValue.trim().length > 0 && !detected}
-            isPending={setLessonVideo.isPending}
-            serverError={gate.formError(setLessonVideo.error)}
-            submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
-          />
-          {hasVideo && (
-            <AlternateVideosContainer
-              lessonId={lesson.id}
-              versioned={versioned}
+        {versioned && (
+          // `@container`: the alternates' language/URL row lays itself out by
+          // this column's width, not the viewport's — at half a modal, a
+          // side-by-side row would crush the URL field.
+          <div className="@container flex min-w-0 flex-col gap-6">
+            <VideoEditorContainer
+              lesson={versioned}
+              hasVideo={hasVideo}
+              onDraft={setDraftDetection}
             />
-          )}
-          {versioned && <VersionFieldContainer lesson={versioned} />}
-        </div>
+          </div>
+        )}
       </div>
 
       {hasVideo &&
@@ -363,11 +290,13 @@ export const VideoSectionContainer = ({
               </output>
             )}
             {languageFallback}
-            <CaptionsStatusContainer
-              lessonId={lesson.id}
-              courseId={courseId}
-              lang={previewLang}
-            />
+            {!readOnly && (
+              <CaptionsStatusContainer
+                lessonId={lesson.id}
+                courseId={courseId}
+                lang={previewLang}
+              />
+            )}
             {!languageNotice && playback.isError && (
               <p role="alert" className="text-error-text text-sm">
                 Couldn't resolve playback: {playback.error.message}
@@ -428,8 +357,8 @@ export const VideoSectionContainer = ({
               {/*
                 Same flow as the course dialog's Video integrations section,
                 minus the card chrome — the line above already names the
-                provider. Opens straight into the form: the admin got here by
-                pasting a video that cannot play without a key.
+                provider. Opens straight into the form: the video cannot play
+                without a key.
               */}
               <CredentialFlowContainer
                 courseId={courseId}

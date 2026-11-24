@@ -38,7 +38,7 @@ export const EditorModuleContainer = ({
 }: {
   module: EditorBoardModule;
   courseId: number;
-  /** Named by the remove control and its confirmation. */
+  /** Named by the remove control, and by the confirmations opened here. */
   courseName: string;
   /** Poster frames by lesson id, fetched once per course by the column. */
   posters?: Record<number, string | null>;
@@ -121,10 +121,12 @@ export const EditorModuleContainer = ({
           provenance ? (
             mod.lessons.length === 0 ? (
               <p className="px-3 py-2 text-tertiary text-xs">
-                No lessons yet — add them in {provenance.ownerName}.
+                No lessons yet. Drag one from Disciplines into {mod.name} in{' '}
+                {provenance.ownerName}.
               </p>
             ) : (
               <BorrowedLessonList
+                course={{ id: courseId, name: courseName }}
                 lessons={mod.lessons}
                 posters={posters}
                 alsoIn={alsoInForModule}
@@ -141,7 +143,7 @@ export const EditorModuleContainer = ({
                 // somewhere visible to aim at. `isOver` comes from that same
                 // droppable, so the outline lights up under a dragged lesson.
                 <DropZoneEmpty
-                  message={`No lessons yet. Drag one from the library into ${mod.name}.`}
+                  message={`No lessons yet. Drag one from Disciplines into ${mod.name}.`}
                   isOver={isOver}
                 />
               ) : (
@@ -151,6 +153,7 @@ export const EditorModuleContainer = ({
                     lesson={lesson}
                     module={mod}
                     courseId={courseId}
+                    courseName={courseName}
                     posterUrl={posters?.[lesson.id]}
                     alsoIn={alsoInForModule.get(lesson.id)}
                   />

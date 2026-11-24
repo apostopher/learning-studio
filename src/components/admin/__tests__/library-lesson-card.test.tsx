@@ -51,9 +51,8 @@ describe('LibraryLessonCard', () => {
    * earned none of that width. Where a lesson is taught is answered by the
    * course rail being on screen beside the library.
    *
-   * `courseCount` stays on the type and is still read elsewhere — the delete
-   * confirmation names it, since deleting a lesson takes it out of every
-   * course at once.
+   * `courseCount` stays on the type and is still read elsewhere: a lesson in
+   * use cannot be deleted.
    */
   it('shows no course-count badge, whatever the count', () => {
     // Every count, because the old badge was conditional on `> 0` — testing
@@ -183,13 +182,12 @@ describe('LibraryLessonCard', () => {
     expect(cls).not.toMatch(/hover:(scale|-?translate)/);
   });
 
-  it('reserves an invisible, unannounced spot for the version', () => {
-    // Placeholder until lesson versioning exists (user's call, 2026-11-19):
-    // present for layout, never seen, read out, or selected.
-    render(<LibraryLessonCard lesson={lesson()} />);
-    const ver = screen.getByText('Vers 3.4');
-    expect(ver.className).toContain('opacity-0');
-    expect(ver.className).toContain('select-none');
-    expect(ver.closest('[aria-hidden="true"]')).not.toBeNull();
+  it('shows the version of the working copy, in plain sight and neutral', () => {
+    render(<LibraryLessonCard lesson={lesson({ version: '1.0' })} />);
+    const version = screen.getByText('v1.0');
+    expect(version.closest('[aria-hidden="true"]')).toBeNull();
+    expect(version.className).not.toMatch(/opacity-|select-none|uppercase/);
+    expect(version.className).toContain('bg-gray-3');
+    expect(screen.queryByText(/Vers/)).toBeNull();
   });
 });

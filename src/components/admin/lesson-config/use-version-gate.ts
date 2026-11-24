@@ -1,9 +1,7 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  type LessonVersionRefusal,
   lessonVersionDraftAtomFamily,
   lessonVersionRefusalAtomFamily,
-  noLessonVersionDraftAtom,
 } from '#/atoms/admin';
 import { VersionConflictError } from '#/data-hooks/version-conflict';
 import {
@@ -66,29 +64,16 @@ export const isVersionDirty = (
   version: string,
 ): boolean => draft !== null && draft.trim() !== version;
 
-const noRefusalAtom = atom<LessonVersionRefusal | null>(null);
+/** What every content write in the lesson editor asks before it is made. */
+export function useVersionGate(lesson: VersionedLesson): VersionGate {
+  const draft = useAtomValue(lessonVersionDraftAtomFamily(lesson.id));
+  const setRefusal = useSetAtom(lessonVersionRefusalAtomFamily(lesson.id));
+  const { version, blocked } = judge(lesson, draft);
 
-/**
- * What every content write in the lesson editor asks before it is made. The
- * course dialog shows no Version field, so it passes null: nothing is checked
- * here, and a refusal from the server shows as any other error.
- */
-export function useVersionGate(lesson: VersionedLesson | null): VersionGate {
-  const draft = useAtomValue(
-    lesson ? lessonVersionDraftAtomFamily(lesson.id) : noLessonVersionDraftAtom,
-  );
-  const setRefusal = useSetAtom(
-    lesson ? lessonVersionRefusalAtomFamily(lesson.id) : noRefusalAtom,
-  );
-  const { version, blocked } = lesson
-    ? judge(lesson, draft)
-    : { version: undefined, blocked: null };
-
-  const refuse = (message: string | null = null) => {
-    if (lesson) setRefusal({ message, focus: {} });
-  };
-  const isRefusal = (error: Error) =>
-    lesson !== null && error instanceof VersionConflictError;
+  const refuse = (message: string | null = null) =>
+    setRefusal({ message, focus: {} });
+  const isRefusal = (error: Error): boolean =>
+    error instanceof VersionConflictError;
 
   return {
     version,
@@ -96,7 +81,7 @@ export function useVersionGate(lesson: VersionedLesson | null): VersionGate {
     refuse,
     attempt: (write) => {
       if (blocked !== null) return refuse();
-      if (lesson) setRefusal(null);
+      setRefusal(null);
       write(version);
     },
     onError: (error) => {

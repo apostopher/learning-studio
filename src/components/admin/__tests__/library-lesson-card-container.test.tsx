@@ -239,7 +239,7 @@ describe('LibraryLessonCardContainer', () => {
     );
     expect(tile.received).toHaveBeenLastCalledWith(undefined);
   });
-  it('opens the delete confirmation for THIS lesson with its own name and course count — the blast radius the dialog states', () => {
+  it('opens the delete confirmation for THIS lesson with its own name and course count — the reason the dialog may refuse', () => {
     const store = createStore();
     render(
       <Provider store={store}>
@@ -256,8 +256,6 @@ describe('LibraryLessonCardContainer', () => {
       id: 42,
       name: 'Stalls',
       courseCount: 3,
-      // A library card has no "remove from module" control to point at.
-      removeControlLabel: null,
     });
   });
 });

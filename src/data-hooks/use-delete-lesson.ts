@@ -12,11 +12,9 @@ import { dataKeys } from './keys';
  *
  *  - `editorBoard()` — the org editor loses every placement of it;
  *  - `orgLibrary()` — the library loses the card;
- *  - `courseBoards()` — the PREFIX, not one course. This hook is reachable
- *    from the per-course board too (`SortableLessonCard`), whose cache lives
- *    under `courseBoard(courseId)` with a 30s `staleTime`. Naming a single
- *    course would still be wrong even if this hook knew one: any cached board
- *    may still show the lesson. Miss this and the deleted lesson sits on the board, still
+ *  - `courseBoards()` — the PREFIX, not one course: any board cached under
+ *    `courseBoard(courseId)`, with its 30s `staleTime`, may still show the
+ *    lesson. Miss this and the deleted lesson sits on the board, still
  *    clickable into a config dialog for a row that no longer exists, until a
  *    remount or the staleness window expires.
  */

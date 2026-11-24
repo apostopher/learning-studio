@@ -1,31 +1,36 @@
 import type { EditorBoardLesson } from '#/lib/admin-schemas';
-import { LessonCard } from './lesson-card';
+import { BorrowedLessonCardContainer } from './borrowed-lesson-card-container';
 
 /**
- * The lessons of a BORROWED module, drawn read-only.
+ * The lessons of a BORROWED module.
  *
- * No `useSortable`, no remove, no delete: those all edit the module's
- * content, which belongs to its owner. Not the same card component with the
+ * No `useSortable`, no remove, no settings: those all edit the module, which
+ * belongs to its owner. The version chip is the one live control, because the
+ * version is the borrowing course's own. Not the same card component with the
  * handlers left off — `EditorLessonCardContainer` registers a dnd sortable
  * unconditionally (hooks cannot be conditional), and a registered sortable
  * that refuses every drop is a control that looks live and is not.
  */
 export const BorrowedLessonList = ({
+  course,
   lessons,
   posters,
   alsoIn,
 }: {
+  /** The course BORROWING the module, whose board this is. */
+  course: { id: number; name: string };
   lessons: readonly EditorBoardLesson[];
   posters?: Record<number, string | null>;
-  alsoIn: ReadonlyMap<number, string[]>;
+  alsoIn?: ReadonlyMap<number, string[]>;
 }) => (
   <>
     {lessons.map((lesson) => (
-      <LessonCard
+      <BorrowedLessonCardContainer
         key={lesson.id}
+        course={course}
         lesson={lesson}
         posterUrl={posters?.[lesson.id]}
-        alsoIn={alsoIn.get(lesson.id)}
+        alsoIn={alsoIn?.get(lesson.id)}
       />
     ))}
   </>

@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '../keys';
 import { useSetLessonVideo } from '../use-set-lesson-video';
 
-const COURSE_ID = 7;
-
 function makeHarness() {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
@@ -29,13 +27,13 @@ describe('useSetLessonVideo', () => {
   // actual invalidateQueries calls (the real consumer of this mutation's
   // onSuccess), not on any internal state, so a wiring regression here fails
   // this test instead of sailing through it.
-  it('invalidates the lessonPosters cache for the course, alongside courseBoard and lessonPlayback', async () => {
+  it('invalidates the posters, alongside courseBoard and lessonPlayback', async () => {
     const { client, wrapper } = makeHarness();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
+    const { result } = renderHook(() => useSetLessonVideo(10), {
       wrapper,
     });
 
@@ -51,26 +49,24 @@ describe('useSetLessonVideo', () => {
     );
     // Every board, not this course's: they all draw Disciplines' version.
     expect(invalidatedKeys).toContainEqual(dataKeys.courseBoards());
-    // The per-lesson PREFIX: playback is cached per course (Task 6b), and a
-    // new video is a new video in every course teaching the lesson.
+    // The per-lesson PREFIX: the working copy is previewed through any course.
     expect(invalidatedKeys).toContainEqual(dataKeys.lessonPlaybacks(10));
-    expect(invalidatedKeys).toContainEqual(dataKeys.lessonPosters(COURSE_ID));
+    // Every shelf's: it is the library that draws the working copy.
+    expect(invalidatedKeys).toContainEqual(dataKeys.allLessonPosters());
   });
 
   /**
-   * The library's "Edit lesson" dialog saves a video too, and a lesson's
-   * `isConfigured` flips on every card that draws it: the library pane, the
-   * org editor's rail and every course board. Asserted on the exact keys the
-   * query client received — the mutant is invalidating only the one course
-   * (or nothing) when there is no course in hand.
+   * The library's "Edit lesson" dialog saves a video, and a lesson's
+   * `isConfigured` flips on the library card; the boards draw the version that
+   * may come with it. Asserted on the exact keys the query client received.
    */
-  it('with no course in hand, invalidates the library, the editor board and every course board', async () => {
+  it('invalidates the library, the editor board and every course board', async () => {
     const { client, wrapper } = makeHarness();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(null, 10), {
+    const { result } = renderHook(() => useSetLessonVideo(10), {
       wrapper,
     });
 
@@ -88,32 +84,6 @@ describe('useSetLessonVideo', () => {
     expect(invalidatedKeys).toContainEqual(dataKeys.editorBoard());
     expect(invalidatedKeys).toContainEqual(dataKeys.courseBoards());
     expect(invalidatedKeys).toContainEqual(dataKeys.lessonPlaybacks(10));
-    // Posters are cached per course; with none named, the prefix.
-    expect(invalidatedKeys).toContainEqual(['admin', 'lesson-posters']);
-  });
-
-  it('with a course in hand, still refreshes the library and the editor rail', async () => {
-    const { client, wrapper } = makeHarness();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(null, { status: 200 }),
-    );
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
-      wrapper,
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        provider: 'mux',
-        ref: 'playback-abc',
-      });
-    });
-
-    const invalidatedKeys = invalidateSpy.mock.calls.map(
-      ([arg]) => arg?.queryKey,
-    );
-    expect(invalidatedKeys).toContainEqual(dataKeys.orgLibrary());
-    expect(invalidatedKeys).toContainEqual(dataKeys.editorBoard());
   });
 
   // A replaced video is a different video with different captions (or none,
@@ -125,7 +95,7 @@ describe('useSetLessonVideo', () => {
       new Response(null, { status: 200 }),
     );
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    const { result } = renderHook(() => useSetLessonVideo(COURSE_ID, 10), {
+    const { result } = renderHook(() => useSetLessonVideo(10), {
       wrapper,
     });
 

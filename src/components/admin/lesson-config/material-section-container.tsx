@@ -54,8 +54,8 @@ export const MaterialSectionContainer = ({
    * them), can drive this section too.
    */
   lesson: { id: number };
-  /** The lesson's version, where the dialog has a Version field; else null. */
-  versioned: VersionedLesson | null;
+  /** The lesson's version, which its edits are gated by. */
+  versioned: VersionedLesson;
 }) => {
   const existing = useLessonMaterial(lesson.id);
   const parse = useParseLessonMaterial(lesson.id);
@@ -95,7 +95,7 @@ export const MaterialSectionContainer = ({
 
   /**
    * Publish "has unsaved edits" for the Save button, which lives in the
-   * modal's sidebar — outside this subtree, so it cannot read `formState`.
+   * modal's header — outside this subtree, so it cannot read `formState`.
    * This IS the synchronise-with-a-store-elsewhere case an effect is for:
    * react-hook-form owns dirtiness, the atom is the wire, and the cleanup
    * withdraws the flag when the panel unmounts (modal closed, lesson

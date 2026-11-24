@@ -31,8 +31,8 @@ function findLesson(
 
 /**
  * Editing what a lesson IS, from the org-level editor — RBAC rule 6, the
- * surface that lets a discipline SME edit their own lesson from either pane
- * of `/admin/editor` without holding authority over any course.
+ * surface that lets a discipline SME edit their own lesson from the library
+ * pane of `/admin/editor` without holding authority over any course.
  *
  * The lesson-level sibling of `LessonConfigDialogContainer`, and the split
  * between them is the point:
@@ -43,7 +43,7 @@ function findLesson(
  *   `requireLessonContentPermission` — so an SME passes on their own
  *   discipline and needs no `course_staff` row.
  * - **There**: gates and sequencing, which describe how ONE course teaches the
- *   lesson, plus video.
+ *   lesson, plus the course's version of the video, only played.
  *
  * **Video sits at the top of Content.** Setting a lesson's video ref is
  * lesson-scoped and content-guarded, so it belongs here as much as the
@@ -61,8 +61,7 @@ function findLesson(
  * language, the name) asks `useVersionGate` first. Settings do not.
  *
  * It reads the lesson out of the library query rather than taking it as a
- * prop, so the pencil on either pane needs only to set an id — and both panes
- * open the same modal against the same cached row.
+ * prop, so a library card needs only to set an id.
  */
 export const LibraryLessonConfigDialogContainer = () => {
   const [lessonId, setLessonId] = useAtom(editLibraryLessonIdAtom);

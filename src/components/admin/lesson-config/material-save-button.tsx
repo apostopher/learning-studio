@@ -9,10 +9,7 @@ const label = (isSaving: boolean, isDirty: boolean) => {
 
 /**
  * The lesson editor's Save: material and version. It submits the material
- * form from OUTSIDE it — the modal's sidebar footer or the header — by
- * `form={formId}`.
- * `fullWidth` in a sidebar: the column is narrow, and a primary action
- * pinned in it reads as a bar, not a chip.
+ * form from OUTSIDE it — the modal's header — by `form={formId}`.
  *
  * `isDirty` is the "you have edits, press me" cue. It goes accent (gold)
  * rather than the resting navy, and — because colour alone is no cue
@@ -23,14 +20,11 @@ export const MaterialSaveButton = ({
   formId,
   isSaving,
   isDirty = false,
-  fullWidth = false,
 }: {
   formId: string;
   isSaving: boolean;
   /** There are edits that are not yet saved. */
   isDirty?: boolean;
-  /** Stretch to the column — for a sidebar footer; a header keeps its own width. */
-  fullWidth?: boolean;
 }) => {
   const showDirty = isDirty && !isSaving;
   return (
@@ -44,7 +38,6 @@ export const MaterialSaveButton = ({
         showDirty
           ? 'bg-accent-9 text-accent-contrast hover:bg-accent-10 focus-visible:ring-accent-9'
           : 'bg-apple-9 text-apple-contrast hover:bg-apple-10 focus-visible:ring-apple-9',
-        fullWidth && 'w-full',
       )}
     >
       {isSaving && (

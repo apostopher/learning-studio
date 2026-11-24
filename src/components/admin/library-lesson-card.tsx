@@ -1,7 +1,9 @@
 import { GripVertical, Trash2 } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import type { LibraryLesson } from '#/lib/admin-schemas';
+import { formatVersion } from '#/lib/lesson-version';
 import { ClampedText } from '../clamped-text';
+import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { LessonVideoTile } from './lesson-video-tile';
 
@@ -14,9 +16,8 @@ import { LessonVideoTile } from './lesson-video-tile';
  * preview a lesson.
  *
  * It also carries NO "in N courses" badge, though `courseCount` is on the
- * type and other things still read it (the delete confirmation names the
- * count, since deleting takes the lesson out of every course at once). The
- * column is 320px wide and the name is the thing being scanned for; a
+ * type and other things still read it (a lesson in use cannot be deleted).
+ * The column is 320px wide and the name is the thing being scanned for; a
  * cross-reference that repeats on nearly every card earned none of that
  * width. Where a lesson is taught is a question the course rail answers by
  * being on screen beside this one.
@@ -30,7 +31,7 @@ export const LibraryLessonCard = ({
 }: {
   lesson: LibraryLesson;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
-  /** Opens the delete confirmation — the same typed-name dialog the course boards use. */
+  /** Opens the delete dialog, which refuses a lesson some course shows. */
   onDelete?: () => void;
   /** The lesson's poster frame when its shelf has one; absent, the tile draws its plain placeholder. */
   posterUrl?: string | null;
@@ -60,18 +61,11 @@ export const LibraryLessonCard = ({
         {/* The name gets the whole line, matching the course card. */}
         <ClampedText text={lesson.name} className="min-w-0" />
         <div className="flex items-center gap-2">
-          {/*
-            Placeholder for the lesson's version. Invisible on purpose (user's
-            call, 2026-11-19) until lesson versioning exists: it holds the
-            spot in the layout but is never seen, read out, or selected.
-            Replace with the real version number then.
-          */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none select-none text-tertiary text-xs opacity-0"
-          >
-            Vers 3.4
-          </span>
+          {/* Neutral: the working copy is never behind, so there is no state
+              to colour. */}
+          <Chip tone="neutral" className="normal-case tabular-nums">
+            {formatVersion(lesson.version)}
+          </Chip>
           <span className="flex-1" />
           {!lesson.isAvailable && (
             <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">

@@ -16,11 +16,9 @@ export const dataKeys = {
   /**
    * Every per-course board at once — the prefix `courseBoard` is built on.
    *
-   * Exists because a lesson is org-owned and can be taught by several courses:
-   * deleting one invalidates EVERY board that was teaching it, and the caller
-   * doing the deleting knows no course id at all. Invalidating this prefix is
-   * the only correct answer there; naming one course would leave the others
-   * showing a lesson the server has destroyed.
+   * Exists because a lesson is org-owned and can be shown by several courses:
+   * a write to the lesson changes EVERY board showing it, and the caller often
+   * knows no course id at all.
    */
   courseBoards: () => ['admin', 'course-board'] as const,
   courseBoard: (courseId: number) =>
@@ -31,12 +29,14 @@ export const dataKeys = {
    */
   updateLessonConfig: (courseId: number) =>
     ['admin', 'update-lesson-config', courseId] as const,
+  /** Mutation key: lets a version chip ask whether its update is in flight. */
+  updateCourseLessonVersion: () =>
+    ['admin', 'update-course-lesson-version'] as const,
   courseCredentials: (courseId: number) =>
     ['admin', 'course-credentials', courseId] as const,
   /**
    * Every course's playback for one lesson — the prefix a video swap
-   * invalidates. A lesson is org-owned and can be taught by several courses,
-   * and a new video is a new video in all of them.
+   * invalidates: the working copy can be previewed through any course.
    */
   lessonPlaybacks: (lessonId: number) =>
     ['admin', 'lesson-playback', lessonId] as const,
@@ -65,9 +65,8 @@ export const dataKeys = {
     [...dataKeys.allLessonPosters(), courseId] as const,
   /**
    * A discipline shelf's posters (`UNTITLED_DISCIPLINE_ID` for the org bag).
-   * Under the same prefix as the course keys so `useSetLessonVideo`'s
-   * prefix invalidation refreshes the library too — a new video is a new
-   * poster on every shelf and board that shows the lesson.
+   * Under the same prefix as the course keys, so one invalidation refreshes
+   * a shelf and the boards.
    */
   disciplineLessonPosters: (disciplineId: number) =>
     [...dataKeys.allLessonPosters(), 'discipline', disciplineId] as const,
@@ -119,18 +118,22 @@ export const dataKeys = {
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,
   myLevel: (courseSlug: string) => ['user', 'my-level', courseSlug] as const,
+  /** Every course's progress summary: the prefix of the key below. */
+  allCourseProgressSummaries: () => ['course', 'progress-summary'] as const,
   courseProgressSummary: (slug: string) =>
-    ['course', 'progress-summary', slug] as const,
+    [...dataKeys.allCourseProgressSummaries(), slug] as const,
+  allDebriefStatuses: () => ['user', 'debrief-status'] as const,
   /** One lesson's debrief state, as the Debrief tab reads it. */
   debriefStatus: (courseSlug: string, lessonSlug: string) =>
-    ['user', 'debrief-status', courseSlug, lessonSlug] as const,
+    [...dataKeys.allDebriefStatuses(), courseSlug, lessonSlug] as const,
+  allDebriefAttempts: () => ['user', 'debrief-attempt'] as const,
   /**
    * A pilot's open debrief attempt on one lesson (questions, answers, draft).
    * The attempt is the lesson's, but its scores are judged on the course's quiz
    * and pass mark.
    */
   debriefAttempt: (courseSlug: string, lessonSlug: string) =>
-    ['user', 'debrief-attempt', courseSlug, lessonSlug] as const,
+    [...dataKeys.allDebriefAttempts(), courseSlug, lessonSlug] as const,
   myCourses: () => ['user', 'my-courses'] as const,
   onboardingSession: (courseSlug: string) =>
     ['user', 'onboarding-session', courseSlug] as const,
@@ -145,8 +148,9 @@ export const dataKeys = {
   subscribedSlugs: () => ['user', 'subscribed-slugs'] as const,
   courseResume: (courseSlug: string) =>
     ['course', 'resume', courseSlug] as const,
+  allLessonQuizResults: () => ['user', 'lesson-quiz-result'] as const,
   lessonQuizResult: (lessonSlug: string) =>
-    ['user', 'lesson-quiz-result', lessonSlug] as const,
+    [...dataKeys.allLessonQuizResults(), lessonSlug] as const,
   library: (courseSlug: string) => ['course', 'library', courseSlug] as const,
   courseNews: (courseSlug: string) => ['course', 'news', courseSlug] as const,
   /**

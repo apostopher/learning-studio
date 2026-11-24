@@ -90,15 +90,13 @@ export const LibraryLessonCardContainer = ({
       <LibraryLessonCard
         lesson={lesson}
         dragHandleProps={{ ...attributes, ...listeners }}
-        // `LibraryLessonCard` has accepted this prop all along and nothing
-        // passed it, so the pencil it guards never rendered — the library had
-        // no way to edit a lesson at all. Offered to everyone who can see the
-        // card: authority over a lesson follows its DISCIPLINE, which the
+        // The only way into a lesson's editor. Offered to everyone who can see
+        // the card: authority over a lesson follows its DISCIPLINE, which the
         // router context cannot answer for any particular lesson, so the
         // server decides and the mutation turns its 403 into a sentence.
         onEdit={() => editLesson(lesson.id)}
-        // The library payload already carries the course count, so the
-        // confirmation can state its blast radius without a second query.
+        // The library payload already carries the course count, so the dialog
+        // can refuse a lesson in use without a second query.
         // Authority follows the lesson's discipline; the server decides and
         // the dialog turns a refusal into a sentence.
         onDelete={() =>
@@ -106,8 +104,6 @@ export const LibraryLessonCardContainer = ({
             id: lesson.id,
             name: lesson.name,
             courseCount: lesson.courseCount,
-            // No "remove from module" control on a library card to point at.
-            removeControlLabel: null,
           })
         }
         posterUrl={posters?.[String(lesson.id)]}

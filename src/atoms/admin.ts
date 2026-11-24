@@ -176,11 +176,9 @@ export const activeDragBoardLessonAtom = atom<{
 /**
  * The lesson pending deletion, or null when closed.
  *
- * Carries `courseCount` — how many courses currently teach the lesson —
- * because deleting is not the same act as removing a placement: it takes the
- * lesson out of every course at once and cascades its progress rows, and the
- * confirmation is not allowed to ask "are you sure?" without naming that
- * blast radius. The count is only ever computed in one place
+ * Carries `courseCount` — how many courses currently show the lesson —
+ * because a lesson any course shows cannot be deleted, and the dialog says so
+ * instead of asking. The count is only ever computed in one place
  * (`LibraryLesson.courseCount`, from the org library query), so whoever opens
  * this dialog reads it from there rather than deriving a second answer.
  */
@@ -188,18 +186,6 @@ export const deleteLessonAtom = atom<{
   id: number;
   name: string;
   courseCount: number;
-  /**
-   * The exact accessible name of the "remove from module" control on the
-   * surface that opened this dialog, or `null` when that surface has none.
-   *
-   * Carried because the confirmation's job is to point at the reversible act,
-   * and the two surfaces differ: the knowledge editor's card has a remove
-   * control (labelled by `removeLessonLabel`), the per-course board's card
-   * does not. A sentence naming a button that is nowhere on the reader's
-   * screen sends them hunting for it — worse than saying nothing — so the
-   * copy branches on this rather than quoting one hard-coded phrase.
-   */
-  removeControlLabel: string | null;
 } | null>(null);
 
 /** Id of the lesson whose configure modal is open, or null when closed. */
@@ -226,8 +212,19 @@ export const playLessonAtom = atom<{
   courseId: number;
 } | null>(null);
 
-/** Module id whose create-lesson dialog is open, or null when closed. */
-export const createLessonModuleIdAtom = atom<number | null>(null);
+/**
+ * The version update being confirmed, or null. `from` and `to` are what the
+ * dialog shows, and `to` is what it asks the server for.
+ */
+export const updateLessonVersionAtom = atom<{
+  courseId: number;
+  courseName: string;
+  lessonId: number;
+  lessonName: string;
+  from: string;
+  to: string;
+  contentUpdatedAt: Date;
+} | null>(null);
 
 /** The module being edited (current field values), or null when closed. */
 export const editModuleAtom = atom<{
@@ -239,10 +236,9 @@ export const editModuleAtom = atom<{
 /**
  * The module pending deletion, or null when closed.
  *
- * `otherCourseCount` rides along for the same reason `deleteLessonAtom`
- * carries `courseCount`: deleting a module that a remix borrows reshapes
- * every remixer at once, and the confirmation is not allowed to ask "are you
- * sure?" without naming that blast radius. Sourced from
+ * `otherCourseCount` rides along for the confirmation: deleting a module
+ * that a remix borrows reshapes every remixer at once, and it is not allowed
+ * to ask "are you sure?" without naming that blast radius. Sourced from
  * `BoardModule.otherCourseCount`, never recomputed here.
  */
 export const deleteModuleAtom = atom<{
@@ -602,8 +598,7 @@ export const editorSplitPercentAtom = atom(40);
  * Whether a lesson's material form holds edits that are not yet saved.
  *
  * Written by `MaterialSectionContainer` (which owns the form) and read by
- * `MaterialSaveButtonContainer`, which lives in the modal's sidebar or header
- * — a different subtree, so the form's own `formState` cannot reach it. Keyed
+ * `MaterialSaveButtonContainer`, which lives in the modal's header — a different subtree, so the form's own `formState` cannot reach it. Keyed
  * per lesson for the same reason as `credentialSaveErrorAtomFamily`: one
  * lesson's edits must never light up another's Save button.
  */
@@ -619,9 +614,6 @@ export const lessonMaterialDirtyAtomFamily = atomFamily((_lessonId: number) =>
 export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
   atom<string | null>(null),
 );
-
-/** The draft where there is no Version field, so no lesson's family entry. */
-export const noLessonVersionDraftAtom = atom<string | null>(null);
 
 /**
  * A content write the lesson's version refused, shown at the Version field.

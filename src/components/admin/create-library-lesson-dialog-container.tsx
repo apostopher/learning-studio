@@ -16,13 +16,9 @@ import {
 import { CreateLessonForm } from './create-lesson-form';
 
 /**
- * "Add lesson" from a library column — the same dialog as the course board's
- * add-lesson, down to reusing `CreateLessonForm`, with one difference: the
- * lesson is filed under this DISCIPLINE — in the module whose "Add lesson"
- * was pressed, or at its root level from the column header, — and placed in no course.
- *
- * Reusing the form component rather than copying its markup is what keeps the
- * two dialogs identical as either changes.
+ * "Add lesson" from a library column, the only place a lesson is created: it is
+ * filed under this DISCIPLINE — in the module whose "Add lesson" was pressed,
+ * or at its root level from the column header — and placed in no course.
  *
  * `disciplineId` comes off the atom rather than being a prop, so this renders
  * once at the editor root instead of once per column — eight columns would
