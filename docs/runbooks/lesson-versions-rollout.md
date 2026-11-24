@@ -64,12 +64,14 @@ Code: the branch's connection string holds a password.
    read -rs BRANCH_URL
    ```
 
-2. Check the host. The first command prints production, the second the branch.
-   **If the two are the same, stop**:
+2. Check the host. The first command prints production, the second must print
+   the new branch's own name from the console. **If the two are the same, or the
+   second is not the branch, stop.** (Neon gives one database two names, with and
+   without `-pooler`, so the commands leave that part out.)
 
    ```
-   pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.host + u.pathname'
-   DATABASE_URL="${BRANCH_URL:?}" pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.host + u.pathname'
+   pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.hostname.replace("-pooler", "") + u.pathname'
+   DATABASE_URL="${BRANCH_URL:?}" pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.hostname.replace("-pooler", "") + u.pathname'
    ```
 
 3. Run it, and note the time:
