@@ -83,7 +83,8 @@ export const SectionedConfigModal = ({
   headerActions,
   headingSlot,
 }: SectionedConfigModalProps) => {
-  // One section has nothing to tab between: no sidebar. The grid collapses to the panel alone.
+  // One section has nothing to tab between: no sidebar. The grid collapses to
+  // the panel alone.
   const hasSidebar = sections.length > 1;
   const firstValue =
     sections.find((section) => section.value === defaultSection)?.value ??

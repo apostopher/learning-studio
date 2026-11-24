@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { updateLessonVersionAtom } from '#/atoms/admin';
 import type { BoardModule } from '#/lib/admin-schemas';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 
 vi.mock('react', async () => {
   const { createRequire } = await import('node:module');
@@ -66,19 +67,18 @@ const LESSON: BoardModule['lessons'][number] = {
   contentUpdatedAt: new Date(0),
 };
 
-function renderColumn(mod: BoardModule) {
+const ITPS = { id: 7, name: 'ITPS', slug: 'itps' };
+const FLAGSHIP = { id: 6, name: '3D Airmanship', slug: FLAGSHIP_COURSE_SLUG };
+const BORROWED = { owner: { id: 6, name: '3D Airmanship' } };
+
+function renderColumn(mod: BoardModule, course = ITPS) {
   const store = createStore();
   render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
         <DndContext>
           <SortableContext items={[]}>
-            <SortableModuleColumn
-              courseId={7}
-              courseName="ITPS"
-              module={mod}
-              posters={{}}
-            />
+            <SortableModuleColumn course={course} module={mod} posters={{}} />
           </SortableContext>
         </DndContext>
       </Provider>
@@ -87,18 +87,26 @@ function renderColumn(mod: BoardModule) {
   return store;
 }
 
-const BORROWED = { owner: { id: 6, name: '3D Airmanship' } };
-
 describe("a module on one course's board", () => {
-  it.each([
-    ['its own', {}],
-    ['a borrowed', BORROWED],
-  ])('%s, empty: no way to add a lesson, and says where they come from', (_n, over) => {
-    renderColumn(module_(over));
+  const empty = () => screen.getByText(/^No lessons yet\./).textContent;
+
+  it('its own, empty: no way to add a lesson, and says where they come from', () => {
+    renderColumn(module_());
     expect(screen.queryByRole('button', { name: /add lesson/i })).toBeNull();
-    expect(
-      screen.getByText(/^No lessons yet\. Drag one .*from Disciplines/),
-    ).toBeTruthy();
+    expect(empty()).toBe(
+      'No lessons yet. In the knowledge library, drag one from Disciplines into Weather, in the ITPS column.',
+    );
+  });
+
+  // The flagship has no column to drag into, and its modules are hidden in
+  // every other one.
+  it.each([
+    ["the flagship's own", BORROWED, FLAGSHIP],
+    ['borrowed from it', BORROWED, ITPS],
+  ])('%s, empty: promises nothing', (_n, over, course) => {
+    renderColumn(module_(over), course);
+    expect(screen.queryByRole('button', { name: /add lesson/i })).toBeNull();
+    expect(empty()).toBe('No lessons yet.');
   });
 
   it.each([

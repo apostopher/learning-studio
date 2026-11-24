@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { boardModuleSchema, type CreateModuleInput } from '@/lib/admin-schemas';
+import { boardModuleSchema, type CreateModuleInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
 
 /** Create a module in a course, then refetch that course's board. */

@@ -1,6 +1,6 @@
 import { Button } from '@base-ui/react/button';
 import { Plus } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 import { iconButtonClass } from '../ui/tooltip-icon-button';
 
 /**

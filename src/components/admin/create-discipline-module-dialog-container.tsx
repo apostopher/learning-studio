@@ -65,7 +65,7 @@ export const CreateDisciplineModuleDialogContainer = () => {
           </Dialog.Title>
           <Dialog.Description className="mt-1 mb-5 text-secondary text-sm">
             Add a module to {target?.disciplineName ?? 'this discipline'}. You
-            can drag lessons into it from the library next.
+            can drag its lessons into it next.
           </Dialog.Description>
           <form
             onSubmit={handleSubmit}

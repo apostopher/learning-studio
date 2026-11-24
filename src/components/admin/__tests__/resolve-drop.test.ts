@@ -20,6 +20,7 @@ import {
   moduleDndId,
   UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 import { removeLessonLabel } from '../lesson-card-labels';
 import { resolveDrop } from '../resolve-drop';
 
@@ -766,7 +767,26 @@ describe('resolveDrop — borrowed modules', () => {
     ).toEqual({
       kind: 'forbidden',
       reason:
-        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Add the lesson to it from 3D Airmanship’s board, or drop it on one of ITPS’s own modules.',
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Add the lesson to it in the 3D Airmanship column, or drop it on one of ITPS’s own modules.',
+    });
+  });
+
+  it('points at no column for the flagship, which has none', () => {
+    const [ownerBoard, viewing] = remixBoard;
+    const flagship = {
+      ...ownerBoard,
+      course: { ...ownerBoard.course, slug: FLAGSHIP_COURSE_SLUG },
+    };
+    expect(
+      resolveDrop(
+        [flagship, viewing],
+        libraryLessonDndId(99),
+        containerDndId(2, 10),
+      ),
+    ).toEqual({
+      kind: 'forbidden',
+      reason:
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Drop the lesson on one of ITPS’s own modules.',
     });
   });
 

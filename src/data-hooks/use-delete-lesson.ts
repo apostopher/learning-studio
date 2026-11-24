@@ -3,6 +3,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { lessonInUseSchema } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
 
+/** Refused: a course shows the lesson. The message names the courses. */
+export class LessonInUseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LessonInUseError';
+  }
+}
+
 /**
  * Delete a lesson outright, cascading its progress rows. Refused while any
  * course shows it, with a message naming the courses.
@@ -20,6 +28,11 @@ import { dataKeys } from './keys';
  */
 export function useDeleteLesson() {
   const queryClient = useQueryClient();
+  const refetch = () => {
+    queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
+    queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
+    queryClient.invalidateQueries({ queryKey: dataKeys.courseBoards() });
+  };
   return useMutation({
     mutationFn: async (lessonId: number) => {
       const res = await fetch(`/api/admin/lessons/${lessonId}`, {
@@ -37,14 +50,14 @@ export function useDeleteLesson() {
         const inUse = lessonInUseSchema.safeParse(
           await res.json().catch(() => null),
         );
-        if (inUse.success) throw new Error(inUse.data.error);
+        if (inUse.success) throw new LessonInUseError(inUse.data.error);
       }
       if (!res.ok) throw new Error(`Failed to delete lesson (${res.status})`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
-      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
-      queryClient.invalidateQueries({ queryKey: dataKeys.courseBoards() });
+    onSuccess: refetch,
+    // This page thought no course showed it: what it knows is out of date.
+    onError: (error) => {
+      if (error instanceof LessonInUseError) refetch();
     },
   });
 }

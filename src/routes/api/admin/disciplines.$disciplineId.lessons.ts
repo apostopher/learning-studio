@@ -51,9 +51,9 @@ async function guard(
 }
 
 /**
- * Create a lesson filed under one discipline — the library's own "add lesson",
- * as opposed to `POST /api/admin/modules/:moduleId/lessons`, which creates a
- * lesson into a course's module.
+ * Create a lesson filed under one discipline: the library's "add lesson", and
+ * the only way to create one. `POST /api/admin/modules/:moduleId/lessons` links
+ * a lesson that exists into a course's module.
  */
 export async function postDisciplineLessonHandler(
   request: Request,

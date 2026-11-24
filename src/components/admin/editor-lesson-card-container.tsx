@@ -29,8 +29,9 @@ import { useLessonVersionChip } from './use-lesson-version-chip';
  * Otherwise this card is the SAME card the per-course board draws — poster,
  * play tile, eye, padlock, quickshot and version chips — down to sharing
  * `LessonCard` and `LessonQuickshot`. The remove control is the one thing it
- * adds, because a placement is only undone here. Two boards showing the same lesson two
- * different ways was the thing to fix, not a difference worth keeping.
+ * adds, because a placement is only undone here. Two boards showing the same
+ * lesson two different ways was the thing to fix, not a difference worth
+ * keeping.
  */
 export const EditorLessonCardContainer = ({
   lesson,

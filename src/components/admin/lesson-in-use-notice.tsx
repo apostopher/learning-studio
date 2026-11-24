@@ -14,11 +14,16 @@ export const LessonInUseNotice = ({
       <span className="font-medium text-primary">{name}</span> cannot be deleted
       while a course shows it.
     </p>
-    <p className="break-words text-primary text-sm">{reason}</p>
+    <p id="lesson-in-use-reason" className="break-words text-primary text-sm">
+      {reason}
+    </p>
     <div className="mbs-2 flex items-center justify-end">
       <button
         type="button"
         onClick={onClose}
+        // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog, where it can replace the button that had focus
+        autoFocus
+        aria-describedby="lesson-in-use-reason"
         className="rounded-lg px-4 py-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
       >
         Close

@@ -28,6 +28,7 @@ import { useLessonPosters } from '@/data-hooks/use-lesson-posters';
 import { useMoveLesson } from '@/data-hooks/use-move-lesson';
 import { useReorderModule } from '@/data-hooks/use-reorder-module';
 import type {
+  BoardCourse,
   BoardLesson,
   BoardModule,
   CourseBoard,
@@ -136,14 +137,13 @@ function placeLesson(
 }
 
 export const ModuleBoardContainer = ({
-  courseId,
-  courseName,
+  course,
   modules,
 }: {
-  courseId: number;
-  courseName: string;
+  course: Pick<BoardCourse, 'id' | 'name' | 'slug'>;
   modules: BoardModule[];
 }) => {
+  const courseId = course.id;
   const queryClient = useQueryClient();
   const key = dataKeys.courseBoard(courseId);
   const [activeModuleId, setActiveModuleId] = useAtom(activeDragModuleIdAtom);
@@ -367,8 +367,7 @@ export const ModuleBoardContainer = ({
             {modules.map((mod) => (
               <SortableModuleColumn
                 key={mod.id}
-                courseId={courseId}
-                courseName={courseName}
+                course={course}
                 module={mod}
                 posters={postersById}
               />

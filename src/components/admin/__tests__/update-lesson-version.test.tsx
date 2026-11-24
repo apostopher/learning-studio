@@ -4,6 +4,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createStore, Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { updateLessonVersionAtom } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import { useEditorBoard } from '#/data-hooks/use-editor-board';
 import type { EditorBoardLesson, OrgEditorBoard } from '#/lib/admin-schemas';
@@ -158,12 +159,13 @@ const Rail = () => {
 };
 
 async function open() {
+  const store = createStore();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const { unmount } = render(
     <QueryClientProvider client={client}>
-      <Provider store={createStore()}>
+      <Provider store={store}>
         <Rail />
         <UpdateLessonVersionDialogContainer
           readBoards={() =>
@@ -174,7 +176,7 @@ async function open() {
     </QueryClientProvider>,
   );
   await screen.findByRole('region', { name: OWNER.name });
-  return client;
+  return { client, store, unmount };
 }
 
 const chip = (course: string) =>
@@ -202,10 +204,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 async function openFor(course: string) {
-  const client = await open();
+  const page = await open();
   await user.click(chip(course));
   await screen.findByRole('alertdialog');
-  return client;
+  return page;
 }
 
 describe('a course card in the editor', () => {
@@ -324,7 +326,7 @@ describe('the update dialog', () => {
   });
 
   it('a board refetched behind it does not change what is posted', async () => {
-    const client = await openFor(OWNER.name);
+    const { client } = await openFor(OWNER.name);
     server.lesson = { ...LESSON, disciplineVersion: '1.2' };
     await act(async () => {
       await client.invalidateQueries();
@@ -418,6 +420,21 @@ describe('the update dialog', () => {
     expect(dialog()?.textContent).toContain('From v1.0 to v1.1.');
     await user.click(button('Cancel'));
     await waitFor(() => expect(dialog()).toBeNull());
+  });
+
+  it('does not wait on the next page for someone who left with it open', async () => {
+    const { store, unmount } = await openFor(OWNER.name);
+    unmount();
+    expect(store.get(updateLessonVersionAtom)).toBeNull();
+    // The other board's dialog, opening on the same atom.
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Provider store={store}>
+          <UpdateLessonVersionDialogContainer readBoards={() => []} />
+        </Provider>
+      </QueryClientProvider>,
+    );
+    expect(dialog()).toBeNull();
   });
 
   it('an error does not greet the next lesson', async () => {

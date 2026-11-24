@@ -163,16 +163,24 @@ function isBorrowed(located: LocatedModule): boolean {
  * would refuse this with a 403 on the owner's course anyway, but a drag that
  * springs back with a bare "Forbidden" leaves the admin with a lesson in hand
  * and no idea where to put it. The sentence names the owner, says what the
- * viewing course's relationship is, and points at the two things that DO
- * work.
+ * viewing course's relationship is, and points at what DOES work.
  */
-function borrowedRefusal(target: LocatedModule, adding: boolean): string {
+function borrowedRefusal(
+  board: OrgEditorBoard,
+  target: LocatedModule,
+  adding: boolean,
+): string {
   const mod = target.module.name;
   const owner = target.module.owner.name;
   const viewing = target.courseBoard.course.name;
-  return adding
-    ? `"${mod}" is edited in ${owner} — ${viewing} only borrows it. Add the lesson to it from ${owner}’s board, or drop it on one of ${viewing}’s own modules.`
-    : `"${mod}" is edited in ${owner} — ${viewing} only borrows it, so its lessons are arranged there.`;
+  if (!adding)
+    return `"${mod}" is edited in ${owner} — ${viewing} only borrows it, so its lessons are arranged there.`;
+  // The flagship has no column on the rail to add it in (`courseRailBoards`).
+  const remedy =
+    findFlagshipCourse(board)?.id === target.module.owner.id
+      ? `Drop the lesson on one of ${viewing}’s own modules.`
+      : `Add the lesson to it in the ${owner} column, or drop it on one of ${viewing}’s own modules.`;
+  return `"${mod}" is edited in ${owner} — ${viewing} only borrows it. ${remedy}`;
 }
 
 /**
@@ -541,7 +549,7 @@ export function resolveDrop(
     // lessons cannot be rearranged from any viewing column, not just other
     // courses' columns.
     if (isBorrowed(from))
-      return { kind: 'forbidden', reason: borrowedRefusal(from, false) };
+      return { kind: 'forbidden', reason: borrowedRefusal(board, from, false) };
 
     // Every library-side target, not just a column or a lesson card: an
     // EMPTY discipline module (only its container to land on) and an empty
@@ -579,7 +587,7 @@ export function resolveDrop(
     // refusal: a borrowed module refuses content changes from its OWN
     // column too, not only from other courses'.
     if (isBorrowed(to))
-      return { kind: 'forbidden', reason: borrowedRefusal(to, true) };
+      return { kind: 'forbidden', reason: borrowedRefusal(board, to, true) };
     if (to.courseBoard.course.id !== from.courseBoard.course.id) {
       return {
         kind: 'forbidden',
@@ -707,7 +715,7 @@ export function resolveDrop(
     // Content authority follows the owner: linking a lesson into a borrowed
     // module here would edit the OWNER's content from the borrower's board.
     if (isBorrowed(to))
-      return { kind: 'forbidden', reason: borrowedRefusal(to, true) };
+      return { kind: 'forbidden', reason: borrowedRefusal(board, to, true) };
     return { kind: 'link', moduleId: to.module.id, lessonId: active.id };
   }
 

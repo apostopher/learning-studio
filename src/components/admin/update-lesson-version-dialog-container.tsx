@@ -1,5 +1,6 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog';
 import { useAtom } from 'jotai';
+import { useEffect } from 'react';
 import { updateLessonVersionAtom } from '#/atoms/admin';
 import {
   CourseLessonVersionError,
@@ -30,6 +31,10 @@ export const UpdateLessonVersionDialogContainer = ({
 }) => {
   const [target, setTarget] = useAtom(updateLessonVersionAtom);
   const update = useUpdateCourseLessonVersion();
+
+  // The other board mounts this too: it must not open there on a question
+  // left behind here, about a lesson its boards may not hold.
+  useEffect(() => () => setTarget(null), [setTarget]);
 
   const close = () => {
     setTarget(null);

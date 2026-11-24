@@ -43,7 +43,7 @@ export const EditorCourseEmptyContainer = ({
         // filled rather than a column that failed to load — and so there is a
         // target big enough to aim a dragged lesson at.
         className="min-h-40"
-        message={`${course.name} has no modules${hasBorrowedModules ? ' of its own' : ''} yet. Drag a module or lesson here from the library to start one, or create one.`}
+        message={`${course.name} has no modules${hasBorrowedModules ? ' of its own' : ''} yet. Drag a module or lesson here from Disciplines to start one, or create one.`}
         isOver={isOver}
         action={
           <PaneActionButton

@@ -54,7 +54,7 @@ export const UpdateLessonVersionDialog = ({
       {error && (
         <p
           role="alert"
-          className="mbs-4 rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-error-text text-sm"
+          className="mbs-4 rounded-lg border border-error-7 bg-error-3 px-3 py-2.5 text-error-text text-sm"
         >
           {error}
         </p>

@@ -47,6 +47,11 @@ export const LessonConfigDialogContainer = ({
             readOnly
             lesson={lesson}
           />
+          {lesson.videoProvider === null && (
+            <p className="text-secondary text-sm">
+              {`${formatVersion(lesson.version)} has no video.`}
+            </p>
+          )}
           <p className="text-secondary text-sm">
             {`Content is ${formatVersion(lesson.version)}. Edit it in Disciplines.`}
           </p>

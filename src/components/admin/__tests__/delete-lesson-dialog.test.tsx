@@ -45,7 +45,7 @@ function open(courseCount: number, board?: unknown) {
       </Provider>
     </QueryClientProvider>,
   );
-  return store;
+  return { client, store };
 }
 const deletes = () =>
   fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
@@ -57,7 +57,7 @@ const expectNothingToConfirm = () => {
 
 describe('deleting a lesson in use', () => {
   it('names the courses showing it, A to Z, and offers nothing to confirm', async () => {
-    const store = open(2, [
+    const { store } = open(2, [
       courseShowing(1, 'UAS Mini', [9, 10]),
       courseShowing(2, 'ITPS', [10]),
       courseShowing(3, 'Other', [9]),
@@ -100,7 +100,7 @@ describe('deleting a lesson no course shows', () => {
   };
 
   it('asks for its name, then deletes it', async () => {
-    const store = open(0, [courseShowing(3, 'Other', [9])]);
+    const { store } = open(0, [courseShowing(3, 'Other', [9])]);
     fetchMock.mockImplementation(
       async () => new Response(null, { status: 204 }),
     );
@@ -109,8 +109,10 @@ describe('deleting a lesson no course shows', () => {
     expect(deletes().map(([url]) => url)).toEqual(['/api/admin/lessons/10']);
   });
 
-  it('taken meanwhile: shows why the server refused, naming the course', async () => {
-    open(0, [courseShowing(3, 'Other', [9])]);
+  it('taken meanwhile: gives the reason, nothing to confirm, and refetches what was out of date', async () => {
+    const { client } = open(0, [courseShowing(3, 'Other', [9])]);
+    client.setQueryData(dataKeys.orgLibrary(), {});
+    client.setQueryData(dataKeys.courseBoard(2), {});
     const error = 'Used by ITPS. Remove it from that course first.';
     fetchMock.mockImplementation(async () =>
       Response.json(
@@ -119,6 +121,36 @@ describe('deleting a lesson no course shows', () => {
       ),
     );
     await confirm();
-    expect((await screen.findByRole('alert')).textContent).toBe(error);
+    expect(await screen.findByText(error)).toBeTruthy();
+    expect(screen.getByRole('dialog').textContent).not.toMatch(
+      /not in any course|permanently/,
+    );
+    expectNothingToConfirm();
+    // Where the Delete button it replaced had focus.
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Close' }),
+    );
+    for (const key of [
+      dataKeys.editorBoard(),
+      dataKeys.orgLibrary(),
+      dataKeys.courseBoard(2),
+    ]) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+
+  it('refused for another reason: still asks, with that reason', async () => {
+    const { client } = open(0, [courseShowing(3, 'Other', [9])]);
+    fetchMock.mockImplementation(
+      async () => new Response('Forbidden', { status: 403 }),
+    );
+    await confirm();
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /authority over its discipline/,
+    );
+    expect(screen.getByRole('textbox')).toBeTruthy();
+    expect(client.getQueryState(dataKeys.editorBoard())?.isInvalidated).toBe(
+      false,
+    );
   });
 });

@@ -59,7 +59,7 @@ export const CourseActionsContainer = ({
 
   return (
     <div className="flex items-center gap-1">
-      <CreateModuleDialogContainer courseId={course.id} />
+      <CreateModuleDialogContainer course={course} />
       <CourseStaffContainer course={course} />
       {capabilities.canTrainCourse && (
         <TooltipIconButton

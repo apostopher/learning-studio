@@ -88,8 +88,9 @@ export const LessonCard = ({
   };
   /**
    * Paid or free, as a padlock toggle: locked (pressed) = paid, open = free.
-   * Replaced the FREE chip and took the bin's slot — deleting a
-   * lesson happens only from the library, where the whole lesson lives. Omitted on read-only cards (drag overlay, borrowed lists).
+   * Replaced the FREE chip and took the bin's slot — deleting a lesson
+   * happens only from the library, where the whole lesson lives. Omitted on
+   * read-only cards (drag overlay, borrowed lists).
    */
   access?: LessonCardAccess;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */

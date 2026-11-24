@@ -5,13 +5,13 @@ import { CourseBoardContainer } from '#/components/admin/course-board-container'
 import { hasAdminAccess, hasOrgPermission } from '#/lib/admin-schemas';
 
 /**
- * The per-course **configure** surface: module CRUD, lesson config (video,
- * material, quiz, gates, sequencing), course actions, staff, onboarding, news
- * and persona.
+ * The per-course **configure** surface: module CRUD, lesson config (gates,
+ * sequencing; its content only played), video credentials, course actions,
+ * staff, onboarding, news and persona.
  *
  * Sibling of `/admin/editor`, not superseded by it. That one COMPOSES —
  * dragging a library lesson into a course, moving it, reordering, removing the
- * placement; this one AUTHORS. The split mirrors the permission model: a
+ * placement; this one CONFIGURES. The split mirrors the permission model: a
  * placement is course-scoped `structure` work, while what a lesson IS follows
  * its discipline. Both surfaces let a lesson be reordered within a module;
  * that overlap is accepted.

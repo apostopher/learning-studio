@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configureLessonIdAtom } from '#/atoms/admin';
 import type { BoardModule } from '#/lib/admin-schemas';
 
@@ -80,22 +80,28 @@ const MODULE: BoardModule = {
   ],
 };
 
+function open(mod: BoardModule) {
+  const requests: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    requests.push(url);
+    return new Response(null, { status: 404 });
+  });
+  const store = createStore();
+  store.set(configureLessonIdAtom, 10);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Provider store={store}>
+        <LessonConfigDialogContainer courseId={7} modules={[mod]} />
+      </Provider>
+    </QueryClientProvider>,
+  );
+  return requests;
+}
+afterEach(() => vi.unstubAllGlobals());
+
 describe("a course's Configure lesson, Content tab", () => {
   it("plays the course's version, says where to edit it, and edits nothing", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal('fetch', async (url: string) => {
-      requests.push(url);
-      return new Response(null, { status: 404 });
-    });
-    const store = createStore();
-    store.set(configureLessonIdAtom, 10);
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <Provider store={store}>
-          <LessonConfigDialogContainer courseId={7} modules={[MODULE]} />
-        </Provider>
-      </QueryClientProvider>,
-    );
+    const requests = open(MODULE);
     expect(
       screen.getByText('Content is v1.0. Edit it in Disciplines.'),
     ).toBeTruthy();
@@ -108,6 +114,14 @@ describe("a course's Configure lesson, Content tab", () => {
         '/api/admin/lessons/10/video-playback?courseId=7&source=course&lang=en',
       ]),
     );
-    vi.unstubAllGlobals();
+    expect(screen.queryByText(/has no video/)).toBeNull();
+  });
+
+  it("says so when the course's version has no video", () => {
+    open({
+      ...MODULE,
+      lessons: [{ ...MODULE.lessons[0], videoProvider: null, videoRef: null }],
+    });
+    expect(screen.getByText('v1.0 has no video.')).toBeTruthy();
   });
 });

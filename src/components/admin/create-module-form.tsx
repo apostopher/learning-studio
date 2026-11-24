@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
-import { cn } from '@/lib/cn';
+import { cn } from '#/lib/cn';
 
 interface CreateModuleFormProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
@@ -37,6 +37,7 @@ export const CreateModuleForm = ({
           {...registerName}
           id="module-name"
           type="text"
+          // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened, where focus belongs on the first field
           autoFocus
           aria-invalid={!!nameError}
           aria-describedby={nameError ? 'module-name-error' : undefined}

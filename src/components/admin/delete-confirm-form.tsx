@@ -67,7 +67,7 @@ export const DeleteConfirmForm = ({
       {serverError && (
         <p
           role="alert"
-          className="rounded-lg border border-error-9/40 bg-error-9/15 px-3 py-2.5 text-sm text-error-text"
+          className="rounded-lg border border-error-7 bg-error-3 px-3 py-2.5 text-sm text-error-text"
         >
           {serverError}
         </p>

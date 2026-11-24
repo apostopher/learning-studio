@@ -4,7 +4,7 @@ import { useSetAtom } from 'jotai';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its component test.
 import { deleteModuleAtom, editModuleAtom } from '#/atoms/admin';
-import type { BoardModule } from '#/lib/admin-schemas';
+import type { BoardCourse, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { moduleDndId } from '#/lib/dnd-ids';
 import { BorrowedLessonList } from './borrowed-lesson-list';
@@ -13,13 +13,11 @@ import { ModuleColumn } from './module-column';
 import { moduleProvenance } from './module-provenance';
 
 export const SortableModuleColumn = ({
-  courseId,
-  courseName,
+  course,
   module: mod,
   posters,
 }: {
-  courseId: number;
-  courseName: string;
+  course: Pick<BoardCourse, 'id' | 'name' | 'slug'>;
   module: BoardModule;
   posters: Record<string, string>;
 }) => {
@@ -32,7 +30,7 @@ export const SortableModuleColumn = ({
     isSorting,
     isDragging,
   } = useSortable({
-    id: moduleDndId(courseId, mod.id),
+    id: moduleDndId(course.id, mod.id),
     data: { type: 'module', moduleId: mod.id },
   });
   const setEditModule = useSetAtom(editModuleAtom);
@@ -42,7 +40,7 @@ export const SortableModuleColumn = ({
   // `moduleProvenance`. Borrowed modules keep their drag handle (position is
   // THIS course's rail, not the owner's) but lose edit/delete and the
   // DnD-enabled lessons list.
-  const provenance = moduleProvenance(mod, courseId);
+  const provenance = moduleProvenance(mod, course.id);
   const borrowed = provenance !== undefined;
 
   return (
@@ -86,22 +84,21 @@ export const SortableModuleColumn = ({
         lessonsSlot={
           provenance ? (
             mod.lessons.length === 0 ? (
-              <p className="text-pretty px-1 py-4 text-center text-tertiary text-xs">
-                No lessons yet. Drag one into {mod.name} in{' '}
-                {provenance.ownerName} from Disciplines, in the knowledge
-                library.
+              // No instruction: its lessons are added in the owner's column,
+              // and the flagship, which every course borrows, has none.
+              <p className="px-1 py-4 text-center text-tertiary text-xs">
+                No lessons yet.
               </p>
             ) : (
               <BorrowedLessonList
-                course={{ id: courseId, name: courseName }}
+                course={course}
                 lessons={mod.lessons}
                 posters={posters}
               />
             )
           ) : (
             <LessonBoardContainer
-              courseId={courseId}
-              courseName={courseName}
+              course={course}
               module={mod}
               posters={posters}
             />

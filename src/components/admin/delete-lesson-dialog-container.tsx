@@ -6,7 +6,10 @@ import { toast } from 'sonner';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its component test.
 import { deleteLessonAtom } from '#/atoms/admin';
-import { useDeleteLesson } from '#/data-hooks/use-delete-lesson';
+import {
+  LessonInUseError,
+  useDeleteLesson,
+} from '#/data-hooks/use-delete-lesson';
 import { useEditorBoard } from '#/data-hooks/use-editor-board';
 import { matchesConfirmPhrase } from '#/lib/confirm-phrase';
 import {
@@ -28,7 +31,7 @@ import { LessonInUseNotice } from './lesson-in-use-notice';
  * that opened it; which ones they are comes from the editor's board.
  *
  * Neither is proof: a course can take the lesson meanwhile. The server refuses
- * then, and its sentence shows as the form's error.
+ * then, and its reason takes the form's place.
  */
 export const DeleteLessonDialogContainer = () => {
   const [target, setTarget] = useAtom(deleteLessonAtom);
@@ -43,11 +46,13 @@ export const DeleteLessonDialogContainer = () => {
 
   const courseNames = target ? courseNamesShowing(board ?? [], target.id) : [];
   const inUseReason =
-    courseNames.length > 0
-      ? lessonInUseMessage(courseNames)
-      : target && target.courseCount > 0
-        ? lessonInUseByCountMessage(target.courseCount)
-        : null;
+    deleteLesson.error instanceof LessonInUseError
+      ? deleteLesson.error.message
+      : courseNames.length > 0
+        ? lessonInUseMessage(courseNames)
+        : target && target.courseCount > 0
+          ? lessonInUseByCountMessage(target.courseCount)
+          : null;
 
   const onOpenChange = (next: boolean) => {
     if (!next) {

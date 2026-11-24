@@ -227,14 +227,10 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
     expect(requestedUrls()).not.toContain(`/api/admin/lessons/${LESSON_ID}`);
   });
 
-  it('offers no delete-everywhere control: that lives in the library', () => {
-    // The bin was replaced by the padlock; deleting a lesson everywhere is
-    // done from the library card only.
+  it('offers no delete control: that lives in the library', () => {
     renderCard();
 
-    expect(
-      document.querySelector('[aria-label="Delete lesson everywhere"]'),
-    ).toBeNull();
+    expect(document.querySelector('[aria-label*="delete" i]')).toBeNull();
   });
 
   /**

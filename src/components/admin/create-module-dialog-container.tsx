@@ -5,24 +5,26 @@ import { useAtom } from 'jotai';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { createModuleDialogOpenAtom } from '@/atoms/admin';
-import { useCreateModule } from '@/data-hooks/use-create-module';
+import { createModuleDialogOpenAtom } from '#/atoms/admin';
+import { useCreateModule } from '#/data-hooks/use-create-module';
 import {
+  type BoardCourse,
   type CreateModuleInput,
   createModuleInputSchema,
-} from '@/lib/admin-schemas';
+} from '#/lib/admin-schemas';
+import { isFlagshipCourse } from '#/lib/flagship-course';
 import { IconButtonTooltip } from '../ui/tooltip-icon-button';
 import { AddModuleButton } from './add-module-button';
 import { CreateModuleForm } from './create-module-form';
 import { ImageUploadFieldContainer } from './image-upload-field-container';
 
 export const CreateModuleDialogContainer = ({
-  courseId,
+  course,
 }: {
-  courseId: number;
+  course: Pick<BoardCourse, 'id' | 'name' | 'slug'>;
 }) => {
   const [open, setOpen] = useAtom(createModuleDialogOpenAtom);
-  const createModule = useCreateModule(courseId);
+  const createModule = useCreateModule(course.id);
   const form = useForm<CreateModuleInput>({
     resolver: zodResolver(createModuleInputSchema),
     mode: 'onSubmit',
@@ -61,8 +63,10 @@ export const CreateModuleDialogContainer = ({
             Create module
           </Dialog.Title>
           <Dialog.Description className="mt-1 mb-5 text-sm text-secondary">
-            Add a module to this course. You can drag lessons into it from
-            Disciplines next.
+            {/* The flagship has no column there to drag into. */}
+            {isFlagshipCourse(course)
+              ? 'Add a module to this course.'
+              : `Add a module to this course. Then, in the knowledge library, drag lessons into it from Disciplines, in the ${course.name} column.`}
           </Dialog.Description>
           <CreateModuleForm
             onSubmit={handleSubmit}

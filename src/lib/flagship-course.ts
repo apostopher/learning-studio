@@ -62,12 +62,13 @@ export function closingTabEmptyText(courseSlug: string): string {
     : 'Nothing to test for this lesson yet.';
 }
 
+export const isFlagshipCourse = (course: { slug: string }): boolean =>
+  course.slug === FLAGSHIP_COURSE_SLUG;
+
 export function findFlagshipCourse<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C['course'] | null {
-  return (
-    boards.find((b) => b.course.slug === FLAGSHIP_COURSE_SLUG)?.course ?? null
-  );
+  return boards.find((b) => isFlagshipCourse(b.course))?.course ?? null;
 }
 
 /**
@@ -88,7 +89,7 @@ export function findFlagshipCourse<
 export function courseRailBoards<
   C extends { course: { id: number; name: string; slug: string } },
 >(boards: readonly C[]): C[] {
-  return boards.filter((b) => b.course.slug !== FLAGSHIP_COURSE_SLUG);
+  return boards.filter((b) => !isFlagshipCourse(b.course));
 }
 
 /**

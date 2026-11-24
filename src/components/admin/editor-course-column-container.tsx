@@ -111,8 +111,8 @@ export const EditorCourseColumnContainer = ({
         />
       }
       // The way across to the other half of the product. This pane composes
-      // courses out of existing lessons; what a lesson IS — video, material,
-      // quiz, gates — and a course's own modules, staff, persona and news are
+      // courses out of existing lessons; a lesson's settings in the course, its
+      // sequencing, and the course's own modules, staff, persona and news are
       // configured on that course's board. Per-column rather than one global
       // link because the destination is course-scoped and this is the only
       // place the course id is to hand.
