@@ -91,6 +91,7 @@ vi.mock('#/db/progress-components', () => ({
     debriefPassed: false,
     lastFinishedDebriefAt: null,
     hasOpenDebrief: false,
+    debriefWaitServed: false,
     chunksCleared: 0,
     chunksTotal: null,
     doneAt: null,

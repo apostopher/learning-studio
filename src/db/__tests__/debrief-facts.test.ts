@@ -44,6 +44,7 @@ vi.mock('#/db', () => ({
   },
 }));
 
+import { attemptIsOfSnapshot } from '#/db/attempt-version';
 import {
   getDebriefAttemptReports,
   getDebriefFacts,
@@ -101,6 +102,7 @@ describe('getDebriefFacts', () => {
   type Opts = {
     lastFinishedAt?: string | null;
     hasOpen?: boolean;
+    waitServed?: boolean;
     passed?: boolean;
     doneAt?: Date | null;
     // Raw `sql<Date>` columns arrive from the driver as offset-bearing strings.
@@ -112,6 +114,7 @@ describe('getDebriefFacts', () => {
   const facts = async ({
     lastFinishedAt = null,
     hasOpen = false,
+    waitServed = false,
     passed = false,
     doneAt = null,
     videoWatchedAt = null,
@@ -124,6 +127,7 @@ describe('getDebriefFacts', () => {
         debriefPassed: passed,
         lastFinishedDebriefAt: lastFinishedAt,
         hasOpenDebrief: hasOpen,
+        debriefWaitServed: waitServed,
         chunksCleared,
         chunksTotal,
         videoWatchedAt,
@@ -140,15 +144,17 @@ describe('getDebriefFacts', () => {
       passed: false,
       lastFinishedAt: null,
       hasOpenAttempt: false,
+      waitServed: false,
       mastery: null,
     });
   });
 
-  it('maps the shared fact columns: finish over ALL rows as ISO, open flag, passed, mastery', async () => {
+  it('maps the shared fact columns: finish as ISO, wait served, open flag, passed, mastery', async () => {
     expect(
       await facts({
         lastFinishedAt: '2026-10-26 08:00:00+00',
         hasOpen: true,
+        waitServed: true,
         passed: true,
         chunksCleared: 5,
         chunksTotal: 7,
@@ -158,6 +164,7 @@ describe('getDebriefFacts', () => {
       passed: true,
       lastFinishedAt: '2026-10-26T08:00:00.000Z',
       hasOpenAttempt: true,
+      waitServed: true,
       mastery: { cleared: 5, total: 7 },
     });
   });
@@ -339,14 +346,23 @@ const leaks = (v: unknown) =>
   ].filter((s) => JSON.stringify(v).includes(s));
 
 describe('rows the client can receive never carry the grading key', () => {
-  it("selectLatestFinishedChunkAttempt reads only this pilot's FINISHED chunk-format rows (callers project them)", async () => {
+  it("selectLatestFinishedChunkAttempt reads only this pilot's FINISHED chunk-format rows of the version this course shows (callers project them)", async () => {
     m.queue.push([]);
-    await selectLatestFinishedChunkAttempt('u1', 'l1');
+    await selectLatestFinishedChunkAttempt('u1', 'l1', 7);
     const where = m.wheres[0] as SQL;
     expect(renderSql(where)).toBe(
-      '("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2 and "lesson_test_results"."format" = $3 and "lesson_test_results"."completed_at" is not null)',
+      `("lesson_test_results"."user_id" = $1 and "lesson_test_results"."lesson_slug" = $2 and "lesson_test_results"."format" = $3 and "lesson_test_results"."completed_at" is not null and ${renderSql(attemptIsOfSnapshot('lesson_test_results'))})`,
     );
     expect(renderSqlParams(where)).toEqual(['u1', 'l1', 'knowledge-chunks-v1']);
+    const [[, onLesson], [pin, onPin], [snapshot]] = m.joins;
+    expect(renderSql(onLesson as SQL)).toBe(
+      '"lessons"."slug" = "lesson_test_results"."lesson_slug"',
+    );
+    expect([pin, snapshot]).toEqual([
+      courseLessonVersionsTable,
+      lessonVersionsTable,
+    ]);
+    expect(renderSqlParams(onPin as SQL)).toEqual([7]);
   });
 
   it('getDebriefAttemptReports (the passed branch of debrief-status) projects every row', async () => {

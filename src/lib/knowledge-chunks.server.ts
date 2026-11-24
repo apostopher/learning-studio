@@ -180,14 +180,19 @@ export async function ensureLessonChunks(
     // with the carry-over undone (nothing would ever retry it).
     const stored = await db.transaction(async (tx) => {
       const version = await nextChunkVersion(lessonId, tx);
+      // Under the lock: if the claim expired, another request may have stored
+      // a list while the models ran. Ours was matched against the one before
+      // it, so theirs stands.
+      const now = await selectLessonChunks(lessonVersionId, tx);
+      if (now && now.version !== latest?.version) return now;
       const numbered = (id: string) => `v${version}-${id}`;
       const chunks = generated.map((c) => ({ ...c, id: numbered(c.id) }));
       const mapping =
         matches &&
         Object.fromEntries(
-          Object.entries(matches).map(([was, now]) => [
-            was,
-            now === null ? null : numbered(now),
+          Object.entries(matches).map(([oldId, newId]) => [
+            oldId,
+            newId === null ? null : numbered(newId),
           ]),
         );
       await upsertLessonChunks(

@@ -52,10 +52,12 @@ export type LessonProgressRow = {
    */
   flagshipDiscipline: boolean;
   debriefPassed: boolean;
-  /** ISO. Latest finished attempt of ANY format (legacy included); gates a retake. */
+  /** ISO. Latest finished attempt on this version, of ANY format (legacy included); gates a retake. */
   lastFinishedDebriefAt: string | null;
   /** An unfinished chunk-format attempt exists. */
   hasOpenDebrief: boolean;
+  /** An attempt has finished, on any version of the lesson. */
+  debriefWaitServed: boolean;
   /** Chunks cleared of the lesson's current version. */
   chunksCleared: number;
   /** Stored chunk count; null when the lesson has no chunks yet. */
@@ -316,6 +318,7 @@ export function aggregateCourseProgress(
         passed: debriefPassedOf(row),
         lastFinishedAt: row.lastFinishedDebriefAt,
         hasOpenAttempt: row.hasOpenDebrief,
+        waitServed: row.debriefWaitServed,
         mastery: masteryFromCounts(row.chunksCleared, row.chunksTotal),
         hasVideo: row.hasVideo,
         bearing: row.debriefBearing,

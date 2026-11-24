@@ -331,7 +331,7 @@ describe('startOrResumeAttempt', () => {
     expect(m.insertAttempt).toHaveBeenCalledWith({
       userId: 'u1',
       lessonSlug: 'l1',
-      stored: { ...stored, sets: [['q1', 'q2']] },
+      stored: { ...stored, lessonVersionId: 61, sets: [['q1', 'q2']] },
       chunkVersion: 1,
     });
     expect(r.ok && r.attempt.questions.map((x) => x.id)).toEqual(['q1', 'q2']);
@@ -1635,6 +1635,11 @@ describe('recheckDebriefPass', () => {
       withSet1(100, { completedAt: null }),
     ]);
     expect(await recheck()).toBe(true);
+  });
+
+  it("reads only the attempts on this course's version", async () => {
+    await recheck();
+    expect(m.selectChunkAttempts).toHaveBeenCalledWith('u1', 'l1', 7);
   });
 
   it('records nothing without a completed set, even with a full quiz', async () => {

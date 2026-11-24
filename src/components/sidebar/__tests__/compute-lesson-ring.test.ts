@@ -13,6 +13,7 @@ const facts = (over: Partial<Record<string, unknown>> = {}) => ({
   passed: false,
   lastFinishedAt: null,
   hasOpenAttempt: false,
+  waitServed: false,
   mastery: null,
   bearing: true,
   ...over,

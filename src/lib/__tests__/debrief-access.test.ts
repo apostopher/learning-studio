@@ -49,6 +49,7 @@ beforeEach(() => {
     passed: false,
     lastFinishedAt: null,
     hasOpenAttempt: false,
+    waitServed: false,
     mastery: null,
   });
 });
@@ -114,6 +115,7 @@ describe('getDebriefAccess state', () => {
       passed: false,
       lastFinishedAt: null,
       hasOpenAttempt: false,
+      waitServed: false,
       mastery: null,
     });
     expect(await getDebriefAccess(args)).toEqual({
@@ -130,6 +132,7 @@ describe('getDebriefAccess state', () => {
       passed: false,
       lastFinishedAt: null,
       hasOpenAttempt: false,
+      waitServed: false,
       mastery: null,
     });
     const access = await getDebriefAccess(args);
@@ -147,6 +150,7 @@ describe('getDebriefAccess state', () => {
       passed: false,
       lastFinishedAt: '2026-10-27T11:00:00.000Z',
       hasOpenAttempt: true,
+      waitServed: false,
       mastery: { cleared: 1, total: 4 },
     });
     const access = await getDebriefAccess(args);
@@ -164,6 +168,7 @@ describe('getDebriefAccess state', () => {
       passed: false,
       lastFinishedAt: '2026-10-27T10:00:00.000Z',
       hasOpenAttempt: false,
+      waitServed: false,
       mastery: { cleared: 1, total: 4 },
     });
     const access = await getDebriefAccess(args);

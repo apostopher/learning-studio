@@ -25,6 +25,7 @@ const base = {
   debriefPassed: false,
   lastFinishedDebriefAt: null as Date | string | null,
   hasOpenDebrief: false,
+  debriefWaitServed: false,
   chunksCleared: 0,
   chunksTotal: null as number | null,
   doneAt: null as Date | string | null,
@@ -87,11 +88,13 @@ describe('toComponentFields', () => {
       toComponentFields({
         ...base,
         hasOpenDebrief: true,
+        debriefWaitServed: true,
         chunksCleared: 5,
         chunksTotal: 7,
       }),
     ).toMatchObject({
       hasOpenDebrief: true,
+      debriefWaitServed: true,
       chunksCleared: 5,
       chunksTotal: 7,
     });

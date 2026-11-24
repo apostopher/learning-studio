@@ -1,4 +1,5 @@
 import { Column, getTableName, is, type SQL, sql } from 'drizzle-orm';
+import { attemptIsOfSnapshot } from '#/db/attempt-version';
 import {
   courseLessonVersionsTable,
   lessonMaterialProgressTable,
@@ -78,9 +79,11 @@ export const debriefPassedSql = (userId: string, lessonSlug: LessonSlugRef) =>
   )`;
 
 /**
- * Latest `completed_at` over ALL this pilot's attempts on the lesson, legacy
- * rows included, so a pilot with only old below-par attempts is offered a
- * retake (at once: there is no retake wait). `completed_at` is timezone-less and written as UTC;
+ * Latest `completed_at` over this pilot's attempts on the version the course
+ * shows, legacy rows included, so a pilot with only old below-par attempts is
+ * offered a retake (at once: there is no retake wait). An unpassed debrief
+ * starts over on another version: its finished attempts there do not count.
+ * `completed_at` is timezone-less and written as UTC;
  * `at time zone 'UTC'` makes the raw string carry an offset so `toIso` cannot
  * read it as local time.
  */
@@ -93,9 +96,22 @@ export const lastFinishedDebriefAtSql = (
     where t.user_id = ${userId}
       and t.lesson_slug = ${outerRef(lessonSlug)}
       and t.completed_at is not null
+      and ${attemptIsOfSnapshot('t')}
   )`;
 
-/** An unfinished chunk-format attempt exists. */
+/** The pilot has finished an attempt on the lesson, on any version: the wait is behind them. */
+export const debriefWaitServedSql = (
+  userId: string,
+  lessonSlug: LessonSlugRef,
+) =>
+  sql<boolean>`exists (
+    select 1 from lesson_test_results t
+    where t.user_id = ${userId}
+      and t.lesson_slug = ${outerRef(lessonSlug)}
+      and t.completed_at is not null
+  )`;
+
+/** An unfinished chunk-format attempt exists, whatever version it is of. */
 export const hasOpenDebriefSql = (userId: string, lessonSlug: LessonSlugRef) =>
   sql<boolean>`exists (
     select 1 from lesson_test_results t
@@ -147,6 +163,7 @@ export const debriefFactColumns = (userId: string) => ({
   debriefPassed: debriefPassedSql(userId, lessonsTable.slug),
   lastFinishedDebriefAt: lastFinishedDebriefAtSql(userId, lessonsTable.slug),
   hasOpenDebrief: hasOpenDebriefSql(userId, lessonsTable.slug),
+  debriefWaitServed: debriefWaitServedSql(userId, lessonsTable.slug),
   chunksCleared: chunksClearedSql(userId, lessonVersionsTable.id),
   chunksTotal: chunksTotalSql(lessonVersionsTable.id),
 });
@@ -155,6 +172,7 @@ type DebriefFactRow = {
   debriefPassed: boolean;
   lastFinishedDebriefAt: Date | string | null;
   hasOpenDebrief: boolean;
+  debriefWaitServed: boolean;
   chunksCleared: number;
   chunksTotal: number | null;
 };
@@ -171,6 +189,7 @@ export function toDebriefFactFields(row: DebriefFactRow) {
     passed: debriefPassedOf(row),
     lastFinishedAt: toIso(row.lastFinishedDebriefAt),
     hasOpenAttempt: row.hasOpenDebrief,
+    waitServed: row.debriefWaitServed,
     mastery: masteryFromCounts(row.chunksCleared, row.chunksTotal),
   };
 }
@@ -350,6 +369,7 @@ type ComponentRow = {
   debriefPassed: boolean;
   lastFinishedDebriefAt: Date | string | null;
   hasOpenDebrief: boolean;
+  debriefWaitServed: boolean;
   chunksCleared: number;
   chunksTotal: number | null;
   doneAt: Date | string | null;
@@ -390,6 +410,7 @@ export function toComponentFields(row: ComponentRow) {
     debriefPassed: row.debriefPassed,
     lastFinishedDebriefAt: toIso(row.lastFinishedDebriefAt),
     hasOpenDebrief: row.hasOpenDebrief,
+    debriefWaitServed: row.debriefWaitServed,
     chunksCleared: row.chunksCleared,
     chunksTotal: row.chunksTotal,
     doneAt: toIso(row.doneAt),

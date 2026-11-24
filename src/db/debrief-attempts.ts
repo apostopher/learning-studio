@@ -1,19 +1,24 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AITestSchema } from '#/ai/schemas';
 import { db } from '#/db';
+import { attemptIsOfSnapshot } from '#/db/attempt-version';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import type { AnswerMetrics } from '#/lib/answer-metrics';
 import {
   DEBRIEF_ATTEMPT_FORMAT,
   type StoredAttempt,
 } from '#/lib/debrief-attempt-snapshot';
 import {
+  courseLessonVersionsTable,
   type DebriefChunkMasterySelect,
   debriefAnswerLogsTable,
   debriefChunkMasteryTable,
   debriefPassesTable,
   lessonKnowledgeChunksTable,
+  lessonsTable,
   lessonTestResultsTable,
+  lessonVersionsTable,
 } from './schema';
 
 /** `db` or a transaction handle. */
@@ -289,21 +294,30 @@ export async function selectHasPass(
 }
 
 /**
- * Every chunk-format attempt this pilot has on the lesson, finished or open.
- * Rows are returned raw: the caller skips the ones that no longer parse.
+ * Every chunk-format attempt this pilot has on the version of the lesson this
+ * course shows, finished or open. Rows are returned raw: the caller skips the
+ * ones that no longer parse.
  */
 export async function selectChunkAttempts(
   userId: string,
   lessonSlug: string,
+  courseId: number,
 ): Promise<AttemptRow[]> {
   return db
-    .select()
+    .select(getTableColumns(lessonTestResultsTable))
     .from(lessonTestResultsTable)
+    .innerJoin(
+      lessonsTable,
+      eq(lessonsTable.slug, lessonTestResultsTable.lessonSlug),
+    )
+    .innerJoin(courseLessonVersionsTable, isPinOf(courseId))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(
       and(
         eq(lessonTestResultsTable.userId, userId),
         eq(lessonTestResultsTable.lessonSlug, lessonSlug),
         eq(lessonTestResultsTable.format, DEBRIEF_ATTEMPT_FORMAT),
+        attemptIsOfSnapshot('lesson_test_results'),
       ),
     );
 }

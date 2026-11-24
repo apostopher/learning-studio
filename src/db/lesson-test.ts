@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '#/db';
+import { attemptIsOfSnapshot } from '#/db/attempt-version';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import {
   debriefFactColumns,
@@ -122,14 +123,15 @@ export async function getDebriefAttemptReports(
 }
 
 /**
- * This pilot's latest FINISHED chunk-format attempt on a lesson, as stored —
- * `questions` holds the grading key. Callers project it with
- * `toClientAttempt` before anything reaches the pilot. Null when the pilot
+ * This pilot's latest FINISHED chunk-format attempt on a lesson, of the version
+ * this course shows, as stored — `questions` holds the grading key. Callers
+ * project it with `toClientAttempt` before anything reaches the pilot. Null when the pilot
  * has none (no attempt yet, or only legacy ones).
  */
 export async function selectLatestFinishedChunkAttempt(
   userId: string,
   lessonSlug: string,
+  courseId: number,
 ): Promise<{
   questions: unknown;
   answers: unknown;
@@ -142,12 +144,19 @@ export async function selectLatestFinishedChunkAttempt(
       totalScore: lessonTestResultsTable.totalScore,
     })
     .from(lessonTestResultsTable)
+    .innerJoin(
+      lessonsTable,
+      eq(lessonsTable.slug, lessonTestResultsTable.lessonSlug),
+    )
+    .innerJoin(courseLessonVersionsTable, isPinOf(courseId))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(
       and(
         eq(lessonTestResultsTable.userId, userId),
         eq(lessonTestResultsTable.lessonSlug, lessonSlug),
         eq(lessonTestResultsTable.format, DEBRIEF_ATTEMPT_FORMAT),
         isNotNull(lessonTestResultsTable.completedAt),
+        attemptIsOfSnapshot('lesson_test_results'),
       ),
     )
     .orderBy(
@@ -165,13 +174,16 @@ export async function selectLatestFinishedChunkAttempt(
  * start route refuses to open, or the reverse.
  *
  * - passed: a row in `debrief_passes` (permanent; legacy passes backfilled);
- * - lastFinishedAt: the latest `completed_at` over ALL this pilot's attempts
- *   on the lesson, legacy ones included, so a pilot with only old below-par
- *   attempts is offered a retake (at once: there is no retake wait);
- * - hasOpenAttempt: an unfinished chunk-format attempt exists;
+ * - lastFinishedAt: the latest `completed_at` over this pilot's attempts on
+ *   the version this course shows, legacy ones included, so a pilot with only
+ *   old below-par attempts is offered a retake (at once: there is no retake
+ *   wait);
+ * - hasOpenAttempt: an unfinished chunk-format attempt exists, of any version;
+ * - waitServed: an attempt has finished, on any version;
  * - mastery: cleared of total against the CURRENT chunk list of the version
- *   this course shows, or null when it has no chunks stored yet. It is the
- *   only fact an update resets: the others are the lesson's, not a version's;
+ *   this course shows, or null when it has no chunks stored yet. With
+ *   lastFinishedAt, the only facts an update resets: the others are the
+ *   lesson's, not a version's;
  * - clockStartAt: the video's first full coverage (the shared
  *   `videoWatchedAtSql` fragment) on a video lesson, else the sticky
  *   `lesson_completions.done_at` — see `debriefClockStart`.
@@ -231,6 +243,7 @@ export async function getDebriefFacts(
         debriefPassed: false,
         lastFinishedDebriefAt: null,
         hasOpenDebrief: false,
+        debriefWaitServed: false,
         chunksCleared: 0,
         chunksTotal: null,
       },

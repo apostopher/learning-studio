@@ -760,6 +760,7 @@ describe('CourseSidebarWrapper', () => {
               passed: false,
               lastFinishedAt: null,
               hasOpenAttempt: false,
+              waitServed: false,
               mastery: { cleared: 5, total: 7 },
               bearing: true,
             },

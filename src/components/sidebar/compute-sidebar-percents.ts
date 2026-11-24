@@ -22,6 +22,7 @@ const NO_DEBRIEF: DebriefFacts & { bearing: boolean } = {
   passed: false,
   lastFinishedAt: null,
   hasOpenAttempt: false,
+  waitServed: false,
   mastery: null,
   bearing: false,
 };

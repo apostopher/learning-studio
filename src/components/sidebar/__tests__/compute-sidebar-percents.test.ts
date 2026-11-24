@@ -25,6 +25,7 @@ const d = (
   passed,
   lastFinishedAt: null,
   hasOpenAttempt: false,
+  waitServed: false,
   mastery,
   bearing,
 });

@@ -30,6 +30,13 @@ const KnowledgeChunkSchema: z.ZodType<KnowledgeChunk> = z.object({
  */
 export const StoredAttemptSchema = z.object({
   lessonSlug: z.string(),
+  /**
+   * The lesson snapshot it was made from. Absent on attempts from before lesson
+   * versions (2026-11-24): those are of the lesson's first snapshot. Read in
+   * SQL (`attemptIsOfSnapshot`), and kept here because every write of
+   * `questions` writes this parsed object.
+   */
+  lessonVersionId: z.number().int().optional(),
   questions: z.array(AITestGenerationQuestionSchema),
   chunks: z.array(KnowledgeChunkSchema),
   context: z.string(),

@@ -71,6 +71,23 @@ vi.mock('#/ai/evaluate-answer', () => ({
   evaluateFreeText: h.evaluateFreeText,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
+vi.mock('#/lib/email/send-level-promotion-email', () => ({
+  sendLevelPromotionEmail: vi.fn(),
+}));
+vi.mock('#/lib/auth', () => ({
+  auth: { api: { getSession: async () => ({ user: { id: 'u1' } }) } },
+}));
+/** The gate is open; who is asking in which course is all that matters here. */
+vi.mock('#/lib/lesson-gating.server', () => ({
+  evaluateLessonGate: async ({ courseSlug }: { courseSlug: string }) => ({
+    courseSlug,
+    courseId: courseSlug === 'one' ? 1 : 2,
+    subscribed: true,
+    outOfTier: null,
+    lessonLock: { kind: 'open' },
+    materialLock: { kind: 'open' },
+  }),
+}));
 
 const schema = await import('#/db/schema');
 const { getMyCourses, getCourseDetails } = await import('../course');
@@ -87,6 +104,13 @@ const { prepareDebrief, preparedFingerprint, takePreparedDebrief } =
   await import('#/lib/prepared-debrief.server');
 const { answerQuestion, startOrResumeAttempt } = await import(
   '#/lib/debrief-attempt.server'
+);
+const { computeDebriefState } = await import('#/lib/debrief-schedule');
+const { submitLessonQuizHandler } = await import(
+  '#/routes/api/lesson/quiz/answers'
+);
+const { debriefStatusHandler } = await import(
+  '#/routes/api/lesson/debrief-status'
 );
 
 const quiz = (id: string) =>
@@ -397,6 +421,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         passed: false,
         lastFinishedAt: null,
         hasOpenAttempt: false,
+        waitServed: false,
         mastery: { cleared: 2, total: 2 },
       });
       expect(await facts('u2')).toMatchObject({
@@ -561,6 +586,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await waiting).toBe(4);
     });
 
+    it('a list stored while this one was being generated stands, with its mastery', async () => {
+      await storeChunks(1, 1);
+      await clear('u1', 1, 'v1-c1');
+      h.generateKnowledgeChunks.mockImplementation(async () => {
+        // The claim ran out and another request stored and carried over.
+        await storeChunks(1, 2);
+        await query(
+          `update debrief_chunk_mastery set chunk_id = 'v2-c2' where chunk_id = 'v1-c1'`,
+        );
+        return [{ id: 'c1', title: 't', summary: 's' }];
+      });
+      expect(await ensureLessonChunks(1, 'a', 1)).toMatchObject({
+        kind: 'ready',
+        version: 2,
+        chunks: kp(2),
+      });
+      expect(await selectLessonChunks(1)).toMatchObject({ version: 2 });
+      expect(await getDebriefFacts('u1', 'a', 1, 1)).toMatchObject({
+        mastery: { cleared: 1, total: 2 },
+      });
+    });
+
     it('regenerating waits for an answer being recorded, and neither deadlocks the other', async () => {
       await storeChunks(1, 1);
       const { selectCurrentChunks, upsertMastery } = await import(
@@ -639,6 +686,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await getDebriefFacts('u1', 'a', 1, 1)).toMatchObject({
         passed: true,
         hasOpenAttempt: false,
+        waitServed: true,
       });
       // What it showed is read from the attempt itself, in either course.
       expect(await getDebriefAttemptReports('u1', 'a')).toMatchObject([
@@ -754,6 +802,316 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           .from(schema.preparedDebriefsTable)
           .where(eq(schema.preparedDebriefsTable.lessonSlug, 'a')),
       ).toEqual([]);
+    });
+
+    describe('an unpassed debrief starts over on another version', () => {
+      const questions = ['q1', 'q2', 'q3', 'q4', 'q5'].map(
+        (id) => JSON.parse(quiz(id))[0],
+      );
+      const five = JSON.stringify(questions);
+      const perfect = questions.map((q) => ({
+        ...q,
+        userOptionId: q.correctOptionId,
+      }));
+      const metrics = {
+        msOnQuestion: 1,
+        msToFirstKey: 1,
+        deletions: 0,
+        charsDeleted: 0,
+        rewrites: 0,
+        pasteBlocked: 0,
+        msHidden: 0,
+        finalLength: 4,
+      };
+      const start = async (courseId: number) => {
+        const started = await startOrResumeAttempt({
+          userId: 'u1',
+          courseId,
+          lessonId: 1,
+          lessonSlug: 'a',
+        });
+        if (!started.ok) throw new Error(started.reason);
+        return started.attempt;
+      };
+      /** Answer everything still open in the attempt, every answer scoring 60. */
+      const finish = async (courseId: number) => {
+        const attempt = await start(courseId);
+        let last: Awaited<ReturnType<typeof answerQuestion>> | undefined;
+        const done = new Set(attempt.answered.map((a) => a.questionId));
+        for (const q of attempt.questions.filter((x) => !done.has(x.id))) {
+          last = await answerQuestion({
+            userId: 'u1',
+            attemptId: attempt.attemptId,
+            questionId: q.id,
+            answer: 'mine',
+            metrics,
+            lessonId: 1,
+            courseId,
+          });
+        }
+        return last;
+      };
+      /** A perfect quiz, through the route: what it answers about promotion. */
+      const takeQuiz = async (courseSlug: string) => {
+        const res = await submitLessonQuizHandler(
+          new Request('http://t/api/lesson/quiz/answers', {
+            method: 'POST',
+            body: JSON.stringify({
+              lessonSlug: 'a',
+              courseSlug,
+              answers: perfect,
+            }),
+          }),
+        );
+        expect(res.status).toBe(200);
+        return (await res.json()).promotion;
+      };
+      const status = async (courseSlug: string) =>
+        (
+          await debriefStatusHandler(
+            new Request(
+              `http://t/api/lesson/debrief-status?lessonSlug=a&courseSlug=${courseSlug}`,
+            ),
+          )
+        ).json();
+      const passes = async () =>
+        (
+          await query(
+            `select 1 from debrief_passes where user_id = 'u1' and lesson_slug = 'a'`,
+          )
+        ).length;
+      const levels = async (courseId: number) =>
+        (
+          await query(
+            'select level from user_levels where course_id = $1 order by id',
+            [courseId],
+          )
+        ).map((l) => l.level);
+      const badge = async (slug: string) => {
+        const debrief = (await lessonOf(slug, 1))?.debrief;
+        if (!debrief) throw new Error('no lesson');
+        return computeDebriefState(debrief, new Date());
+      };
+      const fresh = {
+        kind: 'open',
+        retake: false,
+        resume: false,
+        passed: false,
+      };
+
+      // Lesson `a` is the whole of the basic tier, done but for its debrief.
+      // Every version asks the same five-question quiz, so the mark is 75.
+      beforeEach(async () => {
+        h.evaluateFreeText.mockImplementation(
+          async (q: { id: string; chunkIds: string[] }, answer: string) => ({
+            questionId: q.id,
+            type: 'free-text' as const,
+            score: 60,
+            userAnswer: answer,
+            explanation: '',
+            chunkScores: { [q.chunkIds[0]]: 60 },
+            revisitNote: 'Look at the load factor again',
+            feedback: 'Hm',
+            incorrectClaims: [],
+          }),
+        );
+        await query(
+          `update courses set pass_mark = 75;
+           update lessons set levels = '{none}';
+           update lessons set levels = '{basic}' where id = 1;
+           update lessons set levels = '{intermediate}' where id = 2;
+           update lesson_versions set quiz = '${five}', key_points = '["kp1","kp2"]',
+             video_provider = 'mux', video_ref = 'v' where lesson_id = 1;
+           update lesson_material set quiz = '${five}' where lesson_slug = 'a';
+           delete from lesson_quiz_answers;
+           delete from prepared_debriefs;
+           insert into lesson_completions (user_id, lesson_id, done_at) values ('u1', 1, '2026-11-03 00:00+00');
+           insert into videos_progress (user_id, lesson_id, progress, created_at)
+             select 'u1', 1, p, '2026-11-04 09:00' from generate_series(55, 95, 5) p;
+           insert into user_levels (user_id, course_id, level, source) values
+             ('u1', 1, 'basic', 'admin'), ('u1', 2, 'basic', 'admin');`,
+        );
+      });
+
+      it('a finished set passes with a quiz taken later on the same version', async () => {
+        expect(await finish(1)).toMatchObject({ finished: 'sets-missed' });
+        expect(await passes()).toBe(0);
+        expect(await takeQuiz('one')).toMatchObject({ to: 'intermediate' });
+        expect(await passes()).toBe(1);
+        expect(await levels(1)).toEqual(['basic', 'intermediate']);
+      });
+
+      it('a set from before an update passes nothing, and promotes nobody', async () => {
+        await finish(1);
+        await updateCourseOne();
+        expect(await takeQuiz('one')).toBeNull();
+        expect(await passes()).toBe(0);
+        expect(await levels(1)).toEqual(['basic']);
+
+        // A set of the version now shown does count.
+        expect(await finish(1)).toMatchObject({
+          finished: 'set-passed',
+          passedNow: true,
+        });
+      });
+
+      it('in two courses on different versions, each counts its own sets', async () => {
+        await finish(1);
+        expect(await takeQuiz('two')).toBeNull();
+        expect(await passes()).toBe(0);
+        expect(await status('two')).toMatchObject({ state: fresh });
+        expect(await status('one')).toMatchObject({
+          state: { ...fresh, retake: true },
+          lastAttempt: { score: 60 },
+        });
+        // Saved in course one, the same quiz lifts course one's set.
+        expect(await takeQuiz('one')).toMatchObject({ to: 'intermediate' });
+        expect(await passes()).toBe(1);
+      });
+
+      it("between attempts, shows the last one of this course's version, not a newer one of the other's", async () => {
+        await finish(1);
+        await finish(2);
+        const scores = async () =>
+          (
+            await query(
+              `select questions ->> 'lessonVersionId' as version, total_score from lesson_test_results order by id`,
+            )
+          ).map((r) => [r.version, r.total_score]);
+        expect(await scores()).toEqual([
+          ['1', 60],
+          ['2', 60],
+        ]);
+        await query(
+          `update lesson_test_results set total_score = 40 where questions ->> 'lessonVersionId' = '2'`,
+        );
+        expect((await status('one')).lastAttempt.score).toBe(60);
+        expect((await status('two')).lastAttempt.score).toBe(40);
+      });
+
+      it('an open attempt keeps the version it was made from through every write', async () => {
+        const attempt = await start(1);
+        await answerQuestion({
+          userId: 'u1',
+          attemptId: attempt.attemptId,
+          questionId: attempt.questions[0].id,
+          answer: 'mine',
+          metrics,
+          lessonId: 1,
+          courseId: 1,
+        });
+        await updateCourseOne();
+        // Resumed and finished after the update, still of 1.0.
+        expect((await start(1)).attemptId).toBe(attempt.attemptId);
+        expect((await status('one')).state).toMatchObject({ resume: true });
+        expect(await finish(1)).toMatchObject({ finished: 'sets-missed' });
+        const [row] = await query(
+          `select questions ->> 'lessonVersionId' as version, questions -> 'setVerdicts' as verdicts from lesson_test_results`,
+        );
+        // The verdicts are written with the whole snapshot.
+        expect(row).toEqual({ version: '1', verdicts: [false] });
+        expect(await takeQuiz('one')).toBeNull();
+        expect(await passes()).toBe(0);
+        expect(await status('one')).toMatchObject({ state: fresh });
+      });
+
+      it('a test prepared beforehand is an attempt on the version it was prepared from', async () => {
+        await prepareDebrief({
+          userId: 'u1',
+          courseId: 2,
+          lessonSlug: 'a',
+          lessonId: 1,
+        });
+        h.generateTest.mockClear();
+        await start(2);
+        expect(h.generateTest).not.toHaveBeenCalled();
+        expect(
+          await query(
+            `select questions ->> 'lessonVersionId' as version from lesson_test_results`,
+          ),
+        ).toEqual([{ version: '2' }]);
+      });
+
+      it('an attempt from before versions belongs to the first snapshot only', async () => {
+        await finish(1);
+        await query(
+          `update lesson_test_results set questions = (questions::jsonb - 'lessonVersionId')::json`,
+        );
+        expect(await status('one')).toMatchObject({
+          state: { ...fresh, retake: true },
+          lastAttempt: { score: 60 },
+        });
+        expect(await status('two')).toMatchObject({ state: fresh });
+        expect(await takeQuiz('two')).toBeNull();
+        expect(await passes()).toBe(0);
+        expect(await takeQuiz('one')).toMatchObject({ to: 'intermediate' });
+        expect(await passes()).toBe(1);
+
+        // The first of ITS lesson's snapshots, and the oldest format too.
+        await query(
+          `insert into lesson_test_results (user_id, lesson_slug, questions, total_score, completed_at)
+           values ('u1', 'd', '[]', 50, '2026-11-05 10:00')`,
+        );
+        expect((await lessonOf('one', 4))?.debrief.lastFinishedAt).toBe(
+          '2026-11-05T10:00:00.000Z',
+        );
+      });
+
+      it('shows nothing of an old version until it is passed, and does not restart the wait', async () => {
+        await finish(1);
+        expect(await badge('one')).toEqual({ ...fresh, retake: true });
+        expect(await status('one')).toMatchObject({
+          state: { ...fresh, retake: true },
+          lastAttempt: { score: 60, setAverages: [60] },
+          revisitNotes: ['Look at the load factor again'],
+        });
+
+        await updateCourseOne();
+        // Open at once: the clock had run out on the old version.
+        expect(await status('one')).toEqual({
+          state: fresh,
+          lessonOutstanding: [],
+        });
+        expect(await badge('one')).toEqual(fresh);
+        // Viper still knows what they missed.
+        expect(await findRecentDebriefGaps('u1')).toHaveLength(1);
+
+        // Passed: every finished attempt shows, the old version's too.
+        h.evaluateFreeText.mockImplementation(
+          async (q: { id: string; chunkIds: string[] }, answer: string) => ({
+            questionId: q.id,
+            type: 'free-text' as const,
+            score: 90,
+            userAnswer: answer,
+            explanation: '',
+            chunkScores: { [q.chunkIds[0]]: 90 },
+            revisitNote: '',
+            feedback: 'Good',
+            incorrectClaims: [],
+          }),
+        );
+        expect(await finish(1)).toMatchObject({ finished: 'set-passed' });
+        const passed = await status('one');
+        expect(passed.state).toEqual({ kind: 'passed' });
+        expect(
+          passed.attempts.map((a: { totalScore: number }) => a.totalScore),
+        ).toEqual([90, 60]);
+      });
+
+      it('a pilot whose clock ran out without an attempt starts at once after an update', async () => {
+        expect((await status('one')).state).toEqual(fresh);
+        await updateCourseOne();
+        expect((await status('one')).state).toEqual(fresh);
+      });
+
+      it('a pilot who has finished an attempt never waits again, whatever an update does to the clock', async () => {
+        await finish(1);
+        // The new version is a video they have not watched in full.
+        await query('delete from videos_progress where progress = 95');
+        await updateCourseOne();
+        expect((await status('one')).state).toEqual(fresh);
+        expect(await badge('one')).toEqual(fresh);
+      });
     });
   },
 );

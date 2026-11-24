@@ -384,6 +384,41 @@ describe('ensureLessonChunks', () => {
     });
   });
 
+  it('another request stored a list while the models ran (the claim expired): theirs stands', async () => {
+    const list = (version: number): Stored => ({
+      lessonId: 1,
+      lessonVersionId: 9,
+      version,
+      sourceFingerprint: `fp-${version}`,
+      chunks: [{ id: `v${version}-c1`, title: 'o', summary: '' }],
+      previousMapping: null,
+    });
+    m.stored = list(1);
+    m.clearedRows = [
+      {
+        userId: 'u1',
+        chunkId: 'v1-c1',
+        latestScore: 80,
+        clearedAt: new Date(),
+      },
+    ];
+    // Stored by someone else before this request gets the lesson's lock.
+    m.nextChunkVersion.mockImplementation(async () => {
+      m.stored = list(2);
+      return 3;
+    });
+    expect(await ensureLessonChunks(1, 'l', 2)).toEqual({
+      kind: 'ready',
+      lessonVersionId: 9,
+      version: 2,
+      chunks: list(2).chunks,
+      context: source.context,
+    });
+    expect(m.selectLessonChunks).toHaveBeenLastCalledWith(9, m.tx);
+    expect(m.upsertLessonChunks).not.toHaveBeenCalled();
+    expect(m.txCalls).toEqual([]);
+  });
+
   it('empty generated list: no-source, nothing stored', async () => {
     m.generateKnowledgeChunks.mockResolvedValue([]);
     expect(await ensureLessonChunks(1, 'l', 2)).toEqual({ kind: 'no-source' });

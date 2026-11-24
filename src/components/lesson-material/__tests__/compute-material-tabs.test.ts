@@ -217,6 +217,7 @@ describe('defaultMaterialTab', () => {
     passed: false,
     lastFinishedAt: null,
     hasOpenAttempt: false,
+    waitServed: false,
     mastery: null,
     bearing: true,
     ...over,

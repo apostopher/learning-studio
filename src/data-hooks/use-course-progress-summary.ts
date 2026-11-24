@@ -26,6 +26,7 @@ const lessonProgressSchema = z.object({
     passed: z.boolean(),
     lastFinishedAt: z.string().nullable(),
     hasOpenAttempt: z.boolean(),
+    waitServed: z.boolean(),
     mastery: z.object({ cleared: z.number(), total: z.number() }).nullable(),
     hasVideo: z.boolean(),
     bearing: z.boolean(),

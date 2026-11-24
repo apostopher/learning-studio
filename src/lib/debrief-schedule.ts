@@ -61,10 +61,15 @@ export type DebriefFacts = {
    */
   clockStartAt: string | null;
   passed: boolean;
-  /** When the most recent attempt finished; gates a retake. */
+  /** When the most recent attempt on the version shown finished; gates a retake. */
   lastFinishedAt: string | null;
   /** An attempt is in progress: the pilot resumes it, whatever the clock says. */
   hasOpenAttempt: boolean;
+  /**
+   * An attempt has finished, on any version. Another version has no marks to
+   * show and nothing to retake, but the delay is not served twice.
+   */
+  waitServed: boolean;
   /** Chunk mastery so far; null when the lesson has no chunks yet. */
   mastery: { cleared: number; total: number } | null;
 };
@@ -114,6 +119,10 @@ export function computeDebriefState(
   // A finished, unpassed attempt reopens at once: there is no retake wait.
   if (facts.lastFinishedAt !== null) {
     return { kind: 'open', retake: true, resume: false, passed: false };
+  }
+
+  if (facts.waitServed) {
+    return { kind: 'open', retake: false, resume: false, passed: false };
   }
 
   if (facts.clockStartAt === null) return { kind: 'not-done' };

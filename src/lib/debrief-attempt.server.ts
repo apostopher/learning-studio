@@ -327,6 +327,8 @@ export async function startOrResumeAttempt(k: {
     lessonSlug: k.lessonSlug,
     stored: {
       lessonSlug: k.lessonSlug,
+      // A prepared test's too: it is served only for this same snapshot.
+      lessonVersionId: lesson.lessonVersionId,
       questions: test.questions,
       chunks: lesson.chunks,
       context: lesson.context,
@@ -769,8 +771,9 @@ export async function saveDraft(d: {
 /**
  * After a quiz save: record the pass if the best completed set so far, plus
  * the current quiz, reaches the course pass mark. True when it
- * recorded one. Sets of every chunk-format attempt count, finished or open;
- * rows that no longer parse are skipped. No completed set means no pass.
+ * recorded one. Sets of every chunk-format attempt on the version this course
+ * shows count, finished or open — never those of another version, whose quiz
+ * this is not: an unpassed debrief starts over when the version changes. Rows that no longer parse are skipped. No completed set means no pass.
  */
 export async function recheckDebriefPass(a: {
   userId: string;
@@ -779,18 +782,21 @@ export async function recheckDebriefPass(a: {
 }): Promise<boolean> {
   if (await selectHasPass(db, a)) return false;
 
-  const averages = (await selectChunkAttempts(a.userId, a.lessonSlug)).flatMap(
-    (row) => {
-      try {
-        return completedSetAverages(
-          attemptSets(parseStored(row)),
-          scoresOf(parseAnswers(row)),
-        );
-      } catch {
-        return [];
-      }
-    },
+  const attempts = await selectChunkAttempts(
+    a.userId,
+    a.lessonSlug,
+    a.courseId,
   );
+  const averages = attempts.flatMap((row) => {
+    try {
+      return completedSetAverages(
+        attemptSets(parseStored(row)),
+        scoresOf(parseAnswers(row)),
+      );
+    } catch {
+      return [];
+    }
+  });
   if (averages.length === 0) return false;
   const best = Math.max(...averages);
 

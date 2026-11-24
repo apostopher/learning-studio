@@ -48,7 +48,7 @@ export type DebriefStatusResponse = {
    * Present ONLY between attempts — `open` for a retake:
    * the latest finished attempt's set averages, in order (one per set it
    * completed), or its score alone when it predates sets. Null when there is
-   * no finished chunk attempt.
+   * no finished chunk attempt on the version the course shows.
    */
   lastAttempt?: { score: number; setAverages: number[] } | null;
   /**
@@ -122,7 +122,11 @@ export async function debriefStatusHandler(
       // attempt's set scores and what to revisit, with Retake now, until the
       // pilot starts the retake. While an attempt is open (`resume`) the
       // panel resumes it instead.
-      const latest = await selectLatestFinishedChunkAttempt(userId, lessonSlug);
+      const latest = await selectLatestFinishedChunkAttempt(
+        userId,
+        lessonSlug,
+        access.courseId,
+      );
       const projected = latest ? toClientAttempt(latest) : null;
       body.lastAttempt =
         latest && projected

@@ -14,8 +14,9 @@ export type Executor = Pick<typeof db, 'select' | 'insert' | 'delete'>;
 /** The stored chunk list of a snapshot, or null when none is stored yet. */
 export async function selectLessonChunks(
   lessonVersionId: number,
+  ex: Executor = db,
 ): Promise<LessonKnowledgeChunksSelect | null> {
-  const [row] = await db
+  const [row] = await ex
     .select()
     .from(lessonKnowledgeChunksTable)
     .where(eq(lessonKnowledgeChunksTable.lessonVersionId, lessonVersionId))

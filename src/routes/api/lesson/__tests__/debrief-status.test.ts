@@ -164,7 +164,11 @@ describe('debrief-status', () => {
     const text = await res.text();
     const body = JSON.parse(text);
 
-    expect(m.selectLatestFinishedChunkAttempt).toHaveBeenCalledWith('u1', 'l1');
+    expect(m.selectLatestFinishedChunkAttempt).toHaveBeenCalledWith(
+      'u1',
+      'l1',
+      7,
+    );
     expect(body.state).toEqual(state);
     // An attempt from before sets: its score alone, no set averages.
     expect(body.lastAttempt).toEqual({ score: 65, setAverages: [] });

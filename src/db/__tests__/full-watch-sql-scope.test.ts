@@ -3,6 +3,7 @@ import { eq, type SQL } from 'drizzle-orm';
 import { QueryBuilder } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
+import { attemptIsOfSnapshot } from '#/db/attempt-version';
 import {
   debriefFactColumns,
   progressComponentColumns,
@@ -61,6 +62,22 @@ describe('debrief fact columns in a single-table select', () => {
         inSingleTableSelect(cols.lastFinishedDebriefAt),
         't.lesson_slug',
       ),
+    ).toBe('t.lesson_slug = "lessons"."slug"');
+  });
+
+  // Rendered bare, `lesson_versions` inside `first` would bind to itself.
+  it("lastFinishedDebriefAt counts only the OUTER snapshot's attempts", () => {
+    const text = inSingleTableSelect(cols.lastFinishedDebriefAt);
+    expect(text).toContain(renderSql(attemptIsOfSnapshot('t')));
+    expect(predicate(text, 'first.lesson_id')).toBe(
+      'first.lesson_id = "lesson_versions"."lesson_id")',
+    );
+    expect(text).toContain(') = "lesson_versions"."id"');
+  });
+
+  it('debriefWaitServed ties lesson_test_results to the OUTER lesson slug', () => {
+    expect(
+      predicate(inSingleTableSelect(cols.debriefWaitServed), 't.lesson_slug'),
     ).toBe('t.lesson_slug = "lessons"."slug"');
   });
 

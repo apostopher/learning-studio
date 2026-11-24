@@ -40,6 +40,7 @@ const facts = (passed: boolean): Props['debriefFacts'] => ({
   passed,
   lastFinishedAt: null,
   hasOpenAttempt: true,
+  waitServed: false,
   mastery: null,
 });
 

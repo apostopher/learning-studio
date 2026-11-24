@@ -20,6 +20,7 @@ const facts = (overrides: Partial<DebriefFacts>): DebriefFacts => ({
   passed: false,
   lastFinishedAt: null,
   hasOpenAttempt: false,
+  waitServed: false,
   mastery: null,
   ...overrides,
 });
@@ -83,6 +84,7 @@ describe('computeDebriefState', () => {
           clockStartAt: hoursAgo(1),
           lastFinishedAt: hoursAgo(1 / 60),
           hasOpenAttempt: true,
+          waitServed: false,
         }),
         now,
       ),
@@ -181,6 +183,32 @@ describe('debriefClockStart', () => {
         doneAt: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe('an attempt finished on another version', () => {
+  it('opens at once with nothing to retake, whatever the clock says', () => {
+    for (const clockStartAt of [null, now.toISOString()]) {
+      expect(
+        computeDebriefState(facts({ clockStartAt, waitServed: true }), now),
+      ).toEqual({ kind: 'open', retake: false, resume: false, passed: false });
+    }
+  });
+
+  it('does not outrank this version, an open attempt or a pass', () => {
+    const at = now.toISOString();
+    expect(
+      computeDebriefState(facts({ waitServed: true, lastFinishedAt: at }), now),
+    ).toMatchObject({ retake: true });
+    expect(
+      computeDebriefState(facts({ waitServed: true, passed: true }), now),
+    ).toEqual({ kind: 'passed' });
+    expect(
+      computeDebriefState(
+        facts({ waitServed: true, hasOpenAttempt: true }),
+        now,
+      ),
+    ).toMatchObject({ resume: true });
   });
 });
 
