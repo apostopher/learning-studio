@@ -4,6 +4,9 @@
 the repo root, as typed. Run the SQL in the production SQL console. All of it
 only reads.
 
+The leading `! ` is for running inside Claude Code. Leave it out in a plain
+terminal.
+
 ## 1. Before
 
 Take a database backup (or branch).
@@ -28,6 +31,57 @@ where lesson_slug is null and source_path like 'lesson-%' group by 1;
 No rows: nothing to do. Rows: in those courses Viper also quotes this old text,
 to every learner, whatever version the course is on, and it never updates. It
 does not block the rollout. Afterwards, decide whether to delete those rows.
+
+**Lessons with more than one material row:**
+
+```sql
+select lesson_slug, count(*) from lesson_material
+group by 1 having count(*) > 1;
+```
+
+No rows: nothing to do. Rows: courses will show the row with the lowest `id`.
+Check it is the right one. If it is not, open the lesson in Disciplines, put the
+right text in and press Save before you migrate: a Save leaves one row.
+
+**Is there an hnsw index on `docs`?**
+
+```sql
+select indexname from pg_indexes
+where tablename = 'docs' and indexdef ilike '%using hnsw%';
+```
+
+A row: the first migration rebuilds an index entry for every lesson search row,
+which can take minutes. No rows: expect seconds.
+
+**Time the migration on a copy.** During the real first run, lesson pages wait
+until it ends. The 5 second limit is only on how long it waits to start. Make a
+database branch (or restore the backup) and use your own terminal, not Claude
+Code: the branch's connection string holds a password.
+
+1. Type this, paste the string and press Enter. Nothing shows:
+
+   ```
+   read -rs BRANCH_URL
+   ```
+
+2. Check the host. The first command prints production, the second the branch.
+   **If the two are the same, stop**:
+
+   ```
+   pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.host + u.pathname'
+   DATABASE_URL="${BRANCH_URL:?}" pnpm exec dotenv -e .env.local -- node -p 'const u = new URL(process.env.DATABASE_URL); u.host + u.pathname'
+   ```
+
+3. Run it, and note the time:
+
+   ```
+   time DATABASE_URL="${BRANCH_URL:?}" pnpm db:migrate-lesson-versions
+   ```
+
+4. Close that terminal and delete the branch.
+
+This never touches `.env.local`: a variable set on the command line wins over
+the file. Never type `DATABASE_URL=` for the real run.
 
 ## 2. Roll out
 
@@ -100,17 +154,24 @@ left join docs d on d.lesson_version_id = v.id
 where d.id is null and (coalesce(v.text, '') <> '' or coalesce(v.pro_tips, '') <> '');
 ```
 
-Lesson material edited in the gap. Each lesson listed needs a higher version in
-Disciplines, then its courses updated:
+Lessons edited in the gap (name, video, other languages or material). Each
+lesson listed needs a higher version in Disciplines, then its courses updated:
 
 ```sql
-select distinct l.slug from lessons l
+select l.slug from lessons l
 join lesson_versions v on v.lesson_id = l.id and v.version = l.version
-join lesson_material m on m.lesson_slug = l.slug
-where m.updated_at > v.created_at;
+where (l.name, l.video_provider, l.video_ref, l.other_video_ids)
+    is distinct from (v.name, v.video_provider, v.video_ref, v.other_video_ids)
+  or exists (
+    select 1 from lesson_material m
+    where m.lesson_slug = l.slug and m.updated_at > v.created_at
+  );
 ```
 
-Then click through, with one lesson that two courses use:
+Then click through with one lesson that two courses use. Pick it from a course's
+own module. 3D Airmanship lessons show no course chip in the Knowledge library,
+because their modules are hidden there. Check those on each course's own board
+(the Configure button on its column).
 
 1. Knowledge library: every course card shows a green `v1.0`; Disciplines cards
    show a plain one.
@@ -137,7 +198,24 @@ The old code runs on the migrated database, but:
 Prefer fixing forward. If you did roll back, run the migration and the indexer
 again after the next deploy.
 
-## 5. Scripts that go around versions
+## 5. Old code after the rollout
+
+Old code is any branch, worktree or preview from before this one. `.env.local`
+is production, so running it locally counts. It:
+
+- wipes a lesson's search rows, for every version, when its material is saved;
+- edits lessons without checking their version;
+- places lessons without pins.
+
+Rebase every open branch and worktree onto `main` before you run it. If old code
+did run, run both `db:` commands, then the "edited in the gap" query above:
+
+```
+! pnpm db:migrate-lesson-versions
+! pnpm db:index-lesson-versions
+```
+
+## 6. Scripts that go around versions
 
 `scripts/import-course.ts` (with `import-course-modules.ts`) places lessons
 without pins. After it, run:
@@ -161,3 +239,12 @@ it, run `! pnpm db:index-lesson-versions`.
 
 After any other script or hand-written SQL that puts lessons or modules in
 courses, run both commands above.
+
+## 7. Now and then
+
+If Viper's indexing of a lesson fails, nothing retries it by itself. Only this
+does. It is safe to run any time:
+
+```
+! pnpm db:index-lesson-versions
+```
