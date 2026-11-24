@@ -147,6 +147,19 @@ describe('getCourseDetails', () => {
     expect(renderSqlParams(cap.captured.where[1] as SQL)).toEqual(['SUBQUERY']);
   });
 
+  /** The payload is shared by every learner and cached in Redis. */
+  it("never reads a lesson's version or content edit time", async () => {
+    seedCourseWithModules();
+    await getCourseDetails('itps-uas-remote');
+
+    const { lesson } = cap.captured.select[1] as { lesson: object };
+    expect(Object.keys(lesson)).toEqual(
+      expect.arrayContaining(['id', 'slug', 'isAvailable', 'videoRef']),
+    );
+    expect(lesson).not.toHaveProperty('version');
+    expect(lesson).not.toHaveProperty('contentUpdatedAt');
+  });
+
   /**
    * The course+modules lookup joins THROUGH the placement: courses ->
    * course_modules (on the placement's course id) -> modules (on the

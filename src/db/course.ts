@@ -1,4 +1,11 @@
-import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  countDistinct,
+  eq,
+  getTableColumns,
+  inArray,
+} from 'drizzle-orm';
 import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
 import { courseModuleIds } from '#/db/course-modules';
@@ -46,7 +53,7 @@ import { db } from '.';
 // left to omit. Declared here independently of `DBLesson` so
 // `shapeModuleLessons`'s `ShapeableLesson` constraint (which needs a `rank:
 // string`) is satisfied.
-type LessonDetails = DBLesson & {
+type LessonDetails = Omit<DBLesson, 'version' | 'contentUpdatedAt'> & {
   rank: string;
   dependsOn: CourseLessonDependencies;
   /**
@@ -144,9 +151,17 @@ export async function getCourseDetails(slug: string) {
   // invariant, the INNER JOIN below can add at most one row per lesson for
   // this course's module subquery, so `lessonData` cannot emit the same
   // lesson twice.
+  //
+  // `version` and `contentUpdatedAt` are staff-only: this payload reaches
+  // learners, so they are never read here.
+  const {
+    version: _version,
+    contentUpdatedAt: _contentUpdatedAt,
+    ...lessonColumns
+  } = getTableColumns(lessonsTable);
   const lessonData = await db
     .select({
-      lesson: lessonsTable,
+      lesson: lessonColumns,
       placement: moduleLessonsTable,
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,

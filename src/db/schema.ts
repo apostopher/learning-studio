@@ -25,6 +25,8 @@ import type { AnswerMetrics } from '#/lib/answer-metrics';
 import { DEBRIEF_ATTEMPT_FORMAT } from '#/lib/debrief-attempt-snapshot';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import type { DocSource } from '#/lib/doc-source';
+import type { MaterialExtraTab } from '#/lib/flagship-course';
+import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
 import {
   AddressSchema,
   type CourseLessonDependenciesSchema,
@@ -475,6 +477,12 @@ export const lessonsTable = pgTable(
      * exactly like `hasDebrief` above, which has no learner-side reader either.
      */
     needsVideoWatch: boolean('needs_video_watch').notNull().default(true),
+    /** The working copy's version. Staff-only: never in a learner payload. */
+    version: text('version').notNull().default(DEFAULT_LESSON_VERSION),
+    /** Last content edit; `updatedAt` also moves on config edits. Staff-only. */
+    contentUpdatedAt: timestamp('content_updated_at', { mode: 'date' })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
@@ -762,6 +770,72 @@ export const lessonMaterialTable = pgTable(
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [index('lesson_material_lesson_slug_idx').on(table.lessonSlug)],
+);
+
+/**
+ * A frozen copy of a lesson's content at one version: the `lessons` row and
+ * its `lesson_material`, so column types match those. Created when a course
+ * takes the version and never updated. Null `text` means the lesson had no
+ * material. Created by migrate-lesson-versions.ts, not drizzle-kit push: keep
+ * the two in step.
+ */
+export const lessonVersionsTable = pgTable(
+  'lesson_versions',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    version: text('version').notNull(),
+    name: text('name').notNull(),
+    videoProvider: text('video_provider'),
+    videoRef: text('video_ref'),
+    otherVideoIds:
+      jsonb('other_video_ids').$type<z.infer<typeof OtherVideoIdsSchema>>(),
+    text: text('text'),
+    keyPoints: json('key_points').$type<string[]>(),
+    quiz: json('quiz').$type<z.infer<typeof CourseLessonQuizSchema>>(),
+    proTips: text('pro_tips'),
+    links: json('links').$type<MaterialLink[]>(),
+    assignments: text('assignments'),
+    jobOfTheDay: text('job_of_the_day'),
+    testThis: json('test_this').$type<MaterialLink[]>(),
+    /** The closing tab the lesson showed when frozen. */
+    extraTab: text('extra_tab').$type<MaterialExtraTab>().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('lesson_versions_lesson_version_idx').on(
+      table.lessonId,
+      table.version,
+    ),
+  ],
+);
+
+/**
+ * Pins: which snapshot of a lesson a course uses. Every lesson a course shows
+ * has one, borrowed modules included.
+ */
+export const courseLessonVersionsTable = pgTable(
+  'course_lesson_versions',
+  {
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    lessonVersionId: integer('lesson_version_id')
+      .notNull()
+      .references(() => lessonVersionsTable.id, { onDelete: 'cascade' }),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.courseId, table.lessonId] }),
+    index('course_lesson_versions_lesson_version_id_idx').on(
+      table.lessonVersionId,
+    ),
+  ],
 );
 
 export const lessonMaterialInsertSchema = createInsertSchema(
@@ -1996,6 +2070,11 @@ export const docs = pgTable(
     lessonSlug: text('lesson_slug').references(() => lessonsTable.slug, {
       onDelete: 'cascade',
     }),
+    // The snapshot a lesson chunk was embedded from; null for an upload.
+    lessonVersionId: integer('lesson_version_id').references(
+      () => lessonVersionsTable.id,
+      { onDelete: 'cascade' },
+    ),
     sourcePath: text('source_path').notNull(),
     heading: text('heading'),
     chunk: text('chunk').notNull(),
@@ -2019,6 +2098,7 @@ export const docs = pgTable(
     // Filter embeddings by course before similarity search.
     index('docs_course_id_idx').on(t.courseId),
     index('docs_lesson_slug_idx').on(t.lessonSlug),
+    index('docs_lesson_version_id_idx').on(t.lessonVersionId),
     check('docs_source_check', sql`${t.source} in ('itps', '3d-airmanship')`),
   ],
 );
@@ -2585,11 +2665,13 @@ export const videoCalls = pgTable(
 );
 
 /**
- * AI-generated knowledge chunks for a lesson, one row per lesson.
+ * AI-generated knowledge chunks for a lesson, one row per lesson snapshot
+ * (`lessonVersionId`; null only on an old row of a lesson no course has taken).
  * `sourceFingerprint` detects stale chunks; `version` bumps on regeneration.
  * `previousMapping` (old chunk id -> new chunk id | null) is written on
  * regeneration so mastery rows can be carried over. Created by
- * migrate-knowledge-chunks.ts, not drizzle-kit push — keep the two in step.
+ * migrate-knowledge-chunks.ts and migrate-lesson-versions.ts, not drizzle-kit
+ * push — keep them in step.
  */
 export const lessonKnowledgeChunksTable = pgTable(
   'lesson_knowledge_chunks',
@@ -2598,6 +2680,10 @@ export const lessonKnowledgeChunksTable = pgTable(
     lessonId: integer('lesson_id')
       .notNull()
       .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    lessonVersionId: integer('lesson_version_id').references(
+      () => lessonVersionsTable.id,
+      { onDelete: 'cascade' },
+    ),
     version: integer('version').notNull(),
     sourceFingerprint: text('source_fingerprint').notNull(),
     chunks: jsonb('chunks').$type<KnowledgeChunk[]>().notNull(),
@@ -2609,7 +2695,12 @@ export const lessonKnowledgeChunksTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex('lesson_knowledge_chunks_lesson_idx').on(t.lessonId)],
+  (t) => [
+    index('lesson_knowledge_chunks_lesson_idx').on(t.lessonId),
+    uniqueIndex('lesson_knowledge_chunks_lesson_version_idx').on(
+      t.lessonVersionId,
+    ),
+  ],
 );
 export type LessonKnowledgeChunksSelect =
   typeof lessonKnowledgeChunksTable.$inferSelect;
