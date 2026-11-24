@@ -1,6 +1,7 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '#/db';
-import { coursesTable, lessonMaterialTable } from '#/db/schema';
+import { getPinnedSnapshot } from '#/db/course-lesson-content';
+import { coursesTable } from '#/db/schema';
 import type { CourseLessonQuiz } from '#/types';
 
 /** The course's debrief pass mark; null when there is no such course. */
@@ -16,24 +17,13 @@ export async function selectCoursePassMark(
 }
 
 /**
- * The lesson's authored quiz: the grading key for a pilot's answers. The
- * first material row (by id) whose quiz has a question, the same rows
- * `hasQuizSql` counts (`lesson_material.lesson_slug` is not unique). Null
- * when there is none.
+ * The authored quiz of the lesson as this course has it: the grading key for
+ * a pilot's answers. Null when it asks nothing.
  */
 export async function selectAuthoredQuiz(
   lessonSlug: string,
+  courseId: number,
 ): Promise<CourseLessonQuiz | null> {
-  const [row] = await db
-    .select({ quiz: lessonMaterialTable.quiz })
-    .from(lessonMaterialTable)
-    .where(
-      and(
-        eq(lessonMaterialTable.lessonSlug, lessonSlug),
-        sql`json_array_length(${lessonMaterialTable.quiz}) > 0`,
-      ),
-    )
-    .orderBy(asc(lessonMaterialTable.id))
-    .limit(1);
-  return row?.quiz ?? null;
+  const quiz = (await getPinnedSnapshot(lessonSlug, courseId))?.quiz;
+  return quiz?.length ? quiz : null;
 }

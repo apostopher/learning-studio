@@ -25,11 +25,13 @@ import { shapeModuleLessons } from '#/lib/course-shaping';
 import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
 import type { DBLesson, DBModule } from '@/db/schema';
 import {
+  courseLessonVersionsTable,
   courseModulesTable,
   courseSubscriptionsTable,
   coursesTable,
   lessonMaterialProgressTable,
   lessonsTable,
+  lessonVersionsTable,
   moduleDependenciesTable,
   moduleLessonsTable,
   modulesTable,
@@ -54,9 +56,10 @@ type LessonDetails = Omit<DBLesson, 'version' | 'contentUpdatedAt'> & {
   rank: string;
   dependsOn: CourseLessonDependencies;
   /**
-   * Whether the lesson has a video assigned, derived from the same two
-   * columns the playback layer resolves from. This is the field every
-   * consumer outside the playback layer should read — the gating predicate
+   * Whether the course's version of the lesson has a video assigned, derived
+   * from the same two columns the playback layer resolves from. This is the
+   * field every consumer outside the playback layer should read — the gating
+   * predicate
    * (`#/lib/lesson-gating.ts`) and the learner-facing `/api/course/details`
    * payload both key off this instead of `videoProvider`/`videoRef` directly,
    * so nothing downstream needs to know which video, only whether one exists.
@@ -149,6 +152,11 @@ export async function getCourseDetails(slug: string) {
   // this course's module subquery, so `lessonData` cannot emit the same
   // lesson twice.
   //
+  // Content comes from the snapshot this course is pinned to, never from the
+  // lesson row, so the pin is an INNER join: a lesson without one (there
+  // should be none) is not in the payload. A pin is per (course, lesson), so
+  // it adds no rows either.
+  //
   // `version` and `contentUpdatedAt` are staff-only: this payload reaches
   // learners, so they are never read here.
   const {
@@ -158,7 +166,13 @@ export async function getCourseDetails(slug: string) {
   } = getTableColumns(lessonsTable);
   const lessonData = await db
     .select({
-      lesson: lessonColumns,
+      lesson: {
+        ...lessonColumns,
+        name: lessonVersionsTable.name,
+        videoProvider: lessonVersionsTable.videoProvider,
+        videoRef: lessonVersionsTable.videoRef,
+        otherVideoIds: lessonVersionsTable.otherVideoIds,
+      },
       placement: moduleLessonsTable,
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,
@@ -168,6 +182,17 @@ export async function getCourseDetails(slug: string) {
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(
+      courseLessonVersionsTable,
+      and(
+        eq(courseLessonVersionsTable.courseId, course.id),
+        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
+      ),
+    )
+    .innerJoin(
+      lessonVersionsTable,
+      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
     )
     .leftJoin(
       moduleDependenciesTable,
@@ -275,8 +300,11 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
  * v4 -> v5: a course's modules now come from `course_modules` rather than
  * `modules.course_id`. A v4 entry answers a different question and must be
  * orphaned rather than served for the rest of its 6h TTL.
+ *
+ * v5 -> v6: lesson names and videos now come from the snapshot the course is
+ * pinned to, not from the working copy.
  */
-export const COURSE_DETAILS_CACHE_KEY = 'course-details-v5';
+export const COURSE_DETAILS_CACHE_KEY = 'course-details-v6';
 
 const redisCourseDetails = cacheWithRedis<
   string,

@@ -44,7 +44,8 @@ vi.mock('#/db', () => {
 vi.mock('#/db/schema', () => ({
   coursesTable: {},
   courseModulesTable: {},
-  lessonMaterialTable: {},
+  courseLessonVersionsTable: {},
+  lessonVersionsTable: {},
   lessonsTable: {},
   moduleLessonsTable: {},
   modulesTable: {},
@@ -72,6 +73,7 @@ const row = (
 ) => ({
   lessonId,
   lessonSlug,
+  versionId: lessonId + 100,
   lessonName: lessonSlug,
   moduleId: 1,
   moduleName: 'M',
@@ -312,6 +314,31 @@ describe('getCourseContentForAgent subscription gate', () => {
 
     expect(html).toContain('A body');
     expect(html).not.toContain('WIP body');
+  });
+
+  it('withholds a lesson with no pinned version, even from an admin', async () => {
+    dbState.rows = [
+      row('a', 'A body', 10),
+      { ...row('b', 'B body', 11), versionId: null },
+    ];
+    getUserRoleNames.mockResolvedValue(['admin']);
+    isSubscribedToCourseSlug.mockResolvedValue(false);
+    getCourseDetailsWithCache.mockResolvedValue(detailsFor([]));
+    getCourseProgress.mockResolvedValue({ lessons: [] });
+
+    const gated = await getGatedCourseForAgent('course-b', {
+      userId: 'admin-1',
+    });
+
+    expect(gated?.modules[0].lessons).toEqual([
+      {
+        slug: 'a',
+        versionId: 110,
+        name: 'a',
+        text: 'A body',
+        proTips: 'tips',
+      },
+    ]);
   });
 
   it('withholds WIP lessons from an admin too — the agent corpus is the learner corpus', async () => {

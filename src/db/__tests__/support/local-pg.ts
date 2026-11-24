@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { vi } from 'vitest';
 import { migrateLessonVersions } from '#/db/migrate-lesson-versions';
 import * as schema from '#/db/schema';
 
@@ -23,6 +24,12 @@ import * as schema from '#/db/schema';
  */
 export type TestDb = NodePgDatabase<typeof schema> & { $client: pg.Pool };
 export type FreshDb = { db: TestDb; pool: pg.Pool; drop(): Promise<void> };
+
+// Creating databases on a loaded machine outlasts the defaults. Applies to the
+// file importing this.
+if (process.env.TEST_DATABASE_URL) {
+  vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+}
 
 const TEST_DB_PREFIX = 'rmtp_versions_test_';
 const FIXTURE = new URL('./schema-before-lesson-versions.sql', import.meta.url);

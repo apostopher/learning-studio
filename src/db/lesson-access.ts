@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { courseModuleIds } from '#/db/course-modules';
 import {
+  courseLessonVersionsTable,
   courseModulesTable,
   courseOrgsTable,
   courseSubscriptionsTable,
@@ -13,7 +14,9 @@ import {
 
 /**
  * A lesson as placed in ONE course, or null when the course does not exist or
- * the lesson is not placed in it.
+ * the lesson is not placed in it. One placed without a pin (there should be
+ * none) counts as not placed: the course has no content to show for it, and
+ * its payload (`getCourseDetails`) leaves it out.
  *
  * The course comes from the caller — ultimately the `/course/$courseSlug/…`
  * route the learner is on — and membership is checked through
@@ -48,6 +51,13 @@ export async function getLessonInCourse({
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
+    )
+    .innerJoin(
+      courseLessonVersionsTable,
+      and(
+        eq(courseLessonVersionsTable.courseId, course.id),
+        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
+      ),
     )
     .where(
       and(

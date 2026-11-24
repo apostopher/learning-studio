@@ -111,10 +111,19 @@ const lessonMaterialProgressTable = pgTable('lesson_material_progress', {
   userId: text('user_id'),
   lessonSlug: text('lesson_slug'),
 });
-const lessonMaterialTable = pgTable('lesson_material', {
-  lessonSlug: text('lesson_slug'),
+const lessonVersionsTable = pgTable('lesson_versions', {
+  id: integer('id').primaryKey(),
+  name: text('name'),
+  videoProvider: text('video_provider'),
+  videoRef: text('video_ref'),
+  otherVideoIds: jsonb('other_video_ids'),
   text: text('text'),
   proTips: text('pro_tips'),
+});
+const courseLessonVersionsTable = pgTable('course_lesson_versions', {
+  courseId: integer('course_id'),
+  lessonId: integer('lesson_id'),
+  lessonVersionId: integer('lesson_version_id'),
 });
 
 /** Same chainable stub as admin-course-cache-invalidation.test.ts. */
@@ -200,7 +209,8 @@ const schema = {
   courseSubscriptionsTable,
   videoProgressTable,
   lessonMaterialProgressTable,
-  lessonMaterialTable,
+  lessonVersionsTable,
+  courseLessonVersionsTable,
 };
 
 vi.mock('#/db', () => ({ db }));
@@ -422,10 +432,19 @@ describe('getCourseDetails — placement is the source of truth (site 1)', () =>
 
     await getCourseDetails('flight-basics');
 
-    expect(calls.innerJoin).toHaveLength(1);
+    expect(calls.innerJoin).toHaveLength(3);
     expect(calls.innerJoin[0][0]).toBe(moduleLessonsTable);
     expect(render(calls.innerJoin[0][1])).toBe(
       '"module_lessons"."lesson_id" = "lessons"."id"',
+    );
+    // Then this course's pin, and the snapshot the content is read from.
+    expect(calls.innerJoin[1][0]).toBe(courseLessonVersionsTable);
+    expect(render(calls.innerJoin[1][1])).toBe(
+      '("course_lesson_versions"."course_id" = $1 and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(calls.innerJoin[2][0]).toBe(lessonVersionsTable);
+    expect(render(calls.innerJoin[2][1])).toBe(
+      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
     );
 
     expect(calls.where).toHaveLength(1);
@@ -572,7 +591,7 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
   // `indexOf`-only version of this test. Pinning the full ordered join list
   // (fixed indices, `innerJoin` asserted empty) closes that gap the same way
   // it did for `getMyCourses`.
-  it('getCourseContentForAgent left-joins courses -> course_modules -> modules -> module_lessons -> lessons -> lesson_material, never inner', async () => {
+  it('getCourseContentForAgent left-joins courses -> course_modules -> modules -> module_lessons -> lessons -> pin -> snapshot, never inner', async () => {
     const calls = newJoinCalls();
     db.select.mockReturnValueOnce(makeCapturingChain([], calls));
 
@@ -602,9 +621,13 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     expect(render(calls.leftJoin[3][1])).toBe(
       '"lessons"."id" = "module_lessons"."lesson_id"',
     );
-    expect(calls.leftJoin[4][0]).toBe(lessonMaterialTable);
+    expect(calls.leftJoin[4][0]).toBe(courseLessonVersionsTable);
     expect(render(calls.leftJoin[4][1])).toBe(
-      '"lesson_material"."lesson_slug" = "lessons"."slug"',
+      '("course_lesson_versions"."course_id" = "courses"."id" and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(calls.leftJoin[5][0]).toBe(lessonVersionsTable);
+    expect(render(calls.leftJoin[5][1])).toBe(
+      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
     );
   });
 

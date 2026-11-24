@@ -1,3 +1,4 @@
+import { getPinnedVersionId } from '#/db/course-lesson-content';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { redis } from '#/integrations/upstash/redis';
 import { vttToText } from '#/lib/vtt-to-text';
@@ -7,9 +8,10 @@ const CACHE_KEY_PREFIX = 'lesson-transcript';
 /**
  * Cached for a week, unlike the playback entry it is derived from.
  *
- * The caption URL expires within the hour; the words in the file do not change
- * until the video itself is replaced. Long is the point: a cold read costs a
- * provider call and a caption download, which a learner waits on.
+ * The caption URL expires within the hour; the words in the file are those of
+ * a version's video, and a version is never changed, so nothing evicts this.
+ * Long is the point: a cold read costs a provider call and a caption download,
+ * which a learner waits on.
  */
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -28,9 +30,10 @@ const MIN_USEFUL_CHARS = 200;
  * have no video at all, and a caption fetch can simply fail. Callers treat null
  * as "no transcript source" and the UI offers no debrief.
  *
- * `courseId` is the course the caller is serving — playback is resolved
- * through that course's provider credentials (see `getLessonPlayback`), so
- * the caption URL it hands back is one this course can actually fetch.
+ * `courseId` is the version's home course (`getHomeCourseIdForVersion`):
+ * playback is the video that course is pinned to, resolved through its
+ * provider credentials (see `getLessonPlayback`), so the caption URL it hands
+ * back is one that course can actually fetch.
  */
 async function resolveLessonTranscriptUncached(
   lessonSlug: string,
@@ -60,16 +63,16 @@ async function resolveLessonTranscriptUncached(
  * freezing any of them for a week would leave a lesson permanently
  * debrief-less with nothing to indicate why.
  *
- * Cached per LESSON, not per course, unlike the playback it is derived from:
+ * Cached per VERSION, not per course, unlike the playback it is derived from:
  * the words in the caption file are the video's, and the video is the
- * lesson's — every course teaching it gets the same text. The course only
- * decides whose credentials fetch it on a cold read.
+ * version's — every course on it gets the same text. The course only decides
+ * whose credentials fetch it on a cold read.
  */
 export async function getLessonTranscript(
   lessonSlug: string,
-  options: { courseId: number },
+  options: { courseId: number; versionId: number },
 ): Promise<string | null> {
-  const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
+  const key = `${CACHE_KEY_PREFIX}:${lessonSlug}:${options.versionId}`;
   const cached = await redis.get<string>(key);
   if (cached) return cached;
 
@@ -77,6 +80,14 @@ export async function getLessonTranscript(
     lessonSlug,
     options.courseId,
   );
+  // The course may have moved on since the caller looked it up. Courses never
+  // move back, so being on the version now means the text above is of it.
+  const pinned = await getPinnedVersionId(lessonSlug, options.courseId);
+  if (pinned !== options.versionId) {
+    throw new Error(
+      `Course ${options.courseId} is not on lesson version ${options.versionId}`,
+    );
+  }
   if (transcript) {
     await redis.set(key, transcript, { ex: CACHE_TTL_SECONDS });
   }

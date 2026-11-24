@@ -116,6 +116,7 @@ const { evaluateLessonGate } = await import('#/lib/lesson-gating.server');
 const { getLessonPlayback } = await import('#/db/lesson-playback');
 const { recordLastViewedLesson } = await import('#/db/course-last-viewed');
 const lessonAccess = await import('#/db/lesson-access');
+const { lessonVersionsTable } = await import('#/db/schema');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -169,6 +170,12 @@ describe('evaluateLessonGate resolves the lesson inside the course it was given'
       'radio-failure',
       'SUBQUERY:7',
     ]);
+    // Only as this course has it pinned: one placed without a pin is absent.
+    expect(renderSql(cap.captured.joinOn.at(-1) as SQL)).toBe(
+      '("course_lesson_versions"."course_id" = $1 and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(renderSqlParams(cap.captured.joinOn.at(-1) as SQL)).toEqual([7]);
+    expect(cap.captured.joinKinds).toEqual(['inner', 'inner']);
     // The course the gate reports downstream is the one it was handed, with
     // the id the course lookup resolved — never one inferred from the lesson.
     expect(result).toMatchObject({ courseSlug: 'b', courseId: 7 });
@@ -218,7 +225,7 @@ describe('evaluateLessonGate resolves the lesson inside the course it was given'
 
 describe('getLessonPlayback is scoped and cached per course', () => {
   it('filters through the membership helper for the course it was given', async () => {
-    cap.results.push([{ videoProvider: 'mux', videoRef: 'ref-1' }]);
+    cap.results.push([{ id: 31, videoProvider: 'mux', videoRef: 'ref-1' }]);
     playback.resolvePlayback.mockResolvedValueOnce(ready);
 
     await getLessonPlayback('l1', { courseId: 6 });
@@ -231,14 +238,26 @@ describe('getLessonPlayback is scoped and cached per course', () => {
       'l1',
       'SUBQUERY:6',
     ]);
+    // The video is the snapshot's that this course is pinned to.
+    expect(Object.values(cap.captured.select[0] as object)).toContain(
+      lessonVersionsTable.videoRef,
+    );
+    expect(renderSql(cap.captured.joinOn[1] as SQL)).toBe(
+      '("course_lesson_versions"."course_id" = $1 and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(renderSqlParams(cap.captured.joinOn[1] as SQL)).toEqual([6]);
+    expect(renderSql(cap.captured.joinOn[2] as SQL)).toBe(
+      '"lesson_versions"."id" = "course_lesson_versions"."lesson_version_id"',
+    );
+    expect(cap.captured.joinKinds).toEqual(['inner', 'inner', 'inner']);
     // No ORDER BY: there is nothing to pick between any more.
     expect(cap.captured.orderBy).toHaveLength(0);
     // The credentials are the given course's, not one read off the row.
     expect(playback.resolveCourseProvider).toHaveBeenCalledWith(6, 'mux');
   });
 
-  it('reads and writes the cache under a key that names the course', async () => {
-    cap.results.push([{ videoProvider: 'mux', videoRef: 'ref-1' }]);
+  it('reads and writes the cache under a key that names the course and its version', async () => {
+    cap.results.push([{ id: 31, videoProvider: 'mux', videoRef: 'ref-1' }]);
     playback.resolvePlayback.mockResolvedValueOnce(ready);
 
     await getLessonPlayback('l1', { courseId: 6 });
@@ -248,9 +267,9 @@ describe('getLessonPlayback is scoped and cached per course', () => {
     // payload also carries which language it resolved and which the lesson
     // offers (`resolveLessonPlaybackUncached` merges these in) — this lesson
     // has no alternates, so both are just `en`.
-    expect(redis.get).toHaveBeenCalledWith('lesson-playback:6:l1:en');
+    expect(redis.get).toHaveBeenCalledWith('lesson-playback:6:l1:31:en');
     expect(redis.set).toHaveBeenCalledWith(
-      'lesson-playback:6:l1:en',
+      'lesson-playback:6:l1:31:en',
       JSON.stringify({ ...ready, lang: 'en', languages: ['en'] }),
       { ex: 60 },
     );
@@ -265,13 +284,12 @@ describe('getLessonPlayback is scoped and cached per course', () => {
   });
 
   /**
-   * An admin video swap must evict the entry for EVERY course teaching the
-   * lesson, in EVERY language — one `del` per (course id, language) pair,
-   * each under the per-course-per-language key. The mutant deletes only the
-   * old single per-course key, which no reader consults any more.
+   * A change to what a lesson plays must evict the entry for EVERY course
+   * teaching it, in EVERY version and language. The mutant deletes only the
+   * version the course is on now.
    */
-  it('invalidate evicts every language key per course teaching the lesson', async () => {
-    cap.results.push([{ id: 42 }]);
+  it('invalidate evicts every version and language key per course teaching the lesson', async () => {
+    cap.results.push([{ id: 42 }], [{ id: 30 }, { id: 31 }]);
     playback.getCourseIdsForLesson.mockResolvedValueOnce([2, 6]);
 
     await getLessonPlayback.invalidate('l1');
@@ -281,11 +299,19 @@ describe('getLessonPlayback is scoped and cached per course', () => {
     );
     expect(renderSqlParams(cap.captured.where[0] as SQL)).toEqual(['l1']);
     expect(playback.getCourseIdsForLesson).toHaveBeenCalledWith(42);
-    const allLangs = [PRIMARY_VIDEO_LANG, ...VIDEO_LANGUAGES];
-    const expectedCalls = [2, 6].flatMap((courseId) =>
-      allLangs.map((lang) => [`lesson-playback:${courseId}:l1:${lang}`]),
+    expect(renderSql(cap.captured.where[1] as SQL)).toBe(
+      '"lesson_versions"."lesson_id" = $1',
     );
-    expect(redis.del.mock.calls).toEqual(expectedCalls);
+    expect(renderSqlParams(cap.captured.where[1] as SQL)).toEqual([42]);
+    const allLangs = [PRIMARY_VIDEO_LANG, ...VIDEO_LANGUAGES];
+    const expectedKeys = [2, 6].flatMap((courseId) =>
+      [30, 31].flatMap((versionId) =>
+        allLangs.map(
+          (lang) => `lesson-playback:${courseId}:l1:${versionId}:${lang}`,
+        ),
+      ),
+    );
+    expect(redis.del.mock.calls).toEqual([expectedKeys]);
   });
 
   it('invalidate deletes nothing for a slug that matches no lesson', async () => {

@@ -70,6 +70,18 @@ const moduleLessonsTable = pgTable('module_lessons', {
   rank: numeric('rank'),
   dependsOn: jsonb('depends_on'),
 });
+const lessonVersionsTable = pgTable('lesson_versions', {
+  id: integer('id').primaryKey(),
+  name: text('name'),
+  videoProvider: text('video_provider'),
+  videoRef: text('video_ref'),
+  otherVideoIds: jsonb('other_video_ids'),
+});
+const courseLessonVersionsTable = pgTable('course_lesson_versions', {
+  courseId: integer('course_id'),
+  lessonId: integer('lesson_id'),
+  lessonVersionId: integer('lesson_version_id'),
+});
 const moduleDependenciesTable = pgTable('module_dependencies', {
   moduleId: integer('module_id'),
   dependsOn: jsonb('depends_on'),
@@ -108,6 +120,8 @@ vi.mock('@/db/schema', () => ({
   modulesTable,
   lessonsTable,
   moduleLessonsTable,
+  lessonVersionsTable,
+  courseLessonVersionsTable,
   moduleDependenciesTable,
   orgLessonsTable,
   orgsTable,

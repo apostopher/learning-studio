@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
@@ -6,10 +6,11 @@ import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import {
+  courseLessonVersionsTable,
   courseModulesTable,
   coursesTable,
-  lessonMaterialTable,
   lessonsTable,
+  lessonVersionsTable,
   moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
@@ -34,7 +35,7 @@ type GatedRow = { lessonSlug: string };
  * Drop rows for lessons this user cannot read.
  *
  * The chat widget is mounted app-wide and its knowledge base is assembled from
- * lesson_material, so without this a student locked out of a lesson can simply
+ * lesson material, so without this a student locked out of a lesson can simply
  * ask the assistant for its key points.
  *
  * `progress` is required, not nullable: the previous "null means
@@ -59,11 +60,11 @@ export function filterGatedLessons<T extends GatedRow>(
 }
 
 /**
- * getCourseDetails (src/db/course.ts) does not carry lesson_material text, so
- * this is a minimal, focused reader dedicated to agent RAG enrichment: it
- * selects courses→modules→lessons left-joined to lesson_material (matched by
- * lessons.slug = lesson_material.lesson_slug), ordered by rank, and hands the
- * assembled shape to the pure builder in src/lib/course-content.ts.
+ * getCourseDetails (src/db/course.ts) does not carry lesson text, so this is a
+ * minimal, focused reader dedicated to agent RAG enrichment: it selects
+ * courses→modules→lessons left-joined to the snapshot the course is pinned to,
+ * ordered by rank, and hands the assembled shape to the pure builder in
+ * src/lib/course-content.ts.
  *
  * Four filters run before any content is assembled, in this order:
  *
@@ -109,10 +110,11 @@ export async function getGatedCourseForAgent(
       moduleName: modulesTable.name,
       lessonId: lessonsTable.id,
       lessonSlug: lessonsTable.slug,
-      lessonName: lessonsTable.name,
+      versionId: lessonVersionsTable.id,
+      lessonName: lessonVersionsTable.name,
       isAvailable: lessonsTable.isAvailable,
-      text: lessonMaterialTable.text,
-      proTips: lessonMaterialTable.proTips,
+      text: lessonVersionsTable.text,
+      proTips: lessonVersionsTable.proTips,
     })
     .from(coursesTable)
     // Membership is the placement table (`course_modules`), joined through
@@ -123,19 +125,26 @@ export async function getGatedCourseForAgent(
       eq(courseModulesTable.courseId, coursesTable.id),
     )
     .leftJoin(modulesTable, eq(modulesTable.id, courseModulesTable.moduleId))
-    // Both LEFT: a module with no placements at all must still reach the
-    // `lessonMaterialTable` join and the `isAvailable === null` branch below,
+    // All LEFT: a module with no placements at all must still reach the
+    // snapshot's join and the `isAvailable === null` branch below,
     // so a module with zero lessons (or zero WIP-filtered lessons) still
     // renders its heading — see the filter-1 comment. An inner join on
-    // either hop would drop that module-only row instead of keeping it.
+    // any hop would drop that module-only row instead of keeping it.
     .leftJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.moduleId, modulesTable.id),
     )
     .leftJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
     .leftJoin(
-      lessonMaterialTable,
-      eq(lessonMaterialTable.lessonSlug, lessonsTable.slug),
+      courseLessonVersionsTable,
+      and(
+        eq(courseLessonVersionsTable.courseId, coursesTable.id),
+        eq(courseLessonVersionsTable.lessonId, lessonsTable.id),
+      ),
+    )
+    .leftJoin(
+      lessonVersionsTable,
+      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
     )
     .where(eq(coursesTable.slug, slug))
     // Both ranks are the PLACEMENT's: the module's position in this course,
@@ -260,10 +269,9 @@ export async function getGatedCourseForAgent(
   const courseName = rows[0].courseName;
   const modules: GatedCourse['modules'] = [];
   const moduleMap = new Map<number, GatedCourse['modules'][number]>();
-  // lesson_material.lesson_slug has no unique constraint, so the left-join
-  // above can return >1 material row per lesson — key lessons by lessons.id
-  // and keep only the first material row seen for each, so a lesson never
-  // appears twice in the rendered output.
+  // A course can show a lesson twice, in its own module and a borrowed one —
+  // key lessons by lessons.id, so it never appears twice in the rendered
+  // output.
   const seenLessonIds = new Set<number>();
 
   for (const row of gatedRows) {
@@ -274,16 +282,20 @@ export async function getGatedCourseForAgent(
       moduleMap.set(row.moduleId, mod);
       modules.push(mod);
     }
+    // No version: placed without a pin (there should be none), so the course
+    // has no content for it.
     if (
       row.lessonId === null ||
       row.lessonName === null ||
-      row.lessonSlug === null
+      row.lessonSlug === null ||
+      row.versionId === null
     )
       continue;
     if (seenLessonIds.has(row.lessonId)) continue;
     seenLessonIds.add(row.lessonId);
     mod.lessons.push({
       slug: row.lessonSlug,
+      versionId: row.versionId,
       name: row.lessonName,
       text: row.text,
       proTips: row.proTips,

@@ -1,8 +1,9 @@
+import {
+  getHomeCourseIdForVersion,
+  getPinnedSnapshot,
+} from '#/db/course-lesson-content';
 import { getDerivedKeyPoints } from '#/db/derived-key-points';
-import { getLessonMaterial } from '#/db/lesson';
-import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getLessonTranscript } from '#/db/lesson-transcript';
-import { getHomeCourseIdForLesson } from '#/db/placements';
 
 export type DebriefSource = {
   /**
@@ -62,33 +63,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * Null is answered with a 422, and the UI does not offer a debrief it cannot
  * generate, so it should not be reachable in practice.
  *
- * `courseId` is the course the gate resolved for this request: the transcript
- * fallback resolves playback through that course's provider credentials.
+ * `courseId` is the course the gate resolved for this request; everything
+ * comes from the version of the lesson that course is pinned to. Null when it
+ * has none.
  */
 export async function resolveDebriefSource(
   lessonSlug: string,
   courseId: number,
 ): Promise<DebriefSource | null> {
-  const material = await getLessonMaterial(lessonSlug);
+  // One read for everything below, so it is all of one version.
+  const snapshot = await getPinnedSnapshot(lessonSlug, courseId);
+  if (!snapshot) return null;
 
-  // Chunks are per lesson, not per course, so the transcript comes from the
-  // lesson's home course (see `getHomeCourseIdForLesson`), falling back to the
-  // course being served when the lesson is unplaced. Authored material never
-  // needed the transcript before, so for it a failed lookup (an error, or no
-  // answer within `TRANSCRIPT_LOOKUP_TIMEOUT_MS`) degrades to the material
-  // text instead of breaking the lesson, and says so (`degraded`); with no
-  // material the transcript is the source and the error propagates as it
-  // always did.
+  // Two courses on one version must get the same transcript, so it comes from
+  // the version's home course (see `getHomeCourseIdForVersion`). Authored
+  // material never needed the transcript before, so for it a failed lookup (an
+  // error, or no answer within `TRANSCRIPT_LOOKUP_TIMEOUT_MS`) degrades to the
+  // material text instead of breaking the lesson, and says so (`degraded`);
+  // with no material the transcript is the source and the error propagates as
+  // it always did.
   const lookupTranscript = async (): Promise<string | null> => {
-    const lessonId = await getLessonIdBySlug(lessonSlug);
-    const homeCourseId =
-      (lessonId === null ? null : await getHomeCourseIdForLesson(lessonId)) ??
-      courseId;
-    return getLessonTranscript(lessonSlug, { courseId: homeCourseId });
+    const versionId = snapshot.id;
+    return getLessonTranscript(lessonSlug, {
+      courseId: (await getHomeCourseIdForVersion(versionId)) ?? courseId,
+      versionId,
+    });
   };
   let transcript: string | null;
   let degraded = false;
-  if (material?.text) {
+  if (snapshot.text) {
     try {
       transcript = await withTimeout(
         lookupTranscript(),
@@ -106,18 +109,18 @@ export async function resolveDebriefSource(
     transcript = await lookupTranscript();
   }
 
-  if (material?.text) {
-    const context = transcript ?? material.text;
+  if (snapshot.text) {
+    const context = transcript ?? snapshot.text;
     const flag = degraded ? { degraded: true as const } : {};
-    if (material.keyPoints?.length) {
+    if (snapshot.keyPoints?.length) {
       return {
         kind: 'material',
-        keyPoints: material.keyPoints,
+        keyPoints: snapshot.keyPoints,
         context,
         ...flag,
       };
     }
-    const derived = await getDerivedKeyPoints(material.text);
+    const derived = await getDerivedKeyPoints(snapshot.text);
     if (derived.length > 0) {
       return { kind: 'material-derived', keyPoints: derived, context, ...flag };
     }

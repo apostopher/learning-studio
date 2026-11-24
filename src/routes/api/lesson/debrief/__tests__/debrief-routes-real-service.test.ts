@@ -240,7 +240,7 @@ describe('the lesson total judges the set, from the db facts through to the resp
   it('a quiz never taken adds nothing: 60 on the debrief totals 60, missed', async () => {
     m.getLatestLessonQuizAnswers.mockResolvedValue(null);
     const res = await answerDebriefHandler(post('answer', answerBody));
-    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1');
+    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1', 7);
     expect(m.getLatestLessonQuizAnswers).toHaveBeenCalledWith('u1', 'l1');
     const json = await res.json();
     expect(json).toMatchObject({

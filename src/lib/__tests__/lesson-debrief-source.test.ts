@@ -2,22 +2,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  getLessonMaterial,
+  getPinnedSnapshot,
   getLessonTranscript,
   getDerivedKeyPoints,
-  getLessonIdBySlug,
-  getHomeCourseIdForLesson,
+  getHomeCourseIdForVersion,
 } = vi.hoisted(() => ({
-  getLessonMaterial: vi.fn(),
+  getPinnedSnapshot: vi.fn(),
   getLessonTranscript: vi.fn(),
   getDerivedKeyPoints: vi.fn(),
-  getLessonIdBySlug: vi.fn(),
-  getHomeCourseIdForLesson: vi.fn(),
+  getHomeCourseIdForVersion: vi.fn(),
 }));
-vi.mock('#/db/lesson-access', () => ({ getLessonIdBySlug }));
-vi.mock('#/db/placements', () => ({ getHomeCourseIdForLesson }));
-
-vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
+vi.mock('#/db/course-lesson-content', () => ({
+  getHomeCourseIdForVersion,
+  getPinnedSnapshot,
+}));
 vi.mock('#/db/lesson-transcript', () => ({ getLessonTranscript }));
 vi.mock('#/db/derived-key-points', () => ({ getDerivedKeyPoints }));
 
@@ -26,18 +24,29 @@ import {
   TRANSCRIPT_LOOKUP_TIMEOUT_MS,
 } from '../lesson-debrief-source.server';
 
+/** The served course is on version 31, with this (or no) material. */
+const hasMaterial = (
+  material: { text: string; keyPoints: string[] } | null,
+): void => {
+  getPinnedSnapshot.mockResolvedValue({
+    id: 31,
+    text: null,
+    keyPoints: null,
+    ...material,
+  });
+};
+
 describe('resolveDebriefSource', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getLessonMaterial.mockResolvedValue(null);
+    hasMaterial(null);
     getLessonTranscript.mockResolvedValue(null);
     getDerivedKeyPoints.mockResolvedValue(['derived one', 'derived two']);
-    getLessonIdBySlug.mockResolvedValue(42);
-    getHomeCourseIdForLesson.mockResolvedValue(null);
+    getHomeCourseIdForVersion.mockResolvedValue(null);
   });
 
   it('uses the authored material verbatim when it has key points and text', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['authored'],
     });
@@ -52,7 +61,7 @@ describe('resolveDebriefSource', () => {
   });
 
   it('derives key points from the material text when none were authored', async () => {
-    getLessonMaterial.mockResolvedValue({ text: 'lesson body', keyPoints: [] });
+    hasMaterial({ text: 'lesson body', keyPoints: [] });
 
     await expect(resolveDebriefSource('l-1', 7)).resolves.toEqual({
       kind: 'material-derived',
@@ -75,13 +84,16 @@ describe('resolveDebriefSource', () => {
     expect(getDerivedKeyPoints).toHaveBeenCalledWith(
       'spoken words from the video',
     );
-    // The transcript is read for the course the caller is serving — playback
-    // resolves through that course's credentials (Task 6a).
-    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
+    expect(getPinnedSnapshot).toHaveBeenCalledWith('l-1', 7);
+    expect(getHomeCourseIdForVersion).toHaveBeenCalledWith(31);
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', {
+      courseId: 7,
+      versionId: 31,
+    });
   });
 
   it('falls back to the transcript when the material row has no body text', async () => {
-    getLessonMaterial.mockResolvedValue({ text: '', keyPoints: [] });
+    hasMaterial({ text: '', keyPoints: [] });
     getLessonTranscript.mockResolvedValue('spoken words from the video');
 
     const source = await resolveDebriefSource('l-1', 7);
@@ -102,11 +114,11 @@ describe('resolveDebriefSource', () => {
   });
 
   it('uses the home-course transcript as context when the lesson has material', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['authored'],
     });
-    getHomeCourseIdForLesson.mockResolvedValue(3);
+    getHomeCourseIdForVersion.mockResolvedValue(3);
     getLessonTranscript.mockResolvedValue('the transcript');
 
     const source = await resolveDebriefSource('l-1', 7);
@@ -117,11 +129,14 @@ describe('resolveDebriefSource', () => {
       context: 'the transcript',
     });
     // Home course (3), not the course being served (7).
-    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 3 });
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', {
+      courseId: 3,
+      versionId: 31,
+    });
   });
 
   it('uses the material text as context when there is no transcript', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['authored'],
     });
@@ -131,16 +146,19 @@ describe('resolveDebriefSource', () => {
     expect(source?.context).toBe('lesson body');
   });
 
-  it('falls back to the passed courseId when the lesson has no home course', async () => {
-    getLessonMaterial.mockResolvedValue({ text: 'b', keyPoints: ['a'] });
+  it('falls back to the passed courseId when the version has no home course', async () => {
+    hasMaterial({ text: 'b', keyPoints: ['a'] });
     getLessonTranscript.mockResolvedValue('t');
 
     await resolveDebriefSource('l-1', 7);
-    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
+    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', {
+      courseId: 7,
+      versionId: 31,
+    });
   });
 
   it('falls back to material text, flagged degraded, when the transcript lookup rejects for an authored lesson', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['authored'],
     });
@@ -159,11 +177,11 @@ describe('resolveDebriefSource', () => {
   });
 
   it('falls back to material text when the home-course lookup rejects', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['a'],
     });
-    getHomeCourseIdForLesson.mockRejectedValue(new Error('db'));
+    getHomeCourseIdForVersion.mockRejectedValue(new Error('db'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const source = await resolveDebriefSource('l-1', 7);
@@ -175,7 +193,7 @@ describe('resolveDebriefSource', () => {
   it('a transcript lookup that hangs past the timeout is a failure: material text, degraded', async () => {
     vi.useFakeTimers();
     try {
-      getLessonMaterial.mockResolvedValue({
+      hasMaterial({
         text: 'lesson body',
         keyPoints: ['authored'],
       });
@@ -197,7 +215,7 @@ describe('resolveDebriefSource', () => {
   });
 
   it('a transcript that answers within the timeout is used, not degraded', async () => {
-    getLessonMaterial.mockResolvedValue({
+    hasMaterial({
       text: 'lesson body',
       keyPoints: ['authored'],
     });
@@ -210,13 +228,10 @@ describe('resolveDebriefSource', () => {
     });
   });
 
-  it('uses the passed courseId when the lesson slug resolves to no lesson id', async () => {
-    getLessonIdBySlug.mockResolvedValue(null);
-    getLessonMaterial.mockResolvedValue({ text: 'b', keyPoints: ['a'] });
-    getLessonTranscript.mockResolvedValue('t');
+  it('a course without a pin has nothing to debrief from', async () => {
+    getPinnedSnapshot.mockResolvedValue(null);
 
-    await resolveDebriefSource('l-1', 7);
-    expect(getHomeCourseIdForLesson).not.toHaveBeenCalled();
-    expect(getLessonTranscript).toHaveBeenCalledWith('l-1', { courseId: 7 });
+    await expect(resolveDebriefSource('l-1', 7)).resolves.toBeNull();
+    expect(getLessonTranscript).not.toHaveBeenCalled();
   });
 });

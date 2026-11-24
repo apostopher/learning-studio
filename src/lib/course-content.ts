@@ -5,7 +5,11 @@ export type LessonContent = {
 };
 export type ModuleContent = { name: string; lessons: LessonContent[] };
 export type CourseContent = { name: string; modules: ModuleContent[] };
-export type GatedLesson = LessonContent & { slug: string };
+export type GatedLesson = LessonContent & {
+  slug: string;
+  /** The snapshot the course is pinned to, which the rest of this is from. */
+  versionId: number;
+};
 export type GatedCourse = {
   name: string;
   modules: { name: string; lessons: GatedLesson[] }[];

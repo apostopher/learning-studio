@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 
 describe('getScoreFacts', () => {
-  const facts = () => getScoreFacts('u1', 'l1');
+  const facts = () => getScoreFacts('u1', 'l1', 7);
 
   it('quiz is the latest attempt’s count of right answers (2 of 3)', async () => {
     m.getLatestLessonQuizAnswers.mockResolvedValue({
@@ -69,7 +69,7 @@ describe('getScoreFacts', () => {
       })),
     });
     expect((await facts()).quiz).toEqual({ correct: 0, total: 3 });
-    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1');
+    expect(m.selectAuthoredQuiz).toHaveBeenCalledWith('l1', 7);
   });
 
   it('the denominator is the authored question count: one right answer sent of three authored is 1 of 3', async () => {

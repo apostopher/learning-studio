@@ -879,7 +879,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
     m.row = attemptRow({ questions: eightStored, answers: all(1, 3, 50) });
     m.evaluateFreeText.mockResolvedValue(scored(4, 50));
     await answer('q4');
-    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 7);
     expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
   });
 
@@ -1318,7 +1318,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
         attemptRow({ questions: eightStored, answers: all(1, 4, 50) }),
       );
       const r = await start();
-      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 7);
       expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
       if (!r.ok) throw new Error('expected ok');
       expect(r.attempt.offer).toBe(true);
@@ -1387,7 +1387,7 @@ describe('sets judged on the lesson total against the course pass mark', () => {
       });
       expect(r).toEqual({ ok: true, choice: 'yes', questions: set2 });
       expect(JSON.stringify(r)).not.toContain('SECRET');
-      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
+      expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 7);
       expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
     });
 
@@ -1552,7 +1552,7 @@ describe('recheckDebriefPass', () => {
 
   it('records the pass when the best set plus the quiz reaches the pass mark', async () => {
     expect(await recheck()).toBe(true);
-    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1');
+    expect(m.getScoreFacts).toHaveBeenCalledWith('u1', 'l1', 7);
     expect(m.getCoursePassMark).toHaveBeenCalledWith(7);
     expect(m.insertPass).toHaveBeenCalledWith(expect.anything(), {
       userId: 'u1',

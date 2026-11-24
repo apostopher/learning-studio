@@ -46,8 +46,14 @@ const gatedCourse = {
     {
       name: 'Weather',
       lessons: [
-        { slug: 'wx-1', name: 'METARs', text: 'x', proTips: null },
-        { slug: 'wx-2', name: 'TAFs', text: 'y', proTips: null },
+        {
+          slug: 'wx-1',
+          versionId: 1,
+          name: 'METARs',
+          text: 'x',
+          proTips: null,
+        },
+        { slug: 'wx-2', versionId: 2, name: 'TAFs', text: 'y', proTips: null },
       ],
     },
     { name: 'Empty', lessons: [] },

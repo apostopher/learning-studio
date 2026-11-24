@@ -14,7 +14,12 @@
  * file that imports it — this module and its consumers do not.
  */
 
-type SecretLessonFields = 'videoProvider' | 'videoRef' | 'otherVideoIds';
+type SecretLessonFields =
+  | 'videoProvider'
+  | 'videoRef'
+  | 'otherVideoIds'
+  | 'version'
+  | 'contentUpdatedAt';
 
 function omitLessonSecrets<
   T extends Partial<Record<SecretLessonFields, unknown>>,
@@ -23,6 +28,8 @@ function omitLessonSecrets<
     videoProvider: _videoProvider,
     videoRef: _videoRef,
     otherVideoIds: _otherVideoIds,
+    version: _version,
+    contentUpdatedAt: _contentUpdatedAt,
     ...rest
   } = lesson;
   return rest;
@@ -53,7 +60,8 @@ function omitModuleOwner<T extends { courseId?: unknown }>(
 
 /**
  * Drops every video-identifying field from each lesson before the payload
- * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`.
+ * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`. And its
+ * `version` and `contentUpdatedAt`, which are for staff only.
  *
  * `videoProvider`/`videoRef` matter most: this route has no zod
  * parse on the way out, only a cast, so whatever ships here lands in the

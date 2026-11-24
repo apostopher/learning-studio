@@ -229,7 +229,7 @@ async function loadScoring(k: {
   courseId: number;
 }): Promise<Scoring> {
   const [facts, passMark] = await Promise.all([
-    getScoreFacts(k.userId, k.lessonSlug),
+    getScoreFacts(k.userId, k.lessonSlug, k.courseId),
     getCoursePassMark(k.courseId),
   ]);
   return { facts, passMark, judge: debriefJudge(facts, passMark) };
@@ -810,7 +810,7 @@ export async function recheckDebriefPass(a: {
   const best = Math.max(...averages);
 
   const [facts, passMark] = await Promise.all([
-    getScoreFacts(a.userId, a.lessonSlug),
+    getScoreFacts(a.userId, a.lessonSlug, a.courseId),
     getCoursePassMark(a.courseId),
   ]);
   if (!debriefJudge(facts, passMark)(best)) return false;

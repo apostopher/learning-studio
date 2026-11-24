@@ -40,6 +40,8 @@ const req = (query = '?slug=c1') =>
 // `videoRef` is directly streamable unless every asset is signed-policy-only,
 // an operator setting this code cannot verify — shipping it would let a
 // subscribed learner stream a video before satisfying its prerequisites.
+// `version` and `contentUpdatedAt` are staff-only; the real payload never
+// carries them, and the handler drops them should it ever.
 const course = {
   id: 1,
   slug: 'c1',
@@ -58,6 +60,8 @@ const course = {
           videoProvider: 'mux',
           videoRef: 'ref-secret',
           otherVideoIds: [],
+          version: '1.2',
+          contentUpdatedAt: new Date(0),
           hasVideo: true,
           isAvailable: true,
           needsVideoWatch: true,
@@ -84,6 +88,8 @@ const learnerCourse = (viewingAsAuthor: boolean) => ({
         videoProvider: _videoProvider,
         videoRef: _videoRef,
         otherVideoIds: _otherVideoIds,
+        version: _version,
+        contentUpdatedAt: _contentUpdatedAt,
         ...rest
       }) => rest,
     ),
@@ -145,6 +151,8 @@ describe('getCourseDetailsHandler', () => {
     expect(lesson).not.toHaveProperty('videoProvider');
     expect(lesson).not.toHaveProperty('videoRef');
     expect(lesson).not.toHaveProperty('otherVideoIds');
+    expect(lesson).not.toHaveProperty('version');
+    expect(lesson).not.toHaveProperty('contentUpdatedAt');
     expect(isSubscribedToCourseSlug).toHaveBeenCalledWith('u1', 'c1');
   });
 

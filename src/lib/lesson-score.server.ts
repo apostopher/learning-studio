@@ -14,7 +14,7 @@ export { debriefJudge, type ScoreFacts, setScore } from '#/lib/lesson-score';
  * quiz. Counts the ASKABLE authored questions (`partitionQuiz`: the ones the
  * quiz tab actually asks, duplicate ids once) that the LATEST attempt
  * answered correctly, so a corrected quiz counts; 0 right when never taken.
- * Graded against the authored key, matched by question id: the saved attempt
+ * Graded against the course's authored key, matched by question id: the saved attempt
  * is the request body, so its `correctOptionId`s and its length are the
  * client's word and never trusted. An answer to a question the quiz does not
  * have counts for nothing.
@@ -22,8 +22,11 @@ export { debriefJudge, type ScoreFacts, setScore } from '#/lib/lesson-score';
 export async function getScoreFacts(
   userId: string,
   lessonSlug: string,
+  courseId: number,
 ): Promise<ScoreFacts> {
-  const questions = partitionQuiz(await selectAuthoredQuiz(lessonSlug)).askable;
+  const questions = partitionQuiz(
+    await selectAuthoredQuiz(lessonSlug, courseId),
+  ).askable;
   if (questions.length === 0) return { quiz: null };
   const latest = await getLatestLessonQuizAnswers(userId, lessonSlug);
   const picked = new Map(

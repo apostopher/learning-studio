@@ -4,20 +4,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   getSession,
   evaluateLessonGate,
-  getLessonMaterial,
+  getCourseLessonMaterial,
   recordLessonVisit,
   settleProgress,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   evaluateLessonGate: vi.fn(),
-  getLessonMaterial: vi.fn(),
+  getCourseLessonMaterial: vi.fn(),
   recordLessonVisit: vi.fn(),
   settleProgress: vi.fn(),
 }));
 
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
 vi.mock('#/lib/lesson-gating.server', () => ({ evaluateLessonGate }));
-vi.mock('#/db/lesson', () => ({ getLessonMaterial }));
+vi.mock('#/db/course-lesson-content', () => ({ getCourseLessonMaterial }));
 vi.mock('#/db/lesson-visit', () => ({ recordLessonVisit }));
 vi.mock('#/lib/settle-progress.server', () => ({ settleProgress }));
 
@@ -44,7 +44,7 @@ describe('getLessonMaterialHandler', () => {
     vi.clearAllMocks();
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     evaluateLessonGate.mockResolvedValue(openGate);
-    getLessonMaterial.mockResolvedValue(material);
+    getCourseLessonMaterial.mockResolvedValue(material);
     settleProgress.mockResolvedValue(null);
   });
 
@@ -52,7 +52,7 @@ describe('getLessonMaterialHandler', () => {
     getSession.mockResolvedValue(null);
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(401);
-    expect(getLessonMaterial).not.toHaveBeenCalled();
+    expect(getCourseLessonMaterial).not.toHaveBeenCalled();
     expect(evaluateLessonGate).not.toHaveBeenCalled();
   });
 
@@ -60,7 +60,7 @@ describe('getLessonMaterialHandler', () => {
     evaluateLessonGate.mockResolvedValue({ ...openGate, subscribed: false });
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(403);
-    expect(getLessonMaterial).not.toHaveBeenCalled();
+    expect(getCourseLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('returns the material, including text, when unlocked', async () => {
@@ -72,6 +72,8 @@ describe('getLessonMaterialHandler', () => {
     // dropping it (as the old platform's endpoint did) breaks the debrief.
     expect(body.material.text).toBe('body');
     expect(body.adminBypass).toBe(false);
+    // As the course the gate resolved has it, not as Disciplines does.
+    expect(getCourseLessonMaterial.mock.calls).toEqual([['b', 7]]);
   });
 
   it('reports the video gate without any material content', async () => {
@@ -85,7 +87,7 @@ describe('getLessonMaterialHandler', () => {
     expect(body).toEqual({ locked: true, reason: 'video' });
     // Content must be structurally absent, not nulled — a nulled flat shape
     // leaks every column added to lesson_material later.
-    expect(getLessonMaterial).not.toHaveBeenCalled();
+    expect(getCourseLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('names the blocking lesson when the lesson gate fails', async () => {
@@ -138,7 +140,7 @@ describe('getLessonMaterialHandler', () => {
       ...openGate,
       materialLock: { kind: 'video-locked' },
     });
-    getLessonMaterial.mockResolvedValue(null);
+    getCourseLessonMaterial.mockResolvedValue(null);
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(200);
     expect((await res.json()).reason).toBe('video');
@@ -189,7 +191,7 @@ describe('out-of-tier lessons', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSession.mockResolvedValue({ user: { id: 'u1' } });
-    getLessonMaterial.mockResolvedValue(material);
+    getCourseLessonMaterial.mockResolvedValue(material);
   });
 
   it('403s a lesson outside the level that was never completed, and names the level', async () => {
@@ -206,7 +208,7 @@ describe('out-of-tier lessons', () => {
       error: 'out-of-tier',
       level: 'intermediate',
     });
-    expect(getLessonMaterial).not.toHaveBeenCalled();
+    expect(getCourseLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('403s a pilot with no level with level: null, so the client can say why', async () => {
@@ -218,7 +220,7 @@ describe('out-of-tier lessons', () => {
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'out-of-tier', level: null });
-    expect(getLessonMaterial).not.toHaveBeenCalled();
+    expect(getCourseLessonMaterial).not.toHaveBeenCalled();
   });
 
   it('serves a completed out-of-tier lesson flagged read-only', async () => {
@@ -235,6 +237,15 @@ describe('out-of-tier lessons', () => {
       readOnly: true,
       material,
     });
+    expect(getCourseLessonMaterial.mock.calls).toEqual([['b', 7]]);
+  });
+
+  it('500s when the material cannot be read: an outage is not "no material"', async () => {
+    evaluateLessonGate.mockResolvedValue(openGate);
+    getCourseLessonMaterial.mockRejectedValue(new Error('db down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await getLessonMaterialHandler(req())).status).toBe(500);
+    error.mockRestore();
   });
 
   it('records no visit for a read-only view — an archive is not attendance', async () => {
@@ -259,7 +270,7 @@ describe('recording the visit', () => {
     vi.clearAllMocks();
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     evaluateLessonGate.mockResolvedValue(openGate);
-    getLessonMaterial.mockResolvedValue(material);
+    getCourseLessonMaterial.mockResolvedValue(material);
   });
 
   it('records the session user and the requested lesson when unlocked', async () => {
@@ -274,7 +285,7 @@ describe('recording the visit', () => {
     // Video-only lessons are normal, and this used to 404 — which the client
     // turned into a page-level error that hid the video too. The visit is still
     // recorded, since the learner was let in.
-    getLessonMaterial.mockResolvedValue(null);
+    getCourseLessonMaterial.mockResolvedValue(null);
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -318,7 +329,7 @@ describe('settling progress after a material visit', () => {
     vi.clearAllMocks();
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     evaluateLessonGate.mockResolvedValue(openGate);
-    getLessonMaterial.mockResolvedValue(material);
+    getCourseLessonMaterial.mockResolvedValue(material);
     recordLessonVisit.mockResolvedValue(undefined);
     settleProgress.mockResolvedValue(null);
   });

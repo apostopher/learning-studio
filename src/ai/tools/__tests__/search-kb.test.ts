@@ -68,6 +68,7 @@ describe('makeSearchKBTool', () => {
           lessons: [
             {
               slug: 'wx-1',
+              versionId: 1,
               name: 'METARs',
               text: 'FULL LESSON TEXT',
               proTips: null,

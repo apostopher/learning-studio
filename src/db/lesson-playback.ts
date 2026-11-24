@@ -1,13 +1,16 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '#/db';
-import { courseModuleIds } from '#/db/course-modules';
+import {
+  getPinnedSnapshot,
+  type PinnedSnapshot,
+} from '#/db/course-lesson-content';
 import { getLessonIdBySlug } from '#/db/lesson-access';
 import { getCourseIdsForLesson } from '#/db/placements';
 import {
   type LessonPlaybackResult,
   resolveSelectedLessonVideo,
 } from '#/db/resolve-lesson-video';
-import { lessonsTable, moduleLessonsTable } from '#/db/schema';
+import { lessonVersionsTable } from '#/db/schema';
 import { redis } from '#/integrations/upstash/redis';
 import {
   PRIMARY_VIDEO_LANG,
@@ -22,61 +25,41 @@ const CACHE_KEY_PREFIX = 'lesson-playback';
 export type { LessonPlaybackResult };
 
 /**
- * Playback for a lesson AS TAUGHT BY one course, resolved through that
- * course's stored provider credentials. Null when the lesson is not placed in
- * the course or has no video assigned — callers deliberately render that as
- * the same refusal as "locked", so the route never confirms which slugs are
- * real.
+ * Playback for a lesson AS TAUGHT BY one course: the video of the version the
+ * course is pinned to, resolved through that course's stored provider
+ * credentials. Null when that version has no video assigned — like a lesson
+ * that is not placed in the course, which callers deliberately render as the
+ * same refusal as "locked", so the route never confirms which slugs are real.
  *
  * The course is explicit because a lesson can be taught by SEVERAL courses via
  * `module_lessons`, and each course has its own provider credentials. This
  * used to resolve the course from the lesson — the lowest course id, so at
  * least stable — which handed a learner in any other course a URL signed with
  * the wrong course's credentials. The route already knows the course (the
- * gate resolved it from the URL), so it passes the id in and membership is
- * checked here through `courseModuleIds`, the single definition of "which
- * modules are in this course".
+ * gate resolved it from the URL), so it passes the id in and `getPinnedSnapshot`
+ * checks membership.
  */
 async function resolveLessonPlaybackUncached(
-  lessonSlug: string,
+  snapshot: PinnedSnapshot,
   courseId: number,
   lang: VideoLang,
 ): Promise<LessonPlaybackResult | null> {
-  const [lesson] = await db
-    .select({
-      id: lessonsTable.id,
-      videoProvider: lessonsTable.videoProvider,
-      videoRef: lessonsTable.videoRef,
-      otherVideoIds: lessonsTable.otherVideoIds,
-    })
-    .from(lessonsTable)
-    .innerJoin(
-      moduleLessonsTable,
-      eq(moduleLessonsTable.lessonId, lessonsTable.id),
-    )
-    .where(
-      and(
-        eq(lessonsTable.slug, lessonSlug),
-        inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
-      ),
-    )
-    .limit(1);
-  if (!lesson?.videoProvider || !lesson.videoRef) return null;
+  if (!snapshot.videoProvider || !snapshot.videoRef) return null;
 
   return resolveSelectedLessonVideo({
-    lessonId: lesson.id,
-    provider: lesson.videoProvider as ProviderId,
-    ref: lesson.videoRef,
-    otherVideoIds: lesson.otherVideoIds,
+    lessonId: snapshot.lessonId,
+    provider: snapshot.videoProvider as ProviderId,
+    ref: snapshot.videoRef,
+    otherVideoIds: snapshot.otherVideoIds,
     courseId,
     lang,
   });
 }
 
 /**
- * Cached per course and lesson, with the TTL bounded by the signed URL's OWN
- * expiry — never a default TTL. A cached URL that outlives its signature is a
- * player that fails with no error path.
+ * Cached per course, lesson and version, with the TTL bounded by the signed
+ * URL's OWN expiry — never a default TTL. A cached URL that outlives its
+ * signature is a player that fails with no error path.
  *
  * Hand-rolled against the `redis` client directly rather than
  * `cacheWithRedis`: that helper's `expiresExtractor` cannot skip a write —
@@ -141,9 +124,14 @@ const ALL_LANGS: readonly VideoLang[] = [
 ];
 
 // Keyed per language as well: a cached French result must never answer an
-// English request, and vice versa.
-const cacheKey = (courseId: number, lessonSlug: string, lang: VideoLang) =>
-  `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}:${lang}`;
+// English request, and vice versa. And per version: a lesson removed from a
+// course and added back on a newer one must not play the old video.
+const cacheKey = (
+  courseId: number,
+  lessonSlug: string,
+  versionId: number,
+  lang: VideoLang,
+) => `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}:${versionId}:${lang}`;
 
 export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   async (
@@ -151,7 +139,9 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
     options: LessonPlaybackOptions,
   ): Promise<LessonPlaybackResult | null> => {
     const lang = options.lang ?? PRIMARY_VIDEO_LANG;
-    const key = cacheKey(options.courseId, lessonSlug, lang);
+    const snapshot = await getPinnedSnapshot(lessonSlug, options.courseId);
+    if (!snapshot) return null;
+    const key = cacheKey(options.courseId, lessonSlug, snapshot.id, lang);
 
     if (!options.skipCache) {
       const cached = await redis.get<LessonPlaybackResult>(key);
@@ -159,7 +149,7 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
     }
 
     const result = await resolveLessonPlaybackUncached(
-      lessonSlug,
+      snapshot,
       options.courseId,
       lang,
     );
@@ -176,25 +166,34 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   },
   {
     /**
-     * Evict a lesson's cached playback entry in EVERY course teaching it —
-     * the entries are keyed per course. Unconditional — unlike the read path's
-     * TTL-bounded writes, the change must invalidate regardless of whether an
-     * entry currently exists, so callers never have to reason about whether
-     * one does.
+     * Evict a lesson's cached playback entries in EVERY course teaching it,
+     * for EVERY version of it: the entries are keyed by both, and which
+     * version a course was on when one was written is not recorded.
+     * Unconditional — unlike the read path's TTL-bounded writes, the change
+     * must invalidate regardless of whether an entry currently exists, so
+     * callers never have to reason about whether one does.
      */
     invalidate: async (lessonSlug: string): Promise<void> => {
       const lessonId = await getLessonIdBySlug(lessonSlug);
       if (lessonId === null) return;
-      const courseIds = await getCourseIdsForLesson(lessonId);
+      const [courseIds, versions] = await Promise.all([
+        getCourseIdsForLesson(lessonId),
+        db
+          .select({ id: lessonVersionsTable.id })
+          .from(lessonVersionsTable)
+          .where(eq(lessonVersionsTable.lessonId, lessonId)),
+      ]);
       // Every language, not just the one that changed: an alternate added or
       // removed changes the `languages` list carried by ALL of them.
-      await Promise.all(
-        courseIds.flatMap((courseId) =>
+      const keys = courseIds.flatMap((courseId) =>
+        versions.flatMap((version) =>
           ALL_LANGS.map((lang) =>
-            redis.del(cacheKey(courseId, lessonSlug, lang)),
+            cacheKey(courseId, lessonSlug, version.id, lang),
           ),
         ),
       );
+      // One request, not one per key; DEL with no key is an error.
+      if (keys.length > 0) await redis.del(...keys);
     },
   },
 );

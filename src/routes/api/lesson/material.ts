@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { getLessonMaterial, type LessonMaterial } from '#/db/lesson';
+import { getCourseLessonMaterial } from '#/db/course-lesson-content';
+import type { LessonMaterial } from '#/db/lesson';
 import { recordLessonVisit } from '#/db/lesson-visit';
 import { auth } from '#/lib/auth';
 import {
@@ -110,12 +111,12 @@ export async function getLessonMaterialHandler(
       // Completed at an earlier tier. Serve it, but do NOT record a visit:
       // this is an archive view, not attendance, and a visit would move a
       // progress number for a lesson that no longer counts toward anything.
-      const archived = await getLessonMaterial(lessonSlug);
+      const archived = await getCourseLessonMaterial(lessonSlug, gate.courseId);
       const readOnlyPayload: MaterialPayload = {
         locked: false,
         adminBypass: false,
         readOnly: true,
-        material: archived ?? null,
+        material: archived,
       };
       return Response.json(readOnlyPayload);
     }
@@ -168,13 +169,13 @@ export async function getLessonMaterialHandler(
     // hid the lesson's video along with the empty material panel. An unlocked
     // response with `material: null` says "you're in, there's nothing to read"
     // and leaves the player alone.
-    const material = await getLessonMaterial(lessonSlug);
+    const material = await getCourseLessonMaterial(lessonSlug, gate.courseId);
     if (material) reportUnaskableQuizQuestions(lessonSlug, material.quiz);
 
     const payload: MaterialPayload = {
       locked: false,
       adminBypass: gate.isAdmin,
-      material: material ?? null,
+      material,
     };
     return Response.json(payload);
   } catch (error) {

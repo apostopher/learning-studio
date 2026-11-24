@@ -84,7 +84,9 @@ vi.mock('#/db/lesson-access', () => ({
 const { getCourseDetails, getMyCourses, COURSE_DETAILS_CACHE_KEY } =
   await import('../course');
 const { getCourseContentForAgent } = await import('../course-content');
-const { courseModulesTable, modulesTable } = await import('#/db/schema');
+const { courseModulesTable, lessonVersionsTable, modulesTable } = await import(
+  '#/db/schema'
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -158,6 +160,20 @@ describe('getCourseDetails', () => {
     );
     expect(lesson).not.toHaveProperty('version');
     expect(lesson).not.toHaveProperty('contentUpdatedAt');
+  });
+
+  it('reads the name and video from the snapshot, not the working copy', async () => {
+    seedCourseWithModules();
+    await getCourseDetails('itps-uas-remote');
+
+    expect((cap.captured.select[1] as { lesson: object }).lesson).toMatchObject(
+      {
+        name: lessonVersionsTable.name,
+        videoProvider: lessonVersionsTable.videoProvider,
+        videoRef: lessonVersionsTable.videoRef,
+        otherVideoIds: lessonVersionsTable.otherVideoIds,
+      },
+    );
   });
 
   /**
@@ -254,15 +270,15 @@ describe('getCourseContentForAgent', () => {
 });
 
 /**
- * The payload is cached under a versioned key. A reader holding a v4 entry
- * built from `modules.course_id` would keep being served it for the full 6h
- * TTL, so the key must move in the same commit as the query — exactly the
- * reasoning the v2→v3 and v3→v4 bumps already record.
+ * The payload is cached under a versioned key. A reader holding a v5 entry
+ * built from the working copy of each lesson would keep being served it for
+ * the full 6h TTL, so the key must move in the same commit as the query —
+ * exactly the reasoning the earlier bumps already record.
  *
  * Mutant this catches: the query switched and the key left alone. Invisible
  * to every test that does not read the key, and it makes the rollout
  * silently partial for six hours.
  */
 it('bumps the cached payload key', () => {
-  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v5');
+  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v6');
 });
