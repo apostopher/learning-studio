@@ -17,6 +17,7 @@ import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
+import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
  * Translated videos are lesson content, exactly like the primary ref — same
@@ -91,18 +92,23 @@ export async function putAlternateVideoHandler(
   if (!parsed.success) {
     return Response.json({ error: 'Invalid alternate video' }, { status: 400 });
   }
-  const updated = await setLessonAlternateVideo(lessonId, parsed.data);
+  // Apart from the entry, which is stored as it is.
+  const { version, ...entry } = parsed.data;
+  const updated = await orVersionConflict(() =>
+    setLessonAlternateVideo(lessonId, entry, version),
+  );
+  if (updated instanceof Response) return updated;
   if (!updated) return new Response('Not found', { status: 404 });
 
   // Auto-captions for a Mux video. Awaited (a serverless response may end
   // the work) but never allowed to fail the save — the outcome is stored on
   // `video_captions` and shown, with Retry, in the video section.
-  if (parsed.data.provider === 'mux') {
+  if (entry.provider === 'mux') {
     try {
       await requestLessonCaptionsSafely({
         lessonId,
-        playbackId: parsed.data.ref,
-        lang: parsed.data.lang,
+        playbackId: entry.ref,
+        lang: entry.lang,
       });
     } catch (error) {
       console.error('Captions request failed after a video save:', error);
@@ -127,7 +133,11 @@ export async function deleteAlternateVideoHandler(
   if (!parsed.success) {
     return Response.json({ error: 'Invalid language' }, { status: 400 });
   }
-  const updated = await removeLessonAlternateVideo(lessonId, parsed.data.lang);
+  const { lang, version } = parsed.data;
+  const updated = await orVersionConflict(() =>
+    removeLessonAlternateVideo(lessonId, lang, version),
+  );
+  if (updated instanceof Response) return updated;
   if (!updated) return new Response('Not found', { status: 404 });
   return Response.json({ ok: true });
 }

@@ -115,7 +115,8 @@ async function resolveLessonPlaybackUncached(
  * provider's API.
  *
  * Exposes `.invalidate(lessonSlug)` (see below) so a mutation that changes
- * what this would resolve to — `setLessonVideo` in `#/db/admin` — can evict
+ * what this would resolve to — a course moving to another version of the
+ * lesson, `updateCourseLessonVersion` in `#/db/lesson-versions` — can evict
  * the stale entries instead of leaving learners on a previous video's
  * still-validly-signed URL for up to the remainder of its TTL.
  */
@@ -176,9 +177,8 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   {
     /**
      * Evict a lesson's cached playback entry in EVERY course teaching it —
-     * the entries are keyed per course, and an admin video swap changes what
-     * all of them would resolve to. Unconditional — unlike the read path's
-     * TTL-bounded writes, the swap must invalidate regardless of whether an
+     * the entries are keyed per course. Unconditional — unlike the read path's
+     * TTL-bounded writes, the change must invalidate regardless of whether an
      * entry currently exists, so callers never have to reason about whether
      * one does.
      */

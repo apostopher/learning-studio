@@ -254,7 +254,7 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
 const { getCourseSlugsForLessonId, getCourseSlugsForModuleId } = await import(
   '#/db/lesson-access'
 );
-const { updateLessonName } = await import('#/db/admin');
+const { updateLessonConfig } = await import('#/db/admin');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -461,14 +461,14 @@ describe('bug regression: invalidating every course a lesson is placed in', () =
   // return), leaving the other two serving stale content until the 6h TTL
   // expired.
   //
-  // Mutant this catches: reverting `updateLessonName`'s invalidation call to
+  // Mutant this catches: reverting `updateLessonConfig`'s invalidation call to
   // a single-slug `invalidateCourseDetailsCache(await <one slug>)` (the
   // pre-fix shape). Under that mutant, `db.select`'s three
   // mocked rows still resolve fine, but only the FIRST slug is ever passed to
   // `invalidate` — so `toHaveBeenCalledTimes(3)` fails (actual: 1) and the
   // per-slug assertion below fails too.
-  it('updateLessonName invalidates the cache for every course teaching the lesson', async () => {
-    db.update.mockReturnValueOnce(makeChain([{ id: 9, name: 'New name' }]));
+  it('updateLessonConfig invalidates the cache for every course teaching the lesson', async () => {
+    db.update.mockReturnValueOnce(makeChain([{ id: 9, isAvailable: true }]));
     db.select.mockReturnValueOnce(
       makeChain([
         { courseSlug: 'flight-basics' },
@@ -477,7 +477,7 @@ describe('bug regression: invalidating every course a lesson is placed in', () =
       ]),
     );
 
-    await updateLessonName(9, 'New name');
+    await updateLessonConfig(9, { isAvailable: true });
 
     expect(courseCache.invalidate).toHaveBeenCalledTimes(3);
     const invalidatedSlugs = courseCache.invalidate.mock.calls

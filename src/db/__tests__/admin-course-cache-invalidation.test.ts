@@ -218,9 +218,6 @@ const remixes = vi.hoisted(() => ({
 const courseCache = vi.hoisted(() => ({
   invalidate: vi.fn().mockResolvedValue(undefined),
 }));
-const lessonPlaybackCache = vi.hoisted(() => ({
-  invalidate: vi.fn().mockResolvedValue(undefined),
-}));
 const synthesiaThumbnailsCache = vi.hoisted(() => ({
   invalidate: vi.fn().mockResolvedValue(undefined),
 }));
@@ -284,14 +281,6 @@ const lessonVersions = vi.hoisted(() => ({
 vi.mock('#/db/lesson-versions', () => lessonVersions);
 // moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
-// Same reasoning as `#/db/course` above: admin.ts calls
-// `getLessonPlayback.invalidate(slug)` only, never the reader itself. Without
-// this mock, importing admin.ts would drag in the REAL lesson-playback.ts —
-// which constructs a real `Redis.fromEnv()` client at module scope — into a
-// test that never exercises it.
-vi.mock('#/db/lesson-playback', () => ({
-  getLessonPlayback: Object.assign(vi.fn(), lessonPlaybackCache),
-}));
 vi.mock('@vercel/blob', () => blob);
 // admin.ts also imports #/lib/video-providers/resolve.server for the
 // credential-save/playback-resolve paths. That module transitively pulls in
@@ -324,12 +313,10 @@ const {
   reorderModule,
   resolveLessonPlayback,
   saveCourseProvider,
-  setLessonVideo,
   updateCourse,
   updateCourseOnboarding,
   updateLessonConfig,
   updateLessonDependencies,
-  updateLessonName,
   updateModule,
   updateModuleDependencies,
   updateModuleSequential,
@@ -344,7 +331,6 @@ const { muxCaptionsForPlayback } = await import('#/db/video-captions');
 beforeEach(() => {
   vi.clearAllMocks();
   courseCache.invalidate.mockResolvedValue(undefined);
-  lessonPlaybackCache.invalidate.mockResolvedValue(undefined);
   synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
   blob.del.mockResolvedValue(undefined);
   // Default: the transaction callback just runs against `db` itself, so
@@ -915,57 +901,6 @@ describe('course-details cache invalidation', () => {
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
-  it('setLessonVideo invalidates the cache for every course teaching the lesson', async () => {
-    db.update.mockReturnValueOnce(
-      makeChain([{ id: 9, slug: 'stall-recovery' }]),
-    );
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
-      'flight-basics',
-      'aerobatics',
-    ]);
-
-    await setLessonVideo(9, 'mux', 'ref-123');
-
-    expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
-    // Reverting to single-slug invalidation (the pre-Task-5a-fix-round-1
-    // shape) would still pass a bare `toHaveBeenCalledWith('flight-basics')`
-    // — asserting the full sorted set is what catches that regression.
-    expect(
-      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
-    ).toEqual(['aerobatics', 'flight-basics']);
-  });
-
-  // Regression guard for the bug the final review caught: a stale
-  // lesson-playback cache entry served the PREVIOUS video's still-validly-
-  // signed URL for up to its remaining TTL after an admin swap, because
-  // nothing evicted it. Asserted on the SLUG the invalidation actually
-  // received (not merely that `.invalidate` was called at all) — a call with
-  // a hardcoded or wrong slug would leave the real stale entry untouched
-  // while still passing a weaker assertion.
-  it("setLessonVideo invalidates that lesson's own playback cache entry, by slug", async () => {
-    db.update.mockReturnValueOnce(
-      makeChain([{ id: 9, slug: 'stall-recovery' }]),
-    );
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-
-    await setLessonVideo(9, 'mux', 'ref-123');
-
-    expect(lessonPlaybackCache.invalidate).toHaveBeenCalledWith(
-      'stall-recovery',
-    );
-  });
-
-  it('setLessonVideo skips invalidation when the lesson does not exist', async () => {
-    db.update.mockReturnValueOnce(makeChain([]));
-
-    const result = await setLessonVideo(999, 'mux', 'ref-123');
-
-    expect(result).toBeNull();
-    expect(lessonAccess.getCourseSlugsForLessonId).not.toHaveBeenCalled();
-    expect(courseCache.invalidate).not.toHaveBeenCalled();
-    expect(lessonPlaybackCache.invalidate).not.toHaveBeenCalled();
-  });
-
   // Final review one-liner: the write moved the module's placement in
   // `input.courseId` — the course whose board changed — so THAT course's
   // cache is the one to bust. Resolving via the module's OWNER was right
@@ -1225,15 +1160,6 @@ describe('course-details cache invalidation', () => {
     // placement (and the caller's own input for `id`) — never from a
     // `lessonsTable` row.
     expect(result).toEqual({ id: 9, rank: 3, moduleId: 20 });
-  });
-
-  it('updateLessonName invalidates the owning course, resolved from lessonId', async () => {
-    db.update.mockReturnValueOnce(makeChain([{ id: 9, name: 'New name' }]));
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-
-    await updateLessonName(9, 'New name');
-
-    expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
   // This is the highest-stakes mutation: isAvailable/requiredSubscriptions
@@ -1678,9 +1604,9 @@ describe('course-details cache invalidation', () => {
     lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
     courseCache.invalidate.mockRejectedValueOnce(new Error('redis down'));
 
-    await expect(setLessonVideo(9, 'mux', 'ref-123')).resolves.toEqual({
-      id: 9,
-    });
+    await expect(
+      updateLessonConfig(9, { isAvailable: true }),
+    ).resolves.toMatchObject({ id: 9 });
     expect(consoleError).toHaveBeenCalled();
 
     consoleError.mockRestore();

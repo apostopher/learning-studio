@@ -22,6 +22,7 @@ const m = vi.hoisted(() => {
     updateLessonConfig: vi.fn(),
     updateLessonDependencies: vi.fn(),
     updateLessonName: vi.fn(),
+    setLessonVersion: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -43,6 +44,14 @@ vi.mock('#/db/placements', () => ({
   getCourseIdsForLesson: m.getCourseIdsForLesson,
   findPlacementModuleId: m.findPlacementModuleId,
 }));
+vi.mock('#/db/lesson-content-edit', () => {
+  class VersionEditError extends Error {
+    constructor(readonly body: unknown) {
+      super('version');
+    }
+  }
+  return { VersionEditError, setLessonVersion: m.setLessonVersion };
+});
 vi.mock('#/db/admin', () => ({
   deleteLesson: m.deleteLesson,
   moveLesson: m.moveLesson,
@@ -51,7 +60,23 @@ vi.mock('#/db/admin', () => ({
   updateLessonName: m.updateLessonName,
 }));
 
+import { VersionEditError } from '#/db/lesson-content-edit';
+import {
+  updateLessonConfigInputSchema,
+  versionConflictSchema,
+} from '#/lib/admin-schemas';
 import { deleteLessonHandler, patchLessonHandler } from '../lessons.$lessonId';
+
+const conflict = {
+  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
+  code: 'version' as const,
+  version: '1.0',
+  highestTaken: '1.0',
+};
+async function expectConflict(res: Response) {
+  expect(res.status).toBe(409);
+  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
+}
 
 function req(body: unknown): Request {
   return new Request('http://test/api/admin/lessons/10', {
@@ -295,7 +320,7 @@ describe('patchLessonHandler — rename (discipline-owned content)', () => {
       7,
       'update',
     );
-    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed');
+    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed', undefined);
   });
 
   // Test 1: an SME on this lesson's own discipline (7) is admitted — proven
@@ -377,7 +402,90 @@ describe('patchLessonHandler — rename (discipline-owned content)', () => {
       7,
       'update',
     );
-    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed');
+    expect(m.updateLessonName).toHaveBeenCalledWith(10, 'Renamed', undefined);
+  });
+});
+
+describe('patchLessonHandler — version', () => {
+  beforeEach(() => {
+    m.setLessonVersion.mockResolvedValue({ id: 10, version: '1.1' });
+  });
+
+  it('a rename’s version reaches the writer', async () => {
+    const res = await patchLessonHandler(
+      req({ name: 'Renamed', version: ' 1.1 ' }),
+      '10',
+    );
+    expect(res.status).toBe(200);
+    expect(m.updateLessonName.mock.calls).toEqual([[10, 'Renamed', '1.1']]);
+    expect(m.setLessonVersion).not.toHaveBeenCalled();
+  });
+
+  it('a version alone reaches the writer, under the content guard', async () => {
+    const res = await patchLessonHandler(req({ version: ' 1.1 ' }), '10');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 10, version: '1.1' });
+    expect(m.setLessonVersion.mock.calls).toEqual([[10, '1.1']]);
+    expect(m.requireLessonContentPermission.mock.calls).toEqual([
+      [expect.anything(), 42, 'update'],
+    ]);
+  });
+
+  it.each([
+    ['rename', { name: 'Renamed' }, m.updateLessonName],
+    ['version alone', { version: '1.0' }, m.setLessonVersion],
+  ])('%s: 409 body parses as versionConflictSchema', async (_, body, writer) => {
+    writer.mockRejectedValueOnce(new VersionEditError(conflict));
+    await expectConflict(await patchLessonHandler(req(body), '10'));
+  });
+
+  it.each([
+    ['rename', { name: 'Renamed', version: '1.1' }],
+    ['version alone', { version: '1.1' }],
+  ])('%s: a refused caller gets the 403 and nothing is written', async (_, body) => {
+    m.requireLessonContentPermission.mockRejectedValueOnce(
+      new m.ForbiddenError(),
+    );
+    const res = await patchLessonHandler(req(body), '10');
+    expect(res.status).toBe(403);
+    expect(m.updateLessonName).not.toHaveBeenCalled();
+    expect(m.setLessonVersion).not.toHaveBeenCalled();
+  });
+
+  it('an absent lesson goes to absentResourceResponse', async () => {
+    m.getDisciplineIdForLessonId.mockResolvedValue({ found: false });
+    const res = await patchLessonHandler(req({ version: '1.1' }), '999');
+    expect(res.status).toBe(404);
+    expect(m.setLessonVersion).not.toHaveBeenCalled();
+  });
+
+  it('the config schema still rejects version', async () => {
+    expect(
+      updateLessonConfigInputSchema.safeParse({
+        isAvailable: true,
+        version: '1.1',
+      }).success,
+    ).toBe(false);
+    const res = await patchLessonHandler(
+      req({ isAvailable: true, version: '1.1' }),
+      '10',
+    );
+    expect(res.status).toBe(400);
+    expect(m.updateLessonConfig).not.toHaveBeenCalled();
+    expect(m.setLessonVersion).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '1',
+    'v1.1',
+    '01.1',
+    1.1,
+  ])('400s a malformed version %j', async (version) => {
+    for (const body of [{ version }, { name: 'Renamed', version }]) {
+      expect((await patchLessonHandler(req(body), '10')).status).toBe(400);
+    }
+    expect(m.setLessonVersion).not.toHaveBeenCalled();
+    expect(m.updateLessonName).not.toHaveBeenCalled();
   });
 });
 

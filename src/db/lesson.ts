@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#/db';
+import { applyContentEdit } from '#/db/lesson-content-edit';
+import type { Tx } from '#/db/lesson-versions';
 import {
   type MaterialExtraTab,
   materialExtraTabFor,
@@ -51,8 +53,9 @@ export type LessonMaterial = Awaited<ReturnType<typeof getLessonMaterial>>;
  */
 async function getLessonFiling(
   lessonId: number,
+  ex: Tx | typeof db = db,
 ): Promise<{ slug: string; extraTab: MaterialExtraTab } | null> {
-  const rows = await db
+  const rows = await ex
     .select({ slug: lessonsTable.slug, disciplineSlug: disciplinesTable.slug })
     .from(lessonsTable)
     .leftJoin(
@@ -90,17 +93,21 @@ export async function getLessonMaterialByLessonId(lessonId: number): Promise<{
  * lessonMaterialTable has no such column. Of `jobOfTheDay` / `testThis` only
  * the one this lesson's discipline shows is written; the other is nulled, so
  * an imported doc carrying both can never leave data no tab displays.
- * Returns the saved row, or null when the lesson id doesn't exist.
+ * Returns the saved row, or null when the lesson id doesn't exist. Throws
+ * `VersionEditError` when the lesson's version refuses the edit.
  */
 export async function upsertLessonMaterial(
   lessonId: number,
   material: LessonMaterialGeneration,
+  version?: string,
 ) {
-  const filing = await getLessonFiling(lessonId);
-  if (!filing) return null;
-  const { slug, extraTab } = filing;
-
   return db.transaction(async (tx) => {
+    const lesson = await applyContentEdit(tx, lessonId, version);
+    // Read under that lock: filing the lesson elsewhere changes its tab.
+    const filing = lesson && (await getLessonFiling(lessonId, tx));
+    if (!filing) return null;
+    const { slug, extraTab } = filing;
+
     await tx
       .delete(lessonMaterialTable)
       .where(eq(lessonMaterialTable.lessonSlug, slug));

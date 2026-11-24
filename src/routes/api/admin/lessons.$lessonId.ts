@@ -12,11 +12,13 @@ import {
   getCourseIdForModuleId,
   getDisciplineIdForLessonId,
 } from '#/db/lesson-access';
+import { setLessonVersion } from '#/db/lesson-content-edit';
 import { findPlacementModuleId, getCourseIdsForLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
   moveLessonInputSchema,
   renameLessonInputSchema,
+  setLessonVersionInputSchema,
   updateLessonConfigInputSchema,
   updateLessonDependenciesInputSchema,
 } from '#/lib/admin-schemas';
@@ -25,6 +27,7 @@ import {
   requireCoursePermission,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
+import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
  * Course-scoped guard for the branches that edit a single PLACEMENT rather
@@ -81,7 +84,7 @@ async function guardContent(
 }
 
 /**
- * The SOLE existence check for `rename`, `config`, and `deleteLessonHandler`
+ * The SOLE existence check for `rename`, `version`, `config`, and `deleteLessonHandler`
  * — resolving the discipline `guardContent` needs to decide SME-vs-admin.
  *
  * Deliberately NOT `getCourseIdsForLesson` (the placement-based check `move`
@@ -191,14 +194,32 @@ export async function patchLessonHandler(
 
   const rename = renameLessonInputSchema.safeParse(body);
   if (rename.success) {
-    // A rename changes what EVERY course teaching this lesson shows — its
-    // authority follows the lesson's DISCIPLINE (or org admin, if it has
+    // A rename edits the working copy every course takes its version from —
+    // its authority follows the lesson's DISCIPLINE (or org admin, if it has
     // none), not any one course. See `guardContent`.
     const resolved = await resolveLessonDiscipline(request, lessonId);
     if ('response' in resolved) return resolved.response;
     const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
-    const updated = await updateLessonName(lessonId, rename.data.name);
+    const updated = await orVersionConflict(() =>
+      updateLessonName(lessonId, rename.data.name, rename.data.version),
+    );
+    if (updated instanceof Response) return updated;
+    if (!updated) return new Response('Not found', { status: 404 });
+    return Response.json(updated);
+  }
+
+  const version = setLessonVersionInputSchema.safeParse(body);
+  if (version.success) {
+    // The working copy's number, so the same authority as its content.
+    const resolved = await resolveLessonDiscipline(request, lessonId);
+    if ('response' in resolved) return resolved.response;
+    const denied = await guardContent(request, resolved.disciplineId, 'update');
+    if (denied) return denied;
+    const updated = await orVersionConflict(() =>
+      setLessonVersion(lessonId, version.data.version),
+    );
+    if (updated instanceof Response) return updated;
     if (!updated) return new Response('Not found', { status: 404 });
     return Response.json(updated);
   }

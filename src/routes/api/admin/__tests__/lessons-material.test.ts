@@ -42,15 +42,34 @@ vi.mock('#/ai/embeddings', () => ({
   lessonMaterialHtml: (m: { text: string }) => m.text,
 }));
 vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
+// The real gate module, for its error class; only its database is stubbed.
+vi.mock('#/db', () => ({ db: {} }));
+vi.mock('#/db/lesson-versions', () => ({
+  countCoursesOnVersion: vi.fn(),
+  highestTakenVersions: vi.fn(),
+}));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
 }));
 
+import { VersionEditError } from '#/db/lesson-content-edit';
+import { versionConflictSchema } from '#/lib/admin-schemas';
 import {
   getMaterialHandler,
   saveMaterialHandler,
 } from '../lessons.$lessonId.material';
+
+const conflict = {
+  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
+  code: 'version' as const,
+  version: '1.0',
+  highestTaken: '1.0',
+};
+async function expectConflict(res: Response) {
+  expect(res.status).toBe(409);
+  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
+}
 
 const material = { text: '<p>x</p>', keyPoints: [], proTips: '', quiz: [] };
 function postReq(body: unknown): Request {
@@ -226,7 +245,28 @@ describe('lessons material route', () => {
     const res = await saveMaterialHandler(postReq(material), '1');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(saved);
-    expect(upsertLessonMaterial).toHaveBeenCalledWith(1, material);
+    expect(upsertLessonMaterial).toHaveBeenCalledWith(1, material, undefined);
+  });
+
+  it('version reaches the writer, beside the material and not in it', async () => {
+    upsertLessonMaterial.mockResolvedValueOnce({ id: 7, ...material });
+    await saveMaterialHandler(postReq({ ...material, version: ' 1.1 ' }), '1');
+    expect(upsertLessonMaterial.mock.calls).toEqual([[1, material, '1.1']]);
+  });
+
+  it('POST 400 on a malformed version, without writing', async () => {
+    const res = await saveMaterialHandler(
+      postReq({ ...material, version: '1' }),
+      '1',
+    );
+    expect(res.status).toBe(400);
+    expect(upsertLessonMaterial).not.toHaveBeenCalled();
+  });
+
+  it('409 body parses as versionConflictSchema; nothing is re-embedded', async () => {
+    upsertLessonMaterial.mockRejectedValueOnce(new VersionEditError(conflict));
+    await expectConflict(await saveMaterialHandler(postReq(material), '1'));
+    expect(generateLessonEmbeddings).not.toHaveBeenCalled();
   });
 
   it('POST 500 when upsertLessonMaterial rejects', async () => {

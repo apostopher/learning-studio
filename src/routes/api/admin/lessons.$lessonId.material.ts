@@ -4,15 +4,16 @@ import { generateLessonEmbeddings, lessonMaterialHtml } from '#/ai/embeddings';
 import { getLessonMaterialByLessonId, upsertLessonMaterial } from '#/db/lesson';
 import { getDisciplineIdForLessonId } from '#/db/lesson-access';
 import { ForbiddenError } from '#/lib/admin-functions.server';
+import { saveLessonMaterialInputSchema } from '#/lib/admin-schemas';
 import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
-import { LessonMaterialGenerationSchema } from '#/types';
+import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
- * Material is lesson content: it changes what EVERY course teaching this
- * lesson shows, not just one. Authority follows the lesson's DISCIPLINE — the
+ * Material is lesson content: the working copy every course takes its version
+ * from, not any one course's. Authority follows the lesson's DISCIPLINE — the
  * SME who owns it — falling back to org-level admin only when the lesson has
  * none ("Untitled"). See `requireLessonContentPermission`.
  *
@@ -85,14 +86,17 @@ export async function saveMaterialHandler(
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const parsed = LessonMaterialGenerationSchema.safeParse(body);
+  const parsed = saveLessonMaterialInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: 'Invalid material' }, { status: 400 });
   }
 
-  let saved: Awaited<ReturnType<typeof upsertLessonMaterial>>;
+  const { version, ...material } = parsed.data;
+  let saved: Awaited<ReturnType<typeof upsertLessonMaterial>> | Response;
   try {
-    saved = await upsertLessonMaterial(lessonId, parsed.data);
+    saved = await orVersionConflict(() =>
+      upsertLessonMaterial(lessonId, material, version),
+    );
   } catch (error) {
     console.error('Failed to save lesson material:', error);
     return Response.json(
@@ -100,6 +104,7 @@ export async function saveMaterialHandler(
       { status: 500 },
     );
   }
+  if (saved instanceof Response) return saved;
   if (!saved) return new Response('Not found', { status: 404 });
 
   // Viper searches lesson chunks, so the index follows every save. In the

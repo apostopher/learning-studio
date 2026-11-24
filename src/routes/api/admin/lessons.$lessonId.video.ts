@@ -10,11 +10,12 @@ import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
+import { orVersionConflict } from '#/lib/version-conflict.server';
 import { PRIMARY_VIDEO_LANG } from '#/lib/video-languages';
 
 /**
- * Video is lesson content: it changes what EVERY course teaching this lesson
- * plays, not just one. Authority follows the lesson's DISCIPLINE — the SME
+ * Video is lesson content: the working copy every course takes its version
+ * from, not any one course's. Authority follows the lesson's DISCIPLINE — the SME
  * who owns it — falling back to org-level admin only when the lesson has
  * none ("Untitled"). See `requireLessonContentPermission`.
  *
@@ -97,21 +98,21 @@ export async function putVideoHandler(
     return Response.json({ error: 'Invalid video input' }, { status: 400 });
   }
 
-  const updated = await setLessonVideo(
-    lessonId,
-    parsed.data.provider,
-    parsed.data.ref,
+  const { provider, ref, version } = parsed.data;
+  const updated = await orVersionConflict(() =>
+    setLessonVideo(lessonId, provider, ref, version),
   );
+  if (updated instanceof Response) return updated;
   if (!updated) return new Response('Not found', { status: 404 });
 
   // Auto-captions for a Mux video. Awaited (a serverless response may end
   // the work) but never allowed to fail the save — the outcome is stored on
   // `video_captions` and shown, with Retry, in the video section.
-  if (parsed.data.provider === 'mux') {
+  if (provider === 'mux') {
     try {
       await requestLessonCaptionsSafely({
         lessonId,
-        playbackId: parsed.data.ref,
+        playbackId: ref,
         lang: PRIMARY_VIDEO_LANG,
       });
     } catch (error) {

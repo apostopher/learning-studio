@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lessonVersionSchema } from '#/lib/lesson-version';
 import { PassMarkSchema } from '#/lib/pass-mark';
 import { alternateLangSchema, videoLangSchema } from '#/lib/video-languages';
 import { PROVIDER_IDS } from '#/lib/video-providers';
@@ -7,6 +8,7 @@ import { muxCredentialShape } from '#/lib/video-providers/mux';
 import {
   CourseLessonDependencySchema,
   LessonLevelsSchema,
+  LessonMaterialGenerationSchema,
   OtherVideoIdSchema,
   SubscriptionsSchema,
   UserLevelSchema,
@@ -205,10 +207,36 @@ export const addModuleLessonInputSchema = z.union([
 ]);
 export type AddModuleLessonInput = z.infer<typeof addModuleLessonInputSchema>;
 
+/**
+ * The version a content write moves the lesson to; absent keeps the current
+ * one. Required in effect once a course has taken that: see `applyContentEdit`.
+ */
+const contentVersion = { version: lessonVersionSchema.optional() };
+
 export const renameLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
+  ...contentVersion,
 });
 export type RenameLessonInput = z.infer<typeof renameLessonInputSchema>;
+
+/** PATCH body changing the version alone. Strict: it must not eat a setting. */
+export const setLessonVersionInputSchema = z
+  .object({ version: lessonVersionSchema })
+  .strict();
+export type SetLessonVersionInput = z.infer<typeof setLessonVersionInputSchema>;
+
+/** The 409 of a content write the lesson's version refuses. */
+export const versionConflictSchema = z.object({
+  error: z.string(),
+  code: z.literal('version'),
+  version: z.string(),
+  highestTaken: z.string().nullable(),
+});
+export type VersionConflictBody = z.infer<typeof versionConflictSchema>;
+
+/** POST body of the material save. */
+export const saveLessonMaterialInputSchema =
+  LessonMaterialGenerationSchema.extend(contentVersion);
 
 // Canonical id list lives in PROVIDER_IDS (src/lib/video-providers); derive
 // the schema from it so adding a provider can't drift between the two.
@@ -460,15 +488,18 @@ export type CredentialSummary = z.infer<typeof credentialSummarySchema>;
 export const setLessonVideoInputSchema = z.object({
   provider: providerIdSchema,
   ref: z.string().trim().min(1),
+  ...contentVersion,
 });
 export type SetLessonVideoInput = z.infer<typeof setLessonVideoInputSchema>;
 
-export const setLessonAlternateVideoInputSchema = OtherVideoIdSchema;
+export const setLessonAlternateVideoInputSchema =
+  OtherVideoIdSchema.extend(contentVersion);
 export type SetLessonAlternateVideoInput = z.infer<
   typeof setLessonAlternateVideoInputSchema
 >;
 export const removeLessonAlternateVideoInputSchema = z.object({
   lang: alternateLangSchema,
+  ...contentVersion,
 });
 
 /** A resolved, playable video. Mirrors `Playback` in `#/lib/video-providers/resolve.server`. */

@@ -28,6 +28,12 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/lesson-access', () => ({
   getDisciplineIdForLessonId: m.getDisciplineIdForLessonId,
 }));
+// The real gate module, for its error class; only its database is stubbed.
+vi.mock('#/db', () => ({ db: {} }));
+vi.mock('#/db/lesson-versions', () => ({
+  countCoursesOnVersion: vi.fn(),
+  highestTakenVersions: vi.fn(),
+}));
 vi.mock('#/db/admin', () => ({
   setLessonVideo: m.setLessonVideo,
   getLessonVideo: m.getLessonVideo,
@@ -36,7 +42,20 @@ vi.mock('#/db/video-captions', () => ({
   requestLessonCaptionsSafely: m.requestLessonCaptionsSafely,
 }));
 
+import { VersionEditError } from '#/db/lesson-content-edit';
+import { versionConflictSchema } from '#/lib/admin-schemas';
 import { getVideoHandler, putVideoHandler } from '../lessons.$lessonId.video';
+
+const conflict = {
+  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
+  code: 'version' as const,
+  version: '1.0',
+  highestTaken: '1.0',
+};
+async function expectConflict(res: Response) {
+  expect(res.status).toBe(409);
+  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
+}
 
 function req(body: unknown = { provider: 'mux', ref: 'abc123' }): Request {
   return new Request('http://test/api/admin/lessons/10/video', {
@@ -47,7 +66,7 @@ function req(body: unknown = { provider: 'mux', ref: 'abc123' }): Request {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   // This lesson's discipline — a sentinel so a branch that forwards the wrong
   // value fails a `toHaveBeenCalledWith` assertion rather than passing by
   // coincidence.
@@ -140,7 +159,12 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
   it('sets the video once permitted', async () => {
     const res = await putVideoHandler(req(), '10');
     expect(res.status).toBe(200);
-    expect(m.setLessonVideo).toHaveBeenCalledWith(10, 'mux', 'abc123');
+    expect(m.setLessonVideo).toHaveBeenCalledWith(
+      10,
+      'mux',
+      'abc123',
+      undefined,
+    );
   });
 
   it('404s when the lesson vanishes between the guard and the write', async () => {
@@ -163,6 +187,42 @@ describe('PUT /api/admin/lessons/:lessonId/video', () => {
       null,
       'update',
     );
+  });
+});
+
+describe('PUT version', () => {
+  const body = { provider: 'mux', ref: 'abc123' };
+
+  it('version reaches the writer', async () => {
+    await putVideoHandler(req({ ...body, version: ' 1.1 ' }), '10');
+    expect(m.setLessonVideo).toHaveBeenCalledWith(10, 'mux', 'abc123', '1.1');
+  });
+
+  it('400s a malformed version without writing', async () => {
+    const res = await putVideoHandler(req({ ...body, version: 'v1.1' }), '10');
+    expect(res.status).toBe(400);
+    expect(m.setLessonVideo).not.toHaveBeenCalled();
+  });
+
+  it('409 body parses as versionConflictSchema; no captions are requested', async () => {
+    m.setLessonVideo.mockRejectedValueOnce(new VersionEditError(conflict));
+    await expectConflict(await putVideoHandler(req(body), '10'));
+    expect(m.requestLessonCaptionsSafely).not.toHaveBeenCalled();
+  });
+
+  it('a refused caller gets the 403, never the 409', async () => {
+    m.setLessonVideo.mockRejectedValueOnce(new VersionEditError(conflict));
+    m.requireLessonContentPermission.mockRejectedValueOnce(
+      new m.ForbiddenError(),
+    );
+    const res = await putVideoHandler(req(body), '10');
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe('Forbidden');
+  });
+
+  it('any other failure still throws', async () => {
+    m.setLessonVideo.mockRejectedValueOnce(new Error('db down'));
+    await expect(putVideoHandler(req(body), '10')).rejects.toThrow('db down');
   });
 });
 

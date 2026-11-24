@@ -13,6 +13,10 @@ const state = vi.hoisted(() => ({
   inserted: [] as unknown[],
 }));
 
+// The version gate is lesson-content-edit.test.ts's job, on Postgres.
+vi.mock('#/db/lesson-content-edit', () => ({
+  applyContentEdit: async () => state.lessonRows[0] ?? null,
+}));
 vi.mock('#/db', () => {
   const chain = () => {
     const c: Record<string, unknown> = {};
@@ -24,9 +28,9 @@ vi.mock('#/db', () => {
   };
   return {
     db: {
-      select: () => chain(),
       transaction: async (fn: (tx: unknown) => unknown) =>
         fn({
+          select: () => chain(),
           delete: () => ({ where: async () => undefined }),
           insert: () => ({
             values: (row: unknown) => {

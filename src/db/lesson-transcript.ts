@@ -8,9 +8,8 @@ const CACHE_KEY_PREFIX = 'lesson-transcript';
  * Cached for a week, unlike the playback entry it is derived from.
  *
  * The caption URL expires within the hour; the words in the file do not change
- * until the video itself is replaced, and `setLessonVideo` invalidates this
- * alongside the playback cache when that happens. Long is the point: a cold
- * read costs a provider call and a caption download, which a learner waits on.
+ * until the video itself is replaced. Long is the point: a cold read costs a
+ * provider call and a caption download, which a learner waits on.
  */
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -55,13 +54,6 @@ async function resolveLessonTranscriptUncached(
   return text.length < MIN_USEFUL_CHARS ? null : text;
 }
 
-type LessonTranscriptReader = ((
-  lessonSlug: string,
-  options: { courseId: number },
-) => Promise<string | null>) & {
-  invalidate: (lessonSlug: string) => Promise<void>;
-};
-
 /**
  * Only successes are cached. A null is one of several transient things —
  * captions the provider has not generated yet, a failed download — and
@@ -73,33 +65,20 @@ type LessonTranscriptReader = ((
  * lesson's — every course teaching it gets the same text. The course only
  * decides whose credentials fetch it on a cold read.
  */
-export const getLessonTranscript: LessonTranscriptReader = Object.assign(
-  async (
-    lessonSlug: string,
-    options: { courseId: number },
-  ): Promise<string | null> => {
-    const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
-    const cached = await redis.get<string>(key);
-    if (cached) return cached;
+export async function getLessonTranscript(
+  lessonSlug: string,
+  options: { courseId: number },
+): Promise<string | null> {
+  const key = `${CACHE_KEY_PREFIX}:${lessonSlug}`;
+  const cached = await redis.get<string>(key);
+  if (cached) return cached;
 
-    const transcript = await resolveLessonTranscriptUncached(
-      lessonSlug,
-      options.courseId,
-    );
-    if (transcript) {
-      await redis.set(key, transcript, { ex: CACHE_TTL_SECONDS });
-    }
-    return transcript;
-  },
-  {
-    /**
-     * Unconditional, so a caller swapping a lesson's video never has to reason
-     * about whether an entry currently exists. The derived key points need no
-     * eviction — they are keyed by a hash of this text (see
-     * `getDerivedKeyPoints`), so new text simply misses.
-     */
-    invalidate: async (lessonSlug: string): Promise<void> => {
-      await redis.del(`${CACHE_KEY_PREFIX}:${lessonSlug}`);
-    },
-  },
-);
+  const transcript = await resolveLessonTranscriptUncached(
+    lessonSlug,
+    options.courseId,
+  );
+  if (transcript) {
+    await redis.set(key, transcript, { ex: CACHE_TTL_SECONDS });
+  }
+  return transcript;
+}

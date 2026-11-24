@@ -24,9 +24,8 @@ import {
   getCourseSlugsForLessonId,
   getCourseSlugsForModuleId,
 } from '#/db/lesson-access';
-import { getLessonPlayback } from '#/db/lesson-playback';
+import { applyContentEdit } from '#/db/lesson-content-edit';
 import { nextAvailableLessonSlug } from '#/db/lesson-slug';
-import { getLessonTranscript } from '#/db/lesson-transcript';
 import {
   changeMembership,
   getCourseIdsShowingModule,
@@ -100,40 +99,12 @@ import { db } from '.';
 export type { AdminCourseSummary } from '#/lib/admin-schemas';
 
 /**
- * Evict the learner-facing `getLessonPlayback` cache entry for a lesson so an
- * admin's video swap is visible immediately instead of serving the PREVIOUS
- * video's still-validly-signed URL until it expires (up to ~59.5m for Mux —
- * see `getLessonPlayback`'s doc comment for the TTL math). A stale-but-
- * validly-signed URL plays fine, so the player's 401/403 recovery path never
- * fires and nothing else recovers on its own.
- *
- * Best-effort, same pattern as `invalidateCourseDetailsCache`: a Redis outage
- * must not turn a successful admin write into a failed response.
- */
-async function invalidateLessonPlaybackCache(
-  lessonSlug: string | null,
-): Promise<void> {
-  if (!lessonSlug) return;
-  try {
-    // The transcript goes with it: it is the previous video's captions,
-    // flattened and cached for a week (far longer than any signed URL), and it
-    // is what a material-less lesson's debrief is generated from. Left behind,
-    // the new video would be debriefed on the old one's script.
-    await Promise.all([
-      getLessonPlayback.invalidate(lessonSlug),
-      getLessonTranscript.invalidate(lessonSlug),
-    ]);
-  } catch (error) {
-    console.error('Failed to invalidate lesson-playback cache:', error);
-  }
-}
-
-/**
  * Evict the learner-facing course-details cache for EVERY course that
  * teaches this lesson.
  *
  * A lesson can now be placed into several courses via `module_lessons`, so an
- * admin edit to one lesson can change what several courses show. Invalidating
+ * admin edit to a lesson's SETTINGS can change what several courses show (its
+ * content they hold as a snapshot, so content writers evict nothing). Invalidating
  * only one slug (the bug this closes) would leave the others serving stale
  * content until the 6h TTL expires. `invalidateCourseDetailsCache` is itself
  * best-effort per slug, so a failure on one course doesn't stop the others
@@ -922,22 +893,17 @@ export async function setLessonVideo(
   lessonId: number,
   provider: ProviderId,
   ref: string,
+  version?: string,
 ): Promise<{ id: number } | null> {
-  const [updated] = await db
-    .update(lessonsTable)
-    .set({ videoProvider: provider, videoRef: ref, updatedAt: sql`now()` })
-    .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
-  if (!updated) return null;
-
-  await invalidateAllCoursesForLesson(lessonId);
-  // Evicted by slug (not the course slugs above) — `getLessonPlayback` keeps
-  // one entry per course teaching the lesson, and its `invalidate` finds and
-  // evicts every one of them; a course-details invalidation would leave
-  // this lesson's stale playback entries untouched.
-  await invalidateLessonPlaybackCache(updated.slug);
-
-  return { id: updated.id };
+  return db.transaction(async (tx) => {
+    const lesson = await applyContentEdit(tx, lessonId, version);
+    if (!lesson) return null;
+    await tx
+      .update(lessonsTable)
+      .set({ videoProvider: provider, videoRef: ref })
+      .where(eq(lessonsTable.id, lessonId));
+    return { id: lesson.id };
+  });
 }
 
 /**
@@ -969,55 +935,51 @@ export async function getLessonAlternateVideos(
  * Read-modify-write under a row lock: two concurrent PUTs for different
  * languages on the same lesson would otherwise both read the same `current`
  * array and each write back their own upsert, silently clobbering whichever
- * one commits first. `for('update')` inside the transaction serialises them
- * on the lesson row, so the second writer's `next` sees the first writer's
- * result — same pattern as `remixCourse`/`unremixCourse` in
- * `db/course-remixes.ts`.
+ * one commits first. `applyContentEdit` locks the lesson row, so the second
+ * writer's `next` sees the first writer's result.
  */
 async function writeLessonAlternateVideos(
   lessonId: number,
   next: (current: OtherVideoIds) => OtherVideoIds,
+  version: string | undefined,
 ): Promise<{ id: number } | null> {
-  const updated = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    const lesson = await applyContentEdit(tx, lessonId, version);
+    if (!lesson) return null;
     const [row] = await tx
       .select({ otherVideoIds: lessonsTable.otherVideoIds })
       .from(lessonsTable)
-      .where(eq(lessonsTable.id, lessonId))
-      .for('update');
-    if (!row) return null;
-    const current = parseAlternates(row.otherVideoIds);
-    const [u] = await tx
+      .where(eq(lessonsTable.id, lessonId));
+    await tx
       .update(lessonsTable)
-      .set({ otherVideoIds: next(current), updatedAt: sql`now()` })
-      .where(eq(lessonsTable.id, lessonId))
-      .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
-    return u ?? null;
+      .set({ otherVideoIds: next(parseAlternates(row.otherVideoIds)) })
+      .where(eq(lessonsTable.id, lessonId));
+    return { id: lesson.id };
   });
-  if (!updated) return null;
-  // The languages list rides on every cached playback entry, in every
-  // language — see getLessonPlayback.invalidate. Outside the transaction:
-  // cache eviction is not part of the row's atomicity, and Redis has none of
-  // its own to join.
-  await invalidateLessonPlaybackCache(updated.slug);
-  return { id: updated.id };
 }
 
 /** Attach (or replace) the video for one language. */
 export function setLessonAlternateVideo(
   lessonId: number,
   entry: OtherVideoId,
+  version?: string,
 ): Promise<{ id: number } | null> {
-  return writeLessonAlternateVideos(lessonId, (current) =>
-    upsertAlternate(current, entry),
+  return writeLessonAlternateVideos(
+    lessonId,
+    (current) => upsertAlternate(current, entry),
+    version,
   );
 }
 
 export function removeLessonAlternateVideo(
   lessonId: number,
   lang: AlternateLang,
+  version?: string,
 ): Promise<{ id: number } | null> {
-  return writeLessonAlternateVideos(lessonId, (current) =>
-    removeAlternate(current, lang),
+  return writeLessonAlternateVideos(
+    lessonId,
+    (current) => removeAlternate(current, lang),
+    version,
   );
 }
 
@@ -1249,17 +1211,17 @@ export async function moveLesson(input: {
 export async function updateLessonName(
   lessonId: number,
   name: string,
+  version?: string,
 ): Promise<{ id: number; name: string } | null> {
-  const [updated] = await db
-    .update(lessonsTable)
-    .set({ name, updatedAt: sql`now()` })
-    .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id, name: lessonsTable.name });
-  if (!updated) return null;
-
-  await invalidateAllCoursesForLesson(lessonId);
-
-  return updated;
+  return db.transaction(async (tx) => {
+    const lesson = await applyContentEdit(tx, lessonId, version);
+    if (!lesson) return null;
+    await tx
+      .update(lessonsTable)
+      .set({ name })
+      .where(eq(lessonsTable.id, lessonId));
+    return { id: lesson.id, name };
+  });
 }
 
 export async function updateLessonConfig(
