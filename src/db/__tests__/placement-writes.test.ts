@@ -43,6 +43,7 @@ const db = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
+  transaction: vi.fn(),
 }));
 const invalidateCourseDetailsCache = vi.hoisted(() => vi.fn());
 // Final review, Important #3: plural — every course SHOWING the module (its
@@ -67,6 +68,25 @@ vi.mock('#/db/schema', () => ({
   modulesTable,
 }));
 vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache }));
+/**
+ * Pins are `lesson-versions.test.ts`'s job, on Postgres. Here the write just
+ * runs, and the assertions read which courses and lessons it was run for.
+ */
+const lessonVersions = vi.hoisted(() => ({
+  lockModuleOwner: vi.fn(),
+  getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
+    moduleId * 10,
+    moduleId * 10 + 1,
+  ]),
+  getLessonIdsInModules: vi.fn(async () => [70, 71]),
+  changeMembership: vi.fn(
+    async (_tx: unknown, _scope: unknown, write: () => Promise<unknown>) => ({
+      result: await write(),
+      createdVersionIds: [501],
+    }),
+  ),
+}));
+vi.mock('#/db/lesson-versions', () => lessonVersions);
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugsForModuleId,
   getCourseIdForModuleId,
@@ -89,6 +109,7 @@ const { linkLesson, unlinkLesson, movePlacement } = await import(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  db.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(db));
   getCourseSlugsForModuleId.mockResolvedValue(['a-course']);
   getCourseIdForModuleId.mockResolvedValue(3);
   lessonBelongsToCourseOrg.mockResolvedValue(true);
@@ -200,7 +221,15 @@ describe('linkLesson', () => {
       lessonId: 9,
       rank: 1,
       dependsOn: [],
+      createdVersionIds: [501],
     });
+    // Under the owner's lock, for every course showing the module.
+    expect(lessonVersions.lockModuleOwner).toHaveBeenCalledWith(db, 3);
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      db,
+      { courseIds: [400, 401], lessonIds: [9] },
+      expect.any(Function),
+    );
   });
 
   it('computes a halved rank when only a following lesson is given (insert-first)', async () => {
@@ -317,6 +346,12 @@ describe('unlinkLesson', () => {
     expect(await unlinkLesson(40, 9)).toBe(false);
   });
 
+  it('reports false when the module does not exist', async () => {
+    getCourseIdForModuleId.mockResolvedValueOnce(null);
+    expect(await unlinkLesson(40, 9)).toBe(false);
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
   it('scopes the DELETE to this module AND this lesson, and invalidates every course showing the module', async () => {
     // The destructive write: a bare eq(lessonId) WHERE (same defect class as
     // the movePlacement bug) would delete this lesson's placement out of
@@ -378,6 +413,12 @@ describe('movePlacement', () => {
     expect(db.update).toHaveBeenCalledWith(moduleLessonsTable);
     expect(set.mock.calls[0][0]).toMatchObject({ moduleId: 41 });
     expect(result).toMatchObject({ moduleId: 41, rank: 1.5 });
+    // Courses showing either module: one may show only the other.
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      db,
+      { courseIds: [400, 401, 410, 411], lessonIds: [9] },
+      expect.any(Function),
+    );
   });
 
   /**

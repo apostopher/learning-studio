@@ -94,7 +94,7 @@ beforeEach(() => {
   m.absentResourceResponse.mockResolvedValue(
     new Response('Forbidden', { status: 403 }),
   );
-  m.linkLesson.mockResolvedValue(PLACEMENT);
+  m.linkLesson.mockResolvedValue({ ...PLACEMENT, createdVersionIds: [501] });
   m.createLesson.mockResolvedValue({ id: 5, name: 'x' });
   m.unlinkLesson.mockResolvedValue(true);
   m.movePlacement.mockResolvedValue(PLACEMENT);
@@ -111,6 +111,7 @@ describe('POST /api/admin/modules/:moduleId/lessons — linking', () => {
     });
     expect(m.createLesson).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(PLACEMENT);
   });
 
   it('still creates a new lesson when given name, and does not link', async () => {

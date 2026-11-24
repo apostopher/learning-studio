@@ -107,7 +107,7 @@ function seed(opts: { remixers: number[] }) {
   fake.state.results.push([{ id: 6, name: 'Source' }]); // owner course row (name for the payload)
   fake.state.results.push([]); // taken slugs
   fake.state.results.push([{ maxRank: '2' }]); // own max rank
-  fake.state.results.push([{ id: 6 }]); // lock select (`for update`) — value unused
+  fake.state.results.push([{ id: 6 }]); // lock select — value unused
   fake.state.results.push(opts.remixers.map((courseId) => ({ courseId }))); // remixer read, inside the tx, after the lock
   fake.state.results.push([
     {
@@ -181,7 +181,7 @@ describe('createModule → remixers', () => {
    * until a remix commits in the gap between that read and this create's
    * commit.
    */
-  it('locks the source course row for update, then reads remixers inside the same transaction', async () => {
+  it('locks the source course row, then reads remixers inside the same transaction', async () => {
     seed({ remixers: [2] });
     await createModule({ courseId: 6, name: 'Weather' });
 
@@ -193,8 +193,11 @@ describe('createModule → remixers', () => {
     expect(
       fake.state.selects.slice(0, 3).every((s) => s.for === undefined),
     ).toBe(true);
-    // The lock: issued on `tx`, `for update`, before the remixer read.
-    expect(fake.state.selects[3]).toEqual({ source: 'tx', for: 'update' });
+    // The lock: issued on `tx`, before the remixer read.
+    expect(fake.state.selects[3]).toEqual({
+      source: 'tx',
+      for: 'no key update',
+    });
     // The remixer read: also on `tx` (inside the transaction), no lock of
     // its own — it rides the source row's lock already held above.
     expect(fake.state.selects[4]).toEqual({ source: 'tx', for: undefined });

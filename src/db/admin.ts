@@ -27,6 +27,12 @@ import {
 import { getLessonPlayback } from '#/db/lesson-playback';
 import { nextAvailableLessonSlug } from '#/db/lesson-slug';
 import { getLessonTranscript } from '#/db/lesson-transcript';
+import {
+  changeMembership,
+  getCourseIdsShowingModule,
+  getLessonIdsInModules,
+  lockModuleOwner,
+} from '#/db/lesson-versions';
 import { getPlacementsForCourse, movePlacement } from '#/db/placements';
 import {
   type LessonPlaybackResult,
@@ -268,7 +274,7 @@ export { getUserRoleNames } from '#/db/user-roles';
 export async function createCourse(
   input: CreateCourseInput,
   orgId: number,
-): Promise<DBCourse> {
+): Promise<DBCourse & { createdVersionIds: number[] }> {
   const base = slugify(input.name) || 'course';
 
   // Find a free slug: base, else base-2, base-3, ...
@@ -310,9 +316,9 @@ export async function createCourse(
   // The flagship is always remixed into every course in its org. After the
   // link above, since `remixCourse` refuses a course outside the org; and it
   // never throws — a failed remix is logged, not a failed create.
-  await remixFlagshipIntoNewCourse(created.id, orgId);
+  const createdVersionIds = await remixFlagshipIntoNewCourse(created.id, orgId);
 
-  return created;
+  return { ...created, createdVersionIds };
 }
 
 export async function createModule(input: {
@@ -357,20 +363,18 @@ export async function createModule(input: {
   //
   // Every course that remixes THIS one gets the new module appended to its
   // rail, in the same transaction — this is what makes a remix "live". The
-  // remixer read happens IN here, after locking the source course row `for
-  // update` — `remixCourse` takes the same lock before it inserts its link
+  // remixer read happens IN here, after locking the source course row —
+  // `remixCourse` takes the same lock before it inserts its link
   // row, so a remix committing concurrently and this create now serialise on
   // that row: whichever commits second sees the other's effect, instead of
   // a remix racing this create and permanently missing the module. The rank
   // is computed per remixer, in SQL, against that remixer's own last
   // placement: a remixer's order is its own admin's, so the module lands at
   // the end where it is visible, not at the source's rank.
+  //
+  // No `changeMembership`: the module is empty, so no course gains a lesson.
   const created = await db.transaction(async (tx) => {
-    await tx
-      .select({ id: coursesTable.id })
-      .from(coursesTable)
-      .where(eq(coursesTable.id, input.courseId))
-      .for('update');
+    await lockModuleOwner(tx, input.courseId);
 
     const remixerRows = await tx
       .select({ courseId: courseRemixesTable.courseId })
@@ -463,7 +467,10 @@ export async function createLesson(input: {
   // course for it and 404s. Both inserts still happen in one transaction: a
   // lesson that exists in `lessons` but not in `module_lessons` is exactly
   // that bug.
+  const ownerCourseId = await getCourseIdForModuleId(input.moduleId);
   const [created] = await db.transaction(async (tx) => {
+    if (ownerCourseId !== null) await lockModuleOwner(tx, ownerCourseId);
+
     // `lessons.org_id` is NOT NULL (Task 5/6). Resolved the same way
     // `migrate-lesson-placements.ts`'s backfill did — module → course →
     // `course_orgs`, taking the LOWEST org id when a course belongs to
@@ -505,12 +512,21 @@ export async function createLesson(input: {
       })
       .returning();
 
-    await tx.insert(moduleLessonsTable).values({
-      moduleId: input.moduleId,
-      lessonId: insertedLesson.id,
-      rank: String(rank),
-      dependsOn: [],
-    });
+    // The snapshot it takes is empty, so there is nothing to index.
+    await changeMembership(
+      tx,
+      {
+        courseIds: await getCourseIdsShowingModule(tx, input.moduleId),
+        lessonIds: [insertedLesson.id],
+      },
+      () =>
+        tx.insert(moduleLessonsTable).values({
+          moduleId: input.moduleId,
+          lessonId: insertedLesson.id,
+          rank: String(rank),
+          dependsOn: [],
+        }),
+    );
 
     return [insertedLesson];
   });
@@ -1706,12 +1722,14 @@ export async function updateModuleDependencies(
 export async function deleteModule(moduleId: number): Promise<boolean> {
   const [existing] = await db
     .select({
+      courseId: modulesTable.courseId,
       slug: modulesTable.slug,
       imageUrlAvif: modulesTable.imageUrlAvif,
       imageUrlWebp: modulesTable.imageUrlWebp,
     })
     .from(modulesTable)
     .where(eq(modulesTable.id, moduleId));
+  if (!existing) return false;
 
   // Resolve before the delete — the cascade takes this module's
   // `course_modules` rows with it, and afterwards the membership join that
@@ -1719,10 +1737,24 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
   // to join against.
   const courseSlugs = await getCourseSlugsForModuleId(moduleId);
 
-  const [deleted] = await db
-    .delete(modulesTable)
-    .where(eq(modulesTable.id, moduleId))
-    .returning({ id: modulesTable.id });
+  // The cascade takes its lessons out of every course showing it.
+  const {
+    result: [deleted],
+  } = await db.transaction(async (tx) => {
+    await lockModuleOwner(tx, existing.courseId);
+    return changeMembership(
+      tx,
+      {
+        courseIds: await getCourseIdsShowingModule(tx, moduleId),
+        lessonIds: await getLessonIdsInModules(tx, [moduleId]),
+      },
+      () =>
+        tx
+          .delete(modulesTable)
+          .where(eq(modulesTable.id, moduleId))
+          .returning({ id: modulesTable.id }),
+    );
+  });
   if (!deleted) return false;
 
   // The cascade drops this module's OWN dependency row, but `depends_on` is a
@@ -1730,7 +1762,7 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
   // would keep it forever. Gating tolerates such orphans, so nothing breaks;
   // the admin would just see a chip for a prerequisite that no longer exists,
   // implying a gate that is not there.
-  if (existing?.slug) {
+  if (existing.slug) {
     await db
       .update(moduleDependenciesTable)
       .set({
@@ -1739,7 +1771,7 @@ export async function deleteModule(moduleId: number): Promise<boolean> {
       .where(sql`${existing.slug} = ANY(${moduleDependenciesTable.dependsOn})`);
   }
 
-  await deleteBlobs([existing?.imageUrlAvif, existing?.imageUrlWebp]);
+  await deleteBlobs([existing.imageUrlAvif, existing.imageUrlWebp]);
   await Promise.all(
     courseSlugs.map((slug) => invalidateCourseDetailsCache(slug)),
   );

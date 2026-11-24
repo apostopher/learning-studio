@@ -68,7 +68,8 @@ export async function postModuleFromLibraryHandler(
     // the id confirms nothing. See `absentResourceResponse`.
     return absentResourceResponse(request.headers, 'Library module not found');
   }
-  return Response.json(result);
+  const { createdVersionIds: _, ...copied } = result;
+  return Response.json(copied);
 }
 
 export const Route = createFileRoute(

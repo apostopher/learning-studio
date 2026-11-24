@@ -40,9 +40,14 @@ const fake = vi.hoisted(() => {
     };
     return c;
   }
+  const db = {
+    select: () => chain(false),
+    insert: () => chain(true),
+    transaction: (fn: (tx: unknown) => unknown): unknown => fn(db),
+  };
   return {
     state,
-    db: { select: () => chain(false), insert: () => chain(true) },
+    db,
     createModule: vi.fn(),
     reorderModule: vi.fn(),
     getCourseIdsForLessons: vi.fn(),
@@ -51,6 +56,25 @@ const fake = vi.hoisted(() => {
   };
 });
 vi.mock('#/db', () => ({ db: fake.db }));
+/**
+ * Pins are `lesson-versions.test.ts`'s job, on Postgres. Here the write just
+ * runs, and the assertions read which courses and lessons it was run for.
+ */
+const lessonVersions = vi.hoisted(() => ({
+  lockModuleOwner: vi.fn(),
+  getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
+    5,
+    moduleId,
+  ]),
+  getLessonIdsInModules: vi.fn(async () => [70, 71]),
+  changeMembership: vi.fn(
+    async (_tx: unknown, _scope: unknown, write: () => Promise<unknown>) => ({
+      result: await write(),
+      createdVersionIds: [501],
+    }),
+  ),
+}));
+vi.mock('#/db/lesson-versions', () => lessonVersions);
 vi.mock('#/db/admin', () => ({
   createModule: fake.createModule,
   reorderModule: fake.reorderModule,
@@ -116,6 +140,16 @@ describe('copyDisciplineModuleIntoCourse', () => {
     // Every course showing the new module is told its lessons changed.
     expect(fake.invalidateCourseDetailsCache).toHaveBeenCalledWith('two-week');
     expect(result?.skipped).toEqual([]);
+    expect(result?.createdVersionIds).toEqual([501]);
+    expect(lessonVersions.lockModuleOwner).toHaveBeenCalledWith(
+      fake.db,
+      COURSE,
+    );
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      fake.db,
+      { courseIds: [COURSE, NEW_MODULE], lessonIds: [12, 13, 11] },
+      expect.any(Function),
+    );
     // Appended: no reorder without a module to sit after.
     expect(fake.reorderModule).not.toHaveBeenCalled();
   });

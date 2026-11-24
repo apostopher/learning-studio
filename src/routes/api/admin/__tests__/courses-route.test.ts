@@ -56,7 +56,7 @@ beforeEach(() => {
   m.requirePermission.mockResolvedValue({ userId: 'u1' });
   m.getStaffScopedCourseIds.mockResolvedValue([]);
   m.listAdminCourses.mockResolvedValue(COURSES);
-  m.createCourse.mockResolvedValue(NEW_COURSE);
+  m.createCourse.mockResolvedValue({ ...NEW_COURSE, createdVersionIds: [501] });
   m.getActiveOrgId.mockReturnValue(1);
 });
 

@@ -5,6 +5,12 @@ import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { courseModuleIds } from '#/db/course-modules';
 import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import {
+  changeMembership,
+  getLessonIdsInModules,
+  lockModuleOwner,
+  type Tx,
+} from '#/db/lesson-versions';
+import {
   courseModulesTable,
   courseOrgsTable,
   courseRemixesTable,
@@ -17,7 +23,12 @@ import {
 import type { CourseLessonDependency } from '#/types';
 
 export type RemixResult =
-  | { ok: true; moduleCount: number }
+  | {
+      ok: true;
+      moduleCount: number;
+      /** Snapshots taken for the borrowed lessons, for the caller to index. */
+      createdVersionIds: number[];
+    }
   | { ok: false; reason: 'self' | 'not-found' | 'already-remixed' }
   | {
       /**
@@ -53,12 +64,6 @@ async function coursesAreInOrg(orgId: number, ids: number[]): Promise<boolean> {
   const found = new Set(rows.map((r) => r.courseId));
   return ids.every((id) => found.has(id));
 }
-
-/**
- * The `tx` handed to a `db.transaction` callback — what `modulesGatingOnBorrowed`
- * reads through so it runs under `remixCourse`'s lock.
- */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Which of a source's OWNED modules gate on something the source only
@@ -137,6 +142,9 @@ async function modulesGatingOnBorrowed(
  * One hop only (spec: no transitivity), which is also what makes A⇄B a pair
  * of flat lists rather than a recursion.
  *
+ * The borrowed lessons are pinned to their working copies' versions, not to
+ * the source's pins: each course takes its own.
+ *
  * The one-hop rule has a consequence for prerequisites (final review, #6).
  * An owned module MAY gate on a module its course only borrows — that is
  * the ITPS→flagship use, and `updateModuleDependencies` offers the whole
@@ -186,7 +194,8 @@ export async function remixCourse(input: {
       .select({ id: coursesTable.id, name: coursesTable.name })
       .from(coursesTable)
       .where(eq(coursesTable.id, input.sourceCourseId))
-      .for('update');
+      // See the lock order in `#/db/lesson-versions`.
+      .for('no key update');
     if (!source) return { ok: false, reason: 'not-found' };
 
     const owned = await tx
@@ -243,19 +252,31 @@ export async function remixCourse(input: {
       .where(eq(courseModulesTable.courseId, input.courseId));
     const base = maxRank === null ? 0 : Number(maxRank);
 
+    let createdVersionIds: number[] = [];
     if (owned.length > 0) {
-      await tx
-        .insert(courseModulesTable)
-        .values(
-          owned.map((m, i) => ({
-            courseId: input.courseId,
-            moduleId: m.moduleId,
-            rank: String(base + i + 1),
-          })),
-        )
-        .onConflictDoNothing();
+      ({ createdVersionIds } = await changeMembership(
+        tx,
+        {
+          courseIds: [input.courseId],
+          lessonIds: await getLessonIdsInModules(
+            tx,
+            owned.map((m) => m.moduleId),
+          ),
+        },
+        () =>
+          tx
+            .insert(courseModulesTable)
+            .values(
+              owned.map((m, i) => ({
+                courseId: input.courseId,
+                moduleId: m.moduleId,
+                rank: String(base + i + 1),
+              })),
+            )
+            .onConflictDoNothing(),
+      ));
     }
-    return { ok: true, moduleCount: owned.length };
+    return { ok: true, moduleCount: owned.length, createdVersionIds };
   });
 
   if (result.ok) {
@@ -296,11 +317,7 @@ export async function unremixCourse(input: {
     // commits first (and its placement is among those deleted below). Not
     // serialised, it could append one borrowed module to a rail that no
     // longer remixes anything.
-    await tx
-      .select({ id: coursesTable.id })
-      .from(coursesTable)
-      .where(eq(coursesTable.id, input.sourceCourseId))
-      .for('update');
+    await lockModuleOwner(tx, input.sourceCourseId);
 
     const unlinked = await tx
       .delete(courseRemixesTable)
@@ -313,19 +330,35 @@ export async function unremixCourse(input: {
       .returning({ id: courseRemixesTable.id });
     if (unlinked.length === 0) return { ok: false, reason: 'not-found' };
 
+    const owned = await tx
+      .select({ id: modulesTable.id })
+      .from(modulesTable)
+      .where(eq(modulesTable.courseId, input.sourceCourseId));
+
     // The owner filter is a `sql` fragment rather than a builder subquery:
     // it is over the OWNER column, which has no membership-style helper
     // (`courseModuleIds` answers "placed in", the wrong question here), and a
     // fragment renders standalone so the WHERE can be pinned as text.
-    const removed = await tx
-      .delete(courseModulesTable)
-      .where(
-        and(
-          eq(courseModulesTable.courseId, input.courseId),
-          sql`${courseModulesTable.moduleId} in (select ${modulesTable.id} from ${modulesTable} where ${modulesTable.courseId} = ${input.sourceCourseId})`,
+    const { result: removed } = await changeMembership(
+      tx,
+      {
+        courseIds: [input.courseId],
+        lessonIds: await getLessonIdsInModules(
+          tx,
+          owned.map((m) => m.id),
         ),
-      )
-      .returning({ id: courseModulesTable.id });
+      },
+      () =>
+        tx
+          .delete(courseModulesTable)
+          .where(
+            and(
+              eq(courseModulesTable.courseId, input.courseId),
+              sql`${courseModulesTable.moduleId} in (select ${modulesTable.id} from ${modulesTable} where ${modulesTable.courseId} = ${input.sourceCourseId})`,
+            ),
+          )
+          .returning({ id: courseModulesTable.id }),
+    );
     return { ok: true, moduleCount: removed.length };
   });
 

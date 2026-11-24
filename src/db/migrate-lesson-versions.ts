@@ -1,5 +1,9 @@
 import { type SQL, sql } from 'drizzle-orm';
-import { FLAGSHIP_DISCIPLINE_SLUG } from '#/lib/flagship-course';
+import {
+  pinLessons,
+  shownUnpinned,
+  snapshotLessons,
+} from '#/db/lesson-version-sql';
 import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
 
 /**
@@ -86,38 +90,9 @@ export const LESSON_VERSIONS_STATEMENTS: SQL[] = [
   sql`alter table "docs" add column if not exists "lesson_version_id" integer constraint "docs_lesson_version_id_lesson_versions_id_fk" references "lesson_versions"("id") on delete cascade`,
   sql`create index if not exists "docs_lesson_version_id_idx" on "docs" ("lesson_version_id")`,
 
-  // Snapshot the working copy of every lesson some course shows without a pin.
-  // lesson_material.lesson_slug is not unique: the first row by id counts.
-  sql`insert into "lesson_versions" (
-      "lesson_id", "version", "name", "video_provider", "video_ref", "other_video_ids",
-      "text", "key_points", "quiz", "pro_tips", "links", "assignments",
-      "job_of_the_day", "test_this", "extra_tab"
-    )
-    select l."id", l."version", l."name", l."video_provider", l."video_ref", l."other_video_ids",
-      m."text", m."key_points", m."quiz", m."pro_tips", m."links", m."assignments",
-      m."job_of_the_day", m."test_this",
-      case when d."slug" = ${FLAGSHIP_DISCIPLINE_SLUG} then 'jobOfTheDay' else 'testThis' end
-    from "lessons" l
-    left join "disciplines" d on d."id" = l."discipline_id"
-    left join lateral (
-      select * from "lesson_material" lm where lm."lesson_slug" = l."slug" order by lm."id" limit 1
-    ) m on true
-    where exists (
-      select 1 from "module_lessons" ml
-      join "course_modules" cm on cm."module_id" = ml."module_id"
-      where ml."lesson_id" = l."id" and not exists (
-        select 1 from "course_lesson_versions" p
-        where p."course_id" = cm."course_id" and p."lesson_id" = l."id"
-      )
-    )
-    on conflict ("lesson_id","version") do nothing`,
-  sql`insert into "course_lesson_versions" ("course_id","lesson_id","lesson_version_id")
-    select distinct cm."course_id", l."id", v."id"
-    from "course_modules" cm
-    join "module_lessons" ml on ml."module_id" = cm."module_id"
-    join "lessons" l on l."id" = ml."lesson_id"
-    join "lesson_versions" v on v."lesson_id" = l."id" and v."version" = l."version"
-    on conflict ("course_id","lesson_id") do nothing`,
+  // Only lessons some course shows without a pin.
+  snapshotLessons(shownUnpinned()),
+  pinLessons(),
 ];
 
 /**

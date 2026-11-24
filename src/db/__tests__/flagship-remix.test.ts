@@ -105,9 +105,13 @@ describe('findFlagshipCourseId', () => {
 describe('remixFlagshipIntoNewCourse', () => {
   it('hands remixCourse the new course, the flagship and the org', async () => {
     captured.result = [{ id: 6 }];
-    remixes.remixCourse.mockResolvedValue({ ok: true, moduleCount: 7 });
+    remixes.remixCourse.mockResolvedValue({
+      ok: true,
+      moduleCount: 7,
+      createdVersionIds: [501],
+    });
 
-    await remixFlagshipIntoNewCourse(40, 11);
+    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toEqual([501]);
 
     expect(remixes.remixCourse).toHaveBeenCalledWith({
       orgId: 11,
@@ -119,7 +123,7 @@ describe('remixFlagshipIntoNewCourse', () => {
 
   it('does nothing when the org has no flagship', async () => {
     captured.result = [];
-    await remixFlagshipIntoNewCourse(40, 11);
+    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toEqual([]);
     expect(remixes.remixCourse).not.toHaveBeenCalled();
   });
 
@@ -142,7 +146,7 @@ describe('remixFlagshipIntoNewCourse', () => {
     });
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toBeUndefined();
+    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toEqual([]);
 
     expect(error).toHaveBeenCalledTimes(1);
     expect(String(error.mock.calls[0][0])).toContain('already-remixed');
@@ -173,7 +177,7 @@ describe('remixFlagshipIntoNewCourse', () => {
     remixes.remixCourse.mockRejectedValue(new Error('deadlock'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toBeUndefined();
+    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toEqual([]);
 
     expect(error).toHaveBeenCalledTimes(1);
     error.mockRestore();
@@ -185,7 +189,7 @@ describe('remixFlagshipIntoNewCourse', () => {
     });
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toBeUndefined();
+    await expect(remixFlagshipIntoNewCourse(40, 11)).resolves.toEqual([]);
 
     expect(remixes.remixCourse).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledTimes(1);

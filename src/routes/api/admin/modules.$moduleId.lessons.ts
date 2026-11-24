@@ -89,7 +89,8 @@ export async function postLessonHandler(
         { status: 409 },
       );
     }
-    return Response.json(result);
+    const { createdVersionIds: _, ...placement } = result;
+    return Response.json(placement);
   }
 
   return Response.json(

@@ -82,7 +82,11 @@ export async function createCourseHandler(request: Request): Promise<Response> {
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  return Response.json(await createCourse(parsed.data, getActiveOrgId()));
+  const { createdVersionIds: _, ...course } = await createCourse(
+    parsed.data,
+    getActiveOrgId(),
+  );
+  return Response.json(course);
 }
 
 export const Route = createFileRoute('/api/admin/courses')({

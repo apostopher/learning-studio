@@ -48,6 +48,7 @@ beforeEach(() => {
     module: { id: 900 },
     placedLessonIds: [1],
     skipped: [],
+    createdVersionIds: [501],
   });
 });
 

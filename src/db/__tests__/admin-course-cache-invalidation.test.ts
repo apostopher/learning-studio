@@ -157,7 +157,7 @@ function makeChain(result: unknown) {
     orderBy: () => chain,
     groupBy: () => chain,
     limit: () => chain,
-    // The `for update` row lock createModule/remixCourse take on the source
+    // The row lock createModule/remixCourse take on the source
     // course row (Task 3 fix round 1) — a passthrough, since no test here
     // asserts on the lock strength itself (that's course-remixes.test.ts's
     // and create-module-remix-sync.test.ts's job).
@@ -260,9 +260,28 @@ vi.mock('#/db/course-remixes', () => remixes);
 // whole: what it does is `flagship-remix.test.ts`'s job; here it only matters
 // that createCourse hands it the course it just created and the org.
 const flagshipRemix = vi.hoisted(() => ({
-  remixFlagshipIntoNewCourse: vi.fn(async () => undefined),
+  remixFlagshipIntoNewCourse: vi.fn(async () => [501]),
 }));
 vi.mock('#/db/flagship-remix', () => flagshipRemix);
+/**
+ * Pins are `lesson-versions.test.ts`'s job, on Postgres. Here the write just
+ * runs, and the assertions read which courses and lessons it was run for.
+ */
+const lessonVersions = vi.hoisted(() => ({
+  lockModuleOwner: vi.fn(),
+  getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
+    moduleId * 10,
+    moduleId * 10 + 1,
+  ]),
+  getLessonIdsInModules: vi.fn(async () => [70, 71]),
+  changeMembership: vi.fn(
+    async (_tx: unknown, _scope: unknown, write: () => Promise<unknown>) => ({
+      result: await write(),
+      createdVersionIds: [501],
+    }),
+  ),
+}));
+vi.mock('#/db/lesson-versions', () => lessonVersions);
 // moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
 // Same reasoning as `#/db/course` above: admin.ts calls
@@ -361,8 +380,10 @@ describe('course-details cache invalidation', () => {
       )
       .mockReturnValueOnce(makeChain(undefined)); // course_orgs link
 
-    await createCourse({ name: 'Flight Basics' }, 1);
+    const created = await createCourse({ name: 'Flight Basics' }, 1);
 
+    // The snapshots its flagship remix took, for the route to index.
+    expect(created).toMatchObject({ id: 5, createdVersionIds: [501] });
     expect(courseCache.invalidate).toHaveBeenCalledWith('flight-basics');
   });
 
@@ -427,7 +448,6 @@ describe('course-details cache invalidation', () => {
       .mockReturnValueOnce(makeChain([{ id: 42, name: 'Flight Basics' }])) // owner course row
       .mockReturnValueOnce(makeChain([])) // taken slugs
       .mockReturnValueOnce(makeChain([{ maxRank: null }])) // maxRank
-      .mockReturnValueOnce(makeChain([{ id: 42 }])) // lock on the source row (for update)
       .mockReturnValueOnce(makeChain([])); // remixer read → no remixers
     db.insert
       .mockReturnValueOnce(
@@ -510,13 +530,10 @@ describe('course-details cache invalidation', () => {
       .fn()
       .mockReturnValueOnce(moduleInsert)
       .mockReturnValueOnce(placementInsert);
-    // The lock (`for update`) and the remixer read now happen INSIDE the
-    // transaction (Task 3 fix round 1) — this tx object needs its own
-    // `select`, distinct from `db.select`'s queue above.
-    const txSelect = vi
-      .fn()
-      .mockReturnValueOnce(makeChain([{ id: 42 }])) // lock on the source row
-      .mockReturnValueOnce(makeChain([])); // remixer read → no remixers
+    // The remixer read happens INSIDE the transaction (Task 3 fix round 1) —
+    // this tx object needs its own `select`, distinct from `db.select`'s
+    // queue above.
+    const txSelect = vi.fn().mockReturnValueOnce(makeChain([])); // remixer read → no remixers
     db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
       fn({ insert: txInsert, select: txSelect }),
     );
@@ -615,6 +632,11 @@ describe('course-details cache invalidation', () => {
       rank: '1',
       dependsOn: [],
     });
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      tx,
+      { courseIds: [70, 71], lessonIds: [2] },
+      expect.any(Function),
+    );
   });
 
   // Task 5d: `linkLesson`/`movePlacement` never touch `lessons.module_id`, so
@@ -1552,7 +1574,7 @@ describe('course-details cache invalidation', () => {
 
   it('deleteModule invalidates every course showing the module, resolved BEFORE the row is gone', async () => {
     db.select.mockReturnValueOnce(
-      makeChain([{ imageUrlAvif: null, imageUrlWebp: null }]),
+      makeChain([{ courseId: 4, imageUrlAvif: null, imageUrlWebp: null }]),
     );
     lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
       'flight-basics',
@@ -1566,6 +1588,12 @@ describe('course-details cache invalidation', () => {
     // Order is the whole point: the delete cascades the module's
     // `course_modules` rows, and a membership lookup AFTER it would find no
     // course at all — every remixer (and the owner) would be left stale.
+    expect(lessonVersions.lockModuleOwner).toHaveBeenCalledWith(db, 4);
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      db,
+      { courseIds: [70, 71], lessonIds: [70, 71] },
+      expect.any(Function),
+    );
     expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
     expect(
       lessonAccess.getCourseSlugsForModuleId.mock.invocationCallOrder[0],

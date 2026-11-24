@@ -56,35 +56,37 @@ export function coursesNeedingFlagshipRemix(input: {
  * org, and failing the create over a missing remix would leave the admin
  * with a course they were told was not created. A refusal or an error is
  * logged; the backfill script repairs any course left unlinked.
+ *
+ * Returns the snapshots the remix took, for the caller to index.
  */
 export async function remixFlagshipIntoNewCourse(
   courseId: number,
   orgId: number,
-): Promise<void> {
+): Promise<number[]> {
   try {
     const flagshipId = await findFlagshipCourseId(orgId);
-    if (flagshipId === null || flagshipId === courseId) return;
+    if (flagshipId === null || flagshipId === courseId) return [];
     const result = await remixCourse({
       orgId,
       courseId,
       sourceCourseId: flagshipId,
       actorId: null,
     });
-    if (!result.ok) {
-      // The one refusal with a remedy to name: which flagship modules gate
-      // on a module the flagship only borrows.
-      const detail =
-        result.reason === 'source-depends-on-borrowed'
-          ? ` (${result.modules.map((m) => m.slug).join(', ')})`
-          : '';
-      console.error(
-        `createCourse: could not remix flagship ${flagshipId} into course ${courseId}: ${result.reason}${detail}`,
-      );
-    }
+    if (result.ok) return result.createdVersionIds;
+    // The one refusal with a remedy to name: which flagship modules gate
+    // on a module the flagship only borrows.
+    const detail =
+      result.reason === 'source-depends-on-borrowed'
+        ? ` (${result.modules.map((m) => m.slug).join(', ')})`
+        : '';
+    console.error(
+      `createCourse: could not remix flagship ${flagshipId} into course ${courseId}: ${result.reason}${detail}`,
+    );
   } catch (error) {
     console.error(
       `createCourse: remixing the flagship into course ${courseId} failed`,
       error,
     );
   }
+  return [];
 }

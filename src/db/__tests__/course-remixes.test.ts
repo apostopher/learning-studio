@@ -121,6 +121,25 @@ const membership = vi.hoisted(() => ({
   courseModuleIds: vi.fn((courseId: number) => `SUBQUERY:${courseId}`),
 }));
 vi.mock('#/db/course-modules', () => membership);
+// Pins are `lesson-versions.test.ts`'s job, on Postgres. Here the write just
+// runs, and the assertions read which course and lessons it was run for. The
+// lock is the real one: its statement is asserted below.
+const lessonVersions = vi.hoisted(() => ({
+  getLessonIdsInModules: vi.fn(async (_tx: unknown, moduleIds: number[]) =>
+    moduleIds.map((id) => id + 1000),
+  ),
+  changeMembership: vi.fn(
+    async (_tx: unknown, _scope: unknown, write: () => Promise<unknown>) => ({
+      result: await write(),
+      createdVersionIds: [501],
+    }),
+  ),
+}));
+vi.mock('#/db/lesson-playback', () => ({ getLessonPlayback: vi.fn() }));
+vi.mock('#/db/lesson-versions', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...lessonVersions,
+}));
 
 const { remixCourse, unremixCourse, countRemixers, getRemixSourceIds } =
   await import('../course-remixes');
@@ -211,7 +230,17 @@ describe('remixCourse', () => {
       actorId: 'u1',
     });
 
-    expect(result).toEqual({ ok: true, moduleCount: 2 });
+    expect(result).toEqual({
+      ok: true,
+      moduleCount: 2,
+      createdVersionIds: [501],
+    });
+    // Only the REMIXER's pins change, for every lesson it is about to show.
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      { courseIds: [2], lessonIds: [1010, 1011] },
+      expect.any(Function),
+    );
     // The owned-modules query: FROM modules, filtered on the OWNER column.
     // selects[0] = org check, [1] = the source-row lock, [2] = this query.
     const owned = fake.state.selects[2];
@@ -283,7 +312,7 @@ describe('remixCourse', () => {
    * SOURCE row (`sourceCourseId`, not the remixer) first serialises the two
    * transactions on that row.
    */
-  it('locks the source course row for update before writing the link row', async () => {
+  it('locks the source course row before writing the link row', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]); // org check
     fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([]); // no owned modules
@@ -300,7 +329,7 @@ describe('remixCourse', () => {
     // selects[0] = org check, [1] = the lock — issued before the link insert
     // (fake.state.inserts[0], asserted elsewhere) since it's read first here.
     const lock = fake.state.selects[1];
-    expect(lock.for).toBe('update');
+    expect(lock.for).toBe('no key update');
     expect(renderSql(lock.where as SQL)).toBe('"courses"."id" = $1');
     expect(renderSqlParams(lock.where as SQL)).toEqual([6]);
   });
@@ -428,7 +457,7 @@ describe('remixCourse', () => {
         actorId: 'u1',
       });
 
-      expect(result).toEqual({ ok: true, moduleCount: 2 });
+      expect(result).toMatchObject({ ok: true, moduleCount: 2 });
       expect(fake.state.inserts).toHaveLength(2);
     });
   });
@@ -458,6 +487,7 @@ describe('unremixCourse', () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]);
     fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([{ id: 1 }]); // link deleted
+    fake.state.results.push([{ id: 10 }, { id: 11 }]); // modules the source owns
     fake.state.results.push([{ id: 7 }, { id: 8 }, { id: 9 }]); // placements deleted
     const result = await unremixCourse({
       orgId: ORG,
@@ -465,6 +495,11 @@ describe('unremixCourse', () => {
       sourceCourseId: 6,
     });
     expect(result).toEqual({ ok: true, moduleCount: 3 });
+    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      { courseIds: [2], lessonIds: [1010, 1011] },
+      expect.any(Function),
+    );
     const placements = fake.state.deletes[1];
     expect(placements.table).toBe(courseModulesTable);
     expect(renderSql(placements.where as SQL)).toBe(
@@ -482,10 +517,11 @@ describe('unremixCourse', () => {
    * un-remix deleted every OTHER placement — leaving one orphaned borrowed
    * module on a rail that no longer remixes anything.
    */
-  it('locks the source course row for update before deleting the link', async () => {
+  it('locks the source course row before deleting the link', async () => {
     fake.state.results.push([{ courseId: 2 }, { courseId: 6 }]);
     fake.state.results.push([{ id: 6 }]); // lock on the source row
     fake.state.results.push([{ id: 1 }]); // link deleted
+    fake.state.results.push([]); // modules the source owns
     fake.state.results.push([]); // placements deleted
 
     await unremixCourse({ orgId: ORG, courseId: 2, sourceCourseId: 6 });
@@ -493,7 +529,7 @@ describe('unremixCourse', () => {
     // selects[0] = org check, [1] = the lock — issued first inside the
     // transaction, before the delete (fake.state.deletes[0]).
     const lock = fake.state.selects[1];
-    expect(lock.for).toBe('update');
+    expect(lock.for).toBe('no key update');
     expect(renderSql(lock.where as SQL)).toBe('"courses"."id" = $1');
     expect(renderSqlParams(lock.where as SQL)).toEqual([6]);
   });

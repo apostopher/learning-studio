@@ -3,6 +3,11 @@ import { db } from '#/db';
 import { createModule, reorderModule } from '#/db/admin';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { getCourseSlugsForModuleId } from '#/db/lesson-access';
+import {
+  changeMembership,
+  getCourseIdsShowingModule,
+  lockModuleOwner,
+} from '#/db/lesson-versions';
 import { getCourseIdsForLessons } from '#/db/placements';
 import {
   courseModulesTable,
@@ -25,6 +30,8 @@ export interface CopiedModule {
    * too. Named so the admin is told exactly which ones did not come along.
    */
   skipped: { id: number; name: string }[];
+  /** Snapshots taken for the placed lessons, for the caller to index. */
+  createdVersionIds: number[];
 }
 
 /**
@@ -145,20 +152,37 @@ export async function copyDisciplineModuleIntoCourse(input: {
     }
   }
 
+  let createdVersionIds: number[] = [];
   if (toPlace.length > 0) {
-    await db.insert(moduleLessonsTable).values(
-      toPlace.map((lesson, i) => ({
-        moduleId: module.id,
-        lessonId: lesson.id,
-        rank: String(i + 1),
-        dependsOn: [],
-      })),
-    );
+    ({ createdVersionIds } = await db.transaction(async (tx) => {
+      await lockModuleOwner(tx, input.courseId);
+      return changeMembership(
+        tx,
+        {
+          courseIds: await getCourseIdsShowingModule(tx, module.id),
+          lessonIds: toPlace.map((l) => l.id),
+        },
+        () =>
+          tx.insert(moduleLessonsTable).values(
+            toPlace.map((lesson, i) => ({
+              moduleId: module.id,
+              lessonId: lesson.id,
+              rank: String(i + 1),
+              dependsOn: [],
+            })),
+          ),
+      );
+    }));
     // Every course showing the module — the owner and any course remixing
     // it — just gained lessons.
     const slugs = await getCourseSlugsForModuleId(module.id);
     await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
   }
 
-  return { module, placedLessonIds: toPlace.map((l) => l.id), skipped };
+  return {
+    module,
+    placedLessonIds: toPlace.map((l) => l.id),
+    skipped,
+    createdVersionIds,
+  };
 }

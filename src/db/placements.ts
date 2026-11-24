@@ -8,6 +8,12 @@ import {
   lessonBelongsToCourseOrg,
 } from '#/db/lesson-access';
 import {
+  changeMembership,
+  getCourseIdsShowingModule,
+  lockModuleOwner,
+  type Tx,
+} from '#/db/lesson-versions';
+import {
   courseModulesTable,
   moduleLessonsTable,
   modulesTable,
@@ -75,8 +81,9 @@ export async function getPlacementsForCourse(
  */
 export async function getCourseIdsForLesson(
   lessonId: number,
+  ex: Tx | typeof db = db,
 ): Promise<number[]> {
-  const rows = await db
+  const rows = await ex
     .select({ courseId: courseModulesTable.courseId })
     .from(moduleLessonsTable)
     .innerJoin(
@@ -247,15 +254,22 @@ function toPlacement(row: {
  * module id, which is a lie.
  *
  * The unique index only covers (module_id, lesson_id), so the course-level rule
- * is checked here. A denormalised course_id on module_lessons would make it a
- * DB guarantee; not worth it until this check proves insufficient.
+ * is checked here, under the owner's lock so two drags at once cannot both
+ * pass it.
+ *
+ * `createdVersionIds` are the snapshots taken for it, for the caller to index.
  */
 export async function linkLesson(input: {
   moduleId: number;
   lessonId: number;
   prevLessonId: number | null;
   nextLessonId: number | null;
-}): Promise<Placement | 'duplicate' | 'foreign-lesson' | null> {
+}): Promise<
+  | (Placement & { createdVersionIds: number[] })
+  | 'duplicate'
+  | 'foreign-lesson'
+  | null
+> {
   const targetCourseId = await getCourseIdForModuleId(input.moduleId);
   if (targetCourseId === null) return null;
 
@@ -266,28 +280,48 @@ export async function linkLesson(input: {
     return 'foreign-lesson';
   }
 
-  const existing = await getCourseIdsForLesson(input.lessonId);
-  if (existing.includes(targetCourseId)) return 'duplicate';
+  const { result: created, createdVersionIds } = await db.transaction(
+    async (tx) => {
+      await lockModuleOwner(tx, targetCourseId);
+      return changeMembership(
+        tx,
+        {
+          courseIds: await getCourseIdsShowingModule(tx, input.moduleId),
+          lessonIds: [input.lessonId],
+        },
+        async () => {
+          const existing = await getCourseIdsForLesson(input.lessonId, tx);
+          if (existing.includes(targetCourseId)) return 'duplicate' as const;
 
-  const [created] = await db
-    .insert(moduleLessonsTable)
-    .values({
-      moduleId: input.moduleId,
-      lessonId: input.lessonId,
-      rank: rankBetween(input.prevLessonId, input.nextLessonId, input.moduleId),
-      dependsOn: [],
-    })
-    .returning({
-      id: moduleLessonsTable.id,
-      moduleId: moduleLessonsTable.moduleId,
-      lessonId: moduleLessonsTable.lessonId,
-      rank: moduleLessonsTable.rank,
-      dependsOn: moduleLessonsTable.dependsOn,
-    });
+          const [row] = await tx
+            .insert(moduleLessonsTable)
+            .values({
+              moduleId: input.moduleId,
+              lessonId: input.lessonId,
+              rank: rankBetween(
+                input.prevLessonId,
+                input.nextLessonId,
+                input.moduleId,
+              ),
+              dependsOn: [],
+            })
+            .returning({
+              id: moduleLessonsTable.id,
+              moduleId: moduleLessonsTable.moduleId,
+              lessonId: moduleLessonsTable.lessonId,
+              rank: moduleLessonsTable.rank,
+              dependsOn: moduleLessonsTable.dependsOn,
+            });
+          return row;
+        },
+      );
+    },
+  );
+  if (created === 'duplicate') return 'duplicate';
 
   await invalidateEveryCourseShowingModule(input.moduleId);
 
-  return toPlacement(created);
+  return { ...toPlacement(created), createdVersionIds };
 }
 
 /** Remove a placement. The lesson itself survives, in the library and elsewhere. */
@@ -295,15 +329,29 @@ export async function unlinkLesson(
   moduleId: number,
   lessonId: number,
 ): Promise<boolean> {
-  const removed = await db
-    .delete(moduleLessonsTable)
-    .where(
-      and(
-        eq(moduleLessonsTable.moduleId, moduleId),
-        eq(moduleLessonsTable.lessonId, lessonId),
-      ),
-    )
-    .returning({ id: moduleLessonsTable.id });
+  const ownerCourseId = await getCourseIdForModuleId(moduleId);
+  if (ownerCourseId === null) return false;
+
+  const { result: removed } = await db.transaction(async (tx) => {
+    await lockModuleOwner(tx, ownerCourseId);
+    return changeMembership(
+      tx,
+      {
+        courseIds: await getCourseIdsShowingModule(tx, moduleId),
+        lessonIds: [lessonId],
+      },
+      () =>
+        tx
+          .delete(moduleLessonsTable)
+          .where(
+            and(
+              eq(moduleLessonsTable.moduleId, moduleId),
+              eq(moduleLessonsTable.lessonId, lessonId),
+            ),
+          )
+          .returning({ id: moduleLessonsTable.id }),
+    );
+  });
 
   if (removed.length === 0) return false;
 
@@ -335,6 +383,10 @@ export async function unlinkLesson(
  *   404s — after its own guard on the source's owner has had the chance to
  *   403 first.
  *
+ * Every course showing either module is synced, though a remixer normally
+ * shows both and keeps its pin: one that shows only one of them gains or
+ * loses the lesson.
+ *
  * The owner filter is a `sql` fragment rather than a builder subquery, the
  * way `unremixCourse` writes its owner filter: it is over the OWNER column,
  * which has no membership-style helper, and a fragment renders standalone so
@@ -350,31 +402,47 @@ export async function movePlacement(input: {
   const ownerCourseId = await getCourseIdForModuleId(input.targetModuleId);
   if (ownerCourseId === null) return null;
 
-  const [updated] = await db
-    .update(moduleLessonsTable)
-    .set({
-      moduleId: input.targetModuleId,
-      rank: rankBetween(
-        input.prevLessonId,
-        input.nextLessonId,
-        input.targetModuleId,
-      ),
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(moduleLessonsTable.moduleId, input.fromModuleId),
-        eq(moduleLessonsTable.lessonId, input.lessonId),
-        sql`${moduleLessonsTable.moduleId} in (select ${modulesTable.id} from ${modulesTable} where ${modulesTable.courseId} = ${ownerCourseId})`,
-      ),
-    )
-    .returning({
-      id: moduleLessonsTable.id,
-      moduleId: moduleLessonsTable.moduleId,
-      lessonId: moduleLessonsTable.lessonId,
-      rank: moduleLessonsTable.rank,
-      dependsOn: moduleLessonsTable.dependsOn,
-    });
+  const {
+    result: [updated],
+  } = await db.transaction(async (tx) => {
+    await lockModuleOwner(tx, ownerCourseId);
+    return changeMembership(
+      tx,
+      {
+        courseIds: [
+          ...(await getCourseIdsShowingModule(tx, input.fromModuleId)),
+          ...(await getCourseIdsShowingModule(tx, input.targetModuleId)),
+        ],
+        lessonIds: [input.lessonId],
+      },
+      () =>
+        tx
+          .update(moduleLessonsTable)
+          .set({
+            moduleId: input.targetModuleId,
+            rank: rankBetween(
+              input.prevLessonId,
+              input.nextLessonId,
+              input.targetModuleId,
+            ),
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(moduleLessonsTable.moduleId, input.fromModuleId),
+              eq(moduleLessonsTable.lessonId, input.lessonId),
+              sql`${moduleLessonsTable.moduleId} in (select ${modulesTable.id} from ${modulesTable} where ${modulesTable.courseId} = ${ownerCourseId})`,
+            ),
+          )
+          .returning({
+            id: moduleLessonsTable.id,
+            moduleId: moduleLessonsTable.moduleId,
+            lessonId: moduleLessonsTable.lessonId,
+            rank: moduleLessonsTable.rank,
+            dependsOn: moduleLessonsTable.dependsOn,
+          }),
+    );
+  });
 
   if (!updated) return null;
 
