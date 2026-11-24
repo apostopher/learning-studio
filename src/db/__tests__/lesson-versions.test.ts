@@ -45,7 +45,6 @@ vi.mock('#/db/video-captions', () => ({ muxCaptionsForPlayback: vi.fn() }));
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
 const {
-  changeMembership,
   countCoursesOnVersion,
   getCourseIdsShowingModule,
   getCoursesUsingLesson,
@@ -503,6 +502,33 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }),
         ).toMatchObject({ ok: true });
       });
+
+      it('survives a failed read after the commit, keeping the snapshot to index', async () => {
+        await link(1, 1);
+        await bump(1, '1.1');
+        vi.clearAllMocks();
+        // The transaction reads through its own `tx`, so only a read after it
+        // meets this.
+        const select = vi.spyOn(pgDb.db, 'select').mockImplementation(() => {
+          throw new Error('connection lost');
+        });
+        const result = await updateCourseLessonVersion({
+          courseId: 2,
+          lessonId: 1,
+          toVersion: '1.1',
+        }).finally(() => select.mockRestore());
+
+        const [snapshot] = await rows(
+          `select id from lesson_versions where version = '1.1'`,
+        );
+        expect(result).toEqual({
+          ok: true,
+          version: '1.1',
+          createdVersionIds: [snapshot.id],
+        });
+        expect(h.invalidateCourseDetailsCache).toHaveBeenCalledWith('two');
+        expect(h.invalidatePlayback).toHaveBeenCalledWith('a');
+      });
     });
 
     /** Left behind by the old code, which unlinks without knowing of pins. */
@@ -601,26 +627,66 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await unpinned()).toEqual([]);
     });
 
-    it('a failed write leaves pins and snapshots as they were', async () => {
-      await link(1, 1);
-      const before = await pins();
-      await expect(
-        pgDb.db.transaction(async (tx) => {
-          await changeMembership(
-            tx,
-            { courseIds: [1, 2], lessonIds: [3] },
-            () =>
-              tx.execute(
-                'insert into module_lessons (module_id, lesson_id, rank) values (1, 3, 2)',
-              ),
-          );
-          throw new Error('later step failed');
-        }),
-      ).rejects.toThrow('later step failed');
-      expect(await pins()).toEqual(before);
-      await pgDb.pool.query('delete from course_orgs where course_id = 1');
-      expect(await link(1, 3)).toBe('foreign-lesson');
-      expect(await snapshots()).toHaveLength(1);
+    describe('a failed write leaves placements, pins and snapshots as they were', () => {
+      const state = async () => ({
+        placements: await rows(
+          'select module_id, lesson_id from module_lessons order by id',
+        ),
+        pins: await pins(),
+        snapshots: await snapshots(),
+      });
+
+      it('when the write itself fails, with the stale pins already dropped', async () => {
+        await link(1, 1);
+        // The same lesson in both modules.
+        await pgDb.pool.query(
+          'insert into module_lessons (module_id, lesson_id, rank) values (2, 1, 1)',
+        );
+        // A stale pin: the first thing `changeMembership` deletes.
+        await link(2, 3);
+        await pgDb.pool.query('delete from module_lessons where lesson_id = 3');
+        const before = await state();
+        expect(before.pins).toContain('course 1: lesson 3 1.0');
+
+        // Module 2 holds the lesson already: its unique index refuses the move.
+        const moved = movePlacement({
+          lessonId: 1,
+          fromModuleId: 1,
+          targetModuleId: 2,
+          prevLessonId: null,
+          nextLessonId: null,
+        });
+        await expect(moved).rejects.toMatchObject({
+          cause: { constraint: 'module_lessons_module_lesson_idx' },
+        });
+        expect(await state()).toEqual(before);
+      });
+
+      it('when pinning fails, after the lesson was placed and its snapshot taken', async () => {
+        await link(1, 1);
+        const before = await state();
+        await pgDb.pool.query(`
+          create function refuse_pin() returns trigger language plpgsql as
+            $$ begin raise exception 'pin refused'; end $$;
+          create trigger refuse_pin before insert on course_lesson_versions
+            for each row execute function refuse_pin()`);
+        try {
+          await expect(link(1, 3)).rejects.toMatchObject({
+            cause: { message: 'pin refused' },
+          });
+        } finally {
+          await pgDb.pool.query('drop function refuse_pin cascade');
+        }
+        expect(await state()).toEqual(before);
+      });
+
+      it('when it is refused', async () => {
+        await link(1, 1);
+        const before = await state();
+        await pgDb.pool.query('delete from course_orgs where course_id = 1');
+        expect(await link(1, 3)).toBe('foreign-lesson');
+        expect(await state()).toEqual(before);
+      });
     });
 
     describe('deleteLesson', () => {

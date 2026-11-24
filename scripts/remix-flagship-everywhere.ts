@@ -16,6 +16,9 @@
  * Idempotent: a re-run finds every course already linked and remixes
  * nothing. Prints `{ remixed, alreadyRemixed, failed: [{ courseId, reason }] }`.
  *
+ * It pins the lessons but does not index the snapshots it takes: run
+ * `pnpm db:index-lesson-versions` afterwards, or Viper cannot find them.
+ *
  * Run: pnpm db:remix-flagship-everywhere
  */
 import { and, eq } from 'drizzle-orm';

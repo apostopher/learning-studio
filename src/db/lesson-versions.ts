@@ -12,7 +12,6 @@ import {
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
-import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import {
   pinLessons,
@@ -38,7 +37,8 @@ import { compareVersions } from '#/lib/lesson-version';
  * to those two tables that can add or remove a (course, lesson) goes through
  * `changeMembership`.
  *
- * LOCK ORDER, the same in every writer, so that none can deadlock another:
+ * LOCK ORDER, the same in every membership writer, so that none can deadlock
+ * another:
  * 1. the row of the course OWNING the modules, `for no key update`
  *    (`lockModuleOwner`). It holds still which courses show those modules and
  *    which lessons are in them. Not `for update`: that would also block the
@@ -48,6 +48,9 @@ import { compareVersions } from '#/lib/lesson-version';
  * 3. the `lessons` rows, `for update`, by id, BEFORE the placement is written:
  *    its foreign key share-locks the lesson, and two writers upgrading that
  *    share lock would deadlock.
+ * `deleteDisciplineModule` is outside it: its foreign key clears the lessons'
+ * module in no set order, so it can deadlock with a writer locking several of
+ * them. Postgres then rolls one of the two back whole.
  */
 
 /** The `tx` handed to a `db.transaction` callback. */
@@ -208,9 +211,18 @@ export async function updateCourseLessonVersion(i: {
     const pinned = isPinOf(i.courseId, i.lessonId);
     // Of a lesson the course shows: a pin left behind is not one to move.
     const [pin] = await tx
-      .select({ version: lessonVersionsTable.version })
+      .select({
+        version: lessonVersionsTable.version,
+        // Read here rather than after the commit, where a failure would lose
+        // `createdVersionIds` although the course has moved.
+        courseSlug: coursesTable.slug,
+      })
       .from(courseLessonVersionsTable)
       .innerJoin(lessonVersionsTable, isPinnedSnapshot())
+      .innerJoin(
+        coursesTable,
+        eq(coursesTable.id, courseLessonVersionsTable.courseId),
+      )
       .where(
         and(
           pinned,
@@ -249,15 +261,14 @@ export async function updateCourseLessonVersion(i: {
     return {
       ok: true,
       slug: lesson.slug,
+      courseSlug: pin.courseSlug,
       version: lesson.version,
       createdVersionIds: rows.map((r) => r.id),
     } as const;
   });
   if (!outcome.ok) return outcome;
 
-  await invalidateCourseDetailsCache(
-    await getCourseSlugForCourseId(i.courseId),
-  );
+  await invalidateCourseDetailsCache(outcome.courseSlug);
   // Best-effort, like the line above: the course has already moved.
   try {
     await getLessonPlayback.invalidate(outcome.slug);

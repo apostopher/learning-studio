@@ -1460,12 +1460,6 @@ export const EditorContainer = ({
       */}
       <LibraryLessonConfigDialogContainer />
       {/*
-        The preview the play tile opens. Handed every module on the rail
-        flattened, because it looks a lesson up by id and this board holds
-        several courses at once — unlike the per-course board, which passes
-        only its own.
-      */}
-      {/*
         The three course-level dialogs, mounted once for the rail rather than
         once per column — each is driven by an atom naming the course that
         opened it.
@@ -1477,6 +1471,11 @@ export const EditorContainer = ({
       <EditorCreateModuleDialogContainer />
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer navigateAfterDelete={false} />
+      {/*
+        The preview the play tile opens. Handed every course on the board,
+        because it looks the lesson up in the course whose tile was pressed —
+        unlike the per-course board, which passes only its own.
+      */}
       <LessonVideoModalContainer boards={board} />
       <UpdateLessonVersionDialogContainer
         readBoards={() => readBoard() ?? []}

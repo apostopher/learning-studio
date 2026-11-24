@@ -181,12 +181,13 @@ export async function selectLatestFinishedChunkAttempt(
  * - hasOpenAttempt: an unfinished chunk-format attempt exists, of any version;
  * - waitServed: an attempt has finished, on any version;
  * - mastery: cleared of total against the CURRENT chunk list of the version
- *   this course shows, or null when it has no chunks stored yet. With
- *   lastFinishedAt, the only facts an update resets: the others are the
- *   lesson's, not a version's;
+ *   this course shows, or null when it has no chunks stored yet;
  * - clockStartAt: the video's first full coverage (the shared
  *   `videoWatchedAtSql` fragment) on a video lesson, else the sticky
  *   `lesson_completions.done_at` — see `debriefClockStart`.
+ *
+ * Only lastFinishedAt and mastery start over when the course moves to another
+ * version: the others belong to the lesson, whatever its version.
  */
 export async function getDebriefFacts(
   userId: string,

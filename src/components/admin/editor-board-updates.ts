@@ -15,7 +15,10 @@ import { parseDndId } from '#/lib/dnd-ids';
  * snapshot the container holds for rollback stays intact.
  */
 
-/** Every module on the board, flattened — ids are unique across courses. */
+/**
+ * Every module on the board, flattened. A borrowed module is here once per
+ * course showing it, its lessons as that course has them.
+ */
 function allModules(board: OrgEditorBoard) {
   return board.flatMap((cb) => cb.modules);
 }

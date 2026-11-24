@@ -1116,9 +1116,8 @@ export function hasOrgPermission(
 }
 
 /**
- * A lesson as the org library shows it: the working copy. Deliberately carries none of a
- * lesson's gates (`levels`, `requiredSubscriptions`, `hasDebrief`) — those
- * are edited on the lesson's own config screen, not shown on a library card.
+ * A lesson as the org library shows it: the working copy. Its gates are
+ * carried for the card drawn the instant it is dropped (see `levels` below).
  */
 export const libraryLessonSchema = z.object({
   id: z.number(),

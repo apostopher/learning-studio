@@ -10,11 +10,10 @@ import type { LessonMaterialGeneration } from '#/types';
 import { disciplinesTable, lessonMaterialTable, lessonsTable } from './schema';
 
 /**
- * A lesson's material row, plus which closing tab it shows (`extraTab`).
- *
- * `extraTab` rides on the row so every reader — the learner panel, the
- * admin form — takes the decision from the server rather than re-deriving
- * it from a discipline it may not have loaded.
+ * The working copy's material row, plus which closing tab it shows
+ * (`extraTab`): what the admin form edits. Learners get the same shape from
+ * their course's snapshot (`getCourseLessonMaterial`), `extraTab` included, so
+ * neither re-derives it from a discipline it may not have loaded.
  */
 export async function getLessonMaterial(lessonSlug: string) {
   try {

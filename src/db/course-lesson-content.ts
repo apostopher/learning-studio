@@ -88,6 +88,7 @@ export async function getCourseLessonMaterial(
   if (!snapshot || snapshot.text === null) return null;
   // Named one by one: a learner gets this whole object, and never the version.
   return {
+    // The snapshot's id, not a `lesson_material` row's.
     id: snapshot.id,
     lessonSlug,
     text: snapshot.text,

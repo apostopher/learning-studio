@@ -183,8 +183,8 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
           .from(lessonVersionsTable)
           .where(eq(lessonVersionsTable.lessonId, lessonId)),
       ]);
-      // Every language, not just the one that changed: an alternate added or
-      // removed changes the `languages` list carried by ALL of them.
+      // Every language: the main video is also cached under each language the
+      // version has no video in.
       const keys = courseIds.flatMap((courseId) =>
         versions.flatMap((version) =>
           ALL_LANGS.map((lang) =>

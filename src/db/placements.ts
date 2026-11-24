@@ -434,9 +434,9 @@ export async function movePlacement(input: {
 
   if (!updated) return null;
 
-  // The target module's courses. The source module shares the owner (the
-  // WHERE above guarantees it), and every remixer of that owner shows both
-  // modules — so this set covers the placement's old home too.
+  // The target module's courses: normally the source module's too, since one
+  // course owns both (the WHERE above). One showing only the source module is
+  // not evicted here; `moveLesson` does it, or its cached page expires.
   await invalidateEveryCourseShowingModule(input.targetModuleId);
 
   return toPlacement(updated);

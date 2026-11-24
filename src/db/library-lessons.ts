@@ -6,9 +6,10 @@ import type { LibraryLesson } from '#/lib/admin-schemas';
 /**
  * Create a lesson straight into a discipline, teaching no course yet.
  *
- * The only way a lesson is created. It writes NO placement, deliberately: a
- * library lesson exists as a thing the org knows before any course teaches it,
- * and it enters a course later by being dragged into one. `getOrgLibrary` reads lessons by `org_id`, not by
+ * The app's only way to create a lesson (`scripts/` insert their own). It
+ * writes NO placement, deliberately: a library lesson exists as a thing the
+ * org knows before any course teaches it, and it enters a course later by
+ * being dragged into one. `getOrgLibrary` reads lessons by `org_id`, not by
  * placement, so an unplaced lesson still has a column to appear in — and
  * `getCourseIdsForLessons` returns no entry for it, which the library
  * renders as "in 0 courses" rather than dropping the card.
