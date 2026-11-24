@@ -58,6 +58,9 @@ export async function getVideoPlaybackHandler(
   // which language it played.
   const rawLang = searchParams.get('lang');
   const lang = isVideoLang(rawLang) ? rawLang : PRIMARY_VIDEO_LANG;
+  // The named course's version, unless Disciplines asks for the working copy.
+  const source =
+    searchParams.get('source') === 'discipline' ? 'discipline' : 'course';
   // Confirm the placement before guarding: guarding on a course the lesson is
   // not in would misreport "no such lesson" as "forbidden". A course the
   // lesson is not placed in gets the SAME answer as an unknown lesson, and
@@ -73,7 +76,12 @@ export async function getVideoPlaybackHandler(
   if (denied) return denied;
 
   try {
-    const playback = await resolveLessonPlayback(lessonId, courseId, lang);
+    const playback = await resolveLessonPlayback(
+      lessonId,
+      courseId,
+      lang,
+      source,
+    );
     // 404 now means "no video assigned" only. A missing course credential
     // used to land here too, which made an admin misconfiguration
     // indistinguishable from an empty lesson; it throws

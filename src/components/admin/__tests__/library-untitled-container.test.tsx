@@ -40,6 +40,10 @@ const lesson = (id: number): LibraryLesson => ({
   isAvailable: true,
   courseCount: 0,
   courseIds: [],
+  version: '1.0',
+  highestTaken: null,
+  versionCourseCount: 0,
+  contentUpdatedAt: new Date(0),
   videoProvider: null,
   // Deliberately NOT null: the card must be told the bucket it renders
   // from, never left to read this column off its own payload.

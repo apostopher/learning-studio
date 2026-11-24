@@ -119,7 +119,7 @@ describe('getVideoPlaybackHandler', () => {
 
     await getVideoPlaybackHandler(req('99'), '1');
 
-    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99, 'en');
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 99, 'en', 'course');
   });
 
   /**
@@ -216,7 +216,7 @@ describe('getVideoPlaybackHandler', () => {
       ),
       '1',
     );
-    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'fr');
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'fr', 'course');
     expect(learnerPlaybackSchema.parse(await res.json())).toMatchObject({
       lang: 'fr',
       languages: ['en', 'fr'],
@@ -240,7 +240,34 @@ describe('getVideoPlaybackHandler', () => {
       '1',
     );
     expect(res.status).toBe(200);
-    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'en');
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'en', 'course');
+  });
+
+  /**
+   * Which content to play: the named course's snapshot, or the working copy
+   * Disciplines edits. Anything else gets the course's, what its learners see.
+   */
+  it.each([
+    ['discipline', 'discipline'],
+    ['course', 'course'],
+    ['', 'course'],
+    ['Discipline', 'course'],
+  ])('resolves source=%j as %s', async (raw, source) => {
+    resolveLessonPlayback.mockResolvedValue(null);
+    await getVideoPlaybackHandler(
+      new Request(
+        `http://test/api/admin/lessons/1/video-playback?courseId=42&source=${raw}`,
+      ),
+      '1',
+    );
+    expect(resolveLessonPlayback).toHaveBeenCalledWith(1, 42, 'en', source);
+    // The same course guards both.
+    expect(requireCoursePermission).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      'content',
+      'read',
+    );
   });
 
   it('403s a refused actor without touching the database', async () => {

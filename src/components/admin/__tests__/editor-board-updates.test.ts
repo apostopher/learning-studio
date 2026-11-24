@@ -18,6 +18,7 @@ import { railModules } from '#/lib/flagship-course';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
+  findBoardLesson,
   lessonNeighbours,
   libraryLessonBox,
   libraryLessonNeighbours,
@@ -42,6 +43,9 @@ const lesson = (id: number): BoardLesson => ({
   levels: [],
   isConfigured: true,
   quizQuestionCount: 0,
+  version: '1.0',
+  disciplineVersion: '1.0',
+  contentUpdatedAt: new Date(0),
   dependsOn: [],
   videoProvider: null,
   videoRef: null,
@@ -147,6 +151,116 @@ describe('moveLessonOnBoard', () => {
 
     expect(idsIn(board, 10)).toEqual([100, 101, 102]);
     expect(idsIn(board, 11)).toEqual([110]);
+  });
+});
+
+/**
+ * Each course is on its own version of a lesson, so two columns showing one
+ * module show different cards in it.
+ */
+describe('a lesson two courses have on different versions', () => {
+  const owner = { id: 1, name: 'Owner' };
+  const named = (courseName: string, version: string) =>
+    ({
+      ...lesson(100),
+      name: `As ${courseName} has it`,
+      version,
+      disciplineVersion: '1.2',
+    }) satisfies BoardLesson;
+  /** Course 2 borrows module 10 from course 1, and not module 11. */
+  const board = (): OrgEditorBoard => [
+    courseBoard(1, 'Owner', [
+      { ...mod(10, [101], owner), lessons: [lesson(101), named('one', '1.0')] },
+      mod(11, [], owner),
+    ]),
+    courseBoard(2, 'Borrower', [
+      { ...mod(10, [101], owner), lessons: [lesson(101), named('two', '1.1')] },
+    ]),
+  ];
+  const cardsIn = (b: OrgEditorBoard, moduleId: number) =>
+    b.map((cb) =>
+      cb.modules
+        .find((m) => m.id === moduleId)
+        ?.lessons.filter((l) => l.id === 100)
+        .map((l) => [l.name, l.version]),
+    );
+
+  it('keeps each column its own card through a move', () => {
+    const next = moveLessonOnBoard(board(), 100, 10, 10, lessonDndId(1, 101));
+    expect(idsIn(next, 10)).toEqual([100, 101]);
+    expect(cardsIn(next, 10)).toEqual([
+      [['As one has it', '1.0']],
+      [['As two has it', '1.1']],
+    ]);
+  });
+
+  it('shows the version a column takes when it starts showing the lesson', () => {
+    const away = moveLessonOnBoard(board(), 100, 10, 11, containerDndId(1, 11));
+    expect(cardsIn(away, 11)).toEqual([[['As one has it', '1.0']], undefined]);
+    expect(cardsIn(away, 10)).toEqual([[], []]);
+
+    const back = moveLessonOnBoard(away, 100, 11, 10, containerDndId(1, 10));
+    expect(cardsIn(back, 10).map((c) => c?.[0][1])).toEqual(['1.0', '1.2']);
+  });
+
+  it('a column showing it in another module stays on its version', () => {
+    const [own, borrower] = board();
+    const twice = {
+      ...borrower,
+      modules: [
+        mod(10, [101], owner),
+        { ...mod(20, []), lessons: [named('two', '1.1')] },
+      ],
+    };
+    const next = moveLessonOnBoard(
+      [
+        {
+          ...own,
+          modules: [
+            mod(10, [101], owner),
+            { ...mod(11, []), lessons: [named('one', '1.0')] },
+          ],
+        },
+        twice,
+      ],
+      100,
+      11,
+      10,
+      containerDndId(1, 10),
+    );
+    expect(cardsIn(next, 10)).toEqual([
+      [['As one has it', '1.0']],
+      [['As two has it', '1.1']],
+    ]);
+  });
+
+  it('a library lesson dropped in moves no column off its version', () => {
+    const [own, borrower] = board();
+    const library = { ...named('library', '1.2') };
+    const next = linkLessonOnBoard(
+      [
+        { ...own, modules: [mod(10, [101], owner)] },
+        {
+          ...borrower,
+          modules: [
+            mod(10, [101], owner),
+            { ...mod(20, []), lessons: [named('two', '1.1')] },
+          ],
+        },
+      ],
+      library,
+      10,
+    );
+    expect(cardsIn(next, 10)).toEqual([
+      [['As library has it', '1.2']],
+      [['As two has it', '1.1']],
+    ]);
+  });
+
+  it('finds the card of the course named', () => {
+    expect(findBoardLesson(board(), 2, 100)?.name).toBe('As two has it');
+    expect(findBoardLesson(board(), 1, 100)?.name).toBe('As one has it');
+    expect(findBoardLesson(board(), 3, 100)).toBeUndefined();
   });
 });
 
@@ -333,6 +447,10 @@ describe('boardLessonFromLibrary', () => {
       isAvailable: false,
       courseCount: 0,
       courseIds: [],
+      version: '1.0',
+      highestTaken: null,
+      versionCourseCount: 0,
+      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: [],
@@ -369,6 +487,10 @@ describe('boardLessonFromLibrary', () => {
       isAvailable: true,
       courseCount: 1,
       courseIds: [],
+      version: '1.0',
+      highestTaken: null,
+      versionCourseCount: 0,
+      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: ['advanced'],
@@ -383,6 +505,38 @@ describe('boardLessonFromLibrary', () => {
     expect(card.requiredSubscriptions).toEqual(['rpoc']);
     expect(card.hasDebrief).toBe(true);
     expect(card.needsVideoWatch).toBe(true);
+  });
+
+  it('shows the version the course is taking, as both versions', () => {
+    const edited = new Date('2026-11-24T09:38:00Z');
+    const card = boardLessonFromLibrary({
+      id: 503,
+      name: 'Spins',
+      slug: 'spins',
+      isConfigured: true,
+      isAvailable: true,
+      courseCount: 2,
+      courseIds: [7, 8],
+      version: '1.10',
+      // Not the highest taken: the course takes the working copy.
+      highestTaken: '1.9',
+      versionCourseCount: 0,
+      contentUpdatedAt: edited,
+      videoProvider: 'mux',
+      disciplineModuleId: null,
+      levels: [],
+      requiredSubscriptions: [],
+      hasDebrief: false,
+      needsVideoWatch: false,
+    });
+
+    expect(card).toMatchObject({
+      name: 'Spins',
+      isConfigured: true,
+      version: '1.10',
+      disciplineVersion: '1.10',
+      contentUpdatedAt: edited,
+    });
   });
 
   it('leaves rank and the quiz count as placeholders, deliberately', () => {
@@ -400,6 +554,10 @@ describe('boardLessonFromLibrary', () => {
       isAvailable: true,
       courseCount: 0,
       courseIds: [],
+      version: '1.0',
+      highestTaken: null,
+      versionCourseCount: 0,
+      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: [],
@@ -498,6 +656,10 @@ const libLesson = (
   isAvailable: true,
   courseCount: 0,
   courseIds: [],
+  version: '1.0',
+  highestTaken: null,
+  versionCourseCount: 0,
+  contentUpdatedAt: new Date(0),
   videoProvider: null,
   disciplineModuleId,
   levels: [],

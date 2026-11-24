@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   learnerPlaybackSchema,
+  type PlaybackSource,
   playbackErrorSchema,
 } from '#/lib/admin-schemas';
 import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
@@ -46,6 +47,8 @@ export function playbackRefetchDelayMs(
 export type LessonInCourse = {
   lessonId: number;
   courseId: number;
+  /** The course's version of the lesson, or the Disciplines working copy. */
+  source: PlaybackSource;
   /** Preview language; omitted means the primary one (`'en'`). */
   lang?: VideoLang;
 };
@@ -63,12 +66,13 @@ export function useLessonVideoPlayback(
     queryKey: dataKeys.lessonPlayback(
       target?.lessonId ?? 0,
       target?.courseId ?? 0,
+      target?.source ?? 'course',
       target?.lang,
     ),
     queryFn: async () => {
       if (target === null) return null;
       const res = await fetch(
-        `/api/admin/lessons/${target.lessonId}/video-playback?courseId=${target.courseId}&lang=${target.lang ?? PRIMARY_VIDEO_LANG}`,
+        `/api/admin/lessons/${target.lessonId}/video-playback?courseId=${target.courseId}&source=${target.source}&lang=${target.lang ?? PRIMARY_VIDEO_LANG}`,
       );
       if (res.status === 404) return null;
       if (!res.ok) {
@@ -90,13 +94,14 @@ export function useLessonVideoPlayback(
     // while the new one loads so the preview's player stays mounted and its
     // resume-at-same-position restore point survives (same reason as the
     // learner side, see `lessonPlaybackAtomFamily` in atoms/lesson-video.ts).
-    // Only across a language change, though: a different lesson or course is
-    // a different video, and showing it under the new key would be wrong.
+    // Only across a language change, though: a different lesson, course or
+    // source is a different video, and showing it under the new key would be
+    // wrong.
     placeholderData: (previousData, previousQuery) => {
       if (target === null || previousQuery === undefined) return undefined;
-      // The key minus its trailing language is the lesson-in-course identity.
+      // The key minus its trailing language says whose video it is.
       const identity = dataKeys
-        .lessonPlayback(target.lessonId, target.courseId)
+        .lessonPlayback(target.lessonId, target.courseId, target.source)
         .slice(0, -1);
       const sameTarget =
         previousQuery.queryKey.length === identity.length + 1 &&

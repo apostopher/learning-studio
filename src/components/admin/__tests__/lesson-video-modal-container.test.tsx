@@ -38,12 +38,7 @@ vi.mock('../lesson-config/video-preview', () => ({ VideoPreview: preview }));
 
 import { LessonVideoModalContainer } from '../lesson-video-modal-container';
 
-/**
- * Two courses' modules, as the org editor hands them (flattened across the
- * rail), both teaching lesson 10. The modal looks the lesson up by id for
- * its name only; WHICH course to resolve playback in cannot come from this
- * list — it is whatever column the tile was pressed in.
- */
+/** A course's modules, teaching lesson 10. The modal reads only its name. */
 const MODULES: EditorBoardModule[] = [
   {
     id: 3,
@@ -71,11 +66,21 @@ const MODULES: EditorBoardModule[] = [
         levels: [],
         isConfigured: true,
         quizQuestionCount: 0,
+        version: '1.0',
+        disciplineVersion: '1.0',
+        contentUpdatedAt: new Date(0),
         dependsOn: [],
       },
     ],
   },
 ];
+
+/** The same lesson as a course on another version of it has it. */
+const renamed = (name: string): EditorBoardModule[] =>
+  MODULES.map((m) => ({
+    ...m,
+    lessons: m.lessons.map((l) => ({ ...l, name })),
+  }));
 
 function renderModal(play: { lessonId: number; courseId: number } | null) {
   const store = createStore();
@@ -83,7 +88,15 @@ function renderModal(play: { lessonId: number; courseId: number } | null) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <Provider store={store}>{children}</Provider>
   );
-  return render(<LessonVideoModalContainer modules={MODULES} />, { wrapper });
+  return render(
+    <LessonVideoModalContainer
+      boards={[
+        { course: { id: 6 }, modules: renamed('Course 6 name') },
+        { course: { id: 7 }, modules: MODULES },
+      ]}
+    />,
+    { wrapper },
+  );
 }
 
 const ready = {
@@ -112,16 +125,23 @@ describe('LessonVideoModalContainer', () => {
    *
    * Mutant seen RED: `useLessonVideoPlayback({ lessonId: play.lessonId,
    * courseId: 0 }, …)` — the shape the old id-only atom would force, with
-   * the course filled in by a guess. `modules` carries no course id at all,
-   * so no guess from it can reproduce the seeded 7.
+   * the course filled in by a guess. Course 6 teaches the lesson too, first,
+   * so a guess from the boards cannot reproduce the seeded 7.
    */
   it('asks for playback of the lesson in the course the tile named', () => {
     renderModal({ lessonId: 10, courseId: 7 });
 
     expect(playbackArgs).toHaveBeenCalledWith(
-      { lessonId: 10, courseId: 7, lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
       true,
     );
+  });
+
+  it('names the lesson as the course the tile named has it', () => {
+    renderModal({ lessonId: 10, courseId: 7 });
+    expect(
+      screen.getByRole('dialog', { name: 'Crosswind landings video preview' }),
+    ).toBeTruthy();
   });
 
   it('asks for nothing while closed', () => {
@@ -140,7 +160,7 @@ describe('LessonVideoModalContainer', () => {
     act(() => props.onLanguageChange?.('fr'));
 
     expect(playbackArgs.mock.calls.at(-1)).toEqual([
-      { lessonId: 10, courseId: 7, lang: 'fr' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'fr' },
       true,
     ]);
   });
@@ -193,7 +213,7 @@ describe('LessonVideoModalContainer with a non-playable preview language', () =>
     fireEvent.click(screen.getByRole('button', { name: 'Back to English' }));
 
     expect(playbackArgs.mock.calls.at(-1)).toEqual([
-      { lessonId: 10, courseId: 7, lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
       true,
     ]);
   });
@@ -212,7 +232,7 @@ describe('LessonVideoModalContainer with a non-playable preview language', () =>
     fireEvent.click(screen.getByRole('button', { name: 'Back to English' }));
 
     expect(playbackArgs.mock.calls.at(-1)).toEqual([
-      { lessonId: 10, courseId: 7, lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
       true,
     ]);
   });

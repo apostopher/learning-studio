@@ -47,23 +47,31 @@ describe('useLessonVideoPlayback', () => {
     const { client, wrapper } = harness();
 
     const { result } = renderHook(
-      () => useLessonVideoPlayback({ lessonId: 10, courseId: 7 }, true),
+      () =>
+        useLessonVideoPlayback(
+          { lessonId: 10, courseId: 7, source: 'course' },
+          true,
+        ),
       { wrapper },
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/admin/lessons/10/video-playback?courseId=7&lang=en',
+      '/api/admin/lessons/10/video-playback?courseId=7&source=course&lang=en',
     );
     // The entry the NEXT reader of this lesson-in-this-course finds — and,
     // by the same key, the entry a reader of the same lesson in course 8
     // does NOT find.
-    expect(client.getQueryData(dataKeys.lessonPlayback(10, 7))).toEqual({
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'course')),
+    ).toEqual({
       status: 'rendering',
       lang: 'en',
       languages: ['en'],
     });
-    expect(client.getQueryData(dataKeys.lessonPlayback(10, 8))).toBeUndefined();
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 8, 'course')),
+    ).toBeUndefined();
   });
 
   it('asks for the previewed language and caches each language separately', async () => {
@@ -78,21 +86,55 @@ describe('useLessonVideoPlayback', () => {
 
     const { result } = renderHook(
       () =>
-        useLessonVideoPlayback({ lessonId: 10, courseId: 7, lang: 'fr' }, true),
+        useLessonVideoPlayback(
+          { lessonId: 10, courseId: 7, source: 'course', lang: 'fr' },
+          true,
+        ),
       { wrapper },
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/admin/lessons/10/video-playback?courseId=7&lang=fr',
+      '/api/admin/lessons/10/video-playback?courseId=7&source=course&lang=fr',
     );
     // A signed-URL refetch re-reads THIS entry, so the preview stays French;
     // the English entry is a different video and must not be reused for it.
-    expect(client.getQueryData(dataKeys.lessonPlayback(10, 7, 'fr'))).toEqual(
-      body,
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'course', 'fr')),
+    ).toEqual(body);
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'course', 'en')),
+    ).toBeUndefined();
+  });
+
+  it("asks for and caches the working copy's video apart from the course's", async () => {
+    const body = { status: 'rendering', lang: 'en', languages: ['en'] };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, json: async () => body }),
+    );
+    const { client, wrapper } = harness();
+
+    const { result } = renderHook(
+      () =>
+        useLessonVideoPlayback(
+          { lessonId: 10, courseId: 7, source: 'discipline' },
+          true,
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/admin/lessons/10/video-playback?courseId=7&source=discipline&lang=en',
     );
     expect(
-      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'en')),
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'discipline')),
+    ).toEqual(body);
+    expect(
+      client.getQueryData(dataKeys.lessonPlayback(10, 7, 'course')),
     ).toBeUndefined();
   });
 
@@ -109,7 +151,10 @@ describe('useLessonVideoPlayback', () => {
 
       const { result, rerender } = renderHook(
         ({ lang }: { lang: 'en' | 'fr' }) =>
-          useLessonVideoPlayback({ lessonId: 10, courseId: 7, lang }, true),
+          useLessonVideoPlayback(
+            { lessonId: 10, courseId: 7, source: 'course', lang },
+            true,
+          ),
         { wrapper, initialProps: { lang: 'en' } },
       );
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -121,13 +166,36 @@ describe('useLessonVideoPlayback', () => {
       expect(result.current.isPlaceholderData).toBe(true);
     });
 
+    it("never shows the course's video as the working copy's", async () => {
+      const fetched = vi.fn((url: string) =>
+        url.includes('source=course') ? respond(url) : new Promise(() => {}),
+      );
+      vi.stubGlobal('fetch', fetched);
+      const { wrapper } = harness();
+
+      const { result, rerender } = renderHook(
+        ({ source }: { source: 'course' | 'discipline' }) =>
+          useLessonVideoPlayback({ lessonId: 10, courseId: 7, source }, true),
+        { wrapper, initialProps: { source: 'course' } },
+      );
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      rerender({ source: 'discipline' });
+
+      expect(result.current.data).toBeUndefined();
+      expect(result.current.isPlaceholderData).toBe(false);
+    });
+
     it('never shows one lesson’s video under another lesson', async () => {
       vi.stubGlobal('fetch', vi.fn(respond));
       const { wrapper } = harness();
 
       const { result, rerender } = renderHook(
         ({ lessonId }: { lessonId: number }) =>
-          useLessonVideoPlayback({ lessonId, courseId: 7, lang: 'en' }, true),
+          useLessonVideoPlayback(
+            { lessonId, courseId: 7, source: 'course', lang: 'en' },
+            true,
+          ),
         { wrapper, initialProps: { lessonId: 10 } },
       );
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -162,7 +230,11 @@ describe('useLessonVideoPlayback', () => {
     const { wrapper } = harness();
 
     const { result } = renderHook(
-      () => useLessonVideoPlayback({ lessonId: 10, courseId: 7 }, true),
+      () =>
+        useLessonVideoPlayback(
+          { lessonId: 10, courseId: 7, source: 'course' },
+          true,
+        ),
       { wrapper },
     );
 

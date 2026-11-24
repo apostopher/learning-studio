@@ -1,6 +1,10 @@
 import { asc, eq } from 'drizzle-orm';
 import { db } from '#/db';
 import { getCourseBoard } from '#/db/admin';
+import {
+  countCoursesOnVersions,
+  highestTakenVersions,
+} from '#/db/lesson-versions';
 import { getCourseIdsForLessons } from '#/db/placements';
 import {
   courseOrgsTable,
@@ -63,6 +67,8 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
         disciplineSlug: disciplinesTable.slug,
         disciplineModuleId: lessonsTable.disciplineModuleId,
         libraryRank: lessonsTable.libraryRank,
+        version: lessonsTable.version,
+        contentUpdatedAt: lessonsTable.contentUpdatedAt,
       })
       .from(lessonsTable)
       .leftJoin(
@@ -98,12 +104,18 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
       ),
   ]);
 
-  // One shared membership query for every lesson on the board, rather than
-  // one per lesson: `getCourseIdsForLessons` returns a `Map` with no entry at
-  // all for a lesson taught by zero courses, so a missing id is defaulted to
-  // an empty list here rather than the lesson being dropped. The count the
-  // card shows is derived from the same list the lesson dialog reads.
-  const courseIdsByLesson = await getCourseIdsForLessons(rows.map((r) => r.id));
+  // One query each for every lesson on the board, rather than one per lesson.
+  // `getCourseIdsForLessons` returns a `Map` with no entry at all for a lesson
+  // taught by zero courses, so a missing id is defaulted to an empty list here
+  // rather than the lesson being dropped. The count the card shows is derived
+  // from the same list the lesson dialog reads.
+  const lessonIds = rows.map((r) => r.id);
+  const [courseIdsByLesson, highestTaken, versionCourseCounts] =
+    await Promise.all([
+      getCourseIdsForLessons(lessonIds),
+      highestTakenVersions(lessonIds),
+      countCoursesOnVersions(lessonIds),
+    ]);
 
   // Seeded from the disciplines table, in name order, BEFORE any lesson or
   // module is read — so the map's insertion order is the column order and an
@@ -189,6 +201,10 @@ export async function getOrgLibrary(orgId: number): Promise<OrgLibrary> {
         row.requiredSubscriptions as LibraryLesson['requiredSubscriptions'],
       hasDebrief: row.hasDebrief,
       needsVideoWatch: row.needsVideoWatch,
+      version: row.version,
+      highestTaken: highestTaken.get(row.id) ?? null,
+      versionCourseCount: versionCourseCounts.get(row.id) ?? 0,
+      contentUpdatedAt: row.contentUpdatedAt,
     };
 
     if (row.disciplineId === null) {

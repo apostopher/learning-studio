@@ -389,7 +389,9 @@ export const ModuleBoardContainer = ({
       <EditModuleDialogContainer courseId={courseId} />
       <DeleteModuleDialogContainer courseId={courseId} />
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
-      <LessonVideoModalContainer modules={modules} />
+      <LessonVideoModalContainer
+        boards={[{ course: { id: courseId }, modules }]}
+      />
     </DndContext>
   );
 };

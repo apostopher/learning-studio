@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import { linkCourseToOrg } from '#/db/course-orgs';
 import { countRemixers, getRemixSourceIds } from '#/db/course-remixes';
@@ -39,12 +40,14 @@ import {
 } from '#/db/resolve-lesson-video';
 import type { DBCourse } from '#/db/schema';
 import {
+  courseLessonVersionsTable,
   courseModulesTable,
   courseOrgsTable,
   courseRemixesTable,
   coursesTable,
   courseVideoProvidersTable,
   lessonsTable,
+  lessonVersionsTable,
   moduleDependenciesTable,
   moduleLessonsTable,
   modulesTable,
@@ -60,6 +63,7 @@ import type {
   CourseBoard,
   CreateCourseInput,
   CredentialSummary,
+  PlaybackSource,
   SaveCredentialInput,
   UpdateCourseInput,
 } from '#/lib/admin-schemas';
@@ -524,6 +528,10 @@ export async function createLesson(input: {
     dependsOn: [],
     videoProvider: created.videoProvider as ProviderId | null,
     videoRef: created.videoRef,
+    // The course took the working copy as it was just created.
+    version: created.version,
+    disciplineVersion: created.version,
+    contentUpdatedAt: created.contentUpdatedAt,
   };
 }
 
@@ -605,7 +613,8 @@ export async function getCourseBoard(
   // Placements — not `lessons.module_id` — decide which lessons belong to
   // this course, which module each sits in, and what order: a lesson can
   // sit third in one course and eighth in another, so `lessons.rank` cannot
-  // decide this. The lesson row still supplies name, video and every gate.
+  // decide this. The lesson row still supplies every gate, and the snapshot
+  // the course is pinned to supplies name, video and quiz.
   // Fetched alongside `modules` rather than after: it depends only on
   // `courseId`, not on the module rows, so there is nothing to sequence.
   const ownerCourse = alias(coursesTable, 'owner_course');
@@ -641,24 +650,28 @@ export async function getCourseBoard(
     ? await db
         .select({
           id: lessonsTable.id,
-          name: lessonsTable.name,
+          // A lesson with no pin (the invariant says there is none; a script
+          // can break it) must stay on the board for staff to fix. It shows
+          // the working copy's name and version, only so it can be told
+          // apart, and nothing to teach: what its learners get.
+          name: sql<string>`coalesce(${lessonVersionsTable.name}, ${lessonsTable.name})`,
+          version: sql<string>`coalesce(${lessonVersionsTable.version}, ${lessonsTable.version})`,
+          disciplineVersion: lessonsTable.version,
+          contentUpdatedAt: lessonsTable.contentUpdatedAt,
           slug: lessonsTable.slug,
           isAvailable: lessonsTable.isAvailable,
           hasDebrief: lessonsTable.hasDebrief,
           needsVideoWatch: lessonsTable.needsVideoWatch,
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
           levels: lessonsTable.levels,
-          videoProvider: lessonsTable.videoProvider,
-          videoRef: lessonsTable.videoRef,
-          // Scalar subquery, not a join: `lesson_material.lesson_slug` carries
-          // only a plain index, so a duplicate row there would multiply this
-          // ungrouped query and show the same lesson twice on the board.
-          quizQuestionCount: sql<number>`coalesce((
-            select json_array_length(m.quiz) from lesson_material m
-            where m.lesson_slug = ${lessonsTable.slug} limit 1
-          ), 0)`,
+          videoProvider: lessonVersionsTable.videoProvider,
+          videoRef: lessonVersionsTable.videoRef,
+          quizQuestionCount: sql<number>`coalesce(json_array_length(${lessonVersionsTable.quiz}), 0)`,
         })
         .from(lessonsTable)
+        // At most one pin per (course, lesson), so a row each.
+        .leftJoin(courseLessonVersionsTable, isPinOf(courseId))
+        .leftJoin(lessonVersionsTable, isPinnedSnapshot())
         .where(inArray(lessonsTable.id, lessonIds))
     : [];
   const lessonById = new Map(lessonRows.map((l) => [l.id, l]));
@@ -757,6 +770,9 @@ export async function getCourseBoard(
         dependsOn: l.dependsOn,
         videoProvider: l.videoProvider as ProviderId | null,
         videoRef: l.videoRef,
+        version: l.version,
+        disciplineVersion: l.disciplineVersion,
+        contentUpdatedAt: l.contentUpdatedAt,
       })),
     })),
     remixes: remixSourceIds.map((sourceCourseId) => ({ sourceCourseId })),
@@ -983,10 +999,16 @@ export function removeLessonAlternateVideo(
   );
 }
 
+/**
+ * An admin's preview of a lesson, signed with `courseId`'s credentials: the
+ * version that course is on, or for Disciplines the working copy. Neither
+ * fills in for the other: null is "no video there".
+ */
 export async function resolveLessonPlayback(
   lessonId: number,
   courseId: number,
   lang: VideoLang,
+  source: PlaybackSource,
 ): Promise<LessonPlaybackResult | null> {
   // `courseId` is the course the route already resolved (and guarded on) —
   // fix round 1: previously this ran its own independent "lowest course id"
@@ -1014,17 +1036,21 @@ export async function resolveLessonPlayback(
   // instead, matching lesson-access.ts's "same shape" (`orderBy` +
   // `limit(1)` for a deterministic pick) with the column adjusted to the
   // axis that's actually still ambiguous here.
+  const content = source === 'discipline' ? lessonsTable : lessonVersionsTable;
   const [lesson] = await db
     .select({
-      videoProvider: lessonsTable.videoProvider,
-      videoRef: lessonsTable.videoRef,
-      otherVideoIds: lessonsTable.otherVideoIds,
+      videoProvider: content.videoProvider,
+      videoRef: content.videoRef,
+      otherVideoIds: content.otherVideoIds,
     })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
+    // LEFT: the working copy plays with or without a pin.
+    .leftJoin(courseLessonVersionsTable, isPinOf(courseId))
+    .leftJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(
       and(
         eq(lessonsTable.id, lessonId),
@@ -1045,9 +1071,9 @@ export async function resolveLessonPlayback(
 }
 
 /**
- * Poster frames for every lesson in a course that has a video, as
- * `lessonId → url`. Lessons with no poster are absent — see
- * `buildLessonPosters`.
+ * Poster frames for every lesson in a course that has a video in the version
+ * the course is on, as `lessonId → url`. Lessons with no poster are absent —
+ * see `buildLessonPosters`.
  */
 export async function getCourseLessonPosters(
   courseId: number,
@@ -1064,19 +1090,21 @@ export async function getCourseLessonPosters(
   const rows = await db
     .select({
       id: lessonsTable.id,
-      provider: lessonsTable.videoProvider,
-      ref: lessonsTable.videoRef,
+      provider: lessonVersionsTable.videoProvider,
+      ref: lessonVersionsTable.videoRef,
     })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
       eq(moduleLessonsTable.lessonId, lessonsTable.id),
     )
+    .innerJoin(courseLessonVersionsTable, isPinOf(courseId))
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
     .where(
       and(
         inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)),
-        isNotNull(lessonsTable.videoProvider),
-        isNotNull(lessonsTable.videoRef),
+        isNotNull(lessonVersionsTable.videoProvider),
+        isNotNull(lessonVersionsTable.videoRef),
       ),
     );
 

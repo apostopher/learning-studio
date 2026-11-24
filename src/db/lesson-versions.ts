@@ -1,7 +1,17 @@
-import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  type Column,
+  count,
+  eq,
+  exists,
+  inArray,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { db } from '#/db';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
-import { isPinOf } from '#/db/course-lesson-content';
+import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import { getLessonPlayback } from '#/db/lesson-playback';
 import {
@@ -200,10 +210,7 @@ export async function updateCourseLessonVersion(i: {
     const [pin] = await tx
       .select({ version: lessonVersionsTable.version })
       .from(courseLessonVersionsTable)
-      .innerJoin(
-        lessonVersionsTable,
-        eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
-      )
+      .innerJoin(lessonVersionsTable, isPinnedSnapshot())
       .where(
         and(
           pinned,
@@ -312,28 +319,63 @@ export async function getCoursesUsingLesson(
     .orderBy(asc(coursesTable.name), asc(coursesTable.id));
 }
 
+/**
+ * How many courses show each lesson pinned to exactly `version`, by default
+ * the working copy's. A lesson none is on is absent.
+ */
+export async function countCoursesOnVersions(
+  lessonIds: number[],
+  ex: Executor = db,
+  version: Column | string = lessonsTable.version,
+): Promise<Map<number, number>> {
+  if (lessonIds.length === 0) return new Map();
+  const rows = await ex
+    .select({ lessonId: courseLessonVersionsTable.lessonId, courses: count() })
+    .from(courseLessonVersionsTable)
+    .innerJoin(lessonVersionsTable, isPinnedSnapshot())
+    .innerJoin(
+      lessonsTable,
+      eq(lessonsTable.id, courseLessonVersionsTable.lessonId),
+    )
+    .where(
+      and(
+        inArray(courseLessonVersionsTable.lessonId, lessonIds),
+        eq(lessonVersionsTable.version, version),
+        // A pin can outlive the lesson's place in the course. `exists`, so a
+        // course showing the lesson twice counts once.
+        exists(
+          ex
+            .select({ one: sql`1` })
+            .from(courseModulesTable)
+            .innerJoin(
+              moduleLessonsTable,
+              eq(moduleLessonsTable.moduleId, courseModulesTable.moduleId),
+            )
+            .where(
+              and(
+                eq(
+                  courseModulesTable.courseId,
+                  courseLessonVersionsTable.courseId,
+                ),
+                eq(
+                  moduleLessonsTable.lessonId,
+                  courseLessonVersionsTable.lessonId,
+                ),
+              ),
+            ),
+        ),
+      ),
+    )
+    .groupBy(courseLessonVersionsTable.lessonId);
+  return new Map(rows.map((r) => [r.lessonId, r.courses]));
+}
+
 /** How many courses show the lesson and are pinned to exactly `version`. */
 export async function countCoursesOnVersion(
   lessonId: number,
   version: string,
   ex: Executor = db,
 ): Promise<number> {
-  const rows = await ex
-    .select({ courseId: courseLessonVersionsTable.courseId })
-    .from(courseLessonVersionsTable)
-    .innerJoin(
-      lessonVersionsTable,
-      eq(lessonVersionsTable.id, courseLessonVersionsTable.lessonVersionId),
-    )
-    .where(
-      and(
-        eq(courseLessonVersionsTable.lessonId, lessonId),
-        eq(lessonVersionsTable.version, version),
-        inArray(
-          courseLessonVersionsTable.courseId,
-          coursesShowing(ex, lessonId),
-        ),
-      ),
-    );
-  return rows.length;
+  const counts = await countCoursesOnVersions([lessonId], ex, version);
+  return counts.get(lessonId) ?? 0;
 }

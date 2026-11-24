@@ -21,6 +21,24 @@ function allModules(board: OrgEditorBoard) {
 }
 
 /**
+ * A lesson as the named course shows it. Never searched for across courses:
+ * each is on its own version, with its own name and video.
+ */
+export function findBoardLesson(
+  board: ReadonlyArray<{
+    course: { id: number };
+    modules: ReadonlyArray<{ lessons: ReadonlyArray<EditorBoardLesson> }>;
+  }>,
+  courseId: number,
+  lessonId: number,
+): EditorBoardLesson | undefined {
+  return board
+    .find((cb) => cb.course.id === courseId)
+    ?.modules.flatMap((m) => m.lessons)
+    .find((l) => l.id === lessonId);
+}
+
+/**
  * Where in a module's lesson list a drop lands: a `lesson` over id names the
  * slot it takes, anything else appends.
  *
@@ -42,7 +60,8 @@ function overIndexIn(
 
 function insertAt(
   board: OrgEditorBoard,
-  lesson: EditorBoardLesson,
+  /** The card each column shows. */
+  lessonIn: (courseId: number) => EditorBoardLesson,
   targetModuleId: number,
   index: number,
 ): OrgEditorBoard {
@@ -51,6 +70,7 @@ function insertAt(
     modules: cb.modules.map((m) => {
       if (m.id !== targetModuleId) return m;
       const lessons = [...m.lessons];
+      const lesson = lessonIn(cb.course.id);
       lessons.splice(Math.min(index, lessons.length), 0, lesson);
       return { ...m, lessons };
     }),
@@ -69,6 +89,9 @@ function insertAt(
  * to track; it starts as the pick-up module and advances on each live
  * transfer. A module appears in every column that shows it, so the strip
  * runs across all columns, keyed on the module id.
+ *
+ * Each column keeps its own card: the courses can be on different versions. A
+ * column that starts showing the lesson takes the working copy's version.
  */
 export function moveLessonOnBoard(
   board: OrgEditorBoard,
@@ -81,20 +104,32 @@ export function moveLessonOnBoard(
   if (!target) return board;
   const index = overIndexIn(target.lessons, overId);
 
-  let moved: EditorBoardLesson | undefined;
+  const cards = new Map<number, EditorBoardLesson>();
   const stripped = board.map((cb) => ({
     ...cb,
     modules: cb.modules.map((m) => {
       if (m.id !== fromModuleId) return m;
       const at = m.lessons.findIndex((l) => l.id === lessonId);
       if (at === -1) return m;
-      moved = m.lessons[at];
+      cards.set(cb.course.id, m.lessons[at]);
       return { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) };
     }),
   }));
+  const [moved] = cards.values();
   if (!moved) return board;
 
-  return insertAt(stripped, moved, targetModuleId, index);
+  return insertAt(
+    stripped,
+    (courseId) =>
+      cards.get(courseId) ??
+      // Shown in another of its modules.
+      findBoardLesson(stripped, courseId, lessonId) ?? {
+        ...moved,
+        version: moved.disciplineVersion,
+      },
+    targetModuleId,
+    index,
+  );
 }
 
 /** Append a newly linked library lesson to the end of a module. */
@@ -108,7 +143,13 @@ export function linkLessonOnBoard(
   // Appended, never inserted at the pointer's slot: the link route places the
   // lesson last (it takes no neighbours), so guessing a middle slot here would
   // show the admin a position the refetch is about to take away.
-  return insertAt(board, lesson, targetModuleId, target.lessons.length);
+  return insertAt(
+    board,
+    // A column already showing it in another module stays on its version.
+    (courseId) => findBoardLesson(board, courseId, lesson.id) ?? lesson,
+    targetModuleId,
+    target.lessons.length,
+  );
 }
 
 /**
@@ -228,6 +269,9 @@ export function commitTransferredLesson(
  * `EditorLessonCardContainer` passes one, so a paid level-gated lesson landed
  * showing "Free" with an empty level chip and flipped a few hundred ms later.
  *
+ * A course takes the working copy as it is now, so both versions are its
+ * version.
+ *
  * `rank: 0` and `quizQuestionCount: 0` are still placeholders, and both are
  * safe: rank is replaced by the refetch and never drawn, and the quiz count
  * feeds only the debrief warning's tooltip TEXT, never a chip's state.
@@ -250,6 +294,9 @@ export function boardLessonFromLibrary(
     levels: lesson.levels,
     quizQuestionCount: 0,
     dependsOn: [],
+    version: lesson.version,
+    disciplineVersion: lesson.version,
+    contentUpdatedAt: lesson.contentUpdatedAt,
   };
 }
 

@@ -1,3 +1,4 @@
+import type { PlaybackSource } from '#/lib/admin-schemas';
 import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
 
 /** Query-key factory for typesafe TanStack Query hooks in src/data-hooks/. */
@@ -44,13 +45,15 @@ export const dataKeys = {
    * guards on the named course and signs the URL with that course's provider
    * credentials, so the same lesson previewed from two courses is two
    * different signed URLs. One shared entry would hand the second course
-   * the first's URL until it went stale.
+   * the first's URL until it went stale. By source for the same reason: the
+   * course's version and the working copy can hold different videos.
    */
   lessonPlayback: (
     lessonId: number,
     courseId: number,
+    source: PlaybackSource,
     lang: VideoLang = PRIMARY_VIDEO_LANG,
-  ) => [...dataKeys.lessonPlaybacks(lessonId), courseId, lang] as const,
+  ) => [...dataKeys.lessonPlaybacks(lessonId), courseId, source, lang] as const,
   /** Every language and course of one lesson's captions status. */
   lessonCaptionsAll: (lessonId: number) =>
     ['admin', 'lesson-captions', lessonId] as const,

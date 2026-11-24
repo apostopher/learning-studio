@@ -243,6 +243,14 @@ export const saveLessonMaterialInputSchema =
 export const providerIdSchema = z.enum(PROVIDER_IDS);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
+/** Which of a lesson's content to preview: a course's version, or the working copy. */
+export type PlaybackSource = 'course' | 'discipline';
+
+/**
+ * A lesson on a course's board. Its content (name, video, quiz count) is the
+ * version the course is on; its settings are the lesson's, shared by every
+ * course.
+ */
 export const boardLessonSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -271,6 +279,12 @@ export const boardLessonSchema = z.object({
   dependsOn: z.array(CourseLessonDependencySchema),
   videoProvider: providerIdSchema.nullable(),
   videoRef: z.string().nullable(),
+  /** The version this course is on. Staff-only, like the two below. */
+  version: z.string(),
+  /** The working copy's version: what updating this course would take. */
+  disciplineVersion: z.string(),
+  /** When the working copy's content was last edited. */
+  contentUpdatedAt: z.coerce.date(),
 });
 export type BoardLesson = z.infer<typeof boardLessonSchema>;
 
@@ -1089,7 +1103,7 @@ export function hasOrgPermission(
 }
 
 /**
- * A lesson as the org library shows it. Deliberately carries none of a
+ * A lesson as the org library shows it: the working copy. Deliberately carries none of a
  * lesson's gates (`levels`, `requiredSubscriptions`, `hasDebrief`) — those
  * are edited on the lesson's own config screen, not shown on a library card.
  */
@@ -1146,6 +1160,15 @@ export const libraryLessonSchema = z.object({
   requiredSubscriptions: SubscriptionsSchema,
   hasDebrief: z.boolean(),
   needsVideoWatch: z.boolean(),
+  version: z.string(),
+  /** The highest version a course has taken, by number; null when none has. */
+  highestTaken: z.string().nullable(),
+  /**
+   * How many courses show the lesson on exactly `version`: the N of "v1.0 is
+   * used by N courses". `courseCount` counts them on any version.
+   */
+  versionCourseCount: z.number(),
+  contentUpdatedAt: z.coerce.date(),
 });
 export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
 

@@ -1,7 +1,7 @@
 import { useAtom, useSetAtom } from 'jotai';
 
-import { configureLessonIdAtom, resetVideoSectionAtom } from '@/atoms/admin';
-import type { BoardModule } from '@/lib/admin-schemas';
+import { configureLessonIdAtom, resetVideoSectionAtom } from '#/atoms/admin';
+import type { BoardModule } from '#/lib/admin-schemas';
 import { ConfigSectionContainer } from './lesson-config/config-section-container';
 import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
@@ -44,6 +44,7 @@ export const LessonConfigDialogContainer = ({
           <VideoSectionContainer
             key={`video-${lesson.id}`}
             courseId={courseId}
+            source="course"
             lesson={lesson}
           />
           <MaterialSectionContainer key={lesson.id} lesson={lesson} />

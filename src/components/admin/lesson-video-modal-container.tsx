@@ -5,13 +5,14 @@ import { Loader2, Video, X } from 'lucide-react';
 // and this container is rendered by its own test.
 import { adminPreviewLangAtomFamily, playLessonAtom } from '#/atoms/admin';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
+import type { EditorBoardModule } from '#/lib/admin-schemas';
 import {
   isVideoLang,
   labelForLang,
   PRIMARY_VIDEO_LANG,
 } from '#/lib/video-languages';
-import type { EditorBoardModule } from '@/lib/admin-schemas';
 import { computeVideoModalState } from './compute-video-modal-state';
+import { findBoardLesson } from './editor-board-updates';
 import { BackToPrimaryLanguageButton } from './lesson-config/preview-language-fallback';
 import { previewLanguageNotice } from './lesson-config/preview-language-notice';
 import { VideoPreview } from './lesson-config/video-preview';
@@ -51,26 +52,24 @@ const MESSAGES: Record<
  * exit is a key you have to already know is a trap.
  */
 export const LessonVideoModalContainer = ({
-  modules,
+  boards,
 }: {
   /**
    * The editor's narrower module type, so this modal serves BOTH boards. It
-   * only ever looks a lesson up by id and reads its name — never
-   * `videoProvider`/`videoRef`, which the org editor's payload omits and
-   * which playback resolves server-side from the lesson id anyway. A full
-   * `BoardModule[]` still satisfies it.
+   * only ever looks a lesson up, in the course its tile was pressed in, and
+   * reads its name — never `videoProvider`/`videoRef`, which the org editor's
+   * payload omits and which playback resolves server-side from the lesson id
+   * anyway. A full `BoardModule[]` still satisfies it.
    */
-  modules: EditorBoardModule[];
+  boards: { course: { id: number }; modules: EditorBoardModule[] }[];
 }) => {
   const [play, setPlay] = useAtom(playLessonAtom);
-  const lesson =
-    modules.flatMap((m) => m.lessons).find((l) => l.id === play?.lessonId) ??
-    null;
+  const lesson = play && findBoardLesson(boards, play.courseId, play.lessonId);
 
   // Only resolves while open. Left enabled, this would fire a provider call —
   // an HTTP round trip per Synthesia lesson — for every card on the board.
   // Resolved for the lesson IN the course the tile named — never one picked
-  // from `modules`, which on the org editor spans every course on the rail.
+  // from `boards`, which on the org editor spans every course on the rail.
   // Per-lesson preview language, shared with the config dialog's preview of
   // the same lesson. Read with a stable fallback id while closed: hooks
   // cannot be skipped, and lesson 0 is never a real lesson.
@@ -78,7 +77,7 @@ export const LessonVideoModalContainer = ({
     adminPreviewLangAtomFamily(play?.lessonId ?? 0),
   );
   const playback = useLessonVideoPlayback(
-    play === null ? null : { ...play, lang },
+    play === null ? null : { ...play, source: 'course', lang },
     play !== null,
   );
   const state = computeVideoModalState({

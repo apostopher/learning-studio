@@ -47,8 +47,10 @@ function findLesson(
  * signed by a course's provider credentials, and the credential hand-off
  * asks a course. This dialog has no course of its own, so it signs with the
  * FIRST course teaching the lesson (`courseIds[0]`, ascending — stable across
- * refetches) and says so when there are several; a lesson placed nowhere yet
- * saves its ref without a preview, and the section explains why.
+ * refetches) and says so when there are several. Only the signature is that
+ * course's: the video is the working copy's, whatever version it is on. A
+ * lesson placed nowhere yet saves its ref without a preview, and the section
+ * explains why.
  *
  * It reads the lesson out of the library query rather than taking it as a
  * prop, so the pencil on either pane needs only to set an id — and both panes
@@ -76,10 +78,11 @@ export const LibraryLessonConfigDialogContainer = () => {
           <VideoSectionContainer
             key={`video-${lesson.id}`}
             courseId={lesson.courseIds[0] ?? null}
+            source="discipline"
             lesson={lesson}
             previewNote={
               lesson.courseIds.length > 1
-                ? `Preview is signed with the first of the ${lesson.courseIds.length} courses teaching this lesson; the video itself is shared by all of them.`
+                ? `Preview is signed with the first of the ${lesson.courseIds.length} courses teaching this lesson.`
                 : undefined
             }
           />

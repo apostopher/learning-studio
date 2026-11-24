@@ -165,6 +165,15 @@ export const activeDragModuleIdAtom = atom<number | null>(null);
 export const activeDragLessonIdAtom = atom<number | null>(null);
 
 /**
+ * The org editor's: with the course it was picked up in, since two columns
+ * can show one lesson on different versions.
+ */
+export const activeDragBoardLessonAtom = atom<{
+  courseId: number;
+  lessonId: number;
+} | null>(null);
+
+/**
  * The lesson pending deletion, or null when closed.
  *
  * Carries `courseCount` — how many courses currently teach the lesson —
@@ -526,7 +535,7 @@ export const addPersonCourseIdsAtom = atom<number[]>([]);
 /**
  * Id of the LIBRARY lesson currently being dragged, or null.
  *
- * Separate from `activeDragLessonIdAtom`: that one holds a lesson already
+ * Separate from `activeDragBoardLessonAtom`: that one holds a lesson already
  * placed in a module, and the two drags mean different things (this one
  * creates a placement, that one moves an existing one). One atom for both
  * would make the drag overlay unable to tell which card to draw, and the

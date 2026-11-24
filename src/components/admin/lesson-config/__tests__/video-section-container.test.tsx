@@ -131,6 +131,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
     render(
       <VideoSectionContainer
         courseId={null}
+        source="discipline"
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -150,6 +151,7 @@ describe('VideoSectionContainer without a course (library lesson placed nowhere)
     render(
       <VideoSectionContainer
         courseId={null}
+        source="discipline"
         lesson={{ id: 10, videoProvider: 'mux' }}
       />,
       { wrapper },
@@ -180,13 +182,14 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
         previewNote="Preview is signed with the first course teaching this lesson."
       />,
       { wrapper },
     );
     expect(hooks.playback).toHaveBeenCalledWith(
-      { lessonId: 10, courseId: 7, lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
       true,
     );
     expect(screen.getByTestId('video-preview')).toBeTruthy();
@@ -203,13 +206,14 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
     );
     expect(screen.getByTestId('credential-flow')).toBeTruthy();
     expect(hooks.playback).toHaveBeenCalledWith(
-      { lessonId: 10, courseId: 7, lang: 'en' },
+      { lessonId: 10, courseId: 7, source: 'course', lang: 'en' },
       false,
     );
   });
@@ -225,6 +229,7 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc123' }}
       />,
       { wrapper },
@@ -239,6 +244,7 @@ describe('VideoSectionContainer with a course', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: null }}
       />,
       { wrapper },
@@ -275,6 +281,7 @@ describe('VideoSectionContainer preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -286,6 +293,7 @@ describe('VideoSectionContainer preview language', () => {
     expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
       lessonId: 10,
       courseId: 7,
+      source: 'course',
       lang: 'fr',
     });
   });
@@ -295,6 +303,7 @@ describe('VideoSectionContainer preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -303,6 +312,7 @@ describe('VideoSectionContainer preview language', () => {
     expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
       lessonId: 10,
       courseId: 7,
+      source: 'course',
       lang: 'en',
     });
   });
@@ -318,6 +328,7 @@ describe('VideoSectionContainer preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -341,6 +352,7 @@ describe('VideoSectionContainer preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -378,6 +390,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -406,6 +419,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
     expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
       lessonId: 10,
       courseId: 7,
+      source: 'course',
       lang: 'en',
     });
   });
@@ -427,6 +441,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
     expect(hooks.playback.mock.calls.at(-1)?.[0]).toEqual({
       lessonId: 10,
       courseId: 7,
+      source: 'course',
       lang: 'en',
     });
   });
@@ -444,6 +459,7 @@ describe('VideoSectionContainer with a non-playable preview language', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -469,6 +485,7 @@ describe('VideoSectionContainer captions status', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -486,6 +503,7 @@ describe('VideoSectionContainer captions status', () => {
     render(
       <VideoSectionContainer
         courseId={null}
+        source="discipline"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },
@@ -510,6 +528,7 @@ describe('VideoSectionContainer recovery', () => {
     render(
       <VideoSectionContainer
         courseId={7}
+        source="course"
         lesson={{ id: 10, videoProvider: 'mux', videoRef: 'abc' }}
       />,
       { wrapper },

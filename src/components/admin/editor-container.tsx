@@ -25,7 +25,7 @@ import type {
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
-  activeDragLessonIdAtom,
+  activeDragBoardLessonAtom,
   activeDragLibraryLessonIdAtom,
   activeDragLibraryModuleIdAtom,
   activeDragModuleIdAtom,
@@ -80,6 +80,7 @@ import { EditCourseDialogContainer } from './edit-course-dialog-container';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
+  findBoardLesson,
   lessonNeighbours,
   libraryLessonBox,
   linkLessonOnBoard,
@@ -193,7 +194,9 @@ export const EditorContainer = ({
   const { data: board, error: boardError } = useEditorBoard();
 
   const [activeModuleId, setActiveModuleId] = useAtom(activeDragModuleIdAtom);
-  const [activeLessonId, setActiveLessonId] = useAtom(activeDragLessonIdAtom);
+  const [activeLessonDrag, setActiveLessonDrag] = useAtom(
+    activeDragBoardLessonAtom,
+  );
   const [activeLibraryLessonId, setActiveLibraryLessonId] = useAtom(
     activeDragLibraryLessonIdAtom,
   );
@@ -601,7 +604,7 @@ export const EditorContainer = ({
     // rescue), and both callers capture it into a local before calling this.
     libraryPreviewRef.current = null;
     setActiveModuleId(null);
-    setActiveLessonId(null);
+    setActiveLessonDrag(null);
     setActiveLibraryLessonId(null);
     setActiveLibraryModuleId(null);
     setRefusal(null);
@@ -625,7 +628,7 @@ export const EditorContainer = ({
     librarySnapshotRef.current = readLibrary();
     if (parsed.type === 'module') setActiveModuleId(parsed.id);
     else if (parsed.type === 'lesson') {
-      setActiveLessonId(parsed.id);
+      setActiveLessonDrag({ courseId: parsed.courseId, lessonId: parsed.id });
       const moduleId: unknown = event.active.data.current?.moduleId;
       lessonDragRef.current =
         typeof moduleId === 'number'
@@ -1291,10 +1294,13 @@ export const EditorContainer = ({
   const activeModule = board
     .flatMap((cb) => cb.modules)
     .find((m) => m.id === activeModuleId);
-  const activeLesson = board
-    .flatMap((cb) => cb.modules)
-    .flatMap((m) => m.lessons)
-    .find((l) => l.id === activeLessonId);
+  const activeLesson =
+    activeLessonDrag &&
+    findBoardLesson(
+      board,
+      activeLessonDrag.courseId,
+      activeLessonDrag.lessonId,
+    );
   const activeLibraryLesson = findLibraryLesson(library, activeLibraryLessonId);
   const activeLibraryModule = library.disciplines
     .flatMap((d) => d.modules)
@@ -1471,9 +1477,7 @@ export const EditorContainer = ({
       <EditorCreateModuleDialogContainer />
       <EditCourseDialogContainer />
       <DeleteCourseDialogContainer navigateAfterDelete={false} />
-      <LessonVideoModalContainer
-        modules={board.flatMap((courseBoard) => courseBoard.modules)}
-      />
+      <LessonVideoModalContainer boards={board} />
       <RenameDisciplineDialogContainer />
       <DisciplineLevelsDialogContainer />
       <DeleteDisciplineDialogContainer />

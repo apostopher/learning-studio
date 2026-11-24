@@ -13,7 +13,11 @@ import { useCourseCredentials } from '#/data-hooks/use-course-credentials';
 import { useLessonVideo } from '#/data-hooks/use-lesson-video';
 import { useLessonVideoPlayback } from '#/data-hooks/use-lesson-video-playback';
 import { useSetLessonVideo } from '#/data-hooks/use-set-lesson-video';
-import type { BoardLesson, ProviderId } from '#/lib/admin-schemas';
+import type {
+  BoardLesson,
+  PlaybackSource,
+  ProviderId,
+} from '#/lib/admin-schemas';
 import {
   isVideoLang,
   labelForLang,
@@ -56,6 +60,8 @@ interface VideoSectionContainerProps {
    * preview and the credential hand-off need a course.
    */
   courseId: number | null;
+  /** What the preview plays: that course's version, or the working copy. */
+  source: PlaybackSource;
   lesson: VideoSectionLesson;
   /**
    * One quiet line under the preview, for when the course above was chosen
@@ -81,6 +87,7 @@ interface VideoSectionContainerProps {
  */
 export const VideoSectionContainer = ({
   courseId,
+  source,
   lesson,
   previewNote,
 }: VideoSectionContainerProps) => {
@@ -146,7 +153,7 @@ export const VideoSectionContainer = ({
   const playback = useLessonVideoPlayback(
     courseId === null
       ? null
-      : { lessonId: lesson.id, courseId, lang: previewLang },
+      : { lessonId: lesson.id, courseId, source, lang: previewLang },
     playbackEnabled,
   );
   const previewState = computeVideoPreviewState(playback.data);

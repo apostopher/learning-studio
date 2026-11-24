@@ -114,6 +114,20 @@ const lessonsTable = pgTable('lessons', {
   videoRef: text('video_ref'),
   updatedAt: timestamp('updated_at'),
 });
+const lessonVersionsTable = pgTable('lesson_versions', {
+  id: integer('id').primaryKey(),
+  name: text('name'),
+  version: text('version'),
+  videoProvider: text('video_provider'),
+  videoRef: text('video_ref'),
+  otherVideoIds: jsonb('other_video_ids'),
+  quiz: jsonb('quiz'),
+});
+const courseLessonVersionsTable = pgTable('course_lesson_versions', {
+  courseId: integer('course_id'),
+  lessonId: integer('lesson_id'),
+  lessonVersionId: integer('lesson_version_id'),
+});
 const courseVideoProvidersTable = pgTable('course_video_providers', {
   id: integer('id').primaryKey(),
   courseId: integer('course_id'),
@@ -233,6 +247,8 @@ const blob = vi.hoisted(() => ({
 vi.mock('#/db', () => ({ db }));
 vi.mock('#/db/schema', () => ({
   courseOrgsTable,
+  courseLessonVersionsTable,
+  lessonVersionsTable,
   coursesTable,
   courseModulesTable,
   courseRemixesTable,
@@ -1643,10 +1659,15 @@ describe('resolveLessonPlayback course scoping', () => {
   it('scopes the lesson lookup by BOTH lessonId and the caller-supplied courseId, via membership', async () => {
     const whereCalls: SQL[] = [];
     const joinedTables: unknown[] = [];
+    const leftJoinedOn: SQL[] = [];
     const lessonLookupChain = {
       from: () => lessonLookupChain,
       innerJoin: (table: unknown) => {
         joinedTables.push(table);
+        return lessonLookupChain;
+      },
+      leftJoin: (_table: unknown, on: SQL) => {
+        leftJoinedOn.push(on);
         return lessonLookupChain;
       },
       where: (condition: SQL) => {
@@ -1671,7 +1692,7 @@ describe('resolveLessonPlayback course scoping', () => {
       captions: null,
     });
 
-    await resolveLessonPlayback(9, 3, 'en');
+    await resolveLessonPlayback(9, 3, 'en', 'course');
 
     expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(whereCalls).toHaveLength(1);
@@ -1680,6 +1701,11 @@ describe('resolveLessonPlayback course scoping', () => {
     );
     expect(renderSqlParams(whereCalls[0])).toEqual([9, 'SUBQUERY:3']);
     expect(joinedTables).toEqual([moduleLessonsTable]);
+    // The pin of the course named, never of another showing the lesson.
+    expect(render(leftJoinedOn[0])).toBe(
+      '("course_lesson_versions"."course_id" = $1 and "course_lesson_versions"."lesson_id" = "lessons"."id")',
+    );
+    expect(renderSqlParams(leftJoinedOn[0])).toEqual([3]);
   });
 
   // Task 5e, Part 3a (production regression): the unique index on
@@ -1688,8 +1714,8 @@ describe('resolveLessonPlayback course scoping', () => {
   // one course, in two different modules. Before this fix, `resolveLesson
   // Playback` destructured `[lesson]` from an UNBOUNDED, unordered result.
   // Fix round 1 (Minor): both selected columns (`videoProvider`/`videoRef`)
-  // come from `lessonsTable`, and the WHERE already pins `lessons.id` to one
-  // exact lesson, so every duplicate row carries IDENTICAL provider/ref — the
+  // come from one snapshot (or the working copy), and the WHERE already pins
+  // `lessons.id` to one exact lesson, so every duplicate row carries IDENTICAL provider/ref — the
   // old code was already value-deterministic and never "flapped" playback.
   // The actual bug was pure join fan-out: two matching rows instead of one,
   // an unbounded result shape the code's own `const [lesson] = ...`
@@ -1711,6 +1737,7 @@ describe('resolveLessonPlayback course scoping', () => {
     const lessonLookupChain = {
       from: () => lessonLookupChain,
       innerJoin: () => lessonLookupChain,
+      leftJoin: () => lessonLookupChain,
       where: () => lessonLookupChain,
       orderBy: (col: unknown) => {
         orderByCalls.push(col);
@@ -1735,7 +1762,7 @@ describe('resolveLessonPlayback course scoping', () => {
       captions: null,
     });
 
-    const result = await resolveLessonPlayback(9, 3, 'en');
+    const result = await resolveLessonPlayback(9, 3, 'en', 'course');
 
     expect(orderByCalls).toHaveLength(1);
     // Fix round 1 (Important 2): asserting by `.name` ('module_id') rather
@@ -1779,6 +1806,7 @@ describe('resolveLessonPlayback language selection', () => {
     const chain = {
       from: () => chain,
       innerJoin: () => chain,
+      leftJoin: () => chain,
       where: () => chain,
       orderBy: () => chain,
       limit: () =>
@@ -1809,7 +1837,7 @@ describe('resolveLessonPlayback language selection', () => {
       primaryProvider: 'synthesia',
     });
 
-    const result = await resolveLessonPlayback(9, 3, 'fr');
+    const result = await resolveLessonPlayback(9, 3, 'fr', 'course');
 
     expect(credsWheres).toHaveLength(1);
     expect(renderSqlParams(credsWheres[0])).toEqual([3, 'mux']);
@@ -1829,7 +1857,9 @@ describe('resolveLessonPlayback language selection', () => {
       creds: false,
     });
 
-    await expect(resolveLessonPlayback(9, 3, 'fr')).rejects.toMatchObject({
+    await expect(
+      resolveLessonPlayback(9, 3, 'fr', 'course'),
+    ).rejects.toMatchObject({
       code: 'PROVIDER_NOT_CONFIGURED',
       message: 'This course has no mux credentials configured.',
     });
@@ -1839,7 +1869,7 @@ describe('resolveLessonPlayback language selection', () => {
   it('resolves the requested alternate and reports the languages on offer', async () => {
     lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }]);
 
-    const result = await resolveLessonPlayback(9, 3, 'fr');
+    const result = await resolveLessonPlayback(9, 3, 'fr', 'course');
 
     expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
       'mux',
@@ -1854,7 +1884,7 @@ describe('resolveLessonPlayback language selection', () => {
   it('falls back to the primary video for a language the lesson lacks', async () => {
     lookup([{ lang: 'fr', provider: 'mux', ref: 'fr-ref' }]);
 
-    const result = await resolveLessonPlayback(9, 3, 'de');
+    const result = await resolveLessonPlayback(9, 3, 'de', 'course');
 
     expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
       'mux',
@@ -1869,7 +1899,7 @@ describe('resolveLessonPlayback language selection', () => {
   it('offers no alternates when the stored column fails its schema', async () => {
     lookup([{ lang: 'FR', videoId: 'old-shape' }]);
 
-    const result = await resolveLessonPlayback(9, 3, 'fr');
+    const result = await resolveLessonPlayback(9, 3, 'fr', 'course');
 
     expect(resolveServer.resolvePlayback).toHaveBeenCalledWith(
       'mux',
@@ -1919,10 +1949,14 @@ describe('getCourseLessonPosters course scoping', () => {
     expect(membership.courseModuleIds).toHaveBeenCalledWith(3);
     expect(whereCalls).toHaveLength(1);
     expect(render(whereCalls[0])).toBe(
-      '("module_lessons"."module_id" in $1 and "lessons"."video_provider" is not null and "lessons"."video_ref" is not null)',
+      '("module_lessons"."module_id" in $1 and "lesson_versions"."video_provider" is not null and "lesson_versions"."video_ref" is not null)',
     );
     expect(renderSqlParams(whereCalls[0])).toEqual(['SUBQUERY:3']);
-    expect(joinedTables).toEqual([moduleLessonsTable]);
+    expect(joinedTables).toEqual([
+      moduleLessonsTable,
+      courseLessonVersionsTable,
+      lessonVersionsTable,
+    ]);
   });
 });
 
