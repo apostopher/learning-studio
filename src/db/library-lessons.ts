@@ -6,11 +6,9 @@ import type { LibraryLesson } from '#/lib/admin-schemas';
 /**
  * Create a lesson straight into a discipline, teaching no course yet.
  *
- * The other creation path, `createLesson` in `db/admin.ts`, creates INTO a
- * module and writes a `module_lessons` placement in the same transaction. This
- * one writes NO placement, deliberately: a library lesson exists as a thing
- * the org knows before any course teaches it, and it enters a course later by
- * being dragged into one. `getOrgLibrary` reads lessons by `org_id`, not by
+ * The only way a lesson is created. It writes NO placement, deliberately: a
+ * library lesson exists as a thing the org knows before any course teaches it,
+ * and it enters a course later by being dragged into one. `getOrgLibrary` reads lessons by `org_id`, not by
  * placement, so an unplaced lesson still has a column to appear in — and
  * `getCourseIdsForLessons` returns no entry for it, which the library
  * renders as "in 0 courses" rather than dropping the card.
@@ -39,8 +37,8 @@ export async function createLibraryLesson(input: {
     .values({
       name: input.name,
       slug,
-      // Same empty default `createLesson` uses: what a lesson costs is set on
-      // the lesson-config surface, not at the moment it is named.
+      // What a lesson costs is set on the lesson-config surface, not at the
+      // moment it is named.
       requiredSubscriptions: [],
       orgId: input.orgId,
       disciplineId: input.disciplineId,

@@ -159,13 +159,6 @@ export const updateModuleInputSchema = z.object({
 });
 export type UpdateModuleInput = z.infer<typeof updateModuleInputSchema>;
 
-/**
- * Left untouched, still `{ name }` only: `create-lesson-dialog-container.tsx`
- * types its whole react-hook-form with `CreateLessonInput` and calls
- * `form.register('name')` — a union with `{ lessonId }` would leave `name`
- * absent from one branch and break that form's typing. The library-linking
- * shape lives in `addModuleLessonInputSchema` below instead.
- */
 export const createLessonInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
 });
@@ -187,25 +180,30 @@ export type CreateLibraryLessonInput = z.infer<
   typeof createLibraryLessonInputSchema
 >;
 
-/** Link an existing library lesson into a module — the other half of `POST /api/admin/modules/:moduleId/lessons`. */
-export const linkLessonInputSchema = z
+/**
+ * `POST /api/admin/modules/:moduleId/lessons`: link an existing library lesson
+ * into the module. Lessons are created in Disciplines only.
+ */
+export const addModuleLessonInputSchema = z
   .object({ lessonId: z.number().int().positive() })
   .strict();
-export type LinkLessonInput = z.infer<typeof linkLessonInputSchema>;
-
-/**
- * The actual body `POST /api/admin/modules/:moduleId/lessons` accepts:
- * author a brand new lesson (`name`), or link an existing library lesson into
- * this module (`lessonId`). A `z.union` of two `.strict()` object schemas
- * rather than one object with both fields optional — an object with both
- * optional would accept `{}` and silently mean neither, which is exactly the
- * empty body this shape exists to reject.
- */
-export const addModuleLessonInputSchema = z.union([
-  createLessonInputSchema.strict(),
-  linkLessonInputSchema,
-]);
 export type AddModuleLessonInput = z.infer<typeof addModuleLessonInputSchema>;
+
+/** Move one course to the working copy's version; `toVersion` is the one the dialog showed. */
+export const updateCourseLessonVersionInputSchema = z
+  .object({ toVersion: lessonVersionSchema })
+  .strict();
+export type UpdateCourseLessonVersionInput = z.infer<
+  typeof updateCourseLessonVersionInputSchema
+>;
+
+/** The 409 of deleting a lesson some course shows. */
+export const lessonInUseSchema = z.object({
+  error: z.string(),
+  code: z.literal('in-use'),
+  courses: z.array(z.object({ id: z.number(), name: z.string() })),
+});
+export type LessonInUseBody = z.infer<typeof lessonInUseSchema>;
 
 /**
  * The version a content write moves the lesson to; absent keeps the current

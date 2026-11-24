@@ -124,6 +124,7 @@ import { Route as ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport } from
 import { Route as ApiAdminCoursesCourseIdStaffCandidatesRouteImport } from './routes/api/admin/courses.$courseId.staff.candidates'
 import { Route as ApiAdminModulesModuleIdLessonsLessonIdRouteImport } from './routes/api/admin/modules.$moduleId.lessons.$lessonId'
 import { Route as AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport } from './routes/_authed/course.$courseSlug.modules.$moduleSlug.lessons.$lessonSlug'
+import { Route as ApiAdminCoursesCourseIdLessonsLessonIdVersionRouteImport } from './routes/api/admin/courses.$courseId.lessons.$lessonId.version'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -755,6 +756,12 @@ const AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute =
     path: '/modules/$moduleSlug/lessons/$lessonSlug',
     getParentRoute: () => AuthedCourseCourseSlugRoute,
   } as any)
+const ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute =
+  ApiAdminCoursesCourseIdLessonsLessonIdVersionRouteImport.update({
+    id: '/lessons/$lessonId/version',
+    path: '/lessons/$lessonId/version',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -871,6 +878,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId/version': typeof ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -985,6 +993,7 @@ export interface FileRoutesByTo {
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId/version': typeof ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1103,6 +1112,7 @@ export interface FileRoutesById {
   '/api/admin/courses/$courseId/staff/candidates': typeof ApiAdminCoursesCourseIdStaffCandidatesRoute
   '/api/admin/modules/$moduleId/lessons/$lessonId': typeof ApiAdminModulesModuleIdLessonsLessonIdRoute
   '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug': typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId/version': typeof ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1221,6 +1231,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/api/admin/courses/$courseId/lessons/$lessonId/version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1335,6 +1346,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/api/admin/courses/$courseId/lessons/$lessonId/version'
   id:
     | '__root__'
     | '/'
@@ -1452,6 +1464,7 @@ export interface FileRouteTypes {
     | '/api/admin/courses/$courseId/staff/candidates'
     | '/api/admin/modules/$moduleId/lessons/$lessonId'
     | '/_authed/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug'
+    | '/api/admin/courses/$courseId/lessons/$lessonId/version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2320,6 +2333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCourseCourseSlugModulesModuleSlugLessonsLessonSlugRouteImport
       parentRoute: typeof AuthedCourseCourseSlugRoute
     }
+    '/api/admin/courses/$courseId/lessons/$lessonId/version': {
+      id: '/api/admin/courses/$courseId/lessons/$lessonId/version'
+      path: '/lessons/$lessonId/version'
+      fullPath: '/api/admin/courses/$courseId/lessons/$lessonId/version'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdLessonsLessonIdVersionRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
   }
 }
 
@@ -2519,6 +2539,7 @@ interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdPersonaRoute: typeof ApiAdminCoursesCourseIdPersonaRoute
   ApiAdminCoursesCourseIdRemixesRoute: typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   ApiAdminCoursesCourseIdStaffRoute: typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute: typeof ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute
 }
 
 const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren =
@@ -2540,6 +2561,8 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
       ApiAdminCoursesCourseIdRemixesRouteWithChildren,
     ApiAdminCoursesCourseIdStaffRoute:
       ApiAdminCoursesCourseIdStaffRouteWithChildren,
+    ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute:
+      ApiAdminCoursesCourseIdLessonsLessonIdVersionRoute,
   }
 
 const ApiAdminCoursesCourseIdRouteWithChildren =

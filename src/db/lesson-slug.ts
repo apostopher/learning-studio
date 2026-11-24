@@ -7,10 +7,9 @@ import { slugify } from '#/lib/slugify';
  * The next free lesson slug for `name`: the slugified name, or that name with
  * `-2`, `-3`, … appended until nothing holds it.
  *
- * ONE definition, shared by both ways a lesson comes into existence — created
- * into a module (`createLesson`) and created into a discipline
- * (`createLibraryLesson`). A second copy is a second place for the suffix rule
- * to drift, and the two would then mint colliding slugs for the same name.
+ * ONE definition, for every way a lesson comes into existence. A second copy
+ * is a second place for the suffix rule to drift, and the two would then mint
+ * colliding slugs for the same name.
  *
  * Deliberately NOT org-scoped: `lessons.slug` is the learner-facing URL
  * segment and is unique across the whole table, so a candidate taken by

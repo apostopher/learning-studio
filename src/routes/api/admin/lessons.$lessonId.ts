@@ -16,6 +16,7 @@ import { setLessonVersion } from '#/db/lesson-content-edit';
 import { findPlacementModuleId, getCourseIdsForLesson } from '#/db/placements';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import {
+  type LessonInUseBody,
   moveLessonInputSchema,
   renameLessonInputSchema,
   setLessonVersionInputSchema,
@@ -319,18 +320,29 @@ export async function deleteLessonHandler(
   if (lessonId === null) {
     return Response.json({ error: 'Invalid lesson id' }, { status: 400 });
   }
-  // Deleting removes the lesson from EVERY course and cascades its progress
-  // rows, so this follows the lesson's DISCIPLINE same as rename/config: no
-  // single course's staff is the right authority for it, and an unplaced
-  // (library-only) lesson must still be deletable by its SME — see
-  // `resolveLessonDiscipline`, which is this handler's sole existence check.
+  // Only a lesson no course shows can be deleted, so this follows its
+  // DISCIPLINE same as rename/config — see `resolveLessonDiscipline`, which
+  // is this handler's sole existence check.
   const resolved = await resolveLessonDiscipline(request, lessonId);
   if ('response' in resolved) return resolved.response;
   const denied = await guardContent(request, resolved.disciplineId, 'delete');
   if (denied) return denied;
   const deleted = await deleteLesson(lessonId);
-  if (!deleted) return new Response('Not found', { status: 404 });
-  return new Response(null, { status: 204 });
+  if (deleted.ok) return new Response(null, { status: 204 });
+  if (deleted.reason === 'not-found') {
+    return new Response('Not found', { status: 404 });
+  }
+  const { courses } = deleted;
+  const names = new Intl.ListFormat('en-GB').format(courses.map((c) => c.name));
+  const those = courses.length === 1 ? 'that course' : 'those courses';
+  return Response.json(
+    {
+      error: `Used by ${names}. Remove it from ${those} first.`,
+      code: 'in-use',
+      courses,
+    } satisfies LessonInUseBody,
+    { status: 409 },
+  );
 }
 
 export const Route = createFileRoute('/api/admin/lessons/$lessonId')({

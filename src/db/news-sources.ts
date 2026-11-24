@@ -86,7 +86,7 @@ export async function createNewsSource(
   courseId: number,
   input: CreateNewsSourceInput,
 ): Promise<NewsSourceWriteResult> {
-  // Append: max + 1 within this course, matching createModule/createLesson.
+  // Append: max + 1 within this course, matching createModule.
   const [{ maxRank }] = await db
     .select({ maxRank: sql<string | null>`max(${newsSourcesTable.rank})` })
     .from(newsSourcesTable)

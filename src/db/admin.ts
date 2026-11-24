@@ -26,10 +26,10 @@ import {
   getCourseSlugsForModuleId,
 } from '#/db/lesson-access';
 import { applyContentEdit } from '#/db/lesson-content-edit';
-import { nextAvailableLessonSlug } from '#/db/lesson-slug';
 import {
   changeMembership,
   getCourseIdsShowingModule,
+  getCoursesUsingLesson,
   getLessonIdsInModules,
   lockModuleOwner,
 } from '#/db/lesson-versions';
@@ -42,7 +42,6 @@ import type { DBCourse } from '#/db/schema';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
-  courseOrgsTable,
   courseRemixesTable,
   coursesTable,
   courseVideoProvidersTable,
@@ -58,7 +57,6 @@ import { env } from '#/env';
 import { getVideoThumbnailsWithCache } from '#/integrations/synthesia/thumbnails';
 import type {
   AdminCourseSummary,
-  BoardLesson,
   BoardModule,
   CourseBoard,
   CreateCourseInput,
@@ -321,8 +319,7 @@ export async function createModule(input: {
 
   // Append after this course's PLACEMENTS, not after `max(modules.rank)`:
   // the board orders modules by `course_modules.rank`, and a reorder moves
-  // that row, so the module rows' own ranks are what drifts. Same reason
-  // `createLesson` ranks against `module_lessons`.
+  // that row, so the module rows' own ranks are what drifts.
   const [{ maxRank }] = await db
     .select({ maxRank: sql<string | null>`max(${courseModulesTable.rank})` })
     .from(courseModulesTable)
@@ -414,124 +411,6 @@ export async function createModule(input: {
     // Every remixer just received a placement of this module.
     otherCourseCount: created.remixerIds.length,
     lessons: [],
-  };
-}
-
-export async function createLesson(input: {
-  moduleId: number;
-  name: string;
-}): Promise<BoardLesson> {
-  const slug = await nextAvailableLessonSlug(input.name);
-
-  // Scoped by placement, not `lessons.module_id`: `linkLesson`/`movePlacement`
-  // never touch the legacy column, so the max rank among lessons whose legacy
-  // `module_id` names this module can already disagree with what
-  // `module_lessons` actually holds for it — that staleness is the exact bug
-  // this scoping fixes.
-  const [{ maxRank }] = await db
-    .select({ maxRank: sql<string | null>`max(${moduleLessonsTable.rank})` })
-    .from(moduleLessonsTable)
-    .where(eq(moduleLessonsTable.moduleId, input.moduleId));
-  const rank = maxRank === null ? 1 : Number(maxRank) + 1;
-
-  // `module_lessons` is the only placement write now (the legacy
-  // `lessons.module_id`/`lessons.rank` dual-write was dropped along with
-  // those columns). Without the `module_lessons` row, a freshly created
-  // lesson has NO placement, so every course-scoped reader — the learner
-  // lesson page, playback, the five admin lesson routes — resolves no
-  // course for it and 404s. Both inserts still happen in one transaction: a
-  // lesson that exists in `lessons` but not in `module_lessons` is exactly
-  // that bug.
-  const ownerCourseId = await getCourseIdForModuleId(input.moduleId);
-  const [created] = await db.transaction(async (tx) => {
-    if (ownerCourseId !== null) await lockModuleOwner(tx, ownerCourseId);
-
-    // `lessons.org_id` is NOT NULL (Task 5/6). Resolved the same way
-    // `migrate-lesson-placements.ts`'s backfill did — module → course →
-    // `course_orgs`, taking the LOWEST org id when a course belongs to
-    // several — so a freshly created lesson agrees with every lesson the
-    // backfill already stamped, rather than picking independently. Inside
-    // the transaction so a course with no `course_orgs` row aborts the
-    // whole create rather than leaving an inconsistent partial write.
-    const [orgRow] = await tx
-      .select({ orgId: sql<number | null>`min(${courseOrgsTable.orgId})` })
-      .from(modulesTable)
-      .innerJoin(
-        courseOrgsTable,
-        eq(courseOrgsTable.courseId, modulesTable.courseId),
-      )
-      .where(eq(modulesTable.id, input.moduleId));
-    const orgId = orgRow?.orgId ?? null;
-    if (orgId === null) {
-      // No org would have to be invented, so refuse rather than insert a
-      // lesson nothing in the library can attribute to an org — same
-      // philosophy as the backfill's own NOT NULL gate. Names the same
-      // remedy `migrate-lesson-placements.ts`'s own gate and
-      // `resolve-course-org-link.ts` (scripts/import-course.ts) do, so an
-      // operator hitting any of the three sees one consistent instruction
-      // (fix round 4, Minor 6).
-      throw new Error(
-        `Module ${input.moduleId}'s course has no course_orgs row — cannot ` +
-          `resolve an owning org for the new lesson. Seed those links ` +
-          `(pnpm db:seed-org-links) and try again.`,
-      );
-    }
-
-    const [insertedLesson] = await tx
-      .insert(lessonsTable)
-      .values({
-        name: input.name,
-        slug,
-        requiredSubscriptions: [],
-        orgId,
-      })
-      .returning();
-
-    // The snapshot it takes is empty, so there is nothing to index.
-    await changeMembership(
-      tx,
-      {
-        courseIds: await getCourseIdsShowingModule(tx, input.moduleId),
-        lessonIds: [insertedLesson.id],
-      },
-      () =>
-        tx.insert(moduleLessonsTable).values({
-          moduleId: input.moduleId,
-          lessonId: insertedLesson.id,
-          rank: String(rank),
-          dependsOn: [],
-        }),
-    );
-
-    return [insertedLesson];
-  });
-
-  await invalidateEveryCourseShowingModule(input.moduleId);
-
-  return {
-    id: created.id,
-    name: created.name,
-    slug: created.slug,
-    // `created` (the `lessons` row) no longer carries `rank` — that's
-    // `module_lessons`' column now. Reuse the value already computed above
-    // for the placement insert rather than reading it back from `created`.
-    rank,
-    isAvailable: created.isAvailable,
-    hasDebrief: created.hasDebrief,
-    needsVideoWatch: created.needsVideoWatch,
-    requiredSubscriptions: created.requiredSubscriptions as SubscriptionType[],
-    levels: created.levels as LessonLevel[],
-    isConfigured: created.videoRef !== null,
-    // A lesson is created before any material exists, so it has no quiz yet.
-    quizQuestionCount: 0,
-    // No explicit prerequisites, so it joins its module's chain (if any).
-    dependsOn: [],
-    videoProvider: created.videoProvider as ProviderId | null,
-    videoRef: created.videoRef,
-    // The course took the working copy as it was just created.
-    version: created.version,
-    disciplineVersion: created.version,
-    contentUpdatedAt: created.contentUpdatedAt,
   };
 }
 
@@ -1292,58 +1171,75 @@ export async function updateLessonConfig(
   };
 }
 
-export async function deleteLesson(lessonId: number): Promise<boolean> {
-  // Resolve before the delete — once the row is gone, the module/course join
-  // used to find the owning slug(s) has nothing to join against. A lesson
-  // placed into several courses via `module_lessons` means several courses
-  // can be losing this lesson at once, and every one needs invalidating.
-  const courseSlugs = await getCourseSlugsForLessonId(lessonId);
+export type DeleteLessonResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-found' }
+  | {
+      ok: false;
+      reason: 'in-use';
+      courses: { id: number; name: string }[];
+    };
 
-  const [deleted] = await db
-    .delete(lessonsTable)
-    .where(eq(lessonsTable.id, lessonId))
-    .returning({ id: lessonsTable.id, slug: lessonsTable.slug });
-  if (!deleted) return false;
+/** Delete a lesson, with its snapshots and progress. Refused while any course shows it. */
+export async function deleteLesson(
+  lessonId: number,
+): Promise<DeleteLessonResult> {
+  const outcome = await db.transaction(async (tx) => {
+    // Every membership writer locks the lesson before placing it, so a course
+    // adding this one is either seen below or finds it gone.
+    const [lesson] = await tx
+      .select({ slug: lessonsTable.slug })
+      .from(lessonsTable)
+      .where(eq(lessonsTable.id, lessonId))
+      .for('update');
+    if (!lesson) return { ok: false, reason: 'not-found' } as const;
 
-  // Strip the dead slug from every dependent PLACEMENT's `dependsOn`
-  // (`module_lessons`, the only place prerequisites live now), exactly as
-  // deleteModule does with array_remove for modules. depends_on is JSONB
-  // objects rather than a text array, so the equivalent is a filtered
-  // re-aggregation. Not scoped to the deleted lesson's own (currently
-  // teaching) courses — deliberately broader than the invalidation below,
-  // which IS scoped to `courseSlugs`. Today the two sets are actually equal:
-  // `updateLessonDependencies` only ever lets a lesson depend on a SIBLING
-  // in the same course, validated against that course's placements at write
-  // time, and `linkLesson`/`unlinkLesson` (placements.ts) have zero callers
-  // — so a lesson has exactly one placement for its whole life and no path
-  // exists yet to leave a dangling cross-course reference. This unscoped
-  // WHERE is defence in depth against the day `unlinkLesson` gets a caller:
-  // unlinking a lesson from a course does not (and per that function's own
-  // doc comment, should not) retroactively strip that course's OTHER
-  // lessons' now-stale references to it, so a slug could then survive in a
-  // course that no longer teaches it — this delete-time sweep is the
-  // backstop for exactly that leftover. Without this, dependents keep an
-  // edge to a lesson that no longer exists: the gate tolerates it
-  // (unresolvable edges are skipped) but the admin UI would render a chip
-  // for a prerequisite that isn't there, and it accumulates forever.
-  await db
-    .update(moduleLessonsTable)
-    .set({
-      dependsOn: sql`coalesce((
-        select jsonb_agg(entry)
-        from jsonb_array_elements(${moduleLessonsTable.dependsOn}) entry
-        where entry->>'lessonSlug' <> ${deleted.slug}
-      ), '[]'::jsonb)`,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      sql`${moduleLessonsTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: deleted.slug }])}::jsonb`,
-    );
+    const courses = await getCoursesUsingLesson(lessonId, tx);
+    if (courses.length > 0) {
+      return { ok: false, reason: 'in-use', courses } as const;
+    }
+    await tx.delete(lessonsTable).where(eq(lessonsTable.id, lessonId));
 
-  await Promise.all(
-    courseSlugs.map((slug) => invalidateCourseDetailsCache(slug)),
+    // Strip the dead slug from every dependent PLACEMENT's `dependsOn`
+    // (`module_lessons`, the only place prerequisites live now), exactly as
+    // deleteModule does with array_remove for modules. depends_on is JSONB
+    // objects rather than a text array, so the equivalent is a filtered
+    // re-aggregation. Not scoped to any course: unlinking a lesson leaves
+    // that course's OTHER lessons' references to it in place, so by now every
+    // one left is in a course that no longer shows it. Without this,
+    // dependents keep an edge to a lesson that no longer exists: the gate
+    // tolerates it (unresolvable edges are skipped) but the admin UI would
+    // render a chip for a prerequisite that isn't there, and it accumulates
+    // forever.
+    const stripped = await tx
+      .update(moduleLessonsTable)
+      .set({
+        dependsOn: sql`coalesce((
+          select jsonb_agg(entry)
+          from jsonb_array_elements(${moduleLessonsTable.dependsOn}) entry
+          where entry->>'lessonSlug' <> ${lesson.slug}
+        ), '[]'::jsonb)`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        sql`${moduleLessonsTable.dependsOn} @> ${JSON.stringify([{ lessonSlug: lesson.slug }])}::jsonb`,
+      )
+      .returning({ moduleId: moduleLessonsTable.moduleId });
+    return { ok: true, stripped } as const;
+  });
+  if (!outcome.ok) return outcome;
+
+  // No course shows the lesson itself; these show a placement just changed.
+  const moduleIds = [...new Set(outcome.stripped.map((p) => p.moduleId))];
+  const slugs = await Promise.all(
+    moduleIds.map((id) => getCourseSlugsForModuleId(id)),
   );
-  return true;
+  await Promise.all(
+    [...new Set(slugs.flat())].map((slug) =>
+      invalidateCourseDetailsCache(slug),
+    ),
+  );
+  return { ok: true };
 }
 
 export type UpdateLessonDependenciesResult =

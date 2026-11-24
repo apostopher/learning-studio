@@ -116,4 +116,42 @@ describe('useDeleteLesson', () => {
     expect(message).not.toMatch(/try again/i);
     expect(message).not.toMatch(/403/);
   });
+
+  it('a lesson in use: the message names the courses', async () => {
+    const { wrapper } = makeHarness();
+    const error = 'Used by Course A. Remove it from that course first.';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json(
+        { error, code: 'in-use', courses: [{ id: 1, name: 'Course A' }] },
+        { status: 409 },
+      ),
+    );
+    const { result } = renderHook(() => useDeleteLesson(), { wrapper });
+
+    let message = '';
+    await act(async () => {
+      await result.current.mutateAsync(9).catch((e: Error) => {
+        message = e.message;
+      });
+    });
+
+    expect(message).toBe(error);
+  });
+
+  it('a 409 it cannot read is an ordinary failure', async () => {
+    const { wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('proxy error', { status: 409 }),
+    );
+    const { result } = renderHook(() => useDeleteLesson(), { wrapper });
+
+    let message = '';
+    await act(async () => {
+      await result.current.mutateAsync(9).catch((e: Error) => {
+        message = e.message;
+      });
+    });
+
+    expect(message).toBe('Failed to delete lesson (409)');
+  });
 });

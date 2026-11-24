@@ -269,6 +269,17 @@ export async function linkLesson(input: {
         async () => {
           const existing = await getCourseIdsForLesson(input.lessonId, tx);
           if (existing.includes(targetCourseId)) return 'duplicate' as const;
+          // Again, under the lesson's lock: it may have been deleted while
+          // this waited for it.
+          if (
+            !(await lessonBelongsToCourseOrg(
+              input.lessonId,
+              targetCourseId,
+              tx,
+            ))
+          ) {
+            return 'foreign-lesson' as const;
+          }
 
           const [row] = await tx
             .insert(moduleLessonsTable)
@@ -294,7 +305,7 @@ export async function linkLesson(input: {
       );
     },
   );
-  if (created === 'duplicate') return 'duplicate';
+  if (created === 'duplicate' || created === 'foreign-lesson') return created;
 
   await invalidateEveryCourseShowingModule(input.moduleId);
 

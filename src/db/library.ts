@@ -60,8 +60,8 @@ const LIBRARY_URL_PATTERN = '%/library-%';
  * course per lesson, so at most one `module_lessons` row normally satisfies
  * `inArray(lessonModule.id, courseModuleIds(courseId))` for a given lesson.
  * That check is application-level, not a database constraint — the unique
- * index is on `(module_id, lesson_id)`, i.e. per MODULE, and `admin.ts`'s
- * `createLesson` is a second, independent writer — so it is not a guarantee.
+ * index is on `(module_id, lesson_id)`, i.e. per MODULE — so it is not a
+ * guarantee.
  * If it were ever violated, the resulting duplicate rows would be harmless
  * here rather than merely rare: both would carry the identical `moduleSlug`
  * (read from the assignment's own stored module, not from the placement) and

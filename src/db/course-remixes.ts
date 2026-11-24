@@ -51,7 +51,10 @@ export type UnremixResult =
  * this, an admin (who bypasses `structure`) could remix a course from another
  * deployment's org into their own, or un-remix one out of it.
  */
-async function coursesAreInOrg(orgId: number, ids: number[]): Promise<boolean> {
+export async function coursesAreInOrg(
+  orgId: number,
+  ids: number[],
+): Promise<boolean> {
   const rows = await db
     .select({ courseId: courseOrgsTable.courseId })
     .from(courseOrgsTable)

@@ -144,10 +144,9 @@ describe('createLibraryLesson', () => {
 
     await createLibraryLesson({ orgId: 7, disciplineId: 4, name: 'Stalls' });
 
-    // Mutant this catches: copying `createLesson`'s module_lessons write into
-    // here. There is no module to place into, so it would either crash or
-    // invent a placement in someone's course. Exactly one insert, and it is
-    // the lesson.
+    // Mutant this catches: a module_lessons write here. There is no module to
+    // place into, so it would either crash or invent a placement in someone's
+    // course. Exactly one insert, and it is the lesson.
     expect(m.insert).toHaveBeenCalledTimes(1);
     expect(m.insert.mock.calls[0][0]).toBe(lessonsTable);
     expect(m.transaction).not.toHaveBeenCalled();

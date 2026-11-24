@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
+import type { Tx } from '#/db/lesson-versions';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
@@ -273,10 +274,8 @@ export async function getLessonIdBySlug(slug: string): Promise<number | null> {
  * Expressed against `course_orgs` rather than `getActiveOrgId()` on purpose.
  * The question is not "does this lesson belong to the deployment's org" but
  * "does it belong to an org that owns the course it is being placed in" — and
- * a course may belong to several (`course_orgs` is a join table, and
- * `createLesson` resolves a lesson's single owner as the LOWEST of them). Only
- * the relationship between the two rows can answer that; ambient config
- * cannot.
+ * a course may belong to several (`course_orgs` is a join table). Only the
+ * relationship between the two rows can answer that; ambient config cannot.
  *
  * The mirror of `findDisciplineInOrg`, which does the same job for the other
  * global serial on this surface.
@@ -284,8 +283,9 @@ export async function getLessonIdBySlug(slug: string): Promise<number | null> {
 export async function lessonBelongsToCourseOrg(
   lessonId: number,
   courseId: number,
+  ex: Tx | typeof db = db,
 ): Promise<boolean> {
-  const [row] = await db
+  const [row] = await ex
     .select({ id: lessonsTable.id })
     .from(lessonsTable)
     .innerJoin(courseOrgsTable, eq(courseOrgsTable.orgId, lessonsTable.orgId))

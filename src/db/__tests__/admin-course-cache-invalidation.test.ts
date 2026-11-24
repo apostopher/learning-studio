@@ -61,12 +61,6 @@ const modulesTable = pgTable('modules', {
   requiredSubscriptions: jsonb('required_subscriptions'),
   updatedAt: timestamp('updated_at'),
 });
-// Task 5a fix round 1: createLesson dual-writes into module_lessons (see its
-// doc comment in admin.ts) alongside the legacy lessons row, and moveLesson
-// dual-writes via movePlacement (mocked as a whole module below, not exercised
-// through real column objects) — but the schema mock still needs a real
-// pgTable here so `tx.insert(moduleLessonsTable)` in the real admin.ts code
-// has a table object to pass through the mocked `db`/`tx`.
 const moduleLessonsTable = pgTable('module_lessons', {
   id: integer('id').primaryKey(),
   moduleId: integer('module_id'),
@@ -193,10 +187,9 @@ const db = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
-  // createLesson dual-writes lessons + module_lessons in one
-  // `db.transaction`. Default impl (set in beforeEach) just runs the
-  // callback against `db` itself, so `tx.insert(...)` inside it routes
-  // through the same `db.insert` mock every other test already asserts on.
+  // Default impl (set in beforeEach) just runs the callback against `db`
+  // itself, so `tx.insert(...)` inside it routes through the same `db.insert`
+  // mock every other test already asserts on.
   transaction: vi.fn(),
 }));
 const placements = vi.hoisted(() => ({
@@ -282,6 +275,7 @@ vi.mock('#/db/flagship-remix', () => flagshipRemix);
  */
 const lessonVersions = vi.hoisted(() => ({
   lockModuleOwner: vi.fn(),
+  getCoursesUsingLesson: vi.fn(async () => [] as unknown[]),
   getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
     moduleId * 10,
     moduleId * 10 + 1,
@@ -295,7 +289,7 @@ const lessonVersions = vi.hoisted(() => ({
   ),
 }));
 vi.mock('#/db/lesson-versions', () => lessonVersions);
-// moveLesson (Task 5a fix round 1) dual-writes via `movePlacement`, and createLesson dual-writes via a direct `module_lessons` insert (not through `linkLesson`) — `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
+// moveLesson writes via `movePlacement`; `getPlacementsForCourse` is stubbed only because admin.ts's `getCourseBoard` imports it at module scope, unrelated to any test here.
 vi.mock('#/db/placements', () => placements);
 vi.mock('@vercel/blob', () => blob);
 // admin.ts also imports #/lib/video-providers/resolve.server for the
@@ -319,7 +313,6 @@ vi.mock('#/integrations/synthesia/thumbnails', () => ({
 
 const {
   createCourse,
-  createLesson,
   createModule,
   deleteCourse,
   deleteLesson,
@@ -350,7 +343,7 @@ beforeEach(() => {
   synthesiaThumbnailsCache.invalidate.mockResolvedValue(undefined);
   blob.del.mockResolvedValue(undefined);
   // Default: the transaction callback just runs against `db` itself, so
-  // `tx.insert(...)`/`tx.select(...)` inside createLesson route through the
+  // `tx.insert(...)`/`tx.select(...)` inside it route through the
   // same `db.insert`/`db.select` mocks every other test already queues.
   db.transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
     fn(db),
@@ -562,359 +555,6 @@ describe('course-details cache invalidation', () => {
       rank: '4',
     });
     expect(result.rank).toBe(4);
-  });
-
-  it('createLesson invalidates every course showing the module, resolved from moduleId', async () => {
-    db.select
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(makeChain([{ maxRank: null }]));
-    const lessonInsert = makeChain([
-      {
-        id: 2,
-        name: 'Stall Recovery',
-        slug: 'stall-recovery',
-        rank: '1',
-        isAvailable: false,
-        hasDebrief: false,
-        needsVideoWatch: false,
-        requiredSubscriptions: [],
-        videoId: null,
-        videoProvider: null,
-        videoRef: null,
-      },
-    ]);
-    const placementInsert = makeChain(undefined);
-    // Task 5a fix round 2 (Important 2): the file's default `db.transaction`
-    // mock (below, in `beforeEach`) hands the callback `db` itself, so a
-    // mutant that deletes the transaction wrapper and issues two
-    // independent `db.insert(...)` calls would satisfy every assertion
-    // built on the module-level `db.insert` queue. This test instead
-    // supplies a DISTINCT `tx` object with its own `insert` spy, so the
-    // assertions below can tell "went through the transaction" apart from
-    // "went through `db` directly and merely looks the same".
-    const txInsert = vi
-      .fn()
-      .mockReturnValueOnce(lessonInsert)
-      .mockReturnValueOnce(placementInsert);
-    // Fix round 2, Critical 1: `createLesson` now resolves the new lesson's
-    // `orgId` via a `tx.select(...)` (module -> course -> course_orgs)
-    // BEFORE either insert — the fake `tx` needs a `.select` too, or the
-    // real code crashes calling a method the old fake didn't have.
-    const tx = {
-      select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
-      insert: txInsert,
-    };
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn(tx),
-    );
-    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue([
-      'flight-basics',
-      'itps-remixer',
-    ]);
-
-    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
-
-    expect(lessonAccess.getCourseSlugsForModuleId).toHaveBeenCalledWith(7);
-    // The remixer's slug reaches the cache too — the owner-only helper this
-    // replaces left every remixer's learner payload stale for 6h.
-    expect(
-      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
-    ).toEqual(['flight-basics', 'itps-remixer']);
-    // Task 5a fix round 1 regression (Critical 2): a lesson created without
-    // a module_lessons row is invisible to every placement-based reader —
-    // the learner lesson page, playback, and all five admin lesson routes
-    // 404 on it. Asserted on what the dual-write insert actually received,
-    // not merely that `db.insert` was called a second time.
-    expect(txInsert).toHaveBeenNthCalledWith(1, lessonsTable);
-    expect(txInsert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(placementInsert.valuesArg).toEqual({
-      moduleId: 7,
-      lessonId: 2,
-      rank: '1',
-      dependsOn: [],
-    });
-    expect(lessonVersions.changeMembership).toHaveBeenCalledWith(
-      tx,
-      { courseIds: [70, 71], lessonIds: [2] },
-      expect.any(Function),
-    );
-  });
-
-  // Task 5d: `linkLesson`/`movePlacement` never touch `lessons.module_id`, so
-  // the max rank among lessons whose LEGACY module_id names this module can
-  // already disagree with what `module_lessons` actually holds — a fresh
-  // lesson computed off the stale column could collide with an existing
-  // placement's rank, or leave a gap. Mutant: revert the max-rank query back
-  // to `.from(lessonsTable).where(eq(lessonsTable.moduleId, ...))` —
-  // correct-shaped (still an integer FK, still compiles), wrong-behaving
-  // (silently reads the wrong table the moment a placement and its lesson's
-  // legacy module_id diverge). Verified RED: rendering that mutant's WHERE
-  // produces `"lessons"."module_id" = $1`, not the module_lessons text below.
-  it("createLesson's new-lesson rank is computed from placements in the target module, not legacy lessons.rank", async () => {
-    const maxRankCalls: { from: unknown[]; where: SQL[] } = {
-      from: [],
-      where: [],
-    };
-    const maxRankChain = {
-      from: (table: unknown) => {
-        maxRankCalls.from.push(table);
-        return maxRankChain;
-      },
-      where: (condition: SQL) => {
-        maxRankCalls.where.push(condition);
-        return maxRankChain;
-      },
-      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
-      then: (
-        resolve: (v: unknown) => unknown,
-        reject?: (e: unknown) => unknown,
-      ) => Promise.resolve([{ maxRank: '3' }]).then(resolve, reject),
-    };
-    db.select
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(maxRankChain);
-    const lessonInsert = makeChain([
-      {
-        id: 2,
-        name: 'Stall Recovery',
-        slug: 'stall-recovery',
-        isAvailable: false,
-        hasDebrief: false,
-        needsVideoWatch: false,
-        requiredSubscriptions: [],
-        videoId: null,
-        videoProvider: null,
-        videoRef: null,
-      },
-    ]);
-    const placementInsert = makeChain(undefined);
-    const txInsert = vi
-      .fn()
-      .mockReturnValueOnce(lessonInsert)
-      .mockReturnValueOnce(placementInsert);
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({
-        select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
-        insert: txInsert,
-      }),
-    );
-    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
-
-    const result = await createLesson({ moduleId: 7, name: 'Stall Recovery' });
-
-    expect(maxRankCalls.from[0]).toBe(moduleLessonsTable);
-    expect(render(maxRankCalls.where[0])).toBe(
-      '"module_lessons"."module_id" = $1',
-    );
-    // Task 7: `lessons.rank` is gone — the `module_lessons` placement insert
-    // is the ONLY write that carries the computed rank now. Mutant: read the
-    // canned `lessonInsert` row's own rank (there isn't one any more, but a
-    // stale reversion could reintroduce `rank: created.rank`) instead of the
-    // locally-computed `rank` variable — asserting on the placement insert's
-    // `.values()` argument (not on anything the lesson-row canned return
-    // says) is what proves the value actually came from "3 + 1", not a
-    // hardcoded fixture.
-    expect(placementInsert.valuesArg).toMatchObject({ rank: '4' });
-    // `admin.ts` returns the already-numeric `rank` local variable directly
-    // now (no `Number(created.rank)` round-trip through a Postgres `numeric`
-    // string) — a mutant that stringified it (`rank: String(rank)`) would
-    // still satisfy the placement-insert assertion above (that's the WRITE
-    // side) and only this catches it. Verified RED against that mutant
-    // (`typeof result.rank` is `'string'`, not `'number'`).
-    expect(typeof result.rank).toBe('number');
-    expect(result.rank).toBe(4);
-  });
-
-  // Task 7, Addition 1: the transitional dual-write is gone — `createLesson`
-  // must no longer write `moduleId`/`rank` onto the `lessons` row itself
-  // (those columns don't exist post-migration), only onto its
-  // `module_lessons` placement.
-  it('createLesson writes only name/slug/requiredSubscriptions/orgId to lessonsTable — no moduleId or rank — and still places the lesson via module_lessons', async () => {
-    db.select
-      .mockReturnValueOnce(makeChain([])) // taken slugs
-      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
-    const lessonInsert = makeChain([
-      {
-        id: 2,
-        name: 'Stall Recovery',
-        slug: 'stall-recovery',
-        isAvailable: false,
-        hasDebrief: false,
-        needsVideoWatch: false,
-        requiredSubscriptions: [],
-        videoId: null,
-        videoProvider: null,
-        videoRef: null,
-      },
-    ]);
-    const placementInsert = makeChain(undefined);
-    const txInsert = vi
-      .fn()
-      .mockReturnValueOnce(lessonInsert)
-      .mockReturnValueOnce(placementInsert);
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({
-        select: vi.fn().mockReturnValue(makeChain([{ orgId: 9 }])),
-        insert: txInsert,
-      }),
-    );
-    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
-
-    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
-
-    // Mutant: restore the legacy dual-write (`moduleId: input.moduleId,
-    // rank: String(rank)` back on the `lessonsTable` insert) — correct-
-    // shaped (both were real columns before this task, so this still
-    // compiles), wrong-behaving post-Task-7: an insert carrying them fails
-    // on the real database with a "column does not exist" error this
-    // canned-chain mock can't reproduce, so only asserting the exact
-    // `.values()` argument catches it here.
-    expect(txInsert).toHaveBeenNthCalledWith(1, lessonsTable);
-    expect(lessonInsert.valuesArg).toEqual({
-      name: 'Stall Recovery',
-      slug: 'stall-recovery',
-      requiredSubscriptions: [],
-      orgId: 9,
-    });
-    // The placement insert is still the (only) placement write.
-    expect(txInsert).toHaveBeenNthCalledWith(2, moduleLessonsTable);
-    expect(placementInsert.valuesArg).toEqual({
-      moduleId: 7,
-      lessonId: 2,
-      rank: '1',
-      dependsOn: [],
-    });
-  });
-
-  // Fix round 2, Critical 1: `lessons.org_id` is NOT NULL (Task 5/6), and
-  // `createLesson`'s insert wrote nothing for it — every lesson-create
-  // 500s the moment `migrate-lesson-placements.ts` (which sets that
-  // constraint) has run. Resolved the same way that migration's own
-  // backfill did: module -> course -> `course_orgs`, MIN(org_id) when a
-  // course belongs to several. Mutant: read `orgId` from anywhere else (a
-  // hardcoded default, `input`, `undefined`) instead of this query's
-  // result — correct-shaped (still an integer, still compiles) but
-  // wrong-behaving the instant a course belongs to an org other than
-  // whatever was hardcoded. Verified RED: asserting the exact join/where
-  // this query builds, and that the resolved value reaches the INSERT's
-  // `.values()`, both fail against that mutant.
-  it("createLesson resolves the new lesson's orgId via module → course → course_orgs (MIN org id)", async () => {
-    const orgLookupCalls: {
-      select: Record<string, SQL>[];
-      from: unknown[];
-      innerJoin: [unknown, SQL][];
-      where: SQL[];
-    } = { select: [], from: [], innerJoin: [], where: [] };
-    const orgLookupChain = {
-      from: (table: unknown) => {
-        orgLookupCalls.from.push(table);
-        return orgLookupChain;
-      },
-      innerJoin: (table: unknown, condition: SQL) => {
-        orgLookupCalls.innerJoin.push([table, condition]);
-        return orgLookupChain;
-      },
-      where: (condition: SQL) => {
-        orgLookupCalls.where.push(condition);
-        return orgLookupChain;
-      },
-      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
-      then: (
-        resolve: (v: unknown) => unknown,
-        reject?: (e: unknown) => unknown,
-      ) => Promise.resolve([{ orgId: 4 }]).then(resolve, reject),
-    };
-    db.select
-      .mockReturnValueOnce(makeChain([])) // taken slugs
-      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
-    const lessonInsert = makeChain([
-      {
-        id: 2,
-        name: 'Stall Recovery',
-        slug: 'stall-recovery',
-        isAvailable: false,
-        hasDebrief: false,
-        needsVideoWatch: false,
-        requiredSubscriptions: [],
-        videoId: null,
-        videoProvider: null,
-        videoRef: null,
-      },
-    ]);
-    const placementInsert = makeChain(undefined);
-    const txInsert = vi
-      .fn()
-      .mockReturnValueOnce(lessonInsert)
-      .mockReturnValueOnce(placementInsert);
-    const txSelect = vi.fn((projection: Record<string, SQL>) => {
-      orgLookupCalls.select.push(projection);
-      return orgLookupChain;
-    });
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ select: txSelect, insert: txInsert }),
-    );
-    lessonAccess.getCourseSlugsForModuleId.mockResolvedValue(['flight-basics']);
-
-    await createLesson({ moduleId: 7, name: 'Stall Recovery' });
-
-    expect(orgLookupCalls.from[0]).toBe(modulesTable);
-    expect(orgLookupCalls.innerJoin[0][0]).toBe(courseOrgsTable);
-    expect(render(orgLookupCalls.innerJoin[0][1])).toBe(
-      '"course_orgs"."course_id" = "modules"."course_id"',
-    );
-    expect(render(orgLookupCalls.where[0])).toBe('"modules"."id" = $1');
-    expect(renderSqlParams(orgLookupCalls.where[0])).toEqual([7]);
-    // Fix round 4, Minor 3 (tightened in round 5, Minor 4 — the house rule
-    // in render-sql.ts is `toBe` on the full string, never `toContain`):
-    // pins the PROJECTION too, not just the join/where — `.select({ orgId:
-    // courseOrgsTable.orgId })` (an arbitrary row, no aggregate at all)
-    // would satisfy every assertion above unchanged, since the fake chain
-    // answers `[{ orgId: 4 }]` regardless of what was actually asked for.
-    // Only rendering the captured projection catches that divergence —
-    // exactly what fix round 4's own hazard (a course with several orgs
-    // resolving to the wrong one) depends on this being `min(...)`, not a
-    // bare column.
-    expect(render(orgLookupCalls.select[0].orgId)).toBe(
-      'min("course_orgs"."org_id")',
-    );
-    // The value this query resolved is what actually reaches the INSERT —
-    // not some other source.
-    expect(lessonInsert.valuesArg).toMatchObject({ orgId: 4 });
-  });
-
-  // Fix round 2, Critical 1: a module whose course has no `course_orgs`
-  // row would otherwise have to insert `orgId: null` — impossible now that
-  // the column is NOT NULL, so it would 500 on the database anyway, but
-  // silently and with no indication of WHY. Failing loudly first, before
-  // any insert, names the module so whoever's debugging doesn't have to
-  // reverse-engineer a bare constraint-violation error.
-  it('createLesson fails loudly, before any insert, when the module’s course has no course_orgs row', async () => {
-    db.select
-      .mockReturnValueOnce(makeChain([])) // taken slugs
-      .mockReturnValueOnce(makeChain([{ maxRank: null }])); // maxRank
-    const txInsert = vi.fn();
-    const txSelect = vi.fn().mockReturnValue(makeChain([])); // no course_orgs row
-    db.transaction.mockImplementationOnce(async (fn: (t: unknown) => unknown) =>
-      fn({ select: txSelect, insert: txInsert }),
-    );
-
-    let error: Error | undefined;
-    try {
-      await createLesson({ moduleId: 7, name: 'Stall Recovery' });
-    } catch (e) {
-      error = e as Error;
-    }
-
-    expect(error?.message).toMatch(/module 7/i);
-    // Fix round 5, Minor 5: also pins the REMEDY, not just that a course/
-    // module is named — the importer side (resolve-course-org-link.ts)
-    // already asserts this; this was the one path left where the wording
-    // could be reverted (e.g. back to the vaguer "Link the course to an
-    // org first.") and nothing would go red.
-    expect(error?.message).toMatch(/db:seed-org-links/);
-    expect(txInsert).not.toHaveBeenCalled();
-    expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 
   // Final review one-liner: the write moved the module's placement in
@@ -1210,25 +850,6 @@ describe('course-details cache invalidation', () => {
     ).toEqual(['aerobatics', 'flight-basics', 'instrument-rating']);
   });
 
-  it('deleteLesson invalidates every course teaching the lesson, resolved before the row is gone', async () => {
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue([
-      'flight-basics',
-      'aerobatics',
-    ]);
-    db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
-    db.update.mockReturnValueOnce(makeChain([]));
-
-    const result = await deleteLesson(9);
-
-    expect(result).toBe(true);
-    // Reverting to single-slug invalidation would still pass a bare
-    // `toHaveBeenCalledWith` on one of these — asserting the full sorted set
-    // is what catches that regression.
-    expect(
-      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
-    ).toEqual(['aerobatics', 'flight-basics']);
-  });
-
   // Task 5d: prerequisites now live on the PLACEMENT (`module_lessons
   // .depends_on`), not the legacy per-lesson `lesson_dependencies` row — the
   // board reads placement dependsOn, so stripping the old table left this a
@@ -1248,17 +869,12 @@ describe('course-details cache invalidation', () => {
   // pins that the WHERE is nothing but the jsonb-containment check — no
   // lessonId, no courseId, no join at all.
   it("deleteLesson strips the dead slug from every dependent PLACEMENT's dependsOn, across every course", async () => {
-    // Asserts the UPDATE was issued against module_lessons, not that a row
-    // changed: without it, dependents keep an edge to a lesson that no
-    // longer exists and the admin UI renders a chip for a prerequisite that
-    // is not there. deleteModule has done this since it shipped; lessons
-    // never did. No course/lesson scoping is added to the WHERE (only a
-    // jsonb-containment check on the dead slug) — deliberately broader than
-    // strictly needed today (see admin.ts's doc comment on this strip): it's
-    // defence in depth against `unlinkLesson` (zero callers currently)
-    // leaving a dangling cross-course reference once it gets one.
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    db.delete.mockReturnValueOnce(makeChain([{ id: 9, slug: 'stalls' }]));
+    // Asserts the UPDATE was issued against module_lessons; what it leaves in
+    // the rows is lesson-versions.test.ts's job, on Postgres. No course/lesson
+    // scoping is added to the WHERE: unlinking a lesson leaves references to
+    // it behind in a course that no longer teaches it.
+    db.select.mockReturnValueOnce(makeChain([{ slug: 'stalls' }]));
+    db.delete.mockReturnValueOnce(makeChain(undefined));
     const whereCalls: SQL[] = [];
     const updateChain = {
       set: () => updateChain,
@@ -1266,29 +882,59 @@ describe('course-details cache invalidation', () => {
         whereCalls.push(condition);
         return updateChain;
       },
-      // biome-ignore lint/suspicious/noThenProperty: intentionally thenable, mirroring real drizzle query builders
-      then: (
-        resolve: (v: unknown) => unknown,
-        reject?: (e: unknown) => unknown,
-      ) => Promise.resolve([]).then(resolve, reject),
+      returning: async () => [
+        { moduleId: 7 },
+        { moduleId: 8 },
+        { moduleId: 7 },
+      ],
     };
     db.update.mockReturnValueOnce(updateChain);
+    lessonAccess.getCourseSlugsForModuleId
+      .mockResolvedValueOnce(['flight-basics', 'aerobatics'])
+      .mockResolvedValueOnce(['aerobatics']);
 
-    await deleteLesson(9);
+    expect(await deleteLesson(9)).toEqual({ ok: true });
 
     expect(db.update).toHaveBeenCalledWith(moduleLessonsTable);
     expect(render(whereCalls[0])).toBe(
       '"module_lessons"."depends_on" @> $1::jsonb',
     );
+    expect(renderSqlParams(whereCalls[0])).toEqual([
+      '[{"lessonSlug":"stalls"}]',
+    ]);
+    expect(lessonAccess.getCourseSlugsForModuleId.mock.calls.flat()).toEqual([
+      7, 8,
+    ]);
+    expect(
+      courseCache.invalidate.mock.calls.map((call) => call[0]).sort(),
+    ).toEqual(['aerobatics', 'flight-basics']);
   });
 
-  it('deleteLesson skips invalidation when nothing was deleted', async () => {
-    lessonAccess.getCourseSlugsForLessonId.mockResolvedValue(['flight-basics']);
-    db.delete.mockReturnValueOnce(makeChain([]));
+  it('deleteLesson deletes and invalidates nothing when a course shows the lesson', async () => {
+    db.select.mockReturnValueOnce(makeChain([{ slug: 'stalls' }]));
+    const courses = [{ id: 3, name: 'Three' }];
+    lessonVersions.getCoursesUsingLesson.mockResolvedValueOnce(courses);
 
-    const result = await deleteLesson(999);
+    expect(await deleteLesson(9)).toEqual({
+      ok: false,
+      reason: 'in-use',
+      courses,
+    });
 
-    expect(result).toBe(false);
+    // Asked inside the transaction, where the lock is.
+    expect(lessonVersions.getCoursesUsingLesson).toHaveBeenCalledWith(9, db);
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(courseCache.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('deleteLesson deletes nothing when there is no such lesson', async () => {
+    db.select.mockReturnValueOnce(makeChain([]));
+
+    expect(await deleteLesson(999)).toEqual({
+      ok: false,
+      reason: 'not-found',
+    });
+    expect(db.delete).not.toHaveBeenCalled();
     expect(courseCache.invalidate).not.toHaveBeenCalled();
   });
 

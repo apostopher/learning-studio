@@ -15,7 +15,6 @@ const m = vi.hoisted(() => {
     requireCoursePermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
-    createLesson: vi.fn(),
     linkLesson: vi.fn(),
     unlinkLesson: vi.fn(),
     movePlacement: vi.fn(),
@@ -37,7 +36,6 @@ vi.mock('#/lib/index-lesson-versions.server', () => ({
   indexLessonVersions: m.indexLessonVersions,
 }));
 vi.mock('#/db/admin', () => ({
-  createLesson: m.createLesson,
   deleteLesson: m.deleteLesson,
 }));
 vi.mock('#/db/placements', () => ({
@@ -101,13 +99,12 @@ beforeEach(() => {
     new Response('Forbidden', { status: 403 }),
   );
   m.linkLesson.mockResolvedValue({ ...PLACEMENT, createdVersionIds: [501] });
-  m.createLesson.mockResolvedValue({ id: 5, name: 'x' });
   m.unlinkLesson.mockResolvedValue(true);
   m.movePlacement.mockResolvedValue(PLACEMENT);
 });
 
 describe('POST /api/admin/modules/:moduleId/lessons — linking', () => {
-  it('links an existing lesson when given lessonId, and does not create', async () => {
+  it('links an existing lesson', async () => {
     const res = await postLessonHandler(postReq({ lessonId: 9 }), '40');
     expect(m.linkLesson).toHaveBeenCalledWith({
       moduleId: 40,
@@ -115,45 +112,8 @@ describe('POST /api/admin/modules/:moduleId/lessons — linking', () => {
       prevLessonId: null,
       nextLessonId: null,
     });
-    expect(m.createLesson).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(PLACEMENT);
-  });
-
-  it('still creates a new lesson when given name, and does not link', async () => {
-    m.createLesson.mockResolvedValueOnce({ id: 5, name: 'Intro' });
-    await postLessonHandler(postReq({ name: 'Intro' }), '40');
-    expect(m.createLesson).toHaveBeenCalledWith({
-      moduleId: 40,
-      name: 'Intro',
-    });
-    expect(m.linkLesson).not.toHaveBeenCalled();
-  });
-
-  // Mutant this kills: an addModuleLessonInputSchema that makes both `name`
-  // and `lessonId` optional on one object — that shape would happily parse
-  // `{}` as valid, and this assertion would then fail because the handler
-  // would proceed to call one of the two mutations instead of 400ing.
-  it('rejects an empty body rather than defaulting to either branch', async () => {
-    const res = await postLessonHandler(postReq({}), '40');
-    expect(res.status).toBe(400);
-    expect(m.linkLesson).not.toHaveBeenCalled();
-    expect(m.createLesson).not.toHaveBeenCalled();
-  });
-
-  // Round-1 review (Important 4): pins `.strict()` on BOTH union branches.
-  // Without it, `{ name, lessonId }` would parse as the `name` branch (the
-  // first alternative z.union tries) and silently create a new lesson while
-  // discarding the caller's `lessonId` — the empty-body test above cannot
-  // catch this, since `{}` still fails both branches either way.
-  it('rejects a body carrying BOTH name and lessonId, rather than picking one', async () => {
-    const res = await postLessonHandler(
-      postReq({ name: 'Intro', lessonId: 9 }),
-      '40',
-    );
-    expect(res.status).toBe(400);
-    expect(m.createLesson).not.toHaveBeenCalled();
-    expect(m.linkLesson).not.toHaveBeenCalled();
   });
 
   // Mutant this kills: collapsing `'duplicate'` and `null` into a single

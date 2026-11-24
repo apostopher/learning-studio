@@ -15,7 +15,6 @@ const m = vi.hoisted(() => {
     requireCoursePermission: vi.fn(),
     absentResourceResponse: vi.fn(),
     getCourseIdForModuleId: vi.fn(),
-    createLesson: vi.fn(),
     linkLesson: vi.fn(),
   };
 });
@@ -33,12 +32,11 @@ vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
 vi.mock('#/lib/index-lesson-versions.server', () => ({
   indexLessonVersions: m.indexLessonVersions,
 }));
-vi.mock('#/db/admin', () => ({ createLesson: m.createLesson }));
 vi.mock('#/db/placements', () => ({ linkLesson: m.linkLesson }));
 
 import { postLessonHandler } from '../modules.$moduleId.lessons';
 
-function req(body: unknown = { name: 'Preflight checks' }): Request {
+function req(body: unknown = { lessonId: 9 }): Request {
   return new Request('http://test/api/admin/modules/5/lessons', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -57,7 +55,7 @@ beforeEach(() => {
   m.absentResourceResponse.mockResolvedValue(
     new Response(null, { status: 404 }),
   );
-  m.createLesson.mockResolvedValue({ id: 1, name: 'Preflight checks' });
+  m.linkLesson.mockResolvedValue({ id: 1, createdVersionIds: [] });
 });
 
 describe('POST /api/admin/modules/:moduleId/lessons', () => {
@@ -93,7 +91,7 @@ describe('POST /api/admin/modules/:moduleId/lessons', () => {
       'Module not found',
     );
     expect(res.status).toBe(403);
-    expect(m.createLesson).not.toHaveBeenCalled();
+    expect(m.linkLesson).not.toHaveBeenCalled();
   });
 
   it('404s a module that does not exist, before guarding', async () => {
@@ -101,7 +99,7 @@ describe('POST /api/admin/modules/:moduleId/lessons', () => {
     const res = await postLessonHandler(req(), '999');
     expect(res.status).toBe(404);
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
-    expect(m.createLesson).not.toHaveBeenCalled();
+    expect(m.linkLesson).not.toHaveBeenCalled();
   });
 
   it('400s an invalid module id without resolving a course', async () => {
@@ -110,32 +108,21 @@ describe('POST /api/admin/modules/:moduleId/lessons', () => {
     expect(m.getCourseIdForModuleId).not.toHaveBeenCalled();
   });
 
-  it('403s a refused course manager without creating a lesson', async () => {
+  it('403s a refused course manager without linking a lesson', async () => {
     m.requireCoursePermission.mockRejectedValueOnce(new m.ForbiddenError());
     const res = await postLessonHandler(req(), '5');
     expect(res.status).toBe(403);
-    expect(m.createLesson).not.toHaveBeenCalled();
+    expect(m.linkLesson).not.toHaveBeenCalled();
   });
 
-  it('400s a schema failure before creating', async () => {
-    const res = await postLessonHandler(req({ name: '' }), '5');
+  // A lesson is created in Disciplines, never inside a course.
+  it.each([
+    ['{ name }', { name: 'Preflight checks' }],
+    ['{ name, lessonId }', { name: 'Preflight checks', lessonId: 9 }],
+    ['an empty body', {}],
+  ])('%s is refused', async (_what, body) => {
+    const res = await postLessonHandler(req(body), '5');
     expect(res.status).toBe(400);
-    expect(m.createLesson).not.toHaveBeenCalled();
-  });
-
-  it('creates the lesson scoped to the module', async () => {
-    await postLessonHandler(req({ name: 'Preflight checks' }), '5');
-    expect(m.createLesson).toHaveBeenCalledWith({
-      moduleId: 5,
-      name: 'Preflight checks',
-    });
-  });
-
-  // Mutant this kills: dropping the `if ('lessonId' in parsed.data)` branch
-  // and always calling `createLesson` — every `{ name }` test above would
-  // still pass, but a `{ name }` request would ALSO call `linkLesson`.
-  it('does not link when creating from a name', async () => {
-    await postLessonHandler(req({ name: 'Preflight checks' }), '5');
     expect(m.linkLesson).not.toHaveBeenCalled();
   });
 });

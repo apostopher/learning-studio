@@ -45,6 +45,7 @@ vi.mock('#/db/video-captions', () => ({ muxCaptionsForPlayback: vi.fn() }));
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
 const {
+  changeMembership,
   countCoursesOnVersion,
   getCourseIdsShowingModule,
   getCoursesUsingLesson,
@@ -59,7 +60,7 @@ const { copyDisciplineModuleIntoCourse } = await import(
   '../copy-discipline-module'
 );
 const { remixCourse, unremixCourse } = await import('../course-remixes');
-const { createCourse, createLesson, createModule, deleteModule } = await import(
+const { createCourse, createModule, deleteLesson, deleteModule } = await import(
   '../admin'
 );
 
@@ -413,14 +414,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await unpinned()).toEqual([]);
     });
 
-    it('a lesson created in a module is pinned in every course showing it', async () => {
-      const { id } = await createLesson({ moduleId: 1, name: 'New' });
-      expect(await pins()).toEqual([
-        `course 1: lesson ${id} 1.0`,
-        `course 2: lesson ${id} 1.0`,
-      ]);
-    });
-
     it('a new module, shown to remixers too, changes no pin', async () => {
       await link(1, 1);
       const before = await pins();
@@ -524,9 +517,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       it.each([
         ['linking', () => link(1, 1)],
         [
-          'creating a lesson beside it, then linking',
+          'linking another lesson beside it, then linking',
           async () => {
-            await createLesson({ moduleId: 1, name: 'New' });
+            await link(1, 2);
             await link(1, 1);
           },
         ],
@@ -611,12 +604,103 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     it('a failed write leaves pins and snapshots as they were', async () => {
       await link(1, 1);
       const before = await pins();
-      // No org owns the course, so createLesson refuses inside its transaction.
-      await pgDb.pool.query('delete from course_orgs where course_id = 1');
-      await expect(createLesson({ moduleId: 1, name: 'X' })).rejects.toThrow();
+      await expect(
+        pgDb.db.transaction(async (tx) => {
+          await changeMembership(
+            tx,
+            { courseIds: [1, 2], lessonIds: [3] },
+            () =>
+              tx.execute(
+                'insert into module_lessons (module_id, lesson_id, rank) values (1, 3, 2)',
+              ),
+          );
+          throw new Error('later step failed');
+        }),
+      ).rejects.toThrow('later step failed');
       expect(await pins()).toEqual(before);
+      await pgDb.pool.query('delete from course_orgs where course_id = 1');
       expect(await link(1, 3)).toBe('foreign-lesson');
       expect(await snapshots()).toHaveLength(1);
+    });
+
+    describe('deleteLesson', () => {
+      const lessonIds = async () =>
+        (await rows('select id from lessons order by id')).map((r) => r.id);
+
+      it('is refused while a course shows it, naming each once, and the row survives', async () => {
+        await pgDb.pool.query(`update courses set name = 'Zulu' where id = 1`);
+        await link(3, 1); // course 2
+        await link(1, 1); // courses 1 and 2
+        const before = await pins();
+        vi.clearAllMocks();
+        expect(await deleteLesson(1)).toEqual({
+          ok: false,
+          reason: 'in-use',
+          courses: [
+            { id: 2, name: 'Two' },
+            { id: 1, name: 'Zulu' },
+          ],
+        });
+        expect(await lessonIds()).toEqual([1, 2, 3]);
+        expect(await pins()).toEqual(before);
+        expect(await snapshots()).toHaveLength(1);
+        expect(h.invalidateCourseDetailsCache).not.toHaveBeenCalled();
+      });
+
+      it('works with no course, cascading snapshots', async () => {
+        await link(1, 1);
+        await link(1, 3);
+        await unlinkLesson(1, 1);
+        expect(await deleteLesson(1)).toEqual({ ok: true });
+        expect(await lessonIds()).toEqual([2, 3]);
+        expect((await snapshots()).map((v) => v.lesson_id)).toEqual([3]);
+        expect(
+          await rows(`select 1 from lesson_material where lesson_slug = 'a'`),
+        ).toEqual([]);
+      });
+
+      it('a stale pin does not count as a course, and goes with it', async () => {
+        await link(1, 1);
+        await pgDb.pool.query('delete from module_lessons where lesson_id = 1');
+        expect(await pins()).toHaveLength(2);
+        expect(await deleteLesson(1)).toEqual({ ok: true });
+        expect(await rows('select 1 from course_lesson_versions')).toEqual([]);
+      });
+
+      it('a lesson never taken, and one that does not exist', async () => {
+        expect(await deleteLesson(2)).toEqual({ ok: true });
+        expect(await deleteLesson(2)).toEqual({
+          ok: false,
+          reason: 'not-found',
+        });
+      });
+
+      it('strips its slug from what depended on it, and evicts the courses showing that', async () => {
+        await link(1, 1);
+        await link(1, 3); // courses 1 and 2
+        await link(4, 2); // course 3, which never depended on it
+        await pgDb.pool.query(`update module_lessons
+          set depends_on = '[{"lessonSlug":"a"},{"lessonSlug":"b"}]' where lesson_id = 3`);
+        await unlinkLesson(1, 1);
+        const atEviction: unknown[] = [];
+        vi.clearAllMocks();
+        h.invalidateCourseDetailsCache.mockImplementation(async (slug) => {
+          atEviction.push([
+            slug,
+            (
+              await rows(
+                'select depends_on from module_lessons where lesson_id = 3',
+              )
+            )[0].depends_on,
+          ]);
+        });
+        await deleteLesson(1);
+        h.invalidateCourseDetailsCache.mockReset();
+        expect(atEviction.sort()).toEqual([
+          ['one', [{ lessonSlug: 'b' }]],
+          ['two', [{ lessonSlug: 'b' }]],
+        ]);
+      });
     });
 
     describe('reads', () => {
@@ -794,7 +878,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               nextLessonId: null,
             }),
         ],
-        ['creating a lesson', () => createLesson({ moduleId: 1, name: 'N' })],
         ['deleting the remixed-from module', () => deleteModule(2)],
       ])('%s waits for a remix of the same course', async (_what, write) => {
         await link(1, 1);
@@ -829,6 +912,66 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         await commitOther();
         expect(await linked).toMatchObject({ moduleId: 1 });
         expect(await pins()).toEqual(['course 1: lesson 1 1.0']);
+      });
+
+      it('a delete waits for a course adding the lesson, then refuses', async () => {
+        // What linkLesson holds and has written, uncommitted.
+        await other.query('select 1 from lessons where id = 1 for update');
+        await other.query(
+          'insert into module_lessons (module_id, lesson_id, rank) values (4, 1, 1)',
+        );
+        const deleted = deleteLesson(1);
+        deleted.catch(() => {});
+        await untilBlocked(1);
+        await commitOther();
+        expect(await deleted).toEqual({
+          ok: false,
+          reason: 'in-use',
+          courses: [{ id: 3, name: 'Three' }],
+        });
+        expect(await rows('select id from lessons where id = 1')).toHaveLength(
+          1,
+        );
+      });
+
+      it('a course adding the lesson waits for its delete, then does not find it', async () => {
+        await other.query('select 1 from lessons where id = 1 for update');
+        const deleted = deleteLesson(1);
+        deleted.catch(() => {});
+        await untilBlocked(1);
+        // Queued behind the delete.
+        const linked = link(4, 1);
+        linked.catch(() => {});
+        await untilBlocked(2);
+        await commitOther();
+        expect(await deleted).toEqual({ ok: true });
+        expect(await linked).toBe('foreign-lesson');
+        expect(await rows('select 1 from module_lessons')).toEqual([]);
+        expect(await rows('select 1 from lesson_versions')).toEqual([]);
+      });
+
+      it('deleting two lessons and linking them all end', async () => {
+        // Every writer queues on the rows before any of them starts.
+        await link(1, 1);
+        await unlinkLesson(1, 1);
+        await other.query('select 1 from lessons for update');
+        const all = Promise.allSettled([
+          deleteLesson(1),
+          copyDisciplineModuleIntoCourse({
+            courseId: 3,
+            disciplineModuleId: 1,
+            afterModuleId: null,
+          }),
+          deleteLesson(3),
+          link(2, 1),
+        ]);
+        await untilBlocked(4);
+        await commitOther();
+        const errors = (await all).flatMap((r) =>
+          r.status === 'rejected' ? [String(r.reason?.cause ?? r.reason)] : [],
+        );
+        expect(errors.filter((e) => e.includes('deadlock'))).toEqual([]);
+        expect(await unpinned()).toEqual([]);
       });
 
       it('the same lesson dragged twice into one course lands once', async () => {

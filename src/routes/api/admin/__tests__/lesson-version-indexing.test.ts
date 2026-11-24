@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   copyDisciplineModuleIntoCourse: vi.fn(),
   remixCourse: vi.fn(),
   createCourse: vi.fn(),
+  updateCourseLessonVersion: vi.fn(),
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: m.waitUntil }));
 vi.mock('#/ai/embeddings', () => ({
@@ -45,14 +46,20 @@ vi.mock('#/db/placements', () => ({ linkLesson: m.linkLesson }));
 vi.mock('#/db/copy-discipline-module', () => ({
   copyDisciplineModuleIntoCourse: m.copyDisciplineModuleIntoCourse,
 }));
-vi.mock('#/db/course-remixes', () => ({ remixCourse: m.remixCourse }));
+vi.mock('#/db/course-remixes', () => ({
+  remixCourse: m.remixCourse,
+  coursesAreInOrg: async () => true,
+}));
+vi.mock('#/db/lesson-versions', () => ({
+  updateCourseLessonVersion: m.updateCourseLessonVersion,
+}));
 vi.mock('#/db/admin', () => ({
   createCourse: m.createCourse,
-  createLesson: vi.fn(),
   listAdminCourses: vi.fn(),
 }));
 
 import { createCourseHandler } from '../courses';
+import { postCourseLessonVersionHandler } from '../courses.$courseId.lessons.$lessonId.version';
 import { postModuleFromLibraryHandler } from '../courses.$courseId.modules.from-library';
 import { postRemixHandler } from '../courses.$courseId.remixes';
 import { postLessonHandler } from '../modules.$moduleId.lessons';
@@ -93,6 +100,12 @@ const ROUTES: [string, () => Promise<Response>, number, unknown][] = [
     200,
     { id: 2 },
   ],
+  [
+    'updating a lesson',
+    () => postCourseLessonVersionHandler(post({ toVersion: '1.1' }), '2', '9'),
+    200,
+    { version: '1.1' },
+  ],
 ];
 
 beforeEach(() => {
@@ -109,6 +122,11 @@ beforeEach(() => {
     createdVersionIds,
   });
   m.createCourse.mockResolvedValue({ id: 2, createdVersionIds });
+  m.updateCourseLessonVersion.mockResolvedValue({
+    ok: true,
+    version: '1.1',
+    createdVersionIds,
+  });
   m.readSnapshot.mockResolvedValue([
     { id: 501, slug: 'wx-1', version: '1.0', text: 'T', proTips: null },
   ]);

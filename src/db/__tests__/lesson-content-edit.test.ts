@@ -60,7 +60,6 @@ const { setLessonVersion, VersionEditError } = await import(
 );
 const { upsertLessonMaterial } = await import('../lesson');
 const {
-  createLesson,
   removeLessonAlternateVideo,
   setLessonAlternateVideo,
   setLessonVideo,
@@ -488,16 +487,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     });
 
     it('a new lesson starts at 1.0', async () => {
-      await createLesson({ moduleId: 1, name: 'In a course' });
       await createLibraryLesson({ orgId: 1, disciplineId: 1, name: 'Filed' });
       expect(
         await rows(
           'select name, version from lessons where id > 1 order by id',
         ),
-      ).toEqual([
-        { name: 'In a course', version: '1.0' },
-        { name: 'Filed', version: '1.0' },
-      ]);
+      ).toEqual([{ name: 'Filed', version: '1.0' }]);
     });
 
     it('text saved after the lesson changes discipline keeps the tab it now shows', async () => {

@@ -62,6 +62,7 @@ vi.mock('#/db/admin', () => ({
 
 import { VersionEditError } from '#/db/lesson-content-edit';
 import {
+  lessonInUseSchema,
   updateLessonConfigInputSchema,
   versionConflictSchema,
 } from '#/lib/admin-schemas';
@@ -125,7 +126,7 @@ beforeEach(() => {
   m.updateLessonConfig.mockResolvedValue({ id: 10 });
   m.updateLessonName.mockResolvedValue({ id: 10, name: 'Renamed' });
   m.moveLesson.mockResolvedValue({ id: 10, rank: 1, moduleId: 3 });
-  m.deleteLesson.mockResolvedValue(true);
+  m.deleteLesson.mockResolvedValue({ ok: true });
 });
 
 /**
@@ -742,7 +743,7 @@ describe('patchLessonHandler — move (guards both modules’ owners)', () => {
   });
 });
 
-describe('deleteLessonHandler — discipline-owned (deletes from every course)', () => {
+describe('deleteLessonHandler — discipline-owned', () => {
   it('resolves the lesson’s discipline and forwards it to the content guard with a delete action', async () => {
     m.getDisciplineIdForLessonId.mockResolvedValue({
       found: true,
@@ -771,6 +772,33 @@ describe('deleteLessonHandler — discipline-owned (deletes from every course)',
     expect(res.status).toBe(403);
     expect(m.deleteLesson).not.toHaveBeenCalled();
     expect(m.requireCoursePermission).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [['Course A'], 'Used by Course A. Remove it from that course first.'],
+    [
+      ['Course A', 'Course B'],
+      'Used by Course A and Course B. Remove it from those courses first.',
+    ],
+    [
+      ['Course A', 'Course B', 'Course C'],
+      'Used by Course A, Course B and Course C. Remove it from those courses first.',
+    ],
+  ])('delete refused and names the courses (%s)', async (names, error) => {
+    const courses = names.map((name, i) => ({ id: i + 1, name }));
+    m.deleteLesson.mockResolvedValue({ ok: false, reason: 'in-use', courses });
+    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toEqual({ error, code: 'in-use', courses });
+    // What the client reads it with.
+    expect(lessonInUseSchema.parse(body)).toEqual(body);
+  });
+
+  it('404s a lesson deleted between the lookup and the delete', async () => {
+    m.deleteLesson.mockResolvedValue({ ok: false, reason: 'not-found' });
+    const res = await deleteLessonHandler(new Request('http://test/x'), '10');
+    expect(res.status).toBe(404);
   });
 
   it('404s a lesson that does not exist, before guarding', async () => {

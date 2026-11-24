@@ -45,12 +45,8 @@ vi.mock('#/lib/video-providers/resolve.server', () => ({
 }));
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
-const {
-  createLesson,
-  getCourseBoard,
-  getCourseLessonPosters,
-  resolveLessonPlayback,
-} = await import('../admin');
+const { getCourseBoard, getCourseLessonPosters, resolveLessonPlayback } =
+  await import('../admin');
 const { getOrgEditorBoard, getOrgLibrary } = await import('../editor');
 const { getDisciplineLessonPosters } = await import('../library-posters');
 const { createLibraryLesson } = await import('../library-lessons');
@@ -343,13 +339,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         created.highestTaken,
         created.versionCourseCount,
       ]).toEqual(['1.0', null, 0]);
-    });
-
-    it('a lesson created in a module answers as the board will show it', async () => {
-      const created = await createLesson({ moduleId: 3, name: 'G' });
-      expect(created).toEqual(
-        (await boardOf(3)).flat().find((l) => l.id === created.id),
-      );
     });
   },
 );
