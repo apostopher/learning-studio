@@ -133,6 +133,7 @@ export async function listOfferings({
       courseName: coursesTable.name,
       startsOn: offeringsTable.startsOn,
       endsOn: offeringsTable.endsOn,
+      arriveAt: offeringsTable.arriveAt,
     })
     .from(offeringsTable)
     .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
@@ -160,6 +161,7 @@ export async function getOffering(id: number): Promise<Offering | null> {
       courseName: coursesTable.name,
       startsOn: offeringsTable.startsOn,
       endsOn: offeringsTable.endsOn,
+      arriveAt: offeringsTable.arriveAt,
     })
     .from(offeringsTable)
     .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
@@ -215,6 +217,7 @@ export async function createOffering(
         courseId: input.courseId,
         startsOn: input.startsOn,
         endsOn: input.endsOn,
+        arriveAt: input.arriveAt,
         createdBy: actorId,
       })
       .returning({ id: offeringsTable.id });
@@ -241,6 +244,8 @@ export async function updateOffering(
       .set({
         startsOn: input.startsOn,
         endsOn: input.endsOn,
+        // Undefined leaves the column alone.
+        arriveAt: input.arriveAt,
         updatedAt: new Date(),
       })
       .where(eq(offeringsTable.id, id))

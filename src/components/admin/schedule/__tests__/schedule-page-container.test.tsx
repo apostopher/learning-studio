@@ -74,6 +74,7 @@ const renderPage = (store = createStore()) => {
     courseName: 'Instrument Ground School',
     startsOn: format(addDays(windowStart, 3), 'yyyy-MM-dd'),
     endsOn: format(addDays(windowStart, 5), 'yyyy-MM-dd'),
+    arriveAt: null,
     users: [],
   };
   state.offerings = [offering];

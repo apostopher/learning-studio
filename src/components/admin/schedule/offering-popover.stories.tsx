@@ -80,6 +80,7 @@ const Harness = ({
 }) => {
   const [startsOn, setStartsOn] = useState('2026-07-06');
   const [endsOn, setEndsOn] = useState('2026-10-16');
+  const [arriveAt, setArriveAt] = useState('');
   const [users, setUsers] = useState(initial);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -113,6 +114,8 @@ const Harness = ({
         }}
         endsOn={endsOn}
         onEndsOnChange={setEndsOn}
+        arriveAt={arriveAt}
+        onArriveAtChange={setArriveAt}
         summaryLine={formatWindowSummary(startsOn, endsOn)}
         rosterCount={levelSummary(users)}
         addPerson={

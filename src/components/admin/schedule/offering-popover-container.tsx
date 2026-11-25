@@ -2,7 +2,7 @@ import { Popover } from '@base-ui/react/popover';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -65,7 +65,12 @@ const personQueryAtom = atom('');
 const selectedPersonAtom = atom<string | null>(null);
 
 /** The form with nothing open — also what `values` holds while closed. */
-const EMPTY_SEED: OfferingFormValues = { startsOn: '', endsOn: '', users: [] };
+const EMPTY_SEED: OfferingFormValues = {
+  startsOn: '',
+  endsOn: '',
+  arriveAt: '',
+  users: [],
+};
 
 /**
  * What Save writes to: a course to schedule, or the offering row being
@@ -192,6 +197,7 @@ export const OfferingPopoverContainer = ({
       ? {
           startsOn: seedStartsOn,
           endsOn: seedEndsOn,
+          arriveAt: editing?.arriveAt ?? '',
           users: editing?.users ?? [],
         }
       : EMPTY_SEED,
@@ -200,6 +206,8 @@ export const OfferingPopoverContainer = ({
 
   const startsOn = form.watch('startsOn');
   const endsOn = form.watch('endsOn');
+  const arriveAt = form.watch('arriveAt');
+  const arriveAtField = useRef<HTMLInputElement>(null);
   const users = form.watch('users');
   const isSaving = create.isPending || update.isPending || remove.isPending;
 
@@ -512,6 +520,15 @@ export const OfferingPopoverContainer = ({
     // Unreachable without a target: the popover is closed whenever there is
     // none, and Base UI makes a closed positioner inert.
     if (!saveTarget) return;
+    // A half-typed date reads as '': saved, it would silently erase the one on
+    // record.
+    if (arriveAtField.current?.validity.badInput) {
+      form.setError('arriveAt', {
+        message: 'Finish the arrival date, or clear it',
+      });
+      arriveAtField.current.focus();
+      return;
+    }
     const userIds = values.users.map((person) => person.userId);
     if (saveTarget.mode === 'create') {
       create.mutate(
@@ -519,6 +536,7 @@ export const OfferingPopoverContainer = ({
           courseId: saveTarget.courseId,
           startsOn: values.startsOn,
           endsOn: values.endsOn,
+          arriveAt: values.arriveAt || null,
           userIds,
         },
         {
@@ -536,6 +554,7 @@ export const OfferingPopoverContainer = ({
         offeringId: saveTarget.offering.id,
         startsOn: values.startsOn,
         endsOn: values.endsOn,
+        arriveAt: values.arriveAt || null,
         userIds,
       },
       {
@@ -688,6 +707,13 @@ export const OfferingPopoverContainer = ({
                 form.setValue('endsOn', next, { shouldDirty: true })
               }
               endsOnError={form.formState.errors.endsOn?.message}
+              arriveAt={arriveAt}
+              onArriveAtChange={(next) => {
+                form.setValue('arriveAt', next, { shouldDirty: true });
+                form.clearErrors('arriveAt');
+              }}
+              arriveAtError={form.formState.errors.arriveAt?.message}
+              arriveAtRef={arriveAtField}
               summaryLine={formatWindowSummary(startsOn, endsOn)}
               rosterCount={levelSummary(users)}
               addPerson={

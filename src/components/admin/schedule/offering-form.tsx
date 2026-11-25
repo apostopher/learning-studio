@@ -35,6 +35,10 @@ export const OfferingForm = ({
   endsOn,
   onEndsOnChange,
   endsOnError,
+  arriveAt,
+  onArriveAtChange,
+  arriveAtError,
+  arriveAtRef,
   summaryLine,
   rosterCount,
   addPerson,
@@ -58,6 +62,12 @@ export const OfferingForm = ({
   endsOn: string;
   onEndsOnChange: (next: string) => void;
   endsOnError?: string;
+  /** The day students report to the training center; empty when none. */
+  arriveAt: string;
+  onArriveAtChange: (next: string) => void;
+  arriveAtError?: string;
+  /** The container reads a half-typed date off this input, and focuses it. */
+  arriveAtRef?: Ref<HTMLInputElement>;
   /** "103 calendar days — 14 weeks and 5 days", or null if the dates are bad. */
   summaryLine: string | null;
   /** "8 people", for the roster heading. */
@@ -164,11 +174,42 @@ export const OfferingForm = ({
         </p>
       )}
 
-      {summaryLine && (
-        <p className="font-mono font-semibold text-primary text-sm">
+      {/* The dates' columns again: this field spans the last two, where a
+          whole date still fits on a phone. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_6rem_minmax(0,1fr)] items-start gap-2.5">
+        <p className="text-pretty font-mono font-semibold text-primary text-sm">
           {summaryLine}
         </p>
-      )}
+        <div className="col-span-2 flex flex-col gap-1.5 pbs-2">
+          <label htmlFor="offering-arrive-at" className={labelClassName}>
+            Arrive at training center{' '}
+            <span className="font-normal normal-case tracking-normal">
+              (optional)
+            </span>
+          </label>
+          <input
+            ref={arriveAtRef}
+            id="offering-arrive-at"
+            type="date"
+            value={arriveAt}
+            onChange={(event) => onArriveAtChange(event.target.value)}
+            aria-invalid={arriveAtError ? true : undefined}
+            aria-describedby={
+              arriveAtError ? 'offering-arrive-at-error' : undefined
+            }
+            className={fieldClassName(Boolean(arriveAtError))}
+          />
+          {arriveAtError && (
+            <p
+              id="offering-arrive-at-error"
+              role="alert"
+              className="text-error-text text-sm"
+            >
+              {arriveAtError}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
 
     <div className="flex flex-col gap-3">

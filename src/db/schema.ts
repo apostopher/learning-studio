@@ -127,6 +127,11 @@ export const offeringsTable = pgTable(
      * final day off every bar.
      */
     endsOn: date('ends_on', { mode: 'string' }).notNull(),
+    /**
+     * The day students report to the training center, if set. Only recorded:
+     * nothing is computed from it and it is not tied to the run's dates.
+     */
+    arriveAt: date('arrive_at', { mode: 'string' }),
     /** Who scheduled it. Kept for attribution; nullable for imported rows. */
     createdBy: varchar('created_by', { length: 255 }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),

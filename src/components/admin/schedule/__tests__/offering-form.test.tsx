@@ -11,6 +11,8 @@ const base = {
   onWindowDaysChange: vi.fn(),
   endsOn: '2026-11-06',
   onEndsOnChange: vi.fn(),
+  arriveAt: '',
+  onArriveAtChange: vi.fn(),
   summaryLine: '45 calendar days — 6 weeks and 3 days',
   rosterCount: '2 people',
   addPerson: <div />,
@@ -42,6 +44,34 @@ describe('OfferingForm (compact)', () => {
       target: { value: '30' },
     });
     expect(onWindowDaysChange).toHaveBeenCalledWith('30');
+  });
+
+  it('offers an optional arrival date', () => {
+    const onArriveAtChange = vi.fn();
+    render(
+      <OfferingForm
+        {...base}
+        arriveAt="2026-11-20"
+        onArriveAtChange={onArriveAtChange}
+      />,
+    );
+    const input = screen.getByLabelText(
+      'Arrive at training center (optional)',
+    ) as HTMLInputElement;
+    expect(input.type).toBe('date');
+    expect(input.value).toBe('2026-11-20');
+    expect(input.required).toBe(false);
+    fireEvent.change(input, { target: { value: '2026-11-21' } });
+    expect(onArriveAtChange).toHaveBeenCalledWith('2026-11-21');
+  });
+
+  it('ties an arrival error to its input', () => {
+    render(<OfferingForm {...base} arriveAtError="Finish the date" />);
+    const input = screen.getByLabelText('Arrive at training center (optional)');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toContain(
+      screen.getByRole('alert').id,
+    );
   });
 
   it('a discard confirm replaces the Cancel / Save row', () => {

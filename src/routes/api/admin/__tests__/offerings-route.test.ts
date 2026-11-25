@@ -50,6 +50,7 @@ const OFFERING = {
   courseName: '2 Week',
   startsOn: '2026-09-07',
   endsOn: '2026-09-20',
+  arriveAt: null,
   users: [],
 };
 
@@ -209,6 +210,32 @@ describe('POST /api/admin/offerings', () => {
     expect(res.status).toBe(201);
   });
 
+  it.each([
+    ['a date', { arriveAt: '2026-09-21' }, '2026-09-21'],
+    ['none', { arriveAt: null }, null],
+    ['nothing at all', {}, null],
+  ])('records the arrival date: %s', async (_what, body, expected) => {
+    m.requireCourseCreation.mockResolvedValue(undefined);
+
+    const res = await createOfferingHandler(
+      postReq({ ...VALID_CREATE, ...body }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(m.createOffering.mock.calls[0][0].arriveAt).toBe(expected);
+  });
+
+  it('rejects an arrival date that is not a day', async () => {
+    m.requireCourseCreation.mockResolvedValue(undefined);
+
+    const res = await createOfferingHandler(
+      postReq({ ...VALID_CREATE, arriveAt: '2026-9-1' }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(m.createOffering).not.toHaveBeenCalled();
+  });
+
   // Attribution only — the guard has already decided this caller may write.
   it('creates an unattributed offering when there is no session', async () => {
     m.requireCourseCreation.mockResolvedValue(undefined);
@@ -239,6 +266,20 @@ describe('PATCH and DELETE /api/admin/offerings/:id', () => {
       expect.objectContaining({ endsOn: '2026-09-21', userIds: ['u1'] }),
       'actor-1',
     );
+  });
+
+  // A tab open since before the field existed sends none, which must not
+  // erase the one on record.
+  it.each([
+    ['a date', { arriveAt: '2026-09-22' }, '2026-09-22'],
+    ['cleared', { arriveAt: null }, null],
+    ['not sent', {}, undefined],
+  ])('updates the arrival date: %s', async (_what, body, expected) => {
+    m.requireCourseCreation.mockResolvedValue(undefined);
+
+    await patchOfferingHandler(patchReq({ ...VALID_UPDATE, ...body }), '1');
+
+    expect(m.updateOffering.mock.calls[0][1].arriveAt).toBe(expected);
   });
 
   it('refuses a write the guard refuses', async () => {

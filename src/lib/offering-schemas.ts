@@ -54,6 +54,8 @@ export const offeringSchema = z.object({
   startsOn: calendarDaySchema,
   /** Inclusive — an offering starting and ending the same day is one day. */
   endsOn: calendarDaySchema,
+  /** The day students report to the training center, when recorded. */
+  arriveAt: calendarDaySchema.nullable(),
   users: z.array(offeringUserSchema),
 });
 export type Offering = z.infer<typeof offeringSchema>;
@@ -86,6 +88,7 @@ export const createOfferingInputSchema = z
     courseId: z.number().int().positive(),
     startsOn: calendarDaySchema,
     endsOn: calendarDaySchema,
+    arriveAt: calendarDaySchema.nullable().default(null),
     /**
      * Optional at creation. An offering with nobody on it is a legitimate
      * state — the dates are usually fixed before the roster is — so this is
@@ -101,6 +104,11 @@ export const updateOfferingInputSchema = z
   .object({
     startsOn: calendarDaySchema,
     endsOn: calendarDaySchema,
+    /**
+     * Null clears it. Absent leaves it: a tab open since before the field
+     * existed sends none, and must not erase it.
+     */
+    arriveAt: calendarDaySchema.nullable().optional(),
     userIds: z.array(z.string()),
   })
   .superRefine(datesOrdered);
@@ -122,6 +130,8 @@ export const offeringFormSchema = z
   .object({
     startsOn: calendarDaySchema.min(1, 'Pick a start date'),
     endsOn: calendarDaySchema.min(1, 'Pick an end date'),
+    /** Empty is none: an offering need not have one. */
+    arriveAt: z.union([z.literal(''), calendarDaySchema]),
     users: z.array(offeringUserSchema),
   })
   .superRefine(datesOrdered);

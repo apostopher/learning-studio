@@ -20,18 +20,20 @@ vi.mock('react', async () => {
   return { ...cjs, default: cjs };
 });
 
-const { mutation } = vi.hoisted(() => ({
-  mutation: () => ({
-    mutate: vi.fn(),
+const { mutation, createMutate, updateMutate } = vi.hoisted(() => ({
+  mutation: (mutate = vi.fn()) => ({
+    mutate,
     reset: vi.fn(),
     isPending: false,
     error: null,
   }),
+  createMutate: vi.fn(),
+  updateMutate: vi.fn(),
 }));
 vi.mock('#/data-hooks/use-offerings', () => ({
-  useCreateOffering: mutation,
-  useUpdateOffering: mutation,
-  useDeleteOffering: mutation,
+  useCreateOffering: () => mutation(createMutate),
+  useUpdateOffering: () => mutation(updateMutate),
+  useDeleteOffering: () => mutation(),
 }));
 // The directory the roster resolves profiles from — empty unless a test
 // seeds it.
@@ -63,6 +65,7 @@ const offeringA: Offering = {
   courseName: 'Instrument Ground School',
   startsOn: '2026-09-23',
   endsOn: '2026-11-06',
+  arriveAt: null,
   users: [],
 };
 
@@ -729,5 +732,95 @@ describe('OfferingPopoverContainer roster levels', () => {
     const { pinA } = renderPopover([withAda], true, true);
     pinA();
     expect(adaChip()).toBeTruthy();
+  });
+});
+
+describe('OfferingPopoverContainer arrival date', () => {
+  const arriveAt = () =>
+    screen.getByLabelText(/^Arrive at/) as HTMLInputElement;
+  const save = async (name = 'Save') => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name }));
+    });
+  };
+  beforeEach(() => {
+    createMutate.mockClear();
+    updateMutate.mockClear();
+  });
+
+  it('shows what was recorded, and saves a change', async () => {
+    const { pinA } = renderPopover([{ ...offeringA, arriveAt: '2026-11-09' }]);
+    pinA();
+    expect(arriveAt().value).toBe('2026-11-09');
+    fireEvent.change(arriveAt(), { target: { value: '2026-11-10' } });
+    await save();
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({
+      offeringId: 7,
+      arriveAt: '2026-11-10',
+    });
+  });
+
+  it('saves a cleared one as none', async () => {
+    const { pinA } = renderPopover([{ ...offeringA, arriveAt: '2026-11-09' }]);
+    pinA();
+    fireEvent.change(arriveAt(), { target: { value: '' } });
+    await save();
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({ arriveAt: null });
+  });
+
+  it('is sent with a new offering, or none', async () => {
+    const { store } = renderPopover();
+    const schedule = async (value?: string) => {
+      act(() => {
+        store.set(dispatchOfferingPopoverAtom, {
+          type: 'pin',
+          target: {
+            mode: 'create',
+            courseId: 3,
+            courseName: 'Instrument Ground School',
+            startsOn: '2026-09-23',
+          },
+        });
+      });
+      expect(arriveAt().value).toBe('');
+      if (value) fireEvent.change(arriveAt(), { target: { value } });
+      await save('Schedule');
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      return createMutate.mock.calls.at(-1)?.[0];
+    };
+    expect(await schedule()).toMatchObject({ courseId: 3, arriveAt: null });
+    expect(await schedule('2026-11-10')).toMatchObject({
+      arriveAt: '2026-11-10',
+    });
+  });
+
+  it('is only recorded: the run moving leaves it, and it may be any day', async () => {
+    const { pinA } = renderPopover([{ ...offeringA, arriveAt: '2026-01-05' }]);
+    pinA();
+    fireEvent.change(screen.getByLabelText('Start date'), {
+      target: { value: '2026-10-01' },
+    });
+    await save();
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({
+      startsOn: '2026-10-01',
+      arriveAt: '2026-01-05',
+    });
+  });
+
+  // A half-typed date reads as '' — saved, it would silently erase the one on
+  // record.
+  it('refuses a half-typed date rather than saving none', async () => {
+    const { pinA } = renderPopover([{ ...offeringA, arriveAt: '2026-11-09' }]);
+    pinA();
+    fireEvent.change(arriveAt(), { target: { value: '' } });
+    Object.defineProperty(arriveAt(), 'validity', {
+      value: { badInput: true },
+    });
+    await save();
+    expect(updateMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Finish the arrival date, or clear it',
+    );
+    expect(document.activeElement).toBe(arriveAt());
   });
 });

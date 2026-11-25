@@ -8,6 +8,7 @@ const offering = (over: Partial<Offering> = {}): Offering => ({
   courseName: '2 Week',
   startsOn: '2026-09-07',
   endsOn: '2026-09-09',
+  arriveAt: null,
   users: [],
   ...over,
 });
