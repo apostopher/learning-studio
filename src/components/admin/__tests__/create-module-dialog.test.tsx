@@ -5,7 +5,6 @@ import { render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { describe, expect, it, vi } from 'vitest';
 import { createModuleDialogOpenAtom } from '#/atoms/admin';
-import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 
 vi.mock('react', async () => {
   const { createRequire } = await import('node:module');
@@ -19,14 +18,16 @@ vi.mock('../image-upload-field-container', () => ({
 
 import { CreateModuleDialogContainer } from '../create-module-dialog-container';
 
-function open(slug: string) {
+function open() {
   const store = createStore();
   store.set(createModuleDialogOpenAtom, true);
   render(
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={store}>
         <Tooltip.Provider>
-          <CreateModuleDialogContainer course={{ id: 7, name: 'ITPS', slug }} />
+          <CreateModuleDialogContainer
+            course={{ id: 7, name: 'ITPS', slug: 'itps' }}
+          />
         </Tooltip.Provider>
       </Provider>
     </QueryClientProvider>,
@@ -35,16 +36,11 @@ function open(slug: string) {
 
 describe("creating a module on one course's board", () => {
   it('says where its lessons come from', () => {
-    open('itps');
+    open();
     expect(
       screen.getByText(
         'Add a module to this course. Then, in the knowledge library, drag lessons into it from Disciplines, in the ITPS column.',
       ),
     ).toBeTruthy();
-  });
-
-  it('promises nothing for the flagship, which has no column', () => {
-    open(FLAGSHIP_COURSE_SLUG);
-    expect(screen.getByText('Add a module to this course.')).toBeTruthy();
   });
 });

@@ -119,6 +119,15 @@ const modules = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
 
 describe('EditorCourseColumnContainer', () => {
+  it('draws the flagship with its own modules, and no way to delete it', () => {
+    open(FLAGSHIP, [WEATHER], []);
+    expect(modules()).toEqual(['Weather']);
+    expect(
+      screen.getByRole('button', { name: 'Edit 3D Airmanship' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Delete/ })).toBeNull();
+  });
+
   it('hides the flagship modules in any other column, which can be deleted', () => {
     open(ITPS, [WEATHER, INTRO], []);
     expect(modules()).toEqual(['Intro']);

@@ -18,17 +18,10 @@ import {
 } from '#/atoms/admin';
 import { dataKeys } from '#/data-hooks/keys';
 import type { LibraryLesson } from '#/lib/admin-schemas';
-import {
-  formatVersion,
-  isVersionLocked,
-  lockedVersionMessage,
-  versionEditError,
-} from '#/lib/lesson-version';
 
 /**
  * The Disciplines lesson editor and its version, end to end: the real dialog,
- * hooks and caches over a fake server that refuses what the real one refuses.
- * What the server received is the assertion throughout.
+ * hooks and caches over a fake server. What the server received is the assertion throughout.
  */
 
 // One React for src modules and react-dom: see material-section-container.test.
@@ -131,17 +124,9 @@ const LESSON: LibraryLesson = {
   levels: [],
   videoProvider: 'mux',
   version: '1.0',
-  contentUpdatedAt: new Date('2026-11-24T09:38:00Z'),
-  // More courses show the lesson than are on this version of it.
   courseCount: 5,
   courseIds: [],
   disciplineModuleId: null,
-  highestTaken: '1.0',
-  versionCourseCount: 3,
-};
-const UNLOCKED: Partial<LibraryLesson> = {
-  highestTaken: null,
-  versionCourseCount: 0,
 };
 const MATERIAL = {
   text: 'Saved text',
@@ -172,31 +157,6 @@ const server = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 
-/** A content write as the real server judges it: refused, or applied. */
-function judge(lesson: LibraryLesson, version: string | undefined) {
-  const refusal = versionEditError(lesson, version);
-  if (refusal) {
-    return json(
-      {
-        error:
-          refusal.reason === 'locked'
-            ? lockedVersionMessage(lesson.version, lesson.versionCourseCount)
-            : `Enter a version higher than ${formatVersion(refusal.than)}.`,
-        code: 'version',
-        version: lesson.version,
-        highestTaken: lesson.highestTaken,
-      },
-      409,
-    );
-  }
-  const next = { ...lesson, version: version ?? lesson.version };
-  server.lessons.set(lesson.id, {
-    ...next,
-    versionCourseCount: isVersionLocked(next) ? next.versionCourseCount : 0,
-  });
-  return null;
-}
-
 async function handle(path: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? 'GET';
   if (path === '/api/admin/library') {
@@ -221,8 +181,10 @@ async function handle(path: string, init?: RequestInit): Promise<Response> {
   if (server.holdWrites) await server.holdWrites;
   if (server.failWith) return json({}, server.failWith);
   if ('isAvailable' in body) return json({});
-  const refused = judge(lesson, body.version);
-  if (refused) return refused;
+  server.lessons.set(id, {
+    ...lesson,
+    version: body.version ?? lesson.version,
+  });
   if (path.endsWith('/material')) {
     const { version: _version, ...material } = body;
     server.material = material;
@@ -238,16 +200,6 @@ async function handle(path: string, init?: RequestInit): Promise<Response> {
     });
   }
   return json({ id });
-}
-
-/** A course takes the version the lesson is on, behind the editor's back. */
-function courseTakes(id: number) {
-  const lesson = server.lessons.get(id) as LibraryLesson;
-  server.lessons.set(id, {
-    ...lesson,
-    highestTaken: lesson.version,
-    versionCourseCount: 1,
-  });
 }
 
 beforeEach(() => {
@@ -327,8 +279,9 @@ const alertText = () =>
     ?.textContent;
 const settle = () => act(() => new Promise((r) => setTimeout(r, 20)));
 
-const LOCKED =
-  'v1.0 is used by 3 courses. Enter a higher version to make changes.';
+const HINT =
+  'Courses keep their own copy. Change the version to flag an update.';
+const MALFORMED = 'Use a number like 1.0';
 
 /** The five writes: how each is made, and where the server gets it. */
 const WRITES: {
@@ -390,68 +343,67 @@ const WRITES: {
 ];
 
 describe('the Version field', () => {
-  it('shows the current version and, while locked, always says why', async () => {
+  it('shows the current version and says what changing it does', async () => {
     await open();
     expect(field().value).toBe('1.0');
     expect(document.activeElement).not.toBe(field());
-    expect(screen.getByText(LOCKED)).toBeTruthy();
-    expect(description()).toContain(LOCKED);
+    expect(description()).toBe(HINT);
     expect(field().getAttribute('aria-invalid')).not.toBe('true');
     // Enter in it saves, though it stands outside the form.
     expect(field().form?.id).toBe('lesson-material-form-10');
   });
 
-  it('words one course, and none left', async () => {
-    const { client } = await open({ versionCourseCount: 1 });
-    expect(
-      screen.getByText(
-        'v1.0 is used by 1 course. Enter a higher version to make changes.',
-      ),
-    ).toBeTruthy();
-    server.lessons.set(10, { ...LESSON, versionCourseCount: 0 });
-    await act(() =>
-      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
-    );
-    expect(
-      await screen.findByText(
-        'v1.0 was used by a course. Enter a higher version to make changes.',
-      ),
-    ).toBeTruthy();
-  });
-
-  it('has no hint on a lesson no course has taken', async () => {
-    await open(UNLOCKED);
-    expect(field().value).toBe('1.0');
-    expect(screen.queryByText(/Enter a higher version/)).toBeNull();
-    expect(field().getAttribute('aria-describedby')).toBeNull();
-  });
-
   it('is there for a lesson with no video', async () => {
     await open({ videoProvider: null });
     expect(screen.queryByText('Other languages')).toBeNull();
-    expect(screen.getByText(LOCKED)).toBeTruthy();
+    expect(field().value).toBe('1.0');
   });
 
   it('says a malformed number at the field when it is left', async () => {
-    await open(UNLOCKED);
+    await open();
     typeVersion('v1.1');
     fireEvent.blur(field());
     await waitFor(() => expect(alertText()).toBe('Use a number like 1.0'));
     expect(field().getAttribute('aria-invalid')).toBe('true');
-    expect(description()).toContain('Use a number like 1.0');
+    expect(description()).toBe(`${MALFORMED} ${HINT}`);
     typeVersion('1.1');
     await waitFor(() => expect(alertText()).toBeUndefined());
   });
 });
 
 describe.each(WRITES)('$name', (write) => {
-  it('blocked while locked with no draft: nothing sent, field focused', async () => {
-    await open();
+  it.each([
+    '1.1',
+    '0.9',
+  ])('a draft of %s is sent with it, then spent', async (draft) => {
+    const { client } = await open();
+    client.setQueryData(dataKeys.editorBoard(), []);
+    client.setQueryData(dataKeys.courseBoard(4), {});
+    const reads = server.libraryReads;
+    typeVersion(draft);
     write.act();
+    await waitFor(() => expect(server.writes).toHaveLength(1));
+    expect(server.writes[0].body).toMatchObject({
+      ...write.body,
+      version: draft,
+    });
+    await waitFor(() => expect(server.libraryReads).toBeGreaterThan(reads));
+    for (const key of [dataKeys.editorBoard(), dataKeys.courseBoard(4)]) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+    await waitFor(() => expect(field().readOnly).toBe(false));
+    expect(field().value).toBe(draft);
+    await waitFor(() => expect(save().textContent).toBe('Save'));
+  });
+
+  it('a malformed draft holds it back: nothing sent, field focused', async () => {
+    await open();
+    typeVersion('1');
+    write.act();
+    await waitFor(() => expect(alertText()).toBe(MALFORMED));
     await waitFor(() => expect(document.activeElement).toBe(field()));
     await settle();
     expect(server.writes).toEqual([]);
-    expect(alertText()).toBe(LOCKED);
     expect(field().getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -465,33 +417,17 @@ describe.each(WRITES)('$name', (write) => {
     expect(sent.body).toMatchObject({ ...write.body, version: '1.1' });
   });
 
-  it('unlocked with the field untouched: no version is sent', async () => {
-    await open(UNLOCKED);
+  it('with the field untouched no version is sent', async () => {
+    await open();
     write.act();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes[0].body).toMatchObject(write.body);
     expect(server.writes[0].body).not.toHaveProperty('version');
   });
 
-  it('settles the library and both boards, and spends the draft', async () => {
-    const { client } = await open();
-    client.setQueryData(dataKeys.editorBoard(), []);
-    client.setQueryData(dataKeys.courseBoard(4), {});
-    const reads = server.libraryReads;
-    typeVersion('1.1');
-    write.act();
-    await waitFor(() => expect(screen.queryByText(LOCKED)).toBeNull());
-    await waitFor(() => expect(server.libraryReads).toBeGreaterThan(reads));
-    for (const key of [dataKeys.editorBoard(), dataKeys.courseBoard(4)]) {
-      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
-    }
-    expect(field().value).toBe('1.1');
-    await waitFor(() => expect(save().textContent).toBe('Save'));
-  });
-
   it('the field is read-only while it is in flight', async () => {
     let release = () => {};
-    await open(UNLOCKED);
+    await open();
     server.holdWrites = new Promise((r) => {
       release = r;
     });
@@ -500,32 +436,37 @@ describe.each(WRITES)('$name', (write) => {
     await act(async () => release());
     await waitFor(() => expect(field().readOnly).toBe(false));
   });
-
-  it('a draft that is not higher than the taken version is blocked', async () => {
-    await open();
-    typeVersion('0.9');
-    write.act();
-    await waitFor(() =>
-      expect(alertText()).toBe('Enter a version higher than v1.0.'),
-    );
-    // Still says why it is locked, after what is wrong.
-    expect(description()).toBe(`Enter a version higher than v1.0. ${LOCKED}`);
-    expect(server.writes).toEqual([]);
-  });
 });
 
 describe('Save', () => {
-  it('a malformed draft blocks it', async () => {
-    await open(UNLOCKED);
-    typeVersion('1');
+  it('goes to 1.1 and back to 1.0, with an edit in between', async () => {
+    await open();
+    const saved = () =>
+      waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy(),
+      );
+    typeVersion('1.1');
     pressSave();
-    await waitFor(() => expect(alertText()).toBe('Use a number like 1.0'));
-    await waitFor(() => expect(document.activeElement).toBe(field()));
-    expect(server.writes).toEqual([]);
+    await saved();
+    WRITES[0].act();
+    await waitFor(() => expect(server.writes).toHaveLength(2));
+    await saved();
+    typeVersion('1.0');
+    pressSave();
+    await waitFor(() => expect(server.writes).toHaveLength(3));
+    await saved();
+    expect(server.writes.map((w) => w.body.version)).toEqual([
+      '1.1',
+      undefined,
+      '1.0',
+    ]);
+    expect(server.lessons.get(10)?.version).toBe('1.0');
+    expect(field().value).toBe('1.0');
+    expect(alertText()).toBeUndefined();
   });
 
   it('an emptied field blocks it: the version is required', async () => {
-    await open(UNLOCKED);
+    await open();
     typeVersion('');
     pressSave();
     await waitFor(() => expect(alertText()).toBe('Use a number like 1.0'));
@@ -556,7 +497,7 @@ describe('Save', () => {
   });
 
   it('is not lit by retyping the current version, and then sends no version', async () => {
-    await open(UNLOCKED);
+    await open();
     typeVersion('1.1');
     expect(save().getAttribute('aria-label')).toBe('Save, unsaved changes');
     typeVersion('1.0');
@@ -686,16 +627,8 @@ describe('a link that is not a full web address', () => {
     expect(screen.queryByText(NOT_A_URL)).toBeNull();
   });
 
-  it('does not come before the reason a lesson is locked', async () => {
-    await openWithLink();
-    pressSave();
-    await waitFor(() => expect(alertText()).toBe(LOCKED));
-    await waitFor(() => expect(document.activeElement).toBe(field()));
-    expect(server.writes).toEqual([]);
-  });
-
   it('refuses a material Save at its row, and the fixed link saves', async () => {
-    await openWithLink(UNLOCKED);
+    await openWithLink();
     type('Job of the day (URL)', 'https://example.com/job');
     pressSave();
     const alert = await screen.findByText(NOT_A_URL);
@@ -722,7 +655,7 @@ describe('a link that is not a full web address', () => {
     'javascript:alert(1)',
     'example.com:80',
   ])('refuses %s', async (url) => {
-    await openWithLink(UNLOCKED);
+    await openWithLink();
     fireEvent.input(row(1), { target: { value: url } });
     pressSave();
     expect(await screen.findByText(NOT_A_URL)).toBeTruthy();
@@ -745,14 +678,14 @@ describe('a link that is not a full web address', () => {
       ...MATERIAL,
       testThis: [{ name: '', url: 'www.faa.gov' }],
     };
-    await open(UNLOCKED);
+    await open();
     pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(1));
   });
 });
 
 describe('several writes sharing one typed version', () => {
-  it('Add language then Save: the second is not refused, with no library answer in between', async () => {
+  it('Add language then Save: the second sends none, with no library answer in between', async () => {
     await open();
     server.holdLibrary = true;
     type('Job of the day (URL)', 'https://example.com/job');
@@ -760,10 +693,10 @@ describe('several writes sharing one typed version', () => {
     WRITES[2].act();
     await waitFor(() => expect(server.writes).toHaveLength(1));
     expect(server.writes[0].body.version).toBe('1.1');
-    // The first success already unlocked the lesson and spent the draft.
-    await waitFor(() => expect(screen.queryByText(LOCKED)).toBeNull());
+    // The first success already spent the draft.
     await waitFor(() => expect(field().readOnly).toBe(false));
     expect(field().value).toBe('1.1');
+    await settle();
 
     pressSave();
     await waitFor(() => expect(server.writes).toHaveLength(2));
@@ -773,7 +706,7 @@ describe('several writes sharing one typed version', () => {
     expect(alertText()).toBeUndefined();
   });
 
-  it('a library answer sent before the write cannot lock it again', async () => {
+  it('a library answer sent before the write cannot bring the old version back', async () => {
     const { client } = await open();
     // A read in flight, holding the old state.
     const stale = json({
@@ -790,14 +723,15 @@ describe('several writes sharing one typed version', () => {
     server.holdLibrary = true;
     typeVersion('1.1');
     WRITES[2].act();
-    await waitFor(() => expect(screen.queryByText(LOCKED)).toBeNull());
+    await waitFor(() => expect(server.writes).toHaveLength(1));
+    await waitFor(() => expect(field().readOnly).toBe(false));
     await act(async () => answer());
     await settle();
-    expect(screen.queryByText(LOCKED)).toBeNull();
     expect(field().value).toBe('1.1');
+    expect(save().getAttribute('aria-label')).toBe('Save');
   });
 
-  it('two writes started together both carry it, and neither is refused', async () => {
+  it('two writes started together both carry it', async () => {
     let release = () => {};
     await open();
     server.holdWrites = new Promise((r) => {
@@ -816,111 +750,9 @@ describe('several writes sharing one typed version', () => {
   });
 });
 
-describe('a course takes the version mid-edit', () => {
-  const TAKEN =
-    'v1.1 is used by 1 course. Enter a higher version to make changes.';
-
-  it.each(
-    WRITES,
-  )('$name: refused at the field, the typed work kept, and a higher version saves it', async (write) => {
-    await open({ version: '1.1', highestTaken: '1.0', versionCourseCount: 0 });
-    courseTakes(10);
-    const reads = server.libraryReads;
-    write.act();
-    await waitFor(() => expect(alertText()).toBe(TAKEN));
-    await waitFor(() => expect(document.activeElement).toBe(field()));
-    await waitFor(() => expect(server.libraryReads).toBeGreaterThan(reads));
-    await settle();
-    // Once, and nowhere else.
-    expect(screen.getAllByText(TAKEN)).toHaveLength(1);
-    expect(toast.error).not.toHaveBeenCalled();
-
-    typeVersion('1.2');
-    await waitFor(() => expect(alertText()).toBeUndefined());
-    const form: Record<string, () => void> = {
-      Save: () => pressSave(),
-      'Replace video': () => press('Replace video'),
-      'Add language': () => press('Add language'),
-      'Remove language': write.act,
-      rename: () => press('Save name'),
-    };
-    // Submitted as it stands: nothing is typed again.
-    form[write.name]();
-    await waitFor(() => expect(server.writes).toHaveLength(2));
-    expect(server.writes[1].body).toMatchObject({
-      ...write.body,
-      version: '1.2',
-    });
-    await settle();
-    expect(server.lessons.get(10)?.version).toBe('1.2');
-    expect(alertText()).toBeUndefined();
-  });
-
-  it('keeps a typed version that turned out too low', async () => {
-    await open();
-    // Another SME took the lesson to 1.2, and a course took that.
-    server.lessons.set(10, { ...LESSON, version: '1.2' });
-    courseTakes(10);
-    type('Job of the day (URL)', 'https://example.com/job');
-    typeVersion('1.1');
-    pressSave();
-    await waitFor(() =>
-      expect(alertText()).toBe('Enter a version higher than v1.2.'),
-    );
-    await screen.findByText(
-      'v1.2 is used by 1 course. Enter a higher version to make changes.',
-    );
-    expect(field().value).toBe('1.1');
-    expect(
-      (screen.getByLabelText('Job of the day (URL)') as HTMLInputElement).value,
-    ).toBe('https://example.com/job');
-  });
-
-  it('a version-only Save refused is shown at the field, not by the form', async () => {
-    await open({ version: '1.1', highestTaken: '1.0', versionCourseCount: 0 });
-    server.lessons.set(10, { ...LESSON, version: '1.3' });
-    courseTakes(10);
-    typeVersion('1.2');
-    pressSave();
-    await waitFor(() =>
-      expect(alertText()).toBe('Enter a version higher than v1.3.'),
-    );
-    expect(
-      screen.getAllByText('Enter a version higher than v1.3.'),
-    ).toHaveLength(1);
-    expect(
-      await screen.findByText(
-        'v1.3 is used by 1 course. Enter a higher version to make changes.',
-      ),
-    ).toBeTruthy();
-  });
-
-  it('focuses the field with another write still in flight', async () => {
-    const release: (() => void)[] = [];
-    const hold = () => {
-      server.holdWrites = new Promise((r) => release.push(r));
-    };
-    await open({ version: '1.1', highestTaken: '1.0', versionCourseCount: 0 });
-    courseTakes(10);
-    hold();
-    WRITES[2].act();
-    await waitFor(() => expect(server.writes).toHaveLength(1));
-    hold();
-    WRITES[0].act();
-    await waitFor(() => expect(server.writes).toHaveLength(2));
-    await act(async () => release[0]());
-    await waitFor(() => expect(alertText()).toBe(TAKEN));
-    await waitFor(() => expect(document.activeElement).toBe(field()));
-    expect(field().readOnly).toBe(true);
-    await act(async () => release[1]());
-    await waitFor(() => expect(field().readOnly).toBe(false));
-    expect(document.activeElement).toBe(field());
-  });
-});
-
-describe('another SME raises the version meanwhile', () => {
-  const raise = async (client: QueryClient, version: string) => {
-    server.lessons.set(10, { ...LESSON, version, versionCourseCount: 0 });
+describe('another SME changes the version meanwhile', () => {
+  const change = async (client: QueryClient, version: string) => {
+    server.lessons.set(10, { ...LESSON, version });
     await act(() =>
       client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
     );
@@ -930,72 +762,48 @@ describe('another SME raises the version meanwhile', () => {
     const { client } = await open();
     typeVersion('1.1');
     WRITES[2].act();
-    await waitFor(() => expect(screen.queryByText(LOCKED)).toBeNull());
-    await raise(client, '1.2');
+    await waitFor(() => expect(server.writes).toHaveLength(1));
+    await waitFor(() => expect(field().readOnly).toBe(false));
+    await change(client, '1.2');
     await waitFor(() => expect(field().value).toBe('1.2'));
     expect(save().getAttribute('aria-label')).toBe('Save');
   });
 
-  it('a refusal goes when what it says stops being so', async () => {
+  it('a draft not saved yet is kept', async () => {
     const { client } = await open();
-    WRITES[3].act();
-    await waitFor(() => expect(alertText()).toBe(LOCKED));
-    await raise(client, '1.1');
-    await waitFor(() => expect(field().value).toBe('1.1'));
-    await waitFor(() => expect(alertText()).toBeUndefined());
-    expect(field().getAttribute('aria-invalid')).toBe('false');
-    // And does not come back by itself when a course takes 1.1.
-    courseTakes(10);
-    await act(() =>
-      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
-    );
-    await screen.findByText(/^v1.1 is used by 1 course/);
-    expect(alertText()).toBeUndefined();
-  });
-
-  it('a refusal here says the state as it is now, once', async () => {
-    const { client } = await open();
-    WRITES[3].act();
-    await waitFor(() => expect(alertText()).toBe(LOCKED));
-    server.lessons.set(10, { ...LESSON, versionCourseCount: 4 });
-    await act(() =>
-      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
-    );
-    await waitFor(() =>
-      expect(alertText()).toBe(LOCKED.replace('3 courses', '4 courses')),
-    );
-    expect(screen.getAllByText(/Enter a higher version/)).toHaveLength(1);
-  });
-
-  it('a refusal from the server follows the state too, and does not take focus back', async () => {
-    const { client } = await open({
-      version: '1.1',
-      highestTaken: '1.0',
-      versionCourseCount: 0,
-    });
-    courseTakes(10);
-    WRITES[3].act();
-    await waitFor(() => expect(alertText()).toMatch(/^v1.1 is used by 1/));
-    await waitFor(() => expect(document.activeElement).toBe(field()));
+    typeVersion('2.0');
+    await change(client, '1.2');
     await settle();
-    screen.getByLabelText('Pro tips').focus();
-    server.lessons.set(10, {
-      ...(server.lessons.get(10) as LibraryLesson),
-      versionCourseCount: 2,
-    });
-    await act(() =>
-      client.invalidateQueries({ queryKey: dataKeys.orgLibrary() }),
-    );
-    await waitFor(() => expect(alertText()).toMatch(/^v1.1 is used by 2/));
-    expect(screen.getAllByText(/Enter a higher version/)).toHaveLength(1);
-    await settle();
-    expect(document.activeElement).toBe(screen.getByLabelText('Pro tips'));
+    expect(field().value).toBe('2.0');
   });
 });
 
-describe('what the version never gates', () => {
-  it('the eye toggle works while locked', async () => {
+describe('a refusal', () => {
+  it('goes once the number is right, and does not come back by itself', async () => {
     await open();
+    typeVersion('1');
+    WRITES[3].act();
+    await waitFor(() => expect(alertText()).toBe(MALFORMED));
+    typeVersion('1.1');
+    await waitFor(() => expect(alertText()).toBeUndefined());
+    expect(server.writes).toEqual([]);
+  });
+
+  it('takes focus again each time', async () => {
+    await open();
+    typeVersion('1');
+    WRITES[3].act();
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    screen.getByLabelText('Pro tips').focus();
+    WRITES[3].act();
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+  });
+});
+
+describe('what the version has no part in', () => {
+  it('the eye toggle works with a malformed draft', async () => {
+    await open();
+    typeVersion('1');
     fireEvent.click(
       screen.getByRole('button', { name: 'Published — hide from learners' }),
     );
@@ -1012,7 +820,7 @@ describe('what the version never gates', () => {
     expect(field().readOnly).toBe(false);
   });
 
-  it('Word-doc fill fills the form while locked and does not touch the version', async () => {
+  it('Word-doc fill fills the form and does not touch the version', async () => {
     await open();
     typeVersion('1.1');
     fireEvent.click(screen.getByRole('button', { name: 'Fill form' }));
@@ -1036,7 +844,7 @@ describe('what the version never gates', () => {
 describe('the draft lives as long as the dialog', () => {
   it('closing the dialog clears the draft and the refusal', async () => {
     const { store } = await open();
-    typeVersion('0.9');
+    typeVersion('1');
     WRITES[3].act();
     await waitFor(() => expect(alertText()).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -1057,7 +865,7 @@ describe('the draft lives as long as the dialog', () => {
 
   it('switching lessons discards it, and it never reaches the other lesson', async () => {
     const { store } = await open({}, [
-      { ...LESSON, id: 11, name: 'Stalls', version: '2.0', ...UNLOCKED },
+      { ...LESSON, id: 11, name: 'Stalls', version: '2.0' },
     ]);
     typeVersion('1.1');
     act(() => store.set(editLibraryLessonIdAtom, 11));

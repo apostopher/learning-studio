@@ -45,7 +45,6 @@ const lesson = (id: number): BoardLesson => ({
   quizQuestionCount: 0,
   version: '1.0',
   disciplineVersion: '1.0',
-  contentUpdatedAt: new Date(0),
   dependsOn: [],
   videoProvider: null,
   videoRef: null,
@@ -448,9 +447,6 @@ describe('boardLessonFromLibrary', () => {
       courseCount: 0,
       courseIds: [],
       version: '1.0',
-      highestTaken: null,
-      versionCourseCount: 0,
-      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: [],
@@ -488,9 +484,6 @@ describe('boardLessonFromLibrary', () => {
       courseCount: 1,
       courseIds: [],
       version: '1.0',
-      highestTaken: null,
-      versionCourseCount: 0,
-      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: ['advanced'],
@@ -508,7 +501,6 @@ describe('boardLessonFromLibrary', () => {
   });
 
   it('shows the version the course is taking, as both versions', () => {
-    const edited = new Date('2026-11-24T09:38:00Z');
     const card = boardLessonFromLibrary({
       id: 503,
       name: 'Spins',
@@ -518,10 +510,6 @@ describe('boardLessonFromLibrary', () => {
       courseCount: 2,
       courseIds: [7, 8],
       version: '1.10',
-      // Not the highest taken: the course takes the working copy.
-      highestTaken: '1.9',
-      versionCourseCount: 0,
-      contentUpdatedAt: edited,
       videoProvider: 'mux',
       disciplineModuleId: null,
       levels: [],
@@ -535,7 +523,6 @@ describe('boardLessonFromLibrary', () => {
       isConfigured: true,
       version: '1.10',
       disciplineVersion: '1.10',
-      contentUpdatedAt: edited,
     });
   });
 
@@ -555,9 +542,6 @@ describe('boardLessonFromLibrary', () => {
       courseCount: 0,
       courseIds: [],
       version: '1.0',
-      highestTaken: null,
-      versionCourseCount: 0,
-      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: [],
@@ -657,9 +641,6 @@ const libLesson = (
   courseCount: 0,
   courseIds: [],
   version: '1.0',
-  highestTaken: null,
-  versionCourseCount: 0,
-  contentUpdatedAt: new Date(0),
   videoProvider: null,
   disciplineModuleId,
   levels: [],

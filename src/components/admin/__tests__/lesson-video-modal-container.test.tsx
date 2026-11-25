@@ -68,7 +68,6 @@ const MODULES: EditorBoardModule[] = [
         quizQuestionCount: 0,
         version: '1.0',
         disciplineVersion: '1.0',
-        contentUpdatedAt: new Date(0),
         dependsOn: [],
       },
     ],

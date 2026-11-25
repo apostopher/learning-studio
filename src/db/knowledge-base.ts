@@ -13,7 +13,6 @@ import {
 import { embeddingModel } from '#/ai/gemini';
 import { db } from '#/db';
 import { docs, lessonsTable, lessonVersionsTable } from '#/db/schema';
-import { compareVersions } from '#/lib/lesson-version';
 
 export type KBResult = {
   chunk: string;
@@ -92,15 +91,13 @@ export async function searchKB(
 export async function newestVersionIdForSlug(
   lessonSlug: string,
 ): Promise<number | null> {
-  const rows = await db
-    .select({
-      id: lessonVersionsTable.id,
-      version: lessonVersionsTable.version,
-    })
+  // By id, the order they were taken in: a version is a label, and may go down.
+  const [row] = await db
+    .select({ id: lessonVersionsTable.id })
     .from(lessonVersionsTable)
     .innerJoin(lessonsTable, eq(lessonsTable.id, lessonVersionsTable.lessonId))
-    .where(eq(lessonsTable.slug, lessonSlug));
-  // Stored as text, where '1.9' sorts above '1.10'.
-  rows.sort((a, b) => compareVersions(b.version, a.version));
-  return rows[0]?.id ?? null;
+    .where(eq(lessonsTable.slug, lessonSlug))
+    .orderBy(desc(lessonVersionsTable.id))
+    .limit(1);
+  return row?.id ?? null;
 }

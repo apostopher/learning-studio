@@ -310,7 +310,6 @@ export function boardLessonFromLibrary(
     dependsOn: [],
     version: lesson.version,
     disciplineVersion: lesson.version,
-    contentUpdatedAt: lesson.contentUpdatedAt,
   };
 }
 

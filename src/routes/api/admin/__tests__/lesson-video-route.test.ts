@@ -28,12 +28,6 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/lesson-access', () => ({
   getDisciplineIdForLessonId: m.getDisciplineIdForLessonId,
 }));
-// The real gate module, for its error class; only its database is stubbed.
-vi.mock('#/db', () => ({ db: {} }));
-vi.mock('#/db/lesson-versions', () => ({
-  countCoursesOnVersion: vi.fn(),
-  highestTakenVersions: vi.fn(),
-}));
 vi.mock('#/db/admin', () => ({
   setLessonVideo: m.setLessonVideo,
   getLessonVideo: m.getLessonVideo,
@@ -42,20 +36,7 @@ vi.mock('#/db/video-captions', () => ({
   requestLessonCaptionsSafely: m.requestLessonCaptionsSafely,
 }));
 
-import { VersionEditError } from '#/db/lesson-content-edit';
-import { versionConflictSchema } from '#/lib/admin-schemas';
 import { getVideoHandler, putVideoHandler } from '../lessons.$lessonId.video';
-
-const conflict = {
-  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
-  code: 'version' as const,
-  version: '1.0',
-  highestTaken: '1.0',
-};
-async function expectConflict(res: Response) {
-  expect(res.status).toBe(409);
-  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
-}
 
 function req(body: unknown = { provider: 'mux', ref: 'abc123' }): Request {
   return new Request('http://test/api/admin/lessons/10/video', {
@@ -204,23 +185,17 @@ describe('PUT version', () => {
     expect(m.setLessonVideo).not.toHaveBeenCalled();
   });
 
-  it('409 body parses as versionConflictSchema; no captions are requested', async () => {
-    m.setLessonVideo.mockRejectedValueOnce(new VersionEditError(conflict));
-    await expectConflict(await putVideoHandler(req(body), '10'));
-    expect(m.requestLessonCaptionsSafely).not.toHaveBeenCalled();
-  });
-
-  it('a refused caller gets the 403, never the 409', async () => {
-    m.setLessonVideo.mockRejectedValueOnce(new VersionEditError(conflict));
+  it('a refused caller gets the 403 and nothing is written', async () => {
     m.requireLessonContentPermission.mockRejectedValueOnce(
       new m.ForbiddenError(),
     );
     const res = await putVideoHandler(req(body), '10');
     expect(res.status).toBe(403);
     expect(await res.text()).toBe('Forbidden');
+    expect(m.setLessonVideo).not.toHaveBeenCalled();
   });
 
-  it('any other failure still throws', async () => {
+  it('a failure throws', async () => {
     m.setLessonVideo.mockRejectedValueOnce(new Error('db down'));
     await expect(putVideoHandler(req(body), '10')).rejects.toThrow('db down');
   });

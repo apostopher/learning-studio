@@ -97,11 +97,10 @@ async function resolveLessonPlaybackUncached(
  * handler — this never becomes an unauthenticated way to hammer the
  * provider's API.
  *
- * Exposes `.invalidate(lessonSlug)` (see below) so a mutation that changes
- * what this would resolve to — a course moving to another version of the
- * lesson, `updateCourseLessonVersion` in `#/db/lesson-versions` — can evict
- * the stale entries instead of leaving learners on a previous video's
- * still-validly-signed URL for up to the remainder of its TTL.
+ * Exposes `.invalidate(lessonSlug)` (see below) so a write that changes
+ * what this would resolve to — captions becoming ready, `#/db/video-captions`
+ * — can evict the stale entries instead of leaving them for the remainder of
+ * their TTL.
  */
 type LessonPlaybackOptions = {
   /** The course the learner is in — the one whose credentials sign the URL. */

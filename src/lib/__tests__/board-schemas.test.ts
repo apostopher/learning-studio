@@ -26,12 +26,10 @@ describe('boardLessonSchema', () => {
       videoRef: null,
       version: '1.9',
       disciplineVersion: '1.10',
-      contentUpdatedAt: '2026-11-24T09:38:00.000Z',
     });
     expect(parsed).toMatchObject({
       version: '1.9',
       disciplineVersion: '1.10',
-      contentUpdatedAt: new Date('2026-11-24T09:38:00.000Z'),
     });
     expect(parsed.hasDebrief).toBe(false);
     expect(parsed.requiredSubscriptions).toEqual(['associate']);

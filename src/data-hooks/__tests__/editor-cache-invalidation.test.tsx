@@ -185,11 +185,10 @@ describe('writes that both editor surfaces read', () => {
 });
 
 /**
- * Each of these changes which courses show a lesson, so which versions are
- * taken. The lesson editor's lock reads the library for that: left fresh, it
- * would call a locked version free, or count courses that are gone.
+ * Each of these changes which courses show a lesson, which the library lists:
+ * left fresh, it would count courses that are gone.
  */
-describe('membership changes reach the library, where the version lock reads', () => {
+describe('membership changes reach the library, which lists the courses', () => {
   const move = {
     lessonId: 10,
     fromModuleId: 3,

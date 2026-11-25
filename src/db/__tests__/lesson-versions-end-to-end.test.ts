@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LessonMaterialGeneration } from '#/types';
 import { type FreshDb, freshDb } from './support/local-pg';
+import { retakeLesson } from './support/retake-lesson';
 
 const h = vi.hoisted(() => {
   /** Everything Redis holds. Like Upstash, `get` hands back parsed JSON. */
@@ -84,7 +85,6 @@ const { getCourseDetailsWithCache } = await import('../course');
 const { getCourseLessonMaterial } = await import('../course-lesson-content');
 const { getCourseProgress } = await import('../course-progress');
 const { getLessonPlayback } = await import('../lesson-playback');
-const { VersionEditError } = await import('../lesson-content-edit');
 const { getLessonMaterialByLessonId, upsertLessonMaterial } = await import(
   '../lesson'
 );
@@ -92,11 +92,9 @@ const {
   createCourse,
   deleteLesson,
   removeLessonAlternateVideo,
-  setLessonAlternateVideo,
   setLessonVideo,
   updateLessonName,
 } = await import('../admin');
-const { updateCourseLessonVersion } = await import('../lesson-versions');
 const { linkLesson, unlinkLesson } = await import('../placements');
 const { getScoreFacts } = await import('#/lib/lesson-score.server');
 const { chunkFingerprint, ensureLessonChunks } = await import(
@@ -210,15 +208,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           join lesson_versions v on v.id = p.lesson_version_id and v.lesson_id = l.id
           order by 1, 2`)
       ).map((p) => `${p.course_id} ${p.slug}@${p.version}`);
-    const errorOf = async (edit: Promise<unknown>) => {
-      const error = await edit.then(
-        () => null,
-        (e) => e,
-      );
-      expect(error).toBeInstanceOf(VersionEditError);
-      return (error as InstanceType<typeof VersionEditError>).body.error;
-    };
-
     /** Lesson `a` as each of its consumers gets it, in one course. */
     const viewOf = async (courseId: number, courseSlug: string) => {
       const lesson = async (userId: string) => {
@@ -386,43 +375,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(h.embedMany).not.toHaveBeenCalled();
       expect(await unindexedLessonVersionIds()).toEqual([]);
 
-      // --- An edit of 1.0 is refused, whatever it edits.
-      const unedited = await stored();
+      // --- Edits, at a new version, at the one courses use, and at none.
       const material: LessonMaterialGeneration = {
         text: 'a text 1.1 is about spins and how to recover',
         keyPoints: ['spins', 'recovery'],
         proTips: 'pro tip 1.1',
         quiz: quiz('q2'),
       };
-      const hindi = { lang: 'hi', provider: 'mux', ref: 'a-hi-1.1' } as const;
-      const edits: ((version?: string) => Promise<unknown>)[] = [
-        (v) => upsertLessonMaterial(1, material, v),
-        (v) => updateLessonName(1, 'A two', v),
-        (v) => setLessonVideo(1, 'mux', 'a-ref-1.1', v),
-        (v) => setLessonAlternateVideo(1, hindi, v),
-        (v) => removeLessonAlternateVideo(1, 'hi', v),
-      ];
-      for (const edit of edits) {
-        for (const version of [undefined, '1.0']) {
-          expect(await errorOf(edit(version))).toBe(
-            'v1.0 is used by 3 courses. Enter a higher version to make changes.',
-          );
-        }
-        expect(await errorOf(edit('0.9'))).toBe(
-          'Enter a version higher than v1.0.',
-        );
-      }
-      expect(await stored()).toEqual(unedited);
-      // A lesson in no course stays free.
-      expect(await updateLessonName(3, 'C edited')).toMatchObject({ id: 3 });
-
-      // --- Bump and change in one step; 1.1 is then free until taken.
       expect(await upsertLessonMaterial(1, material, '1.1')).toMatchObject({
         text: material.text,
       });
-      await updateLessonName(1, 'A two');
+      await updateLessonName(1, 'A two', '1.0');
       await setLessonVideo(1, 'mux', 'a-ref-1.1');
-      await removeLessonAlternateVideo(1, 'hi');
+      await removeLessonAlternateVideo(1, 'hi', '1.1');
       expect((await getLessonMaterialByLessonId(1))?.material?.text).toBe(
         material.text,
       );
@@ -433,25 +398,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(h.generateKnowledgeChunks).not.toHaveBeenCalled();
 
       // --- One course moves.
-      expect(
-        await updateCourseLessonVersion({
-          courseId: 1,
-          lessonId: 1,
-          toVersion: '1.0',
-        }),
-      ).toEqual({ ok: false, reason: 'stale' });
-      const update = { courseId: 1, lessonId: 1, toVersion: '1.1' };
-      const moved = await updateCourseLessonVersion(update);
-      if (!moved.ok) throw new Error(moved.reason);
+      const moved = await retakeLesson(pgDb.db, 1, 1);
+      h.store.clear();
       const [a11] = moved.createdVersionIds;
-      expect(moved).toEqual({
-        ok: true,
-        version: '1.1',
-        createdVersionIds: [expect.any(Number)],
-      });
-      expect(await updateCourseLessonVersion(update)).toEqual({
-        ok: false,
-        reason: 'current',
+      expect(moved).toEqual({ createdVersionIds: [expect.any(Number)] });
+      expect(await retakeLesson(pgDb.db, 1, 1)).toEqual({
+        createdVersionIds: [],
       });
       expect(await unindexedLessonVersionIds()).toEqual([a11]);
       expect(await indexLessonVersions(moved.createdVersionIds)).toEqual({
@@ -519,11 +471,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         cleared: 1,
         total: 1,
       });
-      // --- Now 1.1 is taken too.
-      expect(await errorOf(updateLessonName(1, 'A three'))).toBe(
-        'v1.1 is used by 1 course. Enter a higher version to make changes.',
-      );
-
       // --- A new course takes the current versions.
       const created = await createCourse({ name: 'Four' }, 1);
       expect(created.createdVersionIds).toEqual([]);
@@ -602,9 +549,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await unlinkLesson(2, 3)).toBe(true);
       // Out of the course, its snapshot stays until the lesson itself goes.
       expect(await rows(ofC)).toEqual([{ snapshots: 1, docs: 1, chunks: 1 }]);
-      expect(await errorOf(updateLessonName(3, 'C again'))).toBe(
-        'v1.0 was used by a course. Enter a higher version to make changes.',
-      );
       expect(await deleteLesson(3)).toEqual({ ok: true });
       expect(await rows(ofC)).toEqual([{ snapshots: 0, docs: 0, chunks: 0 }]);
       // Every other row is untouched (lesson 3 was `settled`'s last lesson).

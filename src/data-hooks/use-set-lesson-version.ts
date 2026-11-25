@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import type { SetLessonVersionInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
-import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+import { useSettleContentWrite } from './lesson-content-write';
 
 /** Change a lesson's version alone. */
 export function useSetLessonVersion(lessonId: number) {
@@ -14,12 +14,9 @@ export function useSetLessonVersion(lessonId: number) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
       });
-      await throwIfWriteFailed(
-        res,
-        `Could not save the version (${res.status})`,
-      );
+      if (!res.ok)
+        throw new Error(`Could not save the version (${res.status})`);
     },
-    onSuccess: (_data, { version }) => settle.saved(version),
-    onError: settle.failed,
+    onSuccess: (_data, { version }) => settle(version),
   });
 }

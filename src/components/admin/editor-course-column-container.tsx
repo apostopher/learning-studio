@@ -118,7 +118,9 @@ export const EditorCourseColumnContainer = ({
         <CourseColumnActions
           courseName={course.name}
           canEditCourse={canEditCourse}
-          canDeleteCourse={canDeleteCourse}
+          // Every course shows the flagship's modules: deleting it takes them
+          // from all of them.
+          canDeleteCourse={canDeleteCourse && course.id !== flagship?.id}
           onAddModule={() =>
             openCreateModule({ id: course.id, name: course.name })
           }

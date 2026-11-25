@@ -132,6 +132,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ]);
     });
 
+    it('lifts the old uniqueness of a version, keeping every snapshot', async () => {
+      await pgDb.pool.query(SEED);
+      await migrate();
+      // As the first release of lesson versions left it.
+      await pgDb.pool.query(`
+        drop index lesson_versions_lesson_id_version_idx;
+        create unique index lesson_versions_lesson_version_idx
+          on lesson_versions (lesson_id, version)`);
+      const before = [await snapshots(), await pins()];
+      await migrate();
+      expect([await snapshots(), await pins()]).toEqual(before);
+      await pgDb.pool.query(`insert into lesson_versions
+        (lesson_id, version, name, extra_tab) values (1, '1.0', 'again', 'testThis')`);
+      expect(
+        await rows(
+          `select name from lesson_versions where lesson_id = 1 and version = '1.0'`,
+        ),
+      ).toHaveLength(2);
+    });
+
     it('labels existing chunk and lesson doc rows', async () => {
       await pgDb.pool.query(SEED);
       await migrate();
@@ -340,7 +360,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           (
             await pool.query(`
               with t(oid) as (select unnest(array['lessons', 'lesson_versions',
-                'course_lesson_versions', 'lesson_knowledge_chunks', 'docs']::regclass[])::oid)
+                'course_lesson_versions', 'removed_placements', 'lesson_knowledge_chunks', 'docs']::regclass[])::oid)
               select a.attrelid::regclass || '.' || a.attname as what,
                   concat_ws(' ', format_type(a.atttypid, a.atttypmod), nullif(a.attnotnull, false),
                     nullif(a.attidentity, ''), pg_get_expr(d.adbin, d.adrelid)) as def
@@ -361,6 +381,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             'lessons.version',
             'lesson_versions.text',
             'course_lesson_versions.updated_at',
+            'removed_placements.depends_on',
             'docs.lesson_version_id',
           ]),
         );

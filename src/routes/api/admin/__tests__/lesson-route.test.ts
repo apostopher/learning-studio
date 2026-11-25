@@ -44,14 +44,9 @@ vi.mock('#/db/placements', () => ({
   getCourseIdsForLesson: m.getCourseIdsForLesson,
   findPlacementModuleId: m.findPlacementModuleId,
 }));
-vi.mock('#/db/lesson-content-edit', () => {
-  class VersionEditError extends Error {
-    constructor(readonly body: unknown) {
-      super('version');
-    }
-  }
-  return { VersionEditError, setLessonVersion: m.setLessonVersion };
-});
+vi.mock('#/db/lesson-content-edit', () => ({
+  setLessonVersion: m.setLessonVersion,
+}));
 vi.mock('#/db/admin', () => ({
   deleteLesson: m.deleteLesson,
   moveLesson: m.moveLesson,
@@ -60,24 +55,11 @@ vi.mock('#/db/admin', () => ({
   updateLessonName: m.updateLessonName,
 }));
 
-import { VersionEditError } from '#/db/lesson-content-edit';
 import {
   lessonInUseSchema,
   updateLessonConfigInputSchema,
-  versionConflictSchema,
 } from '#/lib/admin-schemas';
 import { deleteLessonHandler, patchLessonHandler } from '../lessons.$lessonId';
-
-const conflict = {
-  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
-  code: 'version' as const,
-  version: '1.0',
-  highestTaken: '1.0',
-};
-async function expectConflict(res: Response) {
-  expect(res.status).toBe(409);
-  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
-}
 
 function req(body: unknown): Request {
   return new Request('http://test/api/admin/lessons/10', {
@@ -430,14 +412,6 @@ describe('patchLessonHandler — version', () => {
     expect(m.requireLessonContentPermission.mock.calls).toEqual([
       [expect.anything(), 42, 'update'],
     ]);
-  });
-
-  it.each([
-    ['rename', { name: 'Renamed' }, m.updateLessonName],
-    ['version alone', { version: '1.0' }, m.setLessonVersion],
-  ])('%s: 409 body parses as versionConflictSchema', async (_, body, writer) => {
-    writer.mockRejectedValueOnce(new VersionEditError(conflict));
-    await expectConflict(await patchLessonHandler(req(body), '10'));
   });
 
   it.each([

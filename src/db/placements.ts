@@ -14,6 +14,10 @@ import {
   type Tx,
 } from '#/db/lesson-versions';
 import {
+  rememberPlacement,
+  takeRemovedPlacement,
+} from '#/db/removed-placements';
+import {
   courseModulesTable,
   moduleLessonsTable,
   modulesTable,
@@ -219,7 +223,8 @@ function toPlacement(row: {
 }
 
 /**
- * Place an existing library lesson into a module.
+ * Place an existing library lesson into a module. One removed from this module
+ * before gets back the place and prerequisites it had.
  *
  * Returns `null` when `moduleId` doesn't resolve to a course — the module
  * doesn't exist. Returns `'duplicate'` when it does, but the target course
@@ -281,17 +286,24 @@ export async function linkLesson(input: {
             return 'foreign-lesson' as const;
           }
 
+          const before = await takeRemovedPlacement(
+            tx,
+            input.moduleId,
+            input.lessonId,
+          );
           const [row] = await tx
             .insert(moduleLessonsTable)
             .values({
               moduleId: input.moduleId,
               lessonId: input.lessonId,
-              rank: rankBetween(
-                input.prevLessonId,
-                input.nextLessonId,
-                input.moduleId,
-              ),
-              dependsOn: [],
+              rank:
+                before?.rank ??
+                rankBetween(
+                  input.prevLessonId,
+                  input.nextLessonId,
+                  input.moduleId,
+                ),
+              dependsOn: before?.dependsOn ?? [],
             })
             .returning({
               id: moduleLessonsTable.id,
@@ -312,7 +324,10 @@ export async function linkLesson(input: {
   return { ...toPlacement(created), createdVersionIds };
 }
 
-/** Remove a placement. The lesson itself survives, in the library and elsewhere. */
+/**
+ * Remove a placement. The lesson itself survives, in the library and elsewhere,
+ * and what the placement held is kept for when it is added back.
+ */
 export async function unlinkLesson(
   moduleId: number,
   lessonId: number,
@@ -328,8 +343,8 @@ export async function unlinkLesson(
         courseIds: await getCourseIdsShowingModule(tx, moduleId),
         lessonIds: [lessonId],
       },
-      () =>
-        tx
+      async () => {
+        const rows = await tx
           .delete(moduleLessonsTable)
           .where(
             and(
@@ -337,7 +352,15 @@ export async function unlinkLesson(
               eq(moduleLessonsTable.lessonId, lessonId),
             ),
           )
-          .returning({ id: moduleLessonsTable.id }),
+          .returning({
+            rank: moduleLessonsTable.rank,
+            dependsOn: moduleLessonsTable.dependsOn,
+          });
+        for (const held of rows) {
+          await rememberPlacement(tx, { moduleId, lessonId, ...held });
+        }
+        return rows;
+      },
     );
   });
 

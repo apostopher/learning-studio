@@ -87,6 +87,12 @@ const lessonVersions = vi.hoisted(() => ({
   ),
 }));
 vi.mock('#/db/lesson-versions', () => lessonVersions);
+/** Its SQL is `lesson-versions.test.ts`'s job too, on Postgres. */
+const removedPlacements = vi.hoisted(() => ({
+  rememberPlacement: vi.fn(),
+  takeRemovedPlacement: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('#/db/removed-placements', () => removedPlacements);
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugsForModuleId,
   getCourseIdForModuleId,
@@ -368,12 +374,15 @@ describe('unlinkLesson', () => {
     // `("module_lessons"."module_id" = $1 and "module_lessons"."lesson_id" =
     // $2)` with params `[9, 40]` instead of `[40, 9]`).
     const where = vi.fn().mockReturnValue({
-      returning: vi.fn().mockResolvedValue([{ id: 1 }]),
+      returning: vi.fn().mockResolvedValue([{ rank: '2', dependsOn: [] }]),
     });
     db.delete.mockReturnValue({ where });
     getCourseSlugsForModuleId.mockResolvedValue(['a-course', 'remixer']);
 
     expect(await unlinkLesson(40, 9)).toBe(true);
+    expect(removedPlacements.rememberPlacement.mock.calls).toEqual([
+      [db, { moduleId: 40, lessonId: 9, rank: '2', dependsOn: [] }],
+    ]);
 
     expect(db.delete).toHaveBeenCalledWith(moduleLessonsTable);
     const condition = where.mock.calls[0][0];

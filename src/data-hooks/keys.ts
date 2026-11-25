@@ -29,9 +29,6 @@ export const dataKeys = {
    */
   updateLessonConfig: (courseId: number) =>
     ['admin', 'update-lesson-config', courseId] as const,
-  /** Mutation key: lets a version chip ask whether its update is in flight. */
-  updateCourseLessonVersion: () =>
-    ['admin', 'update-course-lesson-version'] as const,
   courseCredentials: (courseId: number) =>
     ['admin', 'course-credentials', courseId] as const,
   /**

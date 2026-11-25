@@ -54,7 +54,7 @@ export const MaterialSectionContainer = ({
    * them), can drive this section too.
    */
   lesson: { id: number };
-  /** The lesson's version, which its edits are gated by. */
+  /** The lesson's version, which its edits may change. */
   versioned: VersionedLesson;
 }) => {
   const existing = useLessonMaterial(lesson.id);
@@ -114,9 +114,7 @@ export const MaterialSectionContainer = ({
   const submitMaterial = (version: string | undefined) =>
     form.handleSubmit((values) => {
       setVersion.reset();
-      save.mutate(version === undefined ? values : { ...values, version }, {
-        onError: gate.onError,
-      });
+      save.mutate(version === undefined ? values : { ...values, version });
     }, focusFirstBadLink);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -124,7 +122,7 @@ export const MaterialSectionContainer = ({
     gate.attempt((version) => {
       if (version !== undefined && !isDirty) {
         save.reset();
-        setVersion.mutate({ version }, { onError: gate.onError });
+        setVersion.mutate({ version });
         return;
       }
       void submitMaterial(version)();
@@ -155,7 +153,7 @@ export const MaterialSectionContainer = ({
         control={form.control}
         errors={form.formState.errors}
         onSubmit={onSubmit}
-        saveError={gate.formError(save.error ?? setVersion.error)}
+        saveError={(save.error ?? setVersion.error)?.message}
       />
     </div>
   );

@@ -8,7 +8,6 @@ import {
 // renders this module.
 import type { BoardCourse, BoardModule } from '#/lib/admin-schemas';
 import { containerDndId, lessonDndId } from '#/lib/dnd-ids';
-import { isFlagshipCourse } from '#/lib/flagship-course';
 import { SortableLessonCard } from './sortable-lesson-card';
 
 /**
@@ -21,7 +20,7 @@ export const LessonBoardContainer = ({
   module: mod,
   posters,
 }: {
-  course: Pick<BoardCourse, 'id' | 'name' | 'slug'>;
+  course: Pick<BoardCourse, 'id' | 'name'>;
   /** The whole module: each card's quickshot needs it, not just its id. */
   module: BoardModule;
   /** lessonId → poster url, from `useLessonPosters`. Missing ids draw the
@@ -41,10 +40,8 @@ export const LessonBoardContainer = ({
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {lessons.length === 0 ? (
           <p className="text-pretty px-1 py-4 text-center text-tertiary text-xs">
-            {/* The flagship has no column there to drag into. */}
-            {isFlagshipCourse(course)
-              ? 'No lessons yet.'
-              : `No lessons yet. In the knowledge library, drag one from Disciplines into ${name}, in the ${courseName} column.`}
+            No lessons yet. In the knowledge library, drag one from Disciplines
+            into {name}, in the {courseName} column.
           </p>
         ) : (
           lessons.map((lesson) => (

@@ -45,12 +45,9 @@ vi.mock('#/db/video-captions', () => ({ muxCaptionsForPlayback: vi.fn() }));
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
 const {
-  countCoursesOnVersion,
   getCourseIdsShowingModule,
   getCoursesUsingLesson,
-  highestTakenVersions,
   syncCourseLessonVersions,
-  updateCourseLessonVersion,
 } = await import('../lesson-versions');
 const { linkLesson, movePlacement, unlinkLesson } = await import(
   '../placements'
@@ -201,7 +198,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ]);
     });
 
-    it('a second course shares the existing snapshot of the same version', async () => {
+    it('a second course shares the snapshot of content that has not changed', async () => {
       await link(3, 1);
       const second = await link(4, 1);
       expect(second).toMatchObject({ createdVersionIds: [] });
@@ -251,8 +248,135 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         update lessons set video_provider = 'mux', video_ref = 'new' where id = 2;
         insert into lesson_material (lesson_slug, text) values ('b', 'new text');
       `);
-      await link(4, 2);
       expect(await emptiness()).toEqual(empty);
+    });
+
+    describe('a version used again for different content', () => {
+      /** What each course plays of lesson 1. */
+      const played = () =>
+        rows(`select p.course_id as course, v.version, v.text
+          from course_lesson_versions p
+          join lesson_versions v on v.id = p.lesson_version_id
+          where p.lesson_id = 1 order by 1`);
+      const edit = (text: string) =>
+        pgDb.pool.query(
+          `update lesson_material set text = $1 where lesson_slug = 'a' and text <> 'second'`,
+          [text],
+        );
+      /** What removing a lesson and dragging it in again does. */
+      const readd = async (moduleId: number) => {
+        await unlinkLesson(moduleId, 1);
+        const added = await link(moduleId, 1);
+        if (!added || typeof added === 'string') throw new Error(`${added}`);
+        return added.createdVersionIds;
+      };
+
+      it('adding the lesson takes the CURRENT text; other courses keep theirs', async () => {
+        await link(3, 1); // course 2
+        await edit('edited');
+        const added = await link(4, 1); // course 3
+        expect(await played()).toEqual([
+          { course: 2, version: '1.0', text: 'first' },
+          { course: 3, version: '1.0', text: 'edited' },
+        ]);
+        expect(added).toMatchObject({
+          createdVersionIds: [(await versionIds()).at(-1)],
+        });
+      });
+
+      it('removing it and adding it back takes the CURRENT text under the old number', async () => {
+        await link(3, 1);
+        await link(4, 1);
+        await bump(1, '1.1', 'A');
+        await edit('edited');
+        await readd(3);
+        await bump(1, '1.0', 'A');
+        await edit('edited again');
+        const created = await readd(3);
+        expect(await played()).toEqual([
+          { course: 2, version: '1.0', text: 'edited again' },
+          { course: 3, version: '1.0', text: 'first' },
+        ]);
+        expect(created).toEqual([(await versionIds()).at(-1)]);
+      });
+
+      it('going back with nothing changed is the same snapshot', async () => {
+        await link(3, 1);
+        const [first] = await versionIds();
+        await bump(1, '1.1', 'A');
+        await readd(3);
+        await bump(1, '1.0', 'A');
+        expect(await readd(3)).toEqual([]);
+        expect(
+          await rows(
+            'select lesson_version_id as id from course_lesson_versions',
+          ),
+        ).toEqual([{ id: first }]);
+      });
+
+      it('in a module other courses borrow, it updates every one of them', async () => {
+        await link(1, 1); // courses 1 and 2
+        await link(4, 1); // course 3
+        await bump(1, '1.1', 'A');
+        await edit('edited');
+        await readd(1);
+        expect(await played()).toEqual([
+          { course: 1, version: '1.1', text: 'edited' },
+          { course: 2, version: '1.1', text: 'edited' },
+          { course: 3, version: '1.0', text: 'first' },
+        ]);
+      });
+
+      it.each([
+        `update lessons set name = 'x' where id = 1`,
+        `update lessons set video_ref = 'x' where id = 1`,
+        `update lessons set video_provider = null where id = 1`,
+        `update lessons set other_video_ids = '[]' where id = 1`,
+        `update lessons set discipline_id = 2 where id = 1`,
+        ...[
+          'key_points',
+          'quiz',
+          'pro_tips',
+          'links',
+          'assignments',
+          'job_of_the_day',
+          'test_this',
+        ].flatMap((column) => [
+          `update lesson_material set ${column} = '["x"]' where lesson_slug = 'a'`,
+          `update lesson_material set ${column} = null where lesson_slug = 'a'`,
+        ]),
+        `delete from lesson_material`,
+      ])('a change is seen in everything frozen: %s', async (change) => {
+        await link(3, 1);
+        await pgDb.pool.query(change);
+        await link(4, 1);
+        expect(await snapshots()).toHaveLength(2);
+        const pinned = await rows(
+          'select lesson_version_id as id from course_lesson_versions order by course_id',
+        );
+        expect(pinned.map((p) => p.id)).toEqual(await versionIds());
+      });
+
+      it('until the migration has run, a course still gets the old copy rather than an error', async () => {
+        await pgDb.pool.query(
+          'create unique index old_unique on lesson_versions (lesson_id, version)',
+        );
+        try {
+          await link(3, 1);
+          await edit('edited');
+          await link(4, 1);
+          await bump(1, '1.1', 'A');
+          await readd(3);
+          await bump(1, '1.0', 'A');
+          expect(await readd(3)).toEqual([]);
+          expect((await played()).map((p) => p.version)).toEqual([
+            '1.0',
+            '1.0',
+          ]);
+        } finally {
+          await pgDb.pool.query('drop index old_unique');
+        }
+      });
     });
 
     it('unlinking drops the pin; re-linking takes the CURRENT version', async () => {
@@ -369,7 +493,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await link(1, 1);
       await deleteModule(1);
       expect(await pins()).toEqual([]);
-      expect(await snapshots()).toHaveLength(1); // a taken version stays taken
+      expect(await snapshots()).toHaveLength(1); // a snapshot outlives its pins
     });
 
     it('copying a library module pins its lessons and reports their snapshots', async () => {
@@ -444,113 +568,121 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await unpinned()).toEqual([]);
     });
 
-    describe('updateCourseLessonVersion', () => {
-      it('updateCourseLessonVersion moves one course only', async () => {
-        await link(1, 1);
-        await bump(1, '1.1', 'A new');
-        // What the next reader would find when each cache is evicted.
-        const seenAtEviction: unknown[] = [];
-        vi.clearAllMocks();
-        h.invalidateCourseDetailsCache.mockImplementationOnce(async (slug) => {
-          seenAtEviction.push(slug, await pins());
-        });
-        const result = await updateCourseLessonVersion({
-          courseId: 2,
-          lessonId: 1,
-          toVersion: '1.1',
-        });
-        const [snapshot] = await rows(
-          `select id, name from lesson_versions where version = '1.1'`,
-        );
-        expect(snapshot.name).toBe('A new');
-        expect(result).toEqual({
-          ok: true,
-          version: '1.1',
-          createdVersionIds: [snapshot.id],
-        });
-        const after = ['course 1: lesson 1 1.0', 'course 2: lesson 1 1.1'];
-        expect(await pins()).toEqual(after);
-        expect(seenAtEviction).toEqual(['two', after]);
-        expect(h.invalidateCourseDetailsCache).toHaveBeenCalledTimes(1);
-        expect(h.invalidatePlayback).toHaveBeenCalledWith('a');
-
-        // The owner follows later, on the snapshot that already exists.
-        expect(
-          await updateCourseLessonVersion({
-            courseId: 1,
-            lessonId: 1,
-            toVersion: '1.1',
-          }),
-        ).toEqual({ ok: true, version: '1.1', createdVersionIds: [] });
+    describe('a lesson removed and added back', () => {
+      const PREREQS = [{ lessonSlug: 'c' }];
+      /** Module 1 (courses 1 and 2): C, then A needing C, then B. */
+      beforeEach(async () => {
+        for (const lessonId of [3, 1, 2]) await link(1, lessonId);
+        await pgDb.pool.query(`
+          update module_lessons set rank = 1 where lesson_id = 3;
+          update module_lessons set rank = 2, depends_on = '[{"lessonSlug":"c"}]' where lesson_id = 1;
+          update module_lessons set rank = 3 where lesson_id = 2;`);
       });
+      const order = async (moduleId = 1) =>
+        (
+          await rows(
+            `select lesson_id from module_lessons where module_id = ${moduleId} order by rank, id`,
+          )
+        ).map((r) => r.lesson_id);
+      const prereqs = async (lessonId = 1) =>
+        (
+          await rows(
+            `select depends_on from module_lessons where lesson_id = ${lessonId}`,
+          )
+        ).map((r) => r.depends_on);
 
-      it('updateCourseLessonVersion: stale / current / not-found', async () => {
-        await link(1, 1);
-        const before = await pins();
-        const update = (
-          courseId: number,
-          lessonId: number,
-          toVersion: string,
-        ) => updateCourseLessonVersion({ courseId, lessonId, toVersion });
-
-        expect(await update(1, 1, '1.0')).toEqual({
-          ok: false,
-          reason: 'current',
-        });
-        await bump(1, '1.2');
-        expect(await update(1, 1, '1.1')).toEqual({
-          ok: false,
-          reason: 'stale',
-        });
-        const notFound = { ok: false, reason: 'not-found' };
-        expect(await update(1, 99, '1.0')).toEqual(notFound);
-        expect(await update(99, 1, '1.2')).toEqual(notFound);
-        expect(await update(3, 1, '1.2')).toEqual(notFound); // not shown there
-
-        expect(await pins()).toEqual(before);
-        expect(await snapshots()).toHaveLength(1);
-        expect(h.invalidatePlayback).not.toHaveBeenCalled();
-      });
-
-      it('survives a cache that is down', async () => {
-        vi.spyOn(console, 'error').mockImplementationOnce(() => {});
-        await link(1, 1);
+      it('gets back its place and its prerequisites, and takes the current version', async () => {
         await bump(1, '1.1');
-        h.invalidatePlayback.mockRejectedValueOnce(new Error('redis down'));
-        expect(
-          await updateCourseLessonVersion({
-            courseId: 1,
-            lessonId: 1,
-            toVersion: '1.1',
-          }),
-        ).toMatchObject({ ok: true });
+        await unlinkLesson(1, 1);
+        expect(await order()).toEqual([3, 2]);
+        expect(await link(1, 1)).toMatchObject({
+          rank: 2,
+          dependsOn: PREREQS,
+        });
+        expect(await order()).toEqual([3, 1, 2]);
+        expect(await prereqs()).toEqual([PREREQS]);
+        expect((await pins()).filter((p) => p.includes('lesson 1 '))).toEqual([
+          'course 1: lesson 1 1.1',
+          'course 2: lesson 1 1.1',
+        ]);
       });
 
-      it('survives a failed read after the commit, keeping the snapshot to index', async () => {
+      it('does so every time, with what it had last', async () => {
+        await unlinkLesson(1, 1);
         await link(1, 1);
-        await bump(1, '1.1');
-        vi.clearAllMocks();
-        // The transaction reads through its own `tx`, so only a read after it
-        // meets this.
-        const select = vi.spyOn(pgDb.db, 'select').mockImplementation(() => {
-          throw new Error('connection lost');
-        });
-        const result = await updateCourseLessonVersion({
-          courseId: 2,
-          lessonId: 1,
-          toVersion: '1.1',
-        }).finally(() => select.mockRestore());
-
-        const [snapshot] = await rows(
-          `select id from lesson_versions where version = '1.1'`,
+        await pgDb.pool.query(
+          `update module_lessons set rank = 9, depends_on = '[{"lessonSlug":"b"}]' where lesson_id = 1`,
         );
-        expect(result).toEqual({
-          ok: true,
-          version: '1.1',
-          createdVersionIds: [snapshot.id],
-        });
-        expect(h.invalidateCourseDetailsCache).toHaveBeenCalledWith('two');
-        expect(h.invalidatePlayback).toHaveBeenCalledWith('a');
+        await unlinkLesson(1, 1);
+        await link(1, 1);
+        expect(await order()).toEqual([3, 2, 1]);
+        expect(await prereqs()).toEqual([[{ lessonSlug: 'b' }]]);
+      });
+
+      it('keeps a prerequisite that is itself away for an update', async () => {
+        await unlinkLesson(1, 3);
+        await unlinkLesson(1, 1);
+        await link(1, 1);
+        await link(1, 3);
+        expect(await order()).toEqual([3, 1, 2]);
+        expect(await prereqs()).toEqual([PREREQS]);
+      });
+
+      it('forgets a prerequisite deleted meanwhile', async () => {
+        await unlinkLesson(1, 1);
+        await unlinkLesson(1, 3);
+        expect(await deleteLesson(3)).toEqual({ ok: true });
+        await link(1, 1);
+        expect(await prereqs()).toEqual([[]]);
+      });
+
+      it('goes after a lesson that took its place meanwhile', async () => {
+        await unlinkLesson(1, 1);
+        // Dragged to exactly where A was.
+        await pgDb.pool.query(
+          'update module_lessons set rank = 2 where lesson_id = 3',
+        );
+        await link(1, 1);
+        expect(await order()).toEqual([3, 1, 2]);
+        expect(
+          new Set(
+            (await rows('select rank from module_lessons')).map((r) => r.rank),
+          ).size,
+        ).toBe(3);
+      });
+
+      it('goes last after one that took the last place', async () => {
+        await unlinkLesson(1, 2);
+        await pgDb.pool.query(
+          'update module_lessons set rank = 3 where lesson_id = 1',
+        );
+        await link(1, 2);
+        expect(await order()).toEqual([3, 1, 2]);
+      });
+
+      it('brings nothing to another module', async () => {
+        await unlinkLesson(1, 1);
+        await link(4, 1);
+        expect(await prereqs()).toEqual([[]]);
+      });
+
+      it('a removal that fails is not remembered', async () => {
+        expect(await unlinkLesson(1, 99)).toBe(false);
+        expect(await rows('select * from removed_placements')).toEqual([]);
+      });
+
+      it('until the migration has run, can still be removed and added', async () => {
+        await pgDb.pool.query(
+          'alter table removed_placements rename to not_yet',
+        );
+        try {
+          expect(await unlinkLesson(1, 1)).toBe(true);
+          expect(await link(1, 1)).toMatchObject({ dependsOn: [] });
+        } finally {
+          await pgDb.pool.query(
+            'alter table not_yet rename to removed_placements',
+          );
+        }
       });
     });
 
@@ -607,16 +739,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         expect(await pins()).toContain('course 2: lesson 1 1.1');
       });
 
-      it('are not counted, listed or updatable', async () => {
-        expect(await countCoursesOnVersion(1, '1.0')).toBe(0);
+      it('are not listed', async () => {
         expect(await getCoursesUsingLesson(1)).toEqual([]);
-        expect(
-          await updateCourseLessonVersion({
-            courseId: 1,
-            lessonId: 1,
-            toVersion: '1.1',
-          }),
-        ).toEqual({ ok: false, reason: 'not-found' });
       });
 
       it('go at the next write to the course', async () => {
@@ -798,16 +922,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         await link(1, 1); // courses 1 and 2
       });
 
-      it('highestTakenVersions compares numerically and omits untaken lessons', async () => {
-        expect(await highestTakenVersions([])).toEqual(new Map());
-        await pgDb.pool.query(`insert into lesson_versions
-          (lesson_id, version, name, extra_tab) values
-          (1, '1.10', 'x', 'testThis'), (1, '1.9', 'x', 'testThis')`);
-        expect(await highestTakenVersions([1, 2])).toEqual(
-          new Map([[1, '1.10']]),
-        );
-      });
-
       it('getCoursesUsingLesson names each course once, borrowers included', async () => {
         expect(await getCoursesUsingLesson(1)).toEqual([
           { id: 1, name: 'One' },
@@ -816,34 +930,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         expect(await getCoursesUsingLesson(2)).toEqual([]);
       });
 
-      it('countCoursesOnVersion counts courses on exactly that version', async () => {
-        expect(await countCoursesOnVersion(1, '1.0')).toBe(2);
-        await bump(1, '1.1');
-        await updateCourseLessonVersion({
-          courseId: 2,
-          lessonId: 1,
-          toVersion: '1.1',
-        });
-        expect(await countCoursesOnVersion(1, '1.0')).toBe(1);
-        expect(await countCoursesOnVersion(1, '1.1')).toBe(1);
-        expect(await countCoursesOnVersion(1, '1')).toBe(0);
-      });
-
       it('read through the executor they are given', async () => {
         const client = await pgDb.pool.connect();
         try {
           await client.query('begin');
           const tx = drizzle(client) as unknown as Tx;
-          await client.query(`insert into lesson_versions
-            (lesson_id, version, name, extra_tab) values (1, '2.0', 'x', 'testThis');
-            delete from module_lessons where module_id = 1`);
-          expect(await highestTakenVersions([1], tx)).toEqual(
-            new Map([[1, '2.0']]),
-          );
+          await client.query('delete from module_lessons where module_id = 1');
           expect(await getCoursesUsingLesson(1, tx)).toEqual([
             { id: 2, name: 'Two' },
           ]);
-          expect(await countCoursesOnVersion(1, '1.0', tx)).toBe(1);
         } finally {
           await client.query('rollback');
           client.release();
@@ -913,23 +1008,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         expect(await rows('select name, text from lesson_versions')).toEqual([
           { name: 'Edited', text: 'edited' },
         ]);
-      });
-
-      it('a course update waits for a content edit in progress, then finds it stale', async () => {
-        await link(1, 1);
-        await bump(1, '1.1');
-        await other.query('select 1 from lessons where id = 1 for update');
-        const updated = updateCourseLessonVersion({
-          courseId: 1,
-          lessonId: 1,
-          toVersion: '1.1',
-        });
-        updated.catch(() => {});
-        await untilBlocked(1);
-        await other.query(`update lessons set version = '1.2' where id = 1`);
-        await commitOther();
-        expect(await updated).toEqual({ ok: false, reason: 'stale' });
-        expect(await snapshots()).toHaveLength(1);
       });
 
       it('a lesson linked while its module is being remixed is pinned in the new borrower', async () => {

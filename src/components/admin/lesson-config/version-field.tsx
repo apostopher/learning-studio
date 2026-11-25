@@ -3,15 +3,14 @@ import type { UseFormRegisterReturn } from 'react-hook-form';
 import { cn } from '#/lib/cn';
 
 /**
- * The working copy's version number. `lockedReason` stays visible for as long
- * as the lesson is locked, and is part of the field's accessible description.
+ * The working copy's version. The hint is there because nothing else says it:
+ * an edit under the same version leaves every course's chip green.
  */
 export const VersionField = ({
   id,
   formId,
   register,
   error,
-  lockedReason,
   readOnly,
 }: {
   id: string;
@@ -19,13 +18,9 @@ export const VersionField = ({
   formId: string;
   register: UseFormRegisterReturn<'version'>;
   error?: string;
-  /** Why content cannot be changed at the current version; null when it can. */
-  lockedReason: string | null;
   /** A save is in flight. Not `disabled`, which would drop keyboard focus. */
   readOnly: boolean;
 }) => {
-  // A refusal often IS the locked reason; said once, as the error.
-  const hint = lockedReason !== error ? lockedReason : null;
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   return (
@@ -43,10 +38,7 @@ export const VersionField = ({
         spellCheck={false}
         readOnly={readOnly}
         aria-invalid={!!error}
-        aria-describedby={
-          [error && errorId, hint && hintId].filter(Boolean).join(' ') ||
-          undefined
-        }
+        aria-describedby={error ? `${errorId} ${hintId}` : hintId}
         className={cn(
           'w-32 rounded-lg border px-3.5 py-2.5 text-sm tabular-nums outline-none transition-colors duration-100',
           'focus-visible:border-apple-9 focus-visible:ring-2 focus-visible:ring-apple-9',
@@ -63,11 +55,9 @@ export const VersionField = ({
           {error}
         </p>
       )}
-      {hint && (
-        <p id={hintId} className="text-secondary text-sm">
-          {hint}
-        </p>
-      )}
+      <p id={hintId} className="text-secondary text-sm">
+        Courses keep their own copy. Change the version to flag an update.
+      </p>
     </div>
   );
 };

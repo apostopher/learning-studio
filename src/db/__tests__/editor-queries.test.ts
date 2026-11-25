@@ -94,11 +94,6 @@ vi.mock('#/db/schema', () => ({
 }));
 vi.mock('#/db/admin', () => ({ getCourseBoard: vi.fn() }));
 vi.mock('#/db/placements', () => ({ getCourseIdsForLessons: vi.fn() }));
-// Their SQL is admin-version-reads.test.ts's job, on Postgres.
-vi.mock('#/db/lesson-versions', () => ({
-  highestTakenVersions: vi.fn(async () => new Map()),
-  countCoursesOnVersions: vi.fn(async () => new Map()),
-}));
 
 const { getOrgLibrary, getOrgEditorBoard } = await import('#/db/editor');
 const { getCourseBoard } = await import('#/db/admin');
@@ -140,7 +135,6 @@ function row(over: Record<string, unknown>) {
     hasDebrief: false,
     needsVideoWatch: false,
     version: '1.0',
-    contentUpdatedAt: new Date(0),
     ...over,
   };
 }
@@ -637,7 +631,6 @@ describe('getOrgEditorBoard', () => {
               quizQuestionCount: 0,
               version: '1.0',
               disciplineVersion: '1.0',
-              contentUpdatedAt: new Date(0),
               dependsOn: [],
               videoProvider: 'mux',
               videoRef: 'SECRET-PLAYBACK-ID',

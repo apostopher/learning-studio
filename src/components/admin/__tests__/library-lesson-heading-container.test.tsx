@@ -44,8 +44,6 @@ const LESSON = {
   name: 'Welcome Intro',
   isAvailable: true,
   version: '1.0',
-  highestTaken: null,
-  versionCourseCount: 0,
 };
 
 afterEach(() => {

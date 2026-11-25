@@ -5,7 +5,7 @@ import { VersionChip } from './version-chip';
 const meta: Meta<typeof VersionChip> = {
   title: 'Admin/VersionChip',
   component: VersionChip,
-  args: { version: '1.0', disciplineVersion: '1.1', onUpdate: () => {} },
+  args: { version: '1.0', disciplineVersion: '1.1', editedIn: 'CPL' },
   decorators: [
     (Story) => (
       <Tooltip.Provider>
@@ -23,7 +23,3 @@ export const UpToDate: StoryObj<typeof VersionChip> = {
 };
 
 export const UpdateAvailable: StoryObj<typeof VersionChip> = {};
-
-export const Updating: StoryObj<typeof VersionChip> = {
-  args: { isPending: true },
-};

@@ -7,7 +7,6 @@ import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
-import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
  * Material is lesson content: the working copy every course takes its version
@@ -90,11 +89,9 @@ export async function saveMaterialHandler(
   }
 
   const { version, ...material } = parsed.data;
-  let saved: Awaited<ReturnType<typeof upsertLessonMaterial>> | Response;
+  let saved: Awaited<ReturnType<typeof upsertLessonMaterial>>;
   try {
-    saved = await orVersionConflict(() =>
-      upsertLessonMaterial(lessonId, material, version),
-    );
+    saved = await upsertLessonMaterial(lessonId, material, version);
   } catch (error) {
     console.error('Failed to save lesson material:', error);
     return Response.json(
@@ -102,7 +99,6 @@ export async function saveMaterialHandler(
       { status: 500 },
     );
   }
-  if (saved instanceof Response) return saved;
   if (!saved) return new Response('Not found', { status: 404 });
   return Response.json(saved);
 }

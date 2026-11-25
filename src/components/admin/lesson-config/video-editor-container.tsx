@@ -66,10 +66,7 @@ export const VideoEditorContainer = ({
           // Back to pristine: the refetched current video then flows into the
           // field through `values` above, so it shows what was just saved.
           onSuccess: () => urlForm.reset(),
-          onError: (error) => {
-            onDraft(null);
-            gate.onError(error);
-          },
+          onError: () => onDraft(null),
         },
       );
     });
@@ -86,7 +83,7 @@ export const VideoEditorContainer = ({
         }
         showUnsupported={urlValue.trim().length > 0 && !detected}
         isPending={setLessonVideo.isPending}
-        serverError={gate.formError(setLessonVideo.error)}
+        serverError={setLessonVideo.error?.message}
         submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
       />
       {hasVideo && (

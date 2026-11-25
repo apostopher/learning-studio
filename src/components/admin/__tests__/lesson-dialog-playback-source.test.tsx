@@ -87,15 +87,12 @@ const CONTENT = {
   levels: [],
   videoProvider: 'mux' as const,
   version: '1.0',
-  contentUpdatedAt: new Date('2026-11-24T09:38:00Z'),
 };
 const LIBRARY_LESSON: LibraryLesson = {
   ...CONTENT,
   courseCount: 2,
   courseIds: [7, 8],
   disciplineModuleId: null,
-  highestTaken: '1.0',
-  versionCourseCount: 2,
 };
 const MODULES: BoardModule[] = [
   {

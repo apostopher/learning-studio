@@ -56,7 +56,6 @@ const lesson = (over: Partial<BoardLesson> = {}): BoardLesson => ({
   quizQuestionCount: 0,
   version: '1.0',
   disciplineVersion: '1.0',
-  contentUpdatedAt: new Date(0),
   dependsOn: [],
   videoProvider: 'mux',
   videoRef: 'ref',
@@ -251,44 +250,15 @@ describe('LessonCard', () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 
-  it('updates from the version chip without dragging, playing or configuring', () => {
-    const onUpdate = vi.fn();
-    const others = {
-      onConfigure: vi.fn(),
-      onPlay: vi.fn(),
-      onToggle: vi.fn(),
-      onPointerDown: vi.fn(),
-      onKeyDown: vi.fn(),
-    };
-    render(
-      <LessonCard
-        lesson={lesson()}
-        onConfigure={others.onConfigure}
-        onPlay={others.onPlay}
-        visibility={{ onToggle: others.onToggle }}
-        dragHandleProps={{
-          onPointerDown: others.onPointerDown,
-          onKeyDown: others.onKeyDown,
-        }}
-        quickshotSlot={<span>chips</span>}
-        version={{ version: '1.0', disciplineVersion: '1.1', onUpdate }}
-      />,
-    );
-    const chip = screen.getByRole('button', { name: /Update this lesson/ });
-    fireEvent.pointerDown(chip);
-    fireEvent.keyDown(chip, { key: 'Enter' });
-    fireEvent.click(chip);
-    expect(onUpdate).toHaveBeenCalledTimes(1);
-    for (const other of Object.values(others)) {
-      expect(other).not.toHaveBeenCalled();
-    }
-  });
-
   it('draws the version chip on a card with no settings chips', () => {
     render(
       <LessonCard
         lesson={lesson()}
-        version={{ version: '1.0', disciplineVersion: '1.0' }}
+        version={{
+          version: '1.0',
+          disciplineVersion: '1.0',
+          editedIn: 'CPL',
+        }}
       />,
     );
     expect(screen.getByRole('button', { name: /Up to date/ })).toBeTruthy();

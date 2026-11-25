@@ -57,7 +57,6 @@ const ROW = {
   needsVideoWatch: false,
   disciplineModuleId: null,
   version: '1.0',
-  contentUpdatedAt: new Date(0),
 };
 
 beforeEach(() => {
@@ -204,9 +203,6 @@ describe('createLibraryLesson', () => {
       courseCount: 0,
       courseIds: [],
       version: '1.0',
-      highestTaken: null,
-      versionCourseCount: 0,
-      contentUpdatedAt: new Date(0),
       videoProvider: null,
       disciplineModuleId: null,
       levels: [],

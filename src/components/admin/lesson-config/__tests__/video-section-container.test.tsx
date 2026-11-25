@@ -73,8 +73,6 @@ import { VideoSectionContainer } from '../video-section-container';
 const VERSIONED = {
   id: 10,
   version: '1.0',
-  highestTaken: null,
-  versionCourseCount: 0,
 };
 
 // A fresh jotai store per render: the preview-language atom family is keyed

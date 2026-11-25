@@ -6,12 +6,11 @@ import {
   lessonVersionDraftAtomFamily,
   lessonVersionRefusalAtomFamily,
 } from '#/atoms/admin';
-import { useIsSavingLessonContent } from '#/data-hooks/version-conflict';
+import { useIsSavingLessonContent } from '#/data-hooks/lesson-content-write';
 import {
   type SetLessonVersionInput,
   setLessonVersionInputSchema,
 } from '#/lib/admin-schemas';
-import { isVersionLocked, lockedVersionMessage } from '#/lib/lesson-version';
 import { lessonMaterialFormId } from './material-form-id';
 import {
   isVersionDirty,
@@ -56,30 +55,9 @@ export const VersionFieldContainer = ({
     }
   }, [draft, lesson.version, form, setDraft]);
 
-  const focus = refusal?.focus;
   useEffect(() => {
-    if (focus) form.setFocus('version');
-  }, [focus, form]);
-
-  // The server's message describes the lesson as it was then. Once this page
-  // has newer, the reason is read off that instead.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the lesson's version state is the trigger, not an input
-  useEffect(() => {
-    setRefusal((last) => last && { ...last, message: null });
-  }, [
-    lesson.version,
-    lesson.highestTaken,
-    lesson.versionCourseCount,
-    setRefusal,
-  ]);
-
-  // Nothing is refused any more: drop it, or it would speak up again by itself
-  // the next time the lesson locks.
-  useEffect(() => {
-    if (refusal && refusal.message === null && blocked === null) {
-      setRefusal(null);
-    }
-  }, [refusal, blocked, setRefusal]);
+    if (refusal) form.setFocus('version');
+  }, [refusal, form]);
 
   // The dialog was closed, or pointed at another lesson.
   useEffect(
@@ -100,15 +78,7 @@ export const VersionFieldContainer = ({
           setRefusal(null);
         },
       })}
-      error={
-        (refusal && (refusal.message ?? blocked)) ??
-        form.formState.errors.version?.message
-      }
-      lockedReason={
-        isVersionLocked(lesson)
-          ? lockedVersionMessage(lesson.version, lesson.versionCourseCount)
-          : null
-      }
+      error={(refusal && blocked) ?? form.formState.errors.version?.message}
       readOnly={isSaving}
     />
   );

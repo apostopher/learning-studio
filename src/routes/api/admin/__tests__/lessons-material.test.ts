@@ -46,34 +46,15 @@ vi.mock('#/ai/embeddings', () => ({
 }));
 vi.mock('#/lib/index-lesson-versions.server', () => ({ indexLessonVersions }));
 vi.mock('#/db/lesson-access', () => ({ getDisciplineIdForLessonId }));
-// The real gate module, for its error class; only its database is stubbed.
-vi.mock('#/db', () => ({ db: {} }));
-vi.mock('#/db/lesson-versions', () => ({
-  countCoursesOnVersion: vi.fn(),
-  highestTakenVersions: vi.fn(),
-}));
 vi.mock('#/db/lesson', () => ({
   getLessonMaterialByLessonId,
   upsertLessonMaterial,
 }));
 
-import { VersionEditError } from '#/db/lesson-content-edit';
-import { versionConflictSchema } from '#/lib/admin-schemas';
 import {
   getMaterialHandler,
   saveMaterialHandler,
 } from '../lessons.$lessonId.material';
-
-const conflict = {
-  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
-  code: 'version' as const,
-  version: '1.0',
-  highestTaken: '1.0',
-};
-async function expectConflict(res: Response) {
-  expect(res.status).toBe(409);
-  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
-}
 
 const material = { text: '<p>x</p>', keyPoints: [], proTips: '', quiz: [] };
 function postReq(body: unknown): Request {
@@ -264,11 +245,6 @@ describe('lessons material route', () => {
     );
     expect(res.status).toBe(400);
     expect(upsertLessonMaterial).not.toHaveBeenCalled();
-  });
-
-  it('409 body parses as versionConflictSchema', async () => {
-    upsertLessonMaterial.mockRejectedValueOnce(new VersionEditError(conflict));
-    await expectConflict(await saveMaterialHandler(postReq(material), '1'));
   });
 
   it('POST 500 when upsertLessonMaterial rejects', async () => {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SetLessonAlternateVideoInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
-import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+import { useSettleContentWrite } from './lesson-content-write';
 
 /** Attach (or replace) a lesson's video for one language, then refetch what shows it. */
 export function useSetLessonAlternateVideo(lessonId: number) {
@@ -18,7 +18,7 @@ export function useSetLessonAlternateVideo(lessonId: number) {
           body: JSON.stringify(input),
         },
       );
-      await throwIfWriteFailed(res, `Failed to add language (${res.status})`);
+      if (!res.ok) throw new Error(`Failed to add language (${res.status})`);
     },
     onSuccess: (_data, { version }) => {
       queryClient.invalidateQueries({
@@ -32,8 +32,7 @@ export function useSetLessonAlternateVideo(lessonId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonCaptionsAll(lessonId),
       });
-      settle.saved(version);
+      settle(version);
     },
-    onError: settle.failed,
   });
 }

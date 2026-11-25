@@ -11,7 +11,6 @@ import { lessonDndId } from '#/lib/dnd-ids';
 import { EditorLessonQuickshotContainer } from './editor-lesson-quickshot-container';
 import { LessonCard } from './lesson-card';
 import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
-import { useLessonVersionChip } from './use-lesson-version-chip';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
@@ -23,8 +22,9 @@ import { useLessonVersionChip } from './use-lesson-version-chip';
  * of a reversible act only trains people to dismiss dialogs. Deleting the
  * lesson itself is not offered here: that lives on the library card only.
  *
- * There is no Edit: what a lesson IS is edited in Disciplines, and this course
- * takes a newer version of it through the version chip.
+ * There is no Edit: what a lesson IS is edited in Disciplines. Removing it here
+ * and dragging it in again is how the course takes it as it is there now; the
+ * version chip says when it differs.
  *
  * Otherwise this card is the SAME card the per-course board draws — poster,
  * play tile, eye, padlock, quickshot and version chips — down to sharing
@@ -49,7 +49,7 @@ export const EditorLessonCardContainer = ({
    */
   module: EditorBoardModule;
   courseId: number;
-  /** Named by the dialog the version chip opens. */
+  /** Named by the version chip. */
   courseName: string;
   /** Poster frame for this lesson's video, when its provider exposes one. */
   posterUrl?: string | null;
@@ -80,10 +80,6 @@ export const EditorLessonCardContainer = ({
   // The same save the quickshot chips use, so the eye, the padlock and the
   // chips share one optimistic cache write and one rollback path.
   const updateConfig = useUpdateEditorLessonConfig();
-  const version = useLessonVersionChip(
-    { id: courseId, name: courseName },
-    lesson,
-  );
 
   return (
     <div
@@ -134,7 +130,11 @@ export const EditorLessonCardContainer = ({
             : undefined
         }
         quickshotSlot={<EditorLessonQuickshotContainer lesson={lesson} />}
-        version={version}
+        version={{
+          version: lesson.version,
+          disciplineVersion: lesson.disciplineVersion,
+          editedIn: courseName,
+        }}
       />
     </div>
   );

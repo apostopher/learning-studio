@@ -29,7 +29,6 @@ import {
   requireCoursePermission,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
-import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
  * Course-scoped guard for the branches that edit a single PLACEMENT rather
@@ -203,10 +202,11 @@ export async function patchLessonHandler(
     if ('response' in resolved) return resolved.response;
     const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
-    const updated = await orVersionConflict(() =>
-      updateLessonName(lessonId, rename.data.name, rename.data.version),
+    const updated = await updateLessonName(
+      lessonId,
+      rename.data.name,
+      rename.data.version,
     );
-    if (updated instanceof Response) return updated;
     if (!updated) return new Response('Not found', { status: 404 });
     return Response.json(updated);
   }
@@ -218,10 +218,7 @@ export async function patchLessonHandler(
     if ('response' in resolved) return resolved.response;
     const denied = await guardContent(request, resolved.disciplineId, 'update');
     if (denied) return denied;
-    const updated = await orVersionConflict(() =>
-      setLessonVersion(lessonId, version.data.version),
-    );
-    if (updated instanceof Response) return updated;
+    const updated = await setLessonVersion(lessonId, version.data.version);
     if (!updated) return new Response('Not found', { status: 404 });
     return Response.json(updated);
   }

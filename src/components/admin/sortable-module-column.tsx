@@ -84,14 +84,14 @@ export const SortableModuleColumn = ({
         lessonsSlot={
           provenance ? (
             mod.lessons.length === 0 ? (
-              // No instruction: its lessons are added in the owner's column,
-              // and the flagship, which every course borrows, has none.
-              <p className="px-1 py-4 text-center text-tertiary text-xs">
-                No lessons yet.
+              <p className="text-pretty px-1 py-4 text-center text-tertiary text-xs">
+                No lessons yet. In the knowledge library, drag one from
+                Disciplines into {mod.name}, in the {provenance.ownerName}{' '}
+                column.
               </p>
             ) : (
               <BorrowedLessonList
-                course={course}
+                ownerName={provenance.ownerName}
                 lessons={mod.lessons}
                 posters={posters}
               />

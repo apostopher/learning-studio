@@ -29,12 +29,6 @@ vi.mock('#/lib/permissions.server', () => ({
 vi.mock('#/db/lesson-access', () => ({
   getDisciplineIdForLessonId: m.getDisciplineIdForLessonId,
 }));
-// The real gate module, for its error class; only its database is stubbed.
-vi.mock('#/db', () => ({ db: {} }));
-vi.mock('#/db/lesson-versions', () => ({
-  countCoursesOnVersion: vi.fn(),
-  highestTakenVersions: vi.fn(),
-}));
 vi.mock('#/db/admin', () => ({
   getLessonAlternateVideos: m.getLessonAlternateVideos,
   setLessonAlternateVideo: m.setLessonAlternateVideo,
@@ -44,24 +38,11 @@ vi.mock('#/db/video-captions', () => ({
   requestLessonCaptionsSafely: m.requestLessonCaptionsSafely,
 }));
 
-import { VersionEditError } from '#/db/lesson-content-edit';
-import { versionConflictSchema } from '#/lib/admin-schemas';
 import {
   deleteAlternateVideoHandler,
   getAlternateVideosHandler,
   putAlternateVideoHandler,
 } from '../lessons.$lessonId.alternate-videos';
-
-const conflict = {
-  error: 'v1.0 is used by 1 course. Enter a higher version to make changes.',
-  code: 'version' as const,
-  version: '1.0',
-  highestTaken: '1.0',
-};
-async function expectConflict(res: Response) {
-  expect(res.status).toBe(409);
-  expect(versionConflictSchema.parse(await res.json())).toEqual(conflict);
-}
 
 const json = (method: string, body: unknown) =>
   new Request('http://test/api/admin/lessons/10/alternate-videos', {
@@ -166,15 +147,6 @@ describe.each([
     const res = await handler(json(method, { ...body, version: '01.1' }), '10');
     expect(res.status).toBe(400);
     expect(writer).not.toHaveBeenCalled();
-  });
-
-  it('409 body parses as versionConflictSchema; no captions are requested', async () => {
-    writer.mockRejectedValueOnce(new VersionEditError(conflict));
-    // Mux, which asks for captions when it saves.
-    await expectConflict(
-      await handler(json(method, { ...body, provider: 'mux' }), '10'),
-    );
-    expect(m.requestLessonCaptionsSafely).not.toHaveBeenCalled();
   });
 
   it('a refused caller gets the 403 and nothing is written', async () => {

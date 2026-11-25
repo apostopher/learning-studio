@@ -55,9 +55,7 @@ vi.mock('#/lib/video-providers/resolve.server', () => ({
 vi.mock('#/db/video-captions', () => ({ muxCaptionsForPlayback: vi.fn() }));
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
-const { setLessonVersion, VersionEditError } = await import(
-  '../lesson-content-edit'
-);
+const { setLessonVersion } = await import('../lesson-content-edit');
 const { upsertLessonMaterial } = await import('../lesson');
 const {
   removeLessonAlternateVideo,
@@ -68,12 +66,11 @@ const {
 } = await import('../admin');
 const { createLibraryLesson } = await import('../library-lessons');
 const { placeLessonInLibrary } = await import('../discipline-modules');
-const { updateCourseLessonVersion } = await import('../lesson-versions');
-const { linkLesson, unlinkLesson } = await import('../placements');
+const { linkLesson } = await import('../placements');
 
 /**
  * Three courses with a module each. Lesson 1 has a video, a French one and
- * material. It is placed nowhere, so its 1.0 is untaken. Dates are fixed so
+ * material. It is placed nowhere, so nothing has frozen it. Dates are fixed so
  * that any touch shows. Deletes, not a truncate: that would rewrite every
  * table of the schema before every test.
  */
@@ -166,7 +163,7 @@ const WRITERS: {
 ];
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
-  'the content edit gate on Postgres',
+  'content edits on Postgres',
   () => {
     let pgDb: FreshDb;
     const rows = async (q: string) => (await pgDb.pool.query(q)).rows;
@@ -190,14 +187,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         prevLessonId: null,
         nextLessonId: null,
       });
-    const refusal = async (write: Promise<unknown>) => {
-      const error = await write.then(
-        () => 'was accepted',
-        (e: unknown) => e,
-      );
-      expect(error).toBeInstanceOf(VersionEditError);
-      return (error as InstanceType<typeof VersionEditError>).body;
-    };
 
     /** Another session mid-transaction, for the interleavings below. */
     let other: pg.Client | undefined;
@@ -237,34 +226,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     });
 
     describe.each(WRITERS)('$what', ({ write, stored, fail }) => {
-      it('refused on a taken version and nothing is written', async () => {
+      it('free on a version a course has taken, and the course keeps its copy', async () => {
         await take(1);
-        const before = await workingCopy();
-        expect(await refusal(write())).toEqual({
-          error:
-            'v1.0 is used by 1 course. Enter a higher version to make changes.',
-          code: 'version',
-          version: '1.0',
-          highestTaken: '1.0',
-        });
-        // Repeating the locked version is no bump either.
-        expect((await refusal(write('1.0'))).error).toMatch(/^v1\.0 is used/);
-        expect(await workingCopy()).toEqual(before);
+        await write();
+        expect(await lesson()).toMatchObject({ ...stored, version: '1.0' });
+        expect(
+          await rows(
+            'select version, name, video_ref, text from lesson_versions',
+          ),
+        ).toEqual([
+          { version: '1.0', name: 'A', video_ref: 'ref-a', text: 'old text' },
+        ]);
       });
 
-      it('refused with a version that is not higher, and nothing is written', async () => {
+      it('may carry a lower version than one a course has taken', async () => {
         await take(1);
-        const before = await workingCopy();
-        expect(await refusal(write('0.9'))).toEqual({
-          error: 'Enter a version higher than v1.0.',
-          code: 'version',
-          version: '1.0',
-          highestTaken: '1.0',
-        });
-        expect(await workingCopy()).toEqual(before);
+        await write('0.9');
+        expect(await lesson()).toMatchObject({ ...stored, version: '0.9' });
       });
 
-      it('accepted with a higher version, which is stored', async () => {
+      it('stores the version it carries, and only what it edits', async () => {
         await take(1);
         const before = await lesson();
         await write('1.1');
@@ -288,17 +269,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         ]);
       });
 
-      it('free on an untaken version', async () => {
+      it('keeps the version when it carries none', async () => {
         await write();
         expect(await lesson()).toMatchObject({ ...stored, version: '1.0' });
         expect(await contentEdited()).toBe(true);
-      });
-
-      it('free again once the version has been moved past the taken one', async () => {
-        await take(1);
-        await setLessonVersion(1, '1.1');
-        await write();
-        expect(await lesson()).toMatchObject({ ...stored, version: '1.1' });
       });
 
       it.runIf(fail)(
@@ -308,7 +282,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const before = await workingCopy();
           const error = await fail?.('1.1').catch((e: unknown) => e);
           expect(error).toBeInstanceOf(Error);
-          expect(error).not.toBeInstanceOf(VersionEditError);
           expect(await workingCopy()).toEqual(before);
         },
       );
@@ -319,40 +292,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         await write('1.1');
         expect(h.invalidateCourseDetailsCache).not.toHaveBeenCalled();
         expect(h.invalidatePlayback).not.toHaveBeenCalled();
-      });
-
-      it('a course taking 1.1 between two saves makes the second save refused', async () => {
-        await take(1);
-        await write('1.1');
-        await updateCourseLessonVersion({
-          courseId: 1,
-          lessonId: 1,
-          toVersion: '1.1',
-        });
-        const before = await workingCopy();
-        // The editor still holds 1.1 as the version it is working on.
-        expect(await refusal(write('1.1'))).toEqual({
-          error:
-            'v1.1 is used by 1 course. Enter a higher version to make changes.',
-          code: 'version',
-          version: '1.1',
-          highestTaken: '1.1',
-        });
-        expect((await refusal(write())).version).toBe('1.1');
-        expect(await workingCopy()).toEqual(before);
-      });
-
-      it('waits for a course taking the version, then is refused', async () => {
-        const session = await holdLesson();
-        const refused = refusal(write());
-        refused.catch(() => {});
-        await untilBlocked(1);
-        await session.query(`insert into lesson_versions
-          (lesson_id, version, name, extra_tab) values (1, '1.0', 'A', 'testThis')`);
-        const before = await workingCopy();
-        await session.query('commit');
-        expect((await refused).highestTaken).toBe('1.0');
-        expect(await workingCopy()).toEqual(before);
       });
 
       it('waits for a version bump in progress, then edits the bumped copy', async () => {
@@ -368,47 +307,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
     });
 
-    it('a lesson that does not exist is null, not refused', async () => {
+    it('a lesson that does not exist is null', async () => {
       expect(await upsertLessonMaterial(99, material, '1.1')).toBeNull();
       expect(await setLessonVideo(99, 'mux', 'r', '1.1')).toBeNull();
       expect(await removeLessonAlternateVideo(99, 'fr', '1.1')).toBeNull();
       expect(await updateLessonName(99, 'N', '1.1')).toBeNull();
       expect(await setLessonVersion(99, '1.1')).toBeNull();
-    });
-
-    describe('the locked message', () => {
-      it('counts only courses showing the lesson on exactly that version', async () => {
-        await take(1);
-        await take(2);
-        expect((await refusal(updateLessonName(1, 'N'))).error).toBe(
-          'v1.0 is used by 2 courses. Enter a higher version to make changes.',
-        );
-        await setLessonVersion(1, '1.1');
-        await take(3);
-        // Three courses use the lesson; one is on 1.1.
-        expect((await refusal(updateLessonName(1, 'N'))).error).toBe(
-          'v1.1 is used by 1 course. Enter a higher version to make changes.',
-        );
-      });
-
-      it('a version no course uses any more stays locked and says so', async () => {
-        await take(1);
-        await unlinkLesson(1, 1);
-        expect((await refusal(updateLessonName(1, 'N'))).error).toBe(
-          'v1.0 was used by a course. Enter a higher version to make changes.',
-        );
-      });
-
-      it('compares versions as numbers', async () => {
-        await setLessonVersion(1, '1.9');
-        await take(1);
-        await updateLessonName(1, 'N', '1.10');
-        await take(2);
-        expect(await refusal(updateLessonName(1, 'N2', '1.9'))).toMatchObject({
-          error: 'Enter a version higher than v1.10.',
-          highestTaken: '1.10',
-        });
-      });
     });
 
     describe('setLessonVersion', () => {
@@ -431,25 +335,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         expect(await workingCopy()).toEqual(before);
       });
 
-      it('may go down while untaken', async () => {
-        await setLessonVersion(1, '0.5');
-        expect(await lesson()).toMatchObject({ version: '0.5' });
-      });
-
-      it('refused when locked or not higher, and nothing is written', async () => {
+      it('goes up and back down again, whatever courses have taken', async () => {
         await take(1);
-        const before = await workingCopy();
-        expect((await refusal(setLessonVersion(1, '1.0'))).error).toBe(
-          'v1.0 is used by 1 course. Enter a higher version to make changes.',
-        );
-        expect((await refusal(setLessonVersion(1, '0.9'))).error).toBe(
-          'Enter a version higher than v1.0.',
-        );
-        expect(await workingCopy()).toEqual(before);
+        await setLessonVersion(1, '1.1');
+        await updateLessonName(1, 'Edited');
+        await take(2);
+        for (const version of ['1.0', '1.1', '0.1', '1.0']) {
+          await setLessonVersion(1, version);
+          expect(await lesson()).toMatchObject({ version, name: 'Edited' });
+        }
       });
     });
 
-    it('settings (visibility, levels, paid, debrief) save on a taken version and do not touch content_updated_at', async () => {
+    it('settings (visibility, levels, paid, debrief) do not move the version and do not touch content_updated_at', async () => {
       await take(1);
       vi.clearAllMocks();
       await updateLessonConfig(1, {

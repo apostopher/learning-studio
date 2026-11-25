@@ -49,7 +49,7 @@ import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { useReorderEditorModule } from '#/data-hooks/use-reorder-editor-module';
 import type { OrgEditorBoard, OrgLibrary } from '#/lib/admin-schemas';
 import { type DndType, parseDndId } from '#/lib/dnd-ids';
-import { courseRailBoards, findFlagshipCourse } from '#/lib/flagship-course';
+import { findFlagshipCourse } from '#/lib/flagship-course';
 import { inlineDirSign } from '#/lib/inline-direction';
 import {
   commitLibraryDrop,
@@ -111,7 +111,6 @@ import { RemoveCourseModuleDialogContainer } from './remove-course-module-dialog
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
 import { RenameDisciplineModuleDialogContainer } from './rename-discipline-module-dialog-container';
 import { type DragOrigin, resolveDrop } from './resolve-drop';
-import { UpdateLessonVersionDialogContainer } from './update-lesson-version-dialog-container';
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
@@ -1377,8 +1376,7 @@ export const EditorContainer = ({
               ) : undefined
             }
           >
-            {/* Not the flagship — see `courseRailBoards`. */}
-            {courseRailBoards(board).map((courseBoard) => (
+            {board.map((courseBoard) => (
               <EditorCourseColumnContainer
                 key={courseBoard.course.id}
                 courseBoard={courseBoard}
@@ -1470,9 +1468,6 @@ export const EditorContainer = ({
         unlike the per-course board, which passes only its own.
       */}
       <LessonVideoModalContainer boards={board} />
-      <UpdateLessonVersionDialogContainer
-        readBoards={() => readBoard() ?? []}
-      />
       <RenameDisciplineDialogContainer />
       <DisciplineLevelsDialogContainer />
       <DeleteDisciplineDialogContainer />

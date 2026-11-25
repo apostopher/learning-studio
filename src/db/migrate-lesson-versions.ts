@@ -20,7 +20,8 @@ import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
  * `pnpm db:index-lesson-versions` embeds snapshots with no search rows, and
  * the debrief regenerates missing chunks. Until the deploy:
  * - do not edit lesson content: a snapshot is already frozen, so an edit made
- *   on the old code stays out of every course until the lesson goes to 1.1;
+ *   on the old code stays out of every course until the lesson's version
+ *   changes;
  * - the old code cannot store newly generated debrief chunks (it upserts on
  *   the unique `lesson_id` index this replaces). Stored chunks keep working.
  *
@@ -29,8 +30,7 @@ import { DEFAULT_LESSON_VERSION } from '#/lib/lesson-version';
  * statements only add, bar one index that is replaced.
  *
  * Re-running is safe: a pin is never moved, a snapshot never changed, and a
- * lesson whose courses all have pins is never snapshotted again (a snapshot
- * would lock the version an author is working on). It gives up after waiting
+ * lesson whose courses all have pins is never snapshotted again. It gives up after waiting
  * 5s for a lock rather than queue the whole site behind a long-running reader;
  * just run it again.
  *
@@ -70,7 +70,9 @@ export const LESSON_VERSIONS_STATEMENTS: SQL[] = [
     "extra_tab" text not null,
     "created_at" timestamp not null default now()
   )`,
-  sql`create unique index if not exists "lesson_versions_lesson_version_idx" on "lesson_versions" ("lesson_id","version")`,
+  // Unique until versions became labels: an author may use one again.
+  sql`drop index if exists "lesson_versions_lesson_version_idx"`,
+  sql`create index if not exists "lesson_versions_lesson_id_version_idx" on "lesson_versions" ("lesson_id","version")`,
 
   sql`create table if not exists "course_lesson_versions" (
     "course_id" integer not null constraint "course_lesson_versions_course_id_courses_id_fk" references "courses"("id") on delete cascade,
@@ -80,6 +82,15 @@ export const LESSON_VERSIONS_STATEMENTS: SQL[] = [
     constraint "course_lesson_versions_course_id_lesson_id_pk" primary key ("course_id","lesson_id")
   )`,
   sql`create index if not exists "course_lesson_versions_lesson_version_id_idx" on "course_lesson_versions" ("lesson_version_id")`,
+
+  sql`create table if not exists "removed_placements" (
+    "module_id" integer not null constraint "removed_placements_module_id_modules_id_fk" references "modules"("id") on delete cascade,
+    "lesson_id" integer not null constraint "removed_placements_lesson_id_lessons_id_fk" references "lessons"("id") on delete cascade,
+    "rank" numeric(30, 15) not null,
+    "depends_on" jsonb not null,
+    "removed_at" timestamp not null default now(),
+    constraint "removed_placements_module_id_lesson_id_pk" primary key ("module_id","lesson_id")
+  )`,
 
   sql`alter table "lesson_knowledge_chunks" add column if not exists "lesson_version_id" integer constraint "lesson_knowledge_chunks_lesson_version_id_lesson_versions_id_fk" references "lesson_versions"("id") on delete cascade`,
   // Unique before, plain now: a lesson has one chunk row per snapshot.

@@ -75,7 +75,6 @@ const MODULE: BoardModule = {
       // Disciplines is ahead: the sentence is about the course's version.
       version: '1.0',
       disciplineVersion: '1.4',
-      contentUpdatedAt: new Date(0),
     },
   ],
 };

@@ -57,7 +57,6 @@ export async function createLibraryLesson(input: {
       needsVideoWatch: lessonsTable.needsVideoWatch,
       disciplineModuleId: lessonsTable.disciplineModuleId,
       version: lessonsTable.version,
-      contentUpdatedAt: lessonsTable.contentUpdatedAt,
     });
 
   return {
@@ -85,8 +84,5 @@ export async function createLibraryLesson(input: {
     needsVideoWatch: created.needsVideoWatch,
     version: created.version,
     // In no course, so nobody has taken it.
-    highestTaken: null,
-    versionCourseCount: 0,
-    contentUpdatedAt: created.contentUpdatedAt,
   };
 }

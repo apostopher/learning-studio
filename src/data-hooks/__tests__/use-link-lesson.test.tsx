@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
 import { useLinkLesson } from '#/data-hooks/use-link-lesson';
+import { queryKeys } from '#/hooks/data/keys';
 
 function makeHarness() {
   const client = new QueryClient({
@@ -58,6 +59,39 @@ describe('useLinkLesson', () => {
     );
     expect(invalidatedKeys).toContainEqual(dataKeys.editorBoard());
     expect(invalidatedKeys).toContainEqual(dataKeys.orgLibrary());
+  });
+
+  // Adding a lesson back is how a course updates it: whatever plays or shows
+  // it has to be read again.
+  it('refreshes everything that shows the lesson as the course has it', async () => {
+    const { client, wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 1 }), { status: 200 }),
+    );
+    const { result } = renderHook(() => useLinkLesson(), { wrapper });
+    const shown = [
+      dataKeys.lessonPlaybacks(9),
+      [...dataKeys.allLessonPosters(), 4],
+      [...queryKeys.allCourseDetails(), 'itps'],
+      [...queryKeys.allLessonMaterials(), 'itps', 'wx'],
+      [...queryKeys.allLessonPlaybacks(), 'itps', 'wx'],
+      [...dataKeys.allCourseProgressSummaries(), 'itps'],
+      [...dataKeys.allDebriefStatuses(), 'itps', 'wx'],
+      [...dataKeys.allDebriefAttempts(), 'itps', 'wx'],
+      [...dataKeys.allLessonQuizResults(), 'wx'],
+    ];
+    for (const key of shown) client.setQueryData(key, {});
+    const other = dataKeys.lessonPlaybacks(10);
+    client.setQueryData(other, {});
+
+    await act(async () => {
+      await result.current.mutateAsync({ moduleId: 40, lessonId: 9 });
+    });
+
+    for (const key of shown) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+    expect(client.getQueryState(other)?.isInvalidated).toBe(false);
   });
 
   // Round-1 review (Minor 5): the hook used to hardcode this sentence,

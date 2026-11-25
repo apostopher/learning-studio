@@ -41,7 +41,6 @@ import { LessonConfigDialogContainer } from './lesson-config-dialog-container';
 import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { ModuleColumn } from './module-column';
 import { SortableModuleColumn } from './sortable-module-column';
-import { UpdateLessonVersionDialogContainer } from './update-lesson-version-dialog-container';
 
 /**
  * Which of this course's OWN modules holds the given lesson, or null.
@@ -392,12 +391,6 @@ export const ModuleBoardContainer = ({
       <LessonConfigDialogContainer courseId={courseId} modules={modules} />
       <LessonVideoModalContainer
         boards={[{ course: { id: courseId }, modules }]}
-      />
-      <UpdateLessonVersionDialogContainer
-        readBoards={() => {
-          const board = queryClient.getQueryData<CourseBoard | null>(key);
-          return board ? [board] : [];
-        }}
       />
     </DndContext>
   );

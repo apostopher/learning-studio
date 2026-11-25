@@ -195,23 +195,6 @@ export const addModuleLessonInputSchema = z
   .strict();
 export type AddModuleLessonInput = z.infer<typeof addModuleLessonInputSchema>;
 
-/** Move one course to the working copy's version; `toVersion` is the one the dialog showed. */
-export const updateCourseLessonVersionInputSchema = z
-  .object({ toVersion: lessonVersionSchema })
-  .strict();
-export type UpdateCourseLessonVersionInput = z.infer<
-  typeof updateCourseLessonVersionInputSchema
->;
-
-/** Why a course was not moved: the 409 (with its code) or the 404. */
-export const courseLessonVersionRefusalSchema = z.object({
-  error: z.string(),
-  code: z.enum(['stale', 'current']).optional(),
-});
-export type CourseLessonVersionRefusal = z.infer<
-  typeof courseLessonVersionRefusalSchema
->;
-
 /** The 409 of deleting a lesson some course shows. */
 export const lessonInUseSchema = z.object({
   error: z.string(),
@@ -222,7 +205,7 @@ export type LessonInUseBody = z.infer<typeof lessonInUseSchema>;
 
 /**
  * The version a content write moves the lesson to; absent keeps the current
- * one. Required in effect once a course has taken that: see `applyContentEdit`.
+ * one.
  */
 const contentVersion = { version: lessonVersionSchema.optional() };
 
@@ -237,15 +220,6 @@ export const setLessonVersionInputSchema = z
   .object({ version: lessonVersionSchema })
   .strict();
 export type SetLessonVersionInput = z.infer<typeof setLessonVersionInputSchema>;
-
-/** The 409 of a content write the lesson's version refuses. */
-export const versionConflictSchema = z.object({
-  error: z.string(),
-  code: z.literal('version'),
-  version: z.string(),
-  highestTaken: z.string().nullable(),
-});
-export type VersionConflictBody = z.infer<typeof versionConflictSchema>;
 
 /** POST body of the material save. */
 export const saveLessonMaterialInputSchema =
@@ -300,7 +274,6 @@ export const boardLessonSchema = z.object({
   /** The working copy's version: what updating this course would take. */
   disciplineVersion: z.string(),
   /** When the working copy's content was last edited. */
-  contentUpdatedAt: z.coerce.date(),
 });
 export type BoardLesson = z.infer<typeof boardLessonSchema>;
 
@@ -1179,14 +1152,6 @@ export const libraryLessonSchema = z.object({
   hasDebrief: z.boolean(),
   needsVideoWatch: z.boolean(),
   version: z.string(),
-  /** The highest version a course has taken, by number; null when none has. */
-  highestTaken: z.string().nullable(),
-  /**
-   * How many courses show the lesson on exactly `version`: the N of "v1.0 is
-   * used by N courses". `courseCount` counts them on any version.
-   */
-  versionCourseCount: z.number(),
-  contentUpdatedAt: z.coerce.date(),
 });
 export type LibraryLesson = z.infer<typeof libraryLessonSchema>;
 

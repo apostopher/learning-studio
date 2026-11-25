@@ -25,7 +25,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AlternateVideosContainerProps {
   lessonId: number;
-  /** The lesson's version, which its edits are gated by. */
+  /** The lesson's version, which its edits may change. */
   versioned: VersionedLesson;
 }
 
@@ -79,7 +79,6 @@ export const AlternateVideosContainer = ({
               lang: options.find((o) => o.code !== lang)?.code ?? lang,
               url: '',
             }),
-          onError: gate.onError,
         },
       ),
     );
@@ -90,7 +89,7 @@ export const AlternateVideosContainer = ({
     : undefined;
   // A failed remove belongs beside the list it concerns, named by language —
   // not under the add form, which is gone once every language is attached.
-  const removeError = gate.formError(removeAlternate.error);
+  const removeError = removeAlternate.error?.message;
   const removeFailure =
     removeError && removeAlternate.variables
       ? `Couldn't remove ${labelForLang(removeAlternate.variables.lang)}: ${removeError}`
@@ -130,10 +129,7 @@ export const AlternateVideosContainer = ({
             }))}
             onRemove={(l) =>
               gate.attempt((version) =>
-                removeAlternate.mutate(
-                  { lang: l, version },
-                  { onError: gate.onError },
-                ),
+                removeAlternate.mutate({ lang: l, version }),
               )
             }
           />
@@ -154,7 +150,7 @@ export const AlternateVideosContainer = ({
             }
             showUnsupported={urlValue.trim().length > 0 && !detected}
             isPending={setAlternate.isPending}
-            serverError={gate.formError(setAlternate.error)}
+            serverError={setAlternate.error?.message}
           />
         </>
       )}

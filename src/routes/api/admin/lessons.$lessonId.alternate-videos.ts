@@ -17,7 +17,6 @@ import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
-import { orVersionConflict } from '#/lib/version-conflict.server';
 
 /**
  * Translated videos are lesson content, exactly like the primary ref — same
@@ -94,10 +93,7 @@ export async function putAlternateVideoHandler(
   }
   // Apart from the entry, which is stored as it is.
   const { version, ...entry } = parsed.data;
-  const updated = await orVersionConflict(() =>
-    setLessonAlternateVideo(lessonId, entry, version),
-  );
-  if (updated instanceof Response) return updated;
+  const updated = await setLessonAlternateVideo(lessonId, entry, version);
   if (!updated) return new Response('Not found', { status: 404 });
 
   // Auto-captions for a Mux video. Awaited (a serverless response may end
@@ -134,10 +130,7 @@ export async function deleteAlternateVideoHandler(
     return Response.json({ error: 'Invalid language' }, { status: 400 });
   }
   const { lang, version } = parsed.data;
-  const updated = await orVersionConflict(() =>
-    removeLessonAlternateVideo(lessonId, lang, version),
-  );
-  if (updated instanceof Response) return updated;
+  const updated = await removeLessonAlternateVideo(lessonId, lang, version);
   if (!updated) return new Response('Not found', { status: 404 });
   return Response.json({ ok: true });
 }

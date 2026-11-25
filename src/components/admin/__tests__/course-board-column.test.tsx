@@ -2,11 +2,10 @@
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { createStore, Provider } from 'jotai';
+import { render, screen } from '@testing-library/react';
+import { Provider } from 'jotai';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { updateLessonVersionAtom } from '#/atoms/admin';
 import type { BoardModule } from '#/lib/admin-schemas';
 import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 
@@ -64,7 +63,6 @@ const LESSON: BoardModule['lessons'][number] = {
   videoRef: 'abc',
   version: '1.0',
   disciplineVersion: '1.1',
-  contentUpdatedAt: new Date(0),
 };
 
 const ITPS = { id: 7, name: 'ITPS', slug: 'itps' };
@@ -72,10 +70,9 @@ const FLAGSHIP = { id: 6, name: '3D Airmanship', slug: FLAGSHIP_COURSE_SLUG };
 const BORROWED = { owner: { id: 6, name: '3D Airmanship' } };
 
 function renderColumn(mod: BoardModule, course = ITPS) {
-  const store = createStore();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <Provider store={store}>
+      <Provider>
         <DndContext>
           <SortableContext items={[]}>
             <SortableModuleColumn course={course} module={mod} posters={{}} />
@@ -84,7 +81,6 @@ function renderColumn(mod: BoardModule, course = ITPS) {
       </Provider>
     </QueryClientProvider>,
   );
-  return store;
 }
 
 describe("a module on one course's board", () => {
@@ -98,32 +94,27 @@ describe("a module on one course's board", () => {
     );
   });
 
-  // The flagship has no column to drag into, and its modules are hidden in
-  // every other one.
   it.each([
     ["the flagship's own", BORROWED, FLAGSHIP],
     ['borrowed from it', BORROWED, ITPS],
-  ])('%s, empty: promises nothing', (_n, over, course) => {
+  ])('%s, empty: points at the column of the flagship', (_n, over, course) => {
     renderColumn(module_(over), course);
     expect(screen.queryByRole('button', { name: /add lesson/i })).toBeNull();
-    expect(empty()).toBe('No lessons yet.');
+    expect(empty()).toBe(
+      'No lessons yet. In the knowledge library, drag one from Disciplines into Weather, in the 3D Airmanship column.',
+    );
   });
 
   it.each([
-    ['its own', {}],
-    ['a borrowed', BORROWED],
-  ])("%s: the chip updates this course's version", (_n, over) => {
-    const store = renderColumn(module_({ ...over, lessons: [LESSON] }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Update this lesson$/ }),
-    );
-    expect(store.get(updateLessonVersionAtom)).toMatchObject({
-      courseId: 7,
-      courseName: 'ITPS',
-      lessonId: 10,
-      from: '1.0',
-      to: '1.1',
-    });
+    ['its own', {}, 'ITPS'],
+    ['a borrowed', BORROWED, '3D Airmanship'],
+  ])('%s: the chip names the column to update in', (_n, over, column) => {
+    renderColumn(module_({ ...over, lessons: [LESSON] }));
+    expect(
+      screen.getByRole('button', {
+        name: `v1.0. Disciplines has v1.1. To update, remove this lesson from the ${column} column in the knowledge library and drag it in again`,
+      }),
+    ).toBeTruthy();
   });
 
   it("calls its own lesson's settings what they are", () => {

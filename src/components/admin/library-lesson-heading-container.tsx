@@ -24,8 +24,8 @@ import { LessonHeading } from './lesson-heading';
  * name and availability — that used to be a Details tab.
  *
  * Both are properties of the lesson itself, which is what makes them safe to
- * edit here, where no course is in scope. The name is content, so the lesson's
- * version gates it; availability is a setting every course shares. Gates stay
+ * edit here, where no course is in scope. The name is content, so it may
+ * carry a new version; availability is a setting every course shares. Gates stay
  * on the per-course surface.
  *
  * Mounted with `key={lesson.id}` by the dialog, so pointing the modal at a
@@ -61,11 +61,7 @@ export const LibraryLessonHeadingContainer = ({
             toast.success('Lesson renamed');
             setRenamingId(null);
           },
-          onError: (error) => {
-            gate.onError(error);
-            const message = gate.formError(error);
-            if (message) toast.error(message);
-          },
+          onError: (error) => toast.error(error.message),
         },
       ),
     );

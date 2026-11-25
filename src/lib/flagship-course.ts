@@ -5,7 +5,7 @@
  * The flagship is ALWAYS remixed into every other course in its org (amended
  * 2026-10-14): `createCourse` remixes it into each new course and
  * `scripts/remix-flagship-everywhere.ts` back-fills the rest (see
- * `#/db/flagship-remix`). So the editor offers no "Remix …" button, and its
+ * `#/db/flagship-remix`). So the editor offers no "Remix …" button, and in its
  * course rail draws only the modules each course does NOT borrow from the
  * flagship. Everything below that is still generic — `remixCourse`, the
  * routes, the tables — so a picker could return without touching them.
@@ -72,27 +72,6 @@ export function findFlagshipCourse<
 }
 
 /**
- * The boards the editor's course rail draws: every course EXCEPT the
- * flagship.
- *
- * The flagship is the library, not a course among courses: its lessons are
- * filed under the discipline of the same name in the left pane, and the
- * courses on the rail all borrow its modules (see `railModules`). Drawn as
- * a column too, it would sit beside the very courses that remix it, its
- * modules on screen twice. It is edited on its own board
- * (`/admin/$courseId/editor`, reached from the Courses screen and from every
- * "Edited in …" link).
- *
- * The full board still feeds `findFlagshipCourse` and the drag resolver —
- * only what is DRAWN is filtered.
- */
-export function courseRailBoards<
-  C extends { course: { id: number; name: string; slug: string } },
->(boards: readonly C[]): C[] {
-  return boards.filter((b) => !isFlagshipCourse(b.course));
-}
-
-/**
  * The modules a rail column draws: every module EXCEPT those the course
  * borrows from the flagship. Every course borrows all of them, so drawn they
  * would repeat the same modules down every column; `flagshipRailNote` says
@@ -106,10 +85,12 @@ export function courseRailBoards<
  * a midpoint rank landing inside it.
  */
 export function railModules<M extends { owner: { id: number } }>(
-  courseBoard: { modules: readonly M[] },
+  courseBoard: { course: { id: number }; modules: readonly M[] },
   flagshipId: number | null,
 ): M[] {
-  if (flagshipId === null) return [...courseBoard.modules];
+  // In the flagship's own column they are its own.
+  if (flagshipId === null || flagshipId === courseBoard.course.id)
+    return [...courseBoard.modules];
   return courseBoard.modules.filter((m) => m.owner.id !== flagshipId);
 }
 

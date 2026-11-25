@@ -212,20 +212,6 @@ export const playLessonAtom = atom<{
   courseId: number;
 } | null>(null);
 
-/**
- * The version update being confirmed, or null. `from` and `to` are what the
- * dialog shows, and `to` is what it asks the server for.
- */
-export const updateLessonVersionAtom = atom<{
-  courseId: number;
-  courseName: string;
-  lessonId: number;
-  lessonName: string;
-  from: string;
-  to: string;
-  contentUpdatedAt: Date;
-} | null>(null);
-
 /** The module being edited (current field values), or null when closed. */
 export const editModuleAtom = atom<{
   id: number;
@@ -617,14 +603,12 @@ export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
 );
 
 /**
- * A content write the lesson's version refused, shown at the Version field.
- * `message` is the server's, until this page knows what the server knew; null
- * means the reason is read off the lesson as it is now. A fresh `focus` per
- * refusal: refusing twice for the same reason must move focus twice.
+ * A content write held back because the typed version is not one: shown at the
+ * Version field, which takes focus. A fresh object per refusal: refusing twice
+ * must move focus twice.
  */
-export type LessonVersionRefusal = { message: string | null; focus: object };
 export const lessonVersionRefusalAtomFamily = atomFamily((_lessonId: number) =>
-  atom<LessonVersionRefusal | null>(null),
+  atom<object | null>(null),
 );
 
 /**

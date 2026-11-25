@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 // Drawn in place, so what the tooltip says can be read without hovering.
@@ -14,19 +13,11 @@ import { VersionChip } from '../version-chip';
 
 const chip = () => screen.getByRole('button');
 const tooltip = () => screen.getByTestId('tooltip').textContent;
-const press = async () => {
-  const user = userEvent.setup();
-  await user.click(chip());
-  chip().focus();
-  await user.keyboard('{Enter}');
-  await user.keyboard(' ');
-};
 
 describe('VersionChip', () => {
-  it('on the version Disciplines is on: green, inert, and says so', async () => {
-    const onUpdate = vi.fn();
+  it('on the version Disciplines is on: green, and says so', () => {
     render(
-      <VersionChip version="1.0" disciplineVersion="1.0" onUpdate={onUpdate} />,
+      <VersionChip version="1.0" disciplineVersion="1.0" editedIn="CPL" />,
     );
     expect(chip().textContent).toBe('v1.0');
     expect(chip().className).toContain('success');
@@ -35,68 +26,41 @@ describe('VersionChip', () => {
     expect(chip().getAttribute('aria-label')).toBe(
       'v1.0. Up to date with Disciplines',
     );
-    expect(chip().getAttribute('aria-disabled')).toBe('true');
-    await press();
-    expect(onUpdate).not.toHaveBeenCalled();
   });
 
-  it('on another version: gold, with an arrow, and offers the update', async () => {
-    const onUpdate = vi.fn();
+  it.each([
+    '1.1',
+    '0.9',
+  ])('with Disciplines on %s: gold, with an arrow, and says how to update', (disciplineVersion) => {
     render(
-      <VersionChip version="1.0" disciplineVersion="1.1" onUpdate={onUpdate} />,
+      <VersionChip
+        version="1.0"
+        disciplineVersion={disciplineVersion}
+        editedIn="CPL"
+      />,
     );
     expect(chip().textContent).toBe('v1.0');
     expect(chip().className).toContain('accent');
     expect(chip().querySelector('svg')?.getAttribute('aria-hidden')).toBe(
       'true',
     );
-    expect(tooltip()).toBe('Disciplines has v1.1. Update this lesson');
-    expect(chip().getAttribute('aria-label')).toBe(
-      'v1.0. Disciplines has v1.1. Update this lesson',
-    );
-    expect(chip().getAttribute('aria-disabled')).toBeNull();
-
-    const user = userEvent.setup();
-    await user.click(chip());
-    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const says = `Disciplines has v${disciplineVersion}. To update, remove this lesson from the CPL column in the knowledge library and drag it in again`;
+    expect(tooltip()).toBe(says);
+    expect(chip().getAttribute('aria-label')).toBe(`v1.0. ${says}`);
   });
 
-  it('can be pressed from the keyboard', async () => {
-    const onUpdate = vi.fn();
+  it('is a flag: inert, but can be reached by keyboard', () => {
     render(
-      <VersionChip version="1.0" disciplineVersion="1.1" onUpdate={onUpdate} />,
+      <VersionChip version="1.0" disciplineVersion="1.1" editedIn="CPL" />,
     );
-    const user = userEvent.setup();
-    await user.tab();
-    expect(document.activeElement).toBe(chip());
-    await user.keyboard('{Enter}');
-    expect(onUpdate).toHaveBeenCalledTimes(1);
-  });
-
-  it('while updating: inert, and says to what', async () => {
-    const onUpdate = vi.fn();
-    render(
-      <VersionChip
-        version="1.0"
-        disciplineVersion="1.1"
-        onUpdate={onUpdate}
-        isPending
-      />,
-    );
-    expect(tooltip()).toBe('Updating to v1.1…');
     expect(chip().getAttribute('aria-disabled')).toBe('true');
-    await press();
-    expect(onUpdate).not.toHaveBeenCalled();
-  });
-
-  it('with nothing to update through, does not offer it', () => {
-    render(<VersionChip version="1.0" disciplineVersion="1.1" />);
-    expect(tooltip()).toBe('Disciplines has v1.1');
-    expect(chip().getAttribute('aria-disabled')).toBe('true');
+    expect((chip() as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('keeps the v lower case', () => {
-    render(<VersionChip version="1.0" disciplineVersion="1.0" />);
+    render(
+      <VersionChip version="1.0" disciplineVersion="1.0" editedIn="CPL" />,
+    );
     expect(chip().className).toContain('normal-case');
     expect(chip().className).not.toMatch(/(^|\s)uppercase/);
   });

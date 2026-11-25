@@ -74,7 +74,6 @@ const { selectAuthoredQuiz } = await import('../lesson-score-facts');
 const { getLessonIdBySlug, getLessonInCourse } = await import(
   '../lesson-access'
 );
-const { updateCourseLessonVersion } = await import('../lesson-versions');
 const { evaluateLessonGate } = await import('#/lib/lesson-gating.server');
 const { resolveDebriefSource } = await import(
   '#/lib/lesson-debrief-source.server'
@@ -429,22 +428,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         set lesson_version_id = 2 where course_id = 1 and lesson_id = 1`);
       expect(await getLessonPlayback('a', { courseId: 1 })).toMatchObject({
         url: 'https://cdn/a-ref-1.1',
-      });
-    });
-
-    it('updating a course evicts the playback of every version of the lesson', async () => {
-      await getLessonPlayback('a', { courseId: 1 });
-      await getLessonPlayback('a', { courseId: 1, lang: 'hi' });
-      await getLessonPlayback('a', { courseId: 2 });
-      expect(h.store.size).toBe(3);
-      await updateCourseLessonVersion({
-        courseId: 1,
-        lessonId: 1,
-        toVersion: '1.2',
-      });
-      expect([...h.store.keys()]).toEqual([]);
-      expect(await getLessonPlayback('a', { courseId: 1 })).toMatchObject({
-        url: 'https://cdn/a-ref-1.2',
       });
     });
 

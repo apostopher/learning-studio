@@ -89,8 +89,6 @@ const renderFor = (lessonId: number) => {
         versioned={{
           id: lessonId,
           version: '1.0',
-          highestTaken: null,
-          versionCourseCount: 0,
         }}
       />
       <MaterialSaveButton

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { RenameLessonInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
-import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+import { useSettleContentWrite } from './lesson-content-write';
 
 const failure = (res: Response) =>
   res.status === 403
@@ -17,7 +17,7 @@ const patchLesson = (lessonId: number, body: Record<string, unknown>) =>
 
 /**
  * Rename a library lesson from the org-level editor. The name is content, so
- * the lesson's version gates it; availability below is a setting and is not.
+ * it may carry a new version; availability below is a setting and does not.
  *
  * Both are the lesson-level siblings of `useUpdateLesson`/
  * `useUpdateLessonConfig`, which take a `courseId` to pick the one course
@@ -33,10 +33,9 @@ export function useRenameLibraryLesson(lessonId: number) {
     mutationKey: dataKeys.lessonContentWrite(lessonId),
     mutationFn: async (input: RenameLessonInput) => {
       const res = await patchLesson(lessonId, input);
-      await throwIfWriteFailed(res, failure(res));
+      if (!res.ok) throw new Error(failure(res));
     },
-    onSuccess: (_data, { version }) => settle.saved(version),
-    onError: settle.failed,
+    onSuccess: (_data, { version }) => settle(version),
   });
 }
 

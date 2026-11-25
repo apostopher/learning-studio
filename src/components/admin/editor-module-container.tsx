@@ -126,7 +126,7 @@ export const EditorModuleContainer = ({
               </p>
             ) : (
               <BorrowedLessonList
-                course={{ id: courseId, name: courseName }}
+                ownerName={provenance.ownerName}
                 lessons={mod.lessons}
                 posters={posters}
                 alsoIn={alsoInForModule}

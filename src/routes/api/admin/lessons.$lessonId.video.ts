@@ -10,7 +10,6 @@ import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
-import { orVersionConflict } from '#/lib/version-conflict.server';
 import { PRIMARY_VIDEO_LANG } from '#/lib/video-languages';
 
 /**
@@ -99,10 +98,7 @@ export async function putVideoHandler(
   }
 
   const { provider, ref, version } = parsed.data;
-  const updated = await orVersionConflict(() =>
-    setLessonVideo(lessonId, provider, ref, version),
-  );
-  if (updated instanceof Response) return updated;
+  const updated = await setLessonVideo(lessonId, provider, ref, version);
   if (!updated) return new Response('Not found', { status: 404 });
 
   // Auto-captions for a Mux video. Awaited (a serverless response may end

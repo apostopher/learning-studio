@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SaveLessonMaterialInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
-import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+import { useSettleContentWrite } from './lesson-content-write';
 
 /** Persist edited lesson material, then refetch the material query. */
 export function useSaveLessonMaterial(lessonId: number) {
@@ -17,18 +17,15 @@ export function useSaveLessonMaterial(lessonId: number) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(values),
       });
-      await throwIfWriteFailed(
-        res,
-        `Failed to save lesson material (${res.status})`,
-      );
+      if (!res.ok)
+        throw new Error(`Failed to save lesson material (${res.status})`);
       return res.json();
     },
     onSuccess: (_data, { version }) => {
       queryClient.invalidateQueries({
         queryKey: dataKeys.lessonMaterial(lessonId),
       });
-      settle.saved(version);
+      settle(version);
     },
-    onError: settle.failed,
   });
 }

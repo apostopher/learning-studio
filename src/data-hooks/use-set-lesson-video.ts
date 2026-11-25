@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 // imported directly by its test.
 import type { SetLessonVideoInput } from '#/lib/admin-schemas';
 import { dataKeys } from './keys';
-import { throwIfWriteFailed, useSettleContentWrite } from './version-conflict';
+import { useSettleContentWrite } from './lesson-content-write';
 
 /**
  * Attach a provider video reference to a lesson's working copy, then refetch
@@ -21,10 +21,8 @@ export function useSetLessonVideo(lessonId: number) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
       });
-      await throwIfWriteFailed(
-        res,
-        `Failed to set lesson video (${res.status})`,
-      );
+      if (!res.ok)
+        throw new Error(`Failed to set lesson video (${res.status})`);
     },
     onSuccess: (_data, { version }) => {
       queryClient.invalidateQueries({
@@ -44,8 +42,7 @@ export function useSetLessonVideo(lessonId: number) {
       queryClient.invalidateQueries({
         queryKey: dataKeys.allLessonPosters(),
       });
-      settle.saved(version);
+      settle(version);
     },
-    onError: settle.failed,
   });
 }

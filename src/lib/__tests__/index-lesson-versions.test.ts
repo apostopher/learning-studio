@@ -224,11 +224,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(await found(1, [])).toEqual(['course upload', 'shared upload']);
     });
 
-    it('newest snapshot is the highest by number; none when never taken', async () => {
+    it('newest snapshot is the last one taken, whatever its version; none when never taken', async () => {
       expect(await newestVersionIdForSlug('wx')).toBe(2);
       expect(await newestVersionIdForSlug('brief')).toBe(4);
       expect(await newestVersionIdForSlug('draft')).toBeNull();
       expect(await newestVersionIdForSlug('nope')).toBeNull();
+      const { rows } = await pgDb.pool.query(`insert into lesson_versions
+        (lesson_id, version, name, extra_tab) values (1, '0.5', 'WX', 'testThis') returning id`);
+      expect(await newestVersionIdForSlug('wx')).toBe(rows[0].id);
     });
   },
 );

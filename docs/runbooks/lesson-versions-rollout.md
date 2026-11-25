@@ -1,5 +1,37 @@
 # Lesson versions: rollout
 
+## Update of 2026-11-25: versions become labels
+
+The first rollout (sections 1 and 2) is done. This release goes the other way
+round: **deploy first, then migrate.** The code it replaces needs the index this
+migration drops: migrate first and adding a lesson to a course, or updating one,
+fails until the deploy.
+
+1. Deploy: push `main` and wait for Vercel to say Ready. Until step 2, a course
+   taking a version number used before gets the older content under it, and a
+   lesson removed from a module loses its place and prerequisites. So remove no
+   lessons until then.
+2. Migrate, then index:
+
+   ```
+   ! pnpm db:migrate-lesson-versions
+   ! pnpm db:index-lesson-versions
+   ```
+
+   This is also the second run of section 2, if that is still owed.
+3. Check. Must return one row, without `UNIQUE` in it:
+
+   ```sql
+   select indexdef from pg_indexes
+   where tablename = 'lesson_versions' and indexdef like '%lesson_id, version%';
+   ```
+
+Editor pages left open across the deploy need a refresh. Once
+migrated, the code from before this release cannot add or update lessons in
+courses on this database. Fix forward rather than roll back.
+
+Sections 1 and 2 below are the first rollout, kept for reference.
+
 `.env.local` points at production, so you run every command here yourself, from
 the repo root, as typed. Run the SQL in the production SQL console. All of it
 only reads.
@@ -90,7 +122,8 @@ the file. Never type `DATABASE_URL=` for the real run.
 Pick a quiet time. **From the first migration until the deploy is live, nobody
 edits lessons or courses.** In that gap:
 
-- an edit to a lesson stays out of every course until the lesson goes to 1.1;
+- an edit to a lesson stays out of every course until the lesson's version
+  changes;
 - a lesson added to a course is invisible to learners until the second
   migration;
 - a lesson removed from a course leaves a pin behind (harmless: adding the
@@ -157,7 +190,9 @@ where d.id is null and (coalesce(v.text, '') <> '' or coalesce(v.pro_tips, '') <
 ```
 
 Lessons edited in the gap (name, video, other languages or material). Each
-lesson listed needs a higher version in Disciplines, then its courses updated:
+lesson listed needs a new version in Disciplines, then its courses updated. Only
+useful right after the first rollout: from then on, editing without changing the
+version is allowed, and such lessons are listed too:
 
 ```sql
 select l.slug from lessons l
@@ -170,20 +205,19 @@ where (l.name, l.video_provider, l.video_ref, l.other_video_ids)
   );
 ```
 
-Then click through with one lesson that two courses use. Pick it from a course's
-own module. 3D Airmanship lessons show no course chip in the Knowledge library,
-because their modules are hidden there. Check those on each course's own board
-(the Configure button on its column).
+Then click through with one lesson that two courses each have in a module of
+their own.
 
 1. Knowledge library: every course card shows a green `v1.0`; Disciplines cards
    show a plain one.
-2. Edit the lesson in Disciplines. Under Version: `v1.0 is used by 2 courses.
-   Enter a higher version to make changes.` Change the text and press Save: it
-   is refused and your text stays.
-3. Enter `1.1` and Save. The chips in both courses turn gold.
+2. Edit the lesson in Disciplines and press Save. It saves; the chips stay green.
+3. Enter `1.1` and Save. The chips in both courses turn gold. Enter `1.0` again
+   and Save: green. Back to `1.1`.
 4. Open the lesson as a learner: still the old text.
-5. Click one gold chip, then Update lesson. That course shows the new text, the
-   other the old one.
+5. In one course, remove the lesson and drag it in again from Disciplines. Its
+   chip turns green and that course shows the new text, the other the old one.
+   It is back in its place, with the prerequisites it had.
+   Repeat with a lesson in the 3D Airmanship column: every course updates.
 6. Try to delete the lesson in Disciplines: it names the courses using it.
 7. Ask Viper about the lesson from each course.
 
@@ -191,7 +225,7 @@ because their modules are hidden there. Check those on each course's own board
 
 The old code runs on the migrated database, but:
 
-- it shows the working copy, so every edit made since (1.1 and up) appears in
+- it shows the working copy, so every edit made since appears in
   every course at once;
 - it cannot regenerate debrief key points, because the index it relies on is
   gone. Do not put that index back: lessons may now have several rows;
@@ -206,7 +240,7 @@ Old code is any branch, worktree or preview from before this one. `.env.local`
 is production, so running it locally counts. It:
 
 - wipes a lesson's search rows, for every version, when its material is saved;
-- edits lessons without checking their version;
+- edits lessons without a version;
 - places lessons without pins.
 
 Rebase every open branch and worktree onto `main` before you run it. If old code
@@ -227,14 +261,14 @@ without pins. After it, run:
 ! pnpm db:index-lesson-versions
 ```
 
-- It also edits lessons without checking their version. Courses keep what they
-  had and their chip stays green. Enter a higher version in Disciplines, then
+- It also edits lessons without a version. Courses keep what they
+  had and their chip stays green. Enter another version in Disciplines, then
   update each course.
 - If it puts back a lesson a course used to have, the course may keep its old
-  version. Click its gold chip.
+  version. Remove it and drag it in again.
 
-`! pnpm db:migrate-other-video-ids --write` also edits lessons without checking
-their version. Raise those versions and update their courses.
+`! pnpm db:migrate-other-video-ids --write` also edits lessons without a
+version. Change those versions and update their courses.
 
 `! pnpm db:remix-flagship-everywhere` pins correctly but does not index. After
 it, run `! pnpm db:index-lesson-versions`.

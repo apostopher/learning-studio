@@ -479,7 +479,11 @@ export const lessonsTable = pgTable(
     needsVideoWatch: boolean('needs_video_watch').notNull().default(true),
     /** The working copy's version. Staff-only: never in a learner payload. */
     version: text('version').notNull().default(DEFAULT_LESSON_VERSION),
-    /** Last content edit; `updatedAt` also moves on config edits. Staff-only. */
+    /**
+     * Last content edit; `updatedAt` also moves on config edits. Staff-only.
+     * Kept up, though nothing shows it since the update dialog went
+     * (2026-11-25): for telling whether a lesson was edited under its version.
+     */
     contentUpdatedAt: timestamp('content_updated_at', { mode: 'date' })
       .notNull()
       .defaultNow(),
@@ -553,6 +557,29 @@ export const moduleLessonsTable = pgTable(
     // otherwise be a sequential scan of every placement per lesson delete.
     index('module_lessons_depends_on_idx').using('gin', table.dependsOn),
   ],
+);
+
+/**
+ * What a placement held when its lesson was removed from the module, put back
+ * if the lesson is added to it again. Removing and adding back is how a course
+ * updates a lesson, and must not cost its place or its prerequisites.
+ */
+export const removedPlacementsTable = pgTable(
+  'removed_placements',
+  {
+    moduleId: integer('module_id')
+      .notNull()
+      .references(() => modulesTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    rank: numeric('rank', { precision: 30, scale: 15 }).notNull(),
+    dependsOn: jsonb('depends_on')
+      .$type<z.infer<typeof CourseLessonDependenciesSchema>>()
+      .notNull(),
+    removedAt: timestamp('removed_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.moduleId, table.lessonId] })],
 );
 
 export const dbModuleLessonSchema = createSelectSchema(moduleLessonsTable);
@@ -805,7 +832,8 @@ export const lessonVersionsTable = pgTable(
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('lesson_versions_lesson_version_idx').on(
+    // Not unique: the version is a label an author may use again.
+    index('lesson_versions_lesson_id_version_idx').on(
       table.lessonId,
       table.version,
     ),

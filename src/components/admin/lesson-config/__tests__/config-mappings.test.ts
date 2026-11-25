@@ -25,7 +25,6 @@ const lesson = (over: Partial<BoardLesson> = {}): BoardLesson => ({
   quizQuestionCount: 0,
   version: '1.0',
   disciplineVersion: '1.0',
-  contentUpdatedAt: new Date(0),
   dependsOn: [],
   videoProvider: null,
   videoRef: null,

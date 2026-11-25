@@ -9,7 +9,6 @@ import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
 import { lessonAccess } from './lesson-card-labels';
 import { LessonQuickshotContainer } from './lesson-quickshot-container';
-import { useLessonVersionChip } from './use-lesson-version-chip';
 
 export const SortableLessonCard = ({
   courseId,
@@ -19,7 +18,7 @@ export const SortableLessonCard = ({
   posterUrl,
 }: {
   courseId: number;
-  /** Named by the dialog the version chip opens. */
+  /** Named by the version chip. */
   courseName: string;
   lesson: BoardLesson;
   /** The whole module, not just its id: the padlock depends on what the
@@ -45,10 +44,6 @@ export const SortableLessonCard = ({
   // The same save the quickshot chips use, so the eye, the padlock and the
   // chips share one optimistic cache write and one rollback path.
   const updateConfig = useUpdateLessonConfig(courseId);
-  const version = useLessonVersionChip(
-    { id: courseId, name: courseName },
-    lesson,
-  );
 
   return (
     <div
@@ -91,7 +86,11 @@ export const SortableLessonCard = ({
         quickshotSlot={
           <LessonQuickshotContainer courseId={courseId} lesson={lesson} />
         }
-        version={version}
+        version={{
+          version: lesson.version,
+          disciplineVersion: lesson.disciplineVersion,
+          editedIn: courseName,
+        }}
       />
     </div>
   );

@@ -38,7 +38,6 @@ const lesson = (id: number, name: string): BoardLesson => ({
   quizQuestionCount: 0,
   version: '1.0',
   disciplineVersion: '1.0',
-  contentUpdatedAt: new Date(0),
   dependsOn: [],
   videoProvider: null,
   videoRef: null,
@@ -166,9 +165,6 @@ const libraryLesson = (
   courseCount: 0,
   courseIds: [],
   version: '1.0',
-  highestTaken: null,
-  versionCourseCount: 0,
-  contentUpdatedAt: new Date(0),
   videoProvider: null,
   disciplineModuleId,
   levels: [],
@@ -788,7 +784,18 @@ describe('resolveDrop — borrowed modules', () => {
     });
   });
 
-  it('points at no column for the flagship, which has none', () => {
+  it('adds a library lesson to a module in the flagship column', () => {
+    expect(
+      resolveDrop(
+        remixBoard,
+        libraryLessonDndId(WAKE_TURBULENCE),
+        containerDndId(6, 10),
+        null,
+      ),
+    ).toMatchObject({ kind: 'link', moduleId: 10 });
+  });
+
+  it('points at the flagship column too', () => {
     const [ownerBoard, viewing] = remixBoard;
     const flagship = {
       ...ownerBoard,
@@ -803,7 +810,7 @@ describe('resolveDrop — borrowed modules', () => {
     ).toEqual({
       kind: 'forbidden',
       reason:
-        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Drop the lesson on one of ITPS’s own modules.',
+        '"Weather" is edited in 3D Airmanship — ITPS only borrows it. Add the lesson to it in the 3D Airmanship column, or drop it on one of ITPS’s own modules.',
     });
   });
 

@@ -92,8 +92,7 @@ export async function getLessonMaterialByLessonId(lessonId: number): Promise<{
  * lessonMaterialTable has no such column. Of `jobOfTheDay` / `testThis` only
  * the one this lesson's discipline shows is written; the other is nulled, so
  * an imported doc carrying both can never leave data no tab displays.
- * Returns the saved row, or null when the lesson id doesn't exist. Throws
- * `VersionEditError` when the lesson's version refuses the edit.
+ * Returns the saved row, or null when the lesson id doesn't exist.
  */
 export async function upsertLessonMaterial(
   lessonId: number,

@@ -11,6 +11,7 @@ import {
 } from 'vitest';
 import type { KnowledgeChunk } from '#/lib/debrief-mastery';
 import { type FreshDb, freshDb } from './support/local-pg';
+import { retakeLesson } from './support/retake-lesson';
 
 const h = vi.hoisted(() => {
   /** Redis: only claims matter here. */
@@ -98,7 +99,6 @@ const { getDebriefAttemptReports, getDebriefFacts } = await import(
 const { findRecentDebriefGaps } = await import('../debrief-gaps');
 const { nextChunkVersion, selectLessonChunks, upsertLessonChunks } =
   await import('../knowledge-chunks');
-const { updateCourseLessonVersion } = await import('../lesson-versions');
 const { ensureLessonChunks } = await import('#/lib/knowledge-chunks.server');
 const { prepareDebrief, preparedFingerprint, takePreparedDebrief } =
   await import('#/lib/prepared-debrief.server');
@@ -224,8 +224,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         chunks: kp(version),
         previousMapping: null,
       });
-    const updateCourseOne = () =>
-      updateCourseLessonVersion({ courseId: 1, lessonId: 1, toVersion: '1.2' });
+    const updateCourseOne = () => retakeLesson(pgDb.db, 1, 1);
     const lessonOf = async (slug: string, lessonId: number) =>
       (await getCourseProgress({ userId: 'u1', slug })).lessons.find(
         (l) => l.lessonId === lessonId,
@@ -434,7 +433,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         mastery: null,
       });
 
-      expect(await updateCourseOne()).toMatchObject({ ok: true });
+      await updateCourseOne();
       // The clock, the completion and the passes are the lesson's.
       expect(await facts('u1')).toEqual({ ...before, mastery: null });
       expect(await lessonOf('one', 1)).toMatchObject({
@@ -917,6 +916,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         );
         await query(
           `update courses set pass_mark = 75;
+           -- Only a 3D Airmanship lesson counts towards a level.
+           update disciplines set slug = '3d-airmanship';
            update lessons set levels = '{none}';
            update lessons set levels = '{basic}' where id = 1;
            update lessons set levels = '{intermediate}' where id = 2;

@@ -50,7 +50,6 @@ const { getCourseBoard, getCourseLessonPosters, resolveLessonPlayback } =
 const { getOrgEditorBoard, getOrgLibrary } = await import('../editor');
 const { getDisciplineLessonPosters } = await import('../library-posters');
 const { createLibraryLesson } = await import('../library-lessons');
-const { countCoursesOnVersion } = await import('../lesson-versions');
 
 const quiz = (n: number) =>
   JSON.stringify(Array.from({ length: n }, (_, id) => ({ id })));
@@ -62,7 +61,7 @@ const alternate = (ref: string) =>
  * module 3 (lesson `a` only). Courses 3 and 4 hold pins left behind: course 3
  * of `c`, course 4, which shows nothing, of `a` and `c`.
  *
- * Lesson `a`: course 1 on 1.9, courses 2 and 3 on 1.10 (the highest taken),
+ * Lesson `a`: course 1 on 1.9, courses 2 and 3 on 1.10,
  * the working copy at 1.11. Course 1 shows it twice, course 2 once.
  * Lesson `b`: frozen with no video and no material; the working copy has both.
  * Lesson `c`: the reverse.
@@ -160,10 +159,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         ['b', 'B one', null, false, 0, '1.0', '1.1'],
         ['c', 'C taken', null, false, 0, '1.1', '1.1'],
       ]);
-      // The working copy's edit date, surviving the wire.
-      expect(
-        boardLessonSchema.parse(wire(m1[0])).contentUpdatedAt.toISOString(),
-      ).toBe('2026-11-24T09:38:00.000Z');
     });
 
     it('a lesson a course shows twice appears once per placement, not multiplied', async () => {
@@ -283,49 +278,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         libraryLessonSchema.parse(wire(l)),
       );
 
-    it('library reports highestTaken by number, 1.10 over 1.9', async () => {
-      expect(
-        (await libraryLessons()).map((l) => [
-          l.name,
-          l.version,
-          l.highestTaken,
-          l.contentUpdatedAt.toISOString(),
-        ]),
-      ).toEqual([
-        ['A working', '1.11', '1.10', '2026-11-24T09:38:00.000Z'],
-        ['B working', '1.1', '1.0', '2026-11-23T10:00:00.000Z'],
-        ['C working', '1.1', '1.1', '2026-11-22T10:00:00.000Z'],
-        ['D working', '1.0', null, '2026-11-21T10:00:00.000Z'],
-        ['E working', '1.0', null, '2026-11-20T10:00:00.000Z'],
+    it('library reports the version of the working copy', async () => {
+      expect((await libraryLessons()).map((l) => [l.name, l.version])).toEqual([
+        ['A working', '1.11'],
+        ['B working', '1.1'],
+        ['C working', '1.1'],
+        ['D working', '1.0'],
+        ['E working', '1.0'],
       ]);
     });
 
-    it('library counts the courses on exactly the current version', async () => {
-      const counts = async () =>
-        (await libraryLessons()).map((l) => [
-          l.slug,
-          l.versionCourseCount,
-          l.courseCount,
-        ]);
-      expect(await counts()).toEqual([
-        ['a', 0, 3],
-        ['b', 0, 2],
-        ['c', 1, 2], // course 2; courses 3 and 4 no longer show it
-        ['d', 0, 1],
-        ['e', 0, 0],
-      ]);
-
-      // Course 1 shows `a` twice and still counts once.
-      await pgDb.pool.query(`update lessons set version = '1.9' where id = 1`);
-      expect((await counts())[0]).toEqual(['a', 1, 3]);
-      await pgDb.pool.query(`update lessons set version = '1.10' where id = 1`);
-      expect((await counts())[0]).toEqual(['a', 2, 3]);
-      // The number the locked message says.
-      expect(await countCoursesOnVersion(1, '1.10')).toBe(2);
-      expect(await countCoursesOnVersion(1, '1.9')).toBe(1);
-    });
-
-    it('a new library lesson starts at 1.0, taken by nobody', async () => {
+    it('a new library lesson starts at 1.0', async () => {
       const created = libraryLessonSchema.parse(
         wire(
           await createLibraryLesson({ orgId: 1, disciplineId: 1, name: 'F' }),
@@ -334,11 +297,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(created).toEqual(
         (await libraryLessons()).find((l) => l.id === created.id),
       );
-      expect([
-        created.version,
-        created.highestTaken,
-        created.versionCourseCount,
-      ]).toEqual(['1.0', null, 0]);
+      expect(created.version).toBe('1.0');
     });
   },
 );
