@@ -436,12 +436,18 @@ function moduleForLibraryTarget(
   return null;
 }
 
-/** Whether any module of this course already teaches the lesson. */
-function courseTeaches(
+/**
+ * The module already teaching the lesson in this column, among those it draws
+ * (`railModules`). The flagship's hidden ones do not count, as on the server:
+ * a refusal would point at a lesson nobody can see or take out.
+ */
+function teachingModule(
+  board: OrgEditorBoard,
   courseBoard: EditorCourseBoard,
   lessonId: number,
-): boolean {
-  return courseBoard.modules.some((m) =>
+): EditorBoardModule | undefined {
+  const flagshipId = findFlagshipCourse(board)?.id ?? null;
+  return railModules(courseBoard, flagshipId).find((m) =>
     m.lessons.some((l) => l.id === lessonId),
   );
 }
@@ -668,12 +674,11 @@ export function resolveDrop(
     if (over.type === 'course') {
       const courseBoard = findCourse(board, over.id);
       if (!courseBoard) return null;
-      // Checked first: a course whose only modules are borrowed (hidden from
-      // the rail) may already teach this lesson through one of them.
-      if (courseTeaches(courseBoard, active.id)) {
+      const teaching = teachingModule(board, courseBoard, active.id);
+      if (teaching) {
         return {
           kind: 'forbidden',
-          reason: `${courseBoard.course.name} already teaches this lesson.`,
+          reason: `${courseBoard.course.name} already teaches this lesson, in "${teaching.name}".`,
         };
       }
       // Off the modules, the lesson gets one of its own: named after its
@@ -696,10 +701,11 @@ export function resolveDrop(
 
     const to = resolveOverModule(board, overId);
     if (!to) return null;
-    if (courseTeaches(to.courseBoard, active.id)) {
+    const teaching = teachingModule(board, to.courseBoard, active.id);
+    if (teaching) {
       return {
         kind: 'forbidden',
-        reason: `${to.courseBoard.course.name} already teaches this lesson. Drag the copy that is already in ${to.courseBoard.course.name} to move it between that course's modules.`,
+        reason: `${to.courseBoard.course.name} already teaches this lesson, in "${teaching.name}". Drag it from there to move it between that course's modules.`,
       };
     }
     // Content authority follows the owner: linking a lesson into a borrowed

@@ -73,6 +73,8 @@ vi.mock('#/db/course-cache', () => ({ invalidateCourseDetailsCache }));
  * runs, and the assertions read which courses and lessons it was run for.
  */
 const lessonVersions = vi.hoisted(() => ({
+  lessonsOnRail: vi.fn(async () => new Set<number>()),
+  releaseHiddenPins: vi.fn(),
   lockModuleOwner: vi.fn(),
   getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
     moduleId * 10,
@@ -174,8 +176,7 @@ describe('linkLesson', () => {
   });
 
   it('refuses a second placement in a course that already teaches the lesson', async () => {
-    // The lesson is already in course 3; the target module is also course 3.
-    db.select.mockReturnValueOnce(makeChain([{ courseId: 3 }]));
+    lessonVersions.lessonsOnRail.mockResolvedValueOnce(new Set([9]));
 
     const result = await linkLesson({
       moduleId: 40,
@@ -185,11 +186,13 @@ describe('linkLesson', () => {
     });
 
     expect(result).toBe('duplicate');
+    // The course owning the module, not the module's id.
+    expect(lessonVersions.lessonsOnRail).toHaveBeenCalledWith(db, 3, [9]);
+    expect(lessonVersions.releaseHiddenPins).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
   });
 
   it('inserts a placement carrying the right module, lesson and rank', async () => {
-    db.select.mockReturnValueOnce(makeChain([{ courseId: 7 }]));
     const returning = vi
       .fn()
       .mockResolvedValue([

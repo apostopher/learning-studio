@@ -427,7 +427,7 @@ describe('resolveDrop — the refusals, each stating its reason', () => {
   });
 
   it('refuses a library lesson a course already teaches, saying it is already there', () => {
-    // Mutant seen RED: the `courseTeaches` guard dropped, so the drop
+    // Mutant seen RED: the `teachingModule` guard dropped, so the drop
     // resolves to a `link` and the admin only learns it was impossible when
     // the server answers 409.
     const result = resolveDrop(
@@ -545,26 +545,54 @@ describe('resolveDrop — dropping on a course column itself', () => {
     });
   });
 
-  it('refuses a lesson the course already teaches through a hidden module', () => {
-    const teaching: OrgEditorBoard = [
+  /** Course 3 holds L1 only in a module of course 6, plus an empty own one. */
+  const holding = (flagshipSlug: string): OrgEditorBoard => {
+    const FLAGSHIP = { id: 6, name: '3D Airmanship' };
+    const flagship = courseBoard(6, FLAGSHIP.name, []);
+    return [
+      { ...flagship, course: { ...flagship.course, slug: flagshipSlug } },
       courseBoard(3, 'Weekend Refresher', [
-        mod(70, 'Upset Recovery', [lesson(L1, 'L1')], {
-          id: 6,
-          name: '3D Airmanship',
-        }),
+        mod(70, 'Upset Recovery', [lesson(L1, 'L1')], FLAGSHIP),
+        mod(71, 'Own', [], { id: 3, name: 'Weekend Refresher' }),
       ]),
     ];
-    expect(
-      resolveDrop(
-        teaching,
-        libraryLessonDndId(L1),
-        courseDndId(3),
-        undefined,
-        libraryFixture(),
-      ),
-    ).toEqual({
+  };
+  const dropL1 = (on: OrgEditorBoard, overId: string) =>
+    resolveDrop(
+      on,
+      libraryLessonDndId(L1),
+      overId,
+      undefined,
+      libraryFixture(),
+    );
+
+  it('takes a lesson the course only has in modules the rail hides', () => {
+    const hidden = holding(FLAGSHIP_COURSE_SLUG);
+    expect(dropL1(hidden, courseDndId(3))).toEqual({
+      kind: 'copy-module',
+      courseId: 3,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: null,
+      onlyLessonId: L1,
+    });
+    expect(dropL1(hidden, containerDndId(3, 71))).toEqual({
+      kind: 'link',
+      moduleId: 71,
+      lessonId: L1,
+    });
+  });
+
+  it('refuses one in a module the rail shows, naming the module', () => {
+    const shown = holding('another-course');
+    expect(dropL1(shown, courseDndId(3))).toEqual({
       kind: 'forbidden',
-      reason: 'Weekend Refresher already teaches this lesson.',
+      reason:
+        'Weekend Refresher already teaches this lesson, in "Upset Recovery".',
+    });
+    expect(dropL1(shown, containerDndId(3, 71))).toEqual({
+      kind: 'forbidden',
+      reason:
+        'Weekend Refresher already teaches this lesson, in "Upset Recovery". Drag it from there to move it between that course\'s modules.',
     });
   });
 

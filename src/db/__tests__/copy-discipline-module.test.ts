@@ -50,7 +50,6 @@ const fake = vi.hoisted(() => {
     db,
     createModule: vi.fn(),
     reorderModule: vi.fn(),
-    getCourseIdsForLessons: vi.fn(),
     getCourseSlugsForModuleId: vi.fn(),
     lessonBelongsToCourseOrg: vi.fn(),
     invalidateCourseDetailsCache: vi.fn(),
@@ -62,6 +61,8 @@ vi.mock('#/db', () => ({ db: fake.db }));
  * runs, and the assertions read which courses and lessons it was run for.
  */
 const lessonVersions = vi.hoisted(() => ({
+  lessonsOnRail: vi.fn(async () => new Set<number>()),
+  releaseHiddenPins: vi.fn(),
   lockModuleOwner: vi.fn(),
   getCourseIdsShowingModule: vi.fn(async (_tx: unknown, moduleId: number) => [
     5,
@@ -79,9 +80,6 @@ vi.mock('#/db/lesson-versions', () => lessonVersions);
 vi.mock('#/db/admin', () => ({
   createModule: fake.createModule,
   reorderModule: fake.reorderModule,
-}));
-vi.mock('#/db/placements', () => ({
-  getCourseIdsForLessons: fake.getCourseIdsForLessons,
 }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugsForModuleId: fake.getCourseSlugsForModuleId,
@@ -106,7 +104,7 @@ beforeEach(() => {
     rank: 9,
   });
   fake.reorderModule.mockResolvedValue({ id: NEW_MODULE, rank: 2.5 });
-  fake.getCourseIdsForLessons.mockResolvedValue(new Map());
+  lessonVersions.lessonsOnRail.mockResolvedValue(new Set());
   fake.getCourseSlugsForModuleId.mockResolvedValue(['two-week']);
 });
 
@@ -164,7 +162,7 @@ describe('copyDisciplineModuleIntoCourse', () => {
         { id: 13, name: 'New', libraryRank: '2' },
       ],
     ];
-    fake.getCourseIdsForLessons.mockResolvedValue(new Map([[12, [3, COURSE]]]));
+    lessonVersions.lessonsOnRail.mockResolvedValue(new Set([12]));
 
     const result = await copyDisciplineModuleIntoCourse({
       courseId: COURSE,
@@ -175,6 +173,17 @@ describe('copyDisciplineModuleIntoCourse', () => {
     expect(fake.state.inserts).toEqual([
       [{ moduleId: NEW_MODULE, lessonId: 13, rank: '1', dependsOn: [] }],
     ]);
+    expect(lessonVersions.lessonsOnRail).toHaveBeenCalledWith(
+      fake.db,
+      COURSE,
+      [12, 13],
+    );
+    // Only what is placed is updated: the skipped one keeps its version.
+    expect(lessonVersions.releaseHiddenPins).toHaveBeenCalledWith(
+      fake.db,
+      NEW_MODULE,
+      [13],
+    );
     expect(result).toMatchObject({ skipped: [{ id: 12, name: 'Taught' }] });
     expect(result).toMatchObject({ placedLessonIds: [13] });
   });
@@ -296,7 +305,7 @@ describe('copyDisciplineModuleIntoCourse', () => {
       [{ id: 7, name: 'Basics' }],
       [{ id: 13, name: 'Second', libraryRank: '2' }],
     ];
-    fake.getCourseIdsForLessons.mockResolvedValue(new Map([[13, [COURSE]]]));
+    lessonVersions.lessonsOnRail.mockResolvedValue(new Set([13]));
 
     expect(
       await copyDisciplineModuleIntoCourse({

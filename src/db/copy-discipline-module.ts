@@ -9,9 +9,10 @@ import {
 import {
   changeMembership,
   getCourseIdsShowingModule,
+  lessonsOnRail,
   lockModuleOwner,
+  releaseHiddenPins,
 } from '#/db/lesson-versions';
-import { getCourseIdsForLessons } from '#/db/placements';
 import {
   courseModulesTable,
   courseOrgsTable,
@@ -28,9 +29,8 @@ export interface CopiedModule {
   /** Lessons placed in the new module, in library order. */
   placedLessonIds: number[];
   /**
-   * Lessons the course already teaches, left where they are: a course may
-   * teach a lesson once (`linkLesson`'s 'duplicate'), and that rule holds here
-   * too. Named so the admin is told exactly which ones did not come along.
+   * Lessons the course already teaches where the rail shows them, left where
+   * they are: `linkLesson`'s 'duplicate' holds here too. Named so the admin is told exactly which ones did not come along.
    */
   skipped: { id: number; name: string }[];
   /** Snapshots taken for the placed lessons, for the caller to index. */
@@ -139,14 +139,15 @@ export async function copyDisciplineModuleIntoCourse(
     }))
     .sort(byLibraryOrder);
 
-  // Membership, not ownership — the same test `linkLesson` applies, so a
-  // lesson the course shows through a borrowed module counts as taught.
-  const teaching = await getCourseIdsForLessons(lessons.map((l) => l.id));
-  const taught = (id: number) =>
-    (teaching.get(id) ?? []).includes(input.courseId);
-  const toPlace = lessons.filter((l) => !taught(l.id));
+  // The same test `linkLesson` applies.
+  const taught = await lessonsOnRail(
+    db,
+    input.courseId,
+    lessons.map((l) => l.id),
+  );
+  const toPlace = lessons.filter((l) => !taught.has(l.id));
   const skipped = lessons
-    .filter((l) => taught(l.id))
+    .filter((l) => taught.has(l.id))
     .map((l) => ({ id: l.id, name: l.name }));
   // The module exists only for this lesson: without it, an empty one.
   if (input.onlyLessonId !== undefined && toPlace.length === 0)
@@ -195,15 +196,21 @@ export async function copyDisciplineModuleIntoCourse(
           courseIds: await getCourseIdsShowingModule(tx, module.id),
           lessonIds: toPlace.map((l) => l.id),
         },
-        () =>
-          tx.insert(moduleLessonsTable).values(
+        async () => {
+          await releaseHiddenPins(
+            tx,
+            module.id,
+            toPlace.map((l) => l.id),
+          );
+          await tx.insert(moduleLessonsTable).values(
             toPlace.map((lesson, i) => ({
               moduleId: module.id,
               lessonId: lesson.id,
               rank: String(i + 1),
               dependsOn: [],
             })),
-          ),
+          );
+        },
       );
     }));
     // Every course showing the module — the owner and any course remixing

@@ -4,15 +4,11 @@ import {
   type CopyDisciplineModuleInput,
   copiedModuleSchema,
 } from '#/lib/admin-schemas';
-import { dataKeys } from './keys';
+import { invalidateCourseLessons } from './invalidate-course-lessons';
 
 /**
  * Copy a library (discipline) module, or one lesson of it, into a course as a
  * new module — the editor's drag of either onto a course column.
- *
- * Invalidates the editor board (the new module), every per-course board
- * (the same prefix `useLinkLesson` uses, for the same stale-30s reason) and
- * the library (each placed lesson's "in N courses" count just went up).
  */
 export function useCopyLibraryModule() {
   const queryClient = useQueryClient();
@@ -37,10 +33,6 @@ export function useCopyLibraryModule() {
       if (!res.ok) throw new Error(`Failed to add the module (${res.status})`);
       return copiedModuleSchema.parse(await res.json());
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: dataKeys.editorBoard() });
-      queryClient.invalidateQueries({ queryKey: dataKeys.courseBoards() });
-      queryClient.invalidateQueries({ queryKey: dataKeys.orgLibrary() });
-    },
+    onSuccess: () => invalidateCourseLessons(queryClient),
   });
 }

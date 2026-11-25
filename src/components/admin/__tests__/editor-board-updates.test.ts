@@ -14,7 +14,7 @@ import {
   libraryUntitledDndId,
   UNTITLED_DISCIPLINE_ID,
 } from '#/lib/dnd-ids';
-import { railModules } from '#/lib/flagship-course';
+import { FLAGSHIP_COURSE_SLUG, railModules } from '#/lib/flagship-course';
 import {
   boardLessonFromLibrary,
   commitTransferredLesson,
@@ -254,6 +254,36 @@ describe('a lesson two courses have on different versions', () => {
       [['As library has it', '1.2']],
       [['As two has it', '1.1']],
     ]);
+  });
+
+  it('a column that only has it in hidden flagship modules takes the new version', () => {
+    const [own, borrower] = board();
+    const flagship = {
+      ...own,
+      course: { ...own.course, slug: FLAGSHIP_COURSE_SLUG },
+      modules: [
+        {
+          ...mod(10, [], { id: own.course.id, name: own.course.name }),
+          lessons: [named('one', '1.0')],
+        },
+      ],
+    };
+    const hidden = { ...flagship.modules[0], lessons: [named('two', '1.1')] };
+    const next = linkLessonOnBoard(
+      [
+        flagship,
+        {
+          ...borrower,
+          modules: [
+            hidden,
+            mod(20, [], { id: borrower.course.id, name: borrower.course.name }),
+          ],
+        },
+      ],
+      { ...named('library', '1.2') },
+      20,
+    );
+    expect(cardsIn(next, 20)[1]).toEqual([['As library has it', '1.2']]);
   });
 
   it('finds the card of the course named', () => {

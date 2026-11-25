@@ -391,6 +391,90 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ]);
     });
 
+    describe('a lesson also in the 3D Airmanship modules the rail hides', () => {
+      /** Course 2 has lesson 1 in M3 and, hidden, in the flagship's M1. */
+      beforeEach(async () => {
+        await pgDb.pool.query(
+          `update courses set slug = '3d-airmanship' where id = 1`,
+        );
+        await link(3, 1);
+        await link(1, 1);
+        await bump(1, '2.0');
+      });
+      const copy = (input: {
+        disciplineModuleId: number | null;
+        onlyLessonId?: number;
+      }) =>
+        copyDisciplineModuleIntoCourse({
+          courseId: 2,
+          afterModuleId: null,
+          ...input,
+        });
+      const updated = ['course 1: lesson 1 1.0', 'course 2: lesson 1 2.0'];
+
+      it('removed and added back, is there and takes the CURRENT version', async () => {
+        await unlinkLesson(3, 1);
+        expect(await link(3, 1)).toMatchObject({
+          moduleId: 3,
+          lessonId: 1,
+          createdVersionIds: [(await versionIds()).at(-1)],
+        });
+        expect(await pins()).toEqual(updated);
+        expect(await unpinned()).toEqual([]);
+      });
+
+      it('comes back as a module of its own after its module is deleted', async () => {
+        await deleteModule(3);
+        expect(
+          await copy({ disciplineModuleId: null, onlyLessonId: 1 }),
+        ).toMatchObject({ placedLessonIds: [1], skipped: [] });
+        expect(await pins()).toEqual(updated);
+      });
+
+      it('comes back with its whole library module', async () => {
+        await pgDb.pool.query(
+          'update lessons set discipline_module_id = 1, discipline_id = 2 where id = 1',
+        );
+        await deleteModule(3);
+        const copied = await copy({ disciplineModuleId: 1 });
+        expect(copied).toMatchObject({ skipped: [] });
+        expect(
+          (copied as { placedLessonIds: number[] }).placedLessonIds,
+        ).toContain(1);
+        expect(await pins()).toContain('course 2: lesson 1 2.0');
+      });
+
+      it('is still refused while the course has it where the rail shows it, and keeps its version', async () => {
+        expect(await link(3, 1)).toBe('duplicate');
+        expect(await copy({ disciplineModuleId: null, onlyLessonId: 1 })).toBe(
+          'duplicate',
+        );
+        expect(await pins()).toEqual([
+          'course 1: lesson 1 1.0',
+          'course 2: lesson 1 1.0',
+        ]);
+      });
+
+      it('is refused twice in 3D Airmanship itself', async () => {
+        expect(await link(2, 1)).toBe('duplicate');
+      });
+
+      it('updated in 3D Airmanship, leaves a course with its own copy on its version', async () => {
+        await unlinkLesson(1, 1);
+        await link(1, 1);
+        expect(await pins()).toEqual([
+          'course 1: lesson 1 2.0',
+          'course 2: lesson 1 1.0',
+        ]);
+      });
+
+      it('a borrowed module of any OTHER course still counts: the rail shows it', async () => {
+        await pgDb.pool.query(`update courses set slug = 'one' where id = 1`);
+        await unlinkLesson(3, 1);
+        expect(await link(3, 1)).toBe('duplicate');
+      });
+    });
+
     it('unlinking from one of two modules keeps the pin', async () => {
       // Course 2 shows lesson 1 in its own module and in a borrowed one.
       await link(3, 1);

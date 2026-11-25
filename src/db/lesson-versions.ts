@@ -1,4 +1,4 @@
-import { asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   pinLessons,
@@ -9,7 +9,9 @@ import {
   courseModulesTable,
   coursesTable,
   moduleLessonsTable,
+  modulesTable,
 } from '#/db/schema';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 
 /**
  * Snapshots (`lesson_versions`) and pins (`course_lesson_versions`). The app
@@ -143,6 +145,60 @@ export async function changeMembership<T>(
   const result = await write();
   const { createdVersionIds } = await syncCourseLessonVersions(tx, courseIds);
   return { result, createdVersionIds };
+}
+
+/**
+ * Which of these lessons the course has where the editor's rail shows them: in
+ * any module except one borrowed from the flagship (`railModules`). Those do
+ * not stop a lesson being added. Nobody sees them there to take it out of, and
+ * every course has all of them.
+ */
+export async function lessonsOnRail(
+  ex: Executor,
+  courseId: number,
+  lessonIds: number[],
+): Promise<Set<number>> {
+  if (lessonIds.length === 0) return new Set();
+  const rows = await ex
+    .selectDistinct({ lessonId: moduleLessonsTable.lessonId })
+    .from(moduleLessonsTable)
+    .innerJoin(
+      courseModulesTable,
+      eq(courseModulesTable.moduleId, moduleLessonsTable.moduleId),
+    )
+    .innerJoin(modulesTable, eq(modulesTable.id, moduleLessonsTable.moduleId))
+    .innerJoin(coursesTable, eq(coursesTable.id, modulesTable.courseId))
+    .where(
+      and(
+        eq(courseModulesTable.courseId, courseId),
+        inArray(moduleLessonsTable.lessonId, lessonIds),
+        or(
+          eq(coursesTable.id, courseId),
+          ne(coursesTable.slug, FLAGSHIP_COURSE_SLUG),
+        ),
+      ),
+    );
+  return new Set(rows.map((r) => r.lessonId));
+}
+
+/**
+ * Have the courses showing `moduleId` take the working copy of lessons about to
+ * be placed in it: a lesson in hidden flagship modules kept its pin when it was
+ * removed, and would come back on its old version. Where the rail shows it, the
+ * pin stays. Call it inside `changeMembership`'s write, which pins afresh.
+ */
+export async function releaseHiddenPins(
+  tx: Tx,
+  moduleId: number,
+  lessonIds: number[],
+): Promise<void> {
+  for (const courseId of await getCourseIdsShowingModule(tx, moduleId)) {
+    const kept = await lessonsOnRail(tx, courseId, lessonIds);
+    const released = lessonIds.filter((id) => !kept.has(id));
+    if (released.length === 0) continue;
+    await tx.execute(sql`delete from "course_lesson_versions"
+      where "course_id" = ${courseId} and "lesson_id" in ${released}`);
+  }
 }
 
 export async function getCourseIdsShowingModule(

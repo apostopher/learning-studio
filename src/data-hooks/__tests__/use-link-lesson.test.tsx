@@ -4,7 +4,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dataKeys } from '#/data-hooks/keys';
+import { useCopyLibraryModule } from '#/data-hooks/use-copy-library-module';
+import { useDeleteModule } from '#/data-hooks/use-delete-module';
 import { useLinkLesson } from '#/data-hooks/use-link-lesson';
+import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
 import { queryKeys } from '#/hooks/data/keys';
 
 function makeHarness() {
@@ -18,6 +21,68 @@ function makeHarness() {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+/** The copy's body, cut to what its schema needs. */
+const COPIED = {
+  module: {
+    id: 3,
+    name: 'Approaches',
+    slug: 'approaches',
+    rank: 1,
+    requiredSubscriptions: [],
+    sequentialLessons: false,
+    imageUrlAvif: null,
+    imageUrlWebp: null,
+    dependsOn: [],
+    learnerCount: 0,
+    owner: { id: 4, name: 'Course' },
+    otherCourseCount: 0,
+    lessons: [],
+  },
+  placedLessonIds: [9],
+  skipped: [],
+};
+
+/**
+ * Removing a lesson and adding it back is how a course updates it, and each
+ * half can be done by the lesson or by its module: whichever way, the person
+ * doing it must not go on seeing the old lesson in the same tab.
+ */
+describe('every way a lesson leaves or joins a course', () => {
+  it.each([
+    ['useLinkLesson', () => useLinkLesson(), { moduleId: 40, lessonId: 9 }],
+    ['useUnlinkLesson', () => useUnlinkLesson(), { moduleId: 40, lessonId: 9 }],
+    ['useDeleteModule', () => useDeleteModule(4), 40],
+    [
+      'useCopyLibraryModule',
+      () => useCopyLibraryModule(),
+      { courseId: 4, disciplineModuleId: 7, afterModuleId: null },
+    ],
+  ] as const)('%s refreshes the learner pages', async (_name, useHook, vars) => {
+    const { client, wrapper } = makeHarness();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(COPIED), { status: 200 }),
+    );
+    const shown = [
+      [...dataKeys.allLessonPosters(), 4],
+      [...queryKeys.allCourseDetails(), 'itps'],
+      [...queryKeys.allLessonMaterials(), 'itps', 'wx'],
+      [...queryKeys.allLessonPlaybacks(), 'itps', 'wx'],
+      [...dataKeys.allCourseProgressSummaries(), 'itps'],
+    ];
+    for (const key of shown) client.setQueryData(key, {});
+    const { result } = renderHook(
+      useHook as () => { mutateAsync: (v: unknown) => Promise<unknown> },
+      { wrapper },
+    );
+    await act(async () => {
+      await result.current.mutateAsync(vars);
+    });
+    for (const key of shown) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+});
 
 describe('useLinkLesson', () => {
   it('POSTs lessonId to the module lessons route', async () => {

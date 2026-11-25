@@ -8,6 +8,7 @@ import type {
   OrgLibrary,
 } from '#/lib/admin-schemas';
 import { parseDndId } from '#/lib/dnd-ids';
+import { findFlagshipCourse, railModules } from '#/lib/flagship-course';
 
 /**
  * The optimistic cache edits behind the editor's drags, kept pure and out of
@@ -154,13 +155,19 @@ export function linkLessonOnBoard(
 ): OrgEditorBoard {
   const target = allModules(board).find((m) => m.id === targetModuleId);
   if (!target) return board;
+  const flagshipId = findFlagshipCourse(board)?.id ?? null;
+  const drawn = board.map((cb) => ({
+    ...cb,
+    modules: railModules(cb, flagshipId),
+  }));
   // Appended, never inserted at the pointer's slot: the link route places the
   // lesson last (it takes no neighbours), so guessing a middle slot here would
   // show the admin a position the refetch is about to take away.
   return insertAt(
     board,
-    // A column already showing it in another module stays on its version.
-    (courseId) => findBoardLesson(board, courseId, lesson.id) ?? lesson,
+    // A column already drawing it in another module stays on its version. One
+    // that only has it in hidden flagship modules takes the new one.
+    (courseId) => findBoardLesson(drawn, courseId, lesson.id) ?? lesson,
     targetModuleId,
     target.lessons.length,
   );

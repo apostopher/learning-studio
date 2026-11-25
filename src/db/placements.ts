@@ -10,7 +10,9 @@ import {
 import {
   changeMembership,
   getCourseIdsShowingModule,
+  lessonsOnRail,
   lockModuleOwner,
+  releaseHiddenPins,
   type Tx,
 } from '#/db/lesson-versions';
 import {
@@ -228,9 +230,8 @@ function toPlacement(row: {
  *
  * Returns `null` when `moduleId` doesn't resolve to a course — the module
  * doesn't exist. Returns `'duplicate'` when it does, but the target course
- * already teaches this lesson: one placement per course keeps completion
- * unambiguous, and the caller turns this into an explanation rather than an
- * error. These two must stay distinguishable: Task 9 maps `null` to a 404
+ * already teaches this lesson where the rail shows it (`lessonsOnRail`): the
+ * caller turns this into an explanation rather than an error. These two must stay distinguishable: Task 9 maps `null` to a 404
  * ("no such module") and `'duplicate'` to a 409 ("already in this course") —
  * collapsing them back into one sentinel would report 409 for a dangling
  * module id, which is a lie.
@@ -272,8 +273,10 @@ export async function linkLesson(input: {
           lessonIds: [input.lessonId],
         },
         async () => {
-          const existing = await getCourseIdsForLesson(input.lessonId, tx);
-          if (existing.includes(targetCourseId)) return 'duplicate' as const;
+          const shown = await lessonsOnRail(tx, targetCourseId, [
+            input.lessonId,
+          ]);
+          if (shown.has(input.lessonId)) return 'duplicate' as const;
           // Again, under the lesson's lock: it may have been deleted while
           // this waited for it.
           if (
@@ -286,6 +289,7 @@ export async function linkLesson(input: {
             return 'foreign-lesson' as const;
           }
 
+          await releaseHiddenPins(tx, input.moduleId, [input.lessonId]);
           const before = await takeRemovedPlacement(
             tx,
             input.moduleId,
