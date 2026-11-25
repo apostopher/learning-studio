@@ -15,12 +15,14 @@ import {
   releaseHiddenPins,
   type Tx,
 } from '#/db/lesson-versions';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   rememberPlacement,
   takeRemovedPlacement,
 } from '#/db/removed-placements';
 import {
   courseModulesTable,
+  lessonsTable,
   moduleLessonsTable,
   modulesTable,
 } from '#/db/schema';
@@ -36,7 +38,8 @@ export type Placement = {
 };
 
 /**
- * Every placement in a course, across all its modules, in rank order.
+ * Every placement in a course, across all its modules, in rank order, with
+ * whether the course's learners see it.
  *
  * "Its modules" means the ones `course_modules` places in it — the single
  * definition of membership (`courseModuleIds`) — not the ones whose
@@ -46,7 +49,7 @@ export type Placement = {
  */
 export async function getPlacementsForCourse(
   courseId: number,
-): Promise<Placement[]> {
+): Promise<(Placement & { isVisible: boolean })[]> {
   const rows = await db
     .select({
       id: moduleLessonsTable.id,
@@ -54,8 +57,10 @@ export async function getPlacementsForCourse(
       lessonId: moduleLessonsTable.lessonId,
       rank: moduleLessonsTable.rank,
       dependsOn: moduleLessonsTable.dependsOn,
+      isVisible: lessonVisible(courseId),
     })
     .from(moduleLessonsTable)
+    .innerJoin(lessonsTable, eq(lessonsTable.id, moduleLessonsTable.lessonId))
     .where(inArray(moduleLessonsTable.moduleId, courseModuleIds(courseId)))
     .orderBy(moduleLessonsTable.rank);
 
@@ -66,6 +71,7 @@ export async function getPlacementsForCourse(
     // `numeric` arrives as a string from pg; every consumer sorts on it.
     rank: Number(r.rank),
     dependsOn: (r.dependsOn ?? []) as CourseLessonDependency[],
+    isVisible: r.isVisible,
   }));
 }
 

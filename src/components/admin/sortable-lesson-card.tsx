@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { configureLessonIdAtom, playLessonAtom } from '#/atoms/admin';
+import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
@@ -41,8 +42,9 @@ export const SortableLessonCard = ({
   });
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
   const setPlayLesson = useSetAtom(playLessonAtom);
-  // The same save the quickshot chips use, so the eye, the padlock and the
-  // chips share one optimistic cache write and one rollback path.
+  const setVisibility = useSetLessonVisibility();
+  // The same save the quickshot chips use, so the padlock and the chips share
+  // one optimistic cache write and one rollback path.
   const updateConfig = useUpdateLessonConfig(courseId);
 
   return (
@@ -63,11 +65,13 @@ export const SortableLessonCard = ({
         dragHandleProps={{ ...attributes, ...listeners }}
         visibility={{
           onToggle: () =>
-            updateConfig.mutate({
+            setVisibility.mutate({
+              courseId,
               lessonId: lesson.id,
-              patch: { isAvailable: !lesson.isAvailable },
+              isVisible: !lesson.isAvailable,
             }),
-          isPending: updateConfig.isPending,
+          isPending: setVisibility.isPending,
+          sharedWith: mod.otherCourseCount,
         }}
         onConfigure={() => setConfigureLessonId(lesson.id)}
         access={lessonAccess(

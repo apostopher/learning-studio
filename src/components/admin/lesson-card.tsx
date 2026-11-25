@@ -19,6 +19,7 @@ import {
   iconButtonClass,
   TooltipIconButton,
 } from '../ui/tooltip-icon-button';
+import { visibilityLabel } from './lesson-card-labels';
 import { LessonVideoTile } from './lesson-video-tile';
 import { VersionChip, type VersionChipProps } from './version-chip';
 
@@ -114,14 +115,16 @@ export const LessonCard = ({
    */
   alsoIn?: string[];
   /**
-   * Publish or draft the lesson from the card. Replaces the Draft label with
-   * an eye button that says what a click will do. Omitted on read-only cards
-   * (drag overlay, borrowed lists), which keep the Draft label in words.
+   * Show the lesson to the course's students, or hide it, with an eye button
+   * that says what a click will do. Omitted on read-only cards (drag overlay,
+   * borrowed lists), which say Hidden in words.
    */
   visibility?: {
     onToggle: () => void;
     /** Save in flight: the eye goes inert and says so. */
     isPending?: boolean;
+    /** How many other courses borrow the module: the eye answers for them too. */
+    sharedWith?: number;
   };
 }) => {
   return (
@@ -163,9 +166,7 @@ export const LessonCard = ({
               label={
                 visibility.isPending
                   ? `Updating visibility of ${lesson.name}…`
-                  : lesson.isAvailable
-                    ? 'Visible to students. Hide it'
-                    : 'Hidden from students. Show it'
+                  : visibilityLabel(lesson.isAvailable, visibility.sharedWith)
               }
               onClick={visibility.onToggle}
               disabled={visibility.isPending}
@@ -173,8 +174,8 @@ export const LessonCard = ({
               {lesson.isAvailable ? (
                 <Eye className="h-4 w-4" aria-hidden="true" />
               ) : (
-                // Tinted: a crossed eye says less than the word "Draft"
-                // did, so the draft state carries colour to stay noticed.
+                // Tinted: a crossed eye says less than a word, so the hidden
+                // state carries colour to stay noticed.
                 <EyeOff
                   className="h-4 w-4 text-warning-text"
                   aria-hidden="true"
@@ -184,14 +185,14 @@ export const LessonCard = ({
           ) : (
             /*
               Replaces the status dot the tile took over from. The dot was
-              `aria-hidden`, so published/draft was invisible to a screen
+              `aria-hidden`, so shown/hidden was invisible to a screen
               reader and the board had no other cue; a word is legible to
-              everyone and, since most lessons end up published, is absent
+              everyone and, since most lessons end up shown, is absent
               most of the time. Kept for read-only cards with no eye.
             */
             !lesson.isAvailable && (
               <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
-                Draft
+                Hidden
               </span>
             )
           )}

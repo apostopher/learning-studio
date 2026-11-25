@@ -27,42 +27,21 @@ import { LessonHeading } from '../lesson-heading';
 
 const base = {
   name: 'Welcome Intro',
-  isAvailable: true,
   isRenaming: false,
   isSaving: false,
   onStartRename: vi.fn(),
   onCancelRename: vi.fn(),
-  onToggleAvailability: vi.fn(),
   renameForm: null,
 };
 
 describe('LessonHeading', () => {
-  it('shows the name as the heading with a pencil to rename, and the eye stating what a click does', () => {
+  it('shows the name as the heading with a pencil to rename, and nothing else', () => {
     const onStartRename = vi.fn();
-    const onToggleAvailability = vi.fn();
-    render(
-      <LessonHeading
-        {...base}
-        onStartRename={onStartRename}
-        onToggleAvailability={onToggleAvailability}
-      />,
-    );
+    render(<LessonHeading {...base} onStartRename={onStartRename} />);
     expect(screen.getByRole('heading', { name: 'Welcome Intro' })).toBeTruthy();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Rename lesson' }));
     expect(onStartRename).toHaveBeenCalledOnce();
-    // Reason + remedy in the accessible name: what it IS and what the click does.
-    const eye = screen.getByRole('button', {
-      name: 'Published — hide from learners',
-    });
-    fireEvent.click(eye);
-    expect(onToggleAvailability).toHaveBeenCalledOnce();
-  });
-
-  it('names the draft state the other way round', () => {
-    render(<LessonHeading {...base} isAvailable={false} />);
-    expect(
-      screen.getByRole('button', { name: 'Draft — show to learners' }),
-    ).toBeTruthy();
   });
 
   it('while renaming, swaps the heading for the form with Save and Cancel, and no pencil', () => {
@@ -82,11 +61,6 @@ describe('LessonHeading', () => {
     );
     expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.getByLabelText('Lesson name')).toBeTruthy();
-    // The eye sits on the same centre line as Save and Cancel, not pinned
-    // to the top of the taller field row.
-    const row = screen.getByLabelText('Lesson name').closest('form')
-      ?.parentElement as HTMLElement;
-    expect(row.className).toContain('items-center');
     expect(screen.queryByRole('button', { name: 'Rename lesson' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     expect(onSubmit).toHaveBeenCalledOnce();

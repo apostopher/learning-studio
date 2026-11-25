@@ -180,7 +180,6 @@ async function handle(path: string, init?: RequestInit): Promise<Response> {
   server.writes.push({ method, path, body });
   if (server.holdWrites) await server.holdWrites;
   if (server.failWith) return json({}, server.failWith);
-  if ('isAvailable' in body) return json({});
   server.lessons.set(id, {
     ...lesson,
     version: body.version ?? lesson.version,
@@ -801,25 +800,6 @@ describe('a refusal', () => {
 });
 
 describe('what the version has no part in', () => {
-  it('the eye toggle works with a malformed draft', async () => {
-    await open();
-    typeVersion('1');
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Published — hide from learners' }),
-    );
-    await waitFor(() =>
-      expect(server.writes).toEqual([
-        {
-          method: 'PATCH',
-          path: '/api/admin/lessons/10',
-          body: { isAvailable: false },
-        },
-      ]),
-    );
-    expect(alertText()).toBeUndefined();
-    expect(field().readOnly).toBe(false);
-  });
-
   it('Word-doc fill fills the form and does not touch the version', async () => {
     await open();
     typeVersion('1.1');

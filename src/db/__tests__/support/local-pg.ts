@@ -4,6 +4,7 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { vi } from 'vitest';
 import { migrateLessonVersions } from '#/db/migrate-lesson-versions';
+import { LESSON_VISIBILITY_STATEMENTS } from '#/db/migrate-lesson-visibility';
 import * as schema from '#/db/schema';
 
 /**
@@ -108,7 +109,7 @@ export async function createDb(
   return { db: drizzle(pool, { schema }), pool, drop };
 }
 
-/** A new database holding the schema before, or after, lesson versions. */
+/** A new database holding the schema before lesson versions, or today's. */
 export async function freshDb({
   migrated,
 }: {
@@ -118,6 +119,9 @@ export async function freshDb({
   if (!migrated) return fresh;
   try {
     await migrateLessonVersions(fresh.db);
+    for (const statement of LESSON_VISIBILITY_STATEMENTS) {
+      await fresh.db.execute(statement);
+    }
   } catch (error) {
     await fresh.drop();
     throw error;

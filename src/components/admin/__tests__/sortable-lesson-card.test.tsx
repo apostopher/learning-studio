@@ -199,7 +199,7 @@ describe('SortableLessonCard — visibility', () => {
     vi.stubGlobal('fetch', fetchMock);
   });
 
-  it('hides a visible lesson through the config mutation', async () => {
+  it('hides a visible lesson in its course', async () => {
     renderCard(LIBRARY);
     const visibility = cardProps.mock.calls[0][0].visibility as {
       onToggle: () => void;
@@ -208,10 +208,10 @@ describe('SortableLessonCard — visibility', () => {
       visibility.onToggle();
     });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe(`/api/admin/lessons/${lesson.id}`);
+    expect(String(url)).toBe(`/api/admin/courses/7/lessons/${lesson.id}`);
     expect((init as RequestInit).method).toBe('PATCH');
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      isAvailable: false,
+      isVisible: false,
     });
   });
 

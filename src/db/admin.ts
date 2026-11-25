@@ -537,7 +537,6 @@ export async function getCourseBoard(
           version: sql<string>`coalesce(${lessonVersionsTable.version}, ${lessonsTable.version})`,
           disciplineVersion: lessonsTable.version,
           slug: lessonsTable.slug,
-          isAvailable: lessonsTable.isAvailable,
           hasDebrief: lessonsTable.hasDebrief,
           needsVideoWatch: lessonsTable.needsVideoWatch,
           requiredSubscriptions: lessonsTable.requiredSubscriptions,
@@ -560,6 +559,7 @@ export async function getCourseBoard(
       (typeof lessonRows)[number] & {
         rank: number;
         dependsOn: CourseLessonDependency[];
+        isAvailable: boolean;
       }
     >
   >();
@@ -571,6 +571,7 @@ export async function getCourseBoard(
       ...lesson,
       rank: placement.rank,
       dependsOn: placement.dependsOn,
+      isAvailable: placement.isVisible,
     });
     byModule.set(placement.moduleId, list);
   }
@@ -1132,7 +1133,6 @@ export async function updateLessonName(
 export async function updateLessonConfig(
   lessonId: number,
   patch: {
-    isAvailable?: boolean;
     hasDebrief?: boolean;
     needsVideoWatch?: boolean;
     requiredSubscriptions?: SubscriptionType[];
@@ -1140,7 +1140,6 @@ export async function updateLessonConfig(
   },
 ): Promise<{
   id: number;
-  isAvailable: boolean;
   hasDebrief: boolean;
   needsVideoWatch: boolean;
   requiredSubscriptions: SubscriptionType[];
@@ -1152,7 +1151,6 @@ export async function updateLessonConfig(
     .where(eq(lessonsTable.id, lessonId))
     .returning({
       id: lessonsTable.id,
-      isAvailable: lessonsTable.isAvailable,
       hasDebrief: lessonsTable.hasDebrief,
       needsVideoWatch: lessonsTable.needsVideoWatch,
       requiredSubscriptions: lessonsTable.requiredSubscriptions,

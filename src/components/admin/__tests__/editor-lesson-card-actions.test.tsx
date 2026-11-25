@@ -67,6 +67,7 @@ import { EditorLessonCardContainer } from '../editor-lesson-card-container';
 
 const LESSON_ID = 10;
 const MODULE_ID = 3;
+const VISIBILITY_URL = `/api/admin/courses/7/lessons/${LESSON_ID}`;
 
 /**
  * The card takes the whole module, not an id and a name: the padlock reads
@@ -268,17 +269,17 @@ describe('EditorLessonCardContainer — remove is not delete', () => {
 });
 
 /**
- * The eye publishes or drafts the lesson. Asserted on the PATCH the server
- * receives, not on the card: an eye wired to nothing still renders and
+ * The eye shows or hides the lesson in this course. Asserted on the PATCH the
+ * server receives, not on the card: an eye wired to nothing still renders and
  * still flips its icon optimistically if a cache write is all that happens.
  */
 describe('EditorLessonCardContainer — visibility', () => {
   const patchBodies = () =>
     fetchMock.mock.calls
-      .filter(([url]) => String(url) === `/api/admin/lessons/${LESSON_ID}`)
+      .filter(([url]) => String(url) === VISIBILITY_URL)
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 
-  it('hides a visible lesson through the config mutation', async () => {
+  it('hides a visible lesson in its course', async () => {
     renderCard({ isAvailable: true });
     await act(async () => {
       fireEvent.click(
@@ -287,10 +288,10 @@ describe('EditorLessonCardContainer — visibility', () => {
         ) as HTMLButtonElement,
       );
     });
-    expect(patchBodies()).toEqual([{ isAvailable: false }]);
+    expect(patchBodies()).toEqual([{ isVisible: false }]);
   });
 
-  it('shows a draft lesson through the config mutation', async () => {
+  it('shows a hidden lesson in its course', async () => {
     renderCard({ isAvailable: false });
     await act(async () => {
       fireEvent.click(
@@ -299,14 +300,14 @@ describe('EditorLessonCardContainer — visibility', () => {
         ) as HTMLButtonElement,
       );
     });
-    expect(patchBodies()).toEqual([{ isAvailable: true }]);
+    expect(patchBodies()).toEqual([{ isVisible: true }]);
   });
 
   it('passes the in-flight state to the eye', async () => {
     renderCard({ isAvailable: true });
     // Hold the PATCH open so the mutation stays pending.
     fetchMock.mockImplementation((url: string) =>
-      String(url) === `/api/admin/lessons/${LESSON_ID}`
+      String(url) === VISIBILITY_URL
         ? new Promise(() => {})
         : Promise.resolve({ ok: true, status: 200, json: async () => LIBRARY }),
     );

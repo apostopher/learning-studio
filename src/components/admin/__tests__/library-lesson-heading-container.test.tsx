@@ -6,18 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Completes synchronously, as a settled mutation would: the container leaves
 // rename mode in `onSuccess`, which is what the first test watches for.
-const mutate = vi.hoisted(() =>
-  vi.fn((_input: unknown, opts?: { onSuccess?: () => void }) =>
-    opts?.onSuccess?.(),
-  ),
-);
 const rename = vi.hoisted(() =>
   vi.fn((_input: unknown, opts?: { onSuccess?: () => void }) =>
     opts?.onSuccess?.(),
   ),
 );
 vi.mock('#/data-hooks/use-update-library-lesson', () => ({
-  useUpdateLibraryLesson: () => ({ mutate, isPending: false }),
   useRenameLibraryLesson: () => ({ mutate: rename, isPending: false }),
 }));
 vi.mock('../../ui/tooltip-icon-button', () => ({
@@ -42,12 +36,10 @@ const renderIsolated = (ui: ReactElement) =>
 const LESSON = {
   id: 10,
   name: 'Welcome Intro',
-  isAvailable: true,
   version: '1.0',
 };
 
 afterEach(() => {
-  mutate.mockClear();
   rename.mockClear();
 });
 
@@ -74,16 +66,5 @@ describe('LibraryLessonHeadingContainer', () => {
     );
     await screen.findByRole('heading');
     expect(rename).not.toHaveBeenCalled();
-  });
-
-  it('flips availability through the mutation', () => {
-    renderIsolated(<LibraryLessonHeadingContainer lesson={LESSON} />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Published — hide from learners' }),
-    );
-    expect(mutate).toHaveBeenCalledWith(
-      { lessonId: 10, isAvailable: false },
-      expect.anything(),
-    );
   });
 });

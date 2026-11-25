@@ -477,7 +477,7 @@ describe('bug regression: invalidating every course a lesson is placed in', () =
       ]),
     );
 
-    await updateLessonConfig(9, { isAvailable: true });
+    await updateLessonConfig(9, { hasDebrief: true });
 
     expect(courseCache.invalidate).toHaveBeenCalledTimes(3);
     const invalidatedSlugs = courseCache.invalidate.mock.calls

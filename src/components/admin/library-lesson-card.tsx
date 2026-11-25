@@ -13,7 +13,8 @@ import { LessonVideoTile } from './lesson-video-tile';
  * `requiredSubscriptions`, `hasDebrief`) — those are edited on the lesson's
  * own config screen, not shown here — and it has no delete or play affordance:
  * the library is a source list to drag from, not a place to manage or
- * preview a lesson.
+ * preview a lesson. Nor does it say whether students see it: each course
+ * decides that for itself.
  *
  * It also carries NO "in N courses" badge, though `courseCount` is on the
  * type and other things still read it (a lesson in use cannot be deleted).
@@ -67,11 +68,6 @@ export const LibraryLessonCard = ({
             {formatVersion(lesson.version)}
           </Chip>
           <span className="flex-1" />
-          {!lesson.isAvailable && (
-            <span className="shrink-0 rounded bg-gray-4 px-1.5 py-0.5 font-medium text-tertiary text-xs">
-              Draft
-            </span>
-          )}
           {onDelete && (
             <TooltipIconButton label="Delete lesson" onClick={onDelete}>
               <Trash2 className="h-4 w-4" aria-hidden="true" />

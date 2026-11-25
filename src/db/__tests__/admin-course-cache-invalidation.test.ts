@@ -839,7 +839,7 @@ describe('course-details cache invalidation', () => {
       'instrument-rating',
     ]);
 
-    await updateLessonConfig(9, { isAvailable: true });
+    await updateLessonConfig(9, { hasDebrief: true });
 
     expect(lessonAccess.getCourseSlugsForLessonId).toHaveBeenCalledWith(9);
     // Reverting to single-slug invalidation would still pass a bare
@@ -1267,7 +1267,7 @@ describe('course-details cache invalidation', () => {
     courseCache.invalidate.mockRejectedValueOnce(new Error('redis down'));
 
     await expect(
-      updateLessonConfig(9, { isAvailable: true }),
+      updateLessonConfig(9, { hasDebrief: true }),
     ).resolves.toMatchObject({ id: 9 });
     expect(consoleError).toHaveBeenCalled();
 

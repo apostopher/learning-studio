@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { toast } from 'sonner';
 import { playLessonAtom } from '#/atoms/admin';
+import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
 import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
@@ -77,8 +78,9 @@ export const EditorLessonCardContainer = ({
 
   const unlinkLesson = useUnlinkLesson();
   const setPlayLesson = useSetAtom(playLessonAtom);
-  // The same save the quickshot chips use, so the eye, the padlock and the
-  // chips share one optimistic cache write and one rollback path.
+  const setVisibility = useSetLessonVisibility();
+  // The same save the quickshot chips use, so the padlock and the chips share
+  // one optimistic cache write and one rollback path.
   const updateConfig = useUpdateEditorLessonConfig();
 
   return (
@@ -100,11 +102,13 @@ export const EditorLessonCardContainer = ({
         dragHandleProps={{ ...attributes, ...listeners }}
         visibility={{
           onToggle: () =>
-            updateConfig.mutate({
+            setVisibility.mutate({
+              courseId,
               lessonId: lesson.id,
-              patch: { isAvailable: !lesson.isAvailable },
+              isVisible: !lesson.isAvailable,
             }),
-          isPending: updateConfig.isPending,
+          isPending: setVisibility.isPending,
+          sharedWith: mod.otherCourseCount,
         }}
         remove={{
           label: removeLessonLabel(lesson.name, moduleName),

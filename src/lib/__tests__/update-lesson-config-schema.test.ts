@@ -6,10 +6,16 @@ import { describe, expect, it } from 'vitest';
 const { updateLessonConfigInputSchema } = await import('../admin-schemas');
 
 describe('updateLessonConfigInputSchema', () => {
-  it('accepts a single isAvailable field', () => {
+  it('accepts a single field', () => {
+    expect(
+      updateLessonConfigInputSchema.safeParse({ hasDebrief: false }).success,
+    ).toBe(true);
+  });
+
+  it('rejects isAvailable: each course says who sees its lessons', () => {
     expect(
       updateLessonConfigInputSchema.safeParse({ isAvailable: false }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('accepts requiredSubscriptions', () => {

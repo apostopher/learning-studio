@@ -70,7 +70,7 @@ describe('LibraryLessonCard', () => {
   });
 
   it('gives the name a line of its own', () => {
-    // The name used to share a row with Draft, delete, and the grip, and
+    // The name used to share a row with delete and the grip, and
     // clamped long before it had to (design 2026-11-19). Asserted on the
     // name's own placement: it is a direct child of the card's stacked
     // column, and no control sits beside it there. Mutant: the name moved
@@ -146,20 +146,14 @@ describe('LibraryLessonCard', () => {
     expect(screen.queryByRole('button', { name: 'Delete lesson' })).toBeNull();
   });
 
-  it('marks an unpublished lesson as a draft, in words', () => {
-    // Mutant: the condition is inverted (`lesson.isAvailable &&` instead of
-    // `!lesson.isAvailable &&`), so an unpublished lesson shows no marker —
-    // this assertion fails against that mutant.
-    render(<LibraryLessonCard lesson={lesson({ isAvailable: false })} />);
-    expect(screen.getByText('Draft')).toBeTruthy();
+  it.each([
+    true,
+    false,
+  ])('says nothing about who sees it (%s)', (isAvailable) => {
+    render(<LibraryLessonCard lesson={lesson({ isAvailable })} />);
+    expect(screen.queryByText(/draft|hidden/i)).toBeNull();
   });
 
-  it('says nothing about drafts for a published lesson', () => {
-    // Mutant: the Draft marker is always rendered regardless of
-    // `isAvailable`. This assertion fails against that mutant.
-    render(<LibraryLessonCard lesson={lesson({ isAvailable: true })} />);
-    expect(screen.queryByText('Draft')).toBeNull();
-  });
   /**
    * The card's hover and keyboard-focus treatment: an outline in ITPS's
    * orange (`warning-9`, 6.5:1 on gray-2 — a 60+ pilot can see it), colour-

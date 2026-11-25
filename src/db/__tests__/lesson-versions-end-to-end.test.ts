@@ -81,6 +81,9 @@ vi.mock('#/lib/crypto.server', () => ({
 vi.mock('@vercel/blob', () => ({ del: vi.fn(), list: vi.fn() }));
 
 const { migrateLessonVersions } = await import('../migrate-lesson-versions');
+const { LESSON_VISIBILITY_STATEMENTS } = await import(
+  '../migrate-lesson-visibility'
+);
 const { getCourseDetailsWithCache } = await import('../course');
 const { getCourseLessonMaterial } = await import('../course-lesson-content');
 const { getCourseProgress } = await import('../course-progress');
@@ -251,6 +254,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     beforeAll(async () => {
       pgDb = await freshDb({ migrated: false });
       h.db = pgDb.db;
+      // A later migration's, which today's readers need.
+      for (const statement of LESSON_VISIBILITY_STATEMENTS) {
+        await pgDb.db.execute(statement);
+      }
       vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string) => {

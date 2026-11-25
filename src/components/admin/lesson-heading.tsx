@@ -1,4 +1,4 @@
-import { Check, Eye, EyeOff, Loader2, Pencil } from 'lucide-react';
+import { Check, Loader2, Pencil } from 'lucide-react';
 import type { FormEventHandler } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
@@ -7,35 +7,25 @@ import { cn } from '#/lib/cn';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /**
- * The lesson dialog's heading: the name, a pencil to rename it in place, and
- * — at the far end — one icon button for whether learners can see it.
- *
- * The availability button's accessible name states BOTH what the lesson is
- * and what a click does ("Published — hide from learners"): an eye alone
- * says neither, and this product's rule is that a control states its state
- * and its remedy. The icon is the state (open eye = visible to learners).
+ * The lesson dialog's heading: the name, and a pencil to rename it in place.
  *
  * Renaming swaps the heading for a one-line form — the field is the name,
  * where the name was — with Save and Cancel; Enter and Escape do the same.
  */
 export const LessonHeading = ({
   name,
-  isAvailable,
   isRenaming,
   isSaving,
   onStartRename,
   onCancelRename,
-  onToggleAvailability,
   renameForm,
 }: {
   name: string;
-  isAvailable: boolean;
   isRenaming: boolean;
-  /** A rename or an availability change is in flight. */
+  /** A rename is in flight. */
   isSaving: boolean;
   onStartRename: () => void;
   onCancelRename: () => void;
-  onToggleAvailability: () => void;
   /** The rename form's wiring, present while renaming. */
   renameForm: {
     onSubmit: FormEventHandler<HTMLFormElement>;
@@ -109,21 +99,5 @@ export const LessonHeading = ({
         </TooltipIconButton>
       </div>
     )}
-
-    <TooltipIconButton
-      label={
-        isAvailable
-          ? 'Published — hide from learners'
-          : 'Draft — show to learners'
-      }
-      onClick={onToggleAvailability}
-      disabled={isSaving}
-    >
-      {isAvailable ? (
-        <Eye className="h-5 w-5" aria-hidden="true" />
-      ) : (
-        <EyeOff className="h-5 w-5" aria-hidden="true" />
-      )}
-    </TooltipIconButton>
   </div>
 );

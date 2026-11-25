@@ -6,6 +6,7 @@ import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { getCourseProgress } from '#/db/course-progress';
 import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
@@ -69,7 +70,7 @@ export function filterGatedLessons<T extends GatedRow>(
  *
  * Four filters run before any content is assembled, in this order:
  *
- * 1. **WIP lessons** (`is_available = false`) are dropped outright. The gate
+ * 1. **Hidden lessons** (`lessonVisible`) are dropped outright. The gate
  *    predicate cannot do this job: `getCourseDetailsWithCache` no longer
  *    carries unavailable lessons at all (`shapeModuleLessons` strips them), so
  *    `evaluateLessonLock` cannot locate them and answers "open" by contract —
@@ -113,7 +114,7 @@ export async function getGatedCourseForAgent(
       lessonSlug: lessonsTable.slug,
       versionId: lessonVersionsTable.id,
       lessonName: lessonVersionsTable.name,
-      isAvailable: lessonsTable.isAvailable,
+      isAvailable: lessonVisible(coursesTable.id),
       text: lessonVersionsTable.text,
       proTips: lessonVersionsTable.proTips,
     })
@@ -145,10 +146,9 @@ export async function getGatedCourseForAgent(
 
   if (rows.length === 0) return null;
 
-  // Filter 1: WIP lessons, before any gate runs. `isAvailable` is notNull on
-  // lessonsTable, so it is only ever null for a module-only row (no lesson
-  // matched by the left join) — those carry no lesson material and are kept so
-  // an empty module still renders its heading, exactly as before.
+  // Filter 1: hidden lessons, before any gate runs. A module-only row (no
+  // lesson matched by the left join) carries no lesson material and is kept, so
+  // an empty module still renders its heading.
   const availableRows = rows.filter(
     (r) => r.lessonId === null || r.isAvailable === true,
   );

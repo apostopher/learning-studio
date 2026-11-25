@@ -291,7 +291,7 @@ export async function patchLessonHandler(
 
   const config = updateLessonConfigInputSchema.safeParse(body);
   if (config.success) {
-    // Every config field — availability, level tags, the paywall list, the
+    // Every config field — level tags, the paywall list, the
     // debrief/video-watch gates — is a column on the lesson row
     // (`updateLessonConfig` writes `lessonsTable` by `lessonId` alone, with
     // no course in sight, and invalidates every course teaching this lesson).

@@ -166,6 +166,8 @@ export const dataKeys = {
    */
   updateEditorLessonConfig: () =>
     ['admin', 'editor-board', 'lesson-config'] as const,
+  /** Mutation key for showing and hiding lessons in courses. */
+  setLessonVisibility: () => ['admin', 'lesson-visibility'] as const,
   /** Mutation key for the library's Update levels board. */
   setLibraryLessonLevels: () => ['admin', 'library', 'lesson-levels'] as const,
 } as const;

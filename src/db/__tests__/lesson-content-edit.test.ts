@@ -347,18 +347,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
     });
 
-    it('settings (visibility, levels, paid, debrief) do not move the version and do not touch content_updated_at', async () => {
+    it('settings (levels, paid, debrief) do not move the version and do not touch content_updated_at', async () => {
       await take(1);
       vi.clearAllMocks();
       await updateLessonConfig(1, {
-        isAvailable: true,
         levels: ['basic'],
         requiredSubscriptions: ['associate'],
         hasDebrief: false,
         needsVideoWatch: false,
       });
       expect(await lesson()).toMatchObject({
-        is_available: true,
         levels: ['basic'],
         required_subscriptions: ['associate'],
         has_debrief: false,

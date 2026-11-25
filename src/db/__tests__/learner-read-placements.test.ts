@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { SQL } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 import {
   boolean,
   integer,
@@ -10,7 +10,8 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderSql, renderSqlParams } from '#/db/__tests__/render-sql';
+import { renderSql } from '#/db/__tests__/render-sql';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 
 /**
  * Task 5c moves the LEARNER-FACING read path onto placements
@@ -311,6 +312,7 @@ const lessonRow = (opts: {
     rank: opts.placementRank,
     dependsOn: opts.dependsOn ?? [],
   },
+  isVisible: true,
   moduleDep: null,
   orgLesson: null,
   org: null,
@@ -549,17 +551,16 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
       '"module_lessons"."module_id" = "modules"."id"',
     );
     expect(calls.leftJoin[3][0]).toBe(lessonsTable);
+    // The visibility test sits in the join. What it answers is
+    // `lesson-visibility.test.ts`'s job, on Postgres.
     expect(render(calls.leftJoin[3][1])).toBe(
-      '("lessons"."id" = "module_lessons"."lesson_id" and "lessons"."is_available" = $1)',
+      render(
+        and(
+          eq(lessonsTable.id, moduleLessonsTable.lessonId),
+          lessonVisible(coursesTable.id),
+        ) as SQL,
+      ),
     );
-    // Fix round 1, Part 2c: `eq(lessonsTable.isAvailable, true)` and its
-    // inverse `eq(lessonsTable.isAvailable, false)` render to the exact same
-    // SQL TEXT (`"lessons"."is_available" = $1`) — only the bound parameter
-    // differs. That flip is the WIP filter itself: it would silently invert
-    // which lessons count toward `/app`'s percentages (every available
-    // lesson dropped, every WIP lesson counted), and the string-only
-    // assertion above could not have caught it.
-    expect(renderSqlParams(calls.leftJoin[3][1])).toEqual([true]);
     expectPinThenSnapshot(calls.leftJoin.slice(4, 6));
   });
 
@@ -584,7 +585,12 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
     const nextJoin = calls.leftJoin[moduleLessonsIndex + 1];
     expect(nextJoin?.[0]).toBe(lessonsTable);
     expect(render(nextJoin[1])).toBe(
-      '("lessons"."id" = "module_lessons"."lesson_id" and "lessons"."is_available" = $1)',
+      render(
+        and(
+          eq(lessonsTable.id, moduleLessonsTable.lessonId),
+          lessonVisible(coursesTable.id),
+        ) as SQL,
+      ),
     );
 
     expect(calls.innerJoin.some(([t]) => t === lessonsTable)).toBe(false);

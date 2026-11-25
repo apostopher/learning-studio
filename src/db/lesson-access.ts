@@ -1,8 +1,9 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import type { Tx } from '#/db/lesson-versions';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
@@ -48,7 +49,7 @@ export async function getLessonInCourse({
   if (!course) return null;
 
   const [lesson] = await db
-    .select({ isAvailable: lessonsTable.isAvailable })
+    .select({ isAvailable: lessonVisible(course.id) })
     .from(lessonsTable)
     .innerJoin(
       moduleLessonsTable,
@@ -61,6 +62,8 @@ export async function getLessonInCourse({
         inArray(moduleLessonsTable.moduleId, courseModuleIds(course.id)),
       ),
     )
+    // Placed twice (its own module and a borrowed one), shown in either.
+    .orderBy(desc(lessonVisible(course.id)))
     .limit(1);
   if (!lesson) return null;
   return { courseId: course.id, isAvailable: lesson.isAvailable };

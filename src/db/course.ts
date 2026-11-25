@@ -11,6 +11,7 @@ import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   flagshipDisciplineSql,
   progressComponentColumns,
@@ -178,6 +179,7 @@ export async function getCourseDetails(slug: string) {
         otherVideoIds: lessonVersionsTable.otherVideoIds,
       },
       placement: moduleLessonsTable,
+      isVisible: lessonVisible(course.id),
       levelGated: flagshipDisciplineSql(),
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,
@@ -204,10 +206,26 @@ export async function getCourseDetails(slug: string) {
 
   for (const row of lessonData) {
     const { lesson, placement, moduleDep, orgLesson, org } = row;
+    const mod = moduleMapWithDependencies.get(placement.moduleId);
+
+    // Before the hidden ones go: they carry their module's prerequisites too.
+    if (moduleDep?.dependsOn && mod) {
+      moduleDep.dependsOn.forEach((dep) => {
+        if (!mod.dependsOn.includes(dep)) {
+          mod.dependsOn.push(dep);
+        }
+      });
+    }
+
+    // Per placement, not per lesson: shown in the course's own module, it can
+    // be hidden in one it borrows.
+    if (!row.isVisible) continue;
+
     // group lessons
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
         ...lesson,
+        isAvailable: true,
         // Placement's rank, not the lesson row's own — see the query
         // comment above. `moduleId` isn't carried onto this object at all
         // any more: `lessons.module_id` is gone (Task 7), and the placement
@@ -241,16 +259,6 @@ export async function getCourseDetails(slug: string) {
           name: org.name,
         });
       }
-    }
-
-    const mod = moduleMapWithDependencies.get(placement.moduleId);
-
-    if (moduleDep?.dependsOn && mod) {
-      moduleDep.dependsOn.forEach((dep) => {
-        if (!mod.dependsOn.includes(dep)) {
-          mod.dependsOn.push(dep);
-        }
-      });
     }
 
     if (mod && !mod.lessons.find((l) => l.id === lesson.id)) {
@@ -413,7 +421,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       lessonsTable,
       and(
         eq(lessonsTable.id, moduleLessonsTable.lessonId),
-        eq(lessonsTable.isAvailable, true),
+        lessonVisible(coursesTable.id),
       ),
     )
     // This course's version of the lesson, which every component is read

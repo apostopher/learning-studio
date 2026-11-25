@@ -24,8 +24,13 @@ export const LessonConfigDialogContainer = ({
 }) => {
   const [lessonId, setLessonId] = useAtom(configureLessonIdAtom);
   const resetVideoSection = useSetAtom(resetVideoSectionAtom);
+  // Only the course's own cards open this, and the same lesson can be in a
+  // borrowed module too, with other settings.
   const parentModule =
-    modules.find((m) => m.lessons.some((l) => l.id === lessonId)) ?? null;
+    modules.find(
+      (m) =>
+        m.owner.id === courseId && m.lessons.some((l) => l.id === lessonId),
+    ) ?? null;
   const lesson = parentModule?.lessons.find((l) => l.id === lessonId) ?? null;
 
   const sections: ConfigModalSection[] = [

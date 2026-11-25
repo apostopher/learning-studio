@@ -1,3 +1,4 @@
+import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '@/lib/admin-schemas';
 import { BinaryToggle } from './binary-toggle';
@@ -36,21 +37,23 @@ export const ConfigSectionContainer = ({
   module: mod,
 }: ConfigSectionContainerProps) => {
   const updateConfig = useUpdateLessonConfig(courseId);
+  const setVisibility = useSetLessonVisibility();
   const subscriptionDisabled = isSubscriptionDisabled(mod);
 
   return (
     <div className="flex flex-col">
       <ConfigSettingRow
         title="Availability"
-        description="Whether learners can see and open this lesson."
+        description="Whether this course’s learners can see and open this lesson."
       >
         <BinaryToggle<AvailabilityValue>
           label="Availability"
           value={availabilityValue(lesson)}
           onValueChange={(next) =>
-            updateConfig.mutate({
+            setVisibility.mutate({
+              courseId,
               lessonId: lesson.id,
-              patch: { isAvailable: next === 'public' },
+              isVisible: next === 'public',
             })
           }
           options={[

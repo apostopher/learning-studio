@@ -1,5 +1,6 @@
 import { and, asc, countDistinct, eq, inArray } from 'drizzle-orm';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
+import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   progressComponentColumns,
   progressComponentGroupBy,
@@ -81,7 +82,7 @@ export async function getCourseProgress({
       lessonsTable,
       and(
         eq(lessonsTable.id, moduleLessonsTable.lessonId),
-        eq(lessonsTable.isAvailable, true),
+        lessonVisible(coursesTable.id),
       ),
     )
     // This course's version of the lesson, which every component is read

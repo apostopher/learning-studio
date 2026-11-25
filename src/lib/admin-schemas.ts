@@ -238,8 +238,8 @@ export type PlaybackSource = 'course' | 'discipline';
 
 /**
  * A lesson on a course's board. Its content (name, video, quiz count) is the
- * version the course is on; its settings are the lesson's, shared by every
- * course.
+ * version the course is on, and whether its learners see it; the other
+ * settings are the lesson's, shared by every course.
  */
 export const boardLessonSchema = z.object({
   id: z.number(),
@@ -448,10 +448,14 @@ export const moveLessonInputSchema = movePlacementBodySchema.extend({
 });
 export type MoveLessonInput = z.infer<typeof moveLessonInputSchema>;
 
+/** PATCH body for one lesson in one course. */
+export const setLessonVisibilityInputSchema = z
+  .object({ isVisible: z.boolean() })
+  .strict();
+
 /** PATCH body for the lesson Config tab. Every field optional; at least one required. */
 export const updateLessonConfigInputSchema = z
   .object({
-    isAvailable: z.boolean().optional(),
     hasDebrief: z.boolean().optional(),
     needsVideoWatch: z.boolean().optional(),
     requiredSubscriptions: SubscriptionsSchema.optional(),
@@ -1104,6 +1108,7 @@ export const libraryLessonSchema = z.object({
   slug: z.string(),
   /** A lesson counts as configured once it has a video — same rule as `boardLessonSchema`. */
   isConfigured: z.boolean(),
+  /** What a course starts from (`lessonVisible`), for the card drawn on a drop. */
   isAvailable: z.boolean(),
   /**
    * How many distinct courses teach this lesson. Drives the "in N courses"

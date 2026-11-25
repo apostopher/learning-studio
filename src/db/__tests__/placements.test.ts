@@ -37,8 +37,10 @@ function makeChain(result: unknown) {
 
 const db = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock('#/db', () => ({ db }));
+const lessonsTable = pgTable('lessons', { id: integer('id').primaryKey() });
 vi.mock('#/db/schema', () => ({
   courseModulesTable,
+  lessonsTable,
   moduleLessonsTable,
   modulesTable,
 }));
@@ -74,14 +76,28 @@ describe('getPlacementsForCourse', () => {
   it('returns placements with rank coerced to a number', async () => {
     db.select.mockReturnValueOnce(
       makeChain([
-        { id: 1, moduleId: 4, lessonId: 9, rank: '2.500', dependsOn: [] },
+        {
+          id: 1,
+          moduleId: 4,
+          lessonId: 9,
+          rank: '2.500',
+          dependsOn: [],
+          isVisible: true,
+        },
       ]),
     );
 
     const rows = await getPlacementsForCourse(3);
 
     expect(rows).toEqual([
-      { id: 1, moduleId: 4, lessonId: 9, rank: 2.5, dependsOn: [] },
+      {
+        id: 1,
+        moduleId: 4,
+        lessonId: 9,
+        rank: 2.5,
+        dependsOn: [],
+        isVisible: true,
+      },
     ]);
   });
 

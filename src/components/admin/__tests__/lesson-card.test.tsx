@@ -63,16 +63,16 @@ const lesson = (over: Partial<BoardLesson> = {}): BoardLesson => ({
 });
 
 describe('LessonCard', () => {
-  it('marks an unpublished lesson as a draft, in words', () => {
-    // The dot this replaced was aria-hidden, so published/draft was invisible
+  it('marks a lesson students cannot see, in words', () => {
+    // The dot this replaced was aria-hidden, so shown/hidden was invisible
     // to a screen reader and the board carried no other cue.
     render(<LessonCard lesson={lesson({ isAvailable: false })} />);
-    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.getByText('Hidden')).toBeTruthy();
   });
 
-  it('says nothing about drafts for a published lesson', () => {
+  it('says nothing about a lesson they can', () => {
     render(<LessonCard lesson={lesson({ isAvailable: true })} />);
-    expect(screen.queryByText('Draft')).toBeNull();
+    expect(screen.queryByText('Hidden')).toBeNull();
   });
 
   it('offers playback only when a video is assigned', () => {
@@ -89,7 +89,7 @@ describe('LessonCard', () => {
     expect(screen.queryByRole('button', { name: /play/i })).toBeNull();
   });
 
-  it('keeps draft state and video state independent', () => {
+  it('keeps hidden state and video state independent', () => {
     // Two facts about one lesson; the tile carries one and the badge the
     // other, so every combination stays readable.
     render(
@@ -97,7 +97,7 @@ describe('LessonCard', () => {
         lesson={lesson({ isAvailable: false, isConfigured: false })}
       />,
     );
-    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.getByText('Hidden')).toBeTruthy();
     expect(screen.getByRole('img', { name: /no video/i })).toBeTruthy();
   });
 
@@ -198,16 +198,16 @@ describe('LessonCard', () => {
     expect(cls).not.toMatch(/hover:(scale|-?translate)/);
   });
 
-  it('keeps the Draft label on read-only cards', () => {
+  it('keeps the Hidden label on read-only cards', () => {
     // Drag overlays and borrowed lists pass no `visibility`; without the word
-    // a draft would look published there. Mutant: the label is dropped
+    // a hidden lesson would look shown there. Mutant: the label is dropped
     // whenever the eye exists in the codebase rather than on this card.
     render(<LessonCard lesson={lesson({ isAvailable: false })} />);
-    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.getByText('Hidden')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /students/ })).toBeNull();
   });
 
-  it('offers to show a draft lesson', () => {
+  it('offers to show a hidden lesson', () => {
     const onToggle = vi.fn();
     render(
       <LessonCard
@@ -219,7 +219,7 @@ describe('LessonCard', () => {
       screen.getByRole('button', { name: 'Hidden from students. Show it' }),
     );
     expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText('Draft')).toBeNull();
+    expect(screen.queryByText('Hidden')).toBeNull();
   });
 
   it('offers to hide a visible lesson', () => {
@@ -232,6 +232,32 @@ describe('LessonCard', () => {
     expect(
       screen.getByRole('button', { name: 'Visible to students. Hide it' }),
     ).toBeTruthy();
+  });
+
+  it.each([
+    [
+      true,
+      1,
+      'Visible to students. Hide it here and in the course sharing this module',
+    ],
+    [
+      true,
+      5,
+      'Visible to students. Hide it here and in the 5 courses sharing this module',
+    ],
+    [
+      false,
+      5,
+      'Hidden from students. Show it here and in the 5 courses sharing this module',
+    ],
+  ])('says when a click reaches other courses (%s, %i)', (isAvailable, sharedWith, name) => {
+    render(
+      <LessonCard
+        lesson={lesson({ isAvailable })}
+        visibility={{ onToggle: vi.fn(), sharedWith }}
+      />,
+    );
+    expect(screen.getByRole('button', { name })).toBeTruthy();
   });
 
   it('goes inert while the visibility change is saving', () => {

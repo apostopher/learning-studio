@@ -7,12 +7,17 @@ import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { ConfigSectionContainer } from '../config-section-container';
 
 const mutate = vi.hoisted(() => vi.fn());
+const setVisibility = vi.hoisted(() => vi.fn());
 vi.mock('#/data-hooks/use-update-lesson-config', () => ({
   useUpdateLessonConfig: () => ({ mutate }),
+}));
+vi.mock('#/data-hooks/use-set-lesson-visibility', () => ({
+  useSetLessonVisibility: () => ({ mutate: setVisibility }),
 }));
 
 afterEach(() => {
   mutate.mockClear();
+  setVisibility.mockClear();
 });
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -156,7 +161,7 @@ describe('ConfigSectionContainer', () => {
     ).toBe('true');
   });
 
-  it('clicking Private sends isAvailable: false', () => {
+  it('clicking Private hides it in this course', () => {
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -166,13 +171,14 @@ describe('ConfigSectionContainer', () => {
       { wrapper },
     );
     fireEvent.click(screen.getByRole('button', { name: 'Private' }));
-    expect(mutate).toHaveBeenCalledWith({
+    expect(setVisibility).toHaveBeenCalledWith({
+      courseId: 1,
       lessonId: lesson.id,
-      patch: { isAvailable: false },
+      isVisible: false,
     });
   });
 
-  it('clicking Public from a private lesson sends isAvailable: true', () => {
+  it('clicking Public from a private lesson shows it in this course', () => {
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -182,9 +188,10 @@ describe('ConfigSectionContainer', () => {
       { wrapper },
     );
     fireEvent.click(screen.getByRole('button', { name: 'Public' }));
-    expect(mutate).toHaveBeenCalledWith({
+    expect(setVisibility).toHaveBeenCalledWith({
+      courseId: 1,
       lessonId: privateLesson.id,
-      patch: { isAvailable: true },
+      isVisible: true,
     });
   });
 

@@ -437,12 +437,12 @@ describe('patchLessonHandler — version', () => {
   it('the config schema still rejects version', async () => {
     expect(
       updateLessonConfigInputSchema.safeParse({
-        isAvailable: true,
+        hasDebrief: true,
         version: '1.1',
       }).success,
     ).toBe(false);
     const res = await patchLessonHandler(
-      req({ isAvailable: true, version: '1.1' }),
+      req({ hasDebrief: true, version: '1.1' }),
       '10',
     );
     expect(res.status).toBe(400);

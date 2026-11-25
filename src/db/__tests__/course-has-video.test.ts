@@ -193,6 +193,7 @@ const lessonRow = (lesson: {
     rank: '1',
     dependsOn: [],
   },
+  isVisible: true,
   moduleDep: null,
   orgLesson: null,
   org: null,

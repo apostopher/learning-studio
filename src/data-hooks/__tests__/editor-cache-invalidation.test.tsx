@@ -16,11 +16,9 @@ import {
   useRemixCourse,
   useUnremixCourse,
 } from '#/data-hooks/use-remix-course';
+import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
-import {
-  useRenameLibraryLesson,
-  useUpdateLibraryLesson,
-} from '#/data-hooks/use-update-library-lesson';
+import { useRenameLibraryLesson } from '#/data-hooks/use-update-library-lesson';
 
 const COURSE_ID = 4;
 
@@ -133,7 +131,7 @@ describe('writes that both editor surfaces read', () => {
     expect(stale(client, dataKeys.editorBoard())).toBe(true);
   });
 
-  it('a rename or an availability change reaches the per-course board too', async () => {
+  it('a rename or showing or hiding a lesson reaches the per-course board too', async () => {
     const renamed = makeHarness();
     const rename = renderHook(() => useRenameLibraryLesson(10), {
       wrapper: renamed.wrapper,
@@ -143,13 +141,14 @@ describe('writes that both editor surfaces read', () => {
     });
 
     const hidden = makeHarness();
-    const update = renderHook(() => useUpdateLibraryLesson(), {
+    const update = renderHook(() => useSetLessonVisibility(), {
       wrapper: hidden.wrapper,
     });
     await act(async () => {
       await update.result.current.mutateAsync({
+        courseId: COURSE_ID,
         lessonId: 10,
-        isAvailable: false,
+        isVisible: false,
       });
     });
 

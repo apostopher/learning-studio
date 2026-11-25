@@ -427,6 +427,10 @@ export const lessonsTable = pgTable(
      * see a `['basic']` lesson.
      */
     levels: text('levels').array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * Only what a course that never said starts from (`#/db/lesson-visible-sql`);
+     * each decides for itself. Nothing in the app writes it.
+     */
     isAvailable: boolean('is_available').notNull().default(false),
     exclusivePerDay: boolean('exclusive_per_day').notNull().default(false),
     hasDebrief: boolean('has_debrief').notNull().default(true),
@@ -519,7 +523,7 @@ export const lessonsTableRelations = relations(lessonsTable, ({ many }) => ({
  * properties of the placement: a lesson is third in the 2-Week and eighth in
  * the 16-Week, and its prerequisites can only name lessons the *containing*
  * course actually holds. The gates (`levels`, `requiredSubscriptions`,
- * `hasDebrief`, `needsVideoWatch`, `isAvailable`) deliberately stay on the
+ * `hasDebrief`, `needsVideoWatch`) deliberately stay on the
  * lesson — see the design doc's "Deferred" section.
  */
 export const moduleLessonsTable = pgTable(
@@ -865,6 +869,26 @@ export const courseLessonVersionsTable = pgTable(
       table.lessonVersionId,
     ),
   ],
+);
+
+/**
+ * Whether a course shows a lesson to its learners (`#/db/lesson-visible-sql`).
+ * Not on the placement: it outlives it, so a lesson removed and added back for
+ * an update does not change who sees it.
+ */
+export const courseLessonVisibilityTable = pgTable(
+  'course_lesson_visibility',
+  {
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: 'cascade' }),
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    isVisible: boolean('is_visible').notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.courseId, table.lessonId] })],
 );
 
 export const lessonMaterialInsertSchema = createInsertSchema(

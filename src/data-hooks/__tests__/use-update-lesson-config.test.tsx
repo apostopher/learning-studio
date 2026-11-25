@@ -91,14 +91,14 @@ describe('useUpdateLessonConfig', () => {
     await act(async () => {
       await result.current.mutateAsync({
         lessonId: 10,
-        patch: { isAvailable: true },
+        patch: { needsVideoWatch: false },
       });
     });
 
     const board = client.getQueryData<CourseBoard>(
       dataKeys.courseBoard(COURSE_ID),
     );
-    expect(board?.modules[0].lessons[0].isAvailable).toBe(true);
+    expect(board?.modules[0].lessons[0].needsVideoWatch).toBe(false);
   });
 
   it('rolls back the cache on error', async () => {
@@ -112,14 +112,14 @@ describe('useUpdateLessonConfig', () => {
 
     await act(async () => {
       await result.current
-        .mutateAsync({ lessonId: 10, patch: { isAvailable: true } })
+        .mutateAsync({ lessonId: 10, patch: { needsVideoWatch: false } })
         .catch(() => {});
     });
 
     const board = client.getQueryData<CourseBoard>(
       dataKeys.courseBoard(COURSE_ID),
     );
-    expect(board?.modules[0].lessons[0].isAvailable).toBe(false);
+    expect(board?.modules[0].lessons[0].needsVideoWatch).toBe(true);
   });
 
   it('PATCHes the patch as JSON to the lesson route', async () => {
@@ -158,12 +158,15 @@ describe('useUpdateLessonConfig', () => {
     });
 
     await act(async () => {
-      result.current.mutate({ lessonId: 10, patch: { isAvailable: true } });
+      result.current.mutate({
+        lessonId: 10,
+        patch: { needsVideoWatch: false },
+      });
     });
 
     // The point of the whole feature: the chip already reads its new value
     // with the request still open, so no spinner is needed.
-    expect(lessonInCache(client)?.isAvailable).toBe(true);
+    expect(lessonInCache(client)?.needsVideoWatch).toBe(false);
     await act(async () => {
       release?.();
     });
@@ -184,7 +187,10 @@ describe('useUpdateLessonConfig', () => {
     });
 
     await act(async () => {
-      result.current.mutate({ lessonId: 10, patch: { isAvailable: true } });
+      result.current.mutate({
+        lessonId: 10,
+        patch: { needsVideoWatch: false },
+      });
       result.current.mutate({ lessonId: 10, patch: { hasDebrief: false } });
     });
 
@@ -232,7 +238,10 @@ describe('useUpdateLessonConfig', () => {
     });
 
     await act(async () => {
-      result.current.mutate({ lessonId: 10, patch: { isAvailable: true } });
+      result.current.mutate({
+        lessonId: 10,
+        patch: { needsVideoWatch: false },
+      });
       result.current.mutate({ lessonId: 10, patch: { hasDebrief: false } });
     });
 

@@ -34,6 +34,21 @@ export function removeLessonLabel(
 }
 
 /**
+ * The eye's accessible name and tooltip: what students see, and what a click
+ * does. A module other courses borrow is shown and hidden for them too, which
+ * the click must say.
+ */
+export function visibilityLabel(isVisible: boolean, sharedWith = 0): string {
+  const also =
+    sharedWith === 0
+      ? ''
+      : ` here and in the ${sharedWith === 1 ? 'course' : `${sharedWith} courses`} sharing this module`;
+  return isVisible
+    ? `Visible to students. Hide it${also}`
+    : `Hidden from students. Show it${also}`;
+}
+
+/**
  * The padlock's props for a placed lesson: paid when it requires any
  * subscription, locked open when its module is free.
  *

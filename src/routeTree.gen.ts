@@ -118,6 +118,7 @@ import { Route as ApiAdminUsersProfileIdRolesRouteImport } from './routes/api/ad
 import { Route as ApiAdminViperSessionsChatIdRouteImport } from './routes/api/admin/viper.sessions.$chatId'
 import { Route as ApiTavusV1ChatCompletionsRouteImport } from './routes/api/tavus/v1/chat/completions'
 import { Route as ApiAdminCoursesCourseIdCredentialsProviderRouteImport } from './routes/api/admin/courses.$courseId.credentials.$provider'
+import { Route as ApiAdminCoursesCourseIdLessonsLessonIdRouteImport } from './routes/api/admin/courses.$courseId.lessons.$lessonId'
 import { Route as ApiAdminCoursesCourseIdModulesFromLibraryRouteImport } from './routes/api/admin/courses.$courseId.modules.from-library'
 import { Route as ApiAdminCoursesCourseIdNewsSourcesSourceIdRouteImport } from './routes/api/admin/courses.$courseId.news-sources.$sourceId'
 import { Route as ApiAdminCoursesCourseIdRemixesSourceCourseIdRouteImport } from './routes/api/admin/courses.$courseId.remixes.$sourceCourseId'
@@ -719,6 +720,12 @@ const ApiAdminCoursesCourseIdCredentialsProviderRoute =
     path: '/$provider',
     getParentRoute: () => ApiAdminCoursesCourseIdCredentialsRoute,
   } as any)
+const ApiAdminCoursesCourseIdLessonsLessonIdRoute =
+  ApiAdminCoursesCourseIdLessonsLessonIdRouteImport.update({
+    id: '/lessons/$lessonId',
+    path: '/lessons/$lessonId',
+    getParentRoute: () => ApiAdminCoursesCourseIdRoute,
+  } as any)
 const ApiAdminCoursesCourseIdModulesFromLibraryRoute =
   ApiAdminCoursesCourseIdModulesFromLibraryRouteImport.update({
     id: '/from-library',
@@ -865,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId': typeof ApiAdminCoursesCourseIdLessonsLessonIdRoute
   '/api/admin/courses/$courseId/modules/from-library': typeof ApiAdminCoursesCourseIdModulesFromLibraryRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
@@ -979,6 +987,7 @@ export interface FileRoutesByTo {
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/course/$courseSlug/modules': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId': typeof ApiAdminCoursesCourseIdLessonsLessonIdRoute
   '/api/admin/courses/$courseId/modules/from-library': typeof ApiAdminCoursesCourseIdModulesFromLibraryRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
@@ -1097,6 +1106,7 @@ export interface FileRoutesById {
   '/api/tavus/v1/chat/completions': typeof ApiTavusV1ChatCompletionsRoute
   '/_authed/course/$courseSlug/modules/': typeof AuthedCourseCourseSlugModulesIndexRoute
   '/api/admin/courses/$courseId/credentials/$provider': typeof ApiAdminCoursesCourseIdCredentialsProviderRoute
+  '/api/admin/courses/$courseId/lessons/$lessonId': typeof ApiAdminCoursesCourseIdLessonsLessonIdRoute
   '/api/admin/courses/$courseId/modules/from-library': typeof ApiAdminCoursesCourseIdModulesFromLibraryRoute
   '/api/admin/courses/$courseId/news-sources/$sourceId': typeof ApiAdminCoursesCourseIdNewsSourcesSourceIdRoute
   '/api/admin/courses/$courseId/remixes/$sourceCourseId': typeof ApiAdminCoursesCourseIdRemixesSourceCourseIdRoute
@@ -1215,6 +1225,7 @@ export interface FileRouteTypes {
     | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/lessons/$lessonId'
     | '/api/admin/courses/$courseId/modules/from-library'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
@@ -1329,6 +1340,7 @@ export interface FileRouteTypes {
     | '/api/tavus/v1/chat/completions'
     | '/course/$courseSlug/modules'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/lessons/$lessonId'
     | '/api/admin/courses/$courseId/modules/from-library'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
@@ -1446,6 +1458,7 @@ export interface FileRouteTypes {
     | '/api/tavus/v1/chat/completions'
     | '/_authed/course/$courseSlug/modules/'
     | '/api/admin/courses/$courseId/credentials/$provider'
+    | '/api/admin/courses/$courseId/lessons/$lessonId'
     | '/api/admin/courses/$courseId/modules/from-library'
     | '/api/admin/courses/$courseId/news-sources/$sourceId'
     | '/api/admin/courses/$courseId/remixes/$sourceCourseId'
@@ -2278,6 +2291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminCoursesCourseIdCredentialsProviderRouteImport
       parentRoute: typeof ApiAdminCoursesCourseIdCredentialsRoute
     }
+    '/api/admin/courses/$courseId/lessons/$lessonId': {
+      id: '/api/admin/courses/$courseId/lessons/$lessonId'
+      path: '/lessons/$lessonId'
+      fullPath: '/api/admin/courses/$courseId/lessons/$lessonId'
+      preLoaderRoute: typeof ApiAdminCoursesCourseIdLessonsLessonIdRouteImport
+      parentRoute: typeof ApiAdminCoursesCourseIdRoute
+    }
     '/api/admin/courses/$courseId/modules/from-library': {
       id: '/api/admin/courses/$courseId/modules/from-library'
       path: '/from-library'
@@ -2519,6 +2539,7 @@ interface ApiAdminCoursesCourseIdRouteChildren {
   ApiAdminCoursesCourseIdPersonaRoute: typeof ApiAdminCoursesCourseIdPersonaRoute
   ApiAdminCoursesCourseIdRemixesRoute: typeof ApiAdminCoursesCourseIdRemixesRouteWithChildren
   ApiAdminCoursesCourseIdStaffRoute: typeof ApiAdminCoursesCourseIdStaffRouteWithChildren
+  ApiAdminCoursesCourseIdLessonsLessonIdRoute: typeof ApiAdminCoursesCourseIdLessonsLessonIdRoute
 }
 
 const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren =
@@ -2540,6 +2561,8 @@ const ApiAdminCoursesCourseIdRouteChildren: ApiAdminCoursesCourseIdRouteChildren
       ApiAdminCoursesCourseIdRemixesRouteWithChildren,
     ApiAdminCoursesCourseIdStaffRoute:
       ApiAdminCoursesCourseIdStaffRouteWithChildren,
+    ApiAdminCoursesCourseIdLessonsLessonIdRoute:
+      ApiAdminCoursesCourseIdLessonsLessonIdRoute,
   }
 
 const ApiAdminCoursesCourseIdRouteWithChildren =
