@@ -7,11 +7,8 @@ import { UserLevelSchema } from '#/types';
  * Its own module rather than more of `admin-schemas.ts`, which is already
  * long and is about the editor's board. Nothing here is shared with it.
  *
- * TERMINOLOGY. "Offering" is overloaded in this codebase: the editor's course
- * rail uses it for a COURSE (`add-course-button.tsx` — "offering is an alias
- * of course, not a second table"). That is a different sense from this one. A
- * course is the template; an offering is one dated run of it, and the same
- * course run twice is two offerings.
+ * TERMINOLOGY. A course is the template; an offering is one dated run of it,
+ * and the same course run twice is two offerings.
  */
 
 /**

@@ -126,7 +126,7 @@ describe('writes that both editor surfaces read', () => {
     });
 
     // The bug this pins: only `adminCourses()` was invalidated, so pressing
-    // "New offering" on /admin/editor showed a success toast and left the
+    // "New course" on /admin/editor showed a success toast and left the
     // rail unchanged until a remount. Its three siblings — update, delete and
     // create-module — all invalidate the rail; only create was missed.
     expect(stale(client, dataKeys.adminCourses())).toBe(true);

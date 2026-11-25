@@ -1078,7 +1078,7 @@ export function hasPermissionKey(
  * and the gap is reachable through the shipped UI: `course` is not a
  * course-scoped entity, so an owner can tick "Courses → Add" for
  * `subject-expert` in the permission grid, and that SME is then shown a "New
- * offering" button that answers 403 every time.
+ * course" button that answers 403 every time.
  *
  * Use this for anything guarded by `requirePermission`. Course- and
  * discipline-scoped questions are a different shape entirely — the router

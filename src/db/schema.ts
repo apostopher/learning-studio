@@ -93,11 +93,7 @@ export const coursesTableRelations = relations(coursesTable, ({ many }) => ({
 /**
  * A scheduled instance of a course — an OFFERING.
  *
- * Terminology, because this word is overloaded in this codebase: the editor's
- * course rail calls a course an "offering" (see `add-course-button.tsx`) on
- * the theory that a two-week variant and a full course are separate rows in
- * `courses`. That is a different sense of the word from this table. Here a
- * course is the template — what is taught — and an offering is one dated run
+ * A course is the template — what is taught — and an offering is one dated run
  * of it: the same course scheduled in September and again in November is two
  * rows here and one row in `courses`.
  *

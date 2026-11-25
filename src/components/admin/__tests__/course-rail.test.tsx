@@ -10,12 +10,12 @@ describe('CourseRail', () => {
     // only its heading). This fails against that mutant because the action
     // would not be in the document at all.
     render(
-      <CourseRail headerAction={<button type="button">New offering</button>}>
+      <CourseRail headerAction={<button type="button">New course</button>}>
         <div>2 Week course column</div>
       </CourseRail>,
     );
     expect(screen.getByText('2 Week course column')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'New offering' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New course' })).toBeTruthy();
   });
 
   it('renders no action at all when it is given none', () => {
@@ -35,11 +35,11 @@ describe('CourseRail', () => {
     // instead of the header — visually wrong, and it would scroll away with
     // the columns. Asserting on presence alone cannot see this.
     render(
-      <CourseRail headerAction={<button type="button">New offering</button>}>
+      <CourseRail headerAction={<button type="button">New course</button>}>
         <div>2 Week course column</div>
       </CourseRail>,
     );
-    const action = screen.getByRole('button', { name: 'New offering' });
+    const action = screen.getByRole('button', { name: 'New course' });
     expect(action.closest('header')).not.toBeNull();
   });
 });

@@ -94,7 +94,7 @@ export async function resolveAuthContext(headers: Headers) {
  *
  * `isCourseManagerAnywhere` is narrower still — the course-manager ROLE on any
  * course, which a subject expert staffed on a course does not satisfy. It
- * mirrors `requireCourseCreation` (RBAC rule 5), so the "New offering" button
+ * mirrors `requireCourseCreation` (RBAC rule 5), so the "New course" button
  * and the endpoint behind it can never disagree about who may press it. It is
  * skipped entirely for an admin, who is admitted by their `course:create`
  * grant and needs no second reason.

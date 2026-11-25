@@ -9,7 +9,7 @@ import { dataKeys } from './keys';
  * library.
  *
  * `editorBoard()` as well as `adminCourses()`: the org editor mounts this same
- * dialog as "New offering" and its rail is drawn from the editor board, so
+ * dialog as "New course" and its rail is drawn from the editor board, so
  * without it the toast said "created" and the rail did not change until a
  * remount or a focus refetch past the 30s staleTime. Its three siblings —
  * `useUpdateCourse`, `useDeleteCourse` and `useCreateModule` — were all given

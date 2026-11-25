@@ -1369,10 +1369,7 @@ export const EditorContainer = ({
           <CourseRail
             headerAction={
               capabilities.canCreateCourse ? (
-                <CreateCourseDialogContainer
-                  triggerLabel="New offering"
-                  noun="offering"
-                />
+                <CreateCourseDialogContainer />
               ) : undefined
             }
           >

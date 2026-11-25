@@ -9,7 +9,7 @@ import { cn } from '#/lib/cn';
  * solid accent button with a leading plus and a caller-supplied label.
  *
  * One component rather than one per pane. The editor's two headers each carry
- * one of these ("Add discipline" on the library, "New offering" on the course
+ * one of these ("Add discipline" on the library, "New course" on the course
  * rail) and they must be the same height, since they sit side by side across
  * the splitter — which they cannot be if they are two copies of a long class
  * string that drift apart.
