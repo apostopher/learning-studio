@@ -21,6 +21,9 @@ function parseCourseId(raw: string): number | null {
  * the same name and its lessons placed in library order. Lessons the course
  * already teaches are skipped and named in the response.
  *
+ * A single lesson (`onlyLessonId`) gets a module of its own the same way; one
+ * already taught is a 409, since the module would hold nothing.
+ *
  * Guarded exactly like creating a module by hand — structure:create on the
  * destination course — since that is what it does. The lessons need no
  * separate check: the copy reads them off a discipline module of the
@@ -69,6 +72,12 @@ export async function postModuleFromLibraryHandler(
     // Another org's module, or none at all — the same answer for both, so
     // the id confirms nothing. See `absentResourceResponse`.
     return absentResourceResponse(request.headers, 'Library module not found');
+  }
+  if (result === 'duplicate') {
+    return Response.json(
+      { error: 'This course already teaches this lesson' },
+      { status: 409 },
+    );
   }
   const { createdVersionIds, ...copied } = result;
   waitUntil(indexLessonVersions(createdVersionIds));

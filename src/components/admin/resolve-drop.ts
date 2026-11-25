@@ -29,15 +29,15 @@ import { removeLessonLabel } from './lesson-card-labels';
  * guard nobody can test. It lives here instead: no React, no DOM, no hooks.
  *
  * The four allowed drops:
- * A drop on a COURSE column itself — the target an empty course carries — is
- * always `forbidden`, never `link`: a lesson lives inside a module, and this
- * function does not invent one.
+ * A drop on a COURSE column itself, off its modules, is never `link`: a lesson
+ * lives inside a module, so a library lesson gets one created around it and
+ * anything placed is `forbidden`.
  *
  *   library lesson  → a module            = `link`   (place it in that course)
  *   placed lesson   → a module, same course = `move` (re-place or reorder)
  *   module          → a module, same course = `reorder-module`
  *   library module  → a course's module/column = `copy-module` (new module, its lessons placed)
- *   library lesson  → a course with no modules of its own = `copy-module` (its library module, just this lesson)
+ *   library lesson  → a course's column      = `copy-module` (a new module, just this lesson)
  *
  * Everything else that lands on a REAL target is `forbidden`, never a silent
  * spring-back: `reason` is the sentence the admin reads. Dropping on nothing
@@ -89,11 +89,12 @@ export type DropResolution =
       /**
        * A library (discipline) module dropped on a course: copy it in as a
        * new course module holding its lessons. `afterModuleId` is the
-       * course module it was dropped on; null (an empty course) appends.
+       * course module it was dropped on; null (the column itself) appends.
        */
       kind: 'copy-module';
       courseId: number;
-      disciplineModuleId: number;
+      /** Null with `onlyLessonId`, for a lesson in no library module. */
+      disciplineModuleId: number | null;
       afterModuleId: number | null;
       /** Set when a single library LESSON creates its module around itself. */
       onlyLessonId?: number;
@@ -118,8 +119,8 @@ function findCourse(
 /**
  * Why a drop on a COURSE column itself is refused.
  *
- * That target only exists while a course DRAWS no modules — see
- * `EditorCourseEmptyContainer` — but this does not assume it: a course found
+ * For a lesson that target only exists while a course DRAWS no modules — see
+ * `EditorCourseColumnContainer` — but this does not assume it: a course found
  * with modules on screen gets the sentence that points at them instead. The
  * reason has to name the remedy, because "you cannot drop here" alone leaves
  * the reader with a lesson in hand and nowhere to put it.
@@ -684,12 +685,10 @@ export function resolveDrop(
           reason: `${courseBoard.course.name} already teaches this lesson.`,
         };
       }
-      // A course with nowhere to put the lesson gets the lesson's own
-      // library module created around it — named after it, holding just
-      // this lesson. A lesson in no library module has no name to lend, so
-      // the course still has to make one first.
+      // Off the modules, the lesson gets one of its own: named after its
+      // library module (or itself, when it is in none), holding just it.
       const from = library ? findLibraryLesson(library, active.id) : null;
-      if (from && from.boxId !== null) {
+      if (from) {
         return {
           kind: 'copy-module',
           courseId: courseBoard.course.id,
@@ -761,8 +760,8 @@ export function resolveDrop(
       return null;
 
     // Every remaining target is a course rail one: the module is COPIED into
-    // that course, after the module it was dropped on. An empty course's
-    // column (`course`, only drawn while it has no modules) appends.
+    // that course, after the module it was dropped on. The column itself
+    // (`course`: an empty course, or anywhere off its modules) appends.
     if (over.type === 'course') {
       const courseBoard = findCourse(board, over.id);
       if (!courseBoard) return null;

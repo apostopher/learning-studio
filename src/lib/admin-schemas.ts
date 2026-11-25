@@ -79,18 +79,24 @@ export type CreateModuleInput = z.infer<typeof createModuleInputSchema>;
 /**
  * Copy a discipline (library) module into a course — the editor's drag of a
  * library module onto a course column. `afterModuleId` is the course module
- * it was dropped on; null (an empty course) appends.
+ * it was dropped on; null (the column itself) appends.
  */
-export const copyDisciplineModuleInputSchema = z.object({
-  disciplineModuleId: z.number().int().positive(),
-  afterModuleId: z.number().int().positive().nullable(),
-  /**
-   * Bring only this one lesson along — a single library lesson dropped on a
-   * course with no modules of its own creates its library module around it.
-   * Must be a lesson of `disciplineModuleId`; omitted brings every lesson.
-   */
-  onlyLessonId: z.number().int().positive().optional(),
-});
+export const copyDisciplineModuleInputSchema = z
+  .object({
+    /** Null only with `onlyLessonId`: a lesson that is in no library module. */
+    disciplineModuleId: z.number().int().positive().nullable(),
+    afterModuleId: z.number().int().positive().nullable(),
+    /**
+     * Bring only this one lesson along — a single library lesson dropped on a
+     * course, off its modules, creates its library module around it. Must be a
+     * lesson of `disciplineModuleId`; omitted brings every lesson.
+     */
+    onlyLessonId: z.number().int().positive().optional(),
+  })
+  .refine(
+    (v) => v.disciplineModuleId !== null || v.onlyLessonId !== undefined,
+    { message: 'A library module or a lesson is required' },
+  );
 export type CopyDisciplineModuleInput = z.infer<
   typeof copyDisciplineModuleInputSchema
 >;

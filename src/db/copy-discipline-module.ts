@@ -1,8 +1,11 @@
-import { and, asc, eq, gt, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, ne, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { createModule, reorderModule } from '#/db/admin';
 import { invalidateCourseDetailsCache } from '#/db/course-cache';
-import { getCourseSlugsForModuleId } from '#/db/lesson-access';
+import {
+  getCourseSlugsForModuleId,
+  lessonBelongsToCourseOrg,
+} from '#/db/lesson-access';
 import {
   changeMembership,
   getCourseIdsShowingModule,
@@ -34,31 +37,40 @@ export interface CopiedModule {
   createdVersionIds: number[];
 }
 
-/**
- * Copy a discipline (library) module into a course: a NEW course module with
- * the same name, holding the discipline module's lessons in library order.
- *
- * A one-time copy, not a link: later changes to the discipline module do not
- * flow into the course, and the course module is edited like any other. The
- * lessons themselves are org-owned and are PLACED, never duplicated — the
- * same placement `linkLesson` writes for a single dragged lesson.
- *
- * Free, like a module made with the + button (`createModule` writes
- * `requiredSubscriptions: []`); paid access is set afterwards on the module.
- *
- * `afterModuleId` positions it after that module on THIS course's rail;
- * null appends it at the end (`createModule`'s own placement).
- *
- * Returns null when the discipline module does not exist in an org this
- * course belongs to — to the caller that is simply "not found".
- */
-export async function copyDisciplineModuleIntoCourse(input: {
+interface CopySource {
   courseId: number;
-  disciplineModuleId: number;
-  afterModuleId: number | null;
+  /** Null for a lesson that is in no library module. */
+  disciplineModuleId: number | null;
   /** Bring only this lesson (see `copyDisciplineModuleInputSchema`). */
   onlyLessonId?: number;
-}): Promise<CopiedModule | null> {
+}
+
+/**
+ * The new module's name and the lessons it would hold. A lesson in no library
+ * module lends the module its own name.
+ */
+async function readSource({
+  courseId,
+  disciplineModuleId,
+  onlyLessonId,
+}: CopySource) {
+  const lessonsWhere = (where: SQL | undefined) =>
+    db
+      .select({
+        id: lessonsTable.id,
+        name: lessonsTable.name,
+        libraryRank: lessonsTable.libraryRank,
+      })
+      .from(lessonsTable)
+      .where(where);
+
+  if (disciplineModuleId === null) {
+    if (onlyLessonId === undefined) return null;
+    if (!(await lessonBelongsToCourseOrg(onlyLessonId, courseId))) return null;
+    const rows = await lessonsWhere(eq(lessonsTable.id, onlyLessonId));
+    return rows[0] ? { name: rows[0].name, rows } : null;
+  }
+
   // Scoped to the course's orgs: a discipline module of another org is
   // indistinguishable from one that does not exist.
   const [source] = await db
@@ -77,31 +89,49 @@ export async function copyDisciplineModuleIntoCourse(input: {
     )
     .where(
       and(
-        eq(disciplineModulesTable.id, input.disciplineModuleId),
-        eq(courseOrgsTable.courseId, input.courseId),
+        eq(disciplineModulesTable.id, disciplineModuleId),
+        eq(courseOrgsTable.courseId, courseId),
       ),
     )
     .limit(1);
   if (!source) return null;
-
-  const rows = await db
-    .select({
-      id: lessonsTable.id,
-      name: lessonsTable.name,
-      libraryRank: lessonsTable.libraryRank,
-    })
-    .from(lessonsTable)
-    .where(
-      input.onlyLessonId === undefined
-        ? eq(lessonsTable.disciplineModuleId, source.id)
-        : and(
-            eq(lessonsTable.disciplineModuleId, source.id),
-            eq(lessonsTable.id, input.onlyLessonId),
-          ),
-    );
+  const inModule = eq(lessonsTable.disciplineModuleId, source.id);
+  const rows = await lessonsWhere(
+    onlyLessonId === undefined
+      ? inModule
+      : and(inModule, eq(lessonsTable.id, onlyLessonId)),
+  );
   // A named lesson that is not in this module is a stale or forged request,
   // not "an empty module" — create nothing.
-  if (input.onlyLessonId !== undefined && rows.length === 0) return null;
+  if (onlyLessonId !== undefined && rows.length === 0) return null;
+  return { name: source.name, rows };
+}
+
+/**
+ * Copy a discipline (library) module into a course: a NEW course module with
+ * the same name, holding the discipline module's lessons in library order.
+ *
+ * A one-time copy, not a link: later changes to the discipline module do not
+ * flow into the course, and the course module is edited like any other. The
+ * lessons themselves are org-owned and are PLACED, never duplicated — the
+ * same placement `linkLesson` writes for a single dragged lesson.
+ *
+ * Free, like a module made with the + button (`createModule` writes
+ * `requiredSubscriptions: []`); paid access is set afterwards on the module.
+ *
+ * `afterModuleId` positions it after that module on THIS course's rail;
+ * null appends it at the end (`createModule`'s own placement).
+ *
+ * Returns null when the discipline module (or the named lesson) does not exist
+ * in an org this course belongs to — to the caller that is simply "not found"
+ * — and 'duplicate' when the one named lesson is already taught here.
+ */
+export async function copyDisciplineModuleIntoCourse(
+  input: CopySource & { afterModuleId: number | null },
+): Promise<CopiedModule | 'duplicate' | null> {
+  const source = await readSource(input);
+  if (!source) return null;
+  const { name, rows } = source;
   const lessons = rows
     .map((r) => ({
       ...r,
@@ -117,11 +147,14 @@ export async function copyDisciplineModuleIntoCourse(input: {
   const toPlace = lessons.filter((l) => !taught(l.id));
   const skipped = lessons
     .filter((l) => taught(l.id))
-    .map(({ id, name }) => ({ id, name }));
+    .map((l) => ({ id: l.id, name: l.name }));
+  // The module exists only for this lesson: without it, an empty one.
+  if (input.onlyLessonId !== undefined && toPlace.length === 0)
+    return 'duplicate';
 
   const module = await createModule({
     courseId: input.courseId,
-    name: source.name,
+    name,
   });
 
   if (input.afterModuleId !== null) {

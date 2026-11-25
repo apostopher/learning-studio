@@ -1,11 +1,14 @@
+import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { Link } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Settings2 } from 'lucide-react';
 import {
+  activeDragLibraryLessonIdAtom,
+  activeDragLibraryModuleIdAtom,
   createModuleTargetAtom,
   deleteCourseAtom,
   editCourseAtom,
@@ -13,7 +16,7 @@ import {
 } from '#/atoms/admin';
 import { useLessonPosters } from '#/data-hooks/use-lesson-posters';
 import type { EditorCourseBoard } from '#/lib/admin-schemas';
-import { moduleDndId } from '#/lib/dnd-ids';
+import { courseDndId, moduleDndId } from '#/lib/dnd-ids';
 import { duplicateLessonNotes } from '#/lib/duplicate-lessons';
 import { flagshipRailNote, railModules } from '#/lib/flagship-course';
 import { CourseColumn } from './course-column';
@@ -92,6 +95,21 @@ export const EditorCourseColumnContainer = ({
   const shown = railModules(courseBoard, flagship?.id ?? null);
   const shownIds = new Set(shown.map((m) => m.id));
   const hidesBorrowed = shown.length < modules.length;
+  const isEmpty = shown.length === 0;
+
+  /**
+   * The column itself as a target. For a drag from the library, always: the
+   * space below the modules is where an admin drops a module, or a lesson to
+   * start one. For anything already placed, only while the column is empty —
+   * it is arranged within its own modules.
+   */
+  const draggingModule = useAtomValue(activeDragLibraryModuleIdAtom) !== null;
+  const draggingLesson = useAtomValue(activeDragLibraryLessonIdAtom) !== null;
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: courseDndId(course.id),
+    data: { type: 'course', courseId: course.id },
+    disabled: !isEmpty && !draggingModule && !draggingLesson,
+  });
 
   return (
     <CourseColumn
@@ -128,11 +146,14 @@ export const EditorCourseColumnContainer = ({
         </Link>
       }
       note={flagshipRailNote(flagship, courseBoard)}
+      dropRef={setDropRef}
+      isOver={isOver}
       emptySlot={
-        shown.length === 0 ? (
+        isEmpty ? (
           <EditorCourseEmptyContainer
             course={course}
             hasBorrowedModules={hidesBorrowed}
+            isOver={isOver}
           />
         ) : undefined
       }

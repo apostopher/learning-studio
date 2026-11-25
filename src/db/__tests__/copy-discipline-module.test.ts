@@ -52,6 +52,7 @@ const fake = vi.hoisted(() => {
     reorderModule: vi.fn(),
     getCourseIdsForLessons: vi.fn(),
     getCourseSlugsForModuleId: vi.fn(),
+    lessonBelongsToCourseOrg: vi.fn(),
     invalidateCourseDetailsCache: vi.fn(),
   };
 });
@@ -84,6 +85,7 @@ vi.mock('#/db/placements', () => ({
 }));
 vi.mock('#/db/lesson-access', () => ({
   getCourseSlugsForModuleId: fake.getCourseSlugsForModuleId,
+  lessonBelongsToCourseOrg: fake.lessonBelongsToCourseOrg,
 }));
 vi.mock('#/db/course-cache', () => ({
   invalidateCourseDetailsCache: fake.invalidateCourseDetailsCache,
@@ -139,8 +141,8 @@ describe('copyDisciplineModuleIntoCourse', () => {
     ]);
     // Every course showing the new module is told its lessons changed.
     expect(fake.invalidateCourseDetailsCache).toHaveBeenCalledWith('two-week');
-    expect(result?.skipped).toEqual([]);
-    expect(result?.createdVersionIds).toEqual([501]);
+    expect(result).toMatchObject({ skipped: [] });
+    expect(result).toMatchObject({ createdVersionIds: [501] });
     expect(lessonVersions.lockModuleOwner).toHaveBeenCalledWith(
       fake.db,
       COURSE,
@@ -173,8 +175,8 @@ describe('copyDisciplineModuleIntoCourse', () => {
     expect(fake.state.inserts).toEqual([
       [{ moduleId: NEW_MODULE, lessonId: 13, rank: '1', dependsOn: [] }],
     ]);
-    expect(result?.skipped).toEqual([{ id: 12, name: 'Taught' }]);
-    expect(result?.placedLessonIds).toEqual([13]);
+    expect(result).toMatchObject({ skipped: [{ id: 12, name: 'Taught' }] });
+    expect(result).toMatchObject({ placedLessonIds: [13] });
   });
 
   it('places the module after the one it was dropped on', async () => {
@@ -197,7 +199,7 @@ describe('copyDisciplineModuleIntoCourse', () => {
       prevModuleId: 40,
       nextModuleId: 41,
     });
-    expect(result?.module.rank).toBe(2.5);
+    expect(result).toMatchObject({ module: { rank: 2.5 } });
     // An empty library module creates an empty course module, nothing placed.
     expect(fake.state.inserts).toEqual([]);
   });
@@ -249,7 +251,62 @@ describe('copyDisciplineModuleIntoCourse', () => {
     expect(fake.state.inserts).toEqual([
       [{ moduleId: NEW_MODULE, lessonId: 13, rank: '1', dependsOn: [] }],
     ]);
-    expect(result?.placedLessonIds).toEqual([13]);
+    expect(result).toMatchObject({ placedLessonIds: [13] });
+  });
+
+  it('names the module after a lesson that is in no library module', async () => {
+    fake.lessonBelongsToCourseOrg.mockResolvedValue(true);
+    fake.state.results = [[{ id: 14, name: 'eVTOL Intro', libraryRank: null }]];
+
+    const result = await copyDisciplineModuleIntoCourse({
+      courseId: COURSE,
+      disciplineModuleId: null,
+      afterModuleId: null,
+      onlyLessonId: 14,
+    });
+
+    expect(fake.lessonBelongsToCourseOrg).toHaveBeenCalledWith(14, COURSE);
+    expect(fake.createModule).toHaveBeenCalledWith({
+      courseId: COURSE,
+      name: 'eVTOL Intro',
+    });
+    expect(fake.state.inserts).toEqual([
+      [{ moduleId: NEW_MODULE, lessonId: 14, rank: '1', dependsOn: [] }],
+    ]);
+    expect(result).toMatchObject({ placedLessonIds: [14] });
+  });
+
+  it('creates nothing for a lesson of another org', async () => {
+    fake.lessonBelongsToCourseOrg.mockResolvedValue(false);
+    fake.state.results = [[{ id: 14, name: 'eVTOL Intro', libraryRank: null }]];
+
+    expect(
+      await copyDisciplineModuleIntoCourse({
+        courseId: COURSE,
+        disciplineModuleId: null,
+        afterModuleId: null,
+        onlyLessonId: 14,
+      }),
+    ).toBeNull();
+    expect(fake.createModule).not.toHaveBeenCalled();
+  });
+
+  it('creates no empty module for a lesson the course already teaches', async () => {
+    fake.state.results = [
+      [{ id: 7, name: 'Basics' }],
+      [{ id: 13, name: 'Second', libraryRank: '2' }],
+    ];
+    fake.getCourseIdsForLessons.mockResolvedValue(new Map([[13, [COURSE]]]));
+
+    expect(
+      await copyDisciplineModuleIntoCourse({
+        courseId: COURSE,
+        disciplineModuleId: 7,
+        afterModuleId: null,
+        onlyLessonId: 13,
+      }),
+    ).toBe('duplicate');
+    expect(fake.createModule).not.toHaveBeenCalled();
   });
 
   it('creates nothing when the named lesson is not in that module', async () => {

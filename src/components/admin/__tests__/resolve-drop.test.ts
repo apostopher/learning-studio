@@ -489,13 +489,9 @@ describe('resolveDrop — no target at all', () => {
 });
 
 /**
- * The COURSE column itself is a drop target only while the course has no
- * modules (`EditorCourseEmptyContainer`). It exists so that dragging a lesson
- * onto an empty course is refused BY NAME instead of springing back in
- * silence, which reads as a bug rather than a rule.
- *
- * Every case below is `forbidden`, never `link`: a lesson lives inside a
- * module, and `resolveDrop` does not invent one.
+ * The COURSE column itself, off its modules. A LIBRARY lesson or module
+ * dropped there starts a module; anything else is refused by name, never
+ * silently, and never `link`: a lesson lives inside a module.
  */
 describe('resolveDrop — dropping on a course column itself', () => {
   it('creates a library lesson’s own module around it in a course with none', () => {
@@ -516,8 +512,26 @@ describe('resolveDrop — dropping on a course column itself', () => {
     });
   });
 
-  it('still asks for a module first when the lesson sits in no library module', () => {
-    // L3 is in Weather's Untitled group: there is no module name to lend.
+  it('creates one around it in a course that already has modules', () => {
+    expect(
+      resolveDrop(
+        board,
+        libraryLessonDndId(L1),
+        courseDndId(1),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'copy-module',
+      courseId: 1,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: null,
+      onlyLessonId: L1,
+    });
+  });
+
+  it('creates one for a lesson that sits in no library module', () => {
+    // L3 is in Weather's Untitled group: the module takes the lesson's name.
     expect(
       resolveDrop(
         board,
@@ -526,9 +540,12 @@ describe('resolveDrop — dropping on a course column itself', () => {
         undefined,
         libraryFixture(),
       ),
-    ).toMatchObject({
-      kind: 'forbidden',
-      reason: expect.stringContaining('Create one first'),
+    ).toEqual({
+      kind: 'copy-module',
+      courseId: 3,
+      disciplineModuleId: null,
+      afterModuleId: null,
+      onlyLessonId: L3,
     });
   });
 
@@ -1154,6 +1171,23 @@ describe('resolveDrop — library-side drops', () => {
     ).toEqual({
       kind: 'copy-module',
       courseId: 3,
+      disciplineModuleId: BASICS_MODULE,
+      afterModuleId: null,
+    });
+  });
+
+  it('appends to a course that already has modules, dropped on its column', () => {
+    expect(
+      resolveDrop(
+        board,
+        libraryModuleDndId(BASICS_MODULE),
+        courseDndId(1),
+        undefined,
+        libraryFixture(),
+      ),
+    ).toEqual({
+      kind: 'copy-module',
+      courseId: 1,
       disciplineModuleId: BASICS_MODULE,
       afterModuleId: null,
     });

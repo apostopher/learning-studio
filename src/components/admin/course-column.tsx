@@ -1,6 +1,7 @@
 import { Accordion } from '@base-ui/react/accordion';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import type { BoardCourse } from '#/lib/admin-schemas';
+import { cn } from '#/lib/cn';
 import { ClampedText } from '../clamped-text';
 import { ScrollArea } from '../scroll-area';
 import { OptimizedPicture } from './optimized-picture';
@@ -33,6 +34,8 @@ export const CourseColumn = ({
   note,
   expandedModuleIds,
   onExpandedModuleIdsChange,
+  dropRef,
+  isOver = false,
 }: {
   course: BoardCourse;
   children: ReactNode;
@@ -72,6 +75,10 @@ export const CourseColumn = ({
    */
   expandedModuleIds?: number[];
   onExpandedModuleIdsChange?: (moduleIds: number[]) => void;
+  /** Makes the whole column a drop target, when the caller registers one. */
+  dropRef?: Ref<HTMLElement>;
+  /** Whether a drag would land on the column itself, not on one of its modules. */
+  isOver?: boolean;
 }) => {
   // A course with no cover renders no slot at all rather than a placeholder
   // box: an empty grey rectangle in every column would cost the same vertical
@@ -79,7 +86,13 @@ export const CourseColumn = ({
   const hasCover = Boolean(course.imageUrlAvif ?? course.imageUrlWebp);
 
   return (
-    <section className="flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2">
+    <section
+      ref={dropRef}
+      className={cn(
+        'flex h-full w-96 shrink-0 flex-col rounded-xl border border-gray-6 bg-gray-2',
+        isOver && 'border-apple-9 ring-1 ring-apple-9',
+      )}
+    >
       <header className="sticky top-0 z-10 flex items-center gap-1 rounded-t-xl border-b border-gray-6 bg-gray-3 px-3 py-2">
         <ClampedText
           text={course.name}

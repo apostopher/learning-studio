@@ -51,9 +51,9 @@ export const disciplineDndId = (id: number) => `discipline-${id}`;
  * without importing a dnd-kit component.
  */
 export const UNTITLED_DISCIPLINE_ID = 0;
-/** A course column with no modules — a real droppable so a lesson dropped on
- *  an empty course can be refused with the reason (there is nowhere to put it
- *  yet) rather than looking identical to a drop on nothing. */
+/** A course column itself, off its modules — where a library module appends,
+ *  and a real droppable so a lesson dropped on an empty course starts a module
+ *  or is refused with the reason rather than looking like a drop on nothing. */
 export const courseDndId = (id: number) => `course-${id}`;
 /** A module box on a discipline's library shelf. Flat, like `discipline` and
  *  `course` — a discipline module's id is already unique across the whole

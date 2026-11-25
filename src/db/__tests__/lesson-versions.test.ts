@@ -380,11 +380,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         disciplineModuleId: 1,
         afterModuleId: null,
       });
-      expect(result?.placedLessonIds).toEqual([2, 3]);
+      expect(result).toMatchObject({ placedLessonIds: [2, 3] });
       const created = await rows(
         `select id from lesson_versions where lesson_id = 2 or version = '1.1' order by id`,
       );
-      expect([...(result?.createdVersionIds ?? [])].sort()).toEqual(
+      if (result === null || result === 'duplicate')
+        throw new Error('nothing copied');
+      expect([...result.createdVersionIds].sort()).toEqual(
         created.map((r) => r.id),
       );
       expect(created).toHaveLength(2);
@@ -396,6 +398,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         'course 2: lesson 3 1.1',
         'course 3: lesson 3 1.0',
       ]);
+    });
+
+    it('a lesson in no library module gets one named after it, once', async () => {
+      const copy = () =>
+        copyDisciplineModuleIntoCourse({
+          courseId: 3,
+          disciplineModuleId: null,
+          afterModuleId: null,
+          onlyLessonId: 1,
+        });
+      const modules = () =>
+        rows(
+          `select m.name, l.lesson_id from modules m join lessons x on x.name = m.name
+           join module_lessons l on l.module_id = m.id where m.course_id = 3 and x.id = 1`,
+        );
+      expect(await copy()).toMatchObject({ placedLessonIds: [1] });
+      expect((await modules()).map((r) => r.lesson_id)).toEqual([1]);
+      expect(await pins()).toEqual(['course 3: lesson 1 1.0']);
+
+      expect(await copy()).toBe('duplicate');
+      expect(await modules()).toHaveLength(1);
     });
 
     it('a new course takes the current version of every flagship lesson', async () => {

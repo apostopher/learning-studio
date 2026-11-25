@@ -99,6 +99,13 @@ import { LessonLibrary } from './lesson-library';
 import { LessonVideoModalContainer } from './lesson-video-modal-container';
 import { LibraryLessonCard } from './library-lesson-card';
 import { LibraryLessonConfigDialogContainer } from './library-lesson-config-dialog-container';
+import {
+  inPointerPane,
+  libraryModuleCollisions,
+  nearestToPointer,
+  pointerIsNear,
+  withoutFilledCourses,
+} from './library-module-collision';
 import { ModuleAccordionItem } from './module-accordion-item';
 import { RemoveCourseModuleDialogContainer } from './remove-course-module-dialog-container';
 import { RenameDisciplineDialogContainer } from './rename-discipline-dialog-container';
@@ -108,13 +115,6 @@ import { UpdateLessonVersionDialogContainer } from './update-lesson-version-dial
 
 /** How long a lesson must hover a collapsed module before it opens. */
 const AUTO_EXPAND_DELAY_MS = 400;
-/**
- * How far outside a target still counts as aiming at it. Measured edge to
- * pointer, not centre to centre: a tall module's centre can be 200px from its
- * own bottom edge, so a centre-distance threshold would call a drop just below
- * it a miss while calling a drop across the pane a hit.
- */
-const DROP_SLOP_PX = 24;
 const SPLIT_KEYBOARD_STEP = 2;
 
 /**
@@ -170,11 +170,19 @@ export interface EditorCapabilities {
   canDeleteCourse: boolean;
 }
 
-/** A discipline module's name by id, for the copy hint; generic when unknown. */
-function findLibraryModuleName(
+/** What a copied module will be called, for the hint; generic when unknown. */
+function copiedModuleName(
   library: OrgLibrary | null | undefined,
-  moduleId: number,
+  {
+    disciplineModuleId: moduleId,
+    onlyLessonId,
+  }: { disciplineModuleId: number | null; onlyLessonId?: number },
 ): string {
+  if (moduleId === null)
+    return (
+      findLibraryLesson(library ?? undefined, onlyLessonId ?? null)?.name ??
+      'this lesson'
+    );
   for (const discipline of library?.disciplines ?? []) {
     const found = discipline.modules.find((m) => m.id === moduleId);
     if (found) return found.name;
@@ -290,6 +298,8 @@ export const EditorContainer = ({
   } | null>(null);
   /** The pane row, measured live so the splitter works at any window size. */
   const paneRowRef = useRef<HTMLDivElement>(null);
+  /** The rail's pane, so a drop is judged by the pane the pointer is over. */
+  const railPaneRef = useRef<HTMLDivElement>(null);
   const [paneRowWidth, setPaneRowWidth] = useAtom(editorPaneRowWidthAtom);
 
   const readBoard = () =>
@@ -320,10 +330,21 @@ export const EditorContainer = ({
    * card let go in blank space would raise a red toast. Escape must not be
    * the only way to cancel a drag.
    */
-  const collisionDetection: CollisionDetection = (args) => {
-    const activeData = args.active.data.current;
+  const collisionDetection: CollisionDetection = (allArgs) => {
+    const activeData = allArgs.active.data.current;
     const activeType = activeData?.type as DndType | undefined;
-    const pointer = args.pointerCoordinates;
+    const pointer = allArgs.pointerCoordinates;
+    const railRect = railPaneRef.current?.getBoundingClientRect() ?? null;
+    const args = {
+      ...allArgs,
+      droppableContainers: allArgs.droppableContainers.filter((c) =>
+        inPointerPane(
+          c.data.current?.type as DndType | undefined,
+          pointer,
+          railRect,
+        ),
+      ),
+    };
     const missed = (candidates: typeof args.droppableContainers) =>
       pointer != null &&
       !candidates.some((c) =>
@@ -350,33 +371,7 @@ export const EditorContainer = ({
     }
 
     if (activeType === 'library-module') {
-      // Every droppable is a candidate EXCEPT `discipline` column ids — ALL
-      // of them, not just the drag's own. Unlike a library-lesson drag
-      // (where even a DIFFERENT discipline's column carries a written
-      // refusal — "a discipline column only groups the library"),
-      // `resolveDrop` answers a discipline module dropped on ANY discipline
-      // column with `null` regardless of which one, the same as
-      // `library-untitled` — there is no refusal there to keep reachable.
-      //
-      // Everything else stays in, and nothing else is filtered by kind, on
-      // purpose: `resolveDrop` refuses EVERY rail target ("organises the
-      // library, not a course") and every cross-discipline library target
-      // (naming both disciplines) — a refusal has to be reachable to be a
-      // refusal, the same reasoning `acceptsModuleDrag` documents for the
-      // rail's own module drags. An earlier version of this filter kept
-      // only the rail's `module`/`course` ids and excluded cross-discipline
-      // library lesson/container ids, which made both of those refusals
-      // unreachable through a course module's per-slot droppables or a
-      // sibling discipline's lesson cards — springing the drag back with no
-      // note, no announcement and no toast.
-      const libraryModuleTargets = args.droppableContainers.filter(
-        (c) => (c.data.current?.type as DndType | undefined) !== 'discipline',
-      );
-      if (missed(libraryModuleTargets)) return [];
-      return closestCenter({
-        ...args,
-        droppableContainers: libraryModuleTargets,
-      });
+      return libraryModuleCollisions(args, railRect);
     }
 
     const targets = args.droppableContainers.filter((c) => {
@@ -405,15 +400,17 @@ export const EditorContainer = ({
         // it") rather than a silent miss.
         return true;
       }
-      // `course` is the empty-course region. It is a target so the drop can
-      // be refused BY NAME rather than springing back silently — see
-      // `EditorCourseEmptyContainer`.
+      // `course` is the column itself, off its modules — see
+      // `EditorCourseColumnContainer` for which drags it takes.
       return acceptsLessonDrag(type);
     });
     // Keyboard dragging has no pointer, so the two-stage narrowing below has
     // nothing to narrow with; fall back to plain geometry over every target.
     if (!pointer) {
-      return closestCorners({ ...args, droppableContainers: targets });
+      return closestCorners({
+        ...args,
+        droppableContainers: withoutFilledCourses(targets),
+      });
     }
 
     // Stage one: which module or discipline is the pointer actually inside?
@@ -423,11 +420,10 @@ export const EditorContainer = ({
     const areas = targets.filter((c) =>
       isAreaTarget(c.data.current?.type as DndType | undefined),
     );
-    if (missed(areas)) return [];
     const hovered = pointerWithin({ ...args, droppableContainers: areas });
     const first = hovered[0];
     if (!first) {
-      return closestCorners({ ...args, droppableContainers: areas });
+      return nearestToPointer(args, pointer, areas);
     }
 
     // Stage two: inside a module, pick the nearest of ITS lessons.
@@ -668,10 +664,7 @@ export const EditorContainer = ({
         ? copyModuleHint(
             current,
             resolution,
-            findLibraryModuleName(
-              currentLibrary,
-              resolution.disciplineModuleId,
-            ),
+            copiedModuleName(currentLibrary, resolution),
           )
         : null,
     );
@@ -1171,7 +1164,7 @@ export const EditorContainer = ({
         return copyModuleHint(
           current,
           resolution,
-          findLibraryModuleName(currentLibrary, resolution.disciplineModuleId),
+          copiedModuleName(currentLibrary, resolution),
         );
       }
       if (resolution.kind === 'library-move') {
@@ -1373,7 +1366,7 @@ export const EditorContainer = ({
           />
         </div>
 
-        <div className="min-w-0 flex-1 overflow-hidden">
+        <div ref={railPaneRef} className="min-w-0 flex-1 overflow-hidden">
           <CourseRail
             headerAction={
               capabilities.canCreateCourse ? (
@@ -1494,19 +1487,3 @@ export const EditorContainer = ({
     </DndContext>
   );
 };
-
-/** Whether the pointer is inside a droppable's rect, or within `DROP_SLOP_PX` of it. */
-function pointerIsNear(
-  rect:
-    | { top: number; left: number; width: number; height: number }
-    | undefined,
-  pointer: { x: number; y: number },
-): boolean {
-  if (!rect) return false;
-  return (
-    pointer.x >= rect.left - DROP_SLOP_PX &&
-    pointer.x <= rect.left + rect.width + DROP_SLOP_PX &&
-    pointer.y >= rect.top - DROP_SLOP_PX &&
-    pointer.y <= rect.top + rect.height + DROP_SLOP_PX
-  );
-}

@@ -106,6 +106,38 @@ describe('POST /api/admin/courses/:courseId/modules/from-library', () => {
     });
   });
 
+  it('takes a lesson without a library module, but not nothing at all', async () => {
+    const lessonOnly = { disciplineModuleId: null, afterModuleId: null };
+    expect(
+      (await postModuleFromLibraryHandler(req(lessonOnly), '3')).status,
+    ).toBe(400);
+    expect(m.copyDisciplineModuleIntoCourse).not.toHaveBeenCalled();
+
+    await postModuleFromLibraryHandler(
+      req({ ...lessonOnly, onlyLessonId: 14 }),
+      '3',
+    );
+    expect(m.copyDisciplineModuleIntoCourse).toHaveBeenCalledWith({
+      courseId: 3,
+      disciplineModuleId: null,
+      afterModuleId: null,
+      onlyLessonId: 14,
+    });
+  });
+
+  it('409s a lesson the course already teaches, saying so', async () => {
+    m.copyDisciplineModuleIntoCourse.mockResolvedValueOnce('duplicate');
+    const res = await postModuleFromLibraryHandler(
+      req({ disciplineModuleId: 7, afterModuleId: null, onlyLessonId: 1 }),
+      '3',
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'This course already teaches this lesson',
+    });
+    expect(m.indexLessonVersions).not.toHaveBeenCalled();
+  });
+
   it('answers not-found for a module outside the course’s orgs', async () => {
     m.copyDisciplineModuleIntoCourse.mockResolvedValueOnce(null);
     const res = await postModuleFromLibraryHandler(req(), '3');

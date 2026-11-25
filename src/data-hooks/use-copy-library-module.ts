@@ -7,8 +7,8 @@ import {
 import { dataKeys } from './keys';
 
 /**
- * Copy a library (discipline) module into a course — the editor's drag of a
- * library module onto a course column.
+ * Copy a library (discipline) module, or one lesson of it, into a course as a
+ * new module — the editor's drag of either onto a course column.
  *
  * Invalidates the editor board (the new module), every per-course board
  * (the same prefix `useLinkLesson` uses, for the same stale-30s reason) and
@@ -32,6 +32,8 @@ export function useCopyLibraryModule() {
           }),
         },
       );
+      if (res.status === 409)
+        throw new Error('This course already teaches this lesson');
       if (!res.ok) throw new Error(`Failed to add the module (${res.status})`);
       return copiedModuleSchema.parse(await res.json());
     },
