@@ -157,6 +157,8 @@ const detailsFor = (
      * so the fixtures above keep describing the subscription and material
      * gates and nothing else. */
     levels?: readonly string[];
+    /** Defaults to true: a 3D Airmanship lesson, the only kind levels gate. */
+    levelGated?: boolean;
   }[],
 ) => ({
   // Chain off: these fixtures state their prerequisites explicitly and are
@@ -169,7 +171,11 @@ const detailsFor = (
       name: 'M',
       dependsOn: [],
       sequentialLessons: false,
-      lessons: lessons.map((lesson) => ({ levels: ['basic'], ...lesson })),
+      lessons: lessons.map((lesson) => ({
+        levels: ['basic'],
+        levelGated: true,
+        ...lesson,
+      })),
     },
   ],
 });
@@ -542,6 +548,19 @@ describe('getCourseContentForAgent level visibility', () => {
     for (const level of ['basic', 'intermediate', 'advanced'] as const) {
       getCurrentLevel.mockResolvedValue(level);
       const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+      expect(html).not.toContain('A body');
+    }
+  });
+
+  it('gives any pilot the lessons outside 3D Airmanship, untagged or not', async () => {
+    const [a, b] = twoTiers().modules[0].lessons;
+    getCourseDetailsWithCache.mockResolvedValue(
+      detailsFor([a, { ...b, levels: [], levelGated: false }]),
+    );
+    for (const level of ['advanced', null] as const) {
+      getCurrentLevel.mockResolvedValue(level);
+      const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+      expect(html).toContain('B body');
       expect(html).not.toContain('A body');
     }
   });

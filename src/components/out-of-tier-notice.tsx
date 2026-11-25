@@ -45,7 +45,7 @@ export const OutOfTierNotice = ({
                 </Dialog.Title>
                 <Dialog.Description className="mt-2 text-secondary text-sm">
                   Your training team hasn&rsquo;t set your level for this course
-                  yet, so its lessons aren&rsquo;t open to you.
+                  yet, so this lesson isn&rsquo;t open to you.
                 </Dialog.Description>
               </>
             ) : (

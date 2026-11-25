@@ -149,6 +149,26 @@ describe('getLibraryForUser level visibility', () => {
     expect(names(result)).toEqual([]);
   });
 
+  it('serves a pilot with no level the files of lessons outside 3D Airmanship', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
+    const [mod] = details.modules;
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...mod,
+          lessons: [
+            mod.lessons[0],
+            { ...mod.lessons[1], levels: [], levelGated: false },
+          ],
+        },
+      ],
+    });
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Inter Handout']);
+  });
+
   it('withholds every file from a pilot with no level', async () => {
     m.getCurrentLevel.mockResolvedValue(null);
     m.getLibraryForCourse.mockResolvedValue({

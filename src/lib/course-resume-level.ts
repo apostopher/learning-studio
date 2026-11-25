@@ -19,7 +19,7 @@ export type ResolveResumeForLevelArgs = {
   pointerLessonId: number | null;
   /**
    * The pilot's tier, or null when their training team has not set one —
-   * strict levels then give them nothing to resume into. Ignored for an
+   * strict levels then leave them only the lessons outside 3D Airmanship. Ignored for an
    * author (`bypassLocks`), who has no tier and no filter; callers pass null
    * there too.
    */
@@ -64,11 +64,13 @@ export function resolveResumeTargetForLevel({
     return resolveForTree(details, progress, pointerLessonId, true);
   }
 
-  // Said before anything is filtered, so the empty state names the real
-  // reason — "your level has not been set" — rather than the generic one.
-  if (level === null) return { kind: 'none', reason: 'no-level' };
-
   const visible = filterCourseToLevel(details, level);
+
+  // Names the real reason — "your level has not been set" — rather than the
+  // generic one below. Lessons outside 3D Airmanship need no level, so only
+  // when there are none of those either.
+  if (level === null && visible.modules.length === 0)
+    return { kind: 'none', reason: 'no-level' };
 
   // The course has lessons, just none at this pilot's level. Distinct from
   // `no-lessons` (nothing published at all) because the remedy differs: this

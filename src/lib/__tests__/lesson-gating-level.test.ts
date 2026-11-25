@@ -49,6 +49,7 @@ const DETAILS = {
           needsVideoWatch: true,
           dependsOn: [],
           levels: ['basic'],
+          levelGated: true,
         },
         {
           id: 11,
@@ -59,6 +60,7 @@ const DETAILS = {
           needsVideoWatch: true,
           dependsOn: [],
           levels: ['intermediate'],
+          levelGated: true,
         },
       ],
     },
@@ -334,5 +336,51 @@ describe('strict levels: an untagged lesson, and a pilot with no level', () => {
       courseSlug: 'c1',
     });
     expect(result?.outOfTier).toEqual({ readOnly: false });
+  });
+});
+
+describe('a lesson outside 3D Airmanship', () => {
+  const [mod] = DETAILS.modules;
+  const uas = (levels: string[]) => ({
+    ...mod.lessons[0],
+    id: 20,
+    slug: 'uas-1',
+    levels,
+    levelGated: false,
+  });
+
+  it.each([
+    ['intermediate', []],
+    ['intermediate', ['none']],
+    ['intermediate', ['basic']],
+    [null, []],
+  ] as const)('is open at level %s tagged %j', async (level, levels) => {
+    m.getCurrentLevel.mockResolvedValue(level);
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      // After 3D Airmanship lessons the pilot cannot see, which must not gate it.
+      modules: [{ ...mod, lessons: [mod.lessons[0], uas([...levels])] }],
+    });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'uas-1',
+      courseSlug: 'c1',
+    });
+    expect(result?.outOfTier).toBeNull();
+    expect(result?.lessonLock).toEqual({ kind: 'open' });
+  });
+
+  it('still waits for a UAS lesson before it', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        { ...mod, lessons: [uas([]), { ...uas([]), id: 21, slug: 'uas-2' }] },
+      ],
+    });
+    const result = await evaluateLessonGate({
+      userId: 'u1',
+      lessonSlug: 'uas-2',
+      courseSlug: 'c1',
+    });
+    expect(result?.lessonLock.kind).not.toBe('open');
   });
 });

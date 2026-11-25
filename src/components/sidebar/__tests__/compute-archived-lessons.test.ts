@@ -6,12 +6,19 @@ const course = {
     {
       slug: 'm1',
       lessons: [
-        { id: 1, slug: 'basic-a', name: 'Basic A', levels: [] },
+        {
+          id: 1,
+          slug: 'basic-a',
+          name: 'Basic A',
+          levels: [],
+          levelGated: true,
+        },
         {
           id: 2,
           slug: 'basic-only',
           name: 'Basic Only',
           levels: ['basic'],
+          levelGated: true,
         },
       ],
     },
@@ -23,6 +30,7 @@ const course = {
           slug: 'intermediate-a',
           name: 'Intermediate A',
           levels: ['intermediate'],
+          levelGated: true,
         },
       ],
     },
@@ -129,12 +137,19 @@ describe("computeArchivedLessons — a lesson tagged 'none'", () => {
         {
           slug: 'm1',
           lessons: [
-            { id: 9, slug: 'ditching', name: 'Ditching', levels: ['none'] },
+            {
+              id: 9,
+              slug: 'ditching',
+              name: 'Ditching',
+              levels: ['none'],
+              levelGated: true,
+            },
             {
               id: 2,
               slug: 'basic-only',
               name: 'Basic Only',
               levels: ['basic'],
+              levelGated: true,
             },
           ],
         },

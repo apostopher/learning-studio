@@ -66,7 +66,7 @@ describe('DisciplineColumnContainer', () => {
         <DisciplineColumnContainer
           disciplineId={4}
           name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          discipline={{ slug: 'weather', modules: [], untitled: [] }}
         />
       </Provider>,
     );
@@ -80,25 +80,42 @@ describe('DisciplineColumnContainer', () => {
     });
   });
 
-  // The levels board reads this atom to know which discipline to lay out.
-  it('opens the levels board on THIS discipline', () => {
+  // Levels are a 3D Airmanship feature. The levels board reads this atom to
+  // know which discipline to lay out.
+  it('opens the levels board from the 3D Airmanship column', () => {
     const store = createStore();
     render(
       <Provider store={store}>
         <DisciplineColumnContainer
           disciplineId={4}
-          name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          name="3D Airmanship"
+          discipline={{ slug: '3d-airmanship', modules: [], untitled: [] }}
         />
       </Provider>,
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Update levels in Weather' }),
+      screen.getByRole('button', { name: 'Update levels in 3D Airmanship' }),
     );
     expect(store.get(disciplineLevelsTargetAtom)).toEqual({
       id: 4,
-      name: 'Weather',
+      name: '3D Airmanship',
     });
+  });
+
+  it('offers no levels board in any other discipline', () => {
+    render(
+      <Provider store={createStore()}>
+        <DisciplineColumnContainer
+          disciplineId={4}
+          name="Weather"
+          discipline={{ slug: 'weather', modules: [], untitled: [] }}
+        />
+      </Provider>,
+    );
+    expect(screen.queryByRole('button', { name: /levels/i })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Add a lesson to Weather' }),
+    ).toBeTruthy();
   });
 
   it("starts loading this shelf's posters as soon as the column renders", () => {
@@ -107,7 +124,7 @@ describe('DisciplineColumnContainer', () => {
         <DisciplineColumnContainer
           disciplineId={4}
           name="Weather"
-          discipline={{ modules: [], untitled: [] }}
+          discipline={{ slug: 'weather', modules: [], untitled: [] }}
         />
       </Provider>,
     );

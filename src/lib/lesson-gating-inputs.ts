@@ -14,6 +14,8 @@ export type DetailsLesson = {
   hasVideo: boolean;
   needsVideoWatch: boolean;
   levels: readonly string[];
+  /** See `LevelFilterableLesson`. */
+  levelGated: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };
 export type DetailsModule = {

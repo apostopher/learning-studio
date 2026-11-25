@@ -116,6 +116,7 @@ const row = (courseId: number, slug: string, name: string) => ({
   moduleId: 1,
   lessonId: courseId * 10,
   levels: ['basic'],
+  flagshipDiscipline: true,
   watchedHits: 0,
 });
 
@@ -231,6 +232,30 @@ describe('getMyCourses — course staff', () => {
 
     expect(percentOf(8)).toBeGreaterThan(0);
     expect(percentOf(7)).toBe(0);
+  });
+
+  it('counts a lesson outside 3D Airmanship for a learner with no level', async () => {
+    dbState.rows = [
+      {
+        ...row(7, 'own-course', 'A'),
+        levels: [],
+        flagshipDiscipline: false,
+        watchedHits: 99,
+      },
+      {
+        ...row(8, 'other-course', 'B'),
+        levels: [],
+        flagshipDiscipline: true,
+        watchedHits: 99,
+      },
+    ];
+    m.getCurrentLevelsByCourse.mockResolvedValue(new Map());
+
+    const cards = await getMyCourses('u1');
+    const percentOf = (id: number) => cards.find((c) => c.id === id)?.percent;
+
+    expect(percentOf(7)).toBeGreaterThan(0);
+    expect(percentOf(8)).toBe(0);
   });
 
   it('resolves the staffed courses in ONE query, not one per card', async () => {

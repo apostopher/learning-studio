@@ -32,6 +32,8 @@ describe('OutOfTierNotice', () => {
         /Your training team hasn.t set your level for this course yet/,
       ),
     ).toBeTruthy();
+    // Only 3D Airmanship lessons are closed; the rest of the course is open.
+    expect(screen.getByText(/so this lesson isn.t open to you/)).toBeTruthy();
     expect(screen.queryByText(/current level/)).toBeNull();
   });
 

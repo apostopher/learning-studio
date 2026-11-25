@@ -68,6 +68,38 @@ describe('maybePromote', () => {
     expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
   });
 
+  it('is not held back by, nor promoted into, lessons outside 3D Airmanship', async () => {
+    m.getCurrentLevel.mockResolvedValue('basic');
+    const uas = (id: number, levels: string[]) => ({
+      id,
+      isAvailable: true,
+      levels,
+      levelGated: false,
+    });
+    const [basic, intermediate] = DETAILS.modules[0].lessons;
+    const of = (...lessons: unknown[]) =>
+      m.getCourseDetailsWithCache.mockResolvedValue({ modules: [{ lessons }] });
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        { lessonId: 1, done: true, debrief: { bearing: false, passed: false } },
+      ],
+    });
+
+    // Intermediate holds only a UAS lesson, which is no tier's.
+    of(basic, uas(8, ['intermediate']));
+    expect(await maybePromote({ userId: 'u1', courseSlug: 'rt' })).toBeNull();
+    expect(m.insertEarnedLevelRow).not.toHaveBeenCalled();
+
+    // An unfinished UAS lesson tagged Basic is not Basic work.
+    of(basic, intermediate, uas(9, ['basic']));
+    await maybePromote({ userId: 'u1', courseSlug: 'rt' });
+    expect(m.insertEarnedLevelRow).toHaveBeenCalledWith({
+      userId: 'u1',
+      courseId: 7,
+      level: 'intermediate',
+    });
+  });
+
   it('writes the next rung when the tier is finished', async () => {
     m.getCurrentLevel.mockResolvedValue('basic');
     m.getCourseProgress.mockResolvedValue({

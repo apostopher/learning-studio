@@ -12,6 +12,7 @@ import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
 import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
 import {
+  flagshipDisciplineSql,
   progressComponentColumns,
   progressComponentGroupBy,
   toComponentFields,
@@ -66,6 +67,8 @@ type LessonDetails = Omit<DBLesson, 'version' | 'contentUpdatedAt'> & {
    * so nothing downstream needs to know which video, only whether one exists.
    */
   hasVideo: boolean;
+  /** Whether levels gate the lesson (`#/lib/level-visibility`): 3D Airmanship only. */
+  levelGated: boolean;
   organizations: { id: number; name: string }[];
 };
 type ModuleDetails = DBModule & {
@@ -175,6 +178,7 @@ export async function getCourseDetails(slug: string) {
         otherVideoIds: lessonVersionsTable.otherVideoIds,
       },
       placement: moduleLessonsTable,
+      levelGated: flagshipDisciplineSql(),
       moduleDep: moduleDependenciesTable,
       orgLesson: orgLessonsTable,
       org: orgsTable,
@@ -198,7 +202,8 @@ export async function getCourseDetails(slug: string) {
 
   const lessonMap = new Map<number, LessonDetails>();
 
-  for (const { lesson, placement, moduleDep, orgLesson, org } of lessonData) {
+  for (const row of lessonData) {
+    const { lesson, placement, moduleDep, orgLesson, org } = row;
     // group lessons
     if (!lessonMap.has(lesson.id)) {
       lessonMap.set(lesson.id, {
@@ -214,6 +219,7 @@ export async function getCourseDetails(slug: string) {
           lesson.requiredSubscriptions as SubscriptionType[],
         levels: lesson.levels as LessonLevel[],
         hasVideo: lesson.videoProvider !== null && lesson.videoRef !== null,
+        levelGated: row.levelGated,
         otherVideoIds: lesson.otherVideoIds || [],
         dependsOn: [],
         organizations: [],
@@ -295,8 +301,11 @@ export type CourseDetails = Awaited<ReturnType<typeof getCourseDetails>>;
  *
  * v5 -> v6: lesson names and videos now come from the snapshot the course is
  * pinned to, not from the working copy.
+ *
+ * v6 -> v7: lessons carry `levelGated`. A v6 entry has none, so every lesson
+ * in it would stay gated by level.
  */
-export const COURSE_DETAILS_CACHE_KEY = 'course-details-v6';
+export const COURSE_DETAILS_CACHE_KEY = 'course-details-v7';
 
 const redisCourseDetails = cacheWithRedis<
   string,
@@ -474,7 +483,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
   // Null for an author: they wrote every tier, so none of them filters what
   // they see — the same short-circuit `evaluateLessonGate` makes. Also null
   // for a learner with no level row in the course, who under strict levels
-  // sees NOTHING — so every filter below keys the bypass on `viewsAsAuthor`,
+  // sees no gated lesson — so every filter below keys the bypass on `viewsAsAuthor`,
   // never on a null level.
   const levelFor = (courseId: number): UserLevel | null =>
     viewsAsAuthor(courseId) ? null : (levels.get(courseId) ?? null);
@@ -487,7 +496,10 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         // rather than vanishing from it.
         if (r.lessonId === null) return true;
         if (viewsAsAuthor(r.courseId)) return true;
-        return isLessonVisibleAtLevel(r.levels ?? [], levelFor(r.courseId));
+        return isLessonVisibleAtLevel(
+          { levels: r.levels ?? [], levelGated: r.flagshipDiscipline },
+          levelFor(r.courseId),
+        );
       })
       .map((r) => ({
         courseId: r.courseId,

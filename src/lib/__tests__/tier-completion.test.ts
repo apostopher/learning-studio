@@ -14,10 +14,15 @@ describe('nextLevel', () => {
 
 describe('isTierComplete', () => {
   const lessons = [
-    { lessonId: 1, levels: ['basic'], isAvailable: true },
-    { lessonId: 2, levels: [], isAvailable: true },
-    { lessonId: 3, levels: ['intermediate'], isAvailable: true },
-    { lessonId: 4, levels: ['basic'], isAvailable: false },
+    { lessonId: 1, levels: ['basic'], levelGated: true, isAvailable: true },
+    { lessonId: 2, levels: [], levelGated: true, isAvailable: true },
+    {
+      lessonId: 3,
+      levels: ['intermediate'],
+      levelGated: true,
+      isAvailable: true,
+    },
+    { lessonId: 4, levels: ['basic'], levelGated: true, isAvailable: false },
   ];
 
   it('is true when every reachable lesson at the tier is 100%', () => {
@@ -46,6 +51,30 @@ describe('isTierComplete', () => {
     ).toBe(true);
   });
 
+  it('is neither blocked nor earned by a lesson outside 3D Airmanship', () => {
+    const uas = {
+      lessonId: 9,
+      levels: ['basic'],
+      levelGated: false,
+      isAvailable: true,
+    };
+    const done = (lessonId: number) => ({
+      lessonId,
+      done: true,
+      debrief: { bearing: false, passed: false },
+    });
+    expect(
+      isTierComplete({
+        lessons: [...lessons, uas],
+        progress: [done(1)],
+        level: 'basic',
+      }),
+    ).toBe(true);
+    expect(
+      isTierComplete({ lessons: [uas], progress: [done(9)], level: 'basic' }),
+    ).toBe(false);
+  });
+
   it('does not count untagged lessons toward any tier', () => {
     expect(
       isTierComplete({
@@ -70,7 +99,9 @@ describe('isTierComplete', () => {
   it('cannot be completed by untagged lessons alone', () => {
     expect(
       isTierComplete({
-        lessons: [{ lessonId: 2, levels: [], isAvailable: true }],
+        lessons: [
+          { lessonId: 2, levels: [], levelGated: true, isAvailable: true },
+        ],
         progress: [
           {
             lessonId: 2,
@@ -118,7 +149,14 @@ describe('isTierComplete', () => {
   it('is false when the tier has no reachable lessons at all', () => {
     expect(
       isTierComplete({
-        lessons: [{ lessonId: 9, levels: ['advanced'], isAvailable: true }],
+        lessons: [
+          {
+            lessonId: 9,
+            levels: ['advanced'],
+            levelGated: true,
+            isAvailable: true,
+          },
+        ],
         progress: [
           {
             lessonId: 9,
@@ -133,7 +171,9 @@ describe('isTierComplete', () => {
 });
 
 describe('isTierComplete — debriefs', () => {
-  const lessons = [{ lessonId: 1, levels: ['basic'], isAvailable: true }];
+  const lessons = [
+    { lessonId: 1, levels: ['basic'], levelGated: true, isAvailable: true },
+  ];
 
   it('is incomplete while a bearing debrief is unpassed', () => {
     expect(
@@ -202,8 +242,18 @@ describe("isTierComplete — a 'none' lesson", () => {
       expect(
         isTierComplete({
           lessons: [
-            { lessonId: 1, levels: [level], isAvailable: true },
-            { lessonId: 2, levels: ['none'], isAvailable: true },
+            {
+              lessonId: 1,
+              levels: [level],
+              levelGated: true,
+              isAvailable: true,
+            },
+            {
+              lessonId: 2,
+              levels: ['none'],
+              levelGated: true,
+              isAvailable: true,
+            },
           ],
           progress: [
             {
@@ -221,7 +271,14 @@ describe("isTierComplete — a 'none' lesson", () => {
   it('cannot complete a tier on its own', () => {
     expect(
       isTierComplete({
-        lessons: [{ lessonId: 2, levels: ['none'], isAvailable: true }],
+        lessons: [
+          {
+            lessonId: 2,
+            levels: ['none'],
+            levelGated: true,
+            isAvailable: true,
+          },
+        ],
         progress: [
           {
             lessonId: 2,

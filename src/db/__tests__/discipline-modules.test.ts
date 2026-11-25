@@ -71,6 +71,16 @@ const fake = vi.hoisted(() => {
   return { state, db };
 });
 vi.mock('#/db', () => ({ db: fake.db }));
+const cache = vi.hoisted(() => ({
+  getCourseSlugsForLessonId: vi.fn(async () => ['one', 'two']),
+  invalidateCourseDetailsCache: vi.fn(async (_slug: string | null) => {}),
+}));
+vi.mock('#/db/lesson-access', () => ({
+  getCourseSlugsForLessonId: cache.getCourseSlugsForLessonId,
+}));
+vi.mock('#/db/course-cache', () => ({
+  invalidateCourseDetailsCache: cache.invalidateCourseDetailsCache,
+}));
 
 const {
   createDisciplineModule,
@@ -186,6 +196,44 @@ describe('deleteDisciplineModule', () => {
 });
 
 describe('placeLessonInLibrary', () => {
+  // Whether levels gate a lesson follows its discipline, and every course
+  // showing it caches the answer.
+  it.each([
+    ['into a discipline', null, 4],
+    ['out of one', 4, null],
+  ])('evicts every course teaching a lesson moved %s', async (_w, from, to) => {
+    cache.invalidateCourseDetailsCache.mockClear();
+    fake.state.results.push([{ disciplineId: from, disciplineName: null }]);
+    fake.state.results.push([{ id: 10, libraryRank: '1' }]);
+    const out = await placeLessonInLibrary({
+      lessonId: 10,
+      disciplineId: to,
+      disciplineModuleId: null,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    expect(out.ok).toBe(true);
+    expect(cache.getCourseSlugsForLessonId).toHaveBeenCalledWith(10);
+    expect(cache.invalidateCourseDetailsCache.mock.calls).toEqual([
+      ['one'],
+      ['two'],
+    ]);
+  });
+
+  it('evicts nothing for a lesson reordered within its discipline', async () => {
+    cache.invalidateCourseDetailsCache.mockClear();
+    fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]);
+    fake.state.results.push([{ id: 10, libraryRank: '1' }]);
+    await placeLessonInLibrary({
+      lessonId: 10,
+      disciplineId: 4,
+      disciplineModuleId: null,
+      prevLessonId: null,
+      nextLessonId: null,
+    });
+    expect(cache.invalidateCourseDetailsCache).not.toHaveBeenCalled();
+  });
+
   it('refuses a module of another discipline, naming both, and writes nothing', async () => {
     fake.state.results.push([{ disciplineId: 4, disciplineName: 'Weather' }]); // lesson
     fake.state.results.push([

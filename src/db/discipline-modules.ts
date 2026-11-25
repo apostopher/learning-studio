@@ -1,6 +1,8 @@
 // src/db/discipline-modules.ts
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { db } from '#/db';
+import { invalidateCourseDetailsCache } from '#/db/course-cache';
+import { getCourseSlugsForLessonId } from '#/db/lesson-access';
 import {
   disciplineModulesTable,
   disciplinesTable,
@@ -163,6 +165,15 @@ export type PlaceLessonResult =
     };
 
 /**
+ * Whether levels gate a lesson follows its discipline, and every course
+ * showing it caches the answer. Best-effort per slug.
+ */
+async function evictCoursesTeaching(lessonId: number): Promise<void> {
+  const slugs = await getCourseSlugsForLessonId(lessonId);
+  await Promise.all(slugs.map((slug) => invalidateCourseDetailsCache(slug)));
+}
+
+/**
  * File a lesson into `disciplineId`: into a module (`disciplineModuleId`) or
  * that discipline's Untitled group (`null`), at a midpoint `library_rank`
  * between the named neighbours — or, with `disciplineId: null`, release it
@@ -231,6 +242,8 @@ export async function placeLessonInLibrary(input: {
         libraryRank: lessonsTable.libraryRank,
       });
     if (!released) return { ok: false, reason: 'not-found' };
+    if (lesson.disciplineId !== null)
+      await evictCoursesTeaching(input.lessonId);
     return { ok: true, rank: null };
   }
 
@@ -303,5 +316,7 @@ export async function placeLessonInLibrary(input: {
     .where(eq(lessonsTable.id, input.lessonId))
     .returning({ id: lessonsTable.id, libraryRank: lessonsTable.libraryRank });
   if (!updated) return { ok: false, reason: 'not-found' };
+  if (lesson.disciplineId !== input.disciplineId)
+    await evictCoursesTeaching(input.lessonId);
   return { ok: true, rank: Number(updated.libraryRank) };
 }

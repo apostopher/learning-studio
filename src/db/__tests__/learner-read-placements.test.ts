@@ -236,6 +236,7 @@ vi.mock('#/db/course-staff', () => ({
   isCourseStaff: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('#/db/progress-components', () => ({
+  flagshipDisciplineSql: () => undefined,
   progressComponentColumns: () => ({}),
   progressComponentGroupBy: [],
   toComponentFields: () => ({}),

@@ -2,7 +2,8 @@ import { FilePlus, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 
 /**
- * The actions on a discipline column: update its lessons' levels, add a
+ * The actions on a discipline column: update its lessons' levels (where they
+ * apply), add a
  * lesson to it, add a module to it, edit it (its name and its subject
  * experts), delete it. A lesson added here
  * lands at the column's root level, outside every module — the only way to
@@ -40,20 +41,25 @@ export const DisciplineColumnActions = ({
 }: {
   disciplineName: string;
   canManage: boolean;
-  /** Opens the full-screen board for tagging this discipline's lessons by level. */
-  onUpdateLevels: () => void;
+  /**
+   * Opens the full-screen board for tagging this discipline's lessons by
+   * level. Omitted where levels do not apply, which draws no button.
+   */
+  onUpdateLevels?: () => void;
   onAddLesson: () => void;
   onAddModule: () => void;
   onRename: () => void;
   onDelete: () => void;
 }) => (
   <div className="flex items-center gap-0.5">
-    <TooltipIconButton
-      label={`Update levels in ${disciplineName}`}
-      onClick={onUpdateLevels}
-    >
-      <Layers className="h-4 w-4" aria-hidden="true" />
-    </TooltipIconButton>
+    {onUpdateLevels && (
+      <TooltipIconButton
+        label={`Update levels in ${disciplineName}`}
+        onClick={onUpdateLevels}
+      >
+        <Layers className="h-4 w-4" aria-hidden="true" />
+      </TooltipIconButton>
+    )}
     <TooltipIconButton
       label={`Add a lesson to ${disciplineName}`}
       onClick={onAddLesson}

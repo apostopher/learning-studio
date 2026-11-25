@@ -72,6 +72,7 @@ vi.mock('#/db/course-staff', () => ({
   isCourseStaff: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('#/db/progress-components', () => ({
+  flagshipDisciplineSql: () => undefined,
   progressComponentColumns: () => ({}),
   progressComponentGroupBy: [],
   toComponentFields: () => ({}),
@@ -270,9 +271,9 @@ describe('getCourseContentForAgent', () => {
 });
 
 /**
- * The payload is cached under a versioned key. A reader holding a v5 entry
- * built from the working copy of each lesson would keep being served it for
- * the full 6h TTL, so the key must move in the same commit as the query —
+ * The payload is cached under a versioned key. A reader holding a v6 entry
+ * has no `levelGated`, so it would keep every lesson gated by level for the
+ * full 6h TTL, so the key must move in the same commit as the query —
  * exactly the reasoning the earlier bumps already record.
  *
  * Mutant this catches: the query switched and the key left alone. Invisible
@@ -280,5 +281,5 @@ describe('getCourseContentForAgent', () => {
  * silently partial for six hours.
  */
 it('bumps the cached payload key', () => {
-  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v6');
+  expect(COURSE_DETAILS_CACHE_KEY).toBe('course-details-v7');
 });

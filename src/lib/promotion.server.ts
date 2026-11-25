@@ -6,9 +6,9 @@ import { getCourseProgress } from '#/db/course-progress';
 import { getCurrentLevel, insertEarnedLevelRow } from '#/db/user-levels';
 import { getUserEmail } from '#/db/user-profile';
 import { sendLevelPromotionEmail } from '#/lib/email/send-level-promotion-email';
-import { isLessonVisibleAtLevel } from '#/lib/level-visibility';
+import { isLessonArchivable, isLessonAtTier } from '#/lib/level-visibility';
 import { isTierComplete, nextLevel } from '#/lib/tier-completion';
-import { isUserLevel, type UserLevel } from '#/types';
+import type { UserLevel } from '#/types';
 
 export type Promotion = { id: number; from: UserLevel; to: UserLevel };
 
@@ -59,6 +59,7 @@ export async function maybePromote(options: {
     mod.lessons.map((lesson) => ({
       lessonId: lesson.id,
       levels: lesson.levels ?? [],
+      levelGated: lesson.levelGated,
       isAvailable: lesson.isAvailable,
     })),
   );
@@ -78,9 +79,10 @@ export async function maybePromote(options: {
   // change to the visibility predicate cannot silently reopen it. It also
   // skips the tier walk for the common untagged course.
   //
-  // "Tagged" means a REAL tier. `'none'` hides a lesson from everyone; it is
-  // not a tier, so a course whose only tags are `'none'` has no tiers either.
-  if (!lessons.some((lesson) => lesson.levels.some(isUserLevel))) return null;
+  // "Tagged" means a 3D Airmanship lesson at a REAL tier, which is what
+  // `isLessonArchivable` asks: `'none'` hides a lesson from everyone and is
+  // not a tier, and lessons outside 3D Airmanship belong to none.
+  if (!lessons.some(isLessonArchivable)) return null;
 
   if (!isTierComplete({ lessons, progress: progress.lessons, level: from })) {
     return null;
@@ -91,10 +93,7 @@ export async function maybePromote(options: {
   // to Intermediate would empty their course — and email them about it. They
   // stay where their content is until the next tier has some.
   if (
-    !lessons.some(
-      (lesson) =>
-        lesson.isAvailable && isLessonVisibleAtLevel(lesson.levels, to),
-    )
+    !lessons.some((lesson) => lesson.isAvailable && isLessonAtTier(lesson, to))
   ) {
     return null;
   }

@@ -164,7 +164,9 @@ export type LearnerCourseLesson = {
    * panel reads it, so no cache-key bump is involved.
    */
   hasDebrief: boolean;
-  /** Tiers that see this lesson. Empty means all. */
+  /** Tiers that see this lesson, when it is `levelGated`. */
   levels: readonly string[];
+  /** Whether levels apply to it: only to a 3D Airmanship lesson. */
+  levelGated: boolean;
   dependsOn: readonly { lessonSlug: string; moduleSlug?: string }[];
 };

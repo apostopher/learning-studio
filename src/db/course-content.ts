@@ -194,7 +194,7 @@ export async function getGatedCourseForAgent(
   // Filter 3: level visibility. An author has no tier — they wrote every one
   // — so they skip it, exactly as they skip every gate in
   // `evaluateLessonGate`. For a learner, `level` is null when their training
-  // team has not set one, and strict levels give that learner NOTHING — so
+  // team has not set one, and that learner gets no gated lesson — so
   // the author bypass is keyed on `viewingAsAuthor`, never on `level === null`.
   const level = viewingAsAuthor
     ? null
@@ -222,7 +222,7 @@ export async function getGatedCourseForAgent(
     : new Set(
         details.modules.flatMap((mod) =>
           mod.lessons
-            .filter((lesson) => isLessonVisibleAtLevel(lesson.levels, level))
+            .filter((lesson) => isLessonVisibleAtLevel(lesson, level))
             .map((lesson) => lesson.slug),
         ),
       );

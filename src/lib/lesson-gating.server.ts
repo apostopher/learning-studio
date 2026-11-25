@@ -174,7 +174,7 @@ export async function evaluateLessonGate({
     );
   }
 
-  if (!isLessonVisibleAtLevel(target.levels, level)) {
+  if (!isLessonVisibleAtLevel(target, level)) {
     // Out-of-tier work you already finished stays readable; out-of-tier work
     // you never did is not yours. `done` is the sticky completion record (100%
     // of video, tabs and quiz), so it survives later content changes.
@@ -182,10 +182,10 @@ export async function evaluateLessonGate({
     // Except where there is no "earlier level" for it to be the archive of:
     // a lesson tagged None (withdrawn) or untagged (at nobody's level) is
     // closed even to a pilot who completed it, and so is everything for a
-    // pilot with no level — they see nothing, archive included.
+    // pilot with no level — they see no gated lesson, archive included.
     const completed =
       level !== null &&
-      isLessonArchivable(target.levels) &&
+      isLessonArchivable(target) &&
       progress.lessons.some((row) => row.lessonId === target.id && row.done);
     return {
       ...course,

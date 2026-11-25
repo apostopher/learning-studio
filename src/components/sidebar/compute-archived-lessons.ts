@@ -15,6 +15,7 @@ type ArchivableLesson = {
   slug: string;
   name: string;
   levels: readonly string[];
+  levelGated: boolean;
 };
 type ArchivableModule = {
   slug: string;
@@ -43,7 +44,7 @@ type ProgressLike = { lessons: readonly ProgressLesson[] };
  * withdrawn `['none']` or untagged `[]` lesson was never moved to another
  * tier, so it is not an earlier level's work — the same rule the server gate
  * applies before serving a read-only copy. A pilot with no level (`null`)
- * gets no archive at all: they see nothing in the course.
+ * gets no archive at all: no tier is an earlier one.
  *
  * Admins are not filtered here — this is a pilot-facing view of THEIR OWN
  * completed work, and `CourseSidebarWrapper` does not call this for admins
@@ -61,10 +62,10 @@ export function computeArchivedLessons(
   const archived: ArchivedLesson[] = [];
   for (const mod of course.modules) {
     for (const lesson of mod.lessons) {
-      if (isLessonVisibleAtLevel(lesson.levels, level)) continue;
+      if (isLessonVisibleAtLevel(lesson, level)) continue;
       // Tagged None (withdrawn) or untagged (at nobody's level): not
       // completed at an earlier level, so not offered as an archive either.
-      if (!isLessonArchivable(lesson.levels)) continue;
+      if (!isLessonArchivable(lesson)) continue;
       const percent = percentByLessonId.get(lesson.id) ?? 0;
       if (percent < 100) continue;
       archived.push({

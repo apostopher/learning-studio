@@ -82,8 +82,8 @@ export async function recordLastViewedHandler(
   // those would newly 403 flows that succeed today, which is a separate
   // decision with its own blast radius (see this handler's doc comment).
   // Refusing on `outOfTier` alone matches what the pilot can see: under strict
-  // levels an untagged lesson, a lesson at another level, and every lesson for
-  // a pilot with no level is either refused outright or held only as a
+  // levels an untagged 3D Airmanship lesson, one at another level, and every
+  // one of them for a pilot with no level is either refused outright or held only as a
   // read-only archive, so a write to it has no legitimate origin.
   if (gate?.outOfTier) {
     return new Response('Forbidden', { status: 403 });

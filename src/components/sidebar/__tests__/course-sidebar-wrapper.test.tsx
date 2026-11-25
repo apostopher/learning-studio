@@ -537,6 +537,36 @@ describe('CourseSidebarWrapper', () => {
     expect(screen.queryByText('Fundamentals')).toBeNull();
   });
 
+  it('lists the lessons outside 3D Airmanship for a pilot with no level', async () => {
+    levelMock.mockReturnValue({
+      data: { level: null, pendingChange: null },
+      isError: false,
+    });
+    const [fundamentals, advancedOnly] = leveledCourse.modules;
+    await renderAt('/', {
+      data: {
+        ...leveledCourse,
+        modules: [
+          fundamentals,
+          {
+            ...advancedOnly,
+            name: 'UAS',
+            lessons: advancedOnly.lessons.map((l) => ({
+              ...l,
+              levelGated: false,
+            })),
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    expect(screen.getByText('1 module · 1 lesson')).toBeDefined();
+    expect(screen.getByText('UAS')).toBeDefined();
+    expect(screen.queryByText('Fundamentals')).toBeNull();
+    expect(screen.queryByText(/hasn’t set your level/)).toBeNull();
+  });
+
   it('shows no empty-state message when the pilot has lessons to see', async () => {
     await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
     expect(screen.queryByText(/hasn’t set your level/)).toBeNull();

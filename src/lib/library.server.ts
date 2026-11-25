@@ -94,8 +94,8 @@ export async function getLibraryForUser({
   // durable copy that leaves the site, not a rendering of work already done.
   //
   // Keyed on `viewingAsAuthor`, not `level === null`: a learner whose level
-  // has not been set also has a null level, and strict levels give them
-  // nothing — not the author's unfiltered library.
+  // has not been set also has a null level, and gets only the lessons levels
+  // do not gate — not the author's unfiltered library.
   const gateCourse = toGateCourse(
     viewingAsAuthor ? details : filterCourseToLevel(details, level),
   );

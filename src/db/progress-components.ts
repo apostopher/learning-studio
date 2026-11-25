@@ -70,6 +70,17 @@ const outerRef = (value: SQL | Column | number | string) =>
 type LessonSlugRef = SQL | typeof lessonsTable.slug | string;
 type LessonVersionIdRef = SQL | typeof lessonVersionsTable.id | number;
 
+/**
+ * Is the lesson filed under the 3D Airmanship discipline? By the discipline's
+ * slug, which a rename leaves alone. Also whether levels gate it
+ * (`LevelFilterableLesson`). Select from `lessons`.
+ */
+export const flagshipDisciplineSql = () =>
+  sql<boolean>`coalesce((
+    select d.slug = ${FLAGSHIP_DISCIPLINE_SLUG} from disciplines d
+    where d.id = ${outerRef(lessonsTable.disciplineId)}
+  ), false)`;
+
 /** A row in `debrief_passes` (permanent; legacy passes were backfilled). */
 export const debriefPassedSql = (userId: string, lessonSlug: LessonSlugRef) =>
   sql<boolean>`exists (
@@ -307,10 +318,7 @@ export const progressComponentColumns = (userId: string) => ({
    * A 3D Airmanship lesson, by DISCIPLINE, which is not versioned: its ring
    * closes on the quiz, the debrief being optional there.
    */
-  flagshipDiscipline: sql<boolean>`coalesce((
-    select d.slug = ${FLAGSHIP_DISCIPLINE_SLUG} from disciplines d
-    where d.id = ${lessonsTable.disciplineId}
-  ), false)`,
+  flagshipDiscipline: flagshipDisciplineSql(),
 
   quizPlayed: sql<boolean>`exists (
     select 1 from lesson_quiz_answers q
