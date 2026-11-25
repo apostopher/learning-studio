@@ -35,6 +35,7 @@ import {
   OWNER_ROLE,
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
+import { isFlagshipCourse } from '#/lib/flagship-course';
 import type { UserLevel } from '#/types';
 import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
@@ -187,10 +188,16 @@ export const UsersPageContainer = ({
     })),
   ];
 
-  const courseOptions = (courses.data ?? []).map((c) => ({
+  const toOption = (c: { id: number; name: string }) => ({
     id: c.id,
     name: c.name,
-  }));
+  });
+  const courseOptions = (courses.data ?? []).map(toOption);
+  // 3D Airmanship is part of every other course, so it is never assigned.
+  // Only not offered: anyone already on it stays on it.
+  const assignableCourses = (courses.data ?? [])
+    .filter((c) => !isFlagshipCourse(c))
+    .map(toOption);
 
   const errorOf = (e: unknown) =>
     e instanceof AdminUsersError ? e.message : undefined;
@@ -316,7 +323,7 @@ export const UsersPageContainer = ({
         }}
         email={newEmail}
         onEmailChange={setNewEmail}
-        courses={courseOptions}
+        courses={assignableCourses}
         selectedCourseIds={newCourseIds}
         onToggleCourse={(courseId, selected) =>
           setNewCourseIds(
@@ -345,7 +352,7 @@ export const UsersPageContainer = ({
           // disciplines.
           setDisciplinePicks(null);
         }}
-        allCourses={courseOptions}
+        allCourses={assignableCourses}
         canEditEnrolments={canGrantCourse || canRevokeCourse}
         onToggleCourse={(courseId, granted) =>
           setEnrolment.mutate(

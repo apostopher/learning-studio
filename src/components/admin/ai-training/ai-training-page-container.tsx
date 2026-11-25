@@ -1,10 +1,10 @@
 import { getRouteApi } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import {
-  AI_TRAINING_SECTIONS,
   type AiTrainingSectionId,
   aiTrainingSearchSchema,
   DEFAULT_AI_TRAINING_SECTION,
+  VISIBLE_AI_TRAINING_SECTIONS,
 } from '#/lib/ai-training-sections';
 import { PersonaSectionContainer } from '../persona/persona-section-container';
 import { AiTrainingPage } from './ai-training-page';
@@ -42,7 +42,7 @@ export const AiTrainingPageContainer = () => {
 
   return (
     <AiTrainingPage
-      sections={AI_TRAINING_SECTIONS}
+      sections={VISIBLE_AI_TRAINING_SECTIONS}
       active={active}
       onSelect={(trainingSection) =>
         navigate({ search: (prev) => ({ ...prev, trainingSection }) })
