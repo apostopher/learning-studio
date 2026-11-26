@@ -8,6 +8,7 @@ import { dataKeys } from '#/data-hooks/keys';
 import { lessonMaterialFormId } from './material-form-id';
 import { MaterialSaveButton } from './material-save-button';
 import { isVersionDirty } from './use-version-gate';
+import { useVersionNotes } from './use-version-notes';
 
 /**
  * The lesson dialog's Save button.
@@ -33,7 +34,9 @@ export const MaterialSaveButtonContainer = ({
   });
   const isMaterialDirty = useAtomValue(lessonMaterialDirtyAtomFamily(lessonId));
   const draft = useAtomValue(lessonVersionDraftAtomFamily(lessonId));
-  const isDirty = isMaterialDirty || isVersionDirty(draft, version);
+  const notes = useVersionNotes({ id: lessonId, version });
+  const isDirty =
+    isMaterialDirty || isVersionDirty(draft, version) || notes.isDirty;
   return (
     <MaterialSaveButton
       formId={lessonMaterialFormId(lessonId)}

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { vi } from 'vitest';
+import { LESSON_VERSION_NOTES_STATEMENTS } from '#/db/migrate-lesson-version-notes';
 import { migrateLessonVersions } from '#/db/migrate-lesson-versions';
 import { LESSON_VISIBILITY_STATEMENTS } from '#/db/migrate-lesson-visibility';
 import * as schema from '#/db/schema';
@@ -119,7 +120,10 @@ export async function freshDb({
   if (!migrated) return fresh;
   try {
     await migrateLessonVersions(fresh.db);
-    for (const statement of LESSON_VISIBILITY_STATEMENTS) {
+    for (const statement of [
+      ...LESSON_VISIBILITY_STATEMENTS,
+      ...LESSON_VERSION_NOTES_STATEMENTS,
+    ]) {
       await fresh.db.execute(statement);
     }
   } catch (error) {

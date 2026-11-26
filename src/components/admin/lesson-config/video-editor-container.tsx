@@ -9,6 +9,7 @@ import { detectVideoUrl } from '#/lib/video-providers/detect';
 import { AlternateVideosContainer } from './alternate-videos-container';
 import { useVersionGate, type VersionedLesson } from './use-version-gate';
 import { VersionFieldContainer } from './version-field-container';
+import { VersionNotesFieldContainer } from './version-notes-field-container';
 import { VideoUrlForm } from './video-url-form';
 
 const videoUrlFormSchema = z.object({
@@ -90,6 +91,7 @@ export const VideoEditorContainer = ({
         <AlternateVideosContainer lessonId={lesson.id} versioned={lesson} />
       )}
       <VersionFieldContainer lesson={lesson} />
+      <VersionNotesFieldContainer lesson={lesson} />
     </>
   );
 };

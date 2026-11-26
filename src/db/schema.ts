@@ -891,6 +891,25 @@ export const courseLessonVisibilityTable = pgTable(
   (table) => [primaryKey({ columns: [table.courseId, table.lessonId] })],
 );
 
+/**
+ * What an SME wrote about what changed in one version of a lesson — for their
+ * own reference, read by nobody else. Keyed by the version LABEL: reusing a
+ * label edits its note. Created by migrate-lesson-version-notes.ts, not
+ * drizzle-kit push.
+ */
+export const lessonVersionNotesTable = pgTable(
+  'lesson_version_notes',
+  {
+    lessonId: integer('lesson_id')
+      .notNull()
+      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
+    version: text('version').notNull(),
+    notes: text('notes').notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.lessonId, table.version] })],
+);
+
 export const lessonMaterialInsertSchema = createInsertSchema(
   lessonMaterialTable,
   {

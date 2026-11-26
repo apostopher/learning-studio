@@ -4,6 +4,7 @@ import { type FormEvent, useEffect } from 'react';
 import { type FieldErrors, useForm } from 'react-hook-form';
 import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
+import { useSaveLessonVersionNotes } from '#/data-hooks/use-lesson-version-notes';
 import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
 import { useSetLessonVersion } from '#/data-hooks/use-set-lesson-version';
@@ -15,6 +16,7 @@ import { lessonMaterialFormId } from './material-form-id';
 import { materialFormSchema } from './material-form-schema';
 import { MaterialUpload } from './material-upload';
 import { useVersionGate, type VersionedLesson } from './use-version-gate';
+import { useVersionNotes } from './use-version-notes';
 
 const EMPTY: LessonMaterialGeneration = {
   text: '',
@@ -62,6 +64,8 @@ export const MaterialSectionContainer = ({
   const save = useSaveLessonMaterial(lesson.id);
   const setVersion = useSetLessonVersion(lesson.id);
   const gate = useVersionGate(versioned);
+  const notes = useVersionNotes(versioned);
+  const saveNotes = useSaveLessonVersionNotes(lesson.id);
 
   /**
    * Hydrated by react-hook-form itself, not by an effect.
@@ -120,6 +124,16 @@ export const MaterialSectionContainer = ({
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     gate.attempt((version) => {
+      // Keyed by the version they describe — the one being saved, if any —
+      // so they need not wait for that save.
+      if (notes.isDirty) {
+        saveNotes.reset();
+        saveNotes.mutate({
+          version: version ?? versioned.version,
+          notes: notes.value,
+        });
+        if (version === undefined && !isDirty) return;
+      }
       if (version !== undefined && !isDirty) {
         save.reset();
         setVersion.mutate({ version });
@@ -153,7 +167,7 @@ export const MaterialSectionContainer = ({
         control={form.control}
         errors={form.formState.errors}
         onSubmit={onSubmit}
-        saveError={(save.error ?? setVersion.error)?.message}
+        saveError={(save.error ?? setVersion.error ?? saveNotes.error)?.message}
       />
     </div>
   );

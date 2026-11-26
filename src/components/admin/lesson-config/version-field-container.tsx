@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   lessonVersionDraftAtomFamily,
+  lessonVersionNotesDraftAtomFamily,
   lessonVersionRefusalAtomFamily,
 } from '#/atoms/admin';
 import { useIsSavingLessonContent } from '#/data-hooks/lesson-content-write';
@@ -17,6 +18,7 @@ import {
   useVersionGate,
   type VersionedLesson,
 } from './use-version-gate';
+import { notesDraftAfterVersionEdit } from './use-version-notes';
 import { VersionField } from './version-field';
 
 /**
@@ -32,6 +34,9 @@ export const VersionFieldContainer = ({
   const [draft, setDraft] = useAtom(lessonVersionDraftAtomFamily(lesson.id));
   const [refusal, setRefusal] = useAtom(
     lessonVersionRefusalAtomFamily(lesson.id),
+  );
+  const setNotesDraft = useSetAtom(
+    lessonVersionNotesDraftAtomFamily(lesson.id),
   );
   const { blocked } = useVersionGate(lesson);
   const isSaving = useIsSavingLessonContent(lesson.id);
@@ -64,8 +69,9 @@ export const VersionFieldContainer = ({
     () => () => {
       setDraft(null);
       setRefusal(null);
+      setNotesDraft(null);
     },
-    [setDraft, setRefusal],
+    [setDraft, setRefusal, setNotesDraft],
   );
 
   return (
@@ -74,7 +80,12 @@ export const VersionFieldContainer = ({
       formId={lessonMaterialFormId(lesson.id)}
       register={form.register('version', {
         onChange: (event) => {
-          setDraft(event.target.value);
+          const next: string = event.target.value;
+          // A new version starts with blank notes: see the rule's doc.
+          setNotesDraft((notes) =>
+            notesDraftAfterVersionEdit(lesson.version, draft, next, notes),
+          );
+          setDraft(next);
           setRefusal(null);
         },
       })}

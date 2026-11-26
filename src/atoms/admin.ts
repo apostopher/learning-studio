@@ -603,6 +603,15 @@ export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
 );
 
 /**
+ * The version notes typed in a lesson's editor and not saved yet; null =
+ * untouched, so the field shows the saved notes (or none, for a version just
+ * typed). Keyed per lesson, like the version draft it goes with.
+ */
+export const lessonVersionNotesDraftAtomFamily = atomFamily(
+  (_lessonId: number) => atom<string | null>(null),
+);
+
+/**
  * A content write held back because the typed version is not one: shown at the
  * Version field, which takes focus. A fresh object per refusal: refusing twice
  * must move focus twice.
@@ -612,15 +621,18 @@ export const lessonVersionRefusalAtomFamily = atomFamily((_lessonId: number) =>
 );
 
 /**
- * Forget a lesson's version draft and refusal when its dialog closes. Dropped
- * from the families too, or each would keep an entry per lesson ever opened.
+ * Forget a lesson's version draft, notes draft and refusal when its dialog
+ * closes. Dropped from the families too, or each would keep an entry per
+ * lesson ever opened.
  */
 export const discardLessonVersionAtom = atom(
   null,
   (_get, set, lessonId: number) => {
     set(lessonVersionDraftAtomFamily(lessonId), null);
     set(lessonVersionRefusalAtomFamily(lessonId), null);
+    set(lessonVersionNotesDraftAtomFamily(lessonId), null);
     lessonVersionDraftAtomFamily.remove(lessonId);
+    lessonVersionNotesDraftAtomFamily.remove(lessonId);
     lessonVersionRefusalAtomFamily.remove(lessonId);
   },
 );

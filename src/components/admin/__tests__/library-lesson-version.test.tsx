@@ -144,6 +144,8 @@ type Write = { method: string; path: string; body: Record<string, unknown> };
 const server = {
   lessons: new Map<number, LibraryLesson>(),
   material: null as Record<string, unknown> | null,
+  /** Version notes by version label, for lesson 10. */
+  notes: new Map<string, string>(),
   alternates: [] as unknown[],
   writes: [] as Write[],
   libraryReads: 0,
@@ -169,6 +171,18 @@ async function handle(path: string, init?: RequestInit): Promise<Response> {
   }
   const id = Number(path.match(/lessons\/(\d+)/)?.[1]);
   const lesson = server.lessons.get(id) as LibraryLesson;
+  if (path.includes('/version-notes')) {
+    if (method === 'GET') {
+      const version = new URL(path, 'http://x').searchParams.get('version');
+      return json({ notes: server.notes.get(version as string) ?? '' });
+    }
+    const body = JSON.parse(init?.body as string);
+    server.writes.push({ method, path, body });
+    if (server.holdWrites) await server.holdWrites;
+    if (server.failWith) return json({}, server.failWith);
+    server.notes.set(body.version, body.notes);
+    return json({ notes: body.notes });
+  }
   if (method === 'GET') {
     if (path.endsWith('/material'))
       return json({ extraTab: 'jobOfTheDay', material: server.material });
@@ -204,6 +218,7 @@ async function handle(path: string, init?: RequestInit): Promise<Response> {
 beforeEach(() => {
   server.lessons = new Map();
   server.material = MATERIAL;
+  server.notes = new Map();
   server.alternates = [{ lang: 'fr', provider: 'mux', ref: 'frenchcut' }];
   server.writes = [];
   server.libraryReads = 0;
@@ -859,5 +874,100 @@ describe('the draft lives as long as the dialog', () => {
     act(() => store.set(editLibraryLessonIdAtom, 10));
     await waitFor(() => expect(field().value).toBe('1.0'));
     expect(save().getAttribute('aria-label')).toBe('Save');
+  });
+});
+
+describe('version notes', () => {
+  const notesField = () =>
+    screen.getByLabelText(
+      /What changed in this version/,
+    ) as HTMLTextAreaElement;
+  const typeNotes = (value: string) =>
+    fireEvent.change(notesField(), { target: { value } });
+  const notesWrites = () =>
+    server.writes.filter((w) => w.path.includes('/version-notes'));
+
+  it("shows the current version's saved notes", async () => {
+    server.notes.set('1.0', 'Rewrote the crosswind section');
+    await open();
+    await waitFor(() =>
+      expect(notesField().value).toBe('Rewrote the crosswind section'),
+    );
+  });
+
+  it('a new version starts blank, and Save sends its notes keyed by that version', async () => {
+    server.notes.set('1.0', 'Old notes');
+    await open();
+    await waitFor(() => expect(notesField().value).toBe('Old notes'));
+
+    typeVersion('1.1');
+    expect(notesField().value).toBe('');
+    typeNotes('New quiz');
+    pressSave();
+    await settle();
+
+    expect(notesWrites()).toEqual([
+      {
+        method: 'PUT',
+        path: '/api/admin/lessons/10/version-notes',
+        body: { version: '1.1', notes: 'New quiz' },
+      },
+    ]);
+    expect(server.writes).toContainEqual({
+      method: 'PATCH',
+      path: '/api/admin/lessons/10',
+      body: { version: '1.1' },
+    });
+    // The old version's notes are kept, not overwritten.
+    expect(server.notes.get('1.0')).toBe('Old notes');
+    await waitFor(() => expect(save().getAttribute('aria-label')).toBe('Save'));
+    expect(notesField().value).toBe('New quiz');
+  });
+
+  it('fixing a typo in the new version keeps the notes; typing the saved one back restores its notes', async () => {
+    server.notes.set('1.0', 'Old notes');
+    await open();
+    await waitFor(() => expect(notesField().value).toBe('Old notes'));
+
+    typeVersion('1.');
+    typeNotes('Typed for the new one');
+    typeVersion('1.2');
+    expect(notesField().value).toBe('Typed for the new one');
+    typeVersion('1.0');
+    expect(notesField().value).toBe('Old notes');
+  });
+
+  it('notes typed under the old version clear when the version changes', async () => {
+    await open();
+    await waitFor(() => expect(notesField().readOnly).toBe(false));
+    typeNotes('Meant for 1.0');
+    typeVersion('1.1');
+    expect(notesField().value).toBe('');
+  });
+
+  it('notes alone light Save, and Save writes only the notes, for the current version', async () => {
+    await open();
+    await waitFor(() => expect(notesField().readOnly).toBe(false));
+    typeNotes('Fixed a typo in key points');
+    expect(save().getAttribute('aria-disabled')).not.toBe('true');
+    pressSave();
+    await settle();
+
+    expect(server.writes).toEqual([
+      {
+        method: 'PUT',
+        path: '/api/admin/lessons/10/version-notes',
+        body: { version: '1.0', notes: 'Fixed a typo in key points' },
+      },
+    ]);
+  });
+
+  it('a malformed version holds the notes back too', async () => {
+    await open();
+    typeVersion('one');
+    typeNotes('Notes');
+    pressSave();
+    await settle();
+    expect(notesWrites()).toEqual([]);
   });
 });

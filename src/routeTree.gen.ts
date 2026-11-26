@@ -106,6 +106,7 @@ import { Route as ApiAdminLessonsLessonIdAlternateVideosRouteImport } from './ro
 import { Route as ApiAdminLessonsLessonIdCaptionsRouteImport } from './routes/api/admin/lessons.$lessonId.captions'
 import { Route as ApiAdminLessonsLessonIdLibraryPlacementRouteImport } from './routes/api/admin/lessons.$lessonId.library-placement'
 import { Route as ApiAdminLessonsLessonIdMaterialRouteImport } from './routes/api/admin/lessons.$lessonId.material'
+import { Route as ApiAdminLessonsLessonIdVersionNotesRouteImport } from './routes/api/admin/lessons.$lessonId.version-notes'
 import { Route as ApiAdminLessonsLessonIdVideoRouteImport } from './routes/api/admin/lessons.$lessonId.video'
 import { Route as ApiAdminLessonsLessonIdVideoPlaybackRouteImport } from './routes/api/admin/lessons.$lessonId.video-playback'
 import { Route as ApiAdminModulesModuleIdLessonsRouteImport } from './routes/api/admin/modules.$moduleId.lessons'
@@ -648,6 +649,12 @@ const ApiAdminLessonsLessonIdMaterialRoute =
     path: '/material',
     getParentRoute: () => ApiAdminLessonsLessonIdRoute,
   } as any)
+const ApiAdminLessonsLessonIdVersionNotesRoute =
+  ApiAdminLessonsLessonIdVersionNotesRouteImport.update({
+    id: '/version-notes',
+    path: '/version-notes',
+    getParentRoute: () => ApiAdminLessonsLessonIdRoute,
+  } as any)
 const ApiAdminLessonsLessonIdVideoRoute =
   ApiAdminLessonsLessonIdVideoRouteImport.update({
     id: '/video',
@@ -859,6 +866,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/lessons/$lessonId/captions': typeof ApiAdminLessonsLessonIdCaptionsRoute
   '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
+  '/api/admin/lessons/$lessonId/version-notes': typeof ApiAdminLessonsLessonIdVersionNotesRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRouteWithChildren
@@ -974,6 +982,7 @@ export interface FileRoutesByTo {
   '/api/admin/lessons/$lessonId/captions': typeof ApiAdminLessonsLessonIdCaptionsRoute
   '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
+  '/api/admin/lessons/$lessonId/version-notes': typeof ApiAdminLessonsLessonIdVersionNotesRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRouteWithChildren
@@ -1093,6 +1102,7 @@ export interface FileRoutesById {
   '/api/admin/lessons/$lessonId/captions': typeof ApiAdminLessonsLessonIdCaptionsRoute
   '/api/admin/lessons/$lessonId/library-placement': typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   '/api/admin/lessons/$lessonId/material': typeof ApiAdminLessonsLessonIdMaterialRoute
+  '/api/admin/lessons/$lessonId/version-notes': typeof ApiAdminLessonsLessonIdVersionNotesRoute
   '/api/admin/lessons/$lessonId/video': typeof ApiAdminLessonsLessonIdVideoRoute
   '/api/admin/lessons/$lessonId/video-playback': typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
   '/api/admin/modules/$moduleId/lessons': typeof ApiAdminModulesModuleIdLessonsRouteWithChildren
@@ -1212,6 +1222,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/captions'
     | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
+    | '/api/admin/lessons/$lessonId/version-notes'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
@@ -1327,6 +1338,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/captions'
     | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
+    | '/api/admin/lessons/$lessonId/version-notes'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
@@ -1445,6 +1457,7 @@ export interface FileRouteTypes {
     | '/api/admin/lessons/$lessonId/captions'
     | '/api/admin/lessons/$lessonId/library-placement'
     | '/api/admin/lessons/$lessonId/material'
+    | '/api/admin/lessons/$lessonId/version-notes'
     | '/api/admin/lessons/$lessonId/video'
     | '/api/admin/lessons/$lessonId/video-playback'
     | '/api/admin/modules/$moduleId/lessons'
@@ -2207,6 +2220,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminLessonsLessonIdMaterialRouteImport
       parentRoute: typeof ApiAdminLessonsLessonIdRoute
     }
+    '/api/admin/lessons/$lessonId/version-notes': {
+      id: '/api/admin/lessons/$lessonId/version-notes'
+      path: '/version-notes'
+      fullPath: '/api/admin/lessons/$lessonId/version-notes'
+      preLoaderRoute: typeof ApiAdminLessonsLessonIdVersionNotesRouteImport
+      parentRoute: typeof ApiAdminLessonsLessonIdRoute
+    }
     '/api/admin/lessons/$lessonId/video': {
       id: '/api/admin/lessons/$lessonId/video'
       path: '/video'
@@ -2708,6 +2728,7 @@ interface ApiAdminLessonsLessonIdRouteChildren {
   ApiAdminLessonsLessonIdCaptionsRoute: typeof ApiAdminLessonsLessonIdCaptionsRoute
   ApiAdminLessonsLessonIdLibraryPlacementRoute: typeof ApiAdminLessonsLessonIdLibraryPlacementRoute
   ApiAdminLessonsLessonIdMaterialRoute: typeof ApiAdminLessonsLessonIdMaterialRoute
+  ApiAdminLessonsLessonIdVersionNotesRoute: typeof ApiAdminLessonsLessonIdVersionNotesRoute
   ApiAdminLessonsLessonIdVideoRoute: typeof ApiAdminLessonsLessonIdVideoRoute
   ApiAdminLessonsLessonIdVideoPlaybackRoute: typeof ApiAdminLessonsLessonIdVideoPlaybackRoute
 }
@@ -2720,6 +2741,8 @@ const ApiAdminLessonsLessonIdRouteChildren: ApiAdminLessonsLessonIdRouteChildren
     ApiAdminLessonsLessonIdLibraryPlacementRoute:
       ApiAdminLessonsLessonIdLibraryPlacementRoute,
     ApiAdminLessonsLessonIdMaterialRoute: ApiAdminLessonsLessonIdMaterialRoute,
+    ApiAdminLessonsLessonIdVersionNotesRoute:
+      ApiAdminLessonsLessonIdVersionNotesRoute,
     ApiAdminLessonsLessonIdVideoRoute: ApiAdminLessonsLessonIdVideoRoute,
     ApiAdminLessonsLessonIdVideoPlaybackRoute:
       ApiAdminLessonsLessonIdVideoPlaybackRoute,

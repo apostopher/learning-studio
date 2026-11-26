@@ -34,6 +34,7 @@
     "db:migrate-pass-mark": "dotenv -e .env.local -- tsx src/db/migrate-pass-mark.ts",
     "db:migrate-lesson-versions": "dotenv -e .env.local -- tsx src/db/migrate-lesson-versions.ts",
     "db:migrate-lesson-visibility": "dotenv -e .env.local -- tsx src/db/migrate-lesson-visibility.ts",
+    "db:migrate-lesson-version-notes": "dotenv -e .env.local -- tsx src/db/migrate-lesson-version-notes.ts",
     "db:migrate-knowledge-chunks": "dotenv -e .env.local -- tsx src/db/migrate-knowledge-chunks.ts",
     "db:migrate-video-resume": "dotenv -e .env.local -- tsx src/db/migrate-video-resume.ts",
     "db:index-lesson-versions": "dotenv -e .env.local -- tsx scripts/index-lesson-versions.ts",

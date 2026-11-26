@@ -42,6 +42,15 @@ vi.mock('#/data-hooks/use-save-lesson-material', () => ({
     error: null,
   }),
 }));
+// No notes saved: these tests are not about them (library-lesson-version is).
+vi.mock('#/data-hooks/use-lesson-version-notes', () => ({
+  useLessonVersionNotes: () => ({ data: '', isLoading: false }),
+  useSaveLessonVersionNotes: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    error: null,
+  }),
+}));
 vi.mock('#/data-hooks/use-set-lesson-version', () => ({
   useSetLessonVersion: () => ({
     mutate: vi.fn(),

@@ -221,6 +221,25 @@ export const setLessonVersionInputSchema = z
   .strict();
 export type SetLessonVersionInput = z.infer<typeof setLessonVersionInputSchema>;
 
+/** Longest version note kept: a few paragraphs, not a document. */
+export const LESSON_VERSION_NOTES_MAX = 4000;
+
+/** PUT body of a lesson's version notes: the notes for THIS version. */
+export const setLessonVersionNotesInputSchema = z
+  .object({
+    version: lessonVersionSchema,
+    notes: z
+      .string()
+      .max(
+        LESSON_VERSION_NOTES_MAX,
+        `Keep notes under ${LESSON_VERSION_NOTES_MAX} characters`,
+      ),
+  })
+  .strict();
+export type SetLessonVersionNotesInput = z.infer<
+  typeof setLessonVersionNotesInputSchema
+>;
+
 /** POST body of the material save. */
 export const saveLessonMaterialInputSchema =
   LessonMaterialGenerationSchema.extend(contentVersion);
