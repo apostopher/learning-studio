@@ -191,7 +191,7 @@ export const OfferingRosterTable = ({
     },
     {
       accessorKey: 'level',
-      header: 'Level',
+      header: '3D',
       cell: ({ row }) => {
         const { userId, name } = row.original;
         const level = displayLevel ? displayLevel(userId) : row.original.level;

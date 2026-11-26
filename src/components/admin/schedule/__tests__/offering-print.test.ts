@@ -61,6 +61,13 @@ describe('offeringPrintHtml', () => {
     expect(text).toMatch(/Arrive at training center\s*Not set/);
   });
 
+  it('heads the level column 3D', () => {
+    const headers = [
+      ...parse(offeringPrintHtml(input)).querySelectorAll('thead th'),
+    ].map((th) => th.textContent);
+    expect(headers).toEqual(['#', 'Name', 'Email', '3D']);
+  });
+
   it('is an A4 page', () => {
     expect(offeringPrintHtml(input)).toContain('size: A4');
   });

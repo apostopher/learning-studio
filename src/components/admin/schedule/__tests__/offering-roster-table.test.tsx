@@ -205,4 +205,15 @@ describe('OfferingRosterTable level cell', () => {
     expect(onCycleLevel).not.toHaveBeenCalled();
     expect(locked.className).not.toMatch(/opacity/);
   });
+
+  it('heads the level column 3D', () => {
+    render(
+      <OfferingRosterTable
+        users={[{ userId: 'u1', name: 'Ada', email: 'a@x.com', level: null }]}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('columnheader', { name: '3D' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Level' })).toBeNull();
+  });
 });

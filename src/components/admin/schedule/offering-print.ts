@@ -124,7 +124,7 @@ export function offeringPrintHtml(input: OfferingPrintInput): string {
 <dl>${details.map(([term, value]) => `<dt>${term}</dt><dd>${escapeHtml(value)}</dd>`).join('')}</dl>
 <h2>Students · ${count} ${count === 1 ? 'person' : 'people'}</h2>
 <table>
-<thead><tr><th class="num">#</th><th>Name</th><th>Email</th><th>Level</th></tr></thead>
+<thead><tr><th class="num">#</th><th>Name</th><th>Email</th><th>3D</th></tr></thead>
 <tbody>${rows}</tbody>
 </table>
 </body>
