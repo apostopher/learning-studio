@@ -19,6 +19,7 @@ const base = {
   rosterTable: <div />,
   onSubmit: vi.fn(),
   onCancel: vi.fn(),
+  onPrint: vi.fn(),
   isSaving: false,
   submitLabel: 'Save',
 };
@@ -90,5 +91,12 @@ describe('OfferingForm (compact)', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it('Print hands off to the container', () => {
+    const onPrint = vi.fn();
+    render(<OfferingForm {...base} onPrint={onPrint} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
+    expect(onPrint).toHaveBeenCalledTimes(1);
   });
 });

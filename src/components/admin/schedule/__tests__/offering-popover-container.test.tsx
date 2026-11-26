@@ -56,6 +56,12 @@ vi.mock('#/data-hooks/use-user-levels', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The print sheet's consumer: the HTML and the title it is printed under.
+const printHtmlDocument = vi.hoisted(() => vi.fn());
+vi.mock('../offering-print', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../offering-print')>()),
+  printHtmlDocument,
+}));
 
 import { OfferingPopoverContainer } from '../offering-popover-container';
 
@@ -822,5 +828,38 @@ describe('OfferingPopoverContainer arrival date', () => {
       'Finish the arrival date, or clear it',
     );
     expect(document.activeElement).toBe(arriveAt());
+  });
+});
+
+describe('OfferingPopoverContainer Print', () => {
+  it('prints what is on screen, unsaved edits included, titled with the course', () => {
+    const { pinA } = renderPopover([
+      {
+        ...offeringA,
+        users: [
+          {
+            userId: 'u1',
+            name: 'David Cooke',
+            email: 'david@example.com',
+            level: 'basic',
+          },
+        ],
+      },
+    ]);
+    pinA();
+    makeDirty();
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
+
+    expect(printHtmlDocument).toHaveBeenCalledTimes(1);
+    const [html, title] = printHtmlDocument.mock.calls[0];
+    expect(title).toBe('Instrument Ground School');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    expect(doc.title).toBe('Instrument Ground School');
+    const text = doc.body.textContent ?? '';
+    expect(text).toContain('23 Sep 2026');
+    expect(text).toContain('60 calendar days');
+    expect(text).toContain('David Cooke');
+    expect(text).toContain('david@example.com');
+    expect(text).toContain('Basic');
   });
 });

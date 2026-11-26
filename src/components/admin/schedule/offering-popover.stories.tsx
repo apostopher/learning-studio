@@ -4,6 +4,7 @@ import type { OfferingUser } from '#/lib/offering-schemas';
 import { OfferingAddPerson } from './offering-add-person';
 import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
+import { offeringPrintHtml, printHtmlDocument } from './offering-print';
 import { levelSummary, OfferingRosterTable } from './offering-roster-table';
 import {
   endDateFromWindow,
@@ -145,6 +146,19 @@ const Harness = ({
         }
         onSubmit={() => {}}
         onCancel={() => {}}
+        onPrint={() =>
+          printHtmlDocument(
+            offeringPrintHtml({
+              courseName: 'Story course',
+              startsOn,
+              endsOn,
+              arriveAt,
+              users,
+              printedAt: new Date(),
+            }),
+            'Story course',
+          )
+        }
         onDelete={() => {}}
         isSaving={false}
         submitLabel="Save"

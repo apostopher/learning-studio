@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Printer } from 'lucide-react';
 import type { ReactNode, Ref } from 'react';
 import { cn } from '#/lib/cn';
 
@@ -45,6 +45,7 @@ export const OfferingForm = ({
   rosterTable,
   onSubmit,
   onCancel,
+  onPrint,
   onDelete,
   isSaving,
   submitLabel,
@@ -76,6 +77,8 @@ export const OfferingForm = ({
   rosterTable: ReactNode;
   onSubmit: () => void;
   onCancel: () => void;
+  /** Opens the print dialog on an A4 sheet of the dates and the roster. */
+  onPrint: () => void;
   /** Absent when creating — there is nothing to unschedule yet. */
   onDelete?: () => void;
   isSaving: boolean;
@@ -238,9 +241,17 @@ export const OfferingForm = ({
         )}
         <button
           type="button"
+          onClick={onPrint}
+          className="ms-auto inline-flex items-center gap-2 rounded-lg border border-gray-6 px-4 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9"
+        >
+          <Printer className="h-4 w-4" aria-hidden="true" />
+          Print
+        </button>
+        <button
+          type="button"
           onClick={onCancel}
           disabled={isSaving}
-          className="ms-auto rounded-lg border border-gray-6 px-4 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9 disabled:opacity-60"
+          className="rounded-lg border border-gray-6 px-4 py-2 font-medium text-secondary text-sm transition-colors hover:bg-gray-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-9 disabled:opacity-60"
         >
           Cancel
         </button>

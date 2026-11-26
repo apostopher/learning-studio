@@ -34,6 +34,7 @@ import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
 import { OfferingPopoverPositionerContainer } from './offering-popover-positioner-container';
 import type { PopoverTarget } from './offering-popover-state';
+import { offeringPrintHtml, printHtmlDocument } from './offering-print';
 import {
   type LevelLockReason,
   levelSummary,
@@ -577,6 +578,24 @@ export const OfferingPopoverContainer = ({
     });
   };
 
+  // What is on screen, saved or not: the admin prints the roster they are
+  // looking at.
+  const handlePrint = () =>
+    printHtmlDocument(
+      offeringPrintHtml({
+        courseName,
+        startsOn,
+        endsOn,
+        arriveAt,
+        users: users.map((row) => ({
+          ...row,
+          level: displayLevel(row.userId),
+        })),
+        printedAt: new Date(),
+      }),
+      courseName,
+    );
+
   const saveError =
     create.error?.message ?? update.error?.message ?? remove.error?.message;
 
@@ -752,6 +771,7 @@ export const OfferingPopoverContainer = ({
               }
               onSubmit={handleSubmit}
               onCancel={close}
+              onPrint={handlePrint}
               onDelete={
                 saveTarget?.mode === 'edit'
                   ? () => handleDelete(saveTarget.offering)
