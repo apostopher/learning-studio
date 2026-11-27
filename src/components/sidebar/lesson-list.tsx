@@ -2,7 +2,12 @@ import type { LessonLock } from '#/lib/lesson-gating';
 import type { LessonRing } from './compute-lesson-ring';
 import { LessonLink } from './lesson-link';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = {
+  slug: string;
+  name: string;
+  /** Open to the pilot but not required of them: no ring, says "Optional". */
+  optional?: boolean;
+};
 
 type LessonListProps = {
   courseSlug: string;

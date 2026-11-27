@@ -21,12 +21,19 @@ import {
 import { SidebarError } from './sidebar-error';
 import { SidebarSkeleton } from './sidebar-skeleton';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = {
+  slug: string;
+  name: string;
+  /** Open to the pilot but not required of them: no ring, says "Optional". */
+  optional?: boolean;
+};
 type ModuleLike = {
   id: number;
   slug: string;
   name: string;
   lessons: readonly LessonLike[];
+  /** Every lesson in it is optional: no ring, says "Optional". */
+  optional?: boolean;
 };
 
 type CourseSidebarProps = {

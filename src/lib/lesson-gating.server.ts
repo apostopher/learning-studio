@@ -13,7 +13,7 @@ import { gateProgress, toGateCourse } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
   isLessonArchivable,
-  isLessonVisibleAtLevel,
+  isLessonOpenAtLevel,
 } from '#/lib/level-visibility';
 import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 import type { UserLevel } from '#/types';
@@ -178,7 +178,10 @@ export async function evaluateLessonGate({
     );
   }
 
-  if (!isLessonVisibleAtLevel(target, level)) {
+  // Open, not merely required: an optional lesson (another tier's) is the
+  // pilot's to watch if they want (2026-11-27). It is not in `gateCourse`
+  // below, so no lock ever applies to it.
+  if (!isLessonOpenAtLevel(target, level)) {
     // Out-of-tier work you already finished stays readable; out-of-tier work
     // you never did is not yours. `done` is the sticky completion record (100%
     // of video, tabs and quiz), so it survives later content changes.

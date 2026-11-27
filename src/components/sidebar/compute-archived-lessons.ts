@@ -1,6 +1,6 @@
 import {
   isLessonArchivable,
-  isLessonVisibleAtLevel,
+  isLessonOpenAtLevel,
 } from '#/lib/level-visibility';
 import type { UserLevel } from '#/types';
 
@@ -62,7 +62,8 @@ export function computeArchivedLessons(
   const archived: ArchivedLesson[] = [];
   for (const mod of course.modules) {
     for (const lesson of mod.lessons) {
-      if (isLessonVisibleAtLevel(lesson, level)) continue;
+      // Still open to them (required or optional): not an archive.
+      if (isLessonOpenAtLevel(lesson, level)) continue;
       // Tagged None (withdrawn) or untagged (at nobody's level): not
       // completed at an earlier level, so not offered as an archive either.
       if (!isLessonArchivable(lesson)) continue;

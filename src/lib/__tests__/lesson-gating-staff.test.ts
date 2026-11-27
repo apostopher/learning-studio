@@ -132,12 +132,13 @@ describe('course staff bypass', () => {
   it('gates a subject expert normally on a course they do not staff', async () => {
     // The Biology professor opening Computer Science. They hold
     // `subject-expert` — on course 99, not on course 7 — so here they are an
-    // ordinary intermediate learner, and `basic-1` is out of their tier.
+    // ordinary learner with no level in it, and a 3D lesson is closed to them
+    // (an author would open it).
     m.getUserRoleNames.mockResolvedValue([]);
     m.isCourseStaff.mockImplementation(
       async (_userId: string, courseId: number) => courseId === 99,
     );
-    m.getCurrentLevel.mockResolvedValue('intermediate');
+    m.getCurrentLevel.mockResolvedValue(null);
 
     const result = await evaluateLessonGate({
       userId: 'u1',

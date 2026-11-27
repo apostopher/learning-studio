@@ -100,42 +100,38 @@ beforeEach(() => {
 });
 
 describe('getLibraryForUser level visibility', () => {
-  it('withholds a file attached to an out-of-tier lesson', async () => {
+  it('serves the files of another tier’s lesson: it is optional, theirs to open', async () => {
+    // 2026-11-27: a pilot with a level may open every 3D lesson released at
+    // any tier; only their own tier's are required.
     m.getCurrentLevel.mockResolvedValue('intermediate');
 
-    const result = await getLibraryForUser({
-      userId: 'u1',
-      courseSlug: 'rt',
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
+  });
+
+  it('withholds a file attached to a lesson tagged None (withdrawn)', async () => {
+    m.getCurrentLevel.mockResolvedValue('intermediate');
+    m.getCourseDetailsWithCache.mockResolvedValue({
+      modules: [
+        {
+          ...details.modules[0],
+          lessons: [
+            { ...details.modules[0].lessons[0], levels: ['none'] },
+            details.modules[0].lessons[1],
+          ],
+        },
+      ],
     });
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
     // Not merely locked — absent. `resolveAssignment` returns null for a
-    // lesson missing from the index, so filtering the course fails CLOSED
-    // here, the opposite of what it would do inside `evaluateLessonLock`.
+    // lesson missing from the index, so filtering fails CLOSED here.
     expect(names(result)).toEqual(['Inter Handout']);
   });
 
-  it('serves the same file to a pilot in the lesson’s tier', async () => {
-    m.getCurrentLevel.mockResolvedValue('basic');
-
-    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
-
-    expect(names(result)).toEqual(['Basic Handout']);
-  });
-
-  it('withholds an out-of-tier file even when the pilot completed the lesson', async () => {
-    // Read-only means "you may re-read the lesson", not "you may keep taking
-    // copies of its attachments away with you".
-    m.getCurrentLevel.mockResolvedValue('intermediate');
-    m.getCourseProgress.mockResolvedValue({
-      lessons: [{ lessonId: 10, percent: 100, watched: true }],
-    });
-
-    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
-
-    expect(names(result)).toEqual(['Inter Handout']);
-  });
-
-  it('withholds a module-scoped file when the whole module is out of tier', async () => {
+  it('serves a module-scoped file when the module holds only other tiers’ lessons', async () => {
     m.getCurrentLevel.mockResolvedValue('advanced');
     m.getLibraryForCourse.mockResolvedValue({
       files: [
@@ -146,7 +142,7 @@ describe('getLibraryForUser level visibility', () => {
 
     const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
-    expect(names(result)).toEqual([]);
+    expect(names(result)).toEqual(['Module Pack']);
   });
 
   it('serves a pilot with no level the files of lessons outside 3D Airmanship', async () => {
@@ -239,14 +235,14 @@ describe('getLibraryForUser level visibility', () => {
     expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
   });
 
-  it('filters an admin by their level when they are on the course roster', async () => {
+  it('treats an admin on the course roster as a learner: no level, no 3D files', async () => {
     m.getUserRoleNames.mockResolvedValue(['owner']);
     m.isSubscribedToCourse.mockResolvedValue(true);
-    m.getCurrentLevel.mockResolvedValue('basic');
+    m.getCurrentLevel.mockResolvedValue(null);
 
     const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
-    expect(names(result)).toEqual(['Basic Handout']);
+    expect(names(result)).toEqual([]);
   });
 
   it('does not filter for a subject expert on their own course', async () => {
@@ -263,17 +259,17 @@ describe('getLibraryForUser level visibility', () => {
   });
 
   it('filters a subject expert normally on a course they do not staff', async () => {
-    // Staff on course 99, reading course 7: an ordinary intermediate learner
-    // here, so the basic-tier handout is withheld exactly as for anyone else.
+    // Staff on course 99, reading course 7: an ordinary learner here, with no
+    // level, so the 3D handouts are withheld exactly as for anyone else.
     m.getUserRoleNames.mockResolvedValue([]);
     m.isCourseStaff.mockImplementation(
       async (_userId: string, courseId: number) => courseId === 99,
     );
-    m.getCurrentLevel.mockResolvedValue('intermediate');
+    m.getCurrentLevel.mockResolvedValue(null);
 
     const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
-    expect(names(result)).toEqual(['Inter Handout']);
+    expect(names(result)).toEqual([]);
     expect(result?.adminBypass).toBe(false);
   });
 

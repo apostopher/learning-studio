@@ -7,12 +7,19 @@ import { CircularProgress } from '../ui/circular-progress';
 import type { LessonRing } from './compute-lesson-ring';
 import { LessonList } from './lesson-list';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = {
+  slug: string;
+  name: string;
+  /** Open to the pilot but not required of them: no ring, says "Optional". */
+  optional?: boolean;
+};
 type ModuleLike = {
   id: number;
   slug: string;
   name: string;
   lessons: readonly LessonLike[];
+  /** Every lesson in it is optional: no ring, says "Optional". */
+  optional?: boolean;
 };
 
 type ModuleItemProps = {
@@ -69,13 +76,22 @@ export const ModuleItem = ({
         <span className="tabular-nums text-tertiary text-xs font-medium shrink-0">
           {String(rank).padStart(2, '0')}
         </span>
-        <span className="flex-1 min-w-0 truncate">{module.name}</span>
-        <CircularProgress
-          value={modulePercent}
-          size={24}
-          strokeWidth={8}
-          ariaLabel={`Module ${module.name} progress`}
-        />
+        <span
+          className={`flex-1 min-w-0 truncate${module.optional ? ' text-secondary' : ''}`}
+        >
+          {module.name}
+        </span>
+        {module.optional ? (
+          // In place of the ring: nothing in it is required of this pilot.
+          <span className="shrink-0 text-xs text-secondary">Optional</span>
+        ) : (
+          <CircularProgress
+            value={modulePercent}
+            size={24}
+            strokeWidth={8}
+            ariaLabel={`Module ${module.name} progress`}
+          />
+        )}
         <motion.span
           className="sidebar-chevron shrink-0 inline-flex"
           // -90deg points the chevron toward inline-start in LTR. Sign-flip

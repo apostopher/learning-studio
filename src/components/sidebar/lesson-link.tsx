@@ -5,7 +5,12 @@ import { CircularProgress } from '../ui/circular-progress';
 import type { LessonRing } from './compute-lesson-ring';
 import { LessonLockIcon } from './lesson-lock-icon';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = {
+  slug: string;
+  name: string;
+  /** Open to the pilot but not required of them: no ring, says "Optional". */
+  optional?: boolean;
+};
 
 type LessonLinkProps = {
   courseSlug: string;
@@ -51,7 +56,12 @@ export const LessonLink = ({
     'text-sm',
     'rounded-sidebar-row',
     'hover:bg-gray-a3 hover:text-primary',
-    isActive ? 'sidebar-row-active' : 'text-secondary',
+    // Optional lessons step back a shade; required ones keep today's look.
+    isActive
+      ? 'sidebar-row-active'
+      : lesson.optional
+        ? 'text-tertiary'
+        : 'text-secondary',
   ].join(' ');
 
   return (
@@ -75,15 +85,20 @@ export const LessonLink = ({
         ) : null}
       </span>
       {reason ? <LessonLockIcon /> : null}
-      <CircularProgress
-        value={ring?.percent ?? progressPercent}
-        // 20px is too small for a legible glyph, so a badge gets 24.
-        size={ring?.badge ? 24 : 20}
-        strokeWidth={10}
-        ariaLabel={ring?.ariaLabel ?? `Lesson ${lesson.name} progress`}
-        badge={ring?.badge ?? undefined}
-        showLabel={false}
-      />
+      {lesson.optional ? (
+        // In place of the ring: optional work is not tracked as progress.
+        <span className="shrink-0 text-xs text-tertiary">Optional</span>
+      ) : (
+        <CircularProgress
+          value={ring?.percent ?? progressPercent}
+          // 20px is too small for a legible glyph, so a badge gets 24.
+          size={ring?.badge ? 24 : 20}
+          strokeWidth={10}
+          ariaLabel={ring?.ariaLabel ?? `Lesson ${lesson.name} progress`}
+          badge={ring?.badge ?? undefined}
+          showLabel={false}
+        />
+      )}
     </Link>
   );
 };

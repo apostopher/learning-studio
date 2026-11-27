@@ -46,17 +46,15 @@ describe('computeArchivedLessons', () => {
     expect(computeArchivedLessons(null, null, 'basic')).toEqual([]);
   });
 
-  it('archives a completed lesson that is out of tier at the current level', () => {
-    // Promoted to intermediate: 'basic-only' (levels: ['basic']) is no longer
-    // visible, and was completed.
+  it('does not archive another tier’s completed lesson: it is still open, as optional', () => {
+    // 2026-11-27: promoted to intermediate, 'basic-only' stays in the tree as
+    // an optional lesson, so it needs no archive entry to be reached.
     const archived = computeArchivedLessons(
       course,
       { lessons: [{ lessonId: 2, percent: 100 }] },
       'intermediate',
     );
-    expect(archived).toEqual([
-      { slug: 'basic-only', moduleSlug: 'm1', name: 'Basic Only' },
-    ]);
+    expect(archived).toEqual([]);
   });
 
   it('does not archive an out-of-tier lesson that was never completed', () => {
@@ -112,7 +110,7 @@ describe('computeArchivedLessons', () => {
     expect(archived).toEqual([]);
   });
 
-  it('archives across multiple modules, carrying each lesson’s own moduleSlug', () => {
+  it('archives nothing a pilot with a level can still open, in any module', () => {
     const archived = computeArchivedLessons(
       course,
       {
@@ -123,15 +121,12 @@ describe('computeArchivedLessons', () => {
       },
       'advanced',
     );
-    expect(archived).toEqual([
-      { slug: 'basic-only', moduleSlug: 'm1', name: 'Basic Only' },
-      { slug: 'intermediate-a', moduleSlug: 'm2', name: 'Intermediate A' },
-    ]);
+    expect(archived).toEqual([]);
   });
 });
 
 describe("computeArchivedLessons — a lesson tagged 'none'", () => {
-  it('is not archived even when the pilot completed it: None means withdrawn', () => {
+  it('is not archived even when the pilot completed it: None means withdrawn (and another tier’s lesson is simply open)', () => {
     const withdrawn = {
       modules: [
         {
@@ -165,6 +160,6 @@ describe("computeArchivedLessons — a lesson tagged 'none'", () => {
       computeArchivedLessons(withdrawn, progress, 'intermediate').map(
         (l) => l.slug,
       ),
-    ).toEqual(['basic-only']);
+    ).toEqual([]);
   });
 });

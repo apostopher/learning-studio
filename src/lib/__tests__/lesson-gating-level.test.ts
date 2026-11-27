@@ -104,44 +104,22 @@ describe('level enforcement', () => {
     expect(result?.outOfTier).toBeNull();
   });
 
-  it('marks an out-of-tier lesson out of tier, not open', async () => {
+  it('opens a lesson of another tier as optional: not out of tier, never locked', async () => {
+    // basic-1 is not an intermediate pilot's work, but it is theirs to watch
+    // if they want (2026-11-27). It is outside the required tree the locks
+    // run on, so nothing can lock it.
     m.getCurrentLevel.mockResolvedValue('intermediate');
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',
       courseSlug: 'c1',
     });
-    expect(result?.outOfTier).not.toBeNull();
+    expect(result?.outOfTier).toBeNull();
+    expect(result?.lessonLock).toEqual({ kind: 'open' });
   });
 
-  it('makes an out-of-tier lesson read-only when it was completed', async () => {
-    m.getCurrentLevel.mockResolvedValue('intermediate');
-    m.getCourseProgress.mockResolvedValue({
-      lessons: [
-        { lessonId: 10, moduleId: 1, percent: 40, watched: true, done: true },
-      ],
-    });
-    const result = await evaluateLessonGate({
-      userId: 'u1',
-      lessonSlug: 'basic-1',
-      courseSlug: 'c1',
-    });
-    expect(result?.outOfTier).toEqual({ readOnly: true });
-  });
-
-  it('refuses an out-of-tier lesson that was never completed', async () => {
-    m.getCurrentLevel.mockResolvedValue('intermediate');
-    m.getCourseProgress.mockResolvedValue({
-      lessons: [
-        {
-          lessonId: 10,
-          moduleId: 1,
-          percent: 100,
-          watched: false,
-          done: false,
-        },
-      ],
-    });
+  it('still refuses every 3D lesson to a pilot with no level', async () => {
+    m.getCurrentLevel.mockResolvedValue(null);
     const result = await evaluateLessonGate({
       userId: 'u1',
       lessonSlug: 'basic-1',

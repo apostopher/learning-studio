@@ -514,13 +514,12 @@ describe('getCourseContentForAgent level visibility', () => {
     isCourseStaff.mockResolvedValue(false);
   });
 
-  it('withholds an out-of-tier lesson whose locks are wide open', async () => {
-    // Both lessons have no video and no prerequisites, so both pass
-    // evaluateLessonLock/evaluateMaterialLock for any watched-set. The level
-    // filter is the only thing standing between the pilot and A's text.
+  it('gives a pilot another tier’s lesson too: it is optional, theirs to read', async () => {
+    // 2026-11-27: every 3D lesson released at some tier is open to a pilot
+    // with a level; only their own tier's are required.
     const html = await getCourseContentForAgent('c1', { userId: 'u1' });
     expect(html).toContain('B body');
-    expect(html).not.toContain('A body');
+    expect(html).toContain('A body');
   });
 
   it('resolves the level for the course the content belongs to', async () => {
@@ -557,12 +556,11 @@ describe('getCourseContentForAgent level visibility', () => {
     getCourseDetailsWithCache.mockResolvedValue(
       detailsFor([a, { ...b, levels: [], levelGated: false }]),
     );
-    for (const level of ['advanced', null] as const) {
-      getCurrentLevel.mockResolvedValue(level);
-      const html = await getCourseContentForAgent('c1', { userId: 'u1' });
-      expect(html).toContain('B body');
-      expect(html).not.toContain('A body');
-    }
+    // No level: the 3D lesson (A) is closed, the other (B) is not.
+    getCurrentLevel.mockResolvedValue(null);
+    const html = await getCourseContentForAgent('c1', { userId: 'u1' });
+    expect(html).toContain('B body');
+    expect(html).not.toContain('A body');
   });
 
   it('gives a pilot with no level nothing to read', async () => {
@@ -637,14 +635,15 @@ describe('getCourseContentForAgent level visibility', () => {
   });
 
   it('still filters by tier for a subject expert who staffs another course', async () => {
-    // Staff on course 99, reading course 7: an ordinary intermediate learner
-    // here, so the basic-tier lesson stays withheld.
+    // Staff on course 99, reading course 7: an ordinary learner here, with
+    // no level, so the 3D lessons stay withheld as for anyone else.
     isCourseStaff.mockImplementation(
       async (_userId: string, courseId: number) => courseId === 99,
     );
+    getCurrentLevel.mockResolvedValue(null);
     const html = await getCourseContentForAgent('c1', { userId: 'sme-1' });
-    expect(html).toContain('B body');
     expect(html).not.toContain('A body');
+    expect(html).not.toContain('B body');
   });
 
   it('does not query staff for an admin — they bypass on role alone', async () => {

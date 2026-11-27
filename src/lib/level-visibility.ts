@@ -114,6 +114,60 @@ export function filterCourseToLevel<
 }
 
 /**
+ * May a pilot at this level OPEN the lesson — as required work or as optional
+ * viewing? (user, 2026-11-27: "show all modules and lessons, but only the
+ * required ones highlighted; the student may watch optionals if they want".)
+ *
+ * Everything `isLessonVisibleAtLevel` allows (that is the REQUIRED set), plus
+ * any 3D Airmanship lesson released at some real tier, for a pilot who has a
+ * level. Still closed: a withdrawn (`['none']`) or untagged (`[]`) lesson,
+ * and every gated lesson for a pilot with no level.
+ *
+ * Opening is all it grants. Required work — locks, progress, rings, resume,
+ * promotion — stays on `isLessonVisibleAtLevel` / `isLessonAtTier`.
+ */
+export function isLessonOpenAtLevel(
+  lesson: LevelFilterableLesson,
+  level: UserLevel | null,
+): boolean {
+  return (
+    isLessonVisibleAtLevel(lesson, level) ||
+    (level !== null && lesson.levels.some(isUserLevel))
+  );
+}
+
+/** Open to the pilot but not required of them: optional viewing. */
+export function isLessonOptionalAtLevel(
+  lesson: LevelFilterableLesson,
+  level: UserLevel | null,
+): boolean {
+  return (
+    isLessonOpenAtLevel(lesson, level) && !isLessonVisibleAtLevel(lesson, level)
+  );
+}
+
+/**
+ * `filterCourseToLevel`, keeping the optional lessons too: what a pilot is
+ * SHOWN. Locks and progress still run on `filterCourseToLevel` (required
+ * only), so an optional lesson never blocks or counts.
+ */
+export function filterCourseToOpen<
+  L extends LevelFilterableLesson,
+  M extends LevelFilterableModule<L>,
+  C extends { modules: readonly M[] },
+>(course: C, level: UserLevel | null): C {
+  const modules = course.modules
+    .map((mod) => ({
+      ...mod,
+      lessons: mod.lessons.filter((lesson) =>
+        isLessonOpenAtLevel(lesson, level),
+      ),
+    }))
+    .filter((mod) => mod.lessons.length > 0);
+  return { ...course, modules };
+}
+
+/**
  * Does this course have any available lesson at all, at any level?
  *
  * The one question that tells the two strict-level empty states apart from
@@ -129,4 +183,44 @@ export function courseHasAvailableLessons(course: {
   return course.modules.some((mod) =>
     mod.lessons.some((lesson) => lesson.isAvailable),
   );
+}
+
+/**
+ * The tree a pilot is SHOWN (`filterCourseToOpen`), each lesson marked
+ * `optional` when it is open but not required of them, and each module marked
+ * `optional` when every lesson left in it is. The sidebar draws "Optional" in
+ * place of the ring for those.
+ */
+type MarkableCourse = {
+  modules: readonly { lessons: readonly LevelFilterableLesson[] }[];
+};
+type MarkedModule<M extends MarkableCourse['modules'][number]> = Omit<
+  M,
+  'lessons'
+> & {
+  lessons: (M['lessons'][number] & { optional: boolean })[];
+  optional: boolean;
+};
+
+// One type parameter, inferred from the one argument, so callers keep their
+// modules' and lessons' own fields (see `toLearnerCourseDetails`).
+export function markOptionalAtLevel<C extends MarkableCourse>(
+  course: C,
+  level: UserLevel | null,
+): Omit<C, 'modules'> & { modules: MarkedModule<C['modules'][number]>[] } {
+  const open = filterCourseToOpen(course, level);
+  return {
+    ...open,
+    modules: open.modules.map((mod) => {
+      const lessons = mod.lessons.map((lesson) => ({
+        ...lesson,
+        optional: isLessonOptionalAtLevel(lesson, level),
+      }));
+      return {
+        ...mod,
+        lessons,
+        optional: lessons.length > 0 && lessons.every((l) => l.optional),
+      };
+    }),
+  } as Omit<C, 'modules'> & { modules: MarkedModule<C['modules'][number]>[] };
 }

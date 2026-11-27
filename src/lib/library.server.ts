@@ -8,7 +8,7 @@ import { isSubscribedToCourse } from '#/db/lesson-access';
 import { getLibraryForCourse } from '#/db/library';
 import { getCurrentLevel } from '#/db/user-levels';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
-import { filterCourseToLevel } from '#/lib/level-visibility';
+import { filterCourseToOpen } from '#/lib/level-visibility';
 import { type LibraryFile, resolveLibraryFiles } from '#/lib/library-gating';
 import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
@@ -100,7 +100,7 @@ export async function getLibraryForUser({
   // has not been set also has a null level, and gets only the lessons levels
   // do not gate — not the author's unfiltered library.
   const gateCourse = toGateCourse(
-    viewingAsAuthor ? details : filterCourseToLevel(details, level),
+    viewingAsAuthor ? details : filterCourseToOpen(details, level),
   );
 
   // The author bypass is expressed as "every lesson is watched", not as a

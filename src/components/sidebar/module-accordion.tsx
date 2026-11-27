@@ -4,12 +4,19 @@ import type { LessonLock } from '#/lib/lesson-gating';
 import type { LessonRing } from './compute-lesson-ring';
 import { ModuleItem } from './module-item';
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = {
+  slug: string;
+  name: string;
+  /** Open to the pilot but not required of them: no ring, says "Optional". */
+  optional?: boolean;
+};
 type ModuleLike = {
   id: number;
   slug: string;
   name: string;
   lessons: readonly LessonLike[];
+  /** Every lesson in it is optional: no ring, says "Optional". */
+  optional?: boolean;
 };
 
 type ModuleAccordionProps = {

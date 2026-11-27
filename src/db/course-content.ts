@@ -26,7 +26,7 @@ import {
 import { gateProgress, toGateCourse } from '#/lib/lesson-gating-inputs';
 import {
   filterCourseToLevel,
-  isLessonVisibleAtLevel,
+  isLessonOpenAtLevel,
 } from '#/lib/level-visibility';
 import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
@@ -226,7 +226,7 @@ export async function getGatedCourseForAgent(
     : new Set(
         details.modules.flatMap((mod) =>
           mod.lessons
-            .filter((lesson) => isLessonVisibleAtLevel(lesson, level))
+            .filter((lesson) => isLessonOpenAtLevel(lesson, level))
             .map((lesson) => lesson.slug),
         ),
       );

@@ -391,7 +391,9 @@ describe('CourseSidebarWrapper', () => {
     expect(rollLink?.textContent).not.toContain('Finish');
   });
 
-  it('hides a lesson outside the pilot level and drops its module when it was the only lesson', async () => {
+  it('shows another tier’s module as optional: "Optional" where its ring would be', async () => {
+    // 2026-11-27: every released 3D lesson is shown; only the pilot's own
+    // tier is required, and only required work carries a ring.
     levelMock.mockReturnValue({
       data: { level: 'basic', pendingChange: null },
       isError: false,
@@ -401,9 +403,36 @@ describe('CourseSidebarWrapper', () => {
       isLoading: false,
       isError: false,
     });
-    expect(screen.getByText('1 module · 1 lesson')).toBeDefined();
-    expect(screen.queryByText('Advanced Only')).toBeNull();
-    expect(screen.queryByText('Vortex Recovery')).toBeNull();
+    expect(screen.getByText('2 modules · 2 lessons')).toBeDefined();
+    const optionalRow = screen.getByRole('button', { name: /Advanced Only/ });
+    expect(optionalRow.textContent).toContain('Optional');
+    expect(
+      screen.queryByRole('progressbar', {
+        name: 'Module Advanced Only progress',
+      }),
+    ).toBeNull();
+    // The required module keeps its ring and says nothing of the kind.
+    const requiredRow = screen.getByRole('button', { name: /Fundamentals/ });
+    expect(requiredRow.textContent).not.toContain('Optional');
+    expect(
+      screen.getByRole('progressbar', { name: 'Module Fundamentals progress' }),
+    ).toBeDefined();
+  });
+
+  it('shows an optional lesson with "Optional" in place of its ring, and links it', async () => {
+    levelMock.mockReturnValue({
+      data: { level: 'basic', pendingChange: null },
+      isError: false,
+    });
+    await renderAt('/', {
+      data: leveledCourse,
+      isLoading: false,
+      isError: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Advanced Only/ }));
+    const link = await screen.findByRole('link', { name: /Vortex Recovery/ });
+    expect(link.textContent).toContain('Optional');
+    expect(within(link).queryByRole('progressbar')).toBeNull();
   });
 
   it('shows an out-of-tier lesson to an author, bypassing the level filter', async () => {
@@ -434,8 +463,10 @@ describe('CourseSidebarWrapper', () => {
       isLoading: false,
       isError: false,
     });
-    expect(screen.getByText('1 module · 1 lesson')).toBeDefined();
-    expect(screen.queryByText('Advanced Only')).toBeNull();
+    // A learner's tree: the other tier's module is there, but as optional.
+    expect(
+      screen.getByRole('button', { name: /Advanced Only/ }).textContent,
+    ).toContain('Optional');
   });
 
   it('locks a prerequisite-blocked row when the payload says this is not their course', async () => {
@@ -531,7 +562,7 @@ describe('CourseSidebarWrapper', () => {
     expect(screen.queryByText('Pitch')).toBeNull();
   });
 
-  it('tells a pilot whose level has no lessons that there are none at their level', async () => {
+  it('shows a pilot whose level has no lessons the others as optional, not an empty sidebar', async () => {
     levelMock.mockReturnValue({
       data: { level: 'intermediate', pendingChange: null },
       isError: false,
@@ -542,11 +573,13 @@ describe('CourseSidebarWrapper', () => {
       isError: false,
     });
     expect(
-      screen.getByText(
+      screen.queryByText(
         'There are no lessons at your level in this course yet.',
       ),
-    ).toBeDefined();
-    expect(screen.queryByText('Fundamentals')).toBeNull();
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /Fundamentals/ }).textContent,
+    ).toContain('Optional');
   });
 
   it("heads the course with the month and year of the pilot's offering", async () => {
@@ -785,9 +818,9 @@ describe('CourseSidebarWrapper', () => {
     ],
   };
 
-  it('lists a completed out-of-tier lesson in the archive disclosure, and opens it on click', async () => {
-    // 'vortex' (module 'advanced-only') has levels: ['advanced'] — invisible
-    // to a 'basic' pilot — and progress marks it 100% complete.
+  it('needs no archive for another tier’s completed lesson: it stays in the tree, optional', async () => {
+    // 'vortex' (module 'advanced-only') has levels: ['advanced'] and progress
+    // marks it complete. A 'basic' pilot still sees it, as optional.
     progressMock.mockReturnValue({
       data: {
         lessons: [
@@ -813,22 +846,12 @@ describe('CourseSidebarWrapper', () => {
       isLoading: false,
       isError: false,
     });
-    // Still filtered out of the main tree.
-    expect(screen.queryByText('Vortex Recovery')).toBeNull();
-    // But reachable via the archive disclosure.
-    fireEvent.click(
-      screen.getByRole('button', { name: /Completed at earlier levels/ }),
-    );
-    await waitFor(() => {
-      expect(
-        screen.getByRole('link', { name: 'Vortex Recovery' }),
-      ).toBeDefined();
-    });
     expect(
-      screen
-        .getByRole('link', { name: 'Vortex Recovery' })
-        .getAttribute('href'),
-    ).toBe('/course/3d-airmanship/modules/advanced-only/lessons/vortex');
+      screen.queryByRole('button', { name: /Completed at earlier levels/ }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /Advanced Only/ }).textContent,
+    ).toContain('Optional');
   });
 
   it('does not archive an out-of-tier lesson that was never completed', async () => {

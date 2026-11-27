@@ -16,9 +16,9 @@ describe('reserved lesson: sourcePath', () => {
     ).toBe(true);
   });
   it('rejects deleting a lesson: sourcePath', () => {
-    expect(aiRagDeleteSchema.safeParse({ sourcePath: 'lesson:x' }).success).toBe(
-      false,
-    );
+    expect(
+      aiRagDeleteSchema.safeParse({ sourcePath: 'lesson:x' }).success,
+    ).toBe(false);
   });
 });
 

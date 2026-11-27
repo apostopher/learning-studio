@@ -10,6 +10,7 @@ import { LEVEL_LABELS } from '#/lib/level-labels';
 import {
   courseHasAvailableLessons,
   filterCourseToLevel,
+  markOptionalAtLevel,
 } from '#/lib/level-visibility';
 import { offeringMonthLabel } from '#/lib/viewer-offering';
 import {
@@ -46,6 +47,7 @@ type LessonLike = {
   name: string;
   levelGated?: boolean;
   isAvailable?: boolean;
+  optional?: boolean;
 };
 type ModuleLike = {
   id: number;
@@ -99,6 +101,18 @@ export const CourseSidebarWrapper = ({
     if (viewingAsAuthor) return detailsQuery.data;
     if (!levelQuery.data) return undefined;
     return filterCourseToLevel(detailsQuery.data, levelQuery.data.level);
+  }, [detailsQuery.data, levelQuery.data, viewingAsAuthor]);
+
+  // What the pilot is SHOWN: `visibleDetails` (required) plus the 3D
+  // Airmanship lessons of other tiers, marked optional — open to watch, no
+  // ring, never a lock or a percent (user, 2026-11-27). Percents, rings and
+  // locks above and below keep reading `visibleDetails`, so an optional
+  // lesson can neither block nor count.
+  const shownDetails = useMemo(() => {
+    if (!detailsQuery.data) return detailsQuery.data;
+    if (viewingAsAuthor) return detailsQuery.data;
+    if (!levelQuery.data) return undefined;
+    return markOptionalAtLevel(detailsQuery.data, levelQuery.data.level);
   }, [detailsQuery.data, levelQuery.data, viewingAsAuthor]);
 
   // Not an author, and course details have arrived, but the level query hasn't
@@ -204,9 +218,9 @@ export const CourseSidebarWrapper = ({
   const derived = useMemo(() => {
     if (detailsQuery.isLoading || levelPending)
       return { status: 'loading' as const };
-    if (detailsQuery.isError || visibleDetails == null)
+    if (detailsQuery.isError || shownDetails == null)
       return { status: 'error' as const };
-    const data = visibleDetails;
+    const data = shownDetails;
     const modules = data.modules as unknown as readonly ModuleLike[];
     const moduleCount = modules.length;
     const lessonCount = modules.reduce((sum, m) => sum + m.lessons.length, 0);
@@ -257,7 +271,7 @@ export const CourseSidebarWrapper = ({
       emptyReason,
     };
   }, [
-    visibleDetails,
+    shownDetails,
     detailsQuery.isError,
     detailsQuery.isLoading,
     levelPending,
@@ -309,7 +323,14 @@ export const CourseSidebarWrapper = ({
       flagshipGroup={{
         label: FLAGSHIP_GROUP_LABEL,
         modules: derived.flagshipModules,
-        percent: flagshipGroupPercent(derived.flagshipModules, lessonPercents),
+        // Required lessons only: optional ones carry no percent.
+        percent: flagshipGroupPercent(
+          derived.flagshipModules.map((mod) => ({
+            ...mod,
+            lessons: mod.lessons.filter((l) => !l.optional),
+          })),
+          lessonPercents,
+        ),
         open: flagshipGroupOpen,
         onOpenChange: setFlagshipGroupOpen,
         lockedNote: derived.flagshipLocked ? FLAGSHIP_LOCKED_NOTE : undefined,
